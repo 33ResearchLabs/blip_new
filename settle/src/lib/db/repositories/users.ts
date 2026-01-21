@@ -41,20 +41,37 @@ export async function checkUsernameAvailable(username: string): Promise<boolean>
   return result?.count === 0;
 }
 
-export async function createUser(data: {
-  username: string;
-  password: string;
+type CreateUserInput = {
+  username?: string;
+  password?: string;
   wallet_address?: string;
-}): Promise<Omit<User, 'password_hash'>> {
-  const passwordHash = hashPassword(data.password);
+  name?: string;
+};
+
+export async function createUser(
+  data: CreateUserInput
+): Promise<Omit<User, 'password_hash'>> {
+  const passwordHash = data.password
+    ? hashPassword(data.password)
+    : null;
+
   const result = await queryOne<User>(
-    `INSERT INTO users (username, password_hash, wallet_address)
-     VALUES ($1, $2, $3)
-     RETURNING *`,
-    [data.username, passwordHash, data.wallet_address || null]
+    `
+    INSERT INTO users (username, password_hash, wallet_address, name)
+    VALUES ($1, $2, $3, $4)
+    RETURNING *
+    `,
+    [
+      data.username ?? null,
+      passwordHash,
+      data.wallet_address ?? null,
+      data.name ?? null,
+    ]
   );
+
   return sanitizeUser(result)!;
 }
+
 
 export async function authenticateUser(
   username: string,
