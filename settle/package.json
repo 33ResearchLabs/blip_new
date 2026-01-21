@@ -1,0 +1,51 @@
+{
+  "name": "settle",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "dev:https": "node server.js",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:integration": "jest --config jest.integration.config.js",
+    "typecheck": "tsc --noEmit",
+    "db:reset": "psql -U postgres -d blip -f database/schema.sql"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.29.0",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/wallet-adapter-base": "^0.9.20",
+    "@solana/wallet-adapter-react": "^0.15.20",
+    "@solana/wallet-adapter-react-ui": "^0.9.20",
+    "@solana/wallet-adapter-wallets": "^0.19.20",
+    "@solana/web3.js": "^1.98.4",
+    "bs58": "^6.0.0",
+    "cloudinary": "^2.5.1",
+    "framer-motion": "^12.26.2",
+    "lucide-react": "^0.562.0",
+    "next": "16.1.2",
+    "pg": "^8.17.1",
+    "pusher": "^5.3.2",
+    "pusher-js": "^8.4.0-rc2",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20",
+    "@types/pg": "^8.16.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.2",
+    "jest": "^29.7.0",
+    "tailwindcss": "^4",
+    "ts-jest": "^29.1.2",
+    "typescript": "^5"
+  }
+}

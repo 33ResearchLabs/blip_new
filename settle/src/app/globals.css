@@ -1,0 +1,704 @@
+@import "tailwindcss";
+
+/* Dark mode (default) - Black/White/Orange Theme */
+:root {
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: rgba(255, 255, 255, 0.04);
+  --card-solid: #0a0a0a;
+  --border: rgba(255, 255, 255, 0.08);
+  --muted: #71717a;
+  --muted-bg: #141414;
+  --accent: #f97316;
+  --accent-dark: #ea580c;
+  --accent-subtle: rgba(249, 115, 22, 0.1);
+  --accent-glow: rgba(249, 115, 22, 0.15);
+}
+
+/* Light mode - Black/White/Orange Theme */
+:root.light {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: rgba(0, 0, 0, 0.03);
+  --card-solid: #fafafa;
+  --border: rgba(0, 0, 0, 0.06);
+  --muted: #71717a;
+  --muted-bg: #f5f5f5;
+  --accent: #ea580c;
+  --accent-dark: #c2410c;
+  --accent-subtle: rgba(234, 88, 12, 0.08);
+  --accent-glow: rgba(234, 88, 12, 0.12);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-solid: var(--card-solid);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-bg: var(--muted-bg);
+  --color-accent: var(--accent);
+  --color-accent-dark: var(--accent-dark);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-glow: var(--accent-glow);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  background: var(--background);
+  min-height: 100vh;
+  min-height: 100dvh;
+  transition: background-color 0.2s ease;
+  /* Allow scrolling - removed overflow: hidden */
+}
+
+body {
+  color: var(--foreground);
+  font-family: var(--font-sans), -apple-system, system-ui, sans-serif;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Full height container */
+.app-container {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  /* Allow scrolling - removed overflow: hidden */
+}
+
+/* Safe area insets for PWA */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* PWA standalone mode adjustments */
+@media (display-mode: standalone) {
+  html, body {
+    /* Prevent overscroll bounce in PWA */
+    overscroll-behavior: none;
+  }
+
+  /* Extra padding at bottom for home indicator */
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+  }
+}
+
+/* Scrollbar hide utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ========================================
+   LIGHT MODE THEME OVERRIDES
+   ======================================== */
+
+/* Background colors */
+:root.light .bg-black {
+  background-color: #ffffff !important;
+}
+
+:root.light .bg-neutral-950 {
+  background-color: #f8fafc !important;
+}
+
+:root.light .bg-neutral-900 {
+  background-color: #f1f5f9 !important;
+}
+
+:root.light .bg-neutral-800 {
+  background-color: #e2e8f0 !important;
+}
+
+:root.light .bg-neutral-700 {
+  background-color: #cbd5e1 !important;
+}
+
+/* Text colors */
+:root.light .text-white {
+  color: #0f172a !important;
+}
+
+:root.light .text-neutral-300 {
+  color: #475569 !important;
+}
+
+:root.light .text-neutral-400 {
+  color: #64748b !important;
+}
+
+:root.light .text-neutral-500 {
+  color: #64748b !important;
+}
+
+:root.light .text-neutral-600 {
+  color: #475569 !important;
+}
+
+/* Border colors */
+:root.light .border-neutral-800 {
+  border-color: #e2e8f0 !important;
+}
+
+:root.light .border-neutral-900 {
+  border-color: #e2e8f0 !important;
+}
+
+:root.light .border-black {
+  border-color: #e2e8f0 !important;
+}
+
+/* Ring colors for focus states */
+:root.light .ring-blue-500\/30 {
+  --tw-ring-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+/* Gradient avatars - keep vibrant */
+:root.light .from-violet-500 {
+  --tw-gradient-from: #8b5cf6 !important;
+}
+
+:root.light .to-fuchsia-500 {
+  --tw-gradient-to: #d946ef !important;
+}
+
+/* Input placeholders */
+:root.light input::placeholder {
+  color: #94a3b8 !important;
+}
+
+:root.light .placeholder-neutral-600::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Specific component fixes */
+:root.light .bg-violet-500 {
+  background-color: #8b5cf6 !important;
+}
+
+:root.light .bg-emerald-500\/10 {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+}
+
+:root.light .bg-amber-500\/10 {
+  background-color: rgba(245, 158, 11, 0.1) !important;
+}
+
+:root.light .bg-red-500\/10 {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+:root.light .bg-blue-500\/10 {
+  background-color: rgba(59, 130, 246, 0.1) !important;
+}
+
+:root.light .bg-blue-500\/20 {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+/* Orange accent overrides */
+:root.light .bg-orange-500\/10 {
+  background-color: rgba(249, 115, 22, 0.1) !important;
+}
+
+:root.light .bg-orange-500\/20 {
+  background-color: rgba(249, 115, 22, 0.15) !important;
+}
+
+:root.light .bg-orange-500 {
+  background-color: #ea580c !important;
+}
+
+:root.light .bg-orange-500.text-white {
+  color: #ffffff !important;
+}
+
+:root.light .text-orange-400 {
+  color: #ea580c !important;
+}
+
+/* Scrollable areas background */
+:root.light .overflow-y-auto {
+  background-color: inherit;
+}
+
+/* Chat bubbles - user messages stay white background in light mode */
+:root.light .bg-white.text-black {
+  background-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+/* Fix neutral-700 for toggle background */
+:root.light .bg-neutral-700 {
+  background-color: #cbd5e1 !important;
+}
+
+/* Shadows and elevations for light mode */
+:root.light .bg-neutral-900,
+:root.light .bg-neutral-950 {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Keep buttons consistent */
+:root.light .bg-blue-500 {
+  background-color: #3b82f6 !important;
+}
+
+:root.light .bg-blue-500.text-white {
+  color: #ffffff !important;
+}
+
+/* Keep orange buttons consistent */
+:root.light .ring-orange-500\/30 {
+  --tw-ring-color: rgba(249, 115, 22, 0.3) !important;
+}
+
+/* Smooth transitions for theme switching */
+*, *::before, *::after {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Disable transitions on initial load to prevent flash */
+.no-transitions * {
+  transition: none !important;
+}
+
+/* Map overlay for light mode */
+:root.light .from-neutral-800\/50 {
+  --tw-gradient-from: rgba(241, 245, 249, 0.7) !important;
+}
+
+:root.light .to-neutral-900\/80 {
+  --tw-gradient-to: rgba(248, 250, 252, 0.9) !important;
+}
+
+/* Status indicator colors - keep visible in light mode */
+:root.light .bg-emerald-400 {
+  background-color: #34d399 !important;
+}
+
+:root.light .bg-amber-400 {
+  background-color: #fbbf24 !important;
+}
+
+:root.light .bg-red-400 {
+  background-color: #f87171 !important;
+}
+
+/* Subtle ambient gradient bg */
+.degen-bg {
+  background:
+    radial-gradient(ellipse at 50% -20%, var(--accent-glow) 0%, transparent 60%),
+    var(--background);
+}
+
+:root.light .degen-bg {
+  background:
+    radial-gradient(ellipse at 50% -20%, var(--accent-glow) 0%, transparent 60%),
+    var(--background);
+}
+
+/* Orange glow accent */
+.glow-accent {
+  box-shadow:
+    0 0 30px var(--accent-glow),
+    0 0 80px rgba(249, 115, 22, 0.05);
+}
+
+:root.light .glow-accent {
+  box-shadow:
+    0 0 25px var(--accent-glow),
+    0 0 60px rgba(234, 88, 12, 0.04);
+}
+
+/* Legacy glow class for compatibility */
+.glow-lime {
+  box-shadow:
+    0 0 30px var(--accent-glow),
+    0 0 80px rgba(249, 115, 22, 0.05);
+}
+
+:root.light .glow-lime {
+  box-shadow:
+    0 0 25px var(--accent-glow),
+    0 0 60px rgba(234, 88, 12, 0.04);
+}
+
+/* Card style */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 0; }
+
+/* Number input */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+input[type="number"] { -moz-appearance: textfield; }
+
+/* Safe areas */
+.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 16px); }
+.safe-top { padding-top: env(safe-area-inset-top, 0px); }
+
+/* Wiggle animation */
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-1deg); }
+  50% { transform: rotate(1deg); }
+}
+.wiggle { animation: wiggle 0.3s ease-in-out; }
+
+/* Float animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.float { animation: float 2s ease-in-out infinite; }
+
+/* Pulse */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+.pulse-slow { animation: pulse-slow 2s ease-in-out infinite; }
+
+/* ==========================================
+   2025-2026 MODERN ANIMATIONS & EFFECTS
+   ========================================== */
+
+/* Parallax scroll container */
+.parallax-container {
+  perspective: 1000px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Parallax layers */
+.parallax-slow {
+  transform: translateZ(-100px) scale(1.1);
+}
+
+.parallax-fast {
+  transform: translateZ(50px) scale(0.95);
+}
+
+/* Smooth entrance animations */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Stagger animation classes */
+.animate-slideUp {
+  animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slideDown {
+  animation: slideDown 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slideInRight {
+  animation: slideInRight 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slideInLeft {
+  animation: slideInLeft 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Delay utilities for staggered animations */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+
+/* Glass morphism card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+:root.light .glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+/* Micro-interaction hover effects */
+.hover-lift {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+}
+
+.hover-lift:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Press effect for buttons */
+.press-effect {
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.press-effect:active {
+  transform: scale(0.97);
+}
+
+/* Shimmer loading effect */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Smooth scroll behavior */
+.smooth-scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Snap scroll for sections */
+.snap-y {
+  scroll-snap-type: y mandatory;
+}
+
+.snap-start {
+  scroll-snap-align: start;
+}
+
+/* Gradient text for accents */
+.gradient-text-accent {
+  background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Subtle border glow on focus */
+.focus-glow:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-subtle), 0 0 20px var(--accent-glow);
+}
+
+/* Bounce effect */
+@keyframes bounce-subtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.bounce-subtle {
+  animation: bounce-subtle 2s cubic-bezier(0.36, 0, 0.66, -0.56) infinite;
+}
+
+/* Ring pulse for notifications */
+@keyframes ring-pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+  }
+  70% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.ring-pulse {
+  animation: ring-pulse 2s infinite;
+}
+
+/* Noise texture overlay for depth */
+.noise-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.03;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+/* ==========================================
+   SOLANA WALLET ADAPTER STYLES
+   ========================================== */
+
+/* Override wallet adapter modal styles */
+.wallet-adapter-modal-wrapper {
+  background-color: rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(8px);
+}
+
+.wallet-adapter-modal {
+  background-color: #1a1a1a !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 1rem !important;
+}
+
+.wallet-adapter-modal-title {
+  color: white !important;
+  font-weight: 600 !important;
+}
+
+.wallet-adapter-modal-list {
+  padding: 0 !important;
+}
+
+.wallet-adapter-modal-list li {
+  border-radius: 0.75rem !important;
+  overflow: hidden;
+}
+
+.wallet-adapter-modal-list-more {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.wallet-adapter-button {
+  background: linear-gradient(135deg, #9333ea 0%, #3b82f6 100%) !important;
+  border-radius: 0.75rem !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+}
+
+.wallet-adapter-button:hover {
+  opacity: 0.9 !important;
+  transform: translateY(-1px) !important;
+}
+
+.wallet-adapter-button-trigger {
+  background: linear-gradient(135deg, #9333ea 0%, #3b82f6 100%) !important;
+}
+
+.wallet-adapter-dropdown-list {
+  background-color: #1a1a1a !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 0.75rem !important;
+}
+
+.wallet-adapter-dropdown-list-item {
+  color: white !important;
+}
+
+.wallet-adapter-dropdown-list-item:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Light mode overrides */
+:root.light .wallet-adapter-modal {
+  background-color: #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.light .wallet-adapter-modal-title {
+  color: #0f172a !important;
+}
+
+:root.light .wallet-adapter-dropdown-list {
+  background-color: #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.light .wallet-adapter-dropdown-list-item {
+  color: #0f172a !important;
+}
+
+:root.light .wallet-adapter-dropdown-list-item:hover {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}

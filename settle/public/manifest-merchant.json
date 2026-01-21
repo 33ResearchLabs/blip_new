@@ -1,0 +1,78 @@
+{
+  "name": "Settle Merchant",
+  "short_name": "Merchant",
+  "description": "Manage your P2P trades and orders",
+  "start_url": "/merchant",
+  "scope": "/merchant",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#c9a962",
+  "orientation": "portrait",
+  "categories": ["finance", "business"],
+  "icons": [
+    {
+      "src": "/icons/merchant-72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/merchant-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/merchant-128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/merchant-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/merchant-152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/merchant-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/merchant-384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/merchant-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Orders",
+      "short_name": "Orders",
+      "description": "View pending orders",
+      "url": "/merchant?view=orders",
+      "icons": [{ "src": "/icons/orders-icon.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Chat",
+      "short_name": "Chat",
+      "description": "Open chat",
+      "url": "/merchant?view=chat",
+      "icons": [{ "src": "/icons/chat-icon.png", "sizes": "96x96" }]
+    }
+  ]
+}

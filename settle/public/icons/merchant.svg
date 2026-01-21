@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a1a"/>
+      <stop offset="100%" style="stop-color:#0a0a0a"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#d4af37"/>
+      <stop offset="100%" style="stop-color:#c9a962"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <!-- Store icon -->
+  <g transform="translate(116, 116)" fill="none" stroke="url(#gold)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Roof -->
+    <path d="M20 120 L140 40 L260 120"/>
+    <!-- Building -->
+    <rect x="40" y="120" width="200" height="140" rx="8"/>
+    <!-- Door -->
+    <rect x="110" y="180" width="60" height="80"/>
+    <!-- Windows -->
+    <rect x="60" y="150" width="40" height="30" rx="4"/>
+    <rect x="180" y="150" width="40" height="30" rx="4"/>
+  </g>
+  <!-- Dollar sign -->
+  <circle cx="400" cy="112" r="56" fill="#c9a962"/>
+  <text x="400" y="128" text-anchor="middle" fill="#0a0a0a" font-size="56" font-weight="bold" font-family="system-ui">$</text>
+</svg>
