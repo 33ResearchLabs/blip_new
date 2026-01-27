@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
-  title: "Settle Merchant",
+  title: "Blip Money Merchant",
   description: "Manage your P2P trades and orders",
   manifest: "/manifest-merchant.json",
   appleWebApp: {

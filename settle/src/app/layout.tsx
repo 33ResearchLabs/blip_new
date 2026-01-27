@@ -12,13 +12,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Settle",
+  title: "Blip Money",
   description: "P2P settlement. Send crypto to anyone.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Settle",
+    title: "Blip Money",
   },
 };
 

@@ -68,12 +68,31 @@ export function useRealtimeOrders(
 ): UseRealtimeOrdersReturn {
   const { actorType, actorId, onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse } = options;
 
+  console.log('[useRealtimeOrders] Hook called with:', { actorType, actorId });
+
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const pusher = usePusherOptional();
+  const isConnected = pusher?.isConnected ?? false;
   const subscribedRef = useRef(false);
+
+  console.log('[useRealtimeOrders] Pusher state:', { hasPusher: !!pusher, isConnected });
+
+  // Use refs for callbacks to avoid re-subscribing when callbacks change
+  const onOrderCreatedRef = useRef(onOrderCreated);
+  const onOrderStatusUpdatedRef = useRef(onOrderStatusUpdated);
+  const onExtensionRequestedRef = useRef(onExtensionRequested);
+  const onExtensionResponseRef = useRef(onExtensionResponse);
+
+  // Keep refs updated with latest callbacks
+  useEffect(() => {
+    onOrderCreatedRef.current = onOrderCreated;
+    onOrderStatusUpdatedRef.current = onOrderStatusUpdated;
+    onExtensionRequestedRef.current = onExtensionRequested;
+    onExtensionResponseRef.current = onExtensionResponse;
+  }, [onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse]);
 
   // Fetch orders from API
   const fetchOrders = useCallback(async () => {
@@ -112,7 +131,7 @@ export function useRealtimeOrders(
     }
   }, [actorType, actorId]);
 
-  // Fetch on mount
+  // Fetch on mount and when actorId changes
   useEffect(() => {
     if (actorId) {
       fetchOrders();
@@ -121,21 +140,36 @@ export function useRealtimeOrders(
 
   // Subscribe to real-time updates
   useEffect(() => {
-    if (!actorId || !pusher || subscribedRef.current) return;
+    // Wait for Pusher to be connected before subscribing
+    if (!actorId || !pusher || !isConnected) {
+      console.log('[useRealtimeOrders] Not ready to subscribe:', { actorId: !!actorId, pusher: !!pusher, isConnected });
+      return;
+    }
+
+    if (subscribedRef.current) {
+      console.log('[useRealtimeOrders] Already subscribed, skipping');
+      return;
+    }
 
     const channelName =
       actorType === 'merchant'
         ? getMerchantChannel(actorId)
         : getUserChannel(actorId);
 
+    console.log('[useRealtimeOrders] Subscribing to channel:', channelName);
     const channel = pusher.subscribe(channelName);
 
-    if (!channel) return;
+    if (!channel) {
+      console.log('[useRealtimeOrders] Failed to subscribe - channel is null');
+      return;
+    }
 
     subscribedRef.current = true;
+    console.log('[useRealtimeOrders] Successfully subscribed to', channelName);
 
     // Handle new order created (for merchants)
     const handleOrderCreated = (rawData: unknown) => {
+      console.log('[useRealtimeOrders] Received ORDER_CREATED event:', rawData);
       const data = rawData as {
         orderId: string;
         status: string;
@@ -148,7 +182,7 @@ export function useRealtimeOrders(
           if (prev.some((o) => o.id === data.orderId)) return prev;
           return [data.data!, ...prev];
         });
-        onOrderCreated?.(data.data);
+        onOrderCreatedRef.current?.(data.data);
       } else {
         // Refetch if we don't have full order data
         fetchOrders();
@@ -174,7 +208,7 @@ export function useRealtimeOrders(
         })
       );
 
-      onOrderStatusUpdated?.(data.orderId, data.status, data.previousStatus);
+      onOrderStatusUpdatedRef.current?.(data.orderId, data.status, data.previousStatus);
     };
 
     // Handle order cancelled
@@ -191,13 +225,13 @@ export function useRealtimeOrders(
     // Handle extension requested
     const handleExtensionRequested = (rawData: unknown) => {
       const data = rawData as ExtensionRequestData;
-      onExtensionRequested?.(data);
+      onExtensionRequestedRef.current?.(data);
     };
 
     // Handle extension response
     const handleExtensionResponse = (rawData: unknown) => {
       const data = rawData as ExtensionResponseData;
-      onExtensionResponse?.(data);
+      onExtensionResponseRef.current?.(data);
       // Refetch orders to get updated expires_at
       if (data.accepted) {
         fetchOrders();
@@ -211,6 +245,7 @@ export function useRealtimeOrders(
     channel.bind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
 
     return () => {
+      console.log('[useRealtimeOrders] Cleaning up subscription for', channelName);
       channel.unbind(ORDER_EVENTS.CREATED, handleOrderCreated);
       channel.unbind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
       channel.unbind(ORDER_EVENTS.CANCELLED, handleCancelled);
@@ -219,7 +254,7 @@ export function useRealtimeOrders(
       pusher.unsubscribe(channelName);
       subscribedRef.current = false;
     };
-  }, [actorId, actorType, pusher, onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse, fetchOrders]);
+  }, [actorId, actorType, pusher, isConnected, fetchOrders]);
 
   return {
     orders,

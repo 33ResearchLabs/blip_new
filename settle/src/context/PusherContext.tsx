@@ -127,17 +127,23 @@ export function PusherProvider({ children }: PusherProviderProps) {
 
   // Initialize Pusher
   const initPusher = useCallback(async () => {
+    console.log('[Pusher Context] initPusher called:', { actorType, actorId, isInitializing: isInitializingRef.current });
+
     // Prevent multiple simultaneous initializations
     if (isInitializingRef.current || !isMountedRef.current) {
+      console.log('[Pusher Context] Skipping init - already initializing or unmounted');
       return;
     }
 
     if (!actorType || !actorId) {
+      console.log('[Pusher Context] Skipping init - no actor set');
       return;
     }
 
     const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
     const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
+
+    console.log('[Pusher Context] Credentials:', { hasKey: !!key, hasCluster: !!cluster });
 
     if (!key || !cluster) {
       console.warn('[Pusher] Credentials not configured - real-time features disabled');
@@ -146,6 +152,7 @@ export function PusherProvider({ children }: PusherProviderProps) {
     }
 
     isInitializingRef.current = true;
+    console.log('[Pusher Context] Starting Pusher initialization...');
 
     try {
       const PusherClient = (await import('pusher-js')).default;
@@ -269,6 +276,7 @@ export function PusherProvider({ children }: PusherProviderProps) {
 
   // Set actor for authentication
   const setActor = useCallback((type: 'user' | 'merchant' | 'compliance', id: string) => {
+    console.log('[Pusher Context] setActor called:', { type, id });
     setActorType(type);
     setActorId(id);
   }, []);
@@ -293,20 +301,23 @@ export function PusherProvider({ children }: PusherProviderProps) {
 
   // Subscribe to a channel
   const subscribe = useCallback((channelName: string): Channel | null => {
+    console.log('[Pusher Context] subscribe called:', channelName);
     const pusher = pusherRef.current;
     if (!pusher) {
-      // Silently return null - Pusher will initialize and hooks will retry
+      console.log('[Pusher Context] No pusher instance, returning null');
       return null;
     }
 
     // Check if already subscribed
     const existing = channelsRef.current.get(channelName);
     if (existing) {
+      console.log('[Pusher Context] Already subscribed to:', channelName);
       return existing;
     }
 
     try {
       // Subscribe
+      console.log('[Pusher Context] Subscribing to:', channelName);
       const channel = pusher.subscribe(channelName);
       channelsRef.current.set(channelName, channel);
 
@@ -315,7 +326,7 @@ export function PusherProvider({ children }: PusherProviderProps) {
       });
 
       channel.bind('pusher:subscription_succeeded', () => {
-        // Subscription succeeded
+        console.log(`[Pusher] Subscription succeeded for ${channelName}`);
       });
 
       return channel;

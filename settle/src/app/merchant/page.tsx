@@ -42,6 +42,7 @@ import PWAInstallBanner from "@/components/PWAInstallBanner";
 
 // Dynamically import wallet components (client-side only)
 const MerchantWalletModal = dynamic(() => import("@/components/MerchantWalletModal"), { ssr: false });
+const UsernameModal = dynamic(() => import("@/components/UsernameModal"), { ssr: false });
 const useSolanaWalletHook = () => {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -53,6 +54,7 @@ const useSolanaWalletHook = () => {
       connecting: false,
       publicKey: null,
       walletAddress: null,
+      signMessage: undefined,
       connect: () => {},
       disconnect: () => {},
       openWalletModal: () => {},
@@ -337,6 +339,9 @@ interface MerchantInfo {
   business_name: string;
   balance: number;
   wallet_address?: string;
+  username?: string;
+  rating?: number;
+  total_trades?: number;
 }
 
 export default function MerchantDashboard() {
@@ -350,6 +355,9 @@ export default function MerchantDashboard() {
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showWalletPrompt, setShowWalletPrompt] = useState(false);
   const [walletUpdatePending, setWalletUpdatePending] = useState(false);
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [isNewMerchant, setIsNewMerchant] = useState(false);
 
   // Escrow locking state
   const [showEscrowModal, setShowEscrowModal] = useState(false);
@@ -365,7 +373,10 @@ export default function MerchantDashboard() {
   const [releaseTxHash, setReleaseTxHash] = useState<string | null>(null);
   const [releaseError, setReleaseError] = useState<string | null>(null);
   const solanaWallet = useSolanaWalletHook();
-  const [loginForm, setLoginForm] = useState({ email: "desertgold@merchant.com", password: "merchant123" });
+  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [registerForm, setRegisterForm] = useState({ email: "", password: "", confirmPassword: "", businessName: "" });
+  const [authTab, setAuthTab] = useState<'signin' | 'create'>('signin');
+  const [isRegistering, setIsRegistering] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -374,6 +385,15 @@ export default function MerchantDashboard() {
   const [bigOrders, setBigOrders] = useState<BigOrderRequest[]>(initialBigOrders);
   const [showBigOrderWidget, setShowBigOrderWidget] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showOpenTradeModal, setShowOpenTradeModal] = useState(false);
+  const [openTradeForm, setOpenTradeForm] = useState({
+    customerWallet: "",
+    tradeType: "sell" as "buy" | "sell", // From merchant perspective: sell = merchant sells USDC to user
+    cryptoAmount: "",
+    paymentMethod: "bank" as "bank" | "cash",
+  });
+  const [isCreatingTrade, setIsCreatingTrade] = useState(false);
+  const [createTradeError, setCreateTradeError] = useState<string | null>(null);
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
   const [disputeReason, setDisputeReason] = useState("");
@@ -461,7 +481,9 @@ export default function MerchantDashboard() {
 
   // Set actor when merchant ID is available
   useEffect(() => {
+    console.log('[Merchant Page] setActor effect - merchantId:', merchantId);
     if (merchantId) {
+      console.log('[Merchant Page] Calling setActor with merchantId:', merchantId);
       setActor('merchant', merchantId);
     }
   }, [merchantId, setActor]);
@@ -480,6 +502,197 @@ export default function MerchantDashboard() {
       playSound('message');
     },
   });
+
+  // Handle setting username for new merchant wallet users
+  const handleMerchantUsername = async (username: string) => {
+    if (!solanaWallet.connected || !solanaWallet.walletAddress) {
+      throw new Error("Wallet not connected");
+    }
+
+    if (!username.trim()) {
+      throw new Error("Username is required");
+    }
+
+    try {
+      // If we have merchantId, it means merchant exists and just needs username (no signature needed)
+      if (merchantId && merchantInfo) {
+        const res = await fetch('/api/auth/merchant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update_username',
+            merchant_id: merchantId,
+            username: username.trim(),
+          }),
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          const updatedMerchant = { ...merchantInfo, username: username.trim() };
+          setMerchantInfo(updatedMerchant);
+          setIsLoggedIn(true);
+          setShowUsernameModal(false);
+          localStorage.setItem('blip_merchant', JSON.stringify(updatedMerchant));
+          console.log('[Merchant] Username updated:', updatedMerchant);
+        } else {
+          throw new Error(data.error || 'Failed to update username');
+        }
+        return;
+      }
+
+      // Otherwise, need signature for new merchant creation
+      if (!solanaWallet.signMessage) {
+        throw new Error("Wallet signature method not available");
+      }
+
+      // Generate message to sign
+      const timestamp = Date.now();
+      const nonce = Math.random().toString(36).substring(7);
+      const message = `Sign this message to authenticate with Blip Money\n\nWallet: ${solanaWallet.walletAddress}\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
+
+      // Request signature
+      const encodedMessage = new TextEncoder().encode(message);
+      const signatureUint8 = await solanaWallet.signMessage(encodedMessage);
+
+      // Convert to base58
+      const bs58 = await import('bs58');
+      const signature = bs58.default.encode(signatureUint8);
+
+      // Create merchant account via API
+      const res = await fetch('/api/auth/merchant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_merchant',
+          wallet_address: solanaWallet.walletAddress,
+          signature,
+          message,
+          username: username.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.data.merchant) {
+        // Merchant created successfully
+        const merchant = data.data.merchant;
+        setMerchantId(merchant.id);
+        setMerchantInfo(merchant);
+        setIsLoggedIn(true);
+        setShowUsernameModal(false);
+        localStorage.setItem('blip_merchant', JSON.stringify(merchant));
+        console.log('[Merchant] Merchant account created:', merchant);
+      } else {
+        throw new Error(data.error || 'Failed to create merchant');
+      }
+    } catch (error) {
+      console.error('Set merchant username error:', error);
+      throw error;
+    }
+  };
+
+  // Manual wallet authentication (triggered by button click)
+  const handleWalletAuth = async () => {
+    // Check for wallet address from both adapter and Phantom direct API (for Brave)
+    const phantom = typeof window !== 'undefined' ? (window as any).phantom?.solana : null;
+    const effectiveAddress = solanaWallet.walletAddress || phantom?.publicKey?.toString();
+
+    console.log('[Merchant] handleWalletAuth called. Wallet state:', {
+      connected: solanaWallet.connected,
+      walletAddress: solanaWallet.walletAddress,
+      phantomPublicKey: phantom?.publicKey?.toString(),
+      effectiveAddress,
+      hasSignMessage: !!solanaWallet.signMessage,
+      hasPhantomSignMessage: !!phantom?.signMessage,
+    });
+
+    // NOTE: On Brave with Phantom, connected may be false but Phantom direct API works
+    if (!effectiveAddress) {
+      // Open wallet modal if not connected
+      console.log('[Merchant] Wallet not connected, opening modal');
+      setShowWalletModal(true);
+      return;
+    }
+
+    console.log('[Merchant] Authenticating with wallet:', effectiveAddress);
+    setIsAuthenticating(true);
+    setLoginError("");
+
+    try {
+      // Generate message to sign
+      const timestamp = Date.now();
+      const nonce = Math.random().toString(36).substring(7);
+      const message = `Sign this message to authenticate with Blip Money\n\nWallet: ${effectiveAddress}\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
+
+      // Request signature
+      const encodedMessage = new TextEncoder().encode(message);
+
+      // Use adapter signMessage if available, fallback to Phantom direct API
+      let signatureUint8: Uint8Array;
+      if (solanaWallet.signMessage) {
+        console.log('[Merchant] Using adapter signMessage...');
+        signatureUint8 = await solanaWallet.signMessage(encodedMessage);
+      } else if (phantom?.signMessage) {
+        console.log('[Merchant] Using Phantom direct signMessage...');
+        const result = await phantom.signMessage(encodedMessage, 'utf8');
+        signatureUint8 = result.signature;
+      } else {
+        throw new Error('Wallet does not support message signing. Please reconnect your wallet.');
+      }
+
+      console.log('[Merchant] Signature received');
+
+      // Convert to base58
+      const bs58 = await import('bs58');
+      const signature = bs58.default.encode(signatureUint8);
+
+      // Authenticate with API
+      const res = await fetch('/api/auth/merchant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'wallet_login',
+          wallet_address: effectiveAddress,
+          signature,
+          message,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        if (data.data.isNewMerchant) {
+          // New merchant - need to create account first
+          setIsNewMerchant(true);
+          setShowUsernameModal(true);
+          setIsAuthenticating(false);
+        } else if (data.data.merchant) {
+          // Merchant authenticated successfully
+          const merchant = data.data.merchant;
+          setMerchantId(merchant.id);
+          setMerchantInfo(merchant);
+          setIsLoggedIn(true);
+          localStorage.setItem('blip_merchant', JSON.stringify(merchant));
+          setIsAuthenticating(false);
+          console.log('[Merchant] Wallet auth successful:', merchant);
+
+          // Show username modal in dashboard if needed
+          if (data.data.needsUsername || !merchant.username || merchant.username.startsWith('merchant_')) {
+            console.log('[Merchant] Will prompt for username in dashboard');
+            setShowUsernameModal(true);
+          }
+        }
+      } else {
+        setLoginError(data.error || 'Wallet authentication failed');
+        setIsAuthenticating(false);
+      }
+    } catch (error) {
+      console.error('Merchant wallet auth error:', error);
+      setLoginError(error instanceof Error ? error.message : 'Failed to authenticate with wallet');
+      setIsAuthenticating(false);
+    }
+  };
 
   // Handle merchant login
   const handleLogin = async () => {
@@ -504,7 +717,7 @@ export default function MerchantDashboard() {
         setMerchantId(data.data.merchant.id);
         setMerchantInfo(data.data.merchant);
         setIsLoggedIn(true);
-        localStorage.setItem('merchant_info', JSON.stringify(data.data.merchant));
+        localStorage.setItem('blip_merchant', JSON.stringify(data.data.merchant));
       } else {
         console.log('[Merchant] Login failed:', data);
         setLoginError(data.error || 'Login failed');
@@ -517,34 +730,244 @@ export default function MerchantDashboard() {
     }
   };
 
-  // Handle logout
+  // Handle merchant registration
+  const handleRegister = async () => {
+    if (registerForm.password !== registerForm.confirmPassword) {
+      setLoginError('Passwords do not match');
+      return;
+    }
+
+    if (registerForm.password.length < 6) {
+      setLoginError('Password must be at least 6 characters');
+      return;
+    }
+
+    setIsRegistering(true);
+    setLoginError("");
+
+    try {
+      const res = await fetch('/api/auth/merchant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'register',
+          email: registerForm.email,
+          password: registerForm.password,
+          business_name: registerForm.businessName || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.data.merchant) {
+        console.log('[Merchant] Registration successful:', data.data.merchant);
+        setMerchantId(data.data.merchant.id);
+        setMerchantInfo(data.data.merchant);
+        setIsLoggedIn(true);
+        localStorage.setItem('blip_merchant', JSON.stringify(data.data.merchant));
+      } else {
+        console.log('[Merchant] Registration failed:', data);
+        setLoginError(data.error || 'Registration failed');
+      }
+    } catch (err) {
+      console.error('Registration error:', err);
+      setLoginError('Connection failed');
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
+  // Handle logout and disconnect wallet
   const handleLogout = () => {
-    localStorage.removeItem('merchant_info');
+    localStorage.removeItem('blip_merchant');
     setMerchantId(null);
     setMerchantInfo(null);
     setIsLoggedIn(false);
     setOrders([]);
+    // Also disconnect wallet
+    if (solanaWallet.disconnect) {
+      solanaWallet.disconnect();
+    }
   };
 
-  // Check for saved session on mount
+  // Check for saved session and attempt auto-login on mount
+  // This combines localStorage check with wallet auto-login to handle timing properly
   useEffect(() => {
-    const saved = localStorage.getItem('merchant_info');
-    if (saved) {
+    let isMounted = true;
+    let loginAttempted = false;
+
+    const attemptAutoLogin = async (walletAddr: string): Promise<boolean> => {
+      if (loginAttempted) return false;
+      loginAttempted = true;
+
+      console.log('[Merchant] Attempting auto-login with wallet:', walletAddr);
       try {
-        const parsed = JSON.parse(saved);
-        setMerchantId(parsed.id);
-        setMerchantInfo(parsed);
-        setIsLoggedIn(true);
-      } catch {
-        localStorage.removeItem('merchant_info');
+        const response = await fetch(`/api/auth/merchant?action=wallet_login&wallet_address=${walletAddr}`);
+
+        if (!response.ok) {
+          console.log('[Merchant] Auto-login: merchant not found for wallet', response.status);
+          return false;
+        }
+
+        const data = await response.json();
+
+        if (data.success && data.data && isMounted) {
+          const merchant = data.data;
+
+          // Log in the merchant
+          setMerchantId(merchant.id);
+          setMerchantInfo(merchant);
+          setIsLoggedIn(true);
+          localStorage.setItem('blip_merchant', JSON.stringify(merchant));
+          console.log('[Merchant] Auto-login successful:', merchant);
+
+          // Show username modal in dashboard if needed
+          if (!merchant.username || merchant.username.startsWith('merchant_')) {
+            console.log('[Merchant] Auto-login: will prompt for username in dashboard');
+            setShowUsernameModal(true);
+          }
+
+          return true;
+        }
+        return false;
+      } catch (err) {
+        console.error('[Merchant] Auto-login error:', err);
+        return false;
       }
-    }
-    setIsLoading(false);
-  }, []);
+    };
+
+    const initialize = async () => {
+      console.log('[Merchant] Initializing...');
+
+      // Step 1: Check localStorage for saved session
+      const saved = localStorage.getItem('blip_merchant');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          console.log('[Merchant] Found saved session:', parsed);
+
+          // Validate that merchant ID is a proper UUID
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          if (uuidRegex.test(parsed.id) && isMounted) {
+            setMerchantId(parsed.id);
+            setMerchantInfo(parsed);
+            setIsLoggedIn(true);
+            setIsLoading(false);
+            return; // Already logged in from localStorage
+          } else {
+            console.log('[Merchant] Invalid merchant ID format, clearing localStorage:', parsed.id);
+            localStorage.removeItem('blip_merchant');
+          }
+        } catch (error) {
+          console.error('[Merchant] Failed to parse saved session:', error);
+          localStorage.removeItem('blip_merchant');
+        }
+      } else {
+        console.log('[Merchant] No saved session found');
+      }
+
+      // Step 2: Check if wallet is already connected (Phantom direct or adapter)
+      const getWalletAddress = () => {
+        const phantom = (window as any).phantom?.solana;
+        return solanaWallet.walletAddress || phantom?.publicKey?.toString();
+      };
+
+      // Check immediately
+      let walletAddr = getWalletAddress();
+      if (walletAddr) {
+        console.log('[Merchant] Wallet already available on mount:', walletAddr);
+        const success = await attemptAutoLogin(walletAddr);
+        if (success && isMounted) {
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Step 3: Wait a bit for Phantom to initialize (it can be slow on mobile/Brave)
+      // Check at 100ms, 300ms, 500ms, 800ms intervals
+      const delays = [100, 200, 200, 300];
+      for (const delay of delays) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        if (!isMounted) return;
+
+        walletAddr = getWalletAddress();
+        if (walletAddr) {
+          console.log('[Merchant] Wallet became available after delay:', walletAddr);
+          const success = await attemptAutoLogin(walletAddr);
+          if (success && isMounted) {
+            setIsLoading(false);
+            return;
+          }
+          break; // Wallet found but merchant not in DB, stop waiting
+        }
+      }
+
+      // Step 4: No saved session and no wallet/merchant found, show login screen
+      if (isMounted) {
+        console.log('[Merchant] No session or wallet found, showing login screen');
+        setIsLoading(false);
+      }
+    };
+
+    initialize();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Only run once on mount
+
+  // Auto-login when wallet connects AFTER initial load
+  // This handles the case where user connects wallet after page has loaded
+  useEffect(() => {
+    // Skip if already logged in or still in initial loading
+    if (isLoggedIn || isLoading) return;
+
+    // Also check direct Phantom access for Brave compatibility
+    const phantom = (window as any).phantom?.solana;
+    const walletAddr = solanaWallet.walletAddress || phantom?.publicKey?.toString();
+
+    if (!walletAddr) return;
+
+    console.log('[Merchant] Wallet connected after load, attempting auto-login:', walletAddr);
+
+    const autoLogin = async () => {
+      try {
+        const response = await fetch(`/api/auth/merchant?action=wallet_login&wallet_address=${walletAddr}`);
+
+        if (!response.ok) {
+          console.error('[Merchant] Failed to fetch merchant:', response.status);
+          return;
+        }
+
+        const data = await response.json();
+        if (data.success && data.data) {
+          const merchant = data.data;
+
+          // Log in the merchant
+          setMerchantId(merchant.id);
+          setMerchantInfo(merchant);
+          setIsLoggedIn(true);
+          localStorage.setItem('blip_merchant', JSON.stringify(merchant));
+          console.log('[Merchant] Auto-login successful:', merchant);
+
+          // Show username modal in dashboard if needed
+          if (!merchant.username || merchant.username.startsWith('merchant_')) {
+            console.log('[Merchant] Will prompt for username in dashboard');
+            setShowUsernameModal(true);
+          }
+        }
+      } catch (error) {
+        console.error('[Merchant] Error during auto-login:', error);
+      }
+    };
+
+    autoLogin();
+  }, [isLoggedIn, isLoading, solanaWallet.walletAddress]);
 
   // Prompt wallet connection after login if wallet not connected and no stored wallet
+  // NOTE: On Brave with Phantom, connected may be false but walletAddress is available
   useEffect(() => {
-    if (isLoggedIn && merchantId && !solanaWallet.connected && !merchantInfo?.wallet_address) {
+    if (isLoggedIn && merchantId && !solanaWallet.walletAddress && !merchantInfo?.wallet_address) {
       // Show prompt to connect wallet after a short delay
       const timer = setTimeout(() => {
         setShowWalletPrompt(true);
@@ -554,9 +977,10 @@ export default function MerchantDashboard() {
   }, [isLoggedIn, merchantId, solanaWallet.connected, merchantInfo?.wallet_address]);
 
   // Update merchant wallet in database when wallet connects
+  // NOTE: On Brave with Phantom, connected may be false but walletAddress is available
   useEffect(() => {
     const updateMerchantWallet = async () => {
-      if (!merchantId || !solanaWallet.connected || !solanaWallet.walletAddress) return;
+      if (!merchantId || !solanaWallet.walletAddress) return;
 
       // Check if wallet is different from stored one
       if (merchantInfo?.wallet_address === solanaWallet.walletAddress) {
@@ -574,6 +998,11 @@ export default function MerchantDashboard() {
             wallet_address: solanaWallet.walletAddress,
           }),
         });
+
+        if (!res.ok) {
+          console.error('[Merchant] Failed to update wallet, status:', res.status);
+          return;
+        }
 
         const data = await res.json();
         if (data.success) {
@@ -679,12 +1108,32 @@ export default function MerchantDashboard() {
     return () => clearInterval(interval);
   }, [merchantId, isPusherConnected, fetchOrders]);
 
+  // Auto-expire orders every 30 seconds
+  useEffect(() => {
+    if (!merchantId) return;
+
+    const expireOrders = async () => {
+      try {
+        await fetch('/api/orders/expire', { method: 'POST' });
+      } catch (error) {
+        console.error('[Merchant] Failed to expire orders:', error);
+      }
+    };
+
+    // Run immediately and then every 30 seconds
+    expireOrders();
+    const interval = setInterval(expireOrders, 30000);
+
+    return () => clearInterval(interval);
+  }, [merchantId]);
+
   // Real-time orders subscription - triggers refetch on updates
   useRealtimeOrders({
     actorType: 'merchant',
     actorId: merchantId,
-    onOrderCreated: () => {
+    onOrderCreated: (order) => {
       // Refetch orders when a new order comes in
+      console.log('[Merchant] Real-time: New order created!', order);
       fetchOrders();
       playSound('notification');
       addNotification('order', 'New order received');
@@ -1520,6 +1969,20 @@ export default function MerchantDashboard() {
   const activeChat = chatWindows.find(c => c.id === activeChatId);
   const totalUnread = chatWindows.reduce((sum, c) => sum + c.unread, 0);
 
+  // Loading screen - show while checking session/wallet
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="w-16 h-16 rounded-2xl bg-white/[0.08] border border-white/[0.08] flex items-center justify-center mx-auto mb-4">
+            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          </div>
+          <p className="text-sm text-gray-400">Checking wallet connection...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Login screen
   if (!isLoggedIn) {
     return (
@@ -1530,7 +1993,31 @@ export default function MerchantDashboard() {
               <Wallet className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-xl font-bold mb-2">Merchant Portal</h1>
-            <p className="text-sm text-gray-500">Sign in to manage your orders</p>
+            <p className="text-sm text-gray-500">Manage your orders and trades</p>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex mb-4 bg-[#151515] rounded-xl p-1">
+            <button
+              onClick={() => { setAuthTab('signin'); setLoginError(''); }}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                authTab === 'signin'
+                  ? 'bg-white text-black'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => { setAuthTab('create'); setLoginError(''); }}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                authTab === 'create'
+                  ? 'bg-white text-black'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Create Account
+            </button>
           </div>
 
           <div className="bg-[#0d0d0d] rounded-2xl border border-white/[0.04] p-6 space-y-4">
@@ -1540,57 +2027,165 @@ export default function MerchantDashboard() {
               </div>
             )}
 
-            <div>
-              <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Email</label>
-              <input
-                type="email"
-                value={loginForm.email}
-                onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="merchant@email.com"
-                className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Password</label>
-              <input
-                type="password"
-                value={loginForm.password}
-                onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                placeholder="••••••••"
-                className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-              />
-            </div>
-
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={handleLogin}
-              disabled={isLoggingIn}
-              className="w-full py-3 rounded-xl text-sm font-bold bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-50"
-            >
-              {isLoggingIn ? "Signing in..." : "Sign In"}
-            </motion.button>
-
-            <div className="border-t border-white/[0.04] pt-4 mt-4">
-              <p className="text-xs text-gray-500 mb-3 text-center">Test Accounts:</p>
-              <div className="space-y-2">
-                <button
-                  onClick={() => setLoginForm({ email: "desertgold@merchant.com", password: "merchant123" })}
-                  className="w-full p-2 bg-white/[0.02] hover:bg-white/[0.05] rounded-lg text-left transition-colors"
-                >
-                  <p className="text-xs font-medium">QuickSwap</p>
-                  <p className="text-[10px] text-gray-500">desertgold@merchant.com / merchant123</p>
-                </button>
-                <button
-                  onClick={() => setLoginForm({ email: "desertgold@merchant.com", password: "merchant123" })}
-                  className="w-full p-2 bg-white/[0.02] hover:bg-white/[0.05] rounded-lg text-left transition-colors"
-                >
-                  <p className="text-xs font-medium">DesertGold</p>
-                  <p className="text-[10px] text-gray-500">desertgold@merchant.com / merchant123</p>
-                </button>
+            {isAuthenticating && (
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-sm text-blue-400 flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Authenticating with wallet...
               </div>
-            </div>
+            )}
+
+            {/* Sign In Tab */}
+            {authTab === 'signin' && (
+              <div className="space-y-4">
+                {/* Wallet Connect */}
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  onClick={async () => {
+                    console.log('[Merchant] Connect button clicked');
+
+                    // Check if wallet address is already available (from adapter or Phantom direct)
+                    const phantom = (window as any).phantom?.solana;
+                    const effectiveWalletAddress = solanaWallet.walletAddress || (phantom?.publicKey?.toString());
+
+                    if (effectiveWalletAddress) {
+                      // Wallet is already connected - authenticate with signature
+                      console.log('[Merchant] Wallet already connected, authenticating:', effectiveWalletAddress);
+                      handleWalletAuth();
+                    } else {
+                      // Need to connect wallet first
+                      console.log('[Merchant] Opening wallet modal to connect');
+                      setShowWalletModal(true);
+                    }
+                  }}
+                  disabled={isAuthenticating}
+                  className="w-full py-3.5 rounded-xl text-sm font-bold bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-70"
+                >
+                  {isAuthenticating ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Authenticating...
+                    </>
+                  ) : (
+                    <>
+                      <Wallet className="w-5 h-5" />
+                      {(solanaWallet.walletAddress || (typeof window !== 'undefined' && (window as any).phantom?.solana?.publicKey))
+                        ? 'Sign In with Wallet'
+                        : 'Connect Wallet'}
+                    </>
+                  )}
+                </motion.button>
+
+                <p className="text-[11px] text-gray-500 text-center">
+                  Connect your Solana wallet to sign in
+                </p>
+
+                <p className="text-[11px] text-gray-500 text-center">
+                  Supports Phantom, Solflare, Coinbase Wallet & more
+                </p>
+
+                {/* Divider for email login */}
+                <div className="flex items-center gap-3 pt-2">
+                  <div className="flex-1 h-px bg-white/[0.04]" />
+                  <span className="text-[11px] text-gray-500">or sign in with email</span>
+                  <div className="flex-1 h-px bg-white/[0.04]" />
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Email</label>
+                  <input
+                    type="email"
+                    value={loginForm.email}
+                    onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="merchant@email.com"
+                    className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Password</label>
+                  <input
+                    type="password"
+                    value={loginForm.password}
+                    onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="••••••••"
+                    className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
+                    onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                  />
+                </div>
+
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleLogin}
+                  disabled={isLoggingIn || !loginForm.email || !loginForm.password}
+                  className="w-full py-3 rounded-xl text-sm font-bold bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-50"
+                >
+                  {isLoggingIn ? "Signing in..." : "Sign In"}
+                </motion.button>
+              </div>
+            )}
+
+            {/* Create Account Tab */}
+            {authTab === 'create' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Email</label>
+                  <input
+                    type="email"
+                    value={registerForm.email}
+                    onChange={(e) => setRegisterForm(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="your@email.com"
+                    className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Business Name (Optional)</label>
+                  <input
+                    type="text"
+                    value={registerForm.businessName}
+                    onChange={(e) => setRegisterForm(prev => ({ ...prev, businessName: e.target.value }))}
+                    placeholder="Your Business"
+                    className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Password</label>
+                  <input
+                    type="password"
+                    value={registerForm.password}
+                    onChange={(e) => setRegisterForm(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="Min. 6 characters"
+                    className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Confirm Password</label>
+                  <input
+                    type="password"
+                    value={registerForm.confirmPassword}
+                    onChange={(e) => setRegisterForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                    placeholder="••••••••"
+                    className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
+                    onKeyDown={(e) => e.key === "Enter" && handleRegister()}
+                  />
+                </div>
+
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleRegister}
+                  disabled={isRegistering || !registerForm.email || !registerForm.password || !registerForm.confirmPassword}
+                  className="w-full py-3.5 rounded-xl text-sm font-bold bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                >
+                  {isRegistering ? "Creating Account..." : "Create Account"}
+                </motion.button>
+
+                <p className="text-[11px] text-gray-500 text-center">
+                  After creating your account, you can connect your wallet to enable on-chain transactions
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1663,46 +2258,52 @@ export default function MerchantDashboard() {
             )}
           </motion.button>
 
+          {/* Open Trade - Merchant initiates trade */}
+          {solanaWallet.connected && (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowOpenTradeModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all"
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+              <span className="hidden sm:inline">Open Trade</span>
+            </motion.button>
+          )}
+
           <div className="flex-1" />
 
           {/* Quick Stats */}
-          <div className="hidden lg:flex items-center gap-2">
+          <div className="hidden lg:flex items-center gap-1.5">
+            {/* Total Earned - Inline */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 rounded-md border border-emerald-500/20" title="Total Earned Today">
+              <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-xs font-bold text-emerald-400">${Math.round(todayEarnings + pendingEarnings)}</span>
+            </div>
+
             {/* USDT Balance */}
             <button
               onClick={() => setShowWalletModal(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#26A17B]/10 rounded-md border border-[#26A17B]/30 hover:bg-[#26A17B]/20 transition-colors"
+              className="flex items-center gap-1 px-2 py-1 bg-[#26A17B]/10 rounded-md border border-[#26A17B]/20 hover:bg-[#26A17B]/20 transition-colors"
               title={solanaWallet.connected ? "USDT Balance" : "Connect Wallet"}
             >
-              <span className="text-xs font-bold text-[#26A17B]">
+              <span className="text-[11px] font-mono text-[#26A17B]">
                 {solanaWallet.connected && solanaWallet.usdtBalance !== null
-                  ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
-                  : "Connect Wallet"}
+                  ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USDT`
+                  : "Connect"}
               </span>
             </button>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#151515] rounded-md border border-white/[0.04]" title="Total Volume Today">
-              <Wallet className="w-3 h-3 text-gray-400" />
-              <span className="text-xs font-bold">${totalTradedVolume.toLocaleString()}</span>
+
+            {/* Volume */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-white/[0.03] rounded-md" title="Total Volume Today">
+              <span className="text-[10px] font-mono text-gray-500">VOL</span>
+              <span className="text-[11px] font-mono text-gray-400">${totalTradedVolume.toLocaleString()}</span>
             </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 rounded-md border border-emerald-500/20" title="Earnings Today (0.5% per trade)">
-              <TrendingUp className="w-3 h-3 text-emerald-400" />
-              <span className="text-xs font-bold text-emerald-400">+${Math.round(todayEarnings)}</span>
-            </div>
-            {pendingEarnings > 0 && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 rounded-md border border-amber-500/20" title="Pending Earnings in Escrow">
-                <Lock className="w-3 h-3 text-amber-400" />
-                <span className="text-xs font-bold text-amber-400">+${Math.round(pendingEarnings)}</span>
-              </div>
-            )}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#151515] rounded-md border border-white/[0.04]" title="Completed Trades">
-              <Activity className="w-3 h-3 text-gray-400" />
-              <span className="text-xs font-medium">{completedOrders.length} trades</span>
-            </div>
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#151515] rounded-md border border-white/[0.04]" title="Collateral Locked">
-              <Shield className="w-3 h-3 text-emerald-400" />
-              <span className="text-xs">5k</span>
-              <div className="w-8 h-1 bg-[#252525] rounded-full overflow-hidden">
-                <div className="h-full w-[32%] bg-white/40" />
-              </div>
+
+            {/* Trades */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-white/[0.03] rounded-md" title="Completed Trades">
+              <Activity className="w-3 h-3 text-gray-500" />
+              <span className="text-[11px] font-mono text-gray-400">{completedOrders.length}</span>
             </div>
           </div>
 
@@ -1716,14 +2317,23 @@ export default function MerchantDashboard() {
             <span className="text-[10px] text-emerald-400 font-medium">Online</span>
           </div>
 
-          {/* Logout Button */}
+          {/* Wallet & Logout Button */}
+          {solanaWallet.walletAddress && (
+            <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-[#151515] rounded-md border border-white/[0.04]">
+              <Wallet className="w-3 h-3 text-gray-500" />
+              <span className="text-[10px] text-gray-400 font-mono">
+                {solanaWallet.walletAddress.slice(0, 4)}...{solanaWallet.walletAddress.slice(-4)}
+              </span>
+            </div>
+          )}
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={handleLogout}
-            className="p-1.5 bg-[#151515] rounded-md border border-white/[0.04] hover:bg-red-500/10 hover:border-red-500/20 transition-colors"
-            title="Logout"
+            className="flex items-center gap-1.5 px-2 py-1.5 bg-[#151515] rounded-md border border-white/[0.04] hover:bg-red-500/10 hover:border-red-500/20 transition-colors group"
+            title="Disconnect wallet & logout"
           >
-            <LogOut className="w-4 h-4 text-gray-400 hover:text-red-400" />
+            <LogOut className="w-4 h-4 text-gray-400 group-hover:text-red-400" />
+            <span className="hidden sm:inline text-xs text-gray-400 group-hover:text-red-400">Disconnect</span>
           </motion.button>
 
           {/* Notifications */}
@@ -1813,54 +2423,54 @@ export default function MerchantDashboard() {
           {/* Profile */}
           <div className="flex items-center gap-2 pl-2 border-l border-white/[0.08]">
             <div className="w-7 h-7 rounded-full border border-white/20 flex items-center justify-center text-sm">
-              🐋
+              {merchantInfo?.display_name?.charAt(0)?.toUpperCase() || '🐋'}
             </div>
             <div className="hidden sm:block">
-              <p className="text-[11px] font-medium">crypto_whale</p>
-              <p className="text-[9px] text-gray-500">4.92★</p>
+              <p className="text-[11px] font-medium">{merchantInfo?.display_name || merchantInfo?.business_name || 'Merchant'}</p>
+              <p className="text-[9px] text-gray-500">{merchantInfo?.rating?.toFixed(2) || '5.00'}★</p>
             </div>
           </div>
         </div>
       </header>
 
       {/* Mobile Stats Bar - Shows on mobile only */}
-      <div className="md:hidden flex items-center gap-2 px-4 py-2 bg-[#0d0d0d] border-b border-white/[0.04] overflow-x-auto scrollbar-hide">
+      <div className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-[#0d0d0d] border-b border-white/[0.06]">
+        {/* Total Earned - Inline */}
+        <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 rounded-md border border-emerald-500/20 shrink-0">
+          <DollarSign className="w-3 h-3 text-emerald-400" />
+          <span className="text-xs font-bold text-emerald-400">${Math.round(todayEarnings + pendingEarnings)}</span>
+        </div>
+
         {/* USDT Balance */}
         <button
           onClick={() => setShowWalletModal(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#26A17B]/10 rounded-lg border border-[#26A17B]/30 shrink-0"
+          className="flex items-center gap-1 px-2 py-1 bg-[#26A17B]/10 rounded-md border border-[#26A17B]/20 shrink-0"
         >
-          <span className="text-xs font-bold text-[#26A17B]">
+          <span className="text-[11px] font-mono text-[#26A17B]">
             {solanaWallet.connected && solanaWallet.usdtBalance !== null
-              ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
-              : "Connect"}
+              ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+              : "—"}
           </span>
         </button>
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#151515] rounded-lg border border-white/[0.04] shrink-0">
-          <Wallet className="w-3.5 h-3.5 text-gray-400" />
-          <span className="text-xs font-bold">${totalTradedVolume.toLocaleString()}</span>
+
+        {/* Volume */}
+        <div className="flex items-center gap-1 px-2 py-1 bg-white/[0.03] rounded-md shrink-0">
+          <span className="text-[10px] font-mono text-gray-400">${totalTradedVolume.toLocaleString()}</span>
         </div>
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-500/10 rounded-lg border border-emerald-500/20 shrink-0">
-          <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-xs font-bold text-emerald-400">+${Math.round(todayEarnings)}</span>
-        </div>
-        {pendingEarnings > 0 && (
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-500/10 rounded-lg border border-amber-500/20 shrink-0">
-            <Lock className="w-3.5 h-3.5 text-amber-400" />
-            <span className="text-xs font-bold text-amber-400">+${Math.round(pendingEarnings)}</span>
-          </div>
-        )}
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#151515] rounded-lg border border-white/[0.04] shrink-0">
-          <Activity className="w-3.5 h-3.5 text-gray-400" />
-          <span className="text-xs font-medium">{completedOrders.length} trades</span>
-        </div>
+
         <div className="flex-1" />
+
+        {/* Notifications */}
         <button
-          onClick={handleLogout}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-500/10 rounded-lg border border-red-500/20 shrink-0"
+          onClick={() => setShowNotifications(!showNotifications)}
+          className="relative p-1.5 bg-white/[0.04] rounded-md shrink-0"
         >
-          <LogOut className="w-3.5 h-3.5 text-red-400" />
-          <span className="text-xs font-medium text-red-400">Logout</span>
+          <Bell className="w-3.5 h-3.5 text-gray-400" />
+          {notifications.filter(n => !n.read).length > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full text-[8px] font-bold flex items-center justify-center text-white">
+              {notifications.filter(n => !n.read).length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -2141,157 +2751,133 @@ export default function MerchantDashboard() {
                               animate={{ opacity: 1, x: 0 }}
                               exit={{ opacity: 0, x: 20 }}
                               transition={{ delay: i * 0.03 }}
-                              className="p-3 bg-[#1a1a1a] rounded-lg border border-amber-500/20 hover:border-amber-500/30 hover:bg-[#1d1d1d] transition-all"
+                              className="p-2.5 bg-[#141414] rounded-lg border border-amber-500/10 hover:border-amber-500/20 transition-all"
                             >
-                              <div className="flex items-center gap-3">
-                                <button
-                                  onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
-                                  className="w-11 h-11 rounded-lg bg-[#252525] flex items-center justify-center text-xl shrink-0 hover:bg-[#2a2a2a] transition-colors"
-                                >
-                                  {order.emoji}
-                                </button>
+                              {/* Row 1: User + Timer + Status */}
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-7 h-7 rounded-md bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                                  <span className="text-[10px] font-bold text-amber-400">
+                                    {order.user.slice(0, 2).toUpperCase()}
+                                  </span>
+                                </div>
+                                <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
+                                <div className={`text-[11px] font-mono ${timePercent < 20 ? "text-red-400" : "text-amber-400/70"}`}>
+                                  {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
+                                </div>
+                                {waitingForUser ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded font-mono">RELEASING</span>
+                                ) : canConfirmPayment ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded font-mono">PAID</span>
+                                ) : canComplete ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded font-mono">READY</span>
+                                ) : canMarkPaid ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded font-mono">SEND</span>
+                                ) : (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded font-mono">LOCKED</span>
+                                )}
+                              </div>
+
+                              {/* Row 2: Amount + Actions */}
+                              <div className="flex items-center gap-2 pl-9">
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1.5 mb-1">
-                                    <span className="text-sm font-medium text-gray-300 truncate">{order.user}</span>
-                                    {waitingForUser ? (
-                                      <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded">⏳ User releasing</span>
-                                    ) : canConfirmPayment ? (
-                                      <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded">💸 User paid</span>
-                                    ) : canComplete ? (
-                                      <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded">✓ Confirmed</span>
-                                    ) : canMarkPaid ? (
-                                      <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded">Send AED</span>
-                                    ) : (
-                                      <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded">🔒</span>
-                                    )}
-                                    {order.isNew && (
-                                      <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">
-                                        <Sparkles className="w-2.5 h-2.5" />
-                                        NEW
-                                      </span>
-                                    )}
-                                    {(order.tradeVolume || 0) >= TOP_1_PERCENT_THRESHOLD && (
-                                      <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded font-medium">
-                                        <Crown className="w-2.5 h-2.5" />
-                                        TOP 1%
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-sm font-bold text-white">د.إ {Math.round(order.total).toLocaleString()}</span>
-                                    <span className="text-xs text-white/60">{order.toCurrency}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
+                                    <ArrowRight className="w-3 h-3 text-gray-600" />
+                                    <span className="text-sm font-bold text-white">{Math.round(order.total).toLocaleString()}</span>
+                                    <span className="text-[10px] text-gray-500">AED</span>
                                   </div>
                                   {/* Show user's bank for sell orders waiting for merchant payment */}
                                   {canMarkPaid && order.userBankAccount && (
-                                    <div className="mt-1 text-[10px] text-orange-400 font-mono truncate" title={order.userBankAccount}>
+                                    <div className="mt-1 text-[10px] text-orange-400/80 font-mono truncate" title={order.userBankAccount}>
                                       → {order.userBankAccount}
                                     </div>
                                   )}
                                 </div>
-                                <div className="text-right shrink-0 w-12">
-                                  <div className={`text-xs font-mono mb-1 ${timePercent < 20 ? "text-red-400" : "text-amber-400"}`}>
-                                    {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
-                                  </div>
-                                  <div className="h-1.5 bg-[#252525] rounded-full overflow-hidden">
-                                    <div
-                                      className={`h-full transition-all ${timePercent < 20 ? "bg-red-500" : "bg-amber-500"}`}
-                                      style={{ width: `${timePercent}%` }}
-                                    />
-                                  </div>
-                                </div>
-                                {/* Extension UI */}
-                                {extensionRequests.has(order.id) && extensionRequests.get(order.id)?.requestedBy === 'user' ? (
-                                  // User requested extension - show accept/decline
-                                  <div className="flex gap-1 shrink-0">
-                                    <motion.button
-                                      whileTap={{ scale: 0.95 }}
-                                      onClick={() => respondToExtension(order.id, true)}
+
+                                {/* Icon buttons */}
+                                <div className="flex items-center gap-1">
+                                  {/* Extension UI */}
+                                  {extensionRequests.has(order.id) && extensionRequests.get(order.id)?.requestedBy === 'user' ? (
+                                    <div className="flex gap-0.5">
+                                      <button
+                                        onClick={() => respondToExtension(order.id, true)}
+                                        disabled={requestingExtension === order.id}
+                                        className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded text-[10px] disabled:opacity-50"
+                                        title={`Accept +${extensionRequests.get(order.id)?.extensionMinutes}min`}
+                                      >
+                                        <Check className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        onClick={() => respondToExtension(order.id, false)}
+                                        disabled={requestingExtension === order.id}
+                                        className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded disabled:opacity-50"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ) : timePercent < 30 && !extensionRequests.has(order.id) ? (
+                                    <button
+                                      onClick={() => requestExtension(order.id)}
                                       disabled={requestingExtension === order.id}
-                                      className="px-2 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded text-[10px] font-medium disabled:opacity-50"
-                                      title={`Accept +${extensionRequests.get(order.id)?.extensionMinutes}min`}
+                                      className="p-1.5 hover:bg-orange-500/10 rounded transition-colors disabled:opacity-50"
+                                      title="Request extension"
                                     >
-                                      +{extensionRequests.get(order.id)?.extensionMinutes}m
-                                    </motion.button>
-                                    <motion.button
-                                      whileTap={{ scale: 0.95 }}
-                                      onClick={() => respondToExtension(order.id, false)}
-                                      disabled={requestingExtension === order.id}
-                                      className="px-2 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded text-[10px] font-medium disabled:opacity-50"
-                                      title="Decline extension"
-                                    >
-                                      ✕
-                                    </motion.button>
-                                  </div>
-                                ) : timePercent < 30 && !extensionRequests.has(order.id) ? (
-                                  // Time running low - show request extension button
-                                  <motion.button
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => requestExtension(order.id)}
-                                    disabled={requestingExtension === order.id}
-                                    className="p-2 hover:bg-orange-500/10 rounded-md transition-colors shrink-0 disabled:opacity-50"
-                                    title="Request time extension"
+                                      <Clock className={`w-3.5 h-3.5 ${requestingExtension === order.id ? 'animate-spin text-orange-400' : 'text-gray-500 hover:text-orange-400'}`} />
+                                    </button>
+                                  ) : null}
+                                  <button
+                                    onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
+                                    className="p-1.5 hover:bg-white/[0.04] rounded transition-colors"
+                                    title="Chat"
                                   >
-                                    <Clock className={`w-4 h-4 ${requestingExtension === order.id ? 'animate-spin text-orange-400' : 'text-gray-500 hover:text-orange-400'}`} />
-                                  </motion.button>
-                                ) : extensionRequests.has(order.id) && extensionRequests.get(order.id)?.requestedBy === 'merchant' ? (
-                                  // We requested extension - show pending
-                                  <span className="px-2 py-1.5 bg-orange-500/10 text-orange-400 rounded text-[10px] font-medium shrink-0">
-                                    Pending...
-                                  </span>
-                                ) : null}
-                                <button
-                                  onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
-                                  className="p-2 hover:bg-white/[0.04] rounded-md transition-colors shrink-0"
-                                  title="Chat"
-                                >
-                                  <MessageCircle className="w-4 h-4 text-gray-500 hover:text-amber-400" />
-                                </button>
-                                <button
-                                  onClick={() => openDisputeModal(order.id)}
-                                  className="p-2 hover:bg-red-500/10 rounded-md transition-colors shrink-0"
-                                  title="Report Issue"
-                                >
-                                  <AlertTriangle className="w-4 h-4 text-gray-500 hover:text-red-400" />
-                                </button>
+                                    <MessageCircle className="w-3.5 h-3.5 text-gray-500 hover:text-amber-400" />
+                                  </button>
+                                  <button
+                                    onClick={() => openDisputeModal(order.id)}
+                                    className="p-1.5 hover:bg-red-500/10 rounded transition-colors"
+                                    title="Dispute"
+                                  >
+                                    <AlertTriangle className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
+                                  </button>
+                                </div>
+
+                                {/* Action button */}
                                 {canMarkPaid ? (
                                   <motion.button
-                                    whileTap={{ scale: 0.92 }}
+                                    whileTap={{ scale: 0.95 }}
                                     onClick={() => markPaymentSent(order)}
                                     disabled={markingDone}
-                                    className="px-3 py-1.5 bg-orange-500 hover:bg-orange-400 rounded-md text-xs font-bold text-white transition-all shrink-0 disabled:opacity-50"
-                                    title="Mark that you've sent fiat to user's bank"
+                                    className="px-2.5 py-1.5 bg-orange-500 hover:bg-orange-400 rounded text-[11px] font-bold text-white disabled:opacity-50"
                                   >
                                     {markingDone ? '...' : "I've Paid"}
                                   </motion.button>
                                 ) : waitingForUser ? (
-                                  <span className="px-3 py-1.5 bg-blue-500/20 rounded-md text-xs font-medium text-blue-400 shrink-0">
-                                    Waiting for user
+                                  <span className="px-2.5 py-1.5 bg-blue-500/10 rounded text-[11px] font-mono text-blue-400">
+                                    Waiting
                                   </span>
                                 ) : canConfirmPayment ? (
                                   <motion.button
-                                    whileTap={{ scale: 0.92 }}
+                                    whileTap={{ scale: 0.95 }}
                                     onClick={() => openReleaseModal(order)}
-                                    className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 rounded-md text-xs font-bold text-white transition-all shrink-0"
-                                    title="Confirm you received the payment and release USDC to buyer"
+                                    className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 rounded text-[11px] font-bold text-black"
                                   >
-                                    Confirm & Release
+                                    Release
                                   </motion.button>
                                 ) : canComplete ? (
                                   <motion.button
-                                    whileTap={{ scale: 0.92 }}
+                                    whileTap={{ scale: 0.95 }}
                                     onClick={() => completeOrder(order.id)}
-                                    className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 rounded-md text-xs font-bold text-black transition-all shrink-0"
-                                    title="Release crypto to buyer"
+                                    className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 rounded text-[11px] font-bold text-black"
                                   >
-                                    ✓ Release
+                                    Release
                                   </motion.button>
                                 ) : dbStatus === "escrowed" && order.orderType === "buy" ? (
-                                  <span className="px-3 py-1.5 bg-amber-500/20 rounded-md text-xs font-medium text-amber-400 shrink-0">
-                                    Awaiting payment
+                                  <span className="px-2.5 py-1.5 bg-amber-500/10 rounded text-[11px] font-mono text-amber-400">
+                                    Awaiting
                                   </span>
                                 ) : (
-                                  <span className="px-3 py-1.5 bg-gray-700/50 rounded-md text-xs font-medium text-gray-500 shrink-0">
-                                    Waiting...
+                                  <span className="px-2.5 py-1.5 bg-white/[0.04] rounded text-[11px] font-mono text-gray-500">
+                                    Waiting
                                   </span>
                                 )}
                               </div>
@@ -2300,8 +2886,8 @@ export default function MerchantDashboard() {
                         })
                       ) : (
                         <div className="flex flex-col items-center justify-center h-full py-8 text-gray-600">
-                          <span className="text-xl mb-1 opacity-40">🔐</span>
-                          <p className="text-[10px] text-gray-500">no active escrows</p>
+                          <Lock className="w-6 h-6 mb-1 opacity-20" />
+                          <p className="text-[10px] font-mono text-gray-500">No active escrows</p>
                         </div>
                       )}
                     </AnimatePresence>
@@ -2331,57 +2917,60 @@ export default function MerchantDashboard() {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -10 }}
                             transition={{ delay: i * 0.03 }}
-                            className="p-3 bg-[#1a1a1a] rounded-lg border border-blue-500/20 hover:border-blue-500/30 hover:bg-[#1d1d1d] transition-all"
+                            className="p-2.5 bg-[#141414] rounded-lg border border-blue-500/10 hover:border-blue-500/20 transition-all"
                           >
-                            <div className="flex items-center gap-3">
+                            {/* Row 1: User + Type */}
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-7 h-7 rounded-md bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+                                <span className="text-[10px] font-bold text-blue-400">
+                                  {order.user.slice(0, 2).toUpperCase()}
+                                </span>
+                              </div>
+                              <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                                order.orderType === 'buy'
+                                  ? 'bg-emerald-500/10 text-emerald-400'
+                                  : 'bg-blue-500/10 text-blue-400'
+                              }`}>
+                                {order.orderType?.toUpperCase()}
+                              </span>
+                            </div>
+
+                            {/* Row 2: Amount + Actions */}
+                            <div className="flex items-center gap-2 pl-9">
+                              <div className="flex-1 flex items-center gap-2">
+                                <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
+                                <ArrowRight className="w-3 h-3 text-gray-600" />
+                                <span className="text-sm font-bold text-white">{Math.round(order.total).toLocaleString()}</span>
+                                <span className="text-[10px] text-gray-500">AED</span>
+                              </div>
                               <button
                                 onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
-                                className="w-10 h-10 rounded-lg bg-[#252525] flex items-center justify-center text-lg shrink-0 hover:bg-[#2a2a2a] transition-colors"
+                                className="p-1.5 hover:bg-white/[0.04] rounded transition-colors"
+                                title="Chat"
                               >
-                                {order.emoji}
+                                <MessageCircle className="w-3.5 h-3.5 text-gray-500 hover:text-blue-400" />
                               </button>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 mb-1">
-                                  <span className="text-sm font-medium text-gray-300 truncate">{order.user}</span>
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded">
-                                    {order.orderType === 'buy' ? '⬆️ Buy' : '⬇️ Sell'}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-sm font-bold text-white">د.إ {Math.round(order.total).toLocaleString()}</span>
-                                  <span className="text-xs text-white/60">for {order.amount} {order.fromCurrency}</span>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <button
-                                  onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
-                                  className="p-2 hover:bg-white/[0.04] rounded-md transition-colors"
-                                  title="Chat"
+                              {order.orderType === 'buy' ? (
+                                <motion.button
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => openEscrowModal(order)}
+                                  className="px-2.5 py-1.5 bg-blue-500 hover:bg-blue-400 rounded text-[11px] font-bold text-white"
                                 >
-                                  <MessageCircle className="w-4 h-4 text-gray-500 hover:text-blue-400" />
-                                </button>
-                                {order.orderType === 'buy' ? (
-                                  <motion.button
-                                    whileTap={{ scale: 0.92 }}
-                                    onClick={() => openEscrowModal(order)}
-                                    className="px-3 py-1.5 bg-blue-500 hover:bg-blue-400 rounded-md text-xs font-bold text-white transition-all"
-                                    title="Lock your USDC in escrow"
-                                  >
-                                    🔒 Lock Escrow
-                                  </motion.button>
-                                ) : (
-                                  <span className="px-3 py-1.5 bg-gray-500/20 text-gray-400 rounded-md text-xs font-medium">
-                                    Waiting for user...
-                                  </span>
-                                )}
-                              </div>
+                                  Lock
+                                </motion.button>
+                              ) : (
+                                <span className="px-2.5 py-1.5 bg-white/[0.04] rounded text-[11px] font-mono text-gray-500">
+                                  Waiting
+                                </span>
+                              )}
                             </div>
                           </motion.div>
                         ))
                       ) : (
                         <div className="flex flex-col items-center justify-center h-full py-8 text-gray-600">
-                          <span className="text-xl mb-1 opacity-40">⚡</span>
-                          <p className="text-[10px] text-gray-500">no active orders</p>
+                          <Zap className="w-6 h-6 mb-1 opacity-20" />
+                          <p className="text-[10px] font-mono text-gray-500">No active orders</p>
                         </div>
                       )}
                     </AnimatePresence>
@@ -2414,56 +3003,26 @@ export default function MerchantDashboard() {
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ delay: i * 0.03 }}
-                            className="p-3 bg-[#1a1a1a] rounded-lg border border-emerald-500/15 hover:border-emerald-500/25 hover:bg-[#1d1d1d] transition-all"
+                            className="p-2.5 bg-[#141414] rounded-lg border border-emerald-500/10 hover:border-emerald-500/20 transition-all"
                           >
-                            <div className="flex items-center gap-3">
-                              <button
-                                onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
-                                className="w-11 h-11 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0 hover:bg-emerald-500/25 transition-colors"
-                              >
-                                <span className="text-xl">{order.emoji}</span>
-                              </button>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 mb-1">
-                                  <span className="text-sm font-medium text-gray-300 truncate">{order.user}</span>
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded">✓</span>
-                                  {order.isNew && (
-                                    <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">
-                                      <Sparkles className="w-2.5 h-2.5" />
-                                      NEW
-                                    </span>
-                                  )}
-                                  {(order.tradeVolume || 0) >= TOP_1_PERCENT_THRESHOLD && (
-                                    <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded font-medium">
-                                      <Crown className="w-2.5 h-2.5" />
-                                      TOP 1%
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-sm font-bold">${order.amount.toLocaleString()}</span>
-                                  <span className="text-xs text-gray-500">{order.fromCurrency}</span>
-                                </div>
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                                <span className="text-[10px] font-bold text-emerald-400">
+                                  {order.user.slice(0, 2).toUpperCase()}
+                                </span>
                               </div>
-                              <div className="text-right shrink-0">
-                                <div className="text-sm font-bold text-emerald-400">+${Math.round(profit)}</div>
-                                <div className="text-xs text-gray-600">earned</div>
-                              </div>
-                              <button
-                                onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
-                                className="p-2 hover:bg-white/[0.04] rounded-md transition-colors"
-                                title="Chat"
-                              >
-                                <MessageCircle className="w-4 h-4 text-gray-500 hover:text-gray-300" />
-                              </button>
+                              <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
+                              <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
+                              <span className="text-xs font-bold text-emerald-400">+${Math.round(profit)}</span>
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
                             </div>
                           </motion.div>
                         );
                       })
                     ) : (
                       <div className="flex flex-col items-center justify-center h-full py-8 text-gray-600">
-                        <span className="text-xl mb-1 opacity-40">💰</span>
-                        <p className="text-[10px] text-gray-500">completed trades appear here</p>
+                        <Check className="w-6 h-6 mb-1 opacity-20" />
+                        <p className="text-[10px] font-mono text-gray-500">No completed trades</p>
                       </div>
                     )}
                   </AnimatePresence>
@@ -2857,88 +3416,114 @@ export default function MerchantDashboard() {
         <main className="h-[calc(100vh-180px)] overflow-auto p-3">
           {/* Mobile: Orders View */}
           {mobileView === 'orders' && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 mb-3">
-                <motion.div
-                  className="w-2.5 h-2.5 rounded-full border border-white/40"
-                  animate={{ scale: [1, 1.3, 1], opacity: [0.5, 1, 0.5] }}
-                  transition={{ duration: 1.5, repeat: Infinity }}
-                />
-                <span className="text-sm font-semibold">New Orders</span>
-                <span className="ml-auto text-xs border border-white/20 text-white/70 px-2 py-0.5 rounded-full font-medium">
-                  {pendingOrders.length}
-                </span>
-              </div>
-              {pendingOrders.length > 0 ? (
-                pendingOrders.map((order) => (
+            <div className="space-y-1">
+              {/* Header Row */}
+              <div className="flex items-center justify-between px-2 py-2 border-b border-white/[0.06]">
+                <div className="flex items-center gap-2">
                   <motion.div
-                    key={order.id}
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    onClick={() => setSelectedOrderPopup(order)}
-                    className="p-3 bg-[#151515] rounded-xl border border-white/[0.06] cursor-pointer"
-                  >
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleOpenChat(order.user, order.emoji, order.id); setMobileView('chat'); }}
-                        className="w-12 h-12 rounded-xl bg-[#252525] flex items-center justify-center text-2xl"
-                      >
-                        {order.emoji}
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className="text-sm font-medium text-gray-300">{order.user}</span>
-                          {order.isNew && (
-                            <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">NEW</span>
-                          )}
-                          {order.escrowTxHash && order.orderType === 'sell' && (
-                            <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">
-                              <Shield className="w-2.5 h-2.5" />
-                              <Check className="w-2 h-2 -ml-0.5" />
-                              SECURED
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-base font-bold">${order.amount.toLocaleString()}</span>
-                          <span className="text-xs text-gray-500">→</span>
-                          <span className="text-base font-bold">د.إ {Math.round(order.total).toLocaleString()}</span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs font-semibold text-emerald-400">+${Math.round(order.amount * 0.005)}</div>
-                        <div className={`text-xs font-mono ${order.expiresIn < 30 ? "text-red-400" : "text-gray-500"}`}>
-                          {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
-                        </div>
-                      </div>
-                    </div>
-                    {/* Escrow TX Link for sell orders */}
-                    {order.escrowTxHash && order.orderType === 'sell' && (
-                      <a
-                        href={`https://explorer.solana.com/tx/${order.escrowTxHash}?cluster=devnet`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-1.5 mt-2 py-2 bg-emerald-500/10 rounded-lg text-[11px] text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-                      >
-                        <Shield className="w-3 h-3" />
-                        <span>View Escrow TX</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )}
-                    <motion.button
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => acceptOrder(order)}
-                      className="w-full mt-3 py-2.5 border border-white/30 hover:bg-white/5 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+                    className="w-2 h-2 rounded-full bg-white/60"
+                    animate={{ opacity: [0.4, 1, 0.4] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  />
+                  <span className="text-xs font-mono text-gray-400 uppercase tracking-wide">Pending</span>
+                </div>
+                <span className="text-xs font-mono text-gray-400">{pendingOrders.length}</span>
+              </div>
+
+              {pendingOrders.length > 0 ? (
+                <div className="divide-y divide-white/[0.04]">
+                  {pendingOrders.map((order) => (
+                    <motion.div
+                      key={order.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="px-2 py-3 hover:bg-white/[0.02] transition-colors"
                     >
-                      <Zap className="w-4 h-4" />
-                      Accept Order
-                    </motion.button>
-                  </motion.div>
-                ))
+                      {/* Main Row */}
+                      <div className="flex items-center gap-3">
+                        {/* User Avatar - initials */}
+                        <div className="w-8 h-8 rounded-md bg-white/[0.06] border border-white/[0.08] flex items-center justify-center">
+                          <span className="text-xs font-bold text-gray-400">
+                            {order.user.slice(0, 2).toUpperCase()}
+                          </span>
+                        </div>
+
+                        {/* User & Amount */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-white truncate">{order.user}</span>
+                            {order.orderType && (
+                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                                order.orderType === 'buy'
+                                  ? 'bg-emerald-500/10 text-emerald-400'
+                                  : 'bg-blue-500/10 text-blue-400'
+                              }`}>
+                                {order.orderType.toUpperCase()}
+                              </span>
+                            )}
+                            {order.isNew && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded">NEW</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs font-mono text-gray-400">
+                              {order.amount.toLocaleString()} <span className="text-gray-600">USDC</span>
+                            </span>
+                            <ArrowRight className="w-3 h-3 text-gray-600" />
+                            <span className="text-xs font-mono text-gray-400">
+                              {order.total.toLocaleString()} <span className="text-gray-600">AED</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Timer & Earnings */}
+                        <div className="text-right">
+                          <div className="text-[10px] font-mono text-emerald-400">+${Math.round(order.amount * 0.005)}</div>
+                          <div className={`text-xs font-mono ${order.expiresIn < 30 ? "text-red-400" : "text-gray-500"}`}>
+                            {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Escrow TX Link for sell orders */}
+                      {order.escrowTxHash && order.orderType === 'sell' && (
+                        <a
+                          href={`https://explorer.solana.com/tx/${order.escrowTxHash}?cluster=devnet`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center justify-center gap-1.5 mt-2 ml-11 py-1.5 bg-emerald-500/10 rounded-lg text-[10px] font-mono text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                        >
+                          <Shield className="w-3 h-3" />
+                          <span>Escrow Secured</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+
+                      {/* Action Row */}
+                      <div className="flex items-center gap-2 mt-2.5 pl-11">
+                        <motion.button
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => acceptOrder(order)}
+                          className="flex-1 h-9 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-lg text-xs font-medium text-white flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          Accept
+                        </motion.button>
+                        <button
+                          onClick={() => { handleOpenChat(order.user, order.emoji, order.id); setMobileView('chat'); }}
+                          className="h-9 w-9 border border-white/10 hover:border-white/20 rounded-lg flex items-center justify-center transition-colors"
+                        >
+                          <MessageCircle className="w-4 h-4 text-gray-400" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-gray-600">
-                  <span className="text-3xl mb-2 opacity-40">📭</span>
-                  <p className="text-sm text-gray-500">waiting for orders...</p>
+                <div className="flex flex-col items-center justify-center py-16 text-gray-600">
+                  <Activity className="w-8 h-8 mb-2 opacity-20" />
+                  <p className="text-xs text-gray-500 font-mono">Waiting for orders...</p>
                 </div>
               )}
             </div>
@@ -2946,71 +3531,97 @@ export default function MerchantDashboard() {
 
           {/* Mobile: Active View (accepted, awaiting escrow) */}
           {mobileView === 'active' && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 mb-3">
-                <Zap className="w-4 h-4 text-blue-400" />
-                <span className="text-sm font-semibold">Active</span>
-                <span className="ml-auto text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full font-medium">
-                  {activeOrders.length}
-                </span>
+            <div className="space-y-1">
+              {/* Header Row */}
+              <div className="flex items-center justify-between px-2 py-2 border-b border-white/[0.06]">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="text-xs font-mono text-gray-400 uppercase tracking-wide">Active</span>
+                </div>
+                <span className="text-xs font-mono text-blue-400">{activeOrders.length}</span>
               </div>
+
               {activeOrders.length > 0 ? (
-                activeOrders.map((order) => (
-                  <motion.div
-                    key={order.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="p-3 bg-[#151515] rounded-xl border border-blue-500/20"
-                  >
-                    <div className="flex items-center gap-3 mb-3">
-                      <button
-                        onClick={() => { handleOpenChat(order.user, order.emoji, order.id); setMobileView('chat'); }}
-                        className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-2xl"
-                      >
-                        {order.emoji}
-                      </button>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium">{order.user}</p>
-                          <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded">
-                            {order.orderType === 'buy' ? '⬆️ Buy' : '⬇️ Sell'}
+                <div className="divide-y divide-white/[0.04]">
+                  {activeOrders.map((order) => (
+                    <motion.div
+                      key={order.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="px-2 py-3 hover:bg-white/[0.02] transition-colors"
+                    >
+                      {/* Main Row */}
+                      <div className="flex items-center gap-3">
+                        {/* User Avatar - initials */}
+                        <div className="w-8 h-8 rounded-md bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                          <span className="text-xs font-bold text-blue-400">
+                            {order.user.slice(0, 2).toUpperCase()}
                           </span>
                         </div>
-                        <p className="text-lg font-bold">د.إ {Math.round(order.total).toLocaleString()}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-blue-400">Accepted</p>
-                        <p className="text-xs text-gray-500">{order.amount} USDC</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      {order.orderType === 'buy' ? (
-                        <motion.button
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => openEscrowModal(order)}
-                          className="flex-1 py-2.5 bg-blue-500 hover:bg-blue-400 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2"
-                        >
-                          <Lock className="w-4 h-4" />
-                          Lock Escrow
-                        </motion.button>
-                      ) : (
-                        <div className="flex-1 py-2.5 bg-gray-500/20 rounded-xl text-sm font-medium text-gray-400 flex items-center justify-center gap-2">
-                          Waiting for user to lock escrow...
+
+                        {/* User & Amount */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-white truncate">{order.user}</span>
+                            {order.orderType && (
+                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                                order.orderType === 'buy'
+                                  ? 'bg-emerald-500/10 text-emerald-400'
+                                  : 'bg-blue-500/10 text-blue-400'
+                              }`}>
+                                {order.orderType.toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs font-mono text-gray-400">
+                              {order.amount.toLocaleString()} <span className="text-gray-600">USDC</span>
+                            </span>
+                            <ArrowRight className="w-3 h-3 text-gray-600" />
+                            <span className="text-xs font-mono text-gray-400">
+                              {order.total.toLocaleString()} <span className="text-gray-600">AED</span>
+                            </span>
+                          </div>
                         </div>
-                      )}
-                      <button
-                        onClick={() => { handleOpenChat(order.user, order.emoji, order.id); setMobileView('chat'); }}
-                        className="px-4 py-2.5 border border-white/20 rounded-xl"
-                      >
-                        <MessageCircle className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </motion.div>
-                ))
+
+                        {/* Status */}
+                        <div className="flex items-center gap-1.5 text-blue-400">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                          <span className="text-[10px] font-mono uppercase">Waiting</span>
+                        </div>
+                      </div>
+
+                      {/* Action Row */}
+                      <div className="flex items-center gap-2 mt-2.5 pl-11">
+                        {order.orderType === 'buy' ? (
+                          <motion.button
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => openEscrowModal(order)}
+                            className="flex-1 h-9 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg text-xs font-medium text-blue-400 flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                            Lock Escrow
+                          </motion.button>
+                        ) : (
+                          <div className="flex-1 h-9 bg-white/[0.02] border border-white/[0.06] rounded-lg text-xs font-mono text-gray-500 flex items-center justify-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5" />
+                            Awaiting user escrow
+                          </div>
+                        )}
+                        <button
+                          onClick={() => { handleOpenChat(order.user, order.emoji, order.id); setMobileView('chat'); }}
+                          className="h-9 w-9 border border-white/10 hover:border-white/20 rounded-lg flex items-center justify-center transition-colors"
+                        >
+                          <MessageCircle className="w-4 h-4 text-gray-400" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-gray-600">
-                  <Zap className="w-10 h-10 mb-3 opacity-30" />
-                  <p className="text-sm text-gray-500">No active orders</p>
+                <div className="flex flex-col items-center justify-center py-16 text-gray-600">
+                  <Zap className="w-8 h-8 mb-2 opacity-20" />
+                  <p className="text-xs text-gray-500 font-mono">No active orders</p>
                 </div>
               )}
             </div>
@@ -3018,62 +3629,101 @@ export default function MerchantDashboard() {
 
           {/* Mobile: Escrow View */}
           {mobileView === 'escrow' && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 mb-3">
-                <Lock className="w-4 h-4 text-amber-400" />
-                <span className="text-sm font-semibold">In Escrow</span>
-                <span className="ml-auto text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-medium">
-                  {escrowOrders.length}
-                </span>
+            <div className="space-y-1">
+              {/* Header Row */}
+              <div className="flex items-center justify-between px-2 py-2 border-b border-white/[0.06]">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-xs font-mono text-gray-400 uppercase tracking-wide">Escrow</span>
+                </div>
+                <span className="text-xs font-mono text-amber-400">{escrowOrders.length}</span>
               </div>
+
               {escrowOrders.length > 0 ? (
-                escrowOrders.map((order) => (
-                  <motion.div
-                    key={order.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="p-3 bg-[#151515] rounded-xl border border-amber-500/20"
-                  >
-                    <div className="flex items-center gap-3 mb-3">
-                      <button
-                        onClick={() => { handleOpenChat(order.user, order.emoji, order.id); setMobileView('chat'); }}
-                        className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center text-2xl"
-                      >
-                        {order.emoji}
-                      </button>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{order.user}</p>
-                        <p className="text-lg font-bold">${order.amount.toLocaleString()}</p>
+                <div className="divide-y divide-white/[0.04]">
+                  {escrowOrders.map((order) => (
+                    <motion.div
+                      key={order.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="px-2 py-3 hover:bg-white/[0.02] transition-colors"
+                    >
+                      {/* Main Row */}
+                      <div className="flex items-center gap-3">
+                        {/* User Avatar - initials instead of emoji */}
+                        <div className="w-8 h-8 rounded-md bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                          <span className="text-xs font-bold text-amber-400">
+                            {order.user.slice(0, 2).toUpperCase()}
+                          </span>
+                        </div>
+
+                        {/* User & Amount */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-white truncate">{order.user}</span>
+                            {order.orderType && (
+                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                                order.orderType === 'buy'
+                                  ? 'bg-emerald-500/10 text-emerald-400'
+                                  : 'bg-blue-500/10 text-blue-400'
+                              }`}>
+                                {order.orderType.toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs font-mono text-gray-400">
+                              {order.amount.toLocaleString()} <span className="text-gray-600">USDC</span>
+                            </span>
+                            <ArrowRight className="w-3 h-3 text-gray-600" />
+                            <span className="text-xs font-mono text-gray-400">
+                              {order.total.toLocaleString()} <span className="text-gray-600">AED</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Timer */}
+                        <div className="flex items-center gap-1.5 text-amber-400">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span className="text-xs font-mono">
+                            {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs text-amber-400">In Progress</p>
-                        <p className="text-xs text-gray-500 font-mono">
-                          {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
-                        </p>
+
+                      {/* Action Row */}
+                      <div className="flex items-center gap-2 mt-2.5 pl-11">
+                        <motion.button
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => openReleaseModal(order)}
+                          className="flex-1 h-9 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-xs font-medium text-emerald-400 flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <Unlock className="w-3.5 h-3.5" />
+                          Release
+                        </motion.button>
+                        <button
+                          onClick={() => { handleOpenChat(order.user, order.emoji, order.id); setMobileView('chat'); }}
+                          className="h-9 w-9 border border-white/10 hover:border-white/20 rounded-lg flex items-center justify-center transition-colors"
+                        >
+                          <MessageCircle className="w-4 h-4 text-gray-400" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDisputeOrderId(order.id);
+                            setShowDisputeModal(true);
+                          }}
+                          className="h-9 w-9 border border-white/10 hover:border-red-500/30 rounded-lg flex items-center justify-center transition-colors group"
+                        >
+                          <AlertTriangle className="w-4 h-4 text-gray-400 group-hover:text-red-400" />
+                        </button>
                       </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <motion.button
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => openReleaseModal(order)}
-                        className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-400 rounded-xl text-sm font-bold text-black flex items-center justify-center gap-2"
-                      >
-                        <Check className="w-4 h-4" />
-                        Confirm & Release
-                      </motion.button>
-                      <button
-                        onClick={() => { handleOpenChat(order.user, order.emoji, order.id); setMobileView('chat'); }}
-                        className="px-4 py-2.5 border border-white/20 rounded-xl"
-                      >
-                        <MessageCircle className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </motion.div>
-                ))
+                    </motion.div>
+                  ))}
+                </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-gray-600">
-                  <Lock className="w-10 h-10 mb-3 opacity-30" />
-                  <p className="text-sm text-gray-500">No orders in escrow</p>
+                <div className="flex flex-col items-center justify-center py-16 text-gray-600">
+                  <Lock className="w-8 h-8 mb-2 opacity-20" />
+                  <p className="text-xs text-gray-500 font-mono">No active escrows</p>
                 </div>
               )}
             </div>
@@ -3211,24 +3861,26 @@ export default function MerchantDashboard() {
               </div>
 
               <div className="mt-6">
-                <h3 className="text-sm font-semibold mb-3">Recent Completed</h3>
-                <div className="space-y-2">
+                <h3 className="text-xs font-mono text-gray-400 uppercase tracking-wide mb-3">Recent Completed</h3>
+                <div className="space-y-1 divide-y divide-white/[0.04]">
                   {completedOrders.slice(0, 5).map((order) => (
-                    <div key={order.id} className="flex items-center gap-3 p-3 bg-[#151515] rounded-xl">
-                      <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-lg">
-                        {order.emoji}
+                    <div key={order.id} className="flex items-center gap-3 py-2.5">
+                      <div className="w-7 h-7 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-emerald-400">
+                          {order.user.slice(0, 2).toUpperCase()}
+                        </span>
                       </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{order.user}</p>
-                        <p className="text-xs text-gray-500">${order.amount.toLocaleString()}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{order.user}</p>
                       </div>
-                      <div className="text-emerald-400 text-xs font-medium">
-                        <Check className="w-4 h-4" />
+                      <div className="text-right">
+                        <span className="text-xs font-mono text-gray-400">${order.amount.toLocaleString()}</span>
                       </div>
+                      <Check className="w-4 h-4 text-emerald-400" />
                     </div>
                   ))}
                   {completedOrders.length === 0 && (
-                    <p className="text-sm text-gray-500 text-center py-4">No completed trades yet</p>
+                    <p className="text-xs text-gray-500 text-center py-8 font-mono">No completed trades yet</p>
                   )}
                 </div>
               </div>
@@ -3654,6 +4306,284 @@ export default function MerchantDashboard() {
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Open Corridor
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Open Trade Modal - Merchant initiates trade */}
+      <AnimatePresence>
+        {showOpenTradeModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
+              onClick={() => {
+                setShowOpenTradeModal(false);
+                setCreateTradeError(null);
+              }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md max-h-[90vh] overflow-y-auto"
+            >
+              <div className="bg-[#151515] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
+                {/* Header */}
+                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                      <ArrowLeftRight className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold">Open Trade</h2>
+                      <p className="text-[11px] text-gray-500">Initiate a trade with a customer</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowOpenTradeModal(false);
+                      setCreateTradeError(null);
+                    }}
+                    className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
+                  >
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
+
+                {/* Form */}
+                <div className="p-5 space-y-4">
+                  {/* Customer Wallet Address */}
+                  <div>
+                    <label className="text-[11px] text-gray-400 mb-1.5 block">Customer Wallet Address</label>
+                    <input
+                      type="text"
+                      placeholder="Enter Solana wallet address..."
+                      value={openTradeForm.customerWallet}
+                      onChange={(e) => setOpenTradeForm(prev => ({ ...prev, customerWallet: e.target.value }))}
+                      className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm font-mono outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-emerald-500/30"
+                    />
+                    <p className="text-[10px] text-gray-500 mt-1 ml-1">
+                      The customer&apos;s Solana wallet address
+                    </p>
+                  </div>
+
+                  {/* Trade Type */}
+                  <div>
+                    <label className="text-[11px] text-gray-400 mb-1.5 block">Trade Type</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setOpenTradeForm(prev => ({ ...prev, tradeType: "sell" }))}
+                        className={`py-3 rounded-xl text-xs font-medium transition-all ${
+                          openTradeForm.tradeType === "sell"
+                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                            : "bg-[#1f1f1f] text-gray-400 border border-transparent hover:bg-white/[0.04]"
+                        }`}
+                      >
+                        <div className="flex flex-col items-center gap-1">
+                          <span>Sell USDC</span>
+                          <span className="text-[9px] text-gray-500">You send USDC, get AED</span>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => setOpenTradeForm(prev => ({ ...prev, tradeType: "buy" }))}
+                        className={`py-3 rounded-xl text-xs font-medium transition-all ${
+                          openTradeForm.tradeType === "buy"
+                            ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                            : "bg-[#1f1f1f] text-gray-400 border border-transparent hover:bg-white/[0.04]"
+                        }`}
+                      >
+                        <div className="flex flex-col items-center gap-1">
+                          <span>Buy USDC</span>
+                          <span className="text-[9px] text-gray-500">You send AED, get USDC</span>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* USDC Amount */}
+                  <div>
+                    <label className="text-[11px] text-gray-400 mb-1.5 block">USDC Amount</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={openTradeForm.cryptoAmount}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/[^0-9.]/g, '');
+                          setOpenTradeForm(prev => ({ ...prev, cryptoAmount: value }));
+                        }}
+                        className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 pr-16 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-emerald-500/30"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">USDC</span>
+                    </div>
+                    {openTradeForm.tradeType === "sell" && solanaWallet.usdtBalance !== null && parseFloat(openTradeForm.cryptoAmount || "0") > solanaWallet.usdtBalance && (
+                      <p className="text-[10px] text-red-400 mt-1 ml-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" />
+                        Exceeds your wallet balance ({solanaWallet.usdtBalance.toLocaleString()} USDC)
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Payment Method */}
+                  <div>
+                    <label className="text-[11px] text-gray-400 mb-1.5 block">Payment Method</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setOpenTradeForm(prev => ({ ...prev, paymentMethod: "bank" }))}
+                        className={`py-2.5 rounded-xl text-xs font-medium transition-all ${
+                          openTradeForm.paymentMethod === "bank"
+                            ? "bg-white/10 text-white border border-white/20"
+                            : "bg-[#1f1f1f] text-gray-400 border border-transparent hover:bg-white/[0.04]"
+                        }`}
+                      >
+                        Bank Transfer
+                      </button>
+                      <button
+                        onClick={() => setOpenTradeForm(prev => ({ ...prev, paymentMethod: "cash" }))}
+                        className={`py-2.5 rounded-xl text-xs font-medium transition-all ${
+                          openTradeForm.paymentMethod === "cash"
+                            ? "bg-white/10 text-white border border-white/20"
+                            : "bg-[#1f1f1f] text-gray-400 border border-transparent hover:bg-white/[0.04]"
+                        }`}
+                      >
+                        Cash
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Trade Preview */}
+                  {openTradeForm.cryptoAmount && parseFloat(openTradeForm.cryptoAmount) > 0 && (
+                    <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.04]">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-[11px] font-medium text-emerald-400">Trade Preview</span>
+                      </div>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">USDC Amount</span>
+                          <span className="text-white">{parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Rate (est.)</span>
+                          <span className="text-white">3.67 AED/USDC</span>
+                        </div>
+                        <div className="flex justify-between pt-2 border-t border-white/[0.04]">
+                          <span className="text-gray-400">AED Amount</span>
+                          <span className="text-emerald-400 font-bold">
+                            {(parseFloat(openTradeForm.cryptoAmount) * 3.67).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AED
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error Message */}
+                  {createTradeError && (
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                      <p className="text-xs text-red-400 flex items-center gap-2">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        {createTradeError}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="px-5 py-4 border-t border-white/[0.04] flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowOpenTradeModal(false);
+                      setCreateTradeError(null);
+                    }}
+                    className="flex-1 py-3 rounded-xl text-xs font-medium bg-[#1f1f1f] text-gray-400 hover:bg-white/[0.04] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    disabled={
+                      isCreatingTrade ||
+                      !openTradeForm.customerWallet ||
+                      !openTradeForm.cryptoAmount ||
+                      parseFloat(openTradeForm.cryptoAmount) <= 0 ||
+                      (openTradeForm.tradeType === "sell" && solanaWallet.usdtBalance !== null && parseFloat(openTradeForm.cryptoAmount) > solanaWallet.usdtBalance)
+                    }
+                    onClick={async () => {
+                      if (!merchantId) return;
+                      setIsCreatingTrade(true);
+                      setCreateTradeError(null);
+
+                      try {
+                        const res = await fetch("/api/merchant/orders", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            merchant_id: merchantId,
+                            customer_wallet: openTradeForm.customerWallet.trim(),
+                            type: openTradeForm.tradeType,
+                            crypto_amount: parseFloat(openTradeForm.cryptoAmount),
+                            payment_method: openTradeForm.paymentMethod,
+                          }),
+                        });
+
+                        const data = await res.json();
+
+                        if (!res.ok || !data.success) {
+                          setCreateTradeError(data.error || "Failed to create trade");
+                          return;
+                        }
+
+                        // Success - close modal and refresh orders
+                        setShowOpenTradeModal(false);
+                        setOpenTradeForm({
+                          customerWallet: "",
+                          tradeType: "sell",
+                          cryptoAmount: "",
+                          paymentMethod: "bank",
+                        });
+                        addNotification('order', `Trade created for ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC`, data.data?.id);
+
+                        // Add to orders list
+                        if (data.data) {
+                          const newOrder = mapDbOrderToUI(data.data);
+                          setOrders(prev => [newOrder, ...prev]);
+                        }
+                      } catch (error) {
+                        console.error("Error creating trade:", error);
+                        setCreateTradeError("Network error. Please try again.");
+                      } finally {
+                        setIsCreatingTrade(false);
+                      }
+                    }}
+                    className={`flex-[2] py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 ${
+                      isCreatingTrade ||
+                      !openTradeForm.customerWallet ||
+                      !openTradeForm.cryptoAmount ||
+                      parseFloat(openTradeForm.cryptoAmount) <= 0 ||
+                      (openTradeForm.tradeType === "sell" && solanaWallet.usdtBalance !== null && parseFloat(openTradeForm.cryptoAmount) > solanaWallet.usdtBalance)
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        : 'bg-emerald-500 text-black hover:bg-emerald-400'
+                    }`}
+                  >
+                    {isCreatingTrade ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <ArrowLeftRight className="w-3.5 h-3.5" />
+                        Open Trade
+                      </>
+                    )}
                   </motion.button>
                 </div>
               </div>
@@ -4151,7 +5081,26 @@ export default function MerchantDashboard() {
       <MerchantWalletModal
         isOpen={showWalletModal}
         onClose={() => setShowWalletModal(false)}
+        onConnected={(address) => {
+          console.log('[Merchant] Wallet connected via modal:', address);
+          setShowWalletModal(false);
+          // Trigger authentication after short delay to let wallet state sync
+          setTimeout(() => {
+            handleWalletAuth();
+          }, 100);
+        }}
       />
+
+      {/* Username Modal for New Merchant Wallet Users */}
+      {(solanaWallet.walletAddress || (typeof window !== 'undefined' && (window as any).phantom?.solana?.publicKey)) && (
+        <UsernameModal
+          isOpen={showUsernameModal}
+          walletAddress={solanaWallet.walletAddress || (window as any).phantom?.solana?.publicKey?.toString()}
+          onSubmit={handleMerchantUsername}
+          canClose={false}
+          apiEndpoint="/api/auth/merchant"
+        />
+      )}
 
       {/* Wallet Connection Prompt - shown after login if no wallet connected */}
       <AnimatePresence>

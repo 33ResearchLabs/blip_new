@@ -127,9 +127,9 @@ export async function POST(request: NextRequest) {
         await query(`
           INSERT INTO compliance_team (email, name, role)
           VALUES
-            ('support@settle.com', 'Support Agent', 'support'),
-            ('compliance@settle.com', 'Compliance Officer', 'compliance'),
-            ('admin@settle.com', 'Admin', 'admin')
+            ('support@blip.money', 'Support Agent', 'support'),
+            ('compliance@blip.money', 'Compliance Officer', 'compliance'),
+            ('admin@blip.money', 'Admin', 'admin')
           ON CONFLICT (email) DO NOTHING
         `);
       } catch (tableError) {
@@ -211,9 +211,9 @@ export async function PUT() {
     await query(`
       INSERT INTO compliance_team (email, name, role)
       VALUES
-        ('support@settle.com', 'Support Agent', 'support'),
-        ('compliance@settle.com', 'Compliance Officer', 'compliance'),
-        ('admin@settle.com', 'Admin', 'admin')
+        ('support@blip.money', 'Support Agent', 'support'),
+        ('compliance@blip.money', 'Compliance Officer', 'compliance'),
+        ('admin@blip.money', 'Admin', 'admin')
       ON CONFLICT (email) DO NOTHING
     `);
 

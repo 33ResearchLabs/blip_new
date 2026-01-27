@@ -18,15 +18,24 @@ let pusherServer: PusherLike | null = null;
 let pusherLoadAttempted = false;
 
 async function getPusherServer(): Promise<PusherLike> {
-  if (pusherServer) return pusherServer;
+  if (pusherServer) {
+    console.log('[Pusher Server] Using existing Pusher instance');
+    return pusherServer;
+  }
 
   // Mock pusher that does nothing - used when pusher isn't configured or available
   const mockPusher: PusherLike = {
-    trigger: async () => ({}),
+    trigger: async (...args) => {
+      console.log('[Pusher Server] MOCK trigger called (Pusher not configured):', args);
+      return {};
+    },
     triggerBatch: async () => ({}),
   };
 
-  if (pusherLoadAttempted) return mockPusher;
+  if (pusherLoadAttempted) {
+    console.log('[Pusher Server] Load already attempted, returning mock');
+    return mockPusher;
+  }
   pusherLoadAttempted = true;
 
   const appId = process.env.PUSHER_APP_ID;
@@ -34,8 +43,15 @@ async function getPusherServer(): Promise<PusherLike> {
   const secret = process.env.PUSHER_SECRET;
   const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
 
+  console.log('[Pusher Server] Credentials check:', {
+    hasAppId: !!appId,
+    hasKey: !!key,
+    hasSecret: !!secret,
+    hasCluster: !!cluster
+  });
+
   if (!appId || !key || !secret || !cluster) {
-    console.warn('Pusher credentials not configured. Real-time features disabled.');
+    console.warn('[Pusher Server] Credentials not configured. Real-time features disabled.');
     return mockPusher;
   }
 
@@ -49,9 +65,10 @@ async function getPusherServer(): Promise<PusherLike> {
       cluster,
       useTLS: true,
     });
+    console.log('[Pusher Server] Pusher instance created successfully');
     return pusherServer;
-  } catch {
-    console.warn('Pusher module not available. Real-time features disabled.');
+  } catch (err) {
+    console.warn('[Pusher Server] Module not available:', err);
     return mockPusher;
   }
 }
@@ -64,11 +81,14 @@ export async function triggerEvent(
   event: PusherEvent,
   data: unknown
 ): Promise<void> {
+  console.log('[Pusher Server] triggerEvent called:', { channel, event });
   try {
     const pusher = await getPusherServer();
-    await pusher.trigger(channel, event, data);
+    const result = await pusher.trigger(channel, event, data);
+    console.log('[Pusher Server] Event triggered successfully:', { channel, event, result });
   } catch (error) {
-    console.error('Failed to trigger Pusher event:', error);
+    console.error('[Pusher Server] Failed to trigger event:', error);
+    throw error; // Re-throw so caller knows it failed
   }
 }
 
@@ -108,12 +128,21 @@ export async function notifyOrderCreated(data: OrderEventData): Promise<void> {
     getMerchantChannel(data.merchantId),
   ];
 
+  console.log('[Pusher] Triggering ORDER_CREATED event:', {
+    channels,
+    event: ORDER_EVENTS.CREATED,
+    orderId: data.orderId,
+    merchantId: data.merchantId,
+  });
+
   await triggerEvent(channels, ORDER_EVENTS.CREATED, {
     orderId: data.orderId,
     status: data.status,
     createdAt: data.updatedAt,
     data: data.data,
   });
+
+  console.log('[Pusher] ORDER_CREATED event triggered successfully');
 }
 
 /**

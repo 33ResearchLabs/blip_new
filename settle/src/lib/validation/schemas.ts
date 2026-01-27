@@ -230,6 +230,19 @@ export const merchantOrdersQuerySchema = z.object({
   status: z.string().optional(), // Comma-separated statuses
 });
 
+// Solana wallet regex (base58, 32-44 chars)
+const solanaWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+// Merchant-initiated order schema
+export const merchantCreateOrderSchema = z.object({
+  merchant_id: uuidSchema,
+  customer_wallet: z.string().regex(solanaWalletRegex, 'Invalid Solana wallet address'),
+  type: offerTypeSchema, // From merchant perspective: 'sell' = merchant sells USDC to user
+  crypto_amount: positiveAmountSchema,
+  payment_method: paymentMethodSchema,
+  offer_id: uuidSchema.optional(), // If not provided, use merchant's active offer
+});
+
 // Helper function to sanitize messages (basic XSS prevention)
 function sanitizeMessage(input: string): string {
   return input
@@ -254,3 +267,4 @@ export type MarkMessagesReadInput = z.infer<typeof markMessagesReadSchema>;
 export type SubmitReviewInput = z.infer<typeof submitReviewSchema>;
 export type CreateDisputeInput = z.infer<typeof createDisputeSchema>;
 export type UpdateDisputeInput = z.infer<typeof updateDisputeSchema>;
+export type MerchantCreateOrderInput = z.infer<typeof merchantCreateOrderSchema>;

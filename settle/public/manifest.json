@@ -1,6 +1,6 @@
 {
-  "name": "Settle P2P",
-  "short_name": "Settle",
+  "name": "Blip Money",
+  "short_name": "Blip",
   "description": "P2P settlement. Send crypto to anyone.",
   "start_url": "/",
   "display": "standalone",

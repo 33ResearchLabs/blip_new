@@ -34,11 +34,22 @@ export async function getUserByUsername(username: string): Promise<User | null> 
 }
 
 export async function checkUsernameAvailable(username: string): Promise<boolean> {
-  const result = await queryOne<{ count: number }>(
+  // Check both users and merchants tables to ensure username uniqueness across platform
+  const userResult = await queryOne<{ count: string | number }>(
     'SELECT COUNT(*) as count FROM users WHERE LOWER(username) = LOWER($1)',
     [username]
   );
-  return result?.count === 0;
+
+  const merchantResult = await queryOne<{ count: string | number }>(
+    'SELECT COUNT(*) as count FROM merchants WHERE LOWER(username) = LOWER($1)',
+    [username]
+  );
+
+  // PostgreSQL COUNT returns bigint which pg converts to string for safety
+  const userCount = parseInt(String(userResult?.count || 0));
+  const merchantCount = parseInt(String(merchantResult?.count || 0));
+
+  return userCount === 0 && merchantCount === 0;
 }
 
 type CreateUserInput = {
@@ -51,10 +62,8 @@ type CreateUserInput = {
 export async function createUser(
   data: CreateUserInput
 ): Promise<Omit<User, 'password_hash'>> {
-  const passwordHash = data.password
-    ? hashPassword(data.password)
-    : null;
-
+  // Password is optional for wallet-based authentication
+  const passwordHash = data.password ? hashPassword(data.password) : null;
   const result = await queryOne<User>(
     `
     INSERT INTO users (username, password_hash, wallet_address, name)

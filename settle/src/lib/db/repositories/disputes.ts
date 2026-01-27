@@ -191,7 +191,7 @@ export async function getMerchantResolvedDisputes(merchantId: string): Promise<D
             o.fiat_amount,
             o.crypto_currency,
             o.fiat_currency,
-            u.name as other_party_name,
+            u.username as other_party_name,
             u.id as other_party_id
      FROM disputes d
      JOIN orders o ON d.order_id = o.id

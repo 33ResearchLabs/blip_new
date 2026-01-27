@@ -150,7 +150,7 @@ const QUICK_QUESTIONS = [
 export default function ComplianceDashboard() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [member, setMember] = useState<ComplianceMember | null>(null);
-  const [loginForm, setLoginForm] = useState({ email: "support@settle.com", password: "compliance123" });
+  const [loginForm, setLoginForm] = useState({ email: "support@blip.money", password: "compliance123" });
   const [loginError, setLoginError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [authMethod, setAuthMethod] = useState<'email' | 'wallet'>('email');
@@ -612,48 +612,7 @@ export default function ComplianceDashboard() {
               </div>
             )}
 
-            <div>
-              <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Email</label>
-              <input
-                type="email"
-                value={loginForm.email}
-                onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="compliance@settle.com"
-                className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-orange-500/30"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Password</label>
-              <input
-                type="password"
-                value={loginForm.password}
-                onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                placeholder="••••••••"
-                className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-orange-500/30"
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-              />
-            </div>
-
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={handleLogin}
-              disabled={isLoading}
-              className="w-full py-3 rounded-xl text-sm font-bold bg-orange-500 text-black hover:bg-orange-400 transition-colors disabled:opacity-50"
-            >
-              {isLoading ? "Signing in..." : "Sign In with Email"}
-            </motion.button>
-
-            {/* Wallet Login Section */}
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/[0.04]"></div>
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-2 bg-[#0d0d0d] text-gray-500">or</span>
-              </div>
-            </div>
-
+            {/* Primary: Wallet Login Section */}
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={() => {
@@ -691,22 +650,77 @@ export default function ComplianceDashboard() {
               </p>
             )}
 
+            <p className="text-[11px] text-gray-500 text-center">
+              Authorized DAO members only (Devnet)
+            </p>
+
+            {/* Divider */}
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-white/[0.04]"></div>
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="px-2 bg-[#0d0d0d] text-gray-500">Legacy Login (Testing)</span>
+              </div>
+            </div>
+
+            {/* Collapsible Email Login */}
+            <details className="w-full">
+              <summary className="cursor-pointer text-gray-400 text-xs text-center mb-4 hover:text-gray-300 transition-colors">
+                Show email/password login
+              </summary>
+
+              <div className="space-y-4 mt-4">
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Email</label>
+                  <input
+                    type="email"
+                    value={loginForm.email}
+                    onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="compliance@blip.money"
+                    className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-orange-500/30"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Password</label>
+                  <input
+                    type="password"
+                    value={loginForm.password}
+                    onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="••••••••"
+                    className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-orange-500/30"
+                    onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                  />
+                </div>
+
+                <motion.button
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleLogin}
+                  disabled={isLoading}
+                  className="w-full py-3 rounded-xl text-sm font-bold bg-orange-500 text-black hover:bg-orange-400 transition-colors disabled:opacity-50"
+                >
+                  {isLoading ? "Signing in..." : "Sign In with Email"}
+                </motion.button>
+              </div>
+            </details>
+
             <div className="border-t border-white/[0.04] pt-4 mt-4">
               <p className="text-xs text-gray-500 mb-3 text-center">Test Accounts:</p>
               <div className="space-y-2">
                 <button
-                  onClick={() => setLoginForm({ email: "support@settle.com", password: "compliance123" })}
+                  onClick={() => setLoginForm({ email: "support@blip.money", password: "compliance123" })}
                   className="w-full p-2 bg-white/[0.02] hover:bg-white/[0.05] rounded-lg text-left transition-colors"
                 >
                   <p className="text-xs font-medium">Support Agent</p>
-                  <p className="text-[10px] text-gray-500">support@settle.com / compliance123</p>
+                  <p className="text-[10px] text-gray-500">support@blip.money / compliance123</p>
                 </button>
                 <button
-                  onClick={() => setLoginForm({ email: "compliance@settle.com", password: "compliance123" })}
+                  onClick={() => setLoginForm({ email: "compliance@blip.money", password: "compliance123" })}
                   className="w-full p-2 bg-white/[0.02] hover:bg-white/[0.05] rounded-lg text-left transition-colors"
                 >
                   <p className="text-xs font-medium">Compliance Officer</p>
-                  <p className="text-[10px] text-gray-500">compliance@settle.com / compliance123</p>
+                  <p className="text-[10px] text-gray-500">compliance@blip.money / compliance123</p>
                 </button>
               </div>
             </div>

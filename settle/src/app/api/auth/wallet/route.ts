@@ -44,8 +44,11 @@ export async function POST(request: NextRequest) {
     let isNewUser = false;
 
     if (!user) {
-      // Create new user with optional name
-      user = await createUser({ wallet_address, name });
+      // Create new user with wallet address and auto-generated username
+      user = await createUser({
+        wallet_address,
+        username: name || `user_${wallet_address.slice(0, 8)}`,
+      });
       isNewUser = true;
     }
 

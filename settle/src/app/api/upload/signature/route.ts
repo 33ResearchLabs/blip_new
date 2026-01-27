@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   try {
     // Get request body
     const body = await request.json();
-    const { folder = 'settle/chat', orderId } = body;
+    const { folder = 'blip/chat', orderId } = body;
 
     // Validate Cloudinary is configured
     if (!process.env.CLOUDINARY_API_SECRET || !process.env.CLOUDINARY_API_KEY) {
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const params = {
       timestamp,
       folder: uploadFolder,
-      upload_preset: 'settle_chat', // Optional: create this preset in Cloudinary dashboard
+      upload_preset: 'blip_chat', // Optional: create this preset in Cloudinary dashboard
     };
 
     // Generate signature

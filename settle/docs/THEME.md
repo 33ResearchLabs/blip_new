@@ -1,6 +1,6 @@
-# Settle App - Theme & Design System
+# Blip Money - Theme & Design System
 
-A comprehensive guide to the theme and design patterns used in the Settle P2P trading app.
+A comprehensive guide to the theme and design patterns used in the Blip Money P2P trading app.
 
 **Design Philosophy**: Black, White, Orange - Only 1-2 orange accents per screen for modern, minimal aesthetic.
 

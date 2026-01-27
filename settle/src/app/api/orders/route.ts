@@ -188,14 +188,19 @@ export async function POST(request: NextRequest) {
     logger.order.created(order.id, user_id, offer.merchant_id, crypto_amount);
 
     // Notify merchant of new order via Pusher
-    notifyOrderCreated({
-      orderId: order.id,
-      userId: user_id,
-      merchantId: offer.merchant_id,
-      status: order.status,
-      updatedAt: new Date().toISOString(),
-      data: { ...order, offer, merchant: offer.merchant },
-    });
+    try {
+      await notifyOrderCreated({
+        orderId: order.id,
+        userId: user_id,
+        merchantId: offer.merchant_id,
+        status: order.status,
+        updatedAt: new Date().toISOString(),
+        data: { ...order, offer, merchant: offer.merchant },
+      });
+      console.log('[API] Pusher notification sent successfully for order:', order.id);
+    } catch (pusherError) {
+      console.error('[API] Failed to send Pusher notification:', pusherError);
+    }
 
     return NextResponse.json(
       { success: true, data: { ...order, offer, merchant: offer.merchant } },

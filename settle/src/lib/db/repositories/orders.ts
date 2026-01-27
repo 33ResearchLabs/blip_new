@@ -41,7 +41,7 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
     `SELECT o.*,
             json_build_object(
               'id', u.id,
-              'name', u.name,
+              'name', u.username,
               'wallet_address', u.wallet_address,
               'rating', u.rating,
               'total_trades', u.total_trades
@@ -138,7 +138,7 @@ export async function getMerchantOrders(
     SELECT o.*,
            json_build_object(
              'id', u.id,
-             'name', u.name,
+             'name', u.username,
              'rating', u.rating,
              'total_trades', u.total_trades
            ) as user,
@@ -185,7 +185,7 @@ export async function createOrder(data: {
          crypto_amount, fiat_amount, rate, payment_details,
          status, expires_at, buyer_wallet_address
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', NOW() + INTERVAL '2 hours', $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', NOW() + INTERVAL '15 minutes', $10)
        RETURNING *`,
       [
         data.user_id,
@@ -459,7 +459,7 @@ export async function getOrderMessages(orderId: string): Promise<ChatMessage[]> 
     `SELECT
       cm.*,
       CASE
-        WHEN cm.sender_type = 'user' THEN u.name
+        WHEN cm.sender_type = 'user' THEN u.username
         WHEN cm.sender_type = 'merchant' THEN m.display_name
         WHEN cm.sender_type = 'compliance' THEN ct.name
         ELSE 'System'

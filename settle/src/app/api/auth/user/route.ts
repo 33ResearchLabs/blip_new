@@ -1,23 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  authenticateUser,
-  createUser,
   getUserByWallet,
-  linkWalletToUser,
+  createUser,
   checkUsernameAvailable,
   updateUsername,
-  updatePassword,
   getUserById,
 } from '@/lib/db/repositories/users';
+import { verifyWalletSignature } from '@/lib/solana/verifySignature';
 
 /**
  * POST /api/auth/user
- * Actions: login, signup, check_username
+ * Actions: wallet_login, set_username, check_username
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action, username, password, wallet_address } = body;
+    const { action, username, wallet_address, signature, message } = body;
 
     // Check username availability
     if (action === 'check_username') {
@@ -28,44 +26,86 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const available = await checkUsernameAvailable(username);
-      return NextResponse.json({
-        success: true,
-        data: { available },
-      });
+      try {
+        console.log('[API] Checking username availability:', username);
+        const available = await checkUsernameAvailable(username);
+        console.log('[API] Username availability result:', { username, available });
+        return NextResponse.json({
+          success: true,
+          data: { available },
+        });
+      } catch (checkError) {
+        console.error('[API] Error checking username availability:', checkError);
+        return NextResponse.json(
+          { success: false, error: 'Failed to check username availability', details: checkError instanceof Error ? checkError.message : String(checkError) },
+          { status: 500 }
+        );
+      }
     }
 
-    // Login with username + password
-    if (action === 'login') {
-      if (!username || !password) {
+    // Login/Signup with wallet signature
+    if (action === 'wallet_login') {
+      if (!wallet_address || !signature || !message) {
         return NextResponse.json(
-          { success: false, error: 'Username and password are required' },
+          { success: false, error: 'wallet_address, signature, and message are required' },
           { status: 400 }
         );
       }
 
-      const user = await authenticateUser(username, password);
-      if (!user) {
+      // Verify the wallet signature
+      const isValid = await verifyWalletSignature(wallet_address, signature, message);
+      if (!isValid) {
         return NextResponse.json(
-          { success: false, error: 'Invalid username or password' },
+          { success: false, error: 'Invalid wallet signature' },
           { status: 401 }
         );
       }
 
-      console.log('[API] User logged in:', user.id, user.username);
+      // Check if user exists
+      let user = await getUserByWallet(wallet_address);
+      let isNewUser = false;
+      let needsUsername = false;
+
+      if (!user) {
+        // Create new user without username (will be set later)
+        user = await createUser({
+          wallet_address,
+          username: `user_${wallet_address.slice(0, 8)}`, // Temporary username
+        });
+        isNewUser = true;
+        needsUsername = true;
+      } else if (!user.username || user.username.startsWith('user_')) {
+        // Existing user without a proper username
+        needsUsername = true;
+      }
+
+      console.log('[API] User authenticated via wallet:', user.id, user.username, { isNewUser, needsUsername });
 
       return NextResponse.json({
         success: true,
-        data: { user },
+        data: {
+          user,
+          isNewUser,
+          needsUsername,
+        },
       });
     }
 
-    // Signup with username + password (optionally with wallet)
-    if (action === 'signup') {
-      if (!username || !password) {
+    // Set username for first-time users
+    if (action === 'set_username') {
+      if (!wallet_address || !signature || !message || !username) {
         return NextResponse.json(
-          { success: false, error: 'Username and password are required' },
+          { success: false, error: 'wallet_address, signature, message, and username are required' },
           { status: 400 }
+        );
+      }
+
+      // Verify the wallet signature
+      const isValid = await verifyWalletSignature(wallet_address, signature, message);
+      if (!isValid) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid wallet signature' },
+          { status: 401 }
         );
       }
 
@@ -93,61 +133,37 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Validate password
-      if (password.length < 6) {
-        return NextResponse.json(
-          { success: false, error: 'Password must be at least 6 characters' },
-          { status: 400 }
-        );
-      }
-
-      // If wallet provided, check it's not already linked
-      if (wallet_address) {
-        const existingUser = await getUserByWallet(wallet_address);
-        if (existingUser) {
-          return NextResponse.json(
-            { success: false, error: 'Wallet already linked to another account' },
-            { status: 409 }
-          );
-        }
-      }
-
-      const user = await createUser({
-        username,
-        password,
-        wallet_address: wallet_address || undefined,
-      });
-
-      console.log('[API] User created:', user.id, user.username);
-
-      return NextResponse.json({
-        success: true,
-        data: { user },
-      });
-    }
-
-    // Login with wallet (if wallet is already linked to an account)
-    if (action === 'wallet_login') {
-      if (!wallet_address) {
-        return NextResponse.json(
-          { success: false, error: 'Wallet address is required' },
-          { status: 400 }
-        );
-      }
-
+      // Get user by wallet
       const user = await getUserByWallet(wallet_address);
       if (!user) {
         return NextResponse.json(
-          { success: false, error: 'No account linked to this wallet. Please sign up first.' },
+          { success: false, error: 'User not found' },
           { status: 404 }
         );
       }
 
-      console.log('[API] User logged in via wallet:', user.id, user.username);
+      // Check if user already has a non-temporary username
+      if (user.username && !user.username.startsWith('user_')) {
+        return NextResponse.json(
+          { success: false, error: 'Username already set and cannot be changed' },
+          { status: 400 }
+        );
+      }
+
+      // Update username
+      const updatedUser = await updateUsername(user.id, username);
+      if (!updatedUser) {
+        return NextResponse.json(
+          { success: false, error: 'Failed to update username' },
+          { status: 500 }
+        );
+      }
+
+      console.log('[API] Username set for user:', user.id, username);
 
       return NextResponse.json({
         success: true,
-        data: { user },
+        data: { user: updatedUser },
       });
     }
 
@@ -159,190 +175,6 @@ export async function POST(request: NextRequest) {
     console.error('User auth error:', error);
     return NextResponse.json(
       { success: false, error: 'Authentication failed', details: error instanceof Error ? error.message : String(error) },
-      { status: 500 }
-    );
-  }
-}
-
-/**
- * PATCH /api/auth/user
- * Update user: link wallet, change username, change password
- */
-export async function PATCH(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { user_id, action, wallet_address, new_username, current_password, new_password } = body;
-
-    if (!user_id) {
-      return NextResponse.json(
-        { success: false, error: 'user_id is required' },
-        { status: 400 }
-      );
-    }
-
-    // Link wallet to account
-    if (action === 'link_wallet') {
-      if (!wallet_address) {
-        return NextResponse.json(
-          { success: false, error: 'wallet_address is required' },
-          { status: 400 }
-        );
-      }
-
-      // Validate wallet address format (Solana base58)
-      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet_address)) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid Solana wallet address format' },
-          { status: 400 }
-        );
-      }
-
-      try {
-        const user = await linkWalletToUser(user_id, wallet_address);
-        if (!user) {
-          return NextResponse.json(
-            { success: false, error: 'User not found' },
-            { status: 404 }
-          );
-        }
-
-        console.log('[API] Wallet linked to user:', user_id, wallet_address);
-
-        return NextResponse.json({
-          success: true,
-          data: { user },
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to link wallet';
-        return NextResponse.json(
-          { success: false, error: message },
-          { status: 409 }
-        );
-      }
-    }
-
-    // Change username
-    if (action === 'change_username') {
-      if (!new_username) {
-        return NextResponse.json(
-          { success: false, error: 'new_username is required' },
-          { status: 400 }
-        );
-      }
-
-      // Validate username
-      if (new_username.length < 3 || new_username.length > 20) {
-        return NextResponse.json(
-          { success: false, error: 'Username must be 3-20 characters' },
-          { status: 400 }
-        );
-      }
-
-      if (!/^[a-zA-Z0-9_]+$/.test(new_username)) {
-        return NextResponse.json(
-          { success: false, error: 'Username can only contain letters, numbers, and underscores' },
-          { status: 400 }
-        );
-      }
-
-      try {
-        const user = await updateUsername(user_id, new_username);
-        if (!user) {
-          return NextResponse.json(
-            { success: false, error: 'User not found' },
-            { status: 404 }
-          );
-        }
-
-        console.log('[API] Username changed:', user_id, new_username);
-
-        return NextResponse.json({
-          success: true,
-          data: { user },
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to change username';
-        return NextResponse.json(
-          { success: false, error: message },
-          { status: 409 }
-        );
-      }
-    }
-
-    // Change password
-    if (action === 'change_password') {
-      if (!current_password || !new_password) {
-        return NextResponse.json(
-          { success: false, error: 'current_password and new_password are required' },
-          { status: 400 }
-        );
-      }
-
-      if (new_password.length < 6) {
-        return NextResponse.json(
-          { success: false, error: 'New password must be at least 6 characters' },
-          { status: 400 }
-        );
-      }
-
-      const success = await updatePassword(user_id, current_password, new_password);
-      if (!success) {
-        return NextResponse.json(
-          { success: false, error: 'Current password is incorrect' },
-          { status: 401 }
-        );
-      }
-
-      console.log('[API] Password changed for user:', user_id);
-
-      return NextResponse.json({
-        success: true,
-        data: { message: 'Password changed successfully' },
-      });
-    }
-
-    // Default: link wallet (backwards compatibility)
-    if (wallet_address) {
-      // Validate wallet address format (Solana base58)
-      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet_address)) {
-        return NextResponse.json(
-          { success: false, error: 'Invalid Solana wallet address format' },
-          { status: 400 }
-        );
-      }
-
-      try {
-        const user = await linkWalletToUser(user_id, wallet_address);
-        if (!user) {
-          return NextResponse.json(
-            { success: false, error: 'User not found' },
-            { status: 404 }
-          );
-        }
-
-        console.log('[API] Wallet linked to user:', user_id, wallet_address);
-
-        return NextResponse.json({
-          success: true,
-          data: { user_id, wallet_address },
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to link wallet';
-        return NextResponse.json(
-          { success: false, error: message },
-          { status: 409 }
-        );
-      }
-    }
-
-    return NextResponse.json(
-      { success: false, error: 'Invalid action or missing parameters' },
-      { status: 400 }
-    );
-  } catch (error) {
-    console.error('User update error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to update user', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

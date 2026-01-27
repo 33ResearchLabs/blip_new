@@ -132,8 +132,8 @@ export async function GET() {
       await query(`
         INSERT INTO compliance_team (email, name, role, is_active)
         VALUES
-          ('support@settle.com', 'Support Agent', 'support', true),
-          ('compliance@settle.com', 'Compliance Officer', 'compliance', true)
+          ('support@blip.money', 'Support Agent', 'support', true),
+          ('compliance@blip.money', 'Compliance Officer', 'compliance', true)
         ON CONFLICT (email) DO UPDATE SET is_active = true
       `);
       results.push('✓ Compliance team updated');
@@ -167,8 +167,8 @@ export async function GET() {
           { email: 'desertgold@merchant.com', password: 'merchant123', name: 'DesertGold', balance: '500,000 USDC' },
         ],
         compliance: [
-          { email: 'support@settle.com', password: 'compliance123', name: 'Support Agent', role: 'support' },
-          { email: 'compliance@settle.com', password: 'compliance123', name: 'Compliance Officer', role: 'compliance' },
+          { email: 'support@blip.money', password: 'compliance123', name: 'Support Agent', role: 'support' },
+          { email: 'compliance@blip.money', password: 'compliance123', name: 'Compliance Officer', role: 'compliance' },
         ],
       },
     });

@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
         d.resolved_at,
         d.resolution_notes,
         u.id as user_id,
-        u.name as user_name,
+        u.username as user_name,
         u.wallet_address as user_wallet,
         u.rating as user_rating,
         u.total_trades as user_trades,

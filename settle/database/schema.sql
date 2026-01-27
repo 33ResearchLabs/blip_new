@@ -71,12 +71,15 @@ CREATE TABLE users (
 -- Merchants
 CREATE TABLE merchants (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  wallet_address VARCHAR(64) UNIQUE NOT NULL,
+  wallet_address VARCHAR(64) UNIQUE,
+  username VARCHAR(50) UNIQUE,
   business_name VARCHAR(100) NOT NULL,
   display_name VARCHAR(50) NOT NULL,
   email VARCHAR(255) NOT NULL,
+  password_hash TEXT,
   phone VARCHAR(20),
   avatar_url TEXT,
+  balance DECIMAL(20, 6) DEFAULT 0,
 
   -- Verification
   status merchant_status DEFAULT 'pending',
@@ -355,9 +358,9 @@ INSERT INTO merchant_offers (merchant_id, type, payment_method, rate, min_amount
 ((SELECT id FROM merchants WHERE display_name = 'CashKing'), 'sell', 'cash', 3.65, 500, 20000, 15000, 'Dubai Mall', 'Financial Center Road, Downtown Dubai', 25.1972, 55.2744, 'Meet at Starbucks near Apple Store, Ground Floor. I will be wearing a blue cap.');
 
 -- Insert test user
-INSERT INTO users (wallet_address, name, email, kyc_status, kyc_level) VALUES
-('0xUserWallet123456789abcdef', 'Demo User', 'demo@blip.money', 'verified', 1);
+INSERT INTO users (wallet_address, username, kyc_status, kyc_level) VALUES
+('0xUserWallet123456789abcdef', 'demouser', 'verified', 1);
 
 -- Insert test bank account for user
 INSERT INTO user_bank_accounts (user_id, bank_name, account_name, iban, is_default, is_verified) VALUES
-((SELECT id FROM users WHERE name = 'Demo User'), 'Emirates NBD', 'Demo User', 'AE12 0345 0000 0012 3456 789', true, true);
+((SELECT id FROM users WHERE username = 'demouser'), 'Emirates NBD', 'Demo User', 'AE12 0345 0000 0012 3456 789', true, true);

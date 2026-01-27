@@ -9,7 +9,9 @@ import {
   TorusWalletAdapter,
   LedgerWalletAdapter,
   CoinbaseWalletAdapter,
+  WalletConnectWalletAdapter,
 } from '@solana/wallet-adapter-wallets';
+import { getPrimaryEndpoint, getHealthyEndpoint } from '@/lib/solana/rpc';
 import { clusterApiUrl, PublicKey, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import {
   getAssociatedTokenAddress,
@@ -245,6 +247,7 @@ interface SolanaWalletContextType {
   connect: () => void;
   disconnect: () => void;
   openWalletModal: () => void;
+  signMessage?: (message: Uint8Array) => Promise<Uint8Array>;
 
   // Balance
   solBalance: number | null;
@@ -319,44 +322,77 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
   // Phantom direct connection state (for Brave browser fallback)
   const [phantomDirectKey, setPhantomDirectKey] = useState<PublicKey | null>(null);
 
-  // Check for Phantom direct connection in Brave
+  // Check for Phantom direct connection in Brave - using events only (no polling)
   useEffect(() => {
-    const checkPhantomDirect = () => {
-      const phantom = (window as any).phantom?.solana;
-      if (phantom?.isConnected && phantom?.publicKey && !adapterConnected) {
-        const pubKey = new PublicKey(phantom.publicKey.toString());
-        console.log('[SolanaWallet] Detected Phantom direct connection:', pubKey.toString());
-        setPhantomDirectKey(pubKey);
-      } else if (!phantom?.isConnected) {
-        setPhantomDirectKey(null);
+    const phantom = (window as any).phantom?.solana;
+    if (!phantom) return;
+
+    // Handler for Phantom connection state changes
+    const handlePhantomConnect = (publicKeyParam?: any) => {
+      // Use the passed publicKey or get it from phantom object
+      const pubKeySource = publicKeyParam?.publicKey || publicKeyParam || phantom.publicKey;
+
+      if (pubKeySource && !adapterConnected) {
+        try {
+          const pubKey = new PublicKey(pubKeySource.toString());
+          const pubKeyStr = pubKey.toString();
+
+          if (phantomDirectKey?.toString() !== pubKeyStr) {
+            console.log('[SolanaWallet] Phantom connected (via event):', pubKeyStr);
+          }
+          setPhantomDirectKey(pubKey);
+        } catch (error) {
+          console.error('[SolanaWallet] Invalid publicKey from Phantom:', error);
+          setPhantomDirectKey(null);
+        }
       }
     };
 
-    // Check immediately
-    checkPhantomDirect();
+    const handlePhantomDisconnect = () => {
+      console.log('[SolanaWallet] Phantom disconnected (via event)');
+      setPhantomDirectKey(null);
+    };
 
-    // Also check periodically in case Phantom connects after mount
-    const interval = setInterval(checkPhantomDirect, 1000);
+    const handleAccountChanged = (newPublicKey: any) => {
+      if (newPublicKey) {
+        console.log('[SolanaWallet] Phantom account changed');
+        handlePhantomConnect(newPublicKey);
+      } else {
+        handlePhantomDisconnect();
+      }
+    };
 
-    // Listen for Phantom events
-    const phantom = (window as any).phantom?.solana;
-    if (phantom) {
-      phantom.on?.('connect', checkPhantomDirect);
-      phantom.on?.('disconnect', () => setPhantomDirectKey(null));
+    // Initial check on mount (not polling, just once)
+    if (phantom.publicKey && !adapterConnected) {
+      handlePhantomConnect(phantom.publicKey);
     }
 
+    // Register event listeners
+    phantom.on?.('connect', handlePhantomConnect);
+    phantom.on?.('disconnect', handlePhantomDisconnect);
+    phantom.on?.('accountChanged', handleAccountChanged);
+
+    // Cleanup
     return () => {
-      clearInterval(interval);
-      if (phantom) {
-        phantom.off?.('connect', checkPhantomDirect);
-        phantom.off?.('disconnect', () => setPhantomDirectKey(null));
-      }
+      phantom.off?.('connect', handlePhantomConnect);
+      phantom.off?.('disconnect', handlePhantomDisconnect);
+      phantom.off?.('accountChanged', handleAccountChanged);
     };
-  }, [adapterConnected]);
+  }, [adapterConnected, phantomDirectKey]);
 
   // Use adapter values if available, otherwise fall back to Phantom direct
   const publicKey = adapterPublicKey || phantomDirectKey;
   const connected = adapterConnected || (phantomDirectKey !== null);
+
+  // Debug logging
+  useEffect(() => {
+    console.log('[SolanaWallet] State updated:', {
+      adapterConnected,
+      phantomDirectKey: phantomDirectKey?.toString() || null,
+      connected,
+      publicKey: publicKey?.toString() || null,
+    });
+  }, [adapterConnected, phantomDirectKey, connected, publicKey]);
 
   // Sign transaction - use adapter if available, otherwise use Phantom direct
   const signTransaction = useMemo(() => {
@@ -388,6 +424,32 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     }
     return undefined;
   }, [adapterSignAllTransactions, phantomDirectKey]);
+
+  // Sign message - use adapter if available, otherwise use Phantom direct
+  // Phantom direct signMessage fallback using useCallback
+  const phantomDirectSignMessage = useCallback(
+    async (message: Uint8Array): Promise<Uint8Array> => {
+      const phantom = (window as any).phantom?.solana;
+      if (!phantom?.isConnected) {
+        throw new Error('Phantom wallet not connected');
+      }
+      const signedMessage = await phantom.signMessage(message, 'utf8');
+      return signedMessage.signature;
+    },
+    []
+  );
+
+  // Choose signMessage: prefer adapter, fallback to Phantom direct
+  const signMessageFallback = useMemo(() => {
+    if (signMessage) {
+      return signMessage;
+    }
+    // Use Phantom direct API as fallback
+    if (phantomDirectKey) {
+      return phantomDirectSignMessage;
+    }
+    return undefined;
+  }, [signMessage, phantomDirectKey, phantomDirectSignMessage]);
 
   // Counter to force program reinitialization
   const [programVersion, setProgramVersion] = useState(0);
@@ -1136,6 +1198,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     connect: openWalletModal,
     disconnect,
     openWalletModal,
+    signMessage: signMessageFallback,
     solBalance,
     usdtBalance,
     refreshBalances,
@@ -1164,20 +1227,64 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
 export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [isClient, setIsClient] = useState(false);
 
-  // Configure network (devnet for testing)
-  const endpoint = useMemo(() => {
-    // Use a more reliable RPC endpoint
-    return 'https://api.devnet.solana.com';
-  }, []);
+  // RPC endpoint with fallback support
+  const [endpoint, setEndpoint] = useState(() => getPrimaryEndpoint('devnet'));
 
-  // Configure wallets - explicitly include Phantom for Brave compatibility
-  const wallets = useMemo(() => [
-    new PhantomWalletAdapter(),
-    new SolflareWalletAdapter(),
-    new TorusWalletAdapter(),
-    new LedgerWalletAdapter(),
-    new CoinbaseWalletAdapter(),
-  ], []);
+  // Check for healthier endpoint on mount and periodically
+  useEffect(() => {
+    let mounted = true;
+
+    const checkEndpoint = async () => {
+      try {
+        const healthyEndpoint = await getHealthyEndpoint('devnet');
+        if (mounted && healthyEndpoint !== endpoint) {
+          console.log('[SolanaWallet] Switching to healthier RPC endpoint:', healthyEndpoint);
+          setEndpoint(healthyEndpoint);
+        }
+      } catch (error) {
+        console.warn('[SolanaWallet] Failed to check RPC health:', error);
+      }
+    };
+
+    // Check after a short delay to not block initial render
+    const initialCheck = setTimeout(checkEndpoint, 2000);
+
+    // Re-check every 5 minutes
+    const interval = setInterval(checkEndpoint, 5 * 60 * 1000);
+
+    return () => {
+      mounted = false;
+      clearTimeout(initialCheck);
+      clearInterval(interval);
+    };
+  }, [endpoint]);
+
+  // Configure wallets - includes WalletConnect for mobile support
+  const wallets = useMemo(() => {
+    const walletList = [
+      new PhantomWalletAdapter(),
+      new SolflareWalletAdapter(),
+      new TorusWalletAdapter(),
+      new LedgerWalletAdapter(),
+      new CoinbaseWalletAdapter(),
+    ];
+
+    // Add WalletConnect if project ID is configured
+    const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+    if (walletConnectProjectId) {
+      walletList.push(
+        new WalletConnectWalletAdapter({
+          network: 'devnet' as any,
+          options: {
+            projectId: walletConnectProjectId,
+          },
+        })
+      );
+      console.log('[SolanaWallet] WalletConnect adapter enabled');
+    }
+
+    return walletList;
+  }, []);
 
   // Handle wallet errors gracefully - suppress auto-connect and connection errors
   const onError = useCallback((error: Error) => {

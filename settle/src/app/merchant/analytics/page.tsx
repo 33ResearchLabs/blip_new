@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   TrendingUp,
@@ -50,8 +50,28 @@ const topUsers = [
   { name: "degen_ape", trades: 24, volume: 54000, emoji: "🦧" },
 ];
 
+interface MerchantInfo {
+  id: string;
+  display_name: string;
+  business_name: string;
+  rating?: number;
+}
+
 export default function AnalyticsPage() {
   const [timeframe, setTimeframe] = useState<"7d" | "30d" | "all">("7d");
+  const [merchantInfo, setMerchantInfo] = useState<MerchantInfo | null>(null);
+
+  // Load merchant info from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('blip_merchant');
+    if (saved) {
+      try {
+        setMerchantInfo(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to parse merchant info:', e);
+      }
+    }
+  }, []);
 
   const maxVolume = Math.max(...weeklyData.map(d => d.volume));
   const totalTrades = weeklyData.reduce((sum, d) => sum + d.trades, 0);
@@ -128,11 +148,11 @@ export default function AnalyticsPage() {
           {/* Profile */}
           <div className="flex items-center gap-2 pl-3 border-l border-white/[0.08]">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#ff6b35] to-[#ff8c50] flex items-center justify-center text-sm">
-              🐋
+              {merchantInfo?.display_name?.charAt(0)?.toUpperCase() || '🐋'}
             </div>
             <div className="hidden sm:block">
-              <p className="text-xs font-medium">crypto_whale</p>
-              <p className="text-[10px] text-gray-500">4.92★</p>
+              <p className="text-xs font-medium">{merchantInfo?.display_name || merchantInfo?.business_name || 'Merchant'}</p>
+              <p className="text-[10px] text-gray-500">{merchantInfo?.rating?.toFixed(2) || '5.00'}★</p>
             </div>
           </div>
         </div>

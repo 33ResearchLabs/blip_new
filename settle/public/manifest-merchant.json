@@ -1,5 +1,5 @@
 {
-  "name": "Settle Merchant",
+  "name": "Blip Money Merchant",
   "short_name": "Merchant",
   "description": "Manage your P2P trades and orders",
   "start_url": "/merchant",

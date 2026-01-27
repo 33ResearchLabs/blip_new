@@ -40,6 +40,7 @@ import dynamic from "next/dynamic";
 
 // Dynamically import wallet components (client-side only)
 const WalletConnectModal = dynamic(() => import("@/components/WalletConnectModal"), { ssr: false });
+const UsernameModal = dynamic(() => import("@/components/UsernameModal"), { ssr: false });
 const useSolanaWalletHook = () => {
   // This will be replaced with actual hook on client side
   try {
@@ -130,6 +131,7 @@ interface DbOrder {
   status: string;
   payment_details: Record<string, unknown> | null;
   created_at: string;
+  expires_at: string;
   merchant: Merchant;
   offer: Offer;
   unread_count?: number;
@@ -174,6 +176,7 @@ interface Order {
   status: OrderStatus;
   step: OrderStep;
   createdAt: Date;
+  expiresAt: Date;
   dbStatus?: string; // Original DB status
   unreadCount?: number;
   lastMessage?: {
@@ -259,6 +262,7 @@ function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
     status,
     step,
     createdAt: new Date(dbOrder.created_at),
+    expiresAt: new Date(dbOrder.expires_at),
     dbStatus: dbOrder.status,
     unreadCount: dbOrder.unread_count || 0,
     lastMessage: dbOrder.last_message ? {
@@ -326,6 +330,7 @@ export default function Home() {
   const [pendingTradeData, setPendingTradeData] = useState<{ amount: string; fiatAmount: string; type: TradeType; paymentMethod: PaymentMethod } | null>(null);
   const [matchingTimeLeft, setMatchingTimeLeft] = useState<number>(15 * 60); // 15 minutes in seconds
   const [timedOutOrders, setTimedOutOrders] = useState<Order[]>([]);
+  const [timerTick, setTimerTick] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
   const [userWallet, setUserWallet] = useState<string | null>(null);
   const [userName, setUserName] = useState<string>("Guest");
@@ -343,6 +348,12 @@ export default function Home() {
 
   // Solana wallet state
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
+  const [walletUsername, setWalletUsername] = useState("");
+  const [usernameError, setUsernameError] = useState("");
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const isAuthenticatingRef = useRef(false); // Ref for synchronous check (state updates are async)
+  const lastAuthenticatedWalletRef = useRef<string | null>(null); // Track which wallet we already authenticated
   const solanaWallet = useSolanaWalletHook();
 
   // Escrow transaction state
@@ -385,30 +396,110 @@ export default function Home() {
     }
   }, [userId, setActor]);
 
-  // Save Solana wallet address to database when connected
+  // Authenticate user with wallet when connected
+  // NOTE: On Brave with Phantom, connected may be false but walletAddress/publicKey is available
   useEffect(() => {
-    if (userId && solanaWallet.connected && solanaWallet.walletAddress) {
-      // Save wallet address to database
-      fetch('/api/auth/user', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: userId,
-          wallet_address: solanaWallet.walletAddress,
-        }),
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) {
-            console.log('[Wallet] User wallet address saved to database:', solanaWallet.walletAddress);
-            setUserWallet(solanaWallet.walletAddress);
+    const authenticateWallet = async () => {
+      // Check both adapter and direct Phantom access for Brave compatibility
+      const phantom = (window as any).phantom?.solana;
+      const walletAddress = solanaWallet.walletAddress || phantom?.publicKey?.toString();
+      const hasWallet = walletAddress && (solanaWallet.publicKey || phantom?.publicKey);
+
+      // Use ref for synchronous check to prevent race conditions (state updates are async)
+      // Also skip if we already authenticated this wallet address
+      if (!hasWallet || userId || isAuthenticatingRef.current) {
+        return;
+      }
+
+      // Skip if we already authenticated this exact wallet (prevents re-auth on wallet state changes)
+      if (lastAuthenticatedWalletRef.current === walletAddress) {
+        return;
+      }
+
+      // Set ref immediately (synchronous) to prevent concurrent calls
+      isAuthenticatingRef.current = true;
+      setIsAuthenticating(true);
+      setLoginError("");
+
+      try {
+        // Generate message to sign
+        const timestamp = Date.now();
+        const nonce = Math.random().toString(36).substring(7);
+        const message = `Sign this message to authenticate with Blip Money\n\nWallet: ${walletAddress}\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
+
+        // Request signature - with fallback for Phantom direct connection
+        const encodedMessage = new TextEncoder().encode(message);
+        let signatureUint8: Uint8Array;
+
+        if (solanaWallet.signMessage) {
+          signatureUint8 = await solanaWallet.signMessage(encodedMessage);
+        } else {
+          // Fallback for Phantom direct connection on mobile Brave
+          const phantom = (window as any).phantom?.solana;
+          if (phantom && phantom.signMessage) {
+            console.log('[User] Using Phantom direct signMessage for authentication');
+            const result = await phantom.signMessage(encodedMessage, 'utf8');
+            signatureUint8 = result.signature;
           } else {
-            console.error('[Wallet] Failed to save wallet address:', data.error);
+            throw new Error('Wallet signature method not available');
           }
-        })
-        .catch(err => console.error('[Wallet] Error saving wallet address:', err));
-    }
-  }, [userId, solanaWallet.connected, solanaWallet.walletAddress]);
+        }
+
+        // Convert to base58
+        const bs58 = await import('bs58');
+        const signature = bs58.default.encode(signatureUint8);
+
+        // Authenticate with API
+        const res = await fetch('/api/auth/user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'wallet_login',
+            wallet_address: walletAddress,
+            signature,
+            message,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          // Mark this wallet as authenticated to prevent re-auth
+          lastAuthenticatedWalletRef.current = walletAddress;
+
+          if (data.data.needsUsername) {
+            // Show username modal for new users
+            setShowUsernameModal(true);
+          } else if (data.data.user) {
+            // User authenticated successfully
+            const user = data.data.user;
+            setUserId(user.id);
+            setUserWallet(user.wallet_address);
+            setUserName(user.username || user.name || 'User');
+            setUserBalance(user.balance || 0);
+            localStorage.setItem('blip_user', JSON.stringify(user));
+            fetchOrders(user.id);
+            fetchBankAccounts(user.id);
+            fetchResolvedDisputes(user.id);
+            setScreen('home');
+          }
+        } else {
+          setLoginError(data.error || 'Wallet authentication failed');
+        }
+      } catch (error) {
+        console.error('Wallet auth error:', error);
+        setLoginError(error instanceof Error ? error.message : 'Failed to authenticate with wallet');
+      } finally {
+        // Always reset the ref and state when done (success or failure)
+        isAuthenticatingRef.current = false;
+        setIsAuthenticating(false);
+      }
+    };
+
+    authenticateWallet();
+  // Remove isAuthenticating from deps - we use ref for synchronous check now
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [solanaWallet.walletAddress, solanaWallet.publicKey, userId]);
 
   // Real-time chat hook (replaces polling)
   const {
@@ -503,48 +594,66 @@ export default function Home() {
     },
   });
 
-  // Countdown timer for matching screen
+  // Countdown timer for matching screen - use actual order expiration time
   useEffect(() => {
-    if (screen !== "matching" || !pendingTradeData) {
-      // Reset timer when leaving matching screen
-      setMatchingTimeLeft(15 * 60);
+    if (screen !== "matching" || !pendingTradeData || !activeOrderId) {
       return;
     }
 
-    const interval = setInterval(() => {
-      setMatchingTimeLeft(prev => {
-        if (prev <= 1) {
-          // Time expired - move order to timed out
-          clearInterval(interval);
-          if (activeOrderId) {
-            const expiredOrder = orders.find(o => o.id === activeOrderId);
-            if (expiredOrder) {
-              setTimedOutOrders(prev => [...prev, { ...expiredOrder, status: 'complete' as OrderStatus, dbStatus: 'expired' }]);
-              setOrders(prev => prev.filter(o => o.id !== activeOrderId));
+    const currentOrder = orders.find(o => o.id === activeOrderId);
+    if (!currentOrder?.expiresAt) {
+      return;
+    }
 
-              // Call API to expire the order
-              fetch(`/api/orders/${activeOrderId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  status: 'expired',
-                  actor_type: 'system',
-                  actor_id: 'system',
-                }),
-              }).catch(console.error);
-            }
-          }
-          setPendingTradeData(null);
-          setScreen("home");
-          playSound('error');
-          return 0;
+    const calculateTimeLeft = () => {
+      const now = new Date().getTime();
+      const expiresAt = currentOrder.expiresAt.getTime();
+      return Math.max(0, Math.floor((expiresAt - now) / 1000));
+    };
+
+    setMatchingTimeLeft(calculateTimeLeft());
+
+    const interval = setInterval(() => {
+      const timeLeft = calculateTimeLeft();
+      setMatchingTimeLeft(timeLeft);
+
+      if (timeLeft <= 0) {
+        clearInterval(interval);
+        const expiredOrder = orders.find(o => o.id === activeOrderId);
+        if (expiredOrder) {
+          setTimedOutOrders(prev => [...prev, { ...expiredOrder, status: 'complete' as OrderStatus, dbStatus: 'expired' }]);
+          setOrders(prev => prev.filter(o => o.id !== activeOrderId));
+
+          fetch(`/api/orders/${activeOrderId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              status: 'expired',
+              actor_type: 'system',
+              actor_id: 'system',
+            }),
+          }).catch(console.error);
         }
-        return prev - 1;
-      });
+        setPendingTradeData(null);
+        setScreen("home");
+        playSound('error');
+      }
     }, 1000);
 
     return () => clearInterval(interval);
   }, [screen, pendingTradeData, activeOrderId, orders, playSound]);
+
+  // Timer tick for orders list countdown display
+  useEffect(() => {
+    const hasPendingOrders = orders.some(o => o.dbStatus === 'pending');
+    if (!hasPendingOrders) return;
+
+    const interval = setInterval(() => {
+      setTimerTick(prev => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [orders]);
 
   // Format time left as MM:SS
   const formatTimeLeft = (seconds: number): string => {
@@ -593,7 +702,7 @@ export default function Home() {
         setUserId(data.data.user.id);
         setUserWallet(walletAddress);
         setUserName(data.data.user.name || 'User');
-        localStorage.setItem('settle_wallet', walletAddress);
+        localStorage.setItem('blip_wallet', walletAddress);
         // Fetch orders
         fetchOrders(data.data.user.id);
         // Fetch bank accounts
@@ -644,6 +753,76 @@ export default function Home() {
     }
   }, [connectWallet, newUserName]);
 
+  // Handle setting username for new wallet users
+  // NOTE: On Brave with Phantom, connected may be false but walletAddress is available
+  const handleWalletUsername = useCallback(async (username: string) => {
+    const phantom = (window as any).phantom?.solana;
+    const walletAddress = solanaWallet.walletAddress || phantom?.publicKey?.toString();
+    const signFn = solanaWallet.signMessage || (phantom?.signMessage ? async (msg: Uint8Array) => {
+      const result = await phantom.signMessage(msg, 'utf8');
+      return result.signature;
+    } : null);
+
+    if (!walletAddress || !signFn) {
+      throw new Error("Wallet not connected");
+    }
+
+    if (!username.trim()) {
+      throw new Error("Username is required");
+    }
+
+    try {
+      // Generate message to sign
+      const timestamp = Date.now();
+      const nonce = Math.random().toString(36).substring(7);
+      const message = `Sign this message to authenticate with Blip Money\n\nWallet: ${walletAddress}\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
+
+      // Request signature
+      const encodedMessage = new TextEncoder().encode(message);
+      const signatureUint8 = await signFn(encodedMessage);
+
+      // Convert to base58
+      const bs58 = await import('bs58');
+      const signature = bs58.default.encode(signatureUint8);
+
+      // Set username via API
+      const res = await fetch('/api/auth/user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'set_username',
+          wallet_address: walletAddress,
+          signature,
+          message,
+          username: username.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.data.user) {
+        // Username set successfully
+        const user = data.data.user;
+        setUserId(user.id);
+        setUserWallet(user.wallet_address);
+        setUserName(user.username || user.name || 'User');
+        setUserBalance(user.balance || 0);
+        localStorage.setItem('blip_user', JSON.stringify(user));
+        fetchOrders(user.id);
+        fetchBankAccounts(user.id);
+        fetchResolvedDisputes(user.id);
+        setShowUsernameModal(false);
+        setWalletUsername("");
+        setScreen('home');
+      } else {
+        throw new Error(data.error || 'Failed to set username');
+      }
+    } catch (error) {
+      console.error('Set username error:', error);
+      throw error;
+    }
+  }, [solanaWallet]);
+
   // Handle user login
   const handleUserLogin = useCallback(async () => {
     setIsLoggingIn(true);
@@ -668,7 +847,7 @@ export default function Home() {
         setUserWallet(user.wallet_address);
         setUserName(user.name || 'User');
         setUserBalance(user.balance || 0);
-        localStorage.setItem('settle_user', JSON.stringify(user));
+        localStorage.setItem('blip_user', JSON.stringify(user));
         // Fetch orders
         fetchOrders(user.id);
         // Fetch bank accounts
@@ -693,7 +872,7 @@ export default function Home() {
       setIsInitializing(true);
 
       // Check for saved user login first
-      const savedUser = localStorage.getItem('settle_user');
+      const savedUser = localStorage.getItem('blip_user');
       if (savedUser) {
         try {
           const user = JSON.parse(savedUser);
@@ -708,12 +887,12 @@ export default function Home() {
           setIsInitializing(false);
           return;
         } catch {
-          localStorage.removeItem('settle_user');
+          localStorage.removeItem('blip_user');
         }
       }
 
       // Check for legacy wallet login
-      const savedWallet = localStorage.getItem('settle_wallet');
+      const savedWallet = localStorage.getItem('blip_wallet');
       if (savedWallet) {
         // Reconnect with saved wallet
         await connectWallet(savedWallet);
@@ -1545,7 +1724,7 @@ export default function Home() {
               transition={{ delay: 0.1 }}
               className="text-[32px] font-bold text-white mb-3 text-center"
             >
-              Welcome to Settle
+              Welcome to Blip <span className="text-orange-500">Money</span>
             </motion.h1>
             <motion.p
               initial={{ y: 20, opacity: 0 }}
@@ -1557,95 +1736,134 @@ export default function Home() {
             </motion.p>
 
             {loginError && (
-              <div className="w-full bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400 mb-4">
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400 mb-4"
+              >
                 {loginError}
-              </div>
+              </motion.div>
             )}
 
-            <div className="w-full mb-4">
-              <label className="text-[13px] text-neutral-500 mb-2 block">Email</label>
-              <input
-                type="email"
-                value={loginForm.email}
-                onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                placeholder="your@email.com"
-                className="w-full bg-neutral-900 rounded-2xl px-4 py-4 text-white text-[17px] placeholder:text-neutral-600 outline-none focus:ring-2 focus:ring-orange-500"
-              />
-            </div>
+            {isAuthenticating && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="w-full bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-sm text-blue-400 mb-4 flex items-center gap-2"
+              >
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Authenticating with wallet...
+              </motion.div>
+            )}
 
-            <div className="w-full mb-4">
-              <label className="text-[13px] text-neutral-500 mb-2 block">Password</label>
-              <input
-                type="password"
-                value={loginForm.password}
-                onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                placeholder="••••••••"
-                className="w-full bg-neutral-900 rounded-2xl px-4 py-4 text-white text-[17px] placeholder:text-neutral-600 outline-none focus:ring-2 focus:ring-orange-500"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleUserLogin();
-                  }
-                }}
-              />
-            </div>
-
-            <button
-              onClick={handleUserLogin}
-              disabled={isLoggingIn}
-              className="w-full py-4 rounded-2xl text-[17px] font-semibold flex items-center justify-center gap-2 mb-4 bg-orange-500 text-white disabled:opacity-50"
-            >
-              {isLoggingIn ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                "Sign In"
-              )}
-            </button>
-
-            {/* Solana Wallet Connect */}
-            <div className="w-full flex items-center gap-3 mb-4">
-              <div className="flex-1 h-px bg-neutral-800" />
-              <span className="text-neutral-500 text-[13px]">or</span>
-              <div className="flex-1 h-px bg-neutral-800" />
-            </div>
-
-            <button
+            {/* Primary: Solana Wallet Connect */}
+            <motion.button
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.3 }}
               onClick={() => setShowWalletModal(true)}
-              className="w-full py-4 rounded-2xl text-[17px] font-semibold flex items-center justify-center gap-3 mb-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:opacity-90 transition-opacity"
+              disabled={isAuthenticating}
+              className="w-full py-4 rounded-2xl text-[17px] font-semibold flex items-center justify-center gap-3 mb-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               <Wallet className="w-5 h-5" />
-              Connect Solana Wallet
-            </button>
+              Connect Wallet
+            </motion.button>
 
-            <p className="text-neutral-500 text-[12px] text-center mb-4">
+            <motion.p
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.4 }}
+              className="text-neutral-500 text-[12px] text-center mb-6"
+            >
               Supports Phantom, Solflare, Coinbase Wallet & more (Devnet)
-            </p>
+            </motion.p>
 
-            <div className="w-full border-t border-neutral-800 pt-4 mt-2">
-              <p className="text-neutral-500 text-[13px] text-center mb-3">Test Accounts:</p>
-              <div className="space-y-2">
+            {/* Divider */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="w-full flex items-center gap-3 mb-6"
+            >
+              <div className="flex-1 h-px bg-neutral-800" />
+              <span className="text-neutral-500 text-[13px]">Legacy Login (Testing)</span>
+              <div className="flex-1 h-px bg-neutral-800" />
+            </motion.div>
+
+            {/* Collapsible Legacy Login */}
+            <details className="w-full">
+              <summary className="cursor-pointer text-neutral-400 text-[14px] text-center mb-4 hover:text-neutral-300 transition-colors">
+                Show email/password login
+              </summary>
+
+              <div className="space-y-4 mt-4">
+                <div className="w-full">
+                  <label className="text-[13px] text-neutral-500 mb-2 block">Email</label>
+                  <input
+                    type="email"
+                    value={loginForm.email}
+                    onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="your@email.com"
+                    className="w-full bg-neutral-900 rounded-2xl px-4 py-4 text-white text-[17px] placeholder:text-neutral-600 outline-none focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+
+                <div className="w-full">
+                  <label className="text-[13px] text-neutral-500 mb-2 block">Password</label>
+                  <input
+                    type="password"
+                    value={loginForm.password}
+                    onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="••••••••"
+                    className="w-full bg-neutral-900 rounded-2xl px-4 py-4 text-white text-[17px] placeholder:text-neutral-600 outline-none focus:ring-2 focus:ring-orange-500"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleUserLogin();
+                      }
+                    }}
+                  />
+                </div>
+
                 <button
-                  onClick={() => setLoginForm({ email: "alice@test.com", password: "user123" })}
-                  className="w-full p-3 bg-neutral-900 hover:bg-neutral-800 rounded-xl text-left transition-colors"
+                  onClick={handleUserLogin}
+                  disabled={isLoggingIn}
+                  className="w-full py-4 rounded-2xl text-[17px] font-semibold flex items-center justify-center gap-2 mb-4 bg-orange-500 text-white disabled:opacity-50"
                 >
-                  <p className="text-[14px] font-medium text-white">Alice</p>
-                  <p className="text-[12px] text-neutral-500">alice@test.com / user123</p>
+                  {isLoggingIn ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    "Sign In"
+                  )}
                 </button>
-                <button
-                  onClick={() => setLoginForm({ email: "bob@test.com", password: "user123" })}
-                  className="w-full p-3 bg-neutral-900 hover:bg-neutral-800 rounded-xl text-left transition-colors"
-                >
-                  <p className="text-[14px] font-medium text-white">Bob</p>
-                  <p className="text-[12px] text-neutral-500">bob@test.com / user123</p>
-                </button>
-                <button
-                  onClick={() => setLoginForm({ email: "charlie@test.com", password: "user123" })}
-                  className="w-full p-3 bg-neutral-900 hover:bg-neutral-800 rounded-xl text-left transition-colors"
-                >
-                  <p className="text-[14px] font-medium text-white">Charlie</p>
-                  <p className="text-[12px] text-neutral-500">charlie@test.com / user123</p>
-                </button>
+
+                <div className="w-full border-t border-neutral-800 pt-4">
+                  <p className="text-neutral-500 text-[13px] text-center mb-3">Test Accounts:</p>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => setLoginForm({ email: "alice@test.com", password: "user123" })}
+                      className="w-full p-3 bg-neutral-900 hover:bg-neutral-800 rounded-xl text-left transition-colors"
+                    >
+                      <p className="text-[14px] font-medium text-white">Alice</p>
+                      <p className="text-[12px] text-neutral-500">alice@test.com / user123</p>
+                    </button>
+                    <button
+                      onClick={() => setLoginForm({ email: "bob@test.com", password: "user123" })}
+                      className="w-full p-3 bg-neutral-900 hover:bg-neutral-800 rounded-xl text-left transition-colors"
+                    >
+                      <p className="text-[14px] font-medium text-white">Bob</p>
+                      <p className="text-[12px] text-neutral-500">bob@test.com / user123</p>
+                    </button>
+                    <button
+                      onClick={() => setLoginForm({ email: "charlie@test.com", password: "user123" })}
+                      className="w-full p-3 bg-neutral-900 hover:bg-neutral-800 rounded-xl text-left transition-colors"
+                    >
+                      <p className="text-[14px] font-medium text-white">Charlie</p>
+                      <p className="text-[12px] text-neutral-500">charlie@test.com / user123</p>
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
+            </details>
           </motion.div>
         )}
 
@@ -2600,7 +2818,109 @@ export default function Home() {
                         </div>
                       )}
 
-                      {activeOrder.step === 2 && activeOrder.type === "sell" && (
+                      {/* Sell order step 2 - escrow NOT yet locked, show lock button */}
+                      {activeOrder.step === 2 && activeOrder.type === "sell" && activeOrder.dbStatus !== 'escrowed' && (
+                        <div className="mt-3 space-y-3">
+                          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                                <Lock className="w-5 h-5 text-amber-400" />
+                              </div>
+                              <div>
+                                <p className="text-[15px] font-medium text-amber-400">Lock Your USDT to Escrow</p>
+                                <p className="text-[12px] text-neutral-400">Merchant is waiting for you to lock funds</p>
+                              </div>
+                            </div>
+                            <p className="text-[12px] text-neutral-500 mb-3">
+                              Lock {activeOrder.cryptoAmount} USDT to continue with the trade. Your funds will be held securely until you confirm receiving payment.
+                            </p>
+                            <motion.button
+                              whileTap={{ scale: 0.98 }}
+                              onClick={async () => {
+                                if (!solanaWallet.connected) {
+                                  setShowWalletModal(true);
+                                  return;
+                                }
+                                if (!solanaWallet.programReady) {
+                                  alert('Wallet not ready. Please reconnect your wallet.');
+                                  return;
+                                }
+                                setIsLoading(true);
+                                try {
+                                  const merchantWallet = activeOrder.merchant.walletAddress;
+                                  if (!merchantWallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet)) {
+                                    alert('Invalid merchant wallet address');
+                                    return;
+                                  }
+                                  const escrowResult = await solanaWallet.depositToEscrow({
+                                    amount: parseFloat(activeOrder.cryptoAmount),
+                                    merchantWallet,
+                                  });
+                                  if (escrowResult.success) {
+                                    // Record escrow deposit
+                                    await fetch(`/api/orders/${activeOrder.id}/escrow`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        tx_hash: escrowResult.txHash,
+                                        actor_type: 'user',
+                                        actor_id: userId,
+                                        escrow_address: solanaWallet.walletAddress,
+                                        escrow_trade_id: escrowResult.tradeId,
+                                        escrow_trade_pda: escrowResult.tradePda,
+                                        escrow_pda: escrowResult.escrowPda,
+                                        escrow_creator_wallet: solanaWallet.walletAddress,
+                                      }),
+                                    });
+                                    // Update local state
+                                    setOrders(prev => prev.map(o =>
+                                      o.id === activeOrder.id ? { ...o, dbStatus: 'escrowed', escrowTxHash: escrowResult.txHash } : o
+                                    ));
+                                    playSound('trade_complete');
+                                  }
+                                } catch (err: any) {
+                                  console.error('Escrow failed:', err);
+                                  alert(err?.message || 'Failed to lock escrow. Please try again.');
+                                  playSound('error');
+                                } finally {
+                                  setIsLoading(false);
+                                }
+                              }}
+                              disabled={isLoading || (solanaWallet.connected && !solanaWallet.programReady)}
+                              className="w-full py-3 rounded-xl text-[15px] font-semibold bg-orange-500 text-white flex items-center justify-center gap-2 disabled:opacity-50"
+                            >
+                              {isLoading ? (
+                                <>
+                                  <Loader2 className="w-5 h-5 animate-spin" />
+                                  Locking...
+                                </>
+                              ) : !solanaWallet.connected ? (
+                                <>
+                                  <Wallet className="w-5 h-5" />
+                                  Connect Wallet to Lock
+                                </>
+                              ) : !solanaWallet.programReady ? (
+                                'Wallet Not Ready'
+                              ) : (
+                                <>
+                                  <Lock className="w-5 h-5" />
+                                  Lock {activeOrder.cryptoAmount} USDT to Escrow
+                                </>
+                              )}
+                            </motion.button>
+                          </div>
+                          <button
+                            onClick={handleOpenChat}
+                            className="w-full py-3 rounded-xl text-[15px] font-medium bg-neutral-800 text-white flex items-center justify-center gap-2"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            Message Merchant
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Sell order step 2 - escrow IS locked, waiting for payment */}
+                      {activeOrder.step === 2 && activeOrder.type === "sell" && activeOrder.dbStatus === 'escrowed' && (
                         <div className="mt-2">
                           <p className="text-[13px] text-neutral-500">Your USDT is locked in escrow. Waiting for merchant to send AED payment...</p>
 
@@ -3227,7 +3547,20 @@ export default function Home() {
                         }`}>
                           {order.status === "complete" ? "Done" : `Step ${order.step}/4`}
                         </p>
-                        <p className="text-[11px] text-neutral-600">{order.createdAt.toLocaleDateString()}</p>
+                        {order.dbStatus === 'pending' && order.expiresAt ? (
+                          <p className={`text-[11px] font-mono ${
+                            Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)) < 60
+                              ? "text-red-400"
+                              : "text-amber-400"
+                          }`}>
+                            {(() => {
+                              const secs = Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000));
+                              return `${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, '0')}`;
+                            })()}
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-neutral-600">{order.createdAt.toLocaleDateString()}</p>
+                        )}
                       </div>
                     </motion.button>
                   ))}
@@ -3533,7 +3866,7 @@ export default function Home() {
               <div className="mt-8">
                 <button
                   onClick={() => {
-                    localStorage.removeItem('settle_wallet');
+                    localStorage.removeItem('blip_wallet');
                     setUserId(null);
                     setUserWallet(null);
                     setUserName('Guest');
@@ -4201,6 +4534,16 @@ export default function Home() {
         onClose={() => setShowWalletModal(false)}
         onConnected={handleSolanaWalletConnect}
       />
+
+      {/* Username Modal for New Wallet Users */}
+      {solanaWallet.walletAddress && (
+        <UsernameModal
+          isOpen={showUsernameModal}
+          walletAddress={solanaWallet.walletAddress}
+          onSubmit={handleWalletUsername}
+          canClose={false}
+        />
+      )}
 
       {/* Merchant Acceptance Popup */}
       <AnimatePresence>

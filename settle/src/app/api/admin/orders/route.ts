@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
         o.type,
         o.created_at::text,
         o.expires_at::text,
-        COALESCE(u.name, 'Unknown User') as user_name,
+        COALESCE(u.username, 'Unknown User') as user_name,
         COALESCE(m.business_name, 'Unknown Merchant') as merchant_name
       FROM orders o
       LEFT JOIN users u ON o.user_id = u.id

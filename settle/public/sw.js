@@ -1,7 +1,7 @@
-// Settle PWA Service Worker
-const CACHE_NAME = 'settle-v5-anchor29';
-const STATIC_CACHE = 'settle-static-v5-anchor29';
-const DYNAMIC_CACHE = 'settle-dynamic-v5-anchor29';
+// Blip Money PWA Service Worker
+const CACHE_NAME = 'blip-money-v5-anchor29';
+const STATIC_CACHE = 'blip-money-static-v5-anchor29';
+const DYNAMIC_CACHE = 'blip-money-dynamic-v5-anchor29';
 
 // Static assets to cache
 const STATIC_ASSETS = [
