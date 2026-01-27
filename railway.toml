@@ -1,6 +1,7 @@
 [build]
-builder = "nixpacks"
-nixpacksConfigPath = "nixpacks.toml"
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "cd settle && npm start"
+healthcheckPath = "/"
+restartPolicyType = "on_failure"
