@@ -1,7 +1,7 @@
 'use client';
 
 import React, { FC, ReactNode, useMemo, useCallback, createContext, useContext, useState, useEffect } from 'react';
-import { ConnectionProvider, WalletProvider, useWallet, useConnection } from '@solana/wallet-adapter-react';
+import { ConnectionProvider, WalletProvider, useWallet, useConnection, Adapter } from '@solana/wallet-adapter-react';
 import { WalletModalProvider, useWalletModal } from '@solana/wallet-adapter-react-ui';
 import {
   PhantomWalletAdapter,
@@ -1261,7 +1261,7 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
 
   // Configure wallets - includes WalletConnect for mobile support
   const wallets = useMemo(() => {
-    const walletList = [
+    const walletList: Adapter[] = [
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
       new TorusWalletAdapter(),
