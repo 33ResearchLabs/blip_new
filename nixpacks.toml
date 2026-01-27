@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["nodejs_20", "npm"]
+
+[phases.install]
+cmds = ["cd settle && npm install"]
+
+[phases.build]
+cmds = ["cd settle && npm run build"]
+
+[start]
+cmd = "cd settle && npm start"
