@@ -1390,8 +1390,8 @@ export default function MerchantDashboard() {
       setEscrowTxHash(escrowResult.txHash);
       console.log('[Merchant] Escrow locked on-chain:', escrowResult.txHash);
 
-      // Record escrow on backend
-      await fetch(`/api/orders/${escrowOrder.id}/escrow`, {
+      // Record escrow on backend (this also updates status to 'escrowed')
+      const escrowRecordRes = await fetch(`/api/orders/${escrowOrder.id}/escrow`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1406,27 +1406,24 @@ export default function MerchantDashboard() {
         }),
       });
 
-      // Update status to escrowed
-      const escrowStatusRes = await fetch(`/api/orders/${escrowOrder.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "escrowed",
-          actor_type: "merchant",
-          actor_id: merchantId,
-        }),
-      });
-
-      if (escrowStatusRes.ok) {
-        const data = await escrowStatusRes.json();
+      if (escrowRecordRes.ok) {
+        const data = await escrowRecordRes.json();
         if (data.success) {
           // Update local state immediately for instant UI feedback
-          setOrders(prev => prev.map(o => o.id === escrowOrder.id ? { ...o, status: "escrow" as const } : o));
+          // Include escrowTxHash so the UI shows "Locked" instead of "Lock" button
+          setOrders(prev => prev.map(o => o.id === escrowOrder.id ? {
+            ...o,
+            status: "escrow" as const,
+            escrowTxHash: escrowResult.txHash,
+            escrowTradeId: escrowResult.tradeId,
+            escrowTradePda: escrowResult.tradePda,
+            escrowCreatorWallet: solanaWallet.walletAddress,
+          } : o));
           playSound('trade_complete');
           addNotification('escrow', `${escrowOrder.amount} USDC locked in escrow - waiting for user payment`, escrowOrder.id);
-          // Note: Don't call fetchOrders() here - it can overwrite the local update with stale data
-          // The orders will be refreshed when the modal closes
         }
+      } else {
+        console.error('[Merchant] Failed to record escrow on backend');
       }
 
       setIsLockingEscrow(false);
