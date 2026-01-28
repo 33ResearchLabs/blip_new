@@ -348,6 +348,14 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
   // Phantom direct connection state (for Brave browser fallback)
   const [phantomDirectKey, setPhantomDirectKey] = useState<PublicKey | null>(null);
 
+  // Track current phantom key in a ref to avoid re-render loops in the effect
+  const phantomDirectKeyRef = useRef<string | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    phantomDirectKeyRef.current = phantomDirectKey?.toString() || null;
+  }, [phantomDirectKey]);
+
   // Check for Phantom direct connection in Brave - using events only (no polling)
   useEffect(() => {
     const phantom = (window as any).phantom?.solana;
@@ -363,20 +371,26 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
           const pubKey = new PublicKey(pubKeySource.toString());
           const pubKeyStr = pubKey.toString();
 
-          if (phantomDirectKey?.toString() !== pubKeyStr) {
+          // Only update state if the key actually changed to avoid re-render loops
+          if (phantomDirectKeyRef.current !== pubKeyStr) {
             console.log('[SolanaWallet] Phantom connected (via event):', pubKeyStr);
+            phantomDirectKeyRef.current = pubKeyStr;
+            setPhantomDirectKey(pubKey);
           }
-          setPhantomDirectKey(pubKey);
         } catch (error) {
           console.error('[SolanaWallet] Invalid publicKey from Phantom:', error);
+          phantomDirectKeyRef.current = null;
           setPhantomDirectKey(null);
         }
       }
     };
 
     const handlePhantomDisconnect = () => {
-      console.log('[SolanaWallet] Phantom disconnected (via event)');
-      setPhantomDirectKey(null);
+      if (phantomDirectKeyRef.current !== null) {
+        console.log('[SolanaWallet] Phantom disconnected (via event)');
+        phantomDirectKeyRef.current = null;
+        setPhantomDirectKey(null);
+      }
     };
 
     const handleAccountChanged = (newPublicKey: any) => {
@@ -404,21 +418,23 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       phantom.off?.('disconnect', handlePhantomDisconnect);
       phantom.off?.('accountChanged', handleAccountChanged);
     };
-  }, [adapterConnected, phantomDirectKey]);
+  }, [adapterConnected]); // Removed phantomDirectKey from deps - using ref instead
 
   // Use adapter values if available, otherwise fall back to Phantom direct
   const publicKey = adapterPublicKey || phantomDirectKey;
   const connected = adapterConnected || (phantomDirectKey !== null);
 
-  // Debug logging
+  // Debug logging - only log once on initial connection, using a ref to track
+  const hasLoggedConnection = React.useRef(false);
   useEffect(() => {
-    console.log('[SolanaWallet] State updated:', {
-      adapterConnected,
-      phantomDirectKey: phantomDirectKey?.toString() || null,
-      connected,
-      publicKey: publicKey?.toString() || null,
-    });
-  }, [adapterConnected, phantomDirectKey, connected, publicKey]);
+    if (connected && publicKey && !hasLoggedConnection.current) {
+      hasLoggedConnection.current = true;
+      console.log('[SolanaWallet] Connected:', publicKey.toString());
+    } else if (!connected && hasLoggedConnection.current) {
+      hasLoggedConnection.current = false;
+      console.log('[SolanaWallet] Disconnected');
+    }
+  }, [connected, publicKey]);
 
   // Sign transaction - use adapter if available, otherwise use Phantom direct
   const signTransaction = useMemo(() => {
@@ -508,15 +524,9 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       })) as <T extends Transaction | anchor.web3.VersionedTransaction>(txs: T[]) => Promise<T[]>,
     };
 
-    console.log('[SolanaWallet] anchorWallet created:', {
-      publicKey: publicKey.toString(),
-      hasSignTransaction: !!signTransaction,
-      hasSignAllTransactions: !!signAllTransactions,
-      isPhantomDirect: phantomDirectKey !== null && !adapterConnected,
-    });
-
     return anchorCompatibleWallet;
-  }, [publicKey, signTransaction, signAllTransactions, phantomDirectKey, adapterConnected]);
+    // Note: Only depend on values used to create the wallet object, not for logging
+  }, [publicKey, signTransaction, signAllTransactions]);
 
 
   // Create Anchor program instance using useEffect for more reliable updates
