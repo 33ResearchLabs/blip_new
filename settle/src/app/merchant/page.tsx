@@ -1420,10 +1420,12 @@ export default function MerchantDashboard() {
       if (escrowStatusRes.ok) {
         const data = await escrowStatusRes.json();
         if (data.success) {
+          // Update local state immediately for instant UI feedback
           setOrders(prev => prev.map(o => o.id === escrowOrder.id ? { ...o, status: "escrow" as const } : o));
-          fetchOrders();
           playSound('trade_complete');
           addNotification('escrow', `${escrowOrder.amount} USDC locked in escrow - waiting for user payment`, escrowOrder.id);
+          // Note: Don't call fetchOrders() here - it can overwrite the local update with stale data
+          // The orders will be refreshed when the modal closes
         }
       }
 
@@ -1443,6 +1445,8 @@ export default function MerchantDashboard() {
     setEscrowTxHash(null);
     setEscrowError(null);
     setIsLockingEscrow(false);
+    // Refresh orders to ensure we have latest status
+    fetchOrders();
   };
 
   // Open release modal for confirming payment and releasing escrow
