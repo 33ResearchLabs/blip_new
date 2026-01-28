@@ -1039,6 +1039,13 @@ export default function MerchantDashboard() {
       return;
     }
 
+    // Validate merchantId is a valid UUID before making API call
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(merchantId)) {
+      console.error('[Merchant] fetchOrders: Invalid merchantId format:', merchantId);
+      return;
+    }
+
     console.log('[Merchant] fetchOrders: Fetching for merchantId:', merchantId);
 
     try {
