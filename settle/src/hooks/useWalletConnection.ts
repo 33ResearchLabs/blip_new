@@ -151,6 +151,17 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
         console.log('[WalletConnection] Using native Phantom API...');
 
         try {
+          // If Phantom has a stale connection, disconnect first
+          if (phantom.isConnected && !phantom.publicKey) {
+            console.log('[WalletConnection] Clearing stale Phantom connection...');
+            try {
+              await phantom.disconnect();
+              await new Promise(resolve => setTimeout(resolve, 100));
+            } catch {
+              // Ignore disconnect errors
+            }
+          }
+
           // Try silent connect first (if user has previously approved)
           let connected = false;
           try {
@@ -159,22 +170,60 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
               console.log('[WalletConnection] Phantom silent connect successful');
               connected = true;
             }
-          } catch {
-            // Silent connect failed, will try full connect
+          } catch (silentErr: any) {
+            // Silent connect failed - this is normal for first-time users
+            console.log('[WalletConnection] Silent connect not available, trying full connect...');
+            // Small delay to let Phantom reset its internal state
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
 
           if (!connected) {
-            // Full connect (shows popup)
-            const resp = await phantom.connect();
-            const pubKey = resp.publicKey.toString();
-            console.log('[WalletConnection] Phantom connected:', pubKey);
+            // Full connect (shows popup) with retry logic
+            let retries = 2;
+            let lastError: any = null;
+
+            while (retries > 0 && !connected) {
+              try {
+                const resp = await phantom.connect();
+                if (resp?.publicKey) {
+                  const pubKey = resp.publicKey.toString();
+                  console.log('[WalletConnection] Phantom connected:', pubKey);
+                  connected = true;
+                }
+              } catch (connectErr: any) {
+                lastError = connectErr;
+                retries--;
+
+                // If it's a user rejection, don't retry
+                if (connectErr?.message?.includes('User rejected') || connectErr?.code === 4001) {
+                  throw connectErr;
+                }
+
+                if (retries > 0) {
+                  console.log('[WalletConnection] Phantom connect failed, retrying...');
+                  // Wait and try again
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                  // Try disconnecting to reset state
+                  try {
+                    await phantom.disconnect();
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                  } catch {
+                    // Ignore
+                  }
+                }
+              }
+            }
+
+            if (!connected && lastError) {
+              throw lastError;
+            }
           }
 
           // Select the adapter to sync React state
           select(adapter.name);
 
           // Wait for adapter to sync
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise(resolve => setTimeout(resolve, 300));
 
           // If adapter didn't sync but Phantom is connected, that's still OK
           if (!adapter.connected && phantom.publicKey) {
@@ -183,8 +232,11 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
 
           return;
         } catch (err: any) {
-          if (err?.message?.includes('User rejected')) {
+          if (err?.message?.includes('User rejected') || err?.code === 4001) {
             setConnectionError('Connection cancelled');
+          } else if (err?.message?.includes('Unexpected error')) {
+            console.error('[WalletConnection] Phantom unexpected error, may need page refresh');
+            setConnectionError('Wallet error. Please unlock your wallet and try again.');
           } else {
             console.error('[WalletConnection] Phantom connect failed:', err);
             setConnectionError('Connection failed. Please try again.');
