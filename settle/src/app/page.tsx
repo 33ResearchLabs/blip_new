@@ -354,6 +354,7 @@ export default function Home() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const isAuthenticatingRef = useRef(false); // Ref for synchronous check (state updates are async)
   const lastAuthenticatedWalletRef = useRef<string | null>(null); // Track which wallet we already authenticated
+  const authAttemptedForWalletRef = useRef<string | null>(null); // Track wallet we've already tried (success or failure)
   const solanaWallet = useSolanaWalletHook();
 
   // Escrow transaction state
@@ -405,6 +406,11 @@ export default function Home() {
       const walletAddress = solanaWallet.walletAddress || phantom?.publicKey?.toString();
       const hasWallet = walletAddress && (solanaWallet.publicKey || phantom?.publicKey);
 
+      // Reset attempt tracking if wallet changed to a different address
+      if (walletAddress && authAttemptedForWalletRef.current && authAttemptedForWalletRef.current !== walletAddress) {
+        authAttemptedForWalletRef.current = null;
+      }
+
       // Use ref for synchronous check to prevent race conditions (state updates are async)
       // Also skip if we already authenticated this wallet address
       if (!hasWallet || userId || isAuthenticatingRef.current) {
@@ -415,6 +421,14 @@ export default function Home() {
       if (lastAuthenticatedWalletRef.current === walletAddress) {
         return;
       }
+
+      // Skip if we already attempted auth for this wallet (prevents repeated popups on reject)
+      if (authAttemptedForWalletRef.current === walletAddress) {
+        return;
+      }
+
+      // Mark this wallet as attempted (before we start, to prevent race conditions)
+      authAttemptedForWalletRef.current = walletAddress;
 
       // Set ref immediately (synchronous) to prevent concurrent calls
       isAuthenticatingRef.current = true;
