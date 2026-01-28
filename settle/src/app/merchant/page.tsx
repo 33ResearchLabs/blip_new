@@ -2962,7 +2962,7 @@ export default function MerchantDashboard() {
                               >
                                 <MessageCircle className="w-3.5 h-3.5 text-gray-500 hover:text-blue-400" />
                               </button>
-                              {order.orderType === 'buy' ? (
+                              {order.orderType === 'buy' && !order.escrowTxHash ? (
                                 <motion.button
                                   whileTap={{ scale: 0.95 }}
                                   onClick={() => openEscrowModal(order)}
@@ -2970,6 +2970,10 @@ export default function MerchantDashboard() {
                                 >
                                   Lock
                                 </motion.button>
+                              ) : order.escrowTxHash ? (
+                                <span className="px-2.5 py-1.5 bg-emerald-500/10 text-emerald-400 rounded text-[11px] font-mono">
+                                  Locked
+                                </span>
                               ) : (
                                 <span className="px-2.5 py-1.5 bg-white/[0.04] rounded text-[11px] font-mono text-gray-500">
                                   Waiting
@@ -3604,7 +3608,7 @@ export default function MerchantDashboard() {
 
                       {/* Action Row */}
                       <div className="flex items-center gap-2 mt-2.5 pl-11">
-                        {order.orderType === 'buy' ? (
+                        {order.orderType === 'buy' && !order.escrowTxHash ? (
                           <motion.button
                             whileTap={{ scale: 0.98 }}
                             onClick={() => openEscrowModal(order)}
@@ -3613,6 +3617,11 @@ export default function MerchantDashboard() {
                             <Lock className="w-3.5 h-3.5" />
                             Lock Escrow
                           </motion.button>
+                        ) : order.escrowTxHash ? (
+                          <div className="flex-1 h-9 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs font-mono text-emerald-400 flex items-center justify-center gap-1.5">
+                            <Check className="w-3.5 h-3.5" />
+                            Escrow Locked
+                          </div>
                         ) : (
                           <div className="flex-1 h-9 bg-white/[0.02] border border-white/[0.06] rounded-lg text-xs font-mono text-gray-500 flex items-center justify-center gap-1.5">
                             <Clock className="w-3.5 h-3.5" />
