@@ -499,6 +499,9 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
   // Program state - using useState instead of useMemo for more reliable updates
   const [program, setProgram] = useState<Program | null>(null);
 
+  // Guard against concurrent escrow deposit calls
+  const depositInProgressRef = useRef(false);
+
   const walletAddress = useMemo(() => {
     return publicKey ? publicKey.toBase58() : null;
   }, [publicKey]);
@@ -1063,6 +1066,13 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     escrowPda?: string;
     tradeId?: number;
   }> => {
+    // Prevent concurrent deposit calls (double-click protection)
+    if (depositInProgressRef.current) {
+      console.log('[depositToEscrow] Deposit already in progress, ignoring duplicate call');
+      throw new Error('Deposit already in progress');
+    }
+    depositInProgressRef.current = true;
+
     console.log('[depositToEscrow] Starting with params:', params);
     console.log('[depositToEscrow] State:', {
       publicKey: publicKey?.toString(),
@@ -1072,6 +1082,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     });
 
     if (!publicKey || !signTransaction || !program) {
+      depositInProgressRef.current = false;
       const error = `Wallet not ready: publicKey=${!!publicKey}, signTransaction=${!!signTransaction}, program=${!!program}`;
       console.error('[depositToEscrow]', error);
       throw new Error(error);
@@ -1213,6 +1224,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       // Refresh balances
       await refreshBalances();
 
+      depositInProgressRef.current = false;
       return {
         txHash,
         success: true,
@@ -1221,6 +1233,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         tradeId,
       };
     } catch (error) {
+      depositInProgressRef.current = false;
       console.error('Escrow deposit failed:', error);
       throw error;
     }
