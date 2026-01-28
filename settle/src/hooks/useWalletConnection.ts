@@ -30,9 +30,9 @@ export interface WalletConnectionResult {
 export function useWalletConnection(options: WalletConnectionOptions = {}): WalletConnectionResult {
   const { onConnected, onError } = options;
 
-  const { wallets, connected, wallet, disconnect, select, connect } = useWallet();
+  const { wallets, connected, select } = useWallet();
   const { walletAddress } = useSolanaWallet();
-  const { isMobile, platform, isBrave } = useMobileDetect();
+  const { isMobile, platform } = useMobileDetect();
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectingWallet, setConnectingWallet] = useState<string | null>(null);
@@ -81,7 +81,8 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
     });
   }, [isMobile, platform]);
 
-  // Main connection handler
+  // Main connection handler - simplified approach
+  // Just check if wallet info is available and signing works, then let them in
   const connectWallet = useCallback(async (walletName: string) => {
     // Prevent duplicate connection attempts
     if (connectionInProgress.current) {
@@ -90,7 +91,6 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
     }
 
     console.log('[WalletConnection] Connecting to:', walletName);
-    console.log('[WalletConnection] Platform:', platform, 'isMobile:', isMobile, 'isBrave:', isBrave);
 
     connectionInProgress.current = true;
     setConnectionError(null);
@@ -120,7 +120,7 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
 
       const adapter = walletAdapter.adapter;
 
-      // If already connected, we're done
+      // If already connected with publicKey, we're done
       if (adapter.connected && adapter.publicKey) {
         console.log('[WalletConnection] Already connected');
         setIsConnecting(false);
@@ -129,7 +129,7 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
         return;
       }
 
-      // For Phantom, use native Phantom API (works better across browsers)
+      // For Phantom, check native API first - if already connected, just use it
       if (walletName === 'Phantom') {
         const phantom = (window as any).phantom?.solana || (window as any).solana;
 
@@ -148,101 +148,50 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
           throw new Error('Phantom wallet not installed');
         }
 
-        console.log('[WalletConnection] Using native Phantom API...');
-
-        try {
-          // If Phantom has a stale connection, disconnect first
-          if (phantom.isConnected && !phantom.publicKey) {
-            console.log('[WalletConnection] Clearing stale Phantom connection...');
-            try {
-              await phantom.disconnect();
-              await new Promise(resolve => setTimeout(resolve, 100));
-            } catch {
-              // Ignore disconnect errors
-            }
-          }
-
-          // Try silent connect first (if user has previously approved)
-          let connected = false;
-          try {
-            const resp = await phantom.connect({ onlyIfTrusted: true });
-            if (resp?.publicKey) {
-              console.log('[WalletConnection] Phantom silent connect successful');
-              connected = true;
-            }
-          } catch (silentErr: any) {
-            // Silent connect failed - this is normal for first-time users
-            console.log('[WalletConnection] Silent connect not available, trying full connect...');
-            // Small delay to let Phantom reset its internal state
-            await new Promise(resolve => setTimeout(resolve, 100));
-          }
-
-          if (!connected) {
-            // Full connect (shows popup) with retry logic
-            let retries = 2;
-            let lastError: any = null;
-
-            while (retries > 0 && !connected) {
-              try {
-                const resp = await phantom.connect();
-                if (resp?.publicKey) {
-                  const pubKey = resp.publicKey.toString();
-                  console.log('[WalletConnection] Phantom connected:', pubKey);
-                  connected = true;
-                }
-              } catch (connectErr: any) {
-                lastError = connectErr;
-                retries--;
-
-                // If it's a user rejection, don't retry
-                if (connectErr?.message?.includes('User rejected') || connectErr?.code === 4001) {
-                  throw connectErr;
-                }
-
-                if (retries > 0) {
-                  console.log('[WalletConnection] Phantom connect failed, retrying...');
-                  // Wait and try again
-                  await new Promise(resolve => setTimeout(resolve, 500));
-                  // Try disconnecting to reset state
-                  try {
-                    await phantom.disconnect();
-                    await new Promise(resolve => setTimeout(resolve, 200));
-                  } catch {
-                    // Ignore
-                  }
-                }
-              }
-            }
-
-            if (!connected && lastError) {
-              throw lastError;
-            }
-          }
-
-          // Select the adapter to sync React state
+        // Check if Phantom already has publicKey and signMessage available
+        // If so, user is already connected - just proceed
+        if (phantom.publicKey && phantom.signMessage) {
+          console.log('[WalletConnection] Phantom already has wallet info, proceeding...');
           select(adapter.name);
-
-          // Wait for adapter to sync
-          await new Promise(resolve => setTimeout(resolve, 300));
-
-          // If adapter didn't sync but Phantom is connected, that's still OK
-          if (!adapter.connected && phantom.publicKey) {
-            console.log('[WalletConnection] Adapter not synced but Phantom is connected');
-          }
-
+          // Brief wait for adapter to sync
+          await new Promise(resolve => setTimeout(resolve, 100));
           return;
+        }
+
+        // Try silent connect first (if user has previously approved)
+        try {
+          const resp = await phantom.connect({ onlyIfTrusted: true });
+          if (resp?.publicKey) {
+            console.log('[WalletConnection] Phantom silent connect successful');
+            select(adapter.name);
+            await new Promise(resolve => setTimeout(resolve, 100));
+            return;
+          }
+        } catch {
+          // Silent connect failed - this is normal for first-time users
+          console.log('[WalletConnection] Silent connect not available, trying full connect...');
+        }
+
+        // Single connect attempt - no retries, no complex logic
+        try {
+          const resp = await phantom.connect();
+          if (resp?.publicKey) {
+            console.log('[WalletConnection] Phantom connected:', resp.publicKey.toString());
+            select(adapter.name);
+            await new Promise(resolve => setTimeout(resolve, 100));
+            return;
+          }
         } catch (err: any) {
           if (err?.message?.includes('User rejected') || err?.code === 4001) {
             setConnectionError('Connection cancelled');
-          } else if (err?.message?.includes('Unexpected error')) {
-            console.error('[WalletConnection] Phantom unexpected error, may need page refresh');
-            setConnectionError('Wallet error. Please unlock your wallet and try again.');
           } else {
             console.error('[WalletConnection] Phantom connect failed:', err);
             setConnectionError('Connection failed. Please try again.');
           }
           throw err;
         }
+
+        return;
       }
 
       // For other wallets, use standard adapter flow
@@ -250,15 +199,10 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
       select(adapter.name);
 
       // Wait for adapter to be ready
-      await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Connect with timeout
-      const connectPromise = adapter.connect();
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Connection timed out')), 30000)
-      );
-
-      await Promise.race([connectPromise, timeoutPromise]);
+      // Simple connect - no complex timeout logic
+      await adapter.connect();
       console.log('[WalletConnection] Connected successfully!');
 
     } catch (error: any) {
@@ -267,10 +211,6 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
 
       if (msg.includes('User rejected') || error?.code === 4001) {
         setConnectionError('Connection cancelled');
-      } else if (msg.includes('timed out')) {
-        setConnectionError('Connection timed out. Please try again.');
-      } else if (msg.includes('Unexpected error')) {
-        setConnectionError('Wallet error. Please refresh and try again.');
       } else {
         setConnectionError('Connection failed. Please try again.');
       }
@@ -283,7 +223,7 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
       setConnectingWallet(null);
       connectionInProgress.current = false;
     }
-  }, [wallets, select, isMobile, platform, isBrave, openMobileWalletApp, onError]);
+  }, [wallets, select, isMobile, platform, openMobileWalletApp, onError]);
 
   return {
     isConnecting,
