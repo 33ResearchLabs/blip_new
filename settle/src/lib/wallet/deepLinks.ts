@@ -11,7 +11,7 @@ export interface DeepLinkConfig {
   playStoreAndroid: string;
 }
 
-// Wallet deep link configurations
+// Wallet deep link configurations for mobile apps
 const WALLET_DEEP_LINKS: Record<string, DeepLinkConfig> = {
   Phantom: {
     scheme: 'phantom://',
@@ -25,10 +25,83 @@ const WALLET_DEEP_LINKS: Record<string, DeepLinkConfig> = {
     appStoreIOS: 'https://apps.apple.com/app/solflare/id1580902717',
     playStoreAndroid: 'https://play.google.com/store/apps/details?id=com.solflare.mobile',
   },
+  'Trust Wallet': {
+    scheme: 'trust://',
+    universal: 'https://link.trustwallet.com/',
+    appStoreIOS: 'https://apps.apple.com/app/trust-crypto-bitcoin-wallet/id1288339409',
+    playStoreAndroid: 'https://play.google.com/store/apps/details?id=com.wallet.crypto.trustapp',
+  },
+  'Coinbase Wallet': {
+    scheme: 'cbwallet://',
+    universal: 'https://go.cb-w.com/',
+    appStoreIOS: 'https://apps.apple.com/app/coinbase-wallet-nfts-crypto/id1278383455',
+    playStoreAndroid: 'https://play.google.com/store/apps/details?id=org.toshi',
+  },
+  Exodus: {
+    scheme: 'exodus://',
+    universal: 'https://exodus.com/m/',
+    appStoreIOS: 'https://apps.apple.com/app/exodus-crypto-bitcoin-wallet/id1414384820',
+    playStoreAndroid: 'https://play.google.com/store/apps/details?id=exodusmovement.exodus',
+  },
+  SafePal: {
+    scheme: 'safepal://',
+    universal: 'https://link.safepal.io/',
+    appStoreIOS: 'https://apps.apple.com/app/safepal-wallet/id1548297139',
+    playStoreAndroid: 'https://play.google.com/store/apps/details?id=io.safepal.wallet',
+  },
+  TokenPocket: {
+    scheme: 'tpoutside://',
+    universal: 'https://tokenpocket.pro/',
+    appStoreIOS: 'https://apps.apple.com/app/tokenpocket-crypto-defi-wallet/id1436028697',
+    playStoreAndroid: 'https://play.google.com/store/apps/details?id=vip.mytokenpocket',
+  },
+  Coin98: {
+    scheme: 'coin98://',
+    universal: 'https://coin98.com/ul/',
+    appStoreIOS: 'https://apps.apple.com/app/coin98-wallet/id1561969966',
+    playStoreAndroid: 'https://play.google.com/store/apps/details?id=coin98.crypto.finance.media',
+  },
+  Bitget: {
+    scheme: 'bitkeep://',
+    universal: 'https://bkcode.vip/',
+    appStoreIOS: 'https://apps.apple.com/app/bitget-wallet-ex-bitkeep/id1395301115',
+    playStoreAndroid: 'https://play.google.com/store/apps/details?id=com.bitkeep.wallet',
+  },
+  MathWallet: {
+    scheme: 'mathwallet://',
+    universal: 'https://mathwallet.org/',
+    appStoreIOS: 'https://apps.apple.com/app/mathwallet-web3-wallet/id1582612388',
+    playStoreAndroid: 'https://play.google.com/store/apps/details?id=com.mathwallet.android',
+  },
+  OKX: {
+    scheme: 'okx://',
+    universal: 'https://www.okx.com/download',
+    appStoreIOS: 'https://apps.apple.com/app/okx-buy-bitcoin-btc-crypto/id1327268470',
+    playStoreAndroid: 'https://play.google.com/store/apps/details?id=com.okinc.okex.gp',
+  },
+  Backpack: {
+    scheme: 'backpack://',
+    universal: 'https://backpack.app/',
+    appStoreIOS: 'https://apps.apple.com/app/backpack-crypto-wallet/id6445964121',
+    playStoreAndroid: 'https://play.google.com/store/apps/details?id=app.backpack.mobile',
+  },
 };
 
 // Wallets that support mobile deep links
-const MOBILE_SUPPORTED_WALLETS = ['Phantom', 'Solflare'];
+const MOBILE_SUPPORTED_WALLETS = [
+  'Phantom',
+  'Solflare',
+  'Trust Wallet',
+  'Coinbase Wallet',
+  'Exodus',
+  'SafePal',
+  'TokenPocket',
+  'Coin98',
+  'Bitget',
+  'MathWallet',
+  'OKX',
+  'Backpack',
+];
 
 /**
  * Check if a wallet supports mobile deep links
@@ -64,18 +137,50 @@ export function buildConnectDeepLink(
   const appUrl = encodeURIComponent(dappUrl);
   const redirect = encodeURIComponent(redirectUrl || dappUrl);
 
-  if (walletName === 'Phantom') {
-    // Phantom deep link format
-    // https://docs.phantom.app/phantom-deeplinks/provider-methods/connect
-    return `${config.universal}connect?app_url=${appUrl}&redirect_link=${redirect}&cluster=${cluster}`;
-  }
+  switch (walletName) {
+    case 'Phantom':
+      // https://docs.phantom.app/phantom-deeplinks/provider-methods/connect
+      return `${config.universal}connect?app_url=${appUrl}&redirect_link=${redirect}&cluster=${cluster}`;
 
-  if (walletName === 'Solflare') {
-    // Solflare deep link format
-    return `${config.universal}connect?app_url=${appUrl}&redirect_url=${redirect}&cluster=${cluster}`;
-  }
+    case 'Solflare':
+      return `${config.universal}connect?app_url=${appUrl}&redirect_url=${redirect}&cluster=${cluster}`;
 
-  return null;
+    case 'Trust Wallet':
+      // Trust Wallet uses WalletConnect, but we can open the app
+      return `${config.universal}open_url?coin_id=501&url=${appUrl}`;
+
+    case 'Coinbase Wallet':
+      // Coinbase Wallet deep link
+      return `${config.universal}dapp?url=${appUrl}`;
+
+    case 'Exodus':
+      return `${config.universal}wc?uri=${appUrl}`;
+
+    case 'SafePal':
+      return `${config.universal}wc?uri=${appUrl}`;
+
+    case 'TokenPocket':
+      return `${config.scheme}open?params=${encodeURIComponent(JSON.stringify({ url: dappUrl }))}`;
+
+    case 'Coin98':
+      return `${config.universal}browser?url=${appUrl}`;
+
+    case 'Bitget':
+      return `${config.universal}wc?uri=${appUrl}`;
+
+    case 'MathWallet':
+      return `${config.universal}dapp?url=${appUrl}`;
+
+    case 'OKX':
+      return `${config.universal}?url=${appUrl}`;
+
+    case 'Backpack':
+      return `${config.universal}ul/v1/connect?app_url=${appUrl}&redirect_url=${redirect}`;
+
+    default:
+      // Generic fallback - try to open browser in wallet
+      return `${config.universal}browser?url=${appUrl}`;
+  }
 }
 
 /**
@@ -90,15 +195,43 @@ export function buildBrowseDeepLink(
 
   const encodedUrl = encodeURIComponent(targetUrl);
 
-  if (walletName === 'Phantom') {
-    return `${config.universal}browse/${encodedUrl}`;
-  }
+  switch (walletName) {
+    case 'Phantom':
+      return `${config.universal}browse/${encodedUrl}`;
 
-  if (walletName === 'Solflare') {
-    return `${config.universal}browse?url=${encodedUrl}`;
-  }
+    case 'Solflare':
+      return `${config.universal}browse?url=${encodedUrl}`;
 
-  return null;
+    case 'Trust Wallet':
+      return `${config.universal}open_url?coin_id=501&url=${encodedUrl}`;
+
+    case 'Coinbase Wallet':
+      return `${config.universal}dapp?url=${encodedUrl}`;
+
+    case 'Exodus':
+    case 'SafePal':
+    case 'Bitget':
+      return `${config.universal}browser?url=${encodedUrl}`;
+
+    case 'TokenPocket':
+      return `${config.scheme}open?params=${encodeURIComponent(JSON.stringify({ url: targetUrl }))}`;
+
+    case 'Coin98':
+      return `${config.universal}browser?url=${encodedUrl}`;
+
+    case 'MathWallet':
+      return `${config.universal}dapp?url=${encodedUrl}`;
+
+    case 'OKX':
+      return `${config.universal}?url=${encodedUrl}`;
+
+    case 'Backpack':
+      return `${config.universal}ul/v1/browse?url=${encodedUrl}`;
+
+    default:
+      // Generic fallback
+      return `${config.universal}browser?url=${encodedUrl}`;
+  }
 }
 
 /**
@@ -173,6 +306,16 @@ export function getMobileWalletInfo(walletName: string): {
   const icons: Record<string, string> = {
     Phantom: 'https://phantom.app/img/phantom-icon-purple.svg',
     Solflare: 'https://solflare.com/favicon.ico',
+    'Trust Wallet': 'https://trustwallet.com/assets/images/favicon.png',
+    'Coinbase Wallet': 'https://www.coinbase.com/favicon.ico',
+    Exodus: 'https://exodus.com/favicon.ico',
+    SafePal: 'https://www.safepal.com/favicon.ico',
+    TokenPocket: 'https://tokenpocket.pro/favicon.ico',
+    Coin98: 'https://coin98.com/favicon.ico',
+    Bitget: 'https://web3.bitget.com/favicon.ico',
+    MathWallet: 'https://mathwallet.org/favicon.ico',
+    OKX: 'https://www.okx.com/favicon.ico',
+    Backpack: 'https://backpack.app/favicon.ico',
   };
 
   return {
@@ -180,4 +323,55 @@ export function getMobileWalletInfo(walletName: string): {
     hasDeepLink: true,
     iconUrl: icons[walletName],
   };
+}
+
+/**
+ * Detect if user is on a mobile device
+ */
+export function isMobileDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
+}
+
+/**
+ * Detect the mobile platform
+ */
+export function getMobilePlatform(): 'ios' | 'android' | null {
+  if (typeof window === 'undefined') return null;
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/i.test(ua)) return 'ios';
+  if (/Android/i.test(ua)) return 'android';
+  return null;
+}
+
+/**
+ * Check if running inside a wallet's in-app browser
+ */
+export function isInWalletBrowser(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  // Check for Phantom
+  if ((window as any).phantom?.solana?.isPhantom) return 'Phantom';
+
+  // Check for Solflare
+  if ((window as any).solflare?.isSolflare) return 'Solflare';
+
+  // Check for Trust Wallet
+  if ((window as any).trustwallet) return 'Trust Wallet';
+
+  // Check for Coinbase Wallet
+  if ((window as any).coinbaseWalletExtension) return 'Coinbase Wallet';
+
+  // Check for Backpack
+  if ((window as any).backpack) return 'Backpack';
+
+  // Check for Bitget
+  if ((window as any).bitkeep) return 'Bitget';
+
+  // Check for OKX
+  if ((window as any).okxwallet) return 'OKX';
+
+  return null;
 }

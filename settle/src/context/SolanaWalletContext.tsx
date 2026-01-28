@@ -11,9 +11,34 @@ import {
   LedgerWalletAdapter,
   CoinbaseWalletAdapter,
   WalletConnectWalletAdapter,
+  TrustWalletAdapter,
+  CloverWalletAdapter,
+  Coin98WalletAdapter,
+  SlopeWalletAdapter,
+  BitpieWalletAdapter,
+  TokenPocketWalletAdapter,
+  MathWalletAdapter,
+  BitgetWalletAdapter,
+  SpotWalletAdapter,
+  HuobiWalletAdapter,
+  SaifuWalletAdapter,
+  TokenaryWalletAdapter,
+  NightlyWalletAdapter,
+  NekoWalletAdapter,
+  NufiWalletAdapter,
+  OntoWalletAdapter,
+  ParticleAdapter,
+  SafePalWalletAdapter,
+  SalmonWalletAdapter,
+  SkyWalletAdapter,
+  AvanaWalletAdapter,
+  ExodusWalletAdapter,
+  KeystoneWalletAdapter,
+  KrystalWalletAdapter,
+  XDEFIWalletAdapter,
 } from '@solana/wallet-adapter-wallets';
 import { getPrimaryEndpoint, getHealthyEndpoint } from '@/lib/solana/rpc';
-import { clusterApiUrl, PublicKey, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { PublicKey, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import {
   getAssociatedTokenAddress,
   getAccount,
@@ -26,10 +51,7 @@ import '@solana/wallet-adapter-react-ui/styles.css';
 
 // Import V2.2 SDK
 import {
-  USDT_DEVNET_MINT as V2_USDT_MINT,
   BLIP_V2_PROGRAM_ID,
-  TREASURY_WALLET,
-  getProgram,
   checkProtocolConfigExists,
   initializeProtocolConfig,
   createLane,
@@ -45,9 +67,12 @@ import {
   findEscrowPda,
   TradeSide,
   type Lane,
-  type CreateLaneParams,
-  type FundLaneParams,
+  getUsdtMint,
 } from '@/lib/solana/v2';
+
+// Get network from environment variable (defaults to devnet for safety)
+const SOLANA_NETWORK: 'devnet' | 'mainnet-beta' =
+  (process.env.NEXT_PUBLIC_SOLANA_NETWORK as 'devnet' | 'mainnet-beta') || 'devnet';
 import idlRaw from '@/lib/solana/v2/idl.json';
 // Using inline convertIdlToAnchor29 function below
 
@@ -219,8 +244,8 @@ if (typeof window !== 'undefined') {
   console.log('[SolanaWallet] Module loaded - IDL instructions:', (idl as any).instructions?.length || 0);
 }
 
-// USDT on Devnet (your fake USDT test token)
-const USDT_DEVNET_MINT = new PublicKey('FT8zRmLcsbNvqjCMSiwQC5GdkZfGtsoj8r5k19H65X9Z');
+// USDT Mint - dynamically selected based on network
+const USDT_MINT = getUsdtMint(SOLANA_NETWORK);
 
 interface LaneOperationResult {
   txHash: string;
@@ -564,7 +589,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       // Get USDT balance
       try {
         const usdtAta = await getAssociatedTokenAddress(
-          USDT_DEVNET_MINT,
+          USDT_MINT,
           publicKey
         );
         const tokenAccount = await getAccount(connection, usdtAta);
@@ -643,7 +668,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         laneId: params.laneId,
         minAmount: new BN(Math.floor(params.minAmount * 1_000_000)),
         maxAmount: new BN(Math.floor(params.maxAmount * 1_000_000)),
-        mint: USDT_DEVNET_MINT,
+        mint: USDT_MINT,
       });
 
       const [lanePda] = findLanePda(publicKey, params.laneId);
@@ -672,7 +697,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const transaction = await buildFundLaneTx(
         program,
         publicKey,
-        USDT_DEVNET_MINT,
+        USDT_MINT,
         {
           laneId,
           amount: new BN(Math.floor(amount * 1_000_000)),
@@ -723,7 +748,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const transaction = await buildWithdrawLaneTx(
         program,
         publicKey,
-        USDT_DEVNET_MINT,
+        USDT_MINT,
         {
           laneId,
           amount: new BN(Math.floor(amount * 1_000_000)),
@@ -797,7 +822,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const transaction = await buildCreateTradeTx(
         program,
         publicKey,
-        USDT_DEVNET_MINT,
+        USDT_MINT,
         {
           tradeId: params.tradeId,
           amount: new BN(Math.floor(params.amount * 1_000_000)),
@@ -861,7 +886,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         publicKey,
         tradePda,
         counterpartyPk,
-        USDT_DEVNET_MINT
+        USDT_MINT
       );
 
       // Get recent blockhash
@@ -920,7 +945,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         {
           tradePda,
           counterparty: counterpartyPk,
-          mint: USDT_DEVNET_MINT,
+          mint: USDT_MINT,
         }
       );
 
@@ -977,7 +1002,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         publicKey,
         {
           tradePda,
-          mint: USDT_DEVNET_MINT,
+          mint: USDT_MINT,
         }
       );
 
@@ -1090,7 +1115,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         buildCreateTradeTx(
           program,
           publicKey,
-          USDT_DEVNET_MINT,
+          USDT_MINT,
           {
             tradeId,
             amount: amountBN,
@@ -1111,7 +1136,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
           publicKey,
           tradePda,
           merchantPubkey,
-          USDT_DEVNET_MINT
+          USDT_MINT
         ),
         10000,
         'buildLockEscrowTx'
@@ -1212,7 +1237,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     releaseEscrow,
     refundEscrow,
     depositToEscrow,
-    network: 'devnet',
+    network: SOLANA_NETWORK,
     programReady: !!program,
     reinitializeProgram,
   };
@@ -1228,8 +1253,8 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
 export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [isClient, setIsClient] = useState(false);
 
-  // RPC endpoint with fallback support
-  const [endpoint, setEndpoint] = useState(() => getPrimaryEndpoint('devnet'));
+  // RPC endpoint with fallback support - uses configured network
+  const [endpoint, setEndpoint] = useState(() => getPrimaryEndpoint(SOLANA_NETWORK));
 
   // Check for healthier endpoint on mount and periodically
   useEffect(() => {
@@ -1237,7 +1262,7 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
 
     const checkEndpoint = async () => {
       try {
-        const healthyEndpoint = await getHealthyEndpoint('devnet');
+        const healthyEndpoint = await getHealthyEndpoint(SOLANA_NETWORK);
         if (mounted && healthyEndpoint !== endpoint) {
           console.log('[SolanaWallet] Switching to healthier RPC endpoint:', healthyEndpoint);
           setEndpoint(healthyEndpoint);
@@ -1260,30 +1285,89 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
     };
   }, [endpoint]);
 
-  // Configure wallets - includes WalletConnect for mobile support
+  // Configure wallets - comprehensive support for all major wallets
+  // Includes desktop extensions, mobile apps, hardware wallets, and WalletConnect
   const wallets = useMemo(() => {
+    const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+
     const walletList: Adapter[] = [
+      // Primary wallets - most popular and reliable
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
-      new TorusWalletAdapter(),
+
+      // Hardware wallets
       new LedgerWalletAdapter(),
+      new KeystoneWalletAdapter(),
+
+      // Major exchange/app wallets
       new CoinbaseWalletAdapter(),
+      new TrustWalletAdapter(),
+      new BitgetWalletAdapter(),
+      new ExodusWalletAdapter(),
+      new SafePalWalletAdapter(),
+
+      // Additional popular wallets
+      new Coin98WalletAdapter(),
+      new TokenPocketWalletAdapter(),
+      new MathWalletAdapter(),
+      new CloverWalletAdapter(),
+      new BitpieWalletAdapter(),
+      new SpotWalletAdapter(),
+      new NightlyWalletAdapter(),
+      new NufiWalletAdapter(),
+      new OntoWalletAdapter(),
+      new SalmonWalletAdapter(),
+      new AvanaWalletAdapter(),
+      new XDEFIWalletAdapter(),
+      new KrystalWalletAdapter(),
+
+      // Web-based wallets
+      new TorusWalletAdapter(),
+      new SlopeWalletAdapter(),
+      new HuobiWalletAdapter(),
+      new SaifuWalletAdapter(),
+      new TokenaryWalletAdapter(),
+      new NekoWalletAdapter(),
+      new SkyWalletAdapter(),
     ];
 
-    // Add WalletConnect if project ID is configured
-    const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+    // Add WalletConnect for maximum mobile and cross-platform support
+    // This enables connections from ANY WalletConnect-compatible wallet
     if (walletConnectProjectId) {
       walletList.push(
         new WalletConnectWalletAdapter({
-          network: 'devnet' as any,
+          network: SOLANA_NETWORK as any,
           options: {
             projectId: walletConnectProjectId,
+            // Metadata for WalletConnect modal
+            metadata: {
+              name: 'Blip Money',
+              description: 'Secure P2P crypto payments with escrow protection',
+              url: process.env.NEXT_PUBLIC_APP_URL || 'https://blip.money',
+              icons: [`${process.env.NEXT_PUBLIC_APP_URL || 'https://blip.money'}/logo.png`],
+            },
           },
         })
       );
-      console.log('[SolanaWallet] WalletConnect adapter enabled');
+      console.log('[SolanaWallet] WalletConnect adapter enabled for', SOLANA_NETWORK);
+    } else {
+      console.warn('[SolanaWallet] WalletConnect disabled - set NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID for mobile support');
     }
 
+    // Add Particle adapter for social login support (if configured)
+    const particleProjectId = process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID;
+    const particleClientKey = process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY;
+    const particleAppId = process.env.NEXT_PUBLIC_PARTICLE_APP_ID;
+    if (particleProjectId && particleClientKey && particleAppId) {
+      try {
+        walletList.push(new ParticleAdapter());
+        console.log('[SolanaWallet] Particle social login enabled');
+      } catch (e) {
+        console.warn('[SolanaWallet] Failed to initialize Particle adapter:', e);
+      }
+    }
+
+    console.log(`[SolanaWallet] Initialized ${walletList.length} wallet adapters on ${SOLANA_NETWORK}`);
     return walletList;
   }, []);
 
@@ -1368,4 +1452,4 @@ export function useSolanaWallet() {
 }
 
 // Export the USDT mint for use elsewhere
-export { USDT_DEVNET_MINT };
+export { USDT_MINT };
