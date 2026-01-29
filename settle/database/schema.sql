@@ -338,29 +338,3 @@ CREATE TRIGGER update_offers_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at();
 
--- =====================
--- SEED DATA
--- =====================
-
--- Insert test merchants
-INSERT INTO merchants (wallet_address, business_name, display_name, email, status, is_online, rating, total_trades, avg_response_time_mins) VALUES
-('0xMerchant1Address123456789', 'Quick Exchange LLC', 'QuickSwap', 'merchant1@blip.money', 'active', true, 4.9, 847, 3),
-('0xMerchant2Address987654321', 'Desert Gold Trading', 'DesertGold', 'merchant2@blip.money', 'active', true, 4.7, 523, 8),
-('0xMerchant3CashDealer000001', 'Dubai Cash Exchange', 'CashKing', 'merchant3@blip.money', 'active', true, 4.8, 312, 5);
-
--- Insert test offers (bank transfers)
-INSERT INTO merchant_offers (merchant_id, type, payment_method, rate, min_amount, max_amount, available_amount, bank_name, bank_account_name, bank_iban) VALUES
-((SELECT id FROM merchants WHERE display_name = 'QuickSwap'), 'sell', 'bank', 3.67, 100, 50000, 25000, 'Emirates NBD', 'Quick Exchange LLC', 'AE070331234567890123456'),
-((SELECT id FROM merchants WHERE display_name = 'DesertGold'), 'sell', 'bank', 3.68, 500, 100000, 75000, 'ADCB', 'Desert Gold Trading', 'AE500560001234567890123');
-
--- Insert test offers (cash)
-INSERT INTO merchant_offers (merchant_id, type, payment_method, rate, min_amount, max_amount, available_amount, location_name, location_address, location_lat, location_lng, meeting_instructions) VALUES
-((SELECT id FROM merchants WHERE display_name = 'CashKing'), 'sell', 'cash', 3.65, 500, 20000, 15000, 'Dubai Mall', 'Financial Center Road, Downtown Dubai', 25.1972, 55.2744, 'Meet at Starbucks near Apple Store, Ground Floor. I will be wearing a blue cap.');
-
--- Insert test user
-INSERT INTO users (wallet_address, username, kyc_status, kyc_level) VALUES
-('0xUserWallet123456789abcdef', 'demouser', 'verified', 1);
-
--- Insert test bank account for user
-INSERT INTO user_bank_accounts (user_id, bank_name, account_name, iban, is_default, is_verified) VALUES
-((SELECT id FROM users WHERE username = 'demouser'), 'Emirates NBD', 'Demo User', 'AE12 0345 0000 0012 3456 789', true, true);

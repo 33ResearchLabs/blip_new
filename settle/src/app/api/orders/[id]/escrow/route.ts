@@ -20,8 +20,7 @@ import {
 } from '@/lib/middleware/auth';
 import { logger } from '@/lib/logger';
 import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
-import { verifyTransaction, getConnection, DEVNET_RPC } from '@/lib/solana';
-import { Connection } from '@solana/web3.js';
+import { waitForConfirmation, getConnection } from '@/lib/solana';
 
 // Schema for escrow deposit
 const escrowDepositSchema = z.object({
@@ -154,13 +153,13 @@ export async function POST(
     const isDemoTx = tx_hash.startsWith('demo-');
 
     if (!isDemoTx) {
-      // Verify transaction on-chain (devnet)
+      // Verify transaction on-chain with retries (devnet can be slow to propagate)
       const connection = getConnection('devnet');
-      const verification = await verifyTransaction(connection, tx_hash);
+      const confirmed = await waitForConfirmation(connection, tx_hash, 15000);
 
-      if (!verification.confirmed) {
+      if (!confirmed) {
         return NextResponse.json(
-          { success: false, error: verification.err || 'Transaction not confirmed' },
+          { success: false, error: 'Transaction not confirmed after retries' },
           { status: 400 }
         );
       }
@@ -279,13 +278,13 @@ export async function PATCH(
     const isDemoTx = tx_hash.startsWith('demo-');
 
     if (!isDemoTx) {
-      // Verify transaction on-chain
+      // Verify transaction on-chain with retries (devnet can be slow to propagate)
       const connection = getConnection('devnet');
-      const verification = await verifyTransaction(connection, tx_hash);
+      const confirmed = await waitForConfirmation(connection, tx_hash, 15000);
 
-      if (!verification.confirmed) {
+      if (!confirmed) {
         return NextResponse.json(
-          { success: false, error: verification.err || 'Release transaction not confirmed' },
+          { success: false, error: 'Release transaction not confirmed after retries' },
           { status: 400 }
         );
       }

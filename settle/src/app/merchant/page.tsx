@@ -31,14 +31,18 @@ import {
   LogOut,
   Clock,
   ExternalLink,
+  RotateCcw,
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useRealtimeChat } from "@/hooks/useRealtimeChat";
 import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
 import { usePusher } from "@/context/PusherContext";
 import { useSounds } from "@/hooks/useSounds";
+import { useWebSocketChat } from "@/hooks/useWebSocketChat";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
+import { MessageHistory } from "@/components/merchant/MessageHistory";
+import { OrderDetailsPanel } from "@/components/merchant/OrderDetailsPanel";
+import { AnalyticsDashboard } from "@/components/merchant/AnalyticsDashboard";
 
 // Dynamically import wallet components (client-side only)
 const MerchantWalletModal = dynamic(() => import("@/components/MerchantWalletModal"), { ssr: false });
@@ -244,21 +248,9 @@ const TRADER_CUT_CONFIG = {
 } as const;
 
 // Leaderboard mock data
-const leaderboardData: LeaderboardEntry[] = [
-  { rank: 1, user: "whale_69", emoji: "🐋", volume: 450000, trades: 892, isTop1Percent: true },
-  { rank: 2, user: "gm_alice", emoji: "💎", volume: 220000, trades: 445, isTop1Percent: true },
-  { rank: 3, user: "sol_maxi", emoji: "◎", volume: 125000, trades: 312, isTop1Percent: true },
-  { rank: 4, user: "degen_ape", emoji: "🦧", volume: 85000, trades: 234, isTop1Percent: false },
-  { rank: 5, user: "ser_pump", emoji: "🔥", volume: 45000, trades: 156, isTop1Percent: false },
-];
+const leaderboardData: LeaderboardEntry[] = [];
 
-const notifications = [
-  { id: 1, type: "order", message: "New order from whale_69", time: "just now", read: false },
-  { id: 2, type: "complete", message: "Trade #ord_5 completed +$2.50", time: "2m ago", read: false },
-  { id: 3, type: "escrow", message: "Funds locked for #ord_3", time: "5m ago", read: true },
-  { id: 4, type: "order", message: "New order from anon_fox", time: "12m ago", read: true },
-  { id: 5, type: "complete", message: "Trade #ord_4 completed +$6.25", time: "1h ago", read: true },
-];
+const notifications: { id: number; type: string; message: string; time: string; read: boolean }[] = [];
 
 // Big order requests - special orders above threshold
 interface BigOrderRequest {
@@ -272,10 +264,7 @@ interface BigOrderRequest {
   premium: number; // extra % they're willing to pay
 }
 
-const initialBigOrders: BigOrderRequest[] = [
-  { id: "big_1", user: "mega_whale", emoji: "🐳", amount: 50000, currency: "USDC", message: "Need quick settlement, can do premium rate", timestamp: new Date(Date.now() - 300000), premium: 0.5 },
-  { id: "big_2", user: "corp_treasury", emoji: "🏦", amount: 25000, currency: "USDC", message: "Weekly recurring, looking for reliable merchant", timestamp: new Date(Date.now() - 600000), premium: 0.3 },
-];
+const initialBigOrders: BigOrderRequest[] = [];
 
 // Demo merchant wallet address (from seed data)
 const DEMO_MERCHANT_WALLET = "0xMerchant1Address123456789"; // QuickSwap merchant
@@ -283,53 +272,7 @@ const DEMO_MERCHANT_WALLET = "0xMerchant1Address123456789"; // QuickSwap merchan
 // Mock data for demo mode (when database is not available)
 const DEMO_MODE = false; // Set to true when database is not connected
 const MOCK_MERCHANT_ID = "mock-merchant-123";
-const mockOrders: Order[] = [
-  {
-    id: "order_1",
-    user: "alice_crypto",
-    emoji: "🦊",
-    amount: 500,
-    fromCurrency: "USDC",
-    toCurrency: "AED",
-    rate: 3.67,
-    total: 1835,
-    timestamp: new Date(Date.now() - 120000),
-    status: "pending",
-    expiresIn: 780,
-    isNew: true,
-    tradeVolume: 1500,
-  },
-  {
-    id: "order_2",
-    user: "bob_trader",
-    emoji: "🐋",
-    amount: 1200,
-    fromCurrency: "USDC",
-    toCurrency: "AED",
-    rate: 3.67,
-    total: 4404,
-    timestamp: new Date(Date.now() - 300000),
-    status: "escrow",
-    expiresIn: 540,
-    isNew: false,
-    tradeVolume: 25000,
-  },
-  {
-    id: "order_3",
-    user: "whale_99",
-    emoji: "💎",
-    amount: 2500,
-    fromCurrency: "USDC",
-    toCurrency: "AED",
-    rate: 3.68,
-    total: 9200,
-    timestamp: new Date(Date.now() - 600000),
-    status: "completed",
-    expiresIn: 0,
-    isNew: false,
-    tradeVolume: 150000,
-  },
-];
+const mockOrders: Order[] = [];
 
 // Merchant info type
 interface MerchantInfo {
@@ -372,6 +315,11 @@ export default function MerchantDashboard() {
   const [isReleasingEscrow, setIsReleasingEscrow] = useState(false);
   const [releaseTxHash, setReleaseTxHash] = useState<string | null>(null);
   const [releaseError, setReleaseError] = useState<string | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
+  const [isCancellingEscrow, setIsCancellingEscrow] = useState(false);
+  const [cancelTxHash, setCancelTxHash] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const solanaWallet = useSolanaWalletHook();
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({ email: "", password: "", confirmPassword: "", businessName: "" });
@@ -384,6 +332,10 @@ export default function MerchantDashboard() {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [bigOrders, setBigOrders] = useState<BigOrderRequest[]>(initialBigOrders);
   const [showBigOrderWidget, setShowBigOrderWidget] = useState(true);
+  // New dashboard panels
+  const [showMessageHistory, setShowMessageHistory] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [showAnalytics, setShowAnalytics] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showOpenTradeModal, setShowOpenTradeModal] = useState(false);
   const [openTradeForm, setOpenTradeForm] = useState({
@@ -488,13 +440,13 @@ export default function MerchantDashboard() {
     }
   }, [merchantId, setActor]);
 
-  // Real-time chat hook (replaces polling)
+  // Real-time chat hook via WebSocket (replaces Pusher for chat)
   const {
     chatWindows,
     openChat,
     closeChat,
     sendMessage,
-  } = useRealtimeChat({
+  } = useWebSocketChat({
     maxWindows: 10,
     actorType: "merchant",
     actorId: merchantId || undefined,
@@ -1094,13 +1046,50 @@ export default function MerchantDashboard() {
     }
   }, [merchantId]);
 
+  // Fetch big orders from API
+  const fetchBigOrders = useCallback(async () => {
+    if (!merchantId || DEMO_MODE) return;
+    try {
+      const res = await fetch(`/api/merchant/big-orders?merchant_id=${merchantId}&limit=10`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success && data.data?.orders) {
+        // Map API response to BigOrderRequest format
+        const mappedOrders: BigOrderRequest[] = data.data.orders.map((order: {
+          id: string;
+          user: { username: string };
+          fiat_amount: number;
+          fiat_currency: string;
+          custom_notes?: string;
+          premium_percent?: number;
+          created_at: string;
+        }) => ({
+          id: order.id,
+          user: order.user?.username || 'Unknown',
+          emoji: '🐳',
+          amount: order.fiat_amount,
+          currency: order.fiat_currency || 'AED',
+          message: order.custom_notes || 'Large order available',
+          timestamp: new Date(order.created_at),
+          premium: order.premium_percent || 0,
+        }));
+        if (mappedOrders.length > 0) {
+          setBigOrders(mappedOrders);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch big orders:', err);
+    }
+  }, [merchantId]);
+
   // Fetch orders when merchant ID is available
   // Real-time updates come via Pusher WebSocket (useRealtimeOrders hook)
   useEffect(() => {
     if (!merchantId) return;
     fetchOrders();
     fetchResolvedDisputes();
-  }, [merchantId, fetchOrders, fetchResolvedDisputes]);
+    fetchBigOrders();
+  }, [merchantId, fetchOrders, fetchResolvedDisputes, fetchBigOrders]);
 
   // Polling fallback when Pusher is not available (every 5 seconds)
   const { isConnected: isPusherConnected } = usePusher();
@@ -1318,30 +1307,22 @@ export default function MerchantDashboard() {
     }
 
     // Fetch latest order data to get user's current wallet address
+    let orderToUse = order;
     try {
       const res = await fetch(`/api/orders/${order.id}`);
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
-          // Map the fresh data
-          const freshOrder = mapDbOrderToUI(data.data);
-          console.log('[Escrow] Fetched fresh order data, userWallet:', freshOrder.userWallet);
-
-          // Reset state and open modal with fresh data
-          setEscrowOrder(freshOrder);
-          setEscrowTxHash(null);
-          setEscrowError(null);
-          setIsLockingEscrow(false);
-          setShowEscrowModal(true);
-          return;
+          orderToUse = mapDbOrderToUI(data.data);
+          console.log('[Escrow] Fetched fresh order data, userWallet:', orderToUse.userWallet);
         }
       }
     } catch (err) {
       console.error('[Escrow] Error fetching fresh order:', err);
     }
 
-    // Fallback to cached order if fetch fails
-    setEscrowOrder(order);
+    // Reset state and open modal
+    setEscrowOrder(orderToUse);
     setEscrowTxHash(null);
     setEscrowError(null);
     setIsLockingEscrow(false);
@@ -1390,40 +1371,56 @@ export default function MerchantDashboard() {
       setEscrowTxHash(escrowResult.txHash);
       console.log('[Merchant] Escrow locked on-chain:', escrowResult.txHash);
 
-      // Record escrow on backend (this also updates status to 'escrowed')
-      const escrowRecordRes = await fetch(`/api/orders/${escrowOrder.id}/escrow`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tx_hash: escrowResult.txHash,
-          actor_type: "merchant",
-          actor_id: merchantId,
-          escrow_address: escrowResult.escrowPda,
-          escrow_trade_id: escrowResult.tradeId,
-          escrow_trade_pda: escrowResult.tradePda,
-          escrow_pda: escrowResult.escrowPda,
-          escrow_creator_wallet: solanaWallet.walletAddress,
-        }),
-      });
+      // Update local state IMMEDIATELY after on-chain success
+      // This ensures the Lock button disappears even if the backend recording fails
+      setOrders(prev => prev.map(o => o.id === escrowOrder.id ? {
+        ...o,
+        status: "escrow" as const,
+        escrowTxHash: escrowResult.txHash,
+        escrowTradeId: escrowResult.tradeId,
+        escrowTradePda: escrowResult.tradePda,
+        escrowCreatorWallet: solanaWallet.walletAddress,
+      } : o));
 
-      if (escrowRecordRes.ok) {
-        const data = await escrowRecordRes.json();
-        if (data.success) {
-          // Update local state immediately for instant UI feedback
-          // Include escrowTxHash so the UI shows "Locked" instead of "Lock" button
-          setOrders(prev => prev.map(o => o.id === escrowOrder.id ? {
-            ...o,
-            status: "escrow" as const,
-            escrowTxHash: escrowResult.txHash,
-            escrowTradeId: escrowResult.tradeId,
-            escrowTradePda: escrowResult.tradePda,
-            escrowCreatorWallet: solanaWallet.walletAddress,
-          } : o));
-          playSound('trade_complete');
-          addNotification('escrow', `${escrowOrder.amount} USDC locked in escrow - waiting for user payment`, escrowOrder.id);
+      // Record escrow on backend with retry (devnet verification can be slow)
+      const escrowPayload = {
+        tx_hash: escrowResult.txHash,
+        actor_type: "merchant",
+        actor_id: merchantId,
+        escrow_address: escrowResult.escrowPda,
+        escrow_trade_id: escrowResult.tradeId,
+        escrow_trade_pda: escrowResult.tradePda,
+        escrow_pda: escrowResult.escrowPda,
+        escrow_creator_wallet: solanaWallet.walletAddress,
+      };
+
+      let recorded = false;
+      for (let attempt = 0; attempt < 3 && !recorded; attempt++) {
+        if (attempt > 0) {
+          console.log(`[Merchant] Retrying escrow recording (attempt ${attempt + 1})...`);
+          await new Promise(r => setTimeout(r, 2000 * attempt));
         }
+        try {
+          const res = await fetch(`/api/orders/${escrowOrder.id}/escrow`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(escrowPayload),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) recorded = true;
+          }
+        } catch (err) {
+          console.error(`[Merchant] Escrow record attempt ${attempt + 1} failed:`, err);
+        }
+      }
+
+      if (recorded) {
+        playSound('trade_complete');
+        addNotification('escrow', `${escrowOrder.amount} USDC locked in escrow - waiting for user payment`, escrowOrder.id);
       } else {
-        console.error('[Merchant] Failed to record escrow on backend');
+        console.error('[Merchant] Failed to record escrow on backend after retries');
+        addNotification('system', 'Escrow locked on-chain but server sync failed. It will sync automatically.', escrowOrder.id);
       }
 
       setIsLockingEscrow(false);
@@ -1567,6 +1564,112 @@ export default function MerchantDashboard() {
     setReleaseTxHash(null);
     setReleaseError(null);
     setIsReleasingEscrow(false);
+  };
+
+  // Open cancel/withdraw escrow modal
+  const openCancelModal = async (order: Order) => {
+    if (!merchantId) return;
+
+    if (!solanaWallet.connected) {
+      addNotification('system', 'Please connect your wallet to cancel escrow.');
+      setShowWalletModal(true);
+      return;
+    }
+
+    // Fetch latest order data
+    try {
+      const res = await fetch(`/api/orders/${order.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data) {
+          const freshOrder = mapDbOrderToUI(data.data);
+          setCancelOrder(freshOrder);
+          setCancelTxHash(null);
+          setCancelError(null);
+          setIsCancellingEscrow(false);
+          setShowCancelModal(true);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('[Cancel] Error fetching fresh order:', err);
+    }
+
+    // Fallback to cached order
+    setCancelOrder(order);
+    setCancelTxHash(null);
+    setCancelError(null);
+    setIsCancellingEscrow(false);
+    setShowCancelModal(true);
+  };
+
+  // Execute the escrow cancel/refund transaction
+  const executeCancelEscrow = async () => {
+    if (!merchantId || !cancelOrder) return;
+
+    setIsCancellingEscrow(true);
+    setCancelError(null);
+
+    try {
+      const { escrowTradeId, escrowCreatorWallet } = cancelOrder;
+
+      if (!escrowTradeId || !escrowCreatorWallet) {
+        setCancelError('Missing escrow details. The escrow may not have been locked on-chain.');
+        setIsCancellingEscrow(false);
+        return;
+      }
+
+      console.log('[Cancel] Refunding escrow:', {
+        tradeId: escrowTradeId,
+        creatorWallet: escrowCreatorWallet,
+      });
+
+      // Call the on-chain refund function
+      const refundResult = await solanaWallet.refundEscrow({
+        creatorPubkey: escrowCreatorWallet,
+        tradeId: escrowTradeId,
+      });
+
+      if (refundResult.success) {
+        console.log('[Cancel] Escrow refunded successfully:', refundResult.txHash);
+        setCancelTxHash(refundResult.txHash);
+
+        // Update order status to cancelled on backend
+        await fetch(`/api/orders/${cancelOrder.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'cancelled',
+            actor_type: 'merchant',
+            actor_id: merchantId,
+          }),
+        });
+
+        // Update local state
+        setOrders(prev => prev.map(o => o.id === cancelOrder.id ? { ...o, status: "cancelled" as const } : o));
+        fetchOrders();
+        playSound('click');
+        addNotification('system', `Escrow cancelled. ${cancelOrder.amount} USDC returned to your wallet.`, cancelOrder.id);
+      } else {
+        setCancelError(refundResult.error || 'Failed to refund escrow');
+        playSound('error');
+      }
+    } catch (error) {
+      console.error('[Cancel] Error cancelling escrow:', error);
+      setCancelError(error instanceof Error ? error.message : 'Failed to cancel escrow. Please try again.');
+      playSound('error');
+    } finally {
+      setIsCancellingEscrow(false);
+    }
+  };
+
+  // Close cancel modal
+  const closeCancelModal = () => {
+    setShowCancelModal(false);
+    setCancelOrder(null);
+    setCancelTxHash(null);
+    setCancelError(null);
+    setIsCancellingEscrow(false);
   };
 
   // Merchant marks payment as sent to user's bank
@@ -2344,6 +2447,26 @@ export default function MerchantDashboard() {
             <span className="hidden sm:inline text-xs text-gray-400 group-hover:text-red-400">Disconnect</span>
           </motion.button>
 
+          {/* Message History */}
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowMessageHistory(!showMessageHistory)}
+            className="p-1.5 bg-[#151515] rounded-md border border-white/[0.04] relative group"
+            title="Message History"
+          >
+            <MessageCircle className="w-4 h-4 text-gray-400 group-hover:text-emerald-400" />
+          </motion.button>
+
+          {/* Analytics */}
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowAnalytics(!showAnalytics)}
+            className="p-1.5 bg-[#151515] rounded-md border border-white/[0.04] relative group"
+            title="Analytics"
+          >
+            <TrendingUp className="w-4 h-4 text-gray-400 group-hover:text-cyan-400" />
+          </motion.button>
+
           {/* Notifications */}
           <div className="relative">
             <motion.button
@@ -2431,10 +2554,10 @@ export default function MerchantDashboard() {
           {/* Profile */}
           <div className="flex items-center gap-2 pl-2 border-l border-white/[0.08]">
             <div className="w-7 h-7 rounded-full border border-white/20 flex items-center justify-center text-sm">
-              {merchantInfo?.display_name?.charAt(0)?.toUpperCase() || '🐋'}
+              {(merchantInfo?.username || merchantInfo?.display_name)?.charAt(0)?.toUpperCase() || '🐋'}
             </div>
             <div className="hidden sm:block">
-              <p className="text-[11px] font-medium">{merchantInfo?.display_name || merchantInfo?.business_name || 'Merchant'}</p>
+              <p className="text-[11px] font-medium">{merchantInfo?.username || merchantInfo?.display_name || merchantInfo?.business_name || 'Merchant'}</p>
               <p className="text-[9px] text-gray-500">{merchantInfo?.rating?.toFixed(2) || '5.00'}★</p>
             </div>
           </div>
@@ -2847,6 +2970,15 @@ export default function MerchantDashboard() {
                                   >
                                     <AlertTriangle className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
                                   </button>
+                                  {dbStatus === "escrowed" && order.orderType === "buy" && order.escrowCreatorWallet && (
+                                    <button
+                                      onClick={() => openCancelModal(order)}
+                                      className="p-1.5 hover:bg-orange-500/10 rounded transition-colors"
+                                      title="Cancel & Withdraw"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5 text-gray-500 hover:text-orange-400" />
+                                    </button>
+                                  )}
                                 </div>
 
                                 {/* Action button */}
@@ -3733,6 +3865,15 @@ export default function MerchantDashboard() {
                         >
                           <AlertTriangle className="w-4 h-4 text-gray-400 group-hover:text-red-400" />
                         </button>
+                        {order.dbOrder?.status === "escrowed" && order.orderType === "buy" && order.escrowCreatorWallet && (
+                          <button
+                            onClick={() => openCancelModal(order)}
+                            className="h-9 w-9 border border-white/10 hover:border-orange-500/30 rounded-lg flex items-center justify-center transition-colors group"
+                            title="Cancel & Withdraw"
+                          >
+                            <RotateCcw className="w-4 h-4 text-gray-400 group-hover:text-orange-400" />
+                          </button>
+                        )}
                       </div>
                     </motion.div>
                   ))}
@@ -3843,7 +3984,16 @@ export default function MerchantDashboard() {
           {/* Mobile: Stats View */}
           {mobileView === 'stats' && (
             <div className="space-y-4">
-              <h2 className="text-sm font-semibold mb-4">Trading Stats</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold">Trading Stats</h2>
+                <button
+                  onClick={() => setShowAnalytics(true)}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg text-xs font-medium"
+                >
+                  <TrendingUp className="w-3 h-3" />
+                  Full Analytics
+                </button>
+              </div>
 
               {/* Wallet Balance Card */}
               <button
@@ -4850,6 +5000,7 @@ export default function MerchantDashboard() {
                       )}
                     </>
                   )}
+
                 </div>
 
                 {/* Footer */}
@@ -5091,6 +5242,196 @@ export default function MerchantDashboard() {
         )}
       </AnimatePresence>
 
+      {/* Cancel/Withdraw Escrow Modal */}
+      <AnimatePresence>
+        {showCancelModal && cancelOrder && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
+              onClick={() => !isCancellingEscrow && closeCancelModal()}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md"
+            >
+              <div className="bg-[#151515] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
+                {/* Header */}
+                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
+                      <RotateCcw className="w-5 h-5 text-orange-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold">Cancel & Withdraw</h2>
+                      <p className="text-[11px] text-gray-500">Refund escrow to your wallet</p>
+                    </div>
+                  </div>
+                  {!isCancellingEscrow && (
+                    <button
+                      onClick={closeCancelModal}
+                      className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
+                    >
+                      <X className="w-4 h-4 text-gray-500" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Body */}
+                <div className="p-5 space-y-4">
+                  {/* Order Info */}
+                  <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.04]">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center text-2xl">
+                        {cancelOrder.emoji}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{cancelOrder.user}</p>
+                        <p className="text-xs text-gray-500">Buy Order - Escrow Locked</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-[10px] text-gray-500 uppercase mb-1">Withdraw Amount</p>
+                        <p className="text-lg font-bold text-orange-400">{cancelOrder.amount} USDC</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-gray-500 uppercase mb-1">Order Total</p>
+                        <p className="text-lg font-bold text-white">د.إ {Math.round(cancelOrder.total).toLocaleString()}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Escrow Details */}
+                  {cancelOrder.escrowTradeId && (
+                    <div className="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-3 border border-white/[0.04]">
+                      <span className="text-xs text-gray-500">Escrow Trade ID</span>
+                      <span className="text-xs font-mono text-gray-400">#{cancelOrder.escrowTradeId}</span>
+                    </div>
+                  )}
+
+                  {/* Transaction Status */}
+                  {isCancellingEscrow && !cancelTxHash && (
+                    <div className="bg-orange-500/10 rounded-xl p-4 border border-orange-500/20">
+                      <div className="flex items-center gap-3">
+                        <Loader2 className="w-5 h-5 text-orange-400 animate-spin" />
+                        <div>
+                          <p className="text-sm font-medium text-orange-400">Processing Refund</p>
+                          <p className="text-xs text-orange-400/70">Please approve in your wallet...</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Success State */}
+                  {cancelTxHash && (
+                    <div className="bg-emerald-500/10 rounded-xl p-4 border border-emerald-500/20">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                          <Check className="w-4 h-4 text-emerald-400" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-emerald-400">Escrow Refunded!</p>
+                          <p className="text-xs text-emerald-400/70">{cancelOrder.amount} USDC returned to your wallet</p>
+                        </div>
+                      </div>
+                      <a
+                        href={`https://solscan.io/tx/${cancelTxHash}?cluster=devnet`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        View on Solscan
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Error State */}
+                  {cancelError && (
+                    <div className="bg-red-500/10 rounded-xl p-4 border border-red-500/20">
+                      <div className="flex items-center gap-3">
+                        <AlertTriangle className="w-5 h-5 text-red-400" />
+                        <div>
+                          <p className="text-sm font-medium text-red-400">Refund Failed</p>
+                          <p className="text-xs text-red-400/70">{cancelError}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Warning */}
+                  {!cancelTxHash && !isCancellingEscrow && (
+                    <>
+                      {cancelOrder.escrowTradeId && cancelOrder.escrowCreatorWallet ? (
+                        <div className="bg-orange-500/10 rounded-xl p-3 border border-orange-500/20">
+                          <p className="text-xs text-orange-400">
+                            This will cancel the order and return <strong>{cancelOrder.amount} USDC</strong> to your wallet. The buyer will be notified.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
+                          <p className="text-xs text-red-400">
+                            Missing on-chain escrow details. Cannot refund.
+                            {!cancelOrder.escrowTradeId && ' (No Trade ID)'}
+                            {!cancelOrder.escrowCreatorWallet && ' (No Creator Wallet)'}
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="px-5 pb-5 flex gap-3">
+                  {cancelTxHash ? (
+                    <motion.button
+                      whileTap={{ scale: 0.98 }}
+                      onClick={closeCancelModal}
+                      className="flex-1 py-3 rounded-xl text-sm font-bold bg-emerald-500 text-white hover:bg-emerald-400 transition-colors"
+                    >
+                      Done
+                    </motion.button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={closeCancelModal}
+                        disabled={isCancellingEscrow}
+                        className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] transition-colors disabled:opacity-50"
+                      >
+                        Back
+                      </button>
+                      <motion.button
+                        whileTap={{ scale: 0.98 }}
+                        onClick={executeCancelEscrow}
+                        disabled={isCancellingEscrow || !cancelOrder.escrowTradeId || !cancelOrder.escrowCreatorWallet}
+                        className="flex-[2] py-3 rounded-xl text-sm font-bold bg-orange-500 text-white hover:bg-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {isCancellingEscrow ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Refunding...
+                          </>
+                        ) : (
+                          <>
+                            <RotateCcw className="w-4 h-4" />
+                            Cancel & Withdraw
+                          </>
+                        )}
+                      </motion.button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* PWA Install Banner */}
       <PWAInstallBanner appName="Merchant" accentColor="#c9a962" />
 
@@ -5311,6 +5652,17 @@ export default function MerchantDashboard() {
 
                 <button
                   onClick={() => {
+                    setSelectedOrderId(selectedOrderPopup.id);
+                    setSelectedOrderPopup(null);
+                  }}
+                  className="w-full py-3 rounded-xl bg-[#1a1a2e] text-white font-medium flex items-center justify-center gap-2 border border-white/10"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  View Full Details
+                </button>
+
+                <button
+                  onClick={() => {
                     handleOpenChat(selectedOrderPopup.user, selectedOrderPopup.emoji, selectedOrderPopup.id);
                     setSelectedOrderPopup(null);
                   }}
@@ -5322,6 +5674,69 @@ export default function MerchantDashboard() {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Order Details Panel */}
+      {selectedOrderId && merchantId && (
+        <OrderDetailsPanel
+          orderId={selectedOrderId}
+          onClose={() => setSelectedOrderId(null)}
+        />
+      )}
+
+      {/* Message History Panel */}
+      <AnimatePresence>
+        {showMessageHistory && merchantId && (
+          <motion.div
+            initial={{ opacity: 0, x: 300 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 300 }}
+            className="fixed right-0 top-0 h-full w-full max-w-md z-50 shadow-2xl"
+          >
+            <MessageHistory
+              merchantId={merchantId}
+              onOpenChat={(orderId, user, emoji) => {
+                openChat(user, emoji, orderId);
+                setShowMessageHistory(false);
+              }}
+              onClose={() => setShowMessageHistory(false)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Analytics Dashboard Modal */}
+      <AnimatePresence>
+        {showAnalytics && merchantId && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setShowAnalytics(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-zinc-900 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto border border-white/10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 sticky top-0 bg-zinc-900 z-10">
+                <h2 className="text-lg font-semibold text-white">Analytics Dashboard</h2>
+                <button
+                  onClick={() => setShowAnalytics(false)}
+                  className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                >
+                  <X className="w-5 h-5 text-white/60" />
+                </button>
+              </div>
+              <div className="p-6">
+                <AnalyticsDashboard merchantId={merchantId} />
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

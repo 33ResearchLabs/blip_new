@@ -24,31 +24,11 @@ import {
 import Link from "next/link";
 
 // Mock data
-const weeklyData = [
-  { day: "Mon", trades: 12, volume: 4200, earnings: 32 },
-  { day: "Tue", trades: 18, volume: 6800, earnings: 51 },
-  { day: "Wed", trades: 15, volume: 5500, earnings: 41 },
-  { day: "Thu", trades: 22, volume: 8200, earnings: 62 },
-  { day: "Fri", trades: 28, volume: 11000, earnings: 83 },
-  { day: "Sat", trades: 20, volume: 7500, earnings: 56 },
-  { day: "Sun", trades: 16, volume: 6000, earnings: 45 },
-];
+const weeklyData: { day: string; trades: number; volume: number; earnings: number }[] = [];
 
-const recentTrades = [
-  { id: 1, user: "anon_fox", amount: 1200, profit: 9, time: "2m ago", rating: 5 },
-  { id: 2, user: "degen_ape", amount: 800, profit: 6, time: "15m ago", rating: 5 },
-  { id: 3, user: "sol_maxi", amount: 2500, profit: 19, time: "32m ago", rating: 4 },
-  { id: 4, user: "whale_69", amount: 500, profit: 4, time: "1h ago", rating: 5 },
-  { id: 5, user: "ser_pump", amount: 3200, profit: 24, time: "2h ago", rating: 5 },
-];
+const recentTrades: { id: number; user: string; amount: number; profit: number; time: string; rating: number }[] = [];
 
-const topUsers = [
-  { name: "whale_69", trades: 45, volume: 125000, emoji: "🐋" },
-  { name: "ser_pump", trades: 38, volume: 98000, emoji: "🔥" },
-  { name: "anon_fox", trades: 32, volume: 76000, emoji: "🦊" },
-  { name: "gm_alice", trades: 28, volume: 62000, emoji: "💎" },
-  { name: "degen_ape", trades: 24, volume: 54000, emoji: "🦧" },
-];
+const topUsers: { name: string; trades: number; volume: number; emoji: string }[] = [];
 
 interface MerchantInfo {
   id: string;
