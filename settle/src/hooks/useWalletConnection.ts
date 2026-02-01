@@ -41,6 +41,7 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
   // Refs to prevent duplicate callbacks
   const hasCalledOnConnected = useRef(false);
   const connectionInProgress = useRef(false);
+  const lastConnectionAttempt = useRef(0);
 
   // Reset callback tracking when modal closes or wallet changes
   useEffect(() => {
@@ -90,6 +91,20 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
       return;
     }
 
+    // Debounce: prevent rapid repeated calls (within 500ms)
+    const now = Date.now();
+    if (now - lastConnectionAttempt.current < 500) {
+      console.log('[WalletConnection] Debouncing rapid connection attempt');
+      return;
+    }
+    lastConnectionAttempt.current = now;
+
+    // If already connected at context level, skip connection
+    if (connected && walletAddress) {
+      console.log('[WalletConnection] Already connected at context level:', walletAddress);
+      return;
+    }
+
     console.log('[WalletConnection] Connecting to:', walletName);
 
     connectionInProgress.current = true;
@@ -130,8 +145,11 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
       }
 
       // For Phantom, check native API first - if already connected, just use it
+      // IMPORTANT: Prefer window.phantom?.solana over window.solana
+      // Brave browser has its own Solana wallet that exposes window.solana
+      // but window.phantom?.solana is specifically Phantom's API
       if (walletName === 'Phantom') {
-        const phantom = (window as any).phantom?.solana || (window as any).solana;
+        const phantom = (window as any).phantom?.solana;
 
         if (!phantom) {
           // On mobile, try to open the app
@@ -149,12 +167,11 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
         }
 
         // Check if Phantom already has publicKey and signMessage available
-        // If so, user is already connected - just proceed
+        // If so, user is already connected - just proceed without calling select again
         if (phantom.publicKey && phantom.signMessage) {
-          console.log('[WalletConnection] Phantom already has wallet info, proceeding...');
-          select(adapter.name);
-          // Brief wait for adapter to sync
-          await new Promise(resolve => setTimeout(resolve, 100));
+          console.log('[WalletConnection] Phantom already connected with publicKey:', phantom.publicKey.toString());
+          // Don't call select() here - it can trigger re-renders and loops
+          // The wallet is already connected, just let the state sync naturally
           return;
         }
 
@@ -223,7 +240,7 @@ export function useWalletConnection(options: WalletConnectionOptions = {}): Wall
       setConnectingWallet(null);
       connectionInProgress.current = false;
     }
-  }, [wallets, select, isMobile, platform, openMobileWalletApp, onError]);
+  }, [wallets, select, isMobile, platform, openMobileWalletApp, onError, connected, walletAddress]);
 
   return {
     isConnecting,

@@ -43,17 +43,20 @@ const themeScript = `
   })();
 `;
 
-// Service worker registration script
+// Service worker DISABLED - just cleanup, no registration
 const swScript = `
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function() {
-      navigator.serviceWorker.register('/sw.js').then(function(registration) {
-        console.log('[PWA] SW registered: ', registration.scope);
-      }).catch(function(err) {
-        console.log('[PWA] SW registration failed: ', err);
-      });
-    });
-  }
+  (async function() {
+    try {
+      if ('serviceWorker' in navigator) {
+        var regs = await navigator.serviceWorker.getRegistrations();
+        for (var i = 0; i < regs.length; i++) { await regs[i].unregister(); }
+      }
+      if ('caches' in window) {
+        var keys = await caches.keys();
+        for (var j = 0; j < keys.length; j++) { await caches.delete(keys[j]); }
+      }
+    } catch(e) {}
+  })();
 `;
 
 export default function RootLayout({

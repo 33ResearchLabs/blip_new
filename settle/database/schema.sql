@@ -98,6 +98,9 @@ CREATE TABLE merchants (
   auto_accept_enabled BOOLEAN DEFAULT false,
   auto_accept_max_amount DECIMAL(20, 2),
 
+  -- Big Orders
+  big_order_threshold DECIMAL(20, 2) DEFAULT 10000,
+
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -153,6 +156,7 @@ CREATE TABLE orders (
   user_id UUID REFERENCES users(id),
   merchant_id UUID REFERENCES merchants(id),
   offer_id UUID REFERENCES merchant_offers(id),
+  buyer_merchant_id UUID REFERENCES merchants(id), -- For M2M trading: the merchant acting as buyer
 
   -- Order Type
   type offer_type NOT NULL,
@@ -197,12 +201,31 @@ CREATE TABLE orders (
 
   -- Cancellation
   cancelled_by actor_type,
-  cancellation_reason TEXT
+  cancellation_reason TEXT,
+
+  -- Big/Custom Orders
+  is_custom BOOLEAN DEFAULT false,
+  custom_notes TEXT,
+  premium_percent DECIMAL(5, 2) DEFAULT 0,
+
+  -- Extension System
+  extension_count INT DEFAULT 0,
+  max_extensions INT DEFAULT 3,
+  extension_requested_by actor_type,
+  extension_requested_at TIMESTAMP,
+  last_extended_at TIMESTAMP,
+
+  -- Buyer wallet (for buy orders)
+  buyer_wallet_address VARCHAR(64)
 );
 
 CREATE INDEX idx_orders_user ON orders(user_id, status);
 CREATE INDEX idx_orders_merchant ON orders(merchant_id, status);
+CREATE INDEX idx_orders_buyer_merchant ON orders(buyer_merchant_id, status);
 CREATE INDEX idx_orders_status ON orders(status, created_at);
+CREATE INDEX idx_orders_fiat_amount ON orders(merchant_id, fiat_amount DESC) WHERE status NOT IN ('cancelled', 'expired');
+CREATE INDEX idx_orders_custom ON orders(merchant_id, is_custom) WHERE is_custom = true;
+CREATE INDEX idx_orders_extension_pending ON orders(extension_requested_at) WHERE extension_requested_by IS NOT NULL AND status NOT IN ('completed', 'cancelled', 'expired');
 
 -- Order Events (Audit Log)
 CREATE TABLE order_events (
@@ -292,9 +315,48 @@ CREATE TABLE disputes (
   resolution TEXT,
   resolved_in_favor_of actor_type,
 
+  -- Assignment
+  assigned_to UUID,
+  assigned_at TIMESTAMP,
+
   created_at TIMESTAMP DEFAULT NOW(),
   resolved_at TIMESTAMP
 );
+
+CREATE INDEX idx_disputes_assigned ON disputes(assigned_to, status);
+
+-- Compliance Team (for dispute resolution)
+CREATE TABLE compliance_team (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+  -- Basic info
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  phone VARCHAR(20),
+  avatar_url TEXT,
+
+  -- Role and permissions
+  role VARCHAR(50) DEFAULT 'officer',
+  permissions JSONB DEFAULT '{"can_resolve_disputes": true, "can_ban_users": false, "can_ban_merchants": false}',
+
+  -- Status
+  is_active BOOLEAN DEFAULT true,
+  last_login_at TIMESTAMP,
+
+  -- Stats
+  disputes_resolved INT DEFAULT 0,
+  avg_resolution_time_hours DECIMAL(10, 2) DEFAULT 0,
+
+  -- Audit
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_compliance_team_active ON compliance_team(is_active) WHERE is_active = true;
+
+-- Add foreign key for disputes.assigned_to after compliance_team exists
+ALTER TABLE disputes ADD CONSTRAINT fk_disputes_assigned_to FOREIGN KEY (assigned_to) REFERENCES compliance_team(id);
 
 -- =====================
 -- FUNCTIONS
@@ -335,6 +397,11 @@ CREATE TRIGGER update_merchants_updated_at
 
 CREATE TRIGGER update_offers_updated_at
   BEFORE UPDATE ON merchant_offers
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();
+
+CREATE TRIGGER update_compliance_team_updated_at
+  BEFORE UPDATE ON compliance_team
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at();
 

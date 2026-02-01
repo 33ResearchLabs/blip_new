@@ -72,6 +72,10 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   const wsContext = useWebSocketChatContextOptional();
   const subscribedOrdersRef = useRef<Set<string>>(new Set());
 
+  // Use ref to always have access to latest actorId (prevents stale closure issues)
+  const actorIdRef = useRef(actorId);
+  actorIdRef.current = actorId;
+
   // Set actor in WebSocket context
   useEffect(() => {
     if (wsContext && actorType && actorId) {
@@ -330,8 +334,9 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
       if (!text.trim() && !imageUrl) return;
 
       const window = chatWindows.find((w) => w.id === chatId);
-      if (!window?.orderId || !actorId) {
-        console.error('Cannot send message: missing orderId or actorId');
+      const currentActorId = actorIdRef.current;
+      if (!window?.orderId || !currentActorId) {
+        console.error('Cannot send message: missing orderId or actorId', { orderId: window?.orderId, actorId: currentActorId });
         return;
       }
 
@@ -372,7 +377,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               sender_type: actorType,
-              sender_id: actorId,
+              sender_id: currentActorId,
               content: text,
               message_type: imageUrl ? 'image' : 'text',
               image_url: imageUrl,
@@ -393,7 +398,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         }
       }
     },
-    [chatWindows, actorType, actorId, wsContext]
+    [chatWindows, actorType, wsContext]
   );
 
   const markAsRead = useCallback(

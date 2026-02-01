@@ -312,9 +312,11 @@ interface SolanaWalletContextType {
   }) => Promise<TradeOperationResult>;
 
   // Escrow function - creates trade and locks funds using V2.2 program
+  // merchantWallet is optional - if not provided, uses treasury as placeholder counterparty
+  // This allows locking escrow before a merchant is assigned (for sell orders)
   depositToEscrow: (params: {
     amount: number;
-    merchantWallet: string;
+    merchantWallet?: string;
     tradeId?: number;
   }) => Promise<{
     txHash: string;
@@ -402,8 +404,13 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       }
     };
 
-    // Initial check on mount (not polling, just once)
-    if (phantom.publicKey && !adapterConnected) {
+    // Check initial Phantom state ONLY if user has actively connected before
+    // This helps Brave browser where the adapter doesn't work but Phantom is connected
+    // We only do this if:
+    // 1. Phantom reports connected (phantom.isConnected)
+    // 2. Phantom has a publicKey
+    // 3. The adapter is NOT already connected (to avoid duplicate state)
+    if (phantom.isConnected && phantom.publicKey && !adapterConnected) {
       handlePhantomConnect(phantom.publicKey);
     }
 
@@ -1055,9 +1062,10 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
   }, [publicKey, program, signTransaction, connection, refreshBalances]);
 
   // Deposit to escrow using V2.2 program - creates trade and locks funds
+  // merchantWallet is optional - if not provided, uses treasury as placeholder counterparty
   const depositToEscrow = useCallback(async (params: {
     amount: number;
-    merchantWallet: string;
+    merchantWallet?: string;
     tradeId?: number;
   }): Promise<{
     txHash: string;
@@ -1091,12 +1099,19 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     try {
       const { amount, merchantWallet, tradeId: providedTradeId } = params;
 
-      // Validate merchant wallet is a valid Solana address (base58)
+      // Use treasury as placeholder counterparty if merchant wallet not provided
+      // This allows locking escrow before a merchant is assigned (for sell orders)
+      const TREASURY_WALLET = '3ZRyqoMVfCuxgKjGQeJzAuuDZ91L29jCHpi82B3UbAjP';
+      const counterpartyWallet = merchantWallet || TREASURY_WALLET;
+
+      // Validate counterparty wallet is a valid Solana address (base58)
       // Base58 characters: 123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz
       const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-      if (!base58Regex.test(merchantWallet)) {
-        throw new Error(`Invalid merchant wallet address: not a valid Solana address (got ${merchantWallet.slice(0, 10)}...)`);
+      if (!base58Regex.test(counterpartyWallet)) {
+        throw new Error(`Invalid counterparty wallet address: not a valid Solana address (got ${counterpartyWallet.slice(0, 10)}...)`);
       }
+
+      console.log('[depositToEscrow] Using counterparty:', counterpartyWallet, merchantWallet ? '(merchant)' : '(treasury placeholder)');
 
       // Ensure protocol config is initialized before creating trades
       console.log('[depositToEscrow] Ensuring protocol config is initialized...');
@@ -1117,7 +1132,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         amount: amountBN.toString(),
         tradePda: tradePda.toString(),
         escrowPda: escrowPda.toString(),
-        merchantWallet,
+        counterpartyWallet,
       });
 
       // Helper function with timeout
@@ -1150,13 +1165,13 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
 
       // Step 2: Build the lock escrow transaction
       console.log('[depositToEscrow] Building lock escrow tx...');
-      const merchantPubkey = new PublicKey(merchantWallet);
+      const counterpartyPubkey = new PublicKey(counterpartyWallet);
       const lockEscrowTx = await withTimeout(
         buildLockEscrowTx(
           program,
           publicKey,
           tradePda,
-          merchantPubkey,
+          counterpartyPubkey,
           USDT_MINT
         ),
         10000,
@@ -1180,7 +1195,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       // Get recent blockhash
       console.log('[depositToEscrow] Getting blockhash...');
       const { blockhash, lastValidBlockHeight } = await withTimeout(
-        connection.getLatestBlockhash(),
+        connection.getLatestBlockhash('finalized'),
         10000,
         'getLatestBlockhash'
       );
@@ -1195,11 +1210,12 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
 
       console.log('[depositToEscrow] Transaction signed, sending...');
 
-      // Send transaction
+      // Send transaction - skip preflight simulation to avoid stale blockhash errors
+      // The blockhash may become stale while user is approving in wallet
       const txHash = await withTimeout(
         connection.sendRawTransaction(signedTx.serialize(), {
-          skipPreflight: false,
-          preflightCommitment: 'confirmed',
+          skipPreflight: true, // Skip simulation to avoid blockhash expiry issues
+          maxRetries: 5,
         }),
         30000,
         'sendRawTransaction'
@@ -1207,7 +1223,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
 
       console.log('[depositToEscrow] Transaction sent:', txHash);
 
-      // Confirm transaction
+      // Confirm transaction with longer timeout
       console.log('[depositToEscrow] Waiting for confirmation...');
       await withTimeout(
         connection.confirmTransaction({
@@ -1215,7 +1231,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
           blockhash,
           lastValidBlockHeight,
         }),
-        60000,
+        90000, // 90 seconds for confirmation
         'confirmTransaction'
       );
 

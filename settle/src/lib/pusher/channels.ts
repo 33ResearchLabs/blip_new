@@ -10,6 +10,7 @@ const CHANNEL_PREFIX = {
   MERCHANT: 'private-merchant-',
   ORDER: 'private-order-',
   PRESENCE_ORDER: 'presence-order-',
+  ALL_MERCHANTS: 'private-merchants-global', // Global channel for all merchants
 } as const;
 
 /**
@@ -24,6 +25,13 @@ export function getUserChannel(userId: string): string {
  */
 export function getMerchantChannel(merchantId: string): string {
   return `${CHANNEL_PREFIX.MERCHANT}${merchantId}`;
+}
+
+/**
+ * Get the global channel for ALL merchants (for broadcasting new orders)
+ */
+export function getAllMerchantsChannel(): string {
+  return CHANNEL_PREFIX.ALL_MERCHANTS;
 }
 
 /**
@@ -44,9 +52,13 @@ export function getOrderPresenceChannel(orderId: string): string {
  * Parse channel name to extract type and ID
  */
 export function parseChannelName(channelName: string): {
-  type: 'user' | 'merchant' | 'order' | 'presence-order' | 'unknown';
+  type: 'user' | 'merchant' | 'merchants-global' | 'order' | 'presence-order' | 'unknown';
   id: string | null;
 } {
+  // Check for global merchants channel FIRST (before individual merchant channel)
+  if (channelName === CHANNEL_PREFIX.ALL_MERCHANTS) {
+    return { type: 'merchants-global', id: null };
+  }
   if (channelName.startsWith(CHANNEL_PREFIX.USER)) {
     return { type: 'user', id: channelName.replace(CHANNEL_PREFIX.USER, '') };
   }

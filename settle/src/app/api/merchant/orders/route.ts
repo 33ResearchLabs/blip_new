@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMerchantOrders, createOrder, getOrderWithRelations } from '@/lib/db/repositories/orders';
+import { getMerchantOrders, createOrder, getOrderWithRelations, getAllPendingOrdersForMerchant } from '@/lib/db/repositories/orders';
 import { getMerchantOffers, getOfferWithMerchant } from '@/lib/db/repositories/merchants';
-import { getUserByWallet, createUser } from '@/lib/db/repositories/users';
+import { createUser } from '@/lib/db/repositories/users';
 import { OrderStatus, OfferType, PaymentMethod } from '@/lib/types/database';
 import {
   merchantOrdersQuerySchema,
@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const merchantId = searchParams.get('merchant_id');
     const statusParam = searchParams.get('status');
+    const includeAllPending = searchParams.get('include_all_pending') === 'true';
 
     // Validate query params
     const parseResult = merchantOrdersQuerySchema.safeParse({
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
 
     if (!parseResult.success) {
       const errors = parseResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`);
+      console.error('[API] /api/merchant/orders validation failed:', errors, 'merchantId:', merchantId);
       return validationErrorResponse(errors);
     }
 
@@ -47,16 +49,27 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Verify merchant exists
+    // Verify merchant exists and is active
     const merchantExists = await verifyMerchant(merchant_id);
     if (!merchantExists) {
-      return validationErrorResponse(['Merchant not found']);
+      console.error('[API] GET /api/merchant/orders - Merchant not found or not active:', merchant_id);
+      return validationErrorResponse(['Merchant not found or not active']);
     }
 
     const status = statusParam ? statusParam.split(',') as OrderStatus[] : undefined;
-    const orders = await getMerchantOrders(merchant_id, status);
 
-    console.log('[API] /api/merchant/orders - merchant_id:', merchant_id, 'orders found:', orders?.length || 0);
+    // If include_all_pending is true, fetch ALL pending orders (broadcast model)
+    // Otherwise, fetch only orders for this specific merchant
+    let orders;
+    if (includeAllPending) {
+      // Get merchant's own orders + ALL pending orders from any merchant
+      orders = await getAllPendingOrdersForMerchant(merchant_id, status);
+      console.log('[API] /api/merchant/orders (broadcast mode) - all pending orders:', orders?.length || 0);
+    } else {
+      orders = await getMerchantOrders(merchant_id, status);
+      console.log('[API] /api/merchant/orders - merchant_id:', merchant_id, 'orders found:', orders?.length || 0);
+    }
+
     if (orders && orders.length > 0) {
       console.log('[API] Orders:', orders.map(o => ({ id: o.id, status: o.status, merchant_id: o.merchant_id })));
     }
@@ -83,67 +96,84 @@ export async function POST(request: NextRequest) {
 
     const {
       merchant_id,
-      customer_wallet,
       type,
       crypto_amount,
       payment_method,
       offer_id,
+      target_merchant_id,
     } = parseResult.data;
 
-    // Verify merchant exists
+    // Verify the creating merchant exists
     const merchantExists = await verifyMerchant(merchant_id);
     if (!merchantExists) {
       return validationErrorResponse(['Merchant not found']);
     }
 
-    // Find or create user by wallet address
-    let user = await getUserByWallet(customer_wallet);
-    if (!user) {
-      // Create a new user with the wallet address
-      // Generate a temporary username from wallet address
-      const tempUsername = `user_${customer_wallet.slice(0, 8)}`;
+    // M2M Trading: If target_merchant_id is provided, trade with another merchant
+    const isM2MTrade = !!target_merchant_id && target_merchant_id !== merchant_id;
 
-      try {
-        user = await createUser({
-          username: tempUsername,
-          wallet_address: customer_wallet,
-        });
-        logger.info('Created new user for merchant-initiated order', {
-          userId: user.id,
-          walletAddress: customer_wallet,
-        });
-      } catch (createError) {
-        // User might already exist with this wallet (race condition)
-        user = await getUserByWallet(customer_wallet);
-        if (!user) {
-          logger.error('Failed to create user for merchant order', { error: createError });
-          return errorResponse('Failed to create user account');
-        }
+    if (isM2MTrade) {
+      // Verify target merchant exists
+      const targetMerchantExists = await verifyMerchant(target_merchant_id);
+      if (!targetMerchantExists) {
+        return validationErrorResponse(['Target merchant not found or not active']);
       }
     }
+
+    // Create a placeholder user for merchant-initiated orders
+    // This allows merchants to create orders that any customer can accept later
+    let user;
+    const placeholderUsername = isM2MTrade
+      ? `m2m_${merchant_id.slice(0, 8)}_${Date.now()}`
+      : `open_order_${Date.now()}`;
+    try {
+      user = await createUser({
+        username: placeholderUsername,
+        name: isM2MTrade ? 'M2M Trade' : 'Open Order',
+      });
+      logger.info('Created placeholder user for merchant order', {
+        userId: user.id,
+        isM2MTrade,
+      });
+    } catch (createError) {
+      logger.error('Failed to create placeholder user', { error: createError });
+      return errorResponse('Failed to create order');
+    }
+
+    // Determine which merchant's offer to use
+    const offerMerchantId = isM2MTrade ? target_merchant_id : merchant_id;
 
     // Get merchant's offer
     let offer;
     if (offer_id) {
       // Use specific offer if provided
       offer = await getOfferWithMerchant(offer_id);
-      if (!offer || offer.merchant_id !== merchant_id) {
-        return validationErrorResponse(['Offer not found or does not belong to this merchant']);
+      if (!offer || offer.merchant_id !== offerMerchantId) {
+        return validationErrorResponse([`Offer not found or does not belong to ${isM2MTrade ? 'target' : 'this'} merchant`]);
       }
     } else {
       // Find merchant's active offer matching the type and payment method
-      const merchantOffers = await getMerchantOffers(merchant_id);
+      // For M2M trades: look for the OPPOSITE type (if buyer wants to buy, seller must have sell offer)
+      const offerTypeToFind = isM2MTrade
+        ? type // For M2M: the type stays as-is (buy = I want to buy from their sell offer)
+        : type;
+      const merchantOffers = await getMerchantOffers(offerMerchantId);
+      console.log('[API] Looking for offer type:', offerTypeToFind, 'payment_method:', payment_method);
+      console.log('[API] Merchant offers found:', merchantOffers.map(o => ({ id: o.id, type: o.type, payment_method: o.payment_method, is_active: o.is_active })));
+
       offer = merchantOffers.find(
-        o => o.type === type && o.payment_method === payment_method && o.is_active
+        o => o.type === offerTypeToFind && o.payment_method === payment_method && o.is_active
       );
 
       if (!offer) {
+        console.error('[API] No matching offer found for merchant:', offerMerchantId);
         return NextResponse.json(
-          { success: false, error: `No active ${type} offer found with ${payment_method} payment method. Please create a corridor first.` },
+          { success: false, error: `No active ${offerTypeToFind} offer found with ${payment_method} payment method${isM2MTrade ? ' from target merchant' : ''}. ${isM2MTrade ? 'The target merchant needs to create a corridor first.' : 'Please create a corridor first.'}` },
           { status: 404 }
         );
       }
 
+      console.log('[API] Found matching offer:', offer.id);
       // Get full offer with merchant data
       offer = await getOfferWithMerchant(offer.id);
     }
@@ -191,13 +221,20 @@ export async function POST(request: NextRequest) {
     // For merchant-initiated orders, the type from merchant's perspective:
     // - 'sell' = merchant sells USDC to user (user buys USDC) → order type is 'buy' (from user perspective)
     // - 'buy' = merchant buys USDC from user (user sells USDC) → order type is 'sell' (from user perspective)
+    // For M2M trades, the type is from the creating merchant's perspective
     // Orders are stored from user's perspective, so we invert the type
     const orderType = type === 'sell' ? 'buy' : 'sell';
+
+    // For M2M trades:
+    // - merchant_id = target merchant (the one fulfilling the order)
+    // - buyer_merchant_id = creating merchant (the one placing the order)
+    const orderMerchantId = isM2MTrade ? target_merchant_id : merchant_id;
+    const buyerMerchantId = isM2MTrade ? merchant_id : undefined;
 
     // Create the order
     const order = await createOrder({
       user_id: user.id,
-      merchant_id,
+      merchant_id: orderMerchantId,
       offer_id: offer.id,
       type: orderType as OfferType,
       payment_method: offer.payment_method as PaymentMethod,
@@ -205,32 +242,47 @@ export async function POST(request: NextRequest) {
       fiat_amount: fiatAmount,
       rate: offer.rate,
       payment_details: paymentDetails,
-      // For buy orders (user buys), store user's wallet to receive crypto
-      buyer_wallet_address: orderType === 'buy' ? customer_wallet : undefined,
+      buyer_merchant_id: buyerMerchantId,
     });
 
     logger.info('Merchant-initiated order created', {
       orderId: order.id,
-      merchantId: merchant_id,
+      merchantId: orderMerchantId,
+      buyerMerchantId: buyerMerchantId || null,
       userId: user.id,
       cryptoAmount: crypto_amount,
       orderType,
+      isM2MTrade,
     });
 
     // Get full order with relations for response
     const orderWithRelations = await getOrderWithRelations(order.id);
 
     // Notify via Pusher (notify both user and merchant)
+    // For M2M trades, notify both the target merchant and the buyer merchant
     try {
       await notifyOrderCreated({
         orderId: order.id,
         userId: user.id,
-        merchantId: merchant_id,
+        merchantId: orderMerchantId,
         status: order.status,
         updatedAt: new Date().toISOString(),
         data: orderWithRelations,
       });
       console.log('[API] Pusher notification sent for merchant-initiated order:', order.id);
+
+      // For M2M trades, also notify the buyer merchant
+      if (isM2MTrade && buyerMerchantId) {
+        await notifyOrderCreated({
+          orderId: order.id,
+          userId: user.id,
+          merchantId: buyerMerchantId,
+          status: order.status,
+          updatedAt: new Date().toISOString(),
+          data: orderWithRelations,
+        });
+        console.log('[API] Pusher notification sent to buyer merchant:', buyerMerchantId);
+      }
     } catch (pusherError) {
       console.error('[API] Failed to send Pusher notification:', pusherError);
     }

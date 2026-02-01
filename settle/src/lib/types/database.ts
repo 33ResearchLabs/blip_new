@@ -102,6 +102,7 @@ export interface Order {
   user_id: string;
   merchant_id: string;
   offer_id: string;
+  buyer_merchant_id: string | null; // For M2M trading: the merchant acting as buyer
   type: OfferType;
   payment_method: PaymentMethod;
   crypto_amount: number;

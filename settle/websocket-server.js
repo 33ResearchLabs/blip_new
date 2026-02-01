@@ -27,6 +27,44 @@ const WS_ERROR_CODES = {
   SERVER_ERROR: 4005,
 };
 
+// Rate limiting for WebSocket messages
+const messageRateLimits = new Map(); // actorId -> { count, resetAt }
+const RATE_LIMIT_MAX_MESSAGES = 30; // 30 messages per window
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute window
+
+/**
+ * Check rate limit for an actor
+ * Returns true if within limit, false if exceeded
+ */
+function checkMessageRateLimit(actorId) {
+  const now = Date.now();
+  let entry = messageRateLimits.get(actorId);
+
+  if (!entry || entry.resetAt < now) {
+    // Create new window
+    entry = { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS };
+    messageRateLimits.set(actorId, entry);
+    return true;
+  }
+
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX_MESSAGES) {
+    return false;
+  }
+
+  return true;
+}
+
+// Cleanup rate limit entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [actorId, entry] of messageRateLimits.entries()) {
+    if (entry.resetAt < now) {
+      messageRateLimits.delete(actorId);
+    }
+  }
+}, 5 * 60 * 1000);
+
 /**
  * Verify user exists in database
  */
@@ -130,11 +168,19 @@ async function getSenderName(senderType, senderId) {
       return result.rows[0]?.display_name || 'Merchant';
     }
     if (senderType === 'compliance') {
-      const result = await pool.query('SELECT name FROM compliance_team WHERE id = $1', [senderId]);
-      return result.rows[0]?.name || 'Compliance';
+      // Gracefully handle missing compliance_team table
+      try {
+        const result = await pool.query('SELECT name FROM compliance_team WHERE id = $1', [senderId]);
+        return result.rows[0]?.name || 'Compliance Officer';
+      } catch (complianceError) {
+        // Table may not exist yet - return default name
+        console.warn('compliance_team table query failed, using default name');
+        return 'Compliance Officer';
+      }
     }
     return 'System';
   } catch (error) {
+    console.error('Error getting sender name:', error);
     return senderType === 'user' ? 'User' : senderType === 'merchant' ? 'Merchant' : 'System';
   }
 }
@@ -273,6 +319,16 @@ async function handleMessage(ws, rawData) {
       const { orderId, content, messageType, imageUrl } = message;
       if (!orderId || !content) {
         sendToClient(ws, { type: 'error', code: WS_ERROR_CODES.INVALID_MESSAGE, message: 'Missing orderId or content' });
+        return;
+      }
+
+      // Rate limit check
+      if (!checkMessageRateLimit(info.actorId)) {
+        sendToClient(ws, {
+          type: 'error',
+          code: WS_ERROR_CODES.RATE_LIMITED,
+          message: 'Too many messages. Please wait before sending more.',
+        });
         return;
       }
 

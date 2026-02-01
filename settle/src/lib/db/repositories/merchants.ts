@@ -103,6 +103,10 @@ export async function getActiveOffers(filters?: {
   if (filters?.type) {
     sql += ` AND o.type = $${paramIndex++}`;
     params.push(filters.type);
+    // For "buy" offers (user is selling), merchant wallet is REQUIRED for escrow release
+    if (filters.type === 'buy') {
+      sql += ` AND m.wallet_address IS NOT NULL AND m.wallet_address != ''`;
+    }
   }
   if (filters?.payment_method) {
     sql += ` AND o.payment_method = $${paramIndex++}`;
@@ -144,6 +148,10 @@ export async function findBestOffer(
 
   console.log('[DB] findBestOffer - type:', type, 'paymentMethod:', paymentMethod, 'amount:', amount, 'preference:', preference);
 
+  // For "buy" offers (user is selling), merchant wallet is REQUIRED for escrow release
+  // Filter out merchants without wallets to avoid matching failures
+  const walletFilter = type === 'buy' ? "AND m.wallet_address IS NOT NULL AND m.wallet_address != ''" : '';
+
   const result = await queryOne<MerchantOfferWithMerchant>(
     `SELECT o.*,
             json_build_object(
@@ -167,6 +175,7 @@ export async function findBestOffer(
        AND o.min_amount <= $3
        AND o.max_amount >= $3
        AND o.available_amount >= $3
+       ${walletFilter}
      ORDER BY ${orderBy}
      LIMIT 1`,
     [type, paymentMethod, amount]

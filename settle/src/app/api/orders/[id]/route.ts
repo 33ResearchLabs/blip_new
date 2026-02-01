@@ -93,7 +93,7 @@ export async function PATCH(
       return validationErrorResponse(errors);
     }
 
-    const { status, actor_type, actor_id, reason } = parseResult.data;
+    const { status, actor_type, actor_id, reason, acceptor_wallet_address } = parseResult.data;
 
     // Check authorization
     const order = await getOrderById(id);
@@ -101,12 +101,22 @@ export async function PATCH(
       return notFoundResponse('Order');
     }
 
-    // Verify actor can access this order
-    const auth = { actorType: actor_type, actorId: actor_id };
-    const canAccess = await canAccessOrder(auth as { actorType: 'user' | 'merchant' | 'system'; actorId: string }, id);
-    if (!canAccess) {
-      logger.auth.forbidden(`PATCH /api/orders/${id}`, actor_id, 'Not order participant');
-      return forbiddenResponse('You do not have access to this order');
+    // Special case: Any merchant can claim a pending or escrowed order (Uber-like model)
+    // This allows orders to be broadcast to all merchants and first to accept wins
+    // For sell orders, user locks escrow first (status = escrowed), then merchant accepts
+    const isMerchantClaimingOrder =
+      actor_type === 'merchant' &&
+      (order.status === 'pending' || order.status === 'escrowed') &&
+      status === 'accepted';
+
+    if (!isMerchantClaimingOrder) {
+      // Verify actor can access this order (for all other cases)
+      const auth = { actorType: actor_type, actorId: actor_id };
+      const canAccess = await canAccessOrder(auth as { actorType: 'user' | 'merchant' | 'system'; actorId: string }, id);
+      if (!canAccess) {
+        logger.auth.forbidden(`PATCH /api/orders/${id}`, actor_id, 'Not order participant');
+        return forbiddenResponse('You do not have access to this order');
+      }
     }
 
     // Additional permission check based on actor type
@@ -123,13 +133,18 @@ export async function PATCH(
       return forbiddenResponse(`Merchants cannot set status to '${status}'`);
     }
 
+    // Build metadata for status update
+    const metadata: Record<string, unknown> = {};
+    if (reason) metadata.reason = reason;
+    if (acceptor_wallet_address) metadata.acceptor_wallet_address = acceptor_wallet_address;
+
     // Perform the status update (state machine validates transition)
     const result = await updateOrderStatus(
       id,
       status,
       actor_type,
       actor_id,
-      reason ? { reason } : undefined
+      Object.keys(metadata).length > 0 ? metadata : undefined
     );
 
     if (!result.success) {

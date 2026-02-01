@@ -5,7 +5,7 @@
  */
 
 import { ORDER_EVENTS, CHAT_EVENTS, type PusherEvent } from './events';
-import { getUserChannel, getMerchantChannel, getOrderChannel } from './channels';
+import { getUserChannel, getMerchantChannel, getOrderChannel, getAllMerchantsChannel } from './channels';
 
 // Mock Pusher interface for when module is not available
 interface PusherLike {
@@ -121,18 +121,19 @@ interface OrderEventData {
 }
 
 /**
- * Notify all parties when an order is created
+ * Notify ALL merchants when an order is created (broadcast model)
+ * Any merchant can see and accept new orders
  */
 export async function notifyOrderCreated(data: OrderEventData): Promise<void> {
+  // Broadcast to ALL merchants via the global channel
   const channels = [
-    getMerchantChannel(data.merchantId),
+    getAllMerchantsChannel(), // All merchants receive new orders
   ];
 
-  console.log('[Pusher] Triggering ORDER_CREATED event:', {
+  console.log('[Pusher] Broadcasting ORDER_CREATED to all merchants:', {
     channels,
     event: ORDER_EVENTS.CREATED,
     orderId: data.orderId,
-    merchantId: data.merchantId,
   });
 
   await triggerEvent(channels, ORDER_EVENTS.CREATED, {
@@ -142,7 +143,7 @@ export async function notifyOrderCreated(data: OrderEventData): Promise<void> {
     data: data.data,
   });
 
-  console.log('[Pusher] ORDER_CREATED event triggered successfully');
+  console.log('[Pusher] ORDER_CREATED broadcast sent to all merchants');
 }
 
 /**

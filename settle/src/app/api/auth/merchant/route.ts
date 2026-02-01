@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { verifyWalletSignature } from '@/lib/solana/verifySignature';
+import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import crypto from 'crypto';
 
 // Simple password hashing using Node's crypto
@@ -17,12 +18,69 @@ function verifyPassword(password: string, storedHash: string): boolean {
   return hash === verifyHash;
 }
 
-// GET handler - fetch merchant by wallet address (no signature required for auto-login)
+// GET handler - fetch merchant by wallet address or validate session
 export async function GET(request: NextRequest) {
+  // Rate limit: 100 requests per minute
+  const rateLimitResponse = checkRateLimit(request, 'auth:merchant:get', STANDARD_LIMIT);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const action = searchParams.get('action');
     const wallet_address = searchParams.get('wallet_address');
+    const merchant_id = searchParams.get('merchant_id');
+
+    // Check session validity
+    if (action === 'check_session' && merchant_id) {
+      const rows = await query(
+        `SELECT id, username, display_name, business_name, wallet_address, rating, total_trades, balance
+         FROM merchants
+         WHERE id = $1 AND status = 'active'`,
+        [merchant_id]
+      );
+
+      if (rows.length === 0) {
+        return NextResponse.json({
+          success: true,
+          data: { valid: false },
+        });
+      }
+
+      const merchant = rows[0] as {
+        id: string;
+        username: string | null;
+        display_name: string;
+        business_name: string;
+        wallet_address: string;
+        rating: number;
+        total_trades: number;
+        balance: number;
+      };
+
+      // Set merchant online when session is validated (critical for order matching!)
+      await query(
+        `UPDATE merchants SET is_online = true, last_seen_at = NOW() WHERE id = $1`,
+        [merchant.id]
+      );
+      console.log('[API] Merchant session restored, set online:', merchant.id);
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          valid: true,
+          merchant: {
+            id: merchant.id,
+            username: merchant.username,
+            display_name: merchant.display_name,
+            business_name: merchant.business_name,
+            wallet_address: merchant.wallet_address,
+            rating: parseFloat(String(merchant.rating)) || 5,
+            total_trades: merchant.total_trades || 0,
+            balance: parseFloat(String(merchant.balance)) || 0,
+          },
+        },
+      });
+    }
 
     if (action === 'wallet_login' && wallet_address) {
       // Query merchant by wallet address
@@ -79,6 +137,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limit: 5 auth attempts per minute (prevents brute force)
+  const rateLimitResponse = checkRateLimit(request, 'auth:merchant', AUTH_LIMIT);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body = await request.json();
     const { action, wallet_address, signature, message, username } = body;
@@ -103,7 +165,7 @@ export async function POST(request: NextRequest) {
 
       // Query merchant by wallet address
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, rating, total_trades, is_online
+        `SELECT id, username, display_name, business_name, wallet_address, rating, total_trades, is_online, balance
          FROM merchants
          WHERE wallet_address = $1 AND status = 'active'`,
         [wallet_address]
@@ -133,6 +195,7 @@ export async function POST(request: NextRequest) {
           rating: number;
           total_trades: number;
           is_online: boolean;
+          balance: number;
         };
 
         // Check if username needs to be set
@@ -189,6 +252,7 @@ export async function POST(request: NextRequest) {
               wallet_address: merchant.wallet_address,
               rating: parseFloat(String(merchant.rating)) || 5,
               total_trades: merchant.total_trades || 0,
+              balance: parseFloat(String(merchant.balance)) || 0,
             },
             isNewMerchant,
             needsUsername,
@@ -321,6 +385,7 @@ export async function POST(request: NextRequest) {
             wallet_address: merchant.wallet_address,
             rating: parseFloat(String(merchant.rating)) || 5,
             total_trades: merchant.total_trades || 0,
+            balance: 0,
           },
         },
       });
@@ -510,7 +575,7 @@ export async function POST(request: NextRequest) {
 
       // Find merchant by email
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, email, password_hash, rating, total_trades, is_online
+        `SELECT id, username, display_name, business_name, wallet_address, email, password_hash, rating, total_trades, is_online, balance
          FROM merchants
          WHERE email = $1 AND status = 'active'`,
         [email.toLowerCase()]
@@ -534,6 +599,7 @@ export async function POST(request: NextRequest) {
         rating: number;
         total_trades: number;
         is_online: boolean;
+        balance: number;
       };
 
       // Verify password
@@ -564,6 +630,7 @@ export async function POST(request: NextRequest) {
             email: merchant.email,
             rating: parseFloat(String(merchant.rating)) || 5,
             total_trades: merchant.total_trades || 0,
+            balance: parseFloat(String(merchant.balance)) || 0,
           },
         },
       });
@@ -687,6 +754,7 @@ export async function POST(request: NextRequest) {
             email: merchant.email,
             rating: parseFloat(String(merchant.rating)) || 5,
             total_trades: merchant.total_trades || 0,
+            balance: 0,
           },
         },
       });

@@ -88,7 +88,8 @@ export async function getUserOrders(
              'id', m.id,
              'display_name', m.display_name,
              'rating', m.rating,
-             'total_trades', m.total_trades
+             'total_trades', m.total_trades,
+             'wallet_address', m.wallet_address
            ) as merchant,
            json_build_object(
              'payment_method', mo.payment_method,
@@ -134,6 +135,8 @@ export async function getMerchantOrders(
   merchantId: string,
   status?: OrderStatus[]
 ): Promise<OrderWithRelations[]> {
+  // Query orders where merchant is the seller
+  // Note: buyer_merchant_id for M2M trades requires migration 007
   let sql = `
     SELECT o.*,
            json_build_object(
@@ -162,7 +165,66 @@ export async function getMerchantOrders(
 
   sql += ' ORDER BY o.created_at DESC';
 
-  return query<OrderWithRelations>(sql, params);
+  console.log('[DB] getMerchantOrders for merchant:', merchantId);
+  const results = await query<OrderWithRelations>(sql, params);
+  console.log('[DB] getMerchantOrders found:', results?.length || 0, 'orders');
+
+  return results;
+}
+
+/**
+ * Get ALL pending orders (broadcast model) + merchant's own active orders
+ * This allows any merchant to see and accept new orders
+ */
+export async function getAllPendingOrdersForMerchant(
+  merchantId: string,
+  status?: OrderStatus[]
+): Promise<OrderWithRelations[]> {
+  // Get ALL pending orders (any merchant can accept) + this merchant's active orders
+  let sql = `
+    SELECT o.*,
+           json_build_object(
+             'id', u.id,
+             'name', u.username,
+             'rating', u.rating,
+             'total_trades', u.total_trades
+           ) as user,
+           json_build_object(
+             'id', m.id,
+             'display_name', m.display_name,
+             'username', m.username,
+             'rating', m.rating
+           ) as merchant,
+           json_build_object(
+             'payment_method', mo.payment_method,
+             'location_name', mo.location_name,
+             'rate', mo.rate
+           ) as offer
+    FROM orders o
+    JOIN users u ON o.user_id = u.id
+    JOIN merchants m ON o.merchant_id = m.id
+    JOIN merchant_offers mo ON o.offer_id = mo.id
+    WHERE o.status NOT IN ('expired', 'cancelled')
+      AND (
+        o.status = 'pending'  -- All pending orders visible to all merchants
+        OR o.merchant_id = $1  -- This merchant's own orders (any status)
+      )
+  `;
+
+  const params: unknown[] = [merchantId];
+
+  if (status && status.length > 0) {
+    sql += ` AND o.status = ANY($2)`;
+    params.push(status);
+  }
+
+  sql += ' ORDER BY o.created_at DESC';
+
+  console.log('[DB] getAllPendingOrdersForMerchant for merchant:', merchantId);
+  const results = await query<OrderWithRelations>(sql, params);
+  console.log('[DB] getAllPendingOrdersForMerchant found:', results?.length || 0, 'orders');
+
+  return results;
 }
 
 export async function createOrder(data: {
@@ -176,9 +238,19 @@ export async function createOrder(data: {
   rate: number;
   payment_details?: Record<string, unknown>;
   buyer_wallet_address?: string; // Buyer's Solana wallet for receiving crypto (buy orders)
+  buyer_merchant_id?: string; // For M2M trading: the merchant acting as buyer
 }): Promise<Order> {
   return transaction(async (client) => {
+    console.log('[DB] createOrder called with:', {
+      user_id: data.user_id,
+      merchant_id: data.merchant_id,
+      offer_id: data.offer_id,
+      type: data.type,
+      crypto_amount: data.crypto_amount,
+    });
+
     // Create the order with explicit 'pending' status
+    // Note: buyer_merchant_id column requires migration 007
     const result = await client.query(
       `INSERT INTO orders (
          user_id, merchant_id, offer_id, type, payment_method,
@@ -202,6 +274,7 @@ export async function createOrder(data: {
     );
 
     const order = result.rows[0] as Order;
+    console.log('[DB] Order created:', order.id, 'status:', order.status);
 
     logger.info('Order created in database', {
       orderId: order.id,
@@ -286,11 +359,43 @@ export async function updateOrderStatus(
         };
       }
 
+      // Check if this is a merchant claiming an order (Uber-like model)
+      // When a merchant accepts a pending or escrowed order, reassign the order to them
+      // For sell orders: user locks escrow first (status = 'escrowed'), then merchant accepts
+      const isMerchantClaiming =
+        actorType === 'merchant' &&
+        (oldStatus === 'pending' || oldStatus === 'escrowed') &&
+        newStatus === 'accepted' &&
+        currentOrder.merchant_id !== actorId;
+
       // Build update query with appropriate timestamp
       let timestampField = '';
+      let merchantReassign = '';
+      let acceptorWalletUpdate = '';
       switch (newStatus) {
         case 'accepted':
           timestampField = ", accepted_at = NOW(), expires_at = NOW() + INTERVAL '30 minutes'";
+          // If a different merchant is claiming, reassign the order to them
+          if (isMerchantClaiming) {
+            merchantReassign = `, merchant_id = '${actorId}'`;
+            logger.info('Merchant claiming order', {
+              orderId,
+              previousMerchantId: currentOrder.merchant_id,
+              newMerchantId: actorId,
+            });
+          }
+          // Store acceptor's wallet address when accepting (for sell orders with escrow)
+          if (metadata?.acceptor_wallet_address) {
+            // Sanitize: only allow valid Solana addresses
+            const wallet = String(metadata.acceptor_wallet_address);
+            if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
+              acceptorWalletUpdate = `, acceptor_wallet_address = '${wallet}'`;
+              logger.info('Storing acceptor wallet address', {
+                orderId,
+                acceptorWallet: wallet,
+              });
+            }
+          }
           break;
         case 'escrowed':
           timestampField = ", escrowed_at = NOW(), expires_at = NOW() + INTERVAL '2 hours'";
@@ -316,7 +421,7 @@ export async function updateOrderStatus(
       }
 
       const updateParams: unknown[] = [newStatus, orderId];
-      let sql = `UPDATE orders SET status = $1${timestampField} WHERE id = $2 RETURNING *`;
+      let sql = `UPDATE orders SET status = $1${timestampField}${merchantReassign}${acceptorWalletUpdate} WHERE id = $2 RETURNING *`;
 
       if (newStatus === 'cancelled') {
         updateParams.push(actorType, metadata?.reason || null);
@@ -364,6 +469,25 @@ export async function updateOrderStatus(
           `UPDATE merchants SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $2`,
           [currentOrder.fiat_amount, currentOrder.merchant_id]
         );
+
+        // Update merchant balance (display-only tracking - actual funds are on-chain)
+        // Sell order: merchant sold crypto, balance decreases
+        // Buy order: merchant bought crypto, balance increases
+        const balanceChange = currentOrder.type === 'sell'
+          ? -currentOrder.crypto_amount  // Merchant sold crypto
+          : currentOrder.crypto_amount;   // Merchant bought crypto
+
+        await client.query(
+          `UPDATE merchants SET balance = balance + $1 WHERE id = $2`,
+          [balanceChange, currentOrder.merchant_id]
+        );
+        logger.info('Merchant balance updated', {
+          orderId,
+          merchantId: currentOrder.merchant_id,
+          orderType: currentOrder.type,
+          balanceChange,
+        });
+
         logger.order.completed(orderId, currentOrder.crypto_amount, currentOrder.fiat_amount);
 
         // Record reputation events for order completion

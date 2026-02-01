@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePusherOptional } from '@/context/PusherContext';
-import { getUserChannel, getMerchantChannel } from '@/lib/pusher/channels';
+import { getUserChannel, getMerchantChannel, getAllMerchantsChannel } from '@/lib/pusher/channels';
 import { ORDER_EVENTS } from '@/lib/pusher/events';
 
 interface OrderData {
@@ -151,21 +151,39 @@ export function useRealtimeOrders(
       return;
     }
 
-    const channelName =
+    // For merchants:
+    // - Subscribe to GLOBAL channel for new orders (all merchants see all new orders)
+    // - Subscribe to PERSONAL channel for status updates (only their orders)
+    // For users:
+    // - Subscribe to their personal channel only
+    const primaryChannelName =
       actorType === 'merchant'
-        ? getMerchantChannel(actorId)
+        ? getAllMerchantsChannel() // All merchants receive all new orders
         : getUserChannel(actorId);
 
-    console.log('[useRealtimeOrders] Subscribing to channel:', channelName);
-    const channel = pusher.subscribe(channelName);
+    // Merchants also need their personal channel for order status updates
+    const personalChannelName =
+      actorType === 'merchant'
+        ? getMerchantChannel(actorId)
+        : null;
 
-    if (!channel) {
+    console.log('[useRealtimeOrders] Subscribing to channel:', primaryChannelName);
+    const primaryChannel = pusher.subscribe(primaryChannelName);
+
+    if (!primaryChannel) {
       console.log('[useRealtimeOrders] Failed to subscribe - channel is null');
       return;
     }
 
+    // Subscribe to personal channel for merchants (status updates go here)
+    let personalChannel: ReturnType<typeof pusher.subscribe> | null = null;
+    if (personalChannelName) {
+      console.log('[useRealtimeOrders] Also subscribing to personal channel:', personalChannelName);
+      personalChannel = pusher.subscribe(personalChannelName);
+    }
+
     subscribedRef.current = true;
-    console.log('[useRealtimeOrders] Successfully subscribed to', channelName);
+    console.log('[useRealtimeOrders] Successfully subscribed to', primaryChannelName, personalChannelName ? `and ${personalChannelName}` : '');
 
     // Handle new order created (for merchants)
     const handleOrderCreated = (rawData: unknown) => {
@@ -191,6 +209,7 @@ export function useRealtimeOrders(
 
     // Handle order status update
     const handleStatusUpdated = (rawData: unknown) => {
+      console.log('[useRealtimeOrders] Received STATUS_UPDATED event:', rawData);
       const data = rawData as {
         orderId: string;
         status: string;
@@ -238,20 +257,38 @@ export function useRealtimeOrders(
       }
     };
 
-    channel.bind(ORDER_EVENTS.CREATED, handleOrderCreated);
-    channel.bind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
-    channel.bind(ORDER_EVENTS.CANCELLED, handleCancelled);
-    channel.bind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
-    channel.bind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
+    // Bind events to primary channel
+    primaryChannel.bind(ORDER_EVENTS.CREATED, handleOrderCreated);
+    primaryChannel.bind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
+    primaryChannel.bind(ORDER_EVENTS.CANCELLED, handleCancelled);
+    primaryChannel.bind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
+    primaryChannel.bind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
+
+    // Also bind status events to personal channel for merchants
+    if (personalChannel) {
+      personalChannel.bind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
+      personalChannel.bind(ORDER_EVENTS.CANCELLED, handleCancelled);
+      personalChannel.bind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
+      personalChannel.bind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
+    }
 
     return () => {
-      console.log('[useRealtimeOrders] Cleaning up subscription for', channelName);
-      channel.unbind(ORDER_EVENTS.CREATED, handleOrderCreated);
-      channel.unbind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
-      channel.unbind(ORDER_EVENTS.CANCELLED, handleCancelled);
-      channel.unbind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
-      channel.unbind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
-      pusher.unsubscribe(channelName);
+      console.log('[useRealtimeOrders] Cleaning up subscriptions');
+      primaryChannel.unbind(ORDER_EVENTS.CREATED, handleOrderCreated);
+      primaryChannel.unbind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
+      primaryChannel.unbind(ORDER_EVENTS.CANCELLED, handleCancelled);
+      primaryChannel.unbind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
+      primaryChannel.unbind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
+      pusher.unsubscribe(primaryChannelName);
+
+      if (personalChannel && personalChannelName) {
+        personalChannel.unbind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
+        personalChannel.unbind(ORDER_EVENTS.CANCELLED, handleCancelled);
+        personalChannel.unbind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
+        personalChannel.unbind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
+        pusher.unsubscribe(personalChannelName);
+      }
+
       subscribedRef.current = false;
     };
   }, [actorId, actorType, pusher, isConnected, fetchOrders]);

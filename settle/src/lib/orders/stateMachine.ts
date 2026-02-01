@@ -49,6 +49,7 @@ export const ALLOWED_TRANSITIONS: Record<OrderStatus, TransitionRule[]> = {
   accepted: [
     { to: 'escrow_pending', allowedActors: ['merchant', 'system'] },
     { to: 'escrowed', allowedActors: ['user', 'merchant', 'system'] }, // User can also escrow from accepted
+    { to: 'payment_sent', allowedActors: ['merchant'] }, // For sell orders: merchant sends fiat after accepting (escrow already locked by user)
     { to: 'cancelled', allowedActors: ['user', 'merchant', 'system'] },
     { to: 'expired', allowedActors: ['system'] },
   ],
@@ -58,6 +59,7 @@ export const ALLOWED_TRANSITIONS: Record<OrderStatus, TransitionRule[]> = {
     { to: 'expired', allowedActors: ['system'] },
   ],
   escrowed: [
+    { to: 'accepted', allowedActors: ['merchant'] }, // For sell orders: merchant accepts after user locks escrow
     { to: 'payment_pending', allowedActors: ['user', 'merchant', 'system'] },
     { to: 'payment_sent', allowedActors: ['user', 'merchant'] }, // Merchant sends fiat for buy orders, user sends for sell orders
     { to: 'completed', allowedActors: ['user', 'merchant', 'system'] }, // Allow direct completion after escrow release (for buy orders)

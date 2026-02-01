@@ -146,6 +146,8 @@ interface DbOrder {
   escrow_trade_pda?: string;
   escrow_pda?: string;
   escrow_creator_wallet?: string;
+  // Merchant's wallet address captured when accepting sell orders
+  acceptor_wallet_address?: string;
 }
 
 // UI Order type (maps DB order to UI)
@@ -189,6 +191,8 @@ interface Order {
   escrowTradePda?: string;
   escrowCreatorWallet?: string;
   escrowTxHash?: string;
+  // Merchant's wallet address captured when accepting (for sell order escrow release)
+  acceptorWalletAddress?: string;
 }
 
 interface BankAccount {
@@ -275,11 +279,10 @@ function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
     escrowTradePda: dbOrder.escrow_trade_pda,
     escrowCreatorWallet: dbOrder.escrow_creator_wallet,
     escrowTxHash: dbOrder.escrow_tx_hash,
+    // Merchant's wallet address captured when accepting (for sell order escrow release)
+    acceptorWalletAddress: dbOrder.acceptor_wallet_address,
   };
 }
-
-// Demo user ID (from seed data)
-const DEMO_USER_ID = "demo"; // Will be fetched from DB
 
 // Fee structure based on trade preference
 const FEE_CONFIG = {
@@ -338,7 +341,8 @@ export default function Home() {
   const [newUserName, setNewUserName] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [loginForm, setLoginForm] = useState({ email: "alice@test.com", password: "user123" });
+  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [currentRate, setCurrentRate] = useState(3.67);
@@ -397,123 +401,7 @@ export default function Home() {
     }
   }, [userId, setActor]);
 
-  // Authenticate user with wallet when connected
-  // NOTE: On Brave with Phantom, connected may be false but walletAddress/publicKey is available
-  useEffect(() => {
-    const authenticateWallet = async () => {
-      // Check both adapter and direct Phantom access for Brave compatibility
-      const phantom = (window as any).phantom?.solana;
-      const walletAddress = solanaWallet.walletAddress || phantom?.publicKey?.toString();
-      const hasWallet = walletAddress && (solanaWallet.publicKey || phantom?.publicKey);
-
-      // Reset attempt tracking if wallet changed to a different address
-      if (walletAddress && authAttemptedForWalletRef.current && authAttemptedForWalletRef.current !== walletAddress) {
-        authAttemptedForWalletRef.current = null;
-      }
-
-      // Use ref for synchronous check to prevent race conditions (state updates are async)
-      // Also skip if we already authenticated this wallet address
-      if (!hasWallet || userId || isAuthenticatingRef.current) {
-        return;
-      }
-
-      // Skip if we already authenticated this exact wallet (prevents re-auth on wallet state changes)
-      if (lastAuthenticatedWalletRef.current === walletAddress) {
-        return;
-      }
-
-      // Skip if we already attempted auth for this wallet (prevents repeated popups on reject)
-      if (authAttemptedForWalletRef.current === walletAddress) {
-        return;
-      }
-
-      // Mark this wallet as attempted (before we start, to prevent race conditions)
-      authAttemptedForWalletRef.current = walletAddress;
-
-      // Set ref immediately (synchronous) to prevent concurrent calls
-      isAuthenticatingRef.current = true;
-      setIsAuthenticating(true);
-      setLoginError("");
-
-      try {
-        // Generate message to sign
-        const timestamp = Date.now();
-        const nonce = Math.random().toString(36).substring(7);
-        const message = `Sign this message to authenticate with Blip Money\n\nWallet: ${walletAddress}\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
-
-        // Request signature - with fallback for Phantom direct connection
-        const encodedMessage = new TextEncoder().encode(message);
-        let signatureUint8: Uint8Array;
-
-        if (solanaWallet.signMessage) {
-          signatureUint8 = await solanaWallet.signMessage(encodedMessage);
-        } else {
-          // Fallback for Phantom direct connection on mobile Brave
-          const phantom = (window as any).phantom?.solana;
-          if (phantom && phantom.signMessage) {
-            console.log('[User] Using Phantom direct signMessage for authentication');
-            const result = await phantom.signMessage(encodedMessage, 'utf8');
-            signatureUint8 = result.signature;
-          } else {
-            throw new Error('Wallet signature method not available');
-          }
-        }
-
-        // Convert to base58
-        const bs58 = await import('bs58');
-        const signature = bs58.default.encode(signatureUint8);
-
-        // Authenticate with API
-        const res = await fetch('/api/auth/user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'wallet_login',
-            wallet_address: walletAddress,
-            signature,
-            message,
-          }),
-        });
-
-        const data = await res.json();
-
-        if (data.success) {
-          // Mark this wallet as authenticated to prevent re-auth
-          lastAuthenticatedWalletRef.current = walletAddress;
-
-          if (data.data.needsUsername) {
-            // Show username modal for new users
-            setShowUsernameModal(true);
-          } else if (data.data.user) {
-            // User authenticated successfully
-            const user = data.data.user;
-            setUserId(user.id);
-            setUserWallet(user.wallet_address);
-            setUserName(user.username || user.name || 'User');
-            setUserBalance(user.balance || 0);
-            localStorage.setItem('blip_user', JSON.stringify(user));
-            fetchOrders(user.id);
-            fetchBankAccounts(user.id);
-            fetchResolvedDisputes(user.id);
-            setScreen('home');
-          }
-        } else {
-          setLoginError(data.error || 'Wallet authentication failed');
-        }
-      } catch (error) {
-        console.error('Wallet auth error:', error);
-        setLoginError(error instanceof Error ? error.message : 'Failed to authenticate with wallet');
-      } finally {
-        // Always reset the ref and state when done (success or failure)
-        isAuthenticatingRef.current = false;
-        setIsAuthenticating(false);
-      }
-    };
-
-    authenticateWallet();
-  // Remove isAuthenticating from deps - we use ref for synchronous check now
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [solanaWallet.walletAddress, solanaWallet.publicKey, userId]);
+  // Wallet linking removed - no automatic wallet actions
 
   // Real-time chat hook (replaces polling)
   const {
@@ -571,6 +459,10 @@ export default function Home() {
       // Play trade complete sound
       if (newStatus === 'completed') {
         playSound('trade_complete');
+        // Refresh on-chain wallet balance to sync with platform balance
+        if (solanaWallet.connected) {
+          solanaWallet.refreshBalances();
+        }
       }
 
       // Update the orders list with new status
@@ -732,22 +624,19 @@ export default function Home() {
     }
   }, []);
 
-  // Handle Solana wallet connection
+  // Handle Solana wallet connection - wallet will be linked via useEffect
   const handleSolanaWalletConnect = useCallback(async (walletAddress: string) => {
+    console.log('[User] Wallet connected via modal:', walletAddress);
     setShowWalletModal(false);
-    const success = await connectWallet(walletAddress, `Solana User`);
-    if (success) {
-      // If we were waiting to connect for escrow, reset status
-      // User needs to click "Confirm & Lock" again with wallet now connected
-      if (escrowTxStatus === 'connecting') {
-        setEscrowTxStatus('idle');
-        // Stay on escrow screen, wallet is now connected
-        console.log('[Wallet] Connected during escrow flow, user can now click Confirm & Lock');
-      } else {
-        setScreen('home');
-      }
+    // Wallet will be linked to user account via linkWalletToAccount useEffect
+
+    // If we were waiting to connect for escrow, reset status
+    // User needs to click "Confirm & Lock" again with wallet now connected
+    if (escrowTxStatus === 'connecting') {
+      setEscrowTxStatus('idle');
+      console.log('[Wallet] Connected during escrow flow, user can now click Confirm & Lock');
     }
-  }, [connectWallet, escrowTxStatus]);
+  }, [escrowTxStatus]);
 
   // Create new account
   const createAccount = useCallback(async () => {
@@ -839,6 +728,11 @@ export default function Home() {
 
   // Handle user login
   const handleUserLogin = useCallback(async () => {
+    if (!loginForm.username || !loginForm.password) {
+      setLoginError('Username and password are required');
+      return;
+    }
+
     setIsLoggingIn(true);
     setLoginError("");
 
@@ -847,7 +741,7 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: loginForm.email,
+          username: loginForm.username,
           password: loginForm.password,
           action: 'login',
         }),
@@ -859,7 +753,7 @@ export default function Home() {
         const user = data.data.user;
         setUserId(user.id);
         setUserWallet(user.wallet_address);
-        setUserName(user.name || 'User');
+        setUserName(user.username || user.name || 'User');
         setUserBalance(user.balance || 0);
         localStorage.setItem('blip_user', JSON.stringify(user));
         // Fetch orders
@@ -880,44 +774,114 @@ export default function Home() {
     }
   }, [loginForm]);
 
-  // Fetch user on mount - check localStorage first
-  useEffect(() => {
-    const initUser = async () => {
-      setIsInitializing(true);
+  // Handle user registration
+  const handleUserRegister = useCallback(async () => {
+    if (!loginForm.username || !loginForm.password) {
+      setLoginError('Username and password are required');
+      return;
+    }
 
-      // Check for saved user login first
-      const savedUser = localStorage.getItem('blip_user');
-      if (savedUser) {
-        try {
-          const user = JSON.parse(savedUser);
-          setUserId(user.id);
-          setUserWallet(user.wallet_address);
-          setUserName(user.name || 'User');
-          setUserBalance(user.balance || 0);
-          fetchOrders(user.id);
-          fetchBankAccounts(user.id);
-          fetchResolvedDisputes(user.id);
-          setScreen('home');
-          setIsInitializing(false);
-          return;
-        } catch {
-          localStorage.removeItem('blip_user');
-        }
-      }
+    if (loginForm.username.length < 3) {
+      setLoginError('Username must be at least 3 characters');
+      return;
+    }
 
-      // Check for legacy wallet login
-      const savedWallet = localStorage.getItem('blip_wallet');
-      if (savedWallet) {
-        // Reconnect with saved wallet
-        await connectWallet(savedWallet);
-        setIsInitializing(false);
+    if (loginForm.password.length < 6) {
+      setLoginError('Password must be at least 6 characters');
+      return;
+    }
+
+    setIsLoggingIn(true);
+    setLoginError("");
+
+    try {
+      const res = await fetch('/api/auth/user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: loginForm.username,
+          password: loginForm.password,
+          action: 'register',
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.data.user) {
+        const user = data.data.user;
+        setUserId(user.id);
+        setUserWallet(user.wallet_address);
+        setUserName(user.username || user.name || 'User');
+        setUserBalance(user.balance || 0);
+        localStorage.setItem('blip_user', JSON.stringify(user));
+        // Fetch orders
+        fetchOrders(user.id);
+        // Fetch bank accounts
+        fetchBankAccounts(user.id);
+        // Fetch resolved disputes
+        fetchResolvedDisputes(user.id);
+        setScreen('home');
       } else {
-        // No saved session - show welcome screen
-        setScreen('welcome');
-        setIsInitializing(false);
+        setLoginError(data.error || 'Registration failed');
       }
+    } catch (err) {
+      console.error('Registration error:', err);
+      setLoginError('Connection failed');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  }, [loginForm]);
+
+  // Initialize - restore session if available
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const savedUser = localStorage.getItem('blip_user');
+        const savedWallet = localStorage.getItem('blip_wallet');
+
+        if (savedUser) {
+          const user = JSON.parse(savedUser);
+          console.log('[Session] Restoring user session:', user.username);
+
+          // Validate user still exists in database
+          const checkRes = await fetch(`/api/auth/user?action=check_session&user_id=${user.id}`);
+          if (checkRes.ok) {
+            const checkData = await checkRes.json();
+            if (checkData.success && checkData.data?.valid) {
+              // Session is valid, restore state
+              setUserId(user.id);
+              setUserName(user.username || user.name || 'User');
+              setUserBalance(user.balance || 0);
+              if (savedWallet) {
+                setUserWallet(savedWallet);
+              }
+              // Fetch user data
+              fetchOrders(user.id);
+              fetchBankAccounts(user.id);
+              fetchResolvedDisputes(user.id);
+              // Go to home screen
+              setScreen('home');
+              setIsInitializing(false);
+              return;
+            }
+          }
+          // Session invalid, clear it
+          console.log('[Session] User session invalid, clearing...');
+          localStorage.removeItem('blip_user');
+          localStorage.removeItem('blip_wallet');
+        }
+      } catch (err) {
+        console.error('[Session] Failed to restore session:', err);
+        localStorage.removeItem('blip_user');
+        localStorage.removeItem('blip_wallet');
+      }
+
+      // No valid session, show welcome screen
+      setScreen('welcome');
+      setIsInitializing(false);
     };
-    initUser();
+
+    restoreSession();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1018,15 +982,37 @@ export default function Home() {
   };
 
   const startTrade = async () => {
-    if (!amount || parseFloat(amount) <= 0 || !userId) return;
+    if (!amount || parseFloat(amount) <= 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+
+    if (!userId) {
+      alert('Please connect your wallet first');
+      console.error('[Order] No userId - user not authenticated');
+      return;
+    }
+
+    // Validate userId is a proper UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      console.error('[Order] Invalid userId format:', userId);
+      alert('Session error. Please reconnect your wallet.');
+      localStorage.removeItem('blip_user');
+      setUserId(null);
+      setScreen('welcome');
+      return;
+    }
 
     setIsLoading(true);
 
     try {
       // Find best offer from DB
+      // When user buys, we need merchant sell offers. When user sells, we need merchant buy offers.
+      const offerType = tradeType === 'buy' ? 'sell' : 'buy';
       const params = new URLSearchParams({
         amount: amount,
-        type: 'sell', // Merchant sells USDC = user buys
+        type: offerType,
         payment_method: paymentMethod,
         preference: tradePreference,
       });
@@ -1052,8 +1038,18 @@ export default function Home() {
         return;
       }
 
-      // For sell orders, go to escrow first
+      // For sell orders, go to escrow screen first to lock funds
       if (tradeType === "sell") {
+        // IMPORTANT: Validate merchant has a wallet address before showing escrow screen
+        // This is required for sell orders because the user needs to lock escrow to the merchant's wallet
+        const merchantWallet = offer?.merchant?.wallet_address;
+        const isValidSolanaAddress = merchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
+        if (!isValidSolanaAddress) {
+          console.error('[Trade] Merchant has no wallet address:', offer?.merchant?.display_name);
+          alert('This merchant has not linked their Solana wallet yet. Please try again later or choose a different amount to match with another merchant.');
+          setIsLoading(false);
+          return;
+        }
         setSelectedOffer(offer);
         setScreen("escrow");
         setIsLoading(false);
@@ -1077,8 +1073,22 @@ export default function Home() {
       const orderData = await orderRes.json();
 
       if (!orderRes.ok || !orderData.success) {
-        const errorMsg = orderData.error || 'Failed to create order';
-        console.error('Failed to create order:', errorMsg);
+        const errorDetails = orderData.details ? `\n${orderData.details.join('\n')}` : '';
+        const errorMsg = (orderData.error || 'Failed to create order') + errorDetails;
+        console.error('Failed to create order:', errorMsg, orderData);
+
+        // If user not found, clear session and redirect to welcome
+        if (orderData.details?.includes('User not found')) {
+          alert('Your session has expired. Please reconnect your wallet.');
+          localStorage.removeItem('blip_user');
+          localStorage.removeItem('blip_wallet');
+          setUserId(null);
+          setScreen('welcome');
+          playSound('error');
+          setIsLoading(false);
+          return;
+        }
+
         alert(errorMsg);
         playSound('error');
         setIsLoading(false);
@@ -1107,7 +1117,26 @@ export default function Home() {
   };
 
   const confirmCashOrder = async () => {
-    if (!selectedOffer || !amount || !userId) return;
+    if (!selectedOffer || !amount) {
+      alert('Missing order details');
+      return;
+    }
+
+    if (!userId) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    // Validate userId is a proper UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      console.error('[Order] Invalid userId format:', userId);
+      alert('Session error. Please reconnect your wallet.');
+      localStorage.removeItem('blip_user');
+      setUserId(null);
+      setScreen('welcome');
+      return;
+    }
 
     setIsLoading(true);
 
@@ -1128,8 +1157,21 @@ export default function Home() {
       const orderData = await orderRes.json();
 
       if (!orderRes.ok || !orderData.success) {
-        const errorMsg = orderData.error || 'Failed to create order';
-        console.error('Failed to create cash order:', errorMsg);
+        const errorDetails = orderData.details ? `\n${orderData.details.join('\n')}` : '';
+        const errorMsg = (orderData.error || 'Failed to create order') + errorDetails;
+        console.error('Failed to create cash order:', errorMsg, orderData);
+
+        // If user not found, clear session and redirect to welcome
+        if (orderData.details?.includes('User not found')) {
+          alert('Your session has expired. Please reconnect your wallet.');
+          localStorage.removeItem('blip_user');
+          localStorage.removeItem('blip_wallet');
+          setUserId(null);
+          setScreen('welcome');
+          setIsLoading(false);
+          return;
+        }
+
         alert(errorMsg);
         setIsLoading(false);
         return;
@@ -1155,8 +1197,26 @@ export default function Home() {
 
   const confirmEscrow = async () => {
     console.log('[Escrow] confirmEscrow called', { selectedOffer, amount, userId });
-    if (!selectedOffer || !amount || !userId) {
-      console.log('[Escrow] Missing required data:', { selectedOffer: !!selectedOffer, amount: !!amount, userId: !!userId });
+    if (!selectedOffer || !amount) {
+      console.log('[Escrow] Missing required data:', { selectedOffer: !!selectedOffer, amount: !!amount });
+      alert('Missing order details');
+      return;
+    }
+
+    if (!userId) {
+      console.log('[Escrow] No userId - user not authenticated');
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    // Validate userId is a proper UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      console.error('[Escrow] Invalid userId format:', userId);
+      alert('Session error. Please reconnect your wallet.');
+      localStorage.removeItem('blip_user');
+      setUserId(null);
+      setScreen('welcome');
       return;
     }
 
@@ -1187,69 +1247,63 @@ export default function Home() {
     console.log('[Escrow] Starting escrow transaction');
 
     try {
-      // Get merchant wallet address - required for V2.2 escrow
-      const merchantWallet = selectedOffer.merchant.wallet_address;
-      console.log('[Escrow] Merchant wallet:', merchantWallet);
-      console.log('[Escrow] Merchant wallet type:', typeof merchantWallet);
-      console.log('[Escrow] Merchant wallet length:', merchantWallet?.length);
-
-      // Check if merchant has a valid Solana wallet (base58 format)
-      const isValidSolanaAddress = merchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
-      console.log('[Escrow] Is valid Solana address:', isValidSolanaAddress);
+      // For sell orders: user deposits to escrow, merchant receives when user releases
+      // IMPORTANT: We MUST have the merchant wallet to lock escrow correctly for release
+      const merchantWallet = selectedOffer?.merchant?.wallet_address;
+      console.log('[Escrow] Merchant wallet:', merchantWallet || '(MISSING!)');
+      console.log('[Escrow] Merchant name:', selectedOffer?.merchant?.display_name || '(unknown)');
+      console.log('[Escrow] User wallet:', solanaWallet.walletAddress);
       console.log('[Escrow] Program ready:', solanaWallet.programReady);
+
+      // Validate merchant wallet - REQUIRED for sell orders to release correctly
+      const isValidSolanaAddress = merchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
+      if (!isValidSolanaAddress) {
+        setEscrowError('This merchant has not linked their Solana wallet. Please choose a different offer or wait for the merchant to set up their wallet.');
+        setEscrowTxStatus('error');
+        setIsLoading(false);
+        return;
+      }
+
+      // Step 3: Sign and send escrow transaction using V2.2 program
+      console.log('[Escrow] Wallet state before escrow:', {
+        connected: solanaWallet.connected,
+        walletAddress: solanaWallet.walletAddress,
+        hasPublicKey: !!solanaWallet.publicKey,
+      });
+      console.log('[Escrow] Calling depositToEscrow with:', { amount: amountNum, merchantWallet });
 
       let escrowResult: { txHash: string; success: boolean; tradePda?: string; escrowPda?: string; tradeId?: number };
 
-      // Only attempt on-chain escrow if merchant has a valid Solana wallet
-      if (isValidSolanaAddress) {
-        // Step 3: Sign and send escrow transaction using V2.2 program
-        console.log('[Escrow] Wallet state before escrow:', {
-          connected: solanaWallet.connected,
-          walletAddress: solanaWallet.walletAddress,
-          hasPublicKey: !!solanaWallet.publicKey,
+      try {
+        // Lock escrow with merchant's wallet as counterparty - required for release to work
+        escrowResult = await solanaWallet.depositToEscrow({
+          amount: amountNum,
+          merchantWallet,
         });
-        console.log('[Escrow] Calling depositToEscrow with:', { amount: amountNum, merchantWallet });
+        console.log('[Escrow] depositToEscrow result:', escrowResult);
 
-        try {
-          escrowResult = await solanaWallet.depositToEscrow({
-            amount: amountNum,
-            merchantWallet,
-          });
-          console.log('[Escrow] depositToEscrow result:', escrowResult);
-
-          if (!escrowResult.success) {
-            throw new Error('Transaction failed');
-          }
-        } catch (escrowErr: any) {
-          console.error('[Escrow] On-chain escrow failed:', escrowErr);
-          console.error('[Escrow] Error message:', escrowErr?.message);
-          console.error('[Escrow] Error stack:', escrowErr?.stack?.split('\n').slice(0, 3).join('\n'));
-
-          // Check if this is a wallet not ready error - provide user-friendly message
-          if (escrowErr?.message?.includes('program=false')) {
-            console.error('[Escrow] CRITICAL: Anchor program is null - wallet may not be fully connected');
-            setEscrowError('Wallet not fully connected. Please disconnect and reconnect your wallet, then try again.');
-          } else if (escrowErr?.message?.includes('User rejected')) {
-            setEscrowError('Transaction was rejected. Please approve the transaction in your wallet.');
-          } else if (escrowErr?.message?.includes('Insufficient')) {
-            setEscrowError(escrowErr.message);
-          } else {
-            setEscrowError(`Escrow failed: ${escrowErr?.message || 'Unknown error'}. Please try again.`);
-          }
-          setEscrowTxStatus('error');
-          setIsLoading(false);
-          return;
+        if (!escrowResult.success) {
+          throw new Error('Transaction failed');
         }
-      } else {
-        // Merchant doesn't have a valid Solana wallet - use demo/off-chain mode
-        console.warn('[Escrow] Merchant wallet not valid for Solana, using demo mode:', merchantWallet);
-        escrowResult = {
-          txHash: `demo-${Date.now()}`,
-          success: true,
-          tradePda: undefined,
-          escrowPda: undefined,
-          tradeId: Date.now(),
-        };
+      } catch (escrowErr: any) {
+        console.error('[Escrow] On-chain escrow failed:', escrowErr);
+        console.error('[Escrow] Error message:', escrowErr?.message);
+        console.error('[Escrow] Error stack:', escrowErr?.stack?.split('\n').slice(0, 3).join('\n'));
+
+        // Check if this is a wallet not ready error - provide user-friendly message
+        if (escrowErr?.message?.includes('program=false')) {
+          console.error('[Escrow] CRITICAL: Anchor program is null - wallet may not be fully connected');
+          setEscrowError('Wallet not fully connected. Please disconnect and reconnect your wallet, then try again.');
+        } else if (escrowErr?.message?.includes('User rejected')) {
+          setEscrowError('Transaction was rejected. Please approve the transaction in your wallet.');
+        } else if (escrowErr?.message?.includes('Insufficient')) {
+          setEscrowError(escrowErr.message);
+        } else {
+          setEscrowError(`Escrow failed: ${escrowErr?.message || 'Unknown error'}. Please try again.`);
+        }
+        setEscrowTxStatus('error');
+        setIsLoading(false);
+        return;
       }
 
       setEscrowTxHash(escrowResult.txHash);
@@ -1277,6 +1331,16 @@ export default function Home() {
       const orderData = await orderRes.json();
 
       if (!orderRes.ok || !orderData.success) {
+        // Check if user not found
+        if (orderData.details?.includes('User not found')) {
+          setEscrowError(`Session expired. Your funds are safe - TX: ${escrowResult.txHash}. Please reconnect wallet and contact support.`);
+          setEscrowTxStatus('error');
+          localStorage.removeItem('blip_user');
+          localStorage.removeItem('blip_wallet');
+          setUserId(null);
+          setIsLoading(false);
+          return;
+        }
         // Order creation failed but funds are locked - this is a critical error
         setEscrowError(`Order creation failed after funds were locked. TX: ${escrowResult.txHash}. Please contact support.`);
         setEscrowTxStatus('error');
@@ -1301,14 +1365,23 @@ export default function Home() {
         }),
       });
 
-      if (!escrowRes.ok) {
-        console.warn('Failed to record escrow, but order was created');
-      }
-
       // Step 6: Success - stay on escrow screen showing "waiting for merchant"
       setEscrowTxStatus('success');
 
-      const newOrder = mapDbOrderToUI(orderData.data);
+      // Get the updated order data (with escrowed status) from the escrow response
+      let finalOrderData = orderData.data;
+      if (escrowRes.ok) {
+        const escrowData = await escrowRes.json();
+        if (escrowData.success && escrowData.data) {
+          finalOrderData = escrowData.data;
+        }
+      } else {
+        console.warn('Failed to record escrow, but order was created');
+        // Manually set status to escrowed since the on-chain tx succeeded
+        finalOrderData = { ...finalOrderData, status: 'escrowed', escrow_tx_hash: escrowResult.txHash };
+      }
+
+      const newOrder = mapDbOrderToUI(finalOrderData);
       if (newOrder) {
         setOrders(prev => [...prev, newOrder]);
         setActiveOrderId(newOrder.id);
@@ -1369,7 +1442,9 @@ export default function Home() {
     try {
       // For sell orders, user needs to release escrow to merchant
       if (activeOrder.type === 'sell' && activeOrder.escrowTradeId && activeOrder.escrowCreatorWallet) {
-        // Check if merchant has a valid Solana wallet
+        // IMPORTANT: Use the same wallet that was used when locking escrow
+        // The escrow was locked with merchant.walletAddress (from the offer)
+        // acceptorWalletAddress is just for verification, but release MUST go to the locked counterparty
         const merchantWallet = activeOrder.merchant.walletAddress;
         const isValidSolanaAddress = merchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
 
@@ -1380,7 +1455,7 @@ export default function Home() {
         }
 
         if (!isValidSolanaAddress) {
-          alert('Merchant wallet address is invalid. Cannot release escrow.');
+          alert('Merchant wallet address is invalid. Please contact support.');
           setIsLoading(false);
           return;
         }
@@ -1389,6 +1464,7 @@ export default function Home() {
           creatorPubkey: activeOrder.escrowCreatorWallet,
           tradeId: activeOrder.escrowTradeId,
           counterparty: merchantWallet,
+          merchantName: activeOrder.merchant.name,
         });
 
         // Release escrow on-chain - this MUST succeed
@@ -1424,6 +1500,10 @@ export default function Home() {
             o.id === activeOrder.id ? { ...o, status: "complete" as OrderStatus, step: 4 as OrderStep, dbStatus: 'completed' } : o
           ));
           playSound('trade_complete');
+          // Refresh on-chain wallet balance
+          if (solanaWallet.connected) {
+            solanaWallet.refreshBalances();
+          }
           setIsLoading(false);
           return;
         } else {
@@ -1433,6 +1513,10 @@ export default function Home() {
             o.id === activeOrder.id ? { ...o, status: "complete" as OrderStatus, step: 4 as OrderStep, dbStatus: 'completed' } : o
           ));
           playSound('trade_complete');
+          // Refresh on-chain wallet balance
+          if (solanaWallet.connected) {
+            solanaWallet.refreshBalances();
+          }
           setIsLoading(false);
           return;
         }
@@ -1471,6 +1555,10 @@ export default function Home() {
         o.id === activeOrder.id ? { ...o, status: "complete" as OrderStatus, step: 4 as OrderStep, dbStatus: 'completed' } : o
       ));
       playSound('trade_complete');
+      // Refresh on-chain wallet balance
+      if (solanaWallet.connected) {
+        solanaWallet.refreshBalances();
+      }
     } catch (err) {
       console.error('Failed to confirm payment:', err);
       alert('Failed to release escrow. Please try again.');
@@ -1713,7 +1801,7 @@ export default function Home() {
   }
 
   return (
-    <div className="h-dvh bg-black flex flex-col items-center overflow-hidden">
+    <div className="min-h-dvh bg-black flex flex-col items-center overflow-y-auto">
       <AnimatePresence mode="wait">
         {/* WELCOME / LOGIN */}
         {screen === "welcome" && (
@@ -1759,125 +1847,85 @@ export default function Home() {
               </motion.div>
             )}
 
-            {isAuthenticating && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-sm text-blue-400 mb-4 flex items-center gap-2"
-              >
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Authenticating with wallet...
-              </motion.div>
-            )}
-
-            {/* Primary: Solana Wallet Connect */}
-            <motion.button
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.3 }}
-              onClick={() => setShowWalletModal(true)}
-              disabled={isAuthenticating}
-              className="w-full py-4 rounded-2xl text-[17px] font-semibold flex items-center justify-center gap-3 mb-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
-              <Wallet className="w-5 h-5" />
-              Connect Wallet
-            </motion.button>
-
-            <motion.p
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.4 }}
-              className="text-neutral-500 text-[12px] text-center mb-6"
-            >
-              Supports Phantom, Solflare, Coinbase Wallet & more (Devnet)
-            </motion.p>
-
-            {/* Divider */}
+            {/* Login/Register Toggle */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="w-full flex items-center gap-3 mb-6"
+              transition={{ delay: 0.3 }}
+              className="w-full flex rounded-xl bg-neutral-900 p-1 mb-4"
             >
-              <div className="flex-1 h-px bg-neutral-800" />
-              <span className="text-neutral-500 text-[13px]">Legacy Login (Testing)</span>
-              <div className="flex-1 h-px bg-neutral-800" />
+              <button
+                onClick={() => { setAuthMode('login'); setLoginError(''); }}
+                className={`flex-1 py-2 rounded-lg text-[14px] font-medium transition-colors ${
+                  authMode === 'login' ? 'bg-orange-500 text-white' : 'text-neutral-400'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => { setAuthMode('register'); setLoginError(''); }}
+                className={`flex-1 py-2 rounded-lg text-[14px] font-medium transition-colors ${
+                  authMode === 'register' ? 'bg-orange-500 text-white' : 'text-neutral-400'
+                }`}
+              >
+                Create Account
+              </button>
             </motion.div>
 
-            {/* Collapsible Legacy Login */}
-            <details className="w-full">
-              <summary className="cursor-pointer text-neutral-400 text-[14px] text-center mb-4 hover:text-neutral-300 transition-colors">
-                Show email/password login
-              </summary>
-
-              <div className="space-y-4 mt-4">
-                <div className="w-full">
-                  <label className="text-[13px] text-neutral-500 mb-2 block">Email</label>
-                  <input
-                    type="email"
-                    value={loginForm.email}
-                    onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                    placeholder="your@email.com"
-                    className="w-full bg-neutral-900 rounded-2xl px-4 py-4 text-white text-[17px] placeholder:text-neutral-600 outline-none focus:ring-2 focus:ring-orange-500"
-                  />
-                </div>
-
-                <div className="w-full">
-                  <label className="text-[13px] text-neutral-500 mb-2 block">Password</label>
-                  <input
-                    type="password"
-                    value={loginForm.password}
-                    onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                    placeholder="••••••••"
-                    className="w-full bg-neutral-900 rounded-2xl px-4 py-4 text-white text-[17px] placeholder:text-neutral-600 outline-none focus:ring-2 focus:ring-orange-500"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handleUserLogin();
-                      }
-                    }}
-                  />
-                </div>
-
-                <button
-                  onClick={handleUserLogin}
-                  disabled={isLoggingIn}
-                  className="w-full py-4 rounded-2xl text-[17px] font-semibold flex items-center justify-center gap-2 mb-4 bg-orange-500 text-white disabled:opacity-50"
-                >
-                  {isLoggingIn ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    "Sign In"
-                  )}
-                </button>
-
-                <div className="w-full border-t border-neutral-800 pt-4">
-                  <p className="text-neutral-500 text-[13px] text-center mb-3">Test Accounts:</p>
-                  <div className="space-y-2">
-                    <button
-                      onClick={() => setLoginForm({ email: "alice@test.com", password: "user123" })}
-                      className="w-full p-3 bg-neutral-900 hover:bg-neutral-800 rounded-xl text-left transition-colors"
-                    >
-                      <p className="text-[14px] font-medium text-white">Alice</p>
-                      <p className="text-[12px] text-neutral-500">alice@test.com / user123</p>
-                    </button>
-                    <button
-                      onClick={() => setLoginForm({ email: "bob@test.com", password: "user123" })}
-                      className="w-full p-3 bg-neutral-900 hover:bg-neutral-800 rounded-xl text-left transition-colors"
-                    >
-                      <p className="text-[14px] font-medium text-white">Bob</p>
-                      <p className="text-[12px] text-neutral-500">bob@test.com / user123</p>
-                    </button>
-                    <button
-                      onClick={() => setLoginForm({ email: "charlie@test.com", password: "user123" })}
-                      className="w-full p-3 bg-neutral-900 hover:bg-neutral-800 rounded-xl text-left transition-colors"
-                    >
-                      <p className="text-[14px] font-medium text-white">Charlie</p>
-                      <p className="text-[12px] text-neutral-500">charlie@test.com / user123</p>
-                    </button>
-                  </div>
-                </div>
+            {/* Username/Password Form */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+              className="w-full space-y-4"
+            >
+              <div className="w-full">
+                <label className="text-[13px] text-neutral-500 mb-2 block">Username</label>
+                <input
+                  type="text"
+                  value={loginForm.username}
+                  onChange={(e) => setLoginForm(prev => ({ ...prev, username: e.target.value }))}
+                  placeholder={authMode === 'register' ? 'Choose a username' : 'Enter your username'}
+                  className="w-full bg-neutral-900 rounded-2xl px-4 py-4 text-white text-[17px] placeholder:text-neutral-600 outline-none focus:ring-2 focus:ring-orange-500"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                />
               </div>
-            </details>
+
+              <div className="w-full">
+                <label className="text-[13px] text-neutral-500 mb-2 block">Password</label>
+                <input
+                  type="password"
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                  placeholder={authMode === 'register' ? 'Create a password (min 6 chars)' : 'Enter your password'}
+                  className="w-full bg-neutral-900 rounded-2xl px-4 py-4 text-white text-[17px] placeholder:text-neutral-600 outline-none focus:ring-2 focus:ring-orange-500"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      authMode === 'login' ? handleUserLogin() : handleUserRegister();
+                    }
+                  }}
+                />
+              </div>
+
+              <button
+                onClick={authMode === 'login' ? handleUserLogin : handleUserRegister}
+                disabled={isLoggingIn}
+                className="w-full py-4 rounded-2xl text-[17px] font-semibold flex items-center justify-center gap-2 bg-orange-500 text-white disabled:opacity-50 hover:bg-orange-600 transition-colors"
+              >
+                {isLoggingIn ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : authMode === 'login' ? (
+                  "Sign In"
+                ) : (
+                  "Create Account"
+                )}
+              </button>
+
+              <p className="text-neutral-500 text-[12px] text-center">
+                You can connect your wallet after signing in to enable on-chain trading
+              </p>
+            </motion.div>
           </motion.div>
         )}
 
@@ -1950,6 +1998,33 @@ export default function Home() {
             </div>
 
             <div className="px-5 py-4">
+              {/* Wallet Connection Prompt - show if user logged in but no wallet */}
+              {userId && !solanaWallet.connected && !solanaWallet.walletAddress && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="w-full bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30 rounded-2xl p-4 mb-4"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                      <Wallet className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[15px] font-medium text-white mb-1">Connect Your Wallet</p>
+                      <p className="text-[13px] text-neutral-400 mb-3">
+                        Link your Solana wallet to enable on-chain escrow and secure trading
+                      </p>
+                      <button
+                        onClick={() => setShowWalletModal(true)}
+                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
+                      >
+                        Connect Wallet
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Active Order */}
               {pendingOrders.length > 0 && (
                 <motion.button
@@ -2628,6 +2703,23 @@ export default function Home() {
                       {activeOrder.step >= 1 && (
                         <p className="text-[13px] text-neutral-500">Matched with {activeOrder.merchant.name}</p>
                       )}
+                      {/* For sell orders in pending status, show waiting for merchant to accept */}
+                      {activeOrder.step === 1 && activeOrder.type === "sell" && activeOrder.dbStatus === 'pending' && (
+                        <div className="mt-3 bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
+                              <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+                            </div>
+                            <div>
+                              <p className="text-[14px] font-medium text-amber-400">Waiting for Merchant</p>
+                              <p className="text-[12px] text-neutral-400">Merchant will sign with their wallet to accept</p>
+                            </div>
+                          </div>
+                          <p className="text-[12px] text-neutral-500">
+                            Once accepted, you'll lock your USDT to escrow. The merchant's verified wallet will receive funds when you confirm payment.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2832,21 +2924,22 @@ export default function Home() {
                         </div>
                       )}
 
-                      {/* Sell order step 2 - escrow NOT yet locked, show lock button */}
-                      {activeOrder.step === 2 && activeOrder.type === "sell" && activeOrder.dbStatus !== 'escrowed' && (
+                      {/* Sell order step 2 - merchant accepted with wallet signature, now user locks escrow */}
+                      {/* Also check escrowTxHash as backup - if it exists, escrow is already locked */}
+                      {activeOrder.step === 2 && activeOrder.type === "sell" && activeOrder.dbStatus === 'accepted' && !activeOrder.escrowTxHash && (
                         <div className="mt-3 space-y-3">
-                          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+                          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
                             <div className="flex items-center gap-3 mb-3">
-                              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
-                                <Lock className="w-5 h-5 text-amber-400" />
+                              <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                                <Lock className="w-5 h-5 text-emerald-400" />
                               </div>
                               <div>
-                                <p className="text-[15px] font-medium text-amber-400">Lock Your USDT to Escrow</p>
-                                <p className="text-[12px] text-neutral-400">Merchant is waiting for you to lock funds</p>
+                                <p className="text-[15px] font-medium text-emerald-400">Merchant Accepted - Lock Escrow</p>
+                                <p className="text-[12px] text-neutral-400">Merchant verified their wallet. Lock funds to proceed.</p>
                               </div>
                             </div>
                             <p className="text-[12px] text-neutral-500 mb-3">
-                              Lock {activeOrder.cryptoAmount} USDT to continue with the trade. Your funds will be held securely until you confirm receiving payment.
+                              The merchant has signed with their wallet ({activeOrder.acceptorWalletAddress?.slice(0, 4)}...{activeOrder.acceptorWalletAddress?.slice(-4)}). Lock your {activeOrder.cryptoAmount} USDT to the escrow. Funds will be released to this wallet when you confirm payment received.
                             </p>
                             <motion.button
                               whileTap={{ scale: 0.98 }}
@@ -2861,9 +2954,12 @@ export default function Home() {
                                 }
                                 setIsLoading(true);
                                 try {
-                                  const merchantWallet = activeOrder.merchant.walletAddress;
+                                  // Use acceptorWalletAddress (captured when merchant signed to accept)
+                                  // This is the wallet the merchant proved ownership of via signature
+                                  const merchantWallet = activeOrder.acceptorWalletAddress || activeOrder.merchant.walletAddress;
                                   if (!merchantWallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet)) {
-                                    alert('Invalid merchant wallet address');
+                                    alert('Merchant wallet not available. Please wait for merchant to accept the order with their wallet.');
+                                    setIsLoading(false);
                                     return;
                                   }
                                   const escrowResult = await solanaWallet.depositToEscrow({
@@ -2901,7 +2997,7 @@ export default function Home() {
                                 }
                               }}
                               disabled={isLoading || (solanaWallet.connected && !solanaWallet.programReady)}
-                              className="w-full py-3 rounded-xl text-[15px] font-semibold bg-orange-500 text-white flex items-center justify-center gap-2 disabled:opacity-50"
+                              className="w-full py-3 rounded-xl text-[15px] font-semibold bg-emerald-500 text-white flex items-center justify-center gap-2 disabled:opacity-50"
                             >
                               {isLoading ? (
                                 <>
@@ -2934,7 +3030,8 @@ export default function Home() {
                       )}
 
                       {/* Sell order step 2 - escrow IS locked, waiting for payment */}
-                      {activeOrder.step === 2 && activeOrder.type === "sell" && activeOrder.dbStatus === 'escrowed' && (
+                      {/* Show if dbStatus is escrowed OR if escrowTxHash exists (backup check) */}
+                      {activeOrder.step === 2 && activeOrder.type === "sell" && (activeOrder.dbStatus === 'escrowed' || activeOrder.escrowTxHash) && (
                         <div className="mt-2">
                           <p className="text-[13px] text-neutral-500">Your USDT is locked in escrow. Waiting for merchant to send AED payment...</p>
 
@@ -3633,7 +3730,7 @@ export default function Home() {
               <h1 className="text-[28px] font-semibold text-white">Profile</h1>
             </div>
 
-            <div className="flex-1 px-5 pb-6 overflow-y-auto">
+            <div className="flex-1 px-5 pb-24 overflow-y-auto">
               {/* User */}
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-500 to-orange-400 flex items-center justify-center text-white text-xl font-semibold">
@@ -3880,13 +3977,33 @@ export default function Home() {
               <div className="mt-8">
                 <button
                   onClick={() => {
+                    console.log('[User] Signing out...');
+                    // Clear all session data
+                    localStorage.removeItem('blip_user');
                     localStorage.removeItem('blip_wallet');
+                    // Reset all auth refs to prevent auto-login
+                    isAuthenticatingRef.current = false;
+                    lastAuthenticatedWalletRef.current = null;
+                    authAttemptedForWalletRef.current = null;
+                    // Close any modals
+                    setShowUsernameModal(false);
+                    setShowWalletModal(false);
+                    // Clear state
                     setUserId(null);
                     setUserWallet(null);
                     setUserName('Guest');
+                    setUserBalance(0);
                     setOrders([]);
                     setBankAccounts([]);
-                    setScreen('welcome');
+                    setResolvedDisputes([]);
+                    setLoginError('');
+                    setLoginForm({ username: '', password: '' });
+                    // Disconnect wallet first, then change screen
+                    if (solanaWallet.disconnect) {
+                      solanaWallet.disconnect();
+                    }
+                    // Force page reload to fully reset state
+                    window.location.href = '/';
                   }}
                   className="w-full py-4 rounded-2xl bg-red-500/10 text-red-400 text-[15px] font-medium"
                 >

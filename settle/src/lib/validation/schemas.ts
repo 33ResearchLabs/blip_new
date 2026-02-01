@@ -167,6 +167,7 @@ export const updateOrderStatusSchema = z.object({
   actor_type: actorTypeSchema,
   actor_id: uuidSchema,
   reason: z.string().max(500).optional(), // For cancellation
+  acceptor_wallet_address: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'Invalid Solana wallet address').optional(), // Merchant wallet for sell order acceptance
 });
 
 export const orderIdParamSchema = z.object({
@@ -235,12 +236,12 @@ const solanaWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 // Merchant-initiated order schema
 export const merchantCreateOrderSchema = z.object({
-  merchant_id: uuidSchema,
-  customer_wallet: z.string().regex(solanaWalletRegex, 'Invalid Solana wallet address'),
+  merchant_id: uuidSchema, // The merchant creating this order
   type: offerTypeSchema, // From merchant perspective: 'sell' = merchant sells USDC to user
   crypto_amount: positiveAmountSchema,
   payment_method: paymentMethodSchema,
   offer_id: uuidSchema.optional(), // If not provided, use merchant's active offer
+  target_merchant_id: uuidSchema.optional(), // For M2M trading: trade with another merchant
 });
 
 // Helper function to sanitize messages (basic XSS prevention)

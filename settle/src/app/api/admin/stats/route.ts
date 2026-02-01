@@ -12,6 +12,12 @@ interface StatsRow {
   total_merchants: string;
 }
 
+interface HourlyData {
+  hour: string;
+  count: string;
+  volume: string;
+}
+
 interface ChangeRow {
   current: string;
   previous: string;
@@ -77,6 +83,53 @@ export async function GET() {
       WHERE status = 'completed'
     `);
 
+    // Get transactions per minute (last 5 minutes)
+    const txPerMinute = await queryOne<{ tpm: string }>(`
+      SELECT (COUNT(*) / 5.0)::numeric(10,2)::text as tpm
+      FROM orders
+      WHERE created_at > NOW() - INTERVAL '5 minutes'
+    `);
+
+    // Get transactions per hour (last hour)
+    const txPerHour = await queryOne<{ tph: string }>(`
+      SELECT COUNT(*)::text as tph
+      FROM orders
+      WHERE created_at > NOW() - INTERVAL '1 hour'
+    `);
+
+    // Get hourly breakdown for last 24 hours (for charts)
+    const hourlyData = await query<HourlyData>(`
+      SELECT
+        DATE_TRUNC('hour', created_at)::text as hour,
+        COUNT(*)::text as count,
+        COALESCE(SUM(crypto_amount), 0)::numeric(10,2)::text as volume
+      FROM orders
+      WHERE created_at > NOW() - INTERVAL '24 hours'
+      GROUP BY DATE_TRUNC('hour', created_at)
+      ORDER BY hour DESC
+      LIMIT 24
+    `);
+
+    // Get today's revenue
+    const todayRevenue = await queryOne<{ total: string }>(`
+      SELECT COALESCE(SUM(crypto_amount * 0.005), 0)::numeric(10,2)::text as total
+      FROM orders
+      WHERE status = 'completed'
+      AND created_at > DATE_TRUNC('day', NOW())
+    `);
+
+    // Get peak hour stats
+    const peakHour = await queryOne<{ hour: string; count: string }>(`
+      SELECT
+        EXTRACT(HOUR FROM created_at)::text as hour,
+        COUNT(*)::text as count
+      FROM orders
+      WHERE created_at > NOW() - INTERVAL '7 days'
+      GROUP BY EXTRACT(HOUR FROM created_at)
+      ORDER BY COUNT(*) DESC
+      LIMIT 1
+    `);
+
     // Calculate percentage changes
     const calcChange = (current: number, previous: number): number => {
       if (previous === 0) return current > 0 ? 100 : 0;
@@ -103,6 +156,16 @@ export async function GET() {
       revenue: parseFloat(revenue?.total || '0'),
       totalUsers: parseInt(stats?.total_users || '0'),
       totalMerchants: parseInt(stats?.total_merchants || '0'),
+      // New real-time metrics
+      txPerMinute: parseFloat(txPerMinute?.tpm || '0'),
+      txPerHour: parseInt(txPerHour?.tph || '0'),
+      todayRevenue: parseFloat(todayRevenue?.total || '0'),
+      peakHour: peakHour ? { hour: parseInt(peakHour.hour), count: parseInt(peakHour.count) } : null,
+      hourlyData: (hourlyData || []).map(h => ({
+        hour: h.hour,
+        count: parseInt(h.count),
+        volume: parseFloat(h.volume),
+      })),
     };
 
     return NextResponse.json({ success: true, data: response });

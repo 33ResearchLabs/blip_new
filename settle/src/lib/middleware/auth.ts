@@ -102,6 +102,7 @@ export async function canUserAccessOrder(
 
 /**
  * Check if merchant can access a specific order
+ * Merchants can access orders where they are either the seller (merchant_id) or buyer (buyer_merchant_id for M2M trades)
  */
 export async function canMerchantAccessOrder(
   merchantId: string,
@@ -110,7 +111,8 @@ export async function canMerchantAccessOrder(
   try {
     const order = await getOrderById(orderId);
     if (!order) return false;
-    return order.merchant_id === merchantId;
+    // Allow access if merchant is the seller OR the buyer (M2M trades)
+    return order.merchant_id === merchantId || order.buyer_merchant_id === merchantId;
   } catch {
     return false;
   }
@@ -132,7 +134,8 @@ export async function canAccessOrder(
     }
 
     if (auth.actorType === 'merchant') {
-      return order.merchant_id === auth.actorId;
+      // Allow access if merchant is the seller OR the buyer (M2M trades)
+      return order.merchant_id === auth.actorId || order.buyer_merchant_id === auth.actorId;
     }
 
     // System can access all

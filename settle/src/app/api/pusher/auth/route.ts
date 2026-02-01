@@ -88,6 +88,14 @@ export async function POST(request: NextRequest) {
         }
         break;
 
+      case 'merchants-global':
+        // Any verified merchant can subscribe to the global merchants channel
+        // This is used to broadcast new orders to all merchants
+        if (actorType === 'merchant') {
+          authorized = await verifyMerchant(actorId);
+        }
+        break;
+
       case 'order':
       case 'presence-order':
         // Both user and merchant can subscribe if they're part of the order

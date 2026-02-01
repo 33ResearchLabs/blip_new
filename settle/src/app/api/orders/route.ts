@@ -14,10 +14,14 @@ import {
   successResponse,
   errorResponse,
 } from '@/lib/middleware/auth';
+import { checkRateLimit, STANDARD_LIMIT, ORDER_LIMIT } from '@/lib/middleware/rateLimit';
 import { logger } from '@/lib/logger';
 import { notifyOrderCreated } from '@/lib/pusher/server';
 
 export async function GET(request: NextRequest) {
+  // Rate limit: 100 requests per minute
+  const rateLimitResponse = checkRateLimit(request, 'orders:get', STANDARD_LIMIT);
+  if (rateLimitResponse) return rateLimitResponse;
   try {
     const searchParams = request.nextUrl.searchParams;
     const userId = searchParams.get('user_id');
@@ -55,6 +59,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limit: 20 orders per minute
+  const rateLimitResponse = checkRateLimit(request, 'orders:create', ORDER_LIMIT);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body = await request.json();
 

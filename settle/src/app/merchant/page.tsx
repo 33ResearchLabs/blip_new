@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   TrendingUp,
@@ -32,6 +32,7 @@ import {
   Clock,
   ExternalLink,
   RotateCcw,
+  BarChart3,
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -153,19 +154,24 @@ interface LeaderboardEntry {
 }
 
 // Helper to map DB status to UI status
-const mapDbStatusToUI = (dbStatus: string): "pending" | "active" | "escrow" | "completed" | "disputed" | "cancelled" => {
+// hasEscrow: true when escrow_tx_hash exists (escrow already locked)
+const mapDbStatusToUI = (dbStatus: string, hasEscrow?: boolean): "pending" | "active" | "escrow" | "completed" | "disputed" | "cancelled" => {
   switch (dbStatus) {
     case "pending":
+      return "pending"; // New Orders
+    case "escrowed":
+      // User locked escrow but merchant hasn't approved yet - stays in New Orders
       return "pending";
     case "accepted":
+      // Merchant approved (clicked "Go") - now in Active section, needs to sign tx or send payment
+      return "active";
     case "escrow_pending":
-      return "active"; // Accepted but escrow not yet locked
-    case "escrowed":
+      return "active"; // Transaction pending, escrow not yet confirmed
     case "payment_pending":
     case "payment_sent":
     case "payment_confirmed":
     case "releasing":
-      return "escrow";
+      return "escrow"; // Ongoing - tx signed, trade in progress
     case "completed":
       return "completed";
     case "disputed":
@@ -186,6 +192,55 @@ const getUserEmoji = (name: string): string => {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
   return emojis[Math.abs(hash) % emojis.length];
+};
+
+// Mini Sparkline Component - Shows activity over time
+const MiniSparkline = ({ data, color = "emerald", height = 24 }: { data: number[]; color?: string; height?: number }) => {
+  const max = Math.max(...data, 1);
+  const colorClass = color === "emerald" ? "bg-emerald-400" : color === "purple" ? "bg-purple-400" : "bg-cyan-400";
+
+  return (
+    <div className="flex items-end gap-0.5" style={{ height }}>
+      {data.map((value, i) => {
+        const h = (value / max) * 100;
+        return (
+          <motion.div
+            key={i}
+            className={`flex-1 rounded-t-sm ${colorClass} opacity-60`}
+            initial={{ height: 0 }}
+            animate={{ height: `${Math.max(h, 8)}%` }}
+            transition={{ delay: i * 0.03, duration: 0.4, ease: "easeOut" }}
+          />
+        );
+      })}
+    </div>
+  );
+};
+
+// Animated Number Counter
+const AnimatedCounter = ({ value, prefix = "", suffix = "", decimals = 0 }: { value: number; prefix?: string; suffix?: string; decimals?: number }) => {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    const duration = 1000;
+    const steps = 30;
+    const increment = value / steps;
+    let current = 0;
+
+    const timer = setInterval(() => {
+      current += increment;
+      if (current >= value) {
+        setDisplayValue(value);
+        clearInterval(timer);
+      } else {
+        setDisplayValue(current);
+      }
+    }, duration / steps);
+
+    return () => clearInterval(timer);
+  }, [value]);
+
+  return <span>{prefix}{displayValue.toFixed(decimals)}{suffix}</span>;
 };
 
 // Helper to convert DB order to UI order
@@ -216,7 +271,7 @@ const mapDbOrderToUI = (dbOrder: DbOrder): Order => {
     rate: rate,
     total: fiatAmount,
     timestamp: new Date(dbOrder.created_at),
-    status: mapDbStatusToUI(dbOrder.status),
+    status: mapDbStatusToUI(dbOrder.status, !!dbOrder.escrow_tx_hash),
     expiresIn,
     isNew: (dbOrder.user?.total_trades || 0) < 3,
     tradeVolume: (dbOrder.user?.total_trades || 0) * 500, // Estimated volume
@@ -247,7 +302,7 @@ const TRADER_CUT_CONFIG = {
   average: 0.00583, // Average across all preferences for display
 } as const;
 
-// Leaderboard mock data
+// Leaderboard data
 const leaderboardData: LeaderboardEntry[] = [];
 
 const notifications: { id: number; type: string; message: string; time: string; read: boolean }[] = [];
@@ -265,14 +320,6 @@ interface BigOrderRequest {
 }
 
 const initialBigOrders: BigOrderRequest[] = [];
-
-// Demo merchant wallet address (from seed data)
-const DEMO_MERCHANT_WALLET = "0xMerchant1Address123456789"; // QuickSwap merchant
-
-// Mock data for demo mode (when database is not available)
-const DEMO_MODE = false; // Set to true when database is not connected
-const MOCK_MERCHANT_ID = "mock-merchant-123";
-const mockOrders: Order[] = [];
 
 // Merchant info type
 interface MerchantInfo {
@@ -292,6 +339,7 @@ export default function MerchantDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [merchantId, setMerchantId] = useState<string | null>(null);
   const [merchantInfo, setMerchantInfo] = useState<MerchantInfo | null>(null);
+  const [activeOffers, setActiveOffers] = useState<{ id: string; type: string; available_amount: number; is_active: boolean }[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   // Solana wallet state
@@ -339,7 +387,6 @@ export default function MerchantDashboard() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showOpenTradeModal, setShowOpenTradeModal] = useState(false);
   const [openTradeForm, setOpenTradeForm] = useState({
-    customerWallet: "",
     tradeType: "sell" as "buy" | "sell", // From merchant perspective: sell = merchant sells USDC to user
     cryptoAmount: "",
     paymentMethod: "bank" as "bank" | "cash",
@@ -544,108 +591,6 @@ export default function MerchantDashboard() {
     }
   };
 
-  // Manual wallet authentication (triggered by button click)
-  const handleWalletAuth = async () => {
-    // Check for wallet address from both adapter and Phantom direct API (for Brave)
-    const phantom = typeof window !== 'undefined' ? (window as any).phantom?.solana : null;
-    const effectiveAddress = solanaWallet.walletAddress || phantom?.publicKey?.toString();
-
-    console.log('[Merchant] handleWalletAuth called. Wallet state:', {
-      connected: solanaWallet.connected,
-      walletAddress: solanaWallet.walletAddress,
-      phantomPublicKey: phantom?.publicKey?.toString(),
-      effectiveAddress,
-      hasSignMessage: !!solanaWallet.signMessage,
-      hasPhantomSignMessage: !!phantom?.signMessage,
-    });
-
-    // NOTE: On Brave with Phantom, connected may be false but Phantom direct API works
-    if (!effectiveAddress) {
-      // Open wallet modal if not connected
-      console.log('[Merchant] Wallet not connected, opening modal');
-      setShowWalletModal(true);
-      return;
-    }
-
-    console.log('[Merchant] Authenticating with wallet:', effectiveAddress);
-    setIsAuthenticating(true);
-    setLoginError("");
-
-    try {
-      // Generate message to sign
-      const timestamp = Date.now();
-      const nonce = Math.random().toString(36).substring(7);
-      const message = `Sign this message to authenticate with Blip Money\n\nWallet: ${effectiveAddress}\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
-
-      // Request signature
-      const encodedMessage = new TextEncoder().encode(message);
-
-      // Use adapter signMessage if available, fallback to Phantom direct API
-      let signatureUint8: Uint8Array;
-      if (solanaWallet.signMessage) {
-        console.log('[Merchant] Using adapter signMessage...');
-        signatureUint8 = await solanaWallet.signMessage(encodedMessage);
-      } else if (phantom?.signMessage) {
-        console.log('[Merchant] Using Phantom direct signMessage...');
-        const result = await phantom.signMessage(encodedMessage, 'utf8');
-        signatureUint8 = result.signature;
-      } else {
-        throw new Error('Wallet does not support message signing. Please reconnect your wallet.');
-      }
-
-      console.log('[Merchant] Signature received');
-
-      // Convert to base58
-      const bs58 = await import('bs58');
-      const signature = bs58.default.encode(signatureUint8);
-
-      // Authenticate with API
-      const res = await fetch('/api/auth/merchant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'wallet_login',
-          wallet_address: effectiveAddress,
-          signature,
-          message,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (data.success) {
-        if (data.data.isNewMerchant) {
-          // New merchant - need to create account first
-          setIsNewMerchant(true);
-          setShowUsernameModal(true);
-          setIsAuthenticating(false);
-        } else if (data.data.merchant) {
-          // Merchant authenticated successfully
-          const merchant = data.data.merchant;
-          setMerchantId(merchant.id);
-          setMerchantInfo(merchant);
-          setIsLoggedIn(true);
-          localStorage.setItem('blip_merchant', JSON.stringify(merchant));
-          setIsAuthenticating(false);
-          console.log('[Merchant] Wallet auth successful:', merchant);
-
-          // Show username modal in dashboard if needed
-          if (data.data.needsUsername || !merchant.username || merchant.username.startsWith('merchant_')) {
-            console.log('[Merchant] Will prompt for username in dashboard');
-            setShowUsernameModal(true);
-          }
-        }
-      } else {
-        setLoginError(data.error || 'Wallet authentication failed');
-        setIsAuthenticating(false);
-      }
-    } catch (error) {
-      console.error('Merchant wallet auth error:', error);
-      setLoginError(error instanceof Error ? error.message : 'Failed to authenticate with wallet');
-      setIsAuthenticating(false);
-    }
-  };
-
   // Handle merchant login
   const handleLogin = async () => {
     setIsLoggingIn(true);
@@ -670,6 +615,12 @@ export default function MerchantDashboard() {
         setMerchantInfo(data.data.merchant);
         setIsLoggedIn(true);
         localStorage.setItem('blip_merchant', JSON.stringify(data.data.merchant));
+        // Prompt to connect wallet if merchant doesn't have one linked
+        // Wallet is required for receiving escrow releases on sell orders
+        if (!data.data.merchant.wallet_address) {
+          console.log('[Merchant] No wallet linked, showing connect prompt');
+          setTimeout(() => setShowWalletPrompt(true), 500);
+        }
       } else {
         console.log('[Merchant] Login failed:', data);
         setLoginError(data.error || 'Login failed');
@@ -717,6 +668,10 @@ export default function MerchantDashboard() {
         setMerchantInfo(data.data.merchant);
         setIsLoggedIn(true);
         localStorage.setItem('blip_merchant', JSON.stringify(data.data.merchant));
+        // Prompt to connect wallet after registration
+        // Wallet is required for receiving escrow releases on sell orders
+        console.log('[Merchant] Showing wallet connect prompt after registration');
+        setTimeout(() => setShowWalletPrompt(true), 500);
       } else {
         console.log('[Merchant] Registration failed:', data);
         setLoginError(data.error || 'Registration failed');
@@ -731,217 +686,81 @@ export default function MerchantDashboard() {
 
   // Handle logout and disconnect wallet
   const handleLogout = () => {
+    console.log('[Merchant] Signing out...');
     localStorage.removeItem('blip_merchant');
-    setMerchantId(null);
-    setMerchantInfo(null);
-    setIsLoggedIn(false);
-    setOrders([]);
-    // Also disconnect wallet
+    localStorage.removeItem('merchant_info');
+    // Disconnect wallet first
     if (solanaWallet.disconnect) {
       solanaWallet.disconnect();
     }
+    // Force page reload to fully reset state
+    window.location.href = '/merchant';
   };
 
-  // Check for saved session and attempt auto-login on mount
-  // This combines localStorage check with wallet auto-login to handle timing properly
+  // Initialize - restore session if available
   useEffect(() => {
-    let isMounted = true;
-    let loginAttempted = false;
-
-    const attemptAutoLogin = async (walletAddr: string): Promise<boolean> => {
-      if (loginAttempted) return false;
-      loginAttempted = true;
-
-      console.log('[Merchant] Attempting auto-login with wallet:', walletAddr);
+    const restoreSession = async () => {
       try {
-        const response = await fetch(`/api/auth/merchant?action=wallet_login&wallet_address=${walletAddr}`);
+        const savedMerchant = localStorage.getItem('blip_merchant');
 
-        if (!response.ok) {
-          console.log('[Merchant] Auto-login: merchant not found for wallet', response.status);
-          return false;
-        }
+        if (savedMerchant) {
+          const merchant = JSON.parse(savedMerchant);
+          console.log('[Merchant] Restoring session:', merchant.display_name || merchant.username);
 
-        const data = await response.json();
-
-        if (data.success && data.data && isMounted) {
-          const merchant = data.data;
-
-          // Log in the merchant
-          setMerchantId(merchant.id);
-          setMerchantInfo(merchant);
-          setIsLoggedIn(true);
-          localStorage.setItem('blip_merchant', JSON.stringify(merchant));
-          console.log('[Merchant] Auto-login successful:', merchant);
-
-          // Show username modal in dashboard if needed
-          if (!merchant.username || merchant.username.startsWith('merchant_')) {
-            console.log('[Merchant] Auto-login: will prompt for username in dashboard');
-            setShowUsernameModal(true);
+          // Validate merchant still exists in database
+          const checkRes = await fetch(`/api/auth/merchant?action=check_session&merchant_id=${merchant.id}`);
+          if (checkRes.ok) {
+            const checkData = await checkRes.json();
+            if (checkData.success && checkData.data?.valid) {
+              // Session is valid, restore state with fresh data from API
+              const freshMerchant = checkData.data.merchant || merchant;
+              setMerchantId(freshMerchant.id);
+              setMerchantInfo(freshMerchant);
+              setIsLoggedIn(true);
+              setIsLoading(false);
+              // Update localStorage with fresh data
+              localStorage.setItem('blip_merchant', JSON.stringify(freshMerchant));
+              // Prompt to connect wallet if not linked
+              if (!freshMerchant.wallet_address && !solanaWallet.connected) {
+                console.log('[Merchant] Session restored but no wallet linked, showing prompt');
+                setTimeout(() => setShowWalletPrompt(true), 1000);
+              }
+              return;
+            }
           }
-
-          return true;
-        }
-        return false;
-      } catch (err) {
-        console.error('[Merchant] Auto-login error:', err);
-        return false;
-      }
-    };
-
-    const initialize = async () => {
-      console.log('[Merchant] Initializing...');
-
-      // Step 1: Check localStorage for saved session
-      const saved = localStorage.getItem('blip_merchant');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          console.log('[Merchant] Found saved session:', parsed);
-
-          // Validate that merchant ID is a proper UUID
-          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-          if (uuidRegex.test(parsed.id) && isMounted) {
-            setMerchantId(parsed.id);
-            setMerchantInfo(parsed);
-            setIsLoggedIn(true);
-            setIsLoading(false);
-            return; // Already logged in from localStorage
-          } else {
-            console.log('[Merchant] Invalid merchant ID format, clearing localStorage:', parsed.id);
-            localStorage.removeItem('blip_merchant');
-          }
-        } catch (error) {
-          console.error('[Merchant] Failed to parse saved session:', error);
+          // Session invalid, clear it
+          console.log('[Merchant] Session invalid, clearing...');
           localStorage.removeItem('blip_merchant');
+          localStorage.removeItem('merchant_info');
         }
-      } else {
-        console.log('[Merchant] No saved session found');
+      } catch (err) {
+        console.error('[Merchant] Failed to restore session:', err);
+        localStorage.removeItem('blip_merchant');
+        localStorage.removeItem('merchant_info');
       }
 
-      // Step 2: Check if wallet is already connected (Phantom direct or adapter)
-      const getWalletAddress = () => {
-        const phantom = (window as any).phantom?.solana;
-        return solanaWallet.walletAddress || phantom?.publicKey?.toString();
-      };
-
-      // Check immediately
-      let walletAddr = getWalletAddress();
-      if (walletAddr) {
-        console.log('[Merchant] Wallet already available on mount:', walletAddr);
-        const success = await attemptAutoLogin(walletAddr);
-        if (success && isMounted) {
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      // Step 3: Wait a bit for Phantom to initialize (it can be slow on mobile/Brave)
-      // Check at 100ms, 300ms, 500ms, 800ms intervals
-      const delays = [100, 200, 200, 300];
-      for (const delay of delays) {
-        await new Promise(resolve => setTimeout(resolve, delay));
-        if (!isMounted) return;
-
-        walletAddr = getWalletAddress();
-        if (walletAddr) {
-          console.log('[Merchant] Wallet became available after delay:', walletAddr);
-          const success = await attemptAutoLogin(walletAddr);
-          if (success && isMounted) {
-            setIsLoading(false);
-            return;
-          }
-          break; // Wallet found but merchant not in DB, stop waiting
-        }
-      }
-
-      // Step 4: No saved session and no wallet/merchant found, show login screen
-      if (isMounted) {
-        console.log('[Merchant] No session or wallet found, showing login screen');
-        setIsLoading(false);
-      }
+      // No valid session, show login screen
+      setIsLoading(false);
     };
 
-    initialize();
-
-    return () => {
-      isMounted = false;
-    };
+    restoreSession();
   }, []); // Only run once on mount
 
-  // Auto-login when wallet connects AFTER initial load
-  // This handles the case where user connects wallet after page has loaded
-  useEffect(() => {
-    // Skip if already logged in or still in initial loading
-    if (isLoggedIn || isLoading) return;
-
-    // Also check direct Phantom access for Brave compatibility
-    const phantom = (window as any).phantom?.solana;
-    const walletAddr = solanaWallet.walletAddress || phantom?.publicKey?.toString();
-
-    if (!walletAddr) return;
-
-    console.log('[Merchant] Wallet connected after load, attempting auto-login:', walletAddr);
-
-    const autoLogin = async () => {
-      try {
-        const response = await fetch(`/api/auth/merchant?action=wallet_login&wallet_address=${walletAddr}`);
-
-        if (!response.ok) {
-          console.error('[Merchant] Failed to fetch merchant:', response.status);
-          return;
-        }
-
-        const data = await response.json();
-        if (data.success && data.data) {
-          const merchant = data.data;
-
-          // Log in the merchant
-          setMerchantId(merchant.id);
-          setMerchantInfo(merchant);
-          setIsLoggedIn(true);
-          localStorage.setItem('blip_merchant', JSON.stringify(merchant));
-          console.log('[Merchant] Auto-login successful:', merchant);
-
-          // Show username modal in dashboard if needed
-          if (!merchant.username || merchant.username.startsWith('merchant_')) {
-            console.log('[Merchant] Will prompt for username in dashboard');
-            setShowUsernameModal(true);
-          }
-        }
-      } catch (error) {
-        console.error('[Merchant] Error during auto-login:', error);
-      }
-    };
-
-    autoLogin();
-  }, [isLoggedIn, isLoading, solanaWallet.walletAddress]);
-
-  // Prompt wallet connection after login if wallet not connected and no stored wallet
-  // NOTE: On Brave with Phantom, connected may be false but walletAddress is available
-  useEffect(() => {
-    if (isLoggedIn && merchantId && !solanaWallet.walletAddress && !merchantInfo?.wallet_address) {
-      // Show prompt to connect wallet after a short delay
-      const timer = setTimeout(() => {
-        setShowWalletPrompt(true);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isLoggedIn, merchantId, solanaWallet.connected, merchantInfo?.wallet_address]);
-
-  // Update merchant wallet in database when wallet connects
-  // NOTE: On Brave with Phantom, connected may be false but walletAddress is available
+  // Update merchant wallet address when connected
+  // This ensures email/password merchants can link their wallet for escrow releases
   useEffect(() => {
     const updateMerchantWallet = async () => {
+      // Only update if we have both merchantId and wallet address
       if (!merchantId || !solanaWallet.walletAddress) return;
 
-      // Check if wallet is different from stored one
+      // Check if merchant already has this wallet linked (from merchantInfo)
       if (merchantInfo?.wallet_address === solanaWallet.walletAddress) {
-        console.log('[Merchant] Wallet already stored, skipping update');
+        console.log('[Merchant] Wallet already linked to account');
         return;
       }
 
-      setWalletUpdatePending(true);
       try {
+        console.log('[Merchant] Linking wallet to account:', solanaWallet.walletAddress);
         const res = await fetch('/api/auth/merchant', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -951,43 +770,35 @@ export default function MerchantDashboard() {
           }),
         });
 
-        if (!res.ok) {
-          console.error('[Merchant] Failed to update wallet, status:', res.status);
-          return;
-        }
-
-        const data = await res.json();
-        if (data.success) {
-          console.log('[Merchant] Wallet updated in database:', solanaWallet.walletAddress);
-          // Update local storage and state with new wallet
-          const updatedInfo = { ...merchantInfo, wallet_address: solanaWallet.walletAddress };
-          setMerchantInfo(updatedInfo as MerchantInfo);
-          localStorage.setItem('merchant_info', JSON.stringify(updatedInfo));
-          setShowWalletPrompt(false);
-          addNotification('system', `Wallet connected: ${solanaWallet.walletAddress.slice(0, 4)}...${solanaWallet.walletAddress.slice(-4)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            console.log('[Merchant] Wallet linked successfully');
+            // Update local state to reflect the linked wallet
+            setMerchantInfo(prev => prev ? { ...prev, wallet_address: solanaWallet.walletAddress! } : prev);
+            // Update localStorage too
+            const stored = localStorage.getItem('blip_merchant');
+            if (stored) {
+              const merchantData = JSON.parse(stored);
+              merchantData.wallet_address = solanaWallet.walletAddress;
+              localStorage.setItem('blip_merchant', JSON.stringify(merchantData));
+            }
+          }
         } else {
-          console.error('[Merchant] Failed to update wallet:', data.error);
+          console.error('[Merchant] Failed to link wallet:', await res.text());
         }
       } catch (err) {
-        console.error('[Merchant] Error updating wallet:', err);
-      } finally {
-        setWalletUpdatePending(false);
+        console.error('[Merchant] Error linking wallet:', err);
       }
     };
 
     updateMerchantWallet();
-  }, [merchantId, solanaWallet.connected, solanaWallet.walletAddress, merchantInfo]);
+  }, [merchantId, solanaWallet.walletAddress, merchantInfo?.wallet_address]);
 
   // Fetch orders from API
   const fetchOrders = useCallback(async () => {
     if (!merchantId) {
       console.log('[Merchant] fetchOrders: No merchantId, skipping');
-      return;
-    }
-
-    // Skip API call in demo mode
-    if (DEMO_MODE || merchantId === MOCK_MERCHANT_ID) {
-      setIsLoading(false);
       return;
     }
 
@@ -1001,9 +812,11 @@ export default function MerchantDashboard() {
     console.log('[Merchant] fetchOrders: Fetching for merchantId:', merchantId);
 
     try {
-      const res = await fetch(`/api/merchant/orders?merchant_id=${merchantId}`);
+      // Fetch ALL pending orders (broadcast model) + merchant's own orders
+      const res = await fetch(`/api/merchant/orders?merchant_id=${merchantId}&include_all_pending=true`);
       if (!res.ok) {
-        console.error('[Merchant] Failed to fetch orders:', res.status, res.statusText);
+        const errorBody = await res.json().catch(() => null);
+        console.error('[Merchant] Failed to fetch orders:', res.status, res.statusText, errorBody);
         return;
       }
       const data = await res.json();
@@ -1048,7 +861,7 @@ export default function MerchantDashboard() {
 
   // Fetch big orders from API
   const fetchBigOrders = useCallback(async () => {
-    if (!merchantId || DEMO_MODE) return;
+    if (!merchantId) return;
     try {
       const res = await fetch(`/api/merchant/big-orders?merchant_id=${merchantId}&limit=10`);
       if (!res.ok) return;
@@ -1082,6 +895,22 @@ export default function MerchantDashboard() {
     }
   }, [merchantId]);
 
+  // Fetch merchant's active offers
+  const fetchActiveOffers = useCallback(async () => {
+    if (!merchantId) return;
+    try {
+      const res = await fetch(`/api/merchant/offers?merchant_id=${merchantId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success && data.data) {
+        console.log('[Merchant] Active offers:', data.data);
+        setActiveOffers(data.data.filter((o: { is_active: boolean }) => o.is_active));
+      }
+    } catch (err) {
+      console.error('Failed to fetch active offers:', err);
+    }
+  }, [merchantId]);
+
   // Fetch orders when merchant ID is available
   // Real-time updates come via Pusher WebSocket (useRealtimeOrders hook)
   useEffect(() => {
@@ -1089,19 +918,24 @@ export default function MerchantDashboard() {
     fetchOrders();
     fetchResolvedDisputes();
     fetchBigOrders();
-  }, [merchantId, fetchOrders, fetchResolvedDisputes, fetchBigOrders]);
+    fetchActiveOffers();
+  }, [merchantId, fetchOrders, fetchResolvedDisputes, fetchBigOrders, fetchActiveOffers]);
 
-  // Polling fallback when Pusher is not available (every 5 seconds)
+  // WebSocket-first approach with minimal polling fallback
   const { isConnected: isPusherConnected } = usePusher();
   useEffect(() => {
-    if (!merchantId || isPusherConnected) return;
+    if (!merchantId) return;
 
-    // Poll for new orders every 5 seconds when Pusher isn't connected
-    const interval = setInterval(() => {
-      fetchOrders();
-    }, 5000);
+    // Only poll as fallback if WebSocket is disconnected (30s interval)
+    // Primary updates come via WebSocket (Pusher)
+    if (!isPusherConnected) {
+      console.log('[Merchant] WebSocket not connected, using polling fallback');
+      const interval = setInterval(() => {
+        fetchOrders();
+      }, 30000); // 30 seconds fallback
 
-    return () => clearInterval(interval);
+      return () => clearInterval(interval);
+    }
   }, [merchantId, isPusherConnected, fetchOrders]);
 
   // Auto-expire orders every 30 seconds
@@ -1143,6 +977,10 @@ export default function MerchantDashboard() {
       } else if (newStatus === 'completed') {
         addNotification('complete', 'Trade completed!', orderId);
         playSound('trade_complete');
+        // Refresh on-chain wallet balance to sync with platform balance
+        if (solanaWallet.connected) {
+          solanaWallet.refreshBalances();
+        }
       } else if (newStatus === 'disputed') {
         addNotification('dispute', 'Dispute opened on order', orderId);
         playSound('error');
@@ -1226,65 +1064,130 @@ export default function MerchantDashboard() {
   const acceptOrder = async (order: Order) => {
     if (!merchantId) return;
 
-    // Demo mode - just update local state
-    if (DEMO_MODE || merchantId === MOCK_MERCHANT_ID) {
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "escrow" as const, expiresIn: 900 } : o));
-      openChat(order.user, order.emoji, order.id);
-      setActiveChatId(`chat_${order.user}`);
-      playSound('click');
-      return;
-    }
-
-    // For BUY orders: merchant needs to lock their USDC in escrow
-    // For SELL orders: user already locked escrow, merchant just accepts
     const isBuyOrder = order.orderType === 'buy';
+    const isSellOrder = order.orderType === 'sell';
 
-    if (isBuyOrder) {
-      // Check if merchant has enough USDC balance
-      if (!solanaWallet.connected) {
-        addNotification('system', 'Please connect your wallet to accept buy orders');
-        setShowWalletModal(true);
-        return;
-      }
+    // Debug logging
+    console.log('[Go] Accepting order:', {
+      id: order.id,
+      orderType: order.orderType,
+      dbOrderStatus: order.dbOrder?.status,
+    });
 
-      if (solanaWallet.usdtBalance === null || solanaWallet.usdtBalance < order.amount) {
-        addNotification('system', `Insufficient USDC balance. You need ${order.amount} USDC to accept this order.`);
-        playSound('error');
-        return;
-      }
-    }
+    // "Go" button does NOT require wallet connection or signature
+    // That happens in the Active section when signing tx for next step
 
     try {
+      // Build the request body - just accept the order, no signature needed
+      const requestBody: Record<string, unknown> = {
+        status: "accepted",
+        actor_type: "merchant",
+        actor_id: merchantId,
+      };
+
+      // Include wallet address if connected (for tracking, not required)
+      if (solanaWallet.walletAddress) {
+        requestBody.acceptor_wallet_address = solanaWallet.walletAddress;
+      }
+
       // Step 1: Accept the order (moves to 'accepted' status - shown in Active section)
       const acceptRes = await fetch(`/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "accepted",
-          actor_type: "merchant",
-          actor_id: merchantId,
-        }),
+        body: JSON.stringify(requestBody),
       });
       if (!acceptRes.ok) {
-        console.error("Failed to accept order:", acceptRes.status);
+        const errorData = await acceptRes.json().catch(() => ({}));
+        console.error("Failed to accept order:", acceptRes.status, errorData);
+        addNotification('system', `Failed to accept order: ${errorData.error || `HTTP ${acceptRes.status}`}`, order.id);
+        playSound('error');
         return;
       }
       const acceptData = await acceptRes.json();
 
       if (!acceptData.success) {
         console.error("Failed to accept order:", acceptData.error);
+        addNotification('system', `Failed to accept order: ${acceptData.error}`, order.id);
+        playSound('error');
         return;
       }
 
-      // Update local state to show in Active section
+      // Update local state to show in Active section (needs signing for next step)
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "active" as const, expiresIn: 1800 } : o));
-      openChat(order.user, order.emoji, order.id);
-      setActiveChatId(`chat_${order.user}`);
+      handleOpenChat(order.user, order.emoji, order.id);
       fetchOrders();
       playSound('click');
-      addNotification('system', `Order accepted! ${isBuyOrder ? 'Now lock your USDC in escrow to proceed.' : 'Waiting for user to lock escrow.'}`, order.id);
+      // Next step: sign tx in Active section
+      const nextStepMsg = isBuyOrder
+        ? 'Now sign to lock your USDC in escrow.'
+        : 'Now sign to confirm and proceed.';
+      addNotification('system', `Order accepted! ${nextStepMsg}`, order.id);
     } catch (error) {
       console.error("Error accepting order:", error);
+      playSound('error');
+    }
+  };
+
+  // Sign and proceed for sell orders (Active -> Ongoing)
+  // Merchant signs to confirm they will send fiat payment
+  const signAndProceed = async (order: Order) => {
+    if (!merchantId) return;
+
+    // Require wallet connection for signing
+    if (!solanaWallet.connected) {
+      addNotification('system', 'Please connect your wallet to sign.');
+      setShowWalletModal(true);
+      return;
+    }
+
+    if (!solanaWallet.walletAddress || !solanaWallet.signMessage) {
+      addNotification('system', 'Wallet not ready. Please reconnect.');
+      playSound('error');
+      return;
+    }
+
+    try {
+      // Sign message to prove wallet ownership
+      const message = `Confirm order ${order.id} - I will send fiat payment. Wallet: ${solanaWallet.walletAddress}`;
+      const messageBytes = new TextEncoder().encode(message);
+
+      addNotification('system', 'Please sign in your wallet to proceed...', order.id);
+      const signatureBytes = await solanaWallet.signMessage(messageBytes);
+      const signature = Buffer.from(signatureBytes).toString('base64');
+      console.log('[Sign] Wallet signature obtained');
+
+      // Update order to payment_sent (moves to Ongoing)
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "payment_sent",
+          actor_type: "merchant",
+          actor_id: merchantId,
+          acceptor_wallet_address: solanaWallet.walletAddress,
+          acceptor_wallet_signature: signature,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        addNotification('system', `Failed to update order: ${errorData.error || 'Unknown error'}`, order.id);
+        playSound('error');
+        return;
+      }
+
+      // Update local state to show in Ongoing section
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "escrow" as const } : o));
+      fetchOrders();
+      playSound('click');
+      addNotification('system', 'Signed! Order moved to Ongoing. Click "I\'ve Paid" when you send the fiat.', order.id);
+    } catch (error: any) {
+      if (error?.message?.includes('User rejected')) {
+        addNotification('system', 'Signature rejected. Please sign to proceed.');
+      } else {
+        console.error("Error signing:", error);
+        addNotification('system', 'Failed to sign. Please try again.');
+      }
       playSound('error');
     }
   };
@@ -1542,6 +1445,10 @@ export default function MerchantDashboard() {
         // Update local state
         setOrders(prev => prev.map(o => o.id === releaseOrder.id ? { ...o, status: "completed" as const } : o));
         fetchOrders();
+        // Refresh on-chain wallet balance to sync with platform balance
+        if (solanaWallet.connected) {
+          solanaWallet.refreshBalances();
+        }
         playSound('trade_complete');
         addNotification('escrow', `Escrow released! ${releaseOrder.amount} USDC sent to buyer.`, releaseOrder.id);
       } else {
@@ -1672,18 +1579,18 @@ export default function MerchantDashboard() {
     setIsCancellingEscrow(false);
   };
 
-  // Merchant marks payment as sent to user's bank
+  // Merchant marks payment as sent -> moves to Completed
   const markPaymentSent = async (order: Order) => {
     if (!merchantId) return;
     setMarkingDone(true);
 
     try {
-      // Update order status to payment_sent
+      // Update order status to completed
       const res = await fetch(`/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: "payment_sent",
+          status: "completed",
           actor_type: "merchant",
           actor_id: merchantId,
         }),
@@ -1694,13 +1601,14 @@ export default function MerchantDashboard() {
         if (data.success) {
           // Close popup and refresh orders
           setSelectedOrderPopup(null);
+          setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "completed" as const } : o));
           fetchOrders();
-          playSound('click');
-          addNotification('payment', `Payment sent to ${order.user} - waiting for confirmation`, order.id);
+          playSound('trade_complete');
+          addNotification('complete', `Trade completed with ${order.user}!`, order.id);
         }
       }
     } catch (error) {
-      console.error("Error marking payment sent:", error);
+      console.error("Error completing order:", error);
       playSound('error');
     } finally {
       setMarkingDone(false);
@@ -1709,13 +1617,6 @@ export default function MerchantDashboard() {
 
   const completeOrder = async (orderId: string) => {
     if (!merchantId) return;
-
-    // Demo mode - just update local state
-    if (DEMO_MODE || merchantId === MOCK_MERCHANT_ID) {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: "completed" as const } : o));
-      playSound('trade_complete');
-      return;
-    }
 
     try {
       // Update order status to completed via API
@@ -1738,6 +1639,10 @@ export default function MerchantDashboard() {
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: "completed" as const } : o));
         // Refresh orders from server
         fetchOrders();
+        // Refresh on-chain wallet balance to sync with platform balance
+        if (solanaWallet.connected) {
+          solanaWallet.refreshBalances();
+        }
         playSound('trade_complete');
       }
     } catch (error) {
@@ -1753,13 +1658,6 @@ export default function MerchantDashboard() {
     const order = orders.find(o => o.id === orderId);
     if (!order) {
       console.error("Order not found:", orderId);
-      return;
-    }
-
-    // Demo mode - just update local state
-    if (DEMO_MODE || merchantId === MOCK_MERCHANT_ID) {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: "completed" as const } : o));
-      playSound('trade_complete');
       return;
     }
 
@@ -2064,23 +1962,37 @@ export default function MerchantDashboard() {
     setBigOrders(prev => prev.filter(o => o.id !== id));
   };
 
-  // Filter pending orders - only show those with time remaining
+  // Filter orders by status - Flow: New Orders → Active → Ongoing → Completed
+  // "pending" = New Orders (including escrowed sell orders waiting for merchant to click "Go")
   const pendingOrders = orders.filter(o => o.status === "pending" && o.expiresIn > 0);
-  const activeOrders = orders.filter(o => o.status === "active"); // Accepted but escrow not yet locked
-  const escrowOrders = orders.filter(o => o.status === "escrow");
+  // "active" = Active (merchant clicked "Go", now needs to sign tx or send payment)
+  const activeOrders = orders.filter(o => o.status === "active");
+  // "escrow" = Ongoing (tx signed, trade in progress)
+  const ongoingOrders = orders.filter(o => o.status === "escrow");
   const completedOrders = orders.filter(o => o.status === "completed");
+
+  // Debug logging for UI state
+  console.log('[Merchant UI] State:', {
+    merchantId,
+    isLoggedIn,
+    isLoading,
+    walletConnected: solanaWallet.connected,
+    ordersCount: orders.length,
+    pendingOrdersCount: pendingOrders.length,
+    bigOrdersCount: bigOrders.length,
+  });
 
 
   // Calculate trader earnings using "best" rate (most common preference)
   // Trader earns 0.5% of each completed trade
   const todayEarnings = completedOrders.reduce((sum, o) => sum + o.amount * TRADER_CUT_CONFIG.best, 0);
   const totalTradedVolume = completedOrders.reduce((sum, o) => sum + o.amount, 0);
-  const pendingEarnings = escrowOrders.reduce((sum, o) => sum + o.amount * TRADER_CUT_CONFIG.best, 0);
+  const pendingEarnings = ongoingOrders.reduce((sum, o) => sum + o.amount * TRADER_CUT_CONFIG.best, 0);
 
   const activeChat = chatWindows.find(c => c.id === activeChatId);
   const totalUnread = chatWindows.reduce((sum, c) => sum + c.unread, 0);
 
-  // Loading screen - show while checking session/wallet
+  // Loading screen - show while checking session
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center p-4">
@@ -2088,7 +2000,7 @@ export default function MerchantDashboard() {
           <div className="w-16 h-16 rounded-2xl bg-white/[0.08] border border-white/[0.08] flex items-center justify-center mx-auto mb-4">
             <Loader2 className="w-8 h-8 text-white animate-spin" />
           </div>
-          <p className="text-sm text-gray-400">Checking wallet connection...</p>
+          <p className="text-sm text-gray-400">Loading...</p>
         </div>
       </div>
     );
@@ -2148,59 +2060,6 @@ export default function MerchantDashboard() {
             {/* Sign In Tab */}
             {authTab === 'signin' && (
               <div className="space-y-4">
-                {/* Wallet Connect */}
-                <motion.button
-                  whileTap={{ scale: 0.98 }}
-                  onClick={async () => {
-                    console.log('[Merchant] Connect button clicked');
-
-                    // Check if wallet address is already available (from adapter or Phantom direct)
-                    const phantom = (window as any).phantom?.solana;
-                    const effectiveWalletAddress = solanaWallet.walletAddress || (phantom?.publicKey?.toString());
-
-                    if (effectiveWalletAddress) {
-                      // Wallet is already connected - authenticate with signature
-                      console.log('[Merchant] Wallet already connected, authenticating:', effectiveWalletAddress);
-                      handleWalletAuth();
-                    } else {
-                      // Need to connect wallet first
-                      console.log('[Merchant] Opening wallet modal to connect');
-                      setShowWalletModal(true);
-                    }
-                  }}
-                  disabled={isAuthenticating}
-                  className="w-full py-3.5 rounded-xl text-sm font-bold bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-70"
-                >
-                  {isAuthenticating ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Authenticating...
-                    </>
-                  ) : (
-                    <>
-                      <Wallet className="w-5 h-5" />
-                      {(solanaWallet.walletAddress || (typeof window !== 'undefined' && (window as any).phantom?.solana?.publicKey))
-                        ? 'Sign In with Wallet'
-                        : 'Connect Wallet'}
-                    </>
-                  )}
-                </motion.button>
-
-                <p className="text-[11px] text-gray-500 text-center">
-                  Connect your Solana wallet to sign in
-                </p>
-
-                <p className="text-[11px] text-gray-500 text-center">
-                  Supports Phantom, Solflare, Coinbase Wallet & more
-                </p>
-
-                {/* Divider for email login */}
-                <div className="flex items-center gap-3 pt-2">
-                  <div className="flex-1 h-px bg-white/[0.04]" />
-                  <span className="text-[11px] text-gray-500">or sign in with email</span>
-                  <div className="flex-1 h-px bg-white/[0.04]" />
-                </div>
-
                 <div>
                   <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Email</label>
                   <input
@@ -2232,6 +2091,10 @@ export default function MerchantDashboard() {
                 >
                   {isLoggingIn ? "Signing in..." : "Sign In"}
                 </motion.button>
+
+                <p className="text-[11px] text-gray-500 text-center">
+                  You can connect your wallet after signing in to enable on-chain transactions
+                </p>
               </div>
             )}
 
@@ -2370,52 +2233,89 @@ export default function MerchantDashboard() {
           </motion.button>
 
           {/* Open Trade - Merchant initiates trade */}
-          {solanaWallet.connected && (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setShowOpenTradeModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all"
-            >
-              <ArrowLeftRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-              <span className="hidden sm:inline">Open Trade</span>
-            </motion.button>
-          )}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              if (!solanaWallet.connected) {
+                setShowWalletModal(true);
+              } else {
+                setShowOpenTradeModal(true);
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all"
+          >
+            <ArrowLeftRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+            <span className="hidden sm:inline">Open Trade</span>
+          </motion.button>
 
           <div className="flex-1" />
 
           {/* Quick Stats */}
           <div className="hidden lg:flex items-center gap-1.5">
-            {/* Total Earned - Inline */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 rounded-md border border-emerald-500/20" title="Total Earned Today">
+            {/* Total Earned - Inline with animation */}
+            <motion.div
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 rounded-md border border-emerald-500/20"
+              title="Total Earned Today"
+              whileHover={{ scale: 1.02, borderColor: "rgba(16, 185, 129, 0.4)" }}
+            >
               <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-xs font-bold text-emerald-400">${Math.round(todayEarnings + pendingEarnings)}</span>
-            </div>
+              <span className="text-xs font-bold text-emerald-400">
+                $<AnimatedCounter value={Math.round(todayEarnings + pendingEarnings)} />
+              </span>
+            </motion.div>
 
             {/* USDT Balance */}
-            <button
+            <motion.button
               onClick={() => setShowWalletModal(true)}
               className="flex items-center gap-1 px-2 py-1 bg-[#26A17B]/10 rounded-md border border-[#26A17B]/20 hover:bg-[#26A17B]/20 transition-colors"
               title={solanaWallet.connected ? "USDT Balance" : "Connect Wallet"}
+              whileHover={{ scale: 1.02 }}
             >
               <span className="text-[11px] font-mono text-[#26A17B]">
                 {solanaWallet.connected && solanaWallet.usdtBalance !== null
                   ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USDT`
                   : "Connect"}
               </span>
-            </button>
+            </motion.button>
 
-            {/* Volume */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-white/[0.03] rounded-md" title="Total Volume Today">
-              <span className="text-[10px] font-mono text-gray-500">VOL</span>
-              <span className="text-[11px] font-mono text-gray-400">${totalTradedVolume.toLocaleString()}</span>
-            </div>
+            {/* Volume with mini sparkline */}
+            <motion.div
+              className="flex items-center gap-2 px-2.5 py-1 bg-white/[0.03] rounded-md border border-white/[0.06]"
+              title="Total Volume Today"
+              whileHover={{ scale: 1.02, borderColor: "rgba(255, 255, 255, 0.12)" }}
+            >
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[9px] text-gray-500 leading-none">VOL</span>
+                <span className="text-[11px] font-mono text-gray-300 leading-none">${totalTradedVolume.toLocaleString()}</span>
+              </div>
+              <div className="w-12 h-4">
+                <MiniSparkline
+                  data={[...orders.slice(-8).map(o => o.amount), totalTradedVolume / 10]}
+                  color="cyan"
+                  height={16}
+                />
+              </div>
+            </motion.div>
 
-            {/* Trades */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-white/[0.03] rounded-md" title="Completed Trades">
-              <Activity className="w-3 h-3 text-gray-500" />
-              <span className="text-[11px] font-mono text-gray-400">{completedOrders.length}</span>
-            </div>
+            {/* Activity with live pulse */}
+            <motion.div
+              className="flex items-center gap-1.5 px-2 py-1 bg-purple-500/10 rounded-md border border-purple-500/20"
+              title="Active Orders"
+              whileHover={{ scale: 1.02 }}
+            >
+              <div className="relative">
+                <BarChart3 className="w-3 h-3 text-purple-400" />
+                {pendingOrders.length > 0 && (
+                  <motion.div
+                    className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-purple-400 rounded-full"
+                    animate={{ scale: [1, 1.3, 1], opacity: [1, 0.7, 1] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  />
+                )}
+              </div>
+              <span className="text-[11px] font-mono text-purple-400">{pendingOrders.length + activeOrders.length + ongoingOrders.length}</span>
+            </motion.div>
           </div>
 
           {/* Online Status */}
@@ -2440,11 +2340,11 @@ export default function MerchantDashboard() {
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={handleLogout}
-            className="flex items-center gap-1.5 px-2 py-1.5 bg-[#151515] rounded-md border border-white/[0.04] hover:bg-red-500/10 hover:border-red-500/20 transition-colors group"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-500/10 rounded-md border border-red-500/20 hover:bg-red-500/20 transition-colors group"
             title="Disconnect wallet & logout"
           >
-            <LogOut className="w-4 h-4 text-gray-400 group-hover:text-red-400" />
-            <span className="hidden sm:inline text-xs text-gray-400 group-hover:text-red-400">Disconnect</span>
+            <LogOut className="w-4 h-4 text-red-400" />
+            <span className="text-xs text-red-400 font-medium">Logout</span>
           </motion.button>
 
           {/* Message History */}
@@ -2609,6 +2509,31 @@ export default function MerchantDashboard() {
       <div className="flex-1 flex overflow-hidden w-full pb-16 md:pb-0">
         {/* Main Content */}
         <main className="flex-1 p-3 md:p-4 overflow-auto relative z-10">
+          {/* No Active Offers Warning */}
+          {activeOffers.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl"
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-400">No Active Corridors</p>
+                  <p className="text-xs text-amber-400/70 mt-1">
+                    You need to open a corridor to receive orders from users. Click &quot;Open Corridor&quot; to create one.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-3 py-1.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-lg hover:bg-amber-500/30 transition-colors"
+                >
+                  Open Corridor
+                </button>
+              </div>
+            </motion.div>
+          )}
+
           {/* Desktop: Grid layout, Mobile: Single view based on mobileView state */}
           <div className="hidden md:grid md:grid-cols-2 xl:grid-cols-3 gap-3">
             {/* Column 1: New Orders + Big Orders (stacked) */}
@@ -2714,7 +2639,7 @@ export default function MerchantDashboard() {
                                     </>
                                   ) : order.status === 'escrow' ? (
                                     <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-full font-medium">
-                                      In Escrow
+                                      Ongoing
                                     </span>
                                   ) : order.status === 'completed' ? (
                                     <span className="text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-full font-medium flex items-center gap-1">
@@ -2847,23 +2772,23 @@ export default function MerchantDashboard() {
               </AnimatePresence>
             </div>
 
-            {/* Column 2: In Escrow + Leaderboard (stacked) */}
+            {/* Column 2: Ongoing + Leaderboard (stacked) */}
             <div className="flex flex-col h-[calc(100vh-80px)] gap-3">
-              {/* In Escrow - top portion */}
+              {/* Ongoing - top portion */}
               <div className="flex flex-col flex-1 min-h-0">
                 <div className="flex items-center gap-2 mb-3">
                   <Lock className="w-4 h-4 text-amber-500" />
-                  <span className="text-sm font-semibold">In Escrow</span>
+                  <span className="text-sm font-semibold">Ongoing</span>
                   <span className="ml-auto text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-medium">
-                    {escrowOrders.length}
+                    {ongoingOrders.length}
                   </span>
                 </div>
 
                 <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden min-h-0">
                   <div className="h-full overflow-y-auto p-2 space-y-2">
                     <AnimatePresence mode="popLayout">
-                      {escrowOrders.length > 0 ? (
-                        escrowOrders.map((order, i) => {
+                      {ongoingOrders.length > 0 ? (
+                        ongoingOrders.map((order, i) => {
                           const timePercent = (order.expiresIn / 900) * 100;
                           const dbStatus = order.dbOrder?.status;
                           const canComplete = dbStatus === "payment_confirmed";
@@ -2872,8 +2797,9 @@ export default function MerchantDashboard() {
                           const canConfirmPayment = dbStatus === "payment_sent" && order.orderType === "buy";
                           // For sell orders after merchant paid, show waiting for user
                           const waitingForUser = dbStatus === "payment_sent" && order.orderType === "sell";
-                          // For sell orders, merchant needs to mark payment sent first
-                          const canMarkPaid = dbStatus === "escrowed" && order.orderType === "sell";
+                          // For sell orders in Ongoing section, merchant needs to click "I've Paid"
+                          // After signing in Active, status is 'payment_sent' which maps to Ongoing
+                          const canMarkPaid = dbStatus === "payment_sent" && order.orderType === "sell";
                           return (
                             <motion.div
                               key={order.id}
@@ -3097,11 +3023,19 @@ export default function MerchantDashboard() {
                                   onClick={() => openEscrowModal(order)}
                                   className="px-2.5 py-1.5 bg-blue-500 hover:bg-blue-400 rounded text-[11px] font-bold text-white"
                                 >
-                                  Lock
+                                  Sign
+                                </motion.button>
+                              ) : order.orderType === 'sell' ? (
+                                <motion.button
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => signAndProceed(order)}
+                                  className="px-2.5 py-1.5 bg-blue-500 hover:bg-blue-400 rounded text-[11px] font-bold text-white"
+                                >
+                                  Sign
                                 </motion.button>
                               ) : order.escrowTxHash ? (
                                 <span className="px-2.5 py-1.5 bg-emerald-500/10 text-emerald-400 rounded text-[11px] font-mono">
-                                  Locked
+                                  Signed
                                 </span>
                               ) : (
                                 <span className="px-2.5 py-1.5 bg-white/[0.04] rounded text-[11px] font-mono text-gray-500">
@@ -3652,7 +3586,7 @@ export default function MerchantDashboard() {
                           className="flex-1 h-9 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-lg text-xs font-medium text-white flex items-center justify-center gap-1.5 transition-colors"
                         >
                           <Check className="w-3.5 h-3.5" />
-                          Accept
+                          Go
                         </motion.button>
                         <button
                           onClick={() => { handleOpenChat(order.user, order.emoji, order.id); setMobileView('chat'); }}
@@ -3785,12 +3719,19 @@ export default function MerchantDashboard() {
                   <Lock className="w-3.5 h-3.5 text-amber-400" />
                   <span className="text-xs font-mono text-gray-400 uppercase tracking-wide">Escrow</span>
                 </div>
-                <span className="text-xs font-mono text-amber-400">{escrowOrders.length}</span>
+                <span className="text-xs font-mono text-amber-400">{ongoingOrders.length}</span>
               </div>
 
-              {escrowOrders.length > 0 ? (
+              {ongoingOrders.length > 0 ? (
                 <div className="divide-y divide-white/[0.04]">
-                  {escrowOrders.map((order) => (
+                  {ongoingOrders.map((order) => {
+                    const mobileDbStatus = order.dbOrder?.status;
+                    const mobileCanComplete = mobileDbStatus === "payment_confirmed";
+                    const mobileCanConfirmPayment = mobileDbStatus === "payment_sent" && order.orderType === "buy";
+                    const mobileWaitingForUser = false; // Simplified flow - no waiting state
+                    const mobileCanMarkPaid = mobileDbStatus === "payment_sent" && order.orderType === "sell";
+
+                    return (
                     <motion.div
                       key={order.id}
                       initial={{ opacity: 0 }}
@@ -3819,6 +3760,10 @@ export default function MerchantDashboard() {
                                 {order.orderType.toUpperCase()}
                               </span>
                             )}
+                            {/* Status badge */}
+                            {mobileCanMarkPaid && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded font-mono">SEND</span>
+                            )}
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-xs font-mono text-gray-400">
@@ -3829,6 +3774,12 @@ export default function MerchantDashboard() {
                               {order.total.toLocaleString()} <span className="text-gray-600">AED</span>
                             </span>
                           </div>
+                          {/* Show user's bank account for sell orders waiting for payment */}
+                          {mobileCanMarkPaid && order.userBankAccount && (
+                            <div className="mt-1 text-[10px] text-orange-400/80 font-mono truncate">
+                              → {order.userBankAccount}
+                            </div>
+                          )}
                         </div>
 
                         {/* Timer */}
@@ -3842,14 +3793,47 @@ export default function MerchantDashboard() {
 
                       {/* Action Row */}
                       <div className="flex items-center gap-2 mt-2.5 pl-11">
-                        <motion.button
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => openReleaseModal(order)}
-                          className="flex-1 h-9 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-xs font-medium text-emerald-400 flex items-center justify-center gap-1.5 transition-colors"
-                        >
-                          <Unlock className="w-3.5 h-3.5" />
-                          Release
-                        </motion.button>
+                        {mobileCanMarkPaid ? (
+                          <motion.button
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => markPaymentSent(order)}
+                            disabled={markingDone}
+                            className="flex-1 h-9 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 rounded-lg text-xs font-medium text-orange-400 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                          >
+                            I&apos;ve Paid
+                          </motion.button>
+                        ) : mobileWaitingForUser ? (
+                          <span className="flex-1 h-9 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs font-mono text-amber-400 flex items-center justify-center">
+                            Awaiting user
+                          </span>
+                        ) : mobileCanConfirmPayment ? (
+                          <motion.button
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => openReleaseModal(order)}
+                            className="flex-1 h-9 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-xs font-medium text-emerald-400 flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <Unlock className="w-3.5 h-3.5" />
+                            Confirm & Release
+                          </motion.button>
+                        ) : mobileCanComplete ? (
+                          <motion.button
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => openReleaseModal(order)}
+                            className="flex-1 h-9 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-xs font-medium text-emerald-400 flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <Unlock className="w-3.5 h-3.5" />
+                            Release
+                          </motion.button>
+                        ) : (
+                          <motion.button
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => openReleaseModal(order)}
+                            className="flex-1 h-9 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-xs font-medium text-emerald-400 flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <Unlock className="w-3.5 h-3.5" />
+                            Release
+                          </motion.button>
+                        )}
                         <button
                           onClick={() => { handleOpenChat(order.user, order.emoji, order.id); setMobileView('chat'); }}
                           className="h-9 w-9 border border-white/10 hover:border-white/20 rounded-lg flex items-center justify-center transition-colors"
@@ -3876,7 +3860,7 @@ export default function MerchantDashboard() {
                         )}
                       </div>
                     </motion.div>
-                  ))}
+                  )})}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-16 text-gray-600">
@@ -4091,6 +4075,35 @@ export default function MerchantDashboard() {
                   </div>
                 </div>
               )}
+
+              {/* Account Section */}
+              <div className="mt-8 pt-6 border-t border-white/[0.06]">
+                <h3 className="text-xs font-mono text-gray-400 uppercase tracking-wide mb-3">Account</h3>
+                <div className="space-y-2">
+                  {/* Merchant Info */}
+                  <div className="p-3 bg-[#151515] rounded-xl border border-white/[0.04]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center text-lg">
+                        {(merchantInfo?.username || merchantInfo?.display_name)?.charAt(0)?.toUpperCase() || '🐋'}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{merchantInfo?.username || merchantInfo?.display_name || 'Merchant'}</p>
+                        <p className="text-xs text-gray-500">{merchantInfo?.rating?.toFixed(2) || '5.00'}★ · {merchantInfo?.total_trades || 0} trades</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Logout Button */}
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleLogout}
+                    className="w-full flex items-center justify-center gap-2 p-3 bg-red-500/10 rounded-xl border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                  >
+                    <LogOut className="w-4 h-4 text-red-400" />
+                    <span className="text-sm font-medium text-red-400">Disconnect & Logout</span>
+                  </motion.button>
+                </div>
+              </div>
             </div>
           )}
         </main>
@@ -4141,9 +4154,9 @@ export default function MerchantDashboard() {
           >
             <div className="relative">
               <Lock className={`w-5 h-5 ${mobileView === 'escrow' ? 'text-amber-400' : 'text-gray-500'}`} />
-              {escrowOrders.length > 0 && (
+              {ongoingOrders.length > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-black text-[10px] font-bold rounded-full flex items-center justify-center">
-                  {escrowOrders.length}
+                  {ongoingOrders.length}
                 </span>
               )}
             </div>
@@ -4448,6 +4461,8 @@ export default function MerchantDashboard() {
                         if (data.success) {
                           console.log("Corridor created:", data.data);
                           setShowCreateModal(false);
+                          // Refresh active offers list
+                          fetchActiveOffers();
                           // Reset form
                           setCorridorForm({
                             fromCurrency: "USDT",
@@ -4526,21 +4541,6 @@ export default function MerchantDashboard() {
 
                 {/* Form */}
                 <div className="p-5 space-y-4">
-                  {/* Customer Wallet Address */}
-                  <div>
-                    <label className="text-[11px] text-gray-400 mb-1.5 block">Customer Wallet Address</label>
-                    <input
-                      type="text"
-                      placeholder="Enter Solana wallet address..."
-                      value={openTradeForm.customerWallet}
-                      onChange={(e) => setOpenTradeForm(prev => ({ ...prev, customerWallet: e.target.value }))}
-                      className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm font-mono outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-emerald-500/30"
-                    />
-                    <p className="text-[10px] text-gray-500 mt-1 ml-1">
-                      The customer&apos;s Solana wallet address
-                    </p>
-                  </div>
-
                   {/* Trade Type */}
                   <div>
                     <label className="text-[11px] text-gray-400 mb-1.5 block">Trade Type</label>
@@ -4678,7 +4678,6 @@ export default function MerchantDashboard() {
                     whileTap={{ scale: 0.98 }}
                     disabled={
                       isCreatingTrade ||
-                      !openTradeForm.customerWallet ||
                       !openTradeForm.cryptoAmount ||
                       parseFloat(openTradeForm.cryptoAmount) <= 0 ||
                       (openTradeForm.tradeType === "sell" && solanaWallet.usdtBalance !== null && parseFloat(openTradeForm.cryptoAmount) > solanaWallet.usdtBalance)
@@ -4694,7 +4693,6 @@ export default function MerchantDashboard() {
                           headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({
                             merchant_id: merchantId,
-                            customer_wallet: openTradeForm.customerWallet.trim(),
                             type: openTradeForm.tradeType,
                             crypto_amount: parseFloat(openTradeForm.cryptoAmount),
                             payment_method: openTradeForm.paymentMethod,
@@ -4704,14 +4702,16 @@ export default function MerchantDashboard() {
                         const data = await res.json();
 
                         if (!res.ok || !data.success) {
+                          console.error('[Merchant] Create trade failed:', data);
                           setCreateTradeError(data.error || "Failed to create trade");
                           return;
                         }
 
+                        console.log('[Merchant] Trade created successfully:', data.data);
+
                         // Success - close modal and refresh orders
                         setShowOpenTradeModal(false);
                         setOpenTradeForm({
-                          customerWallet: "",
                           tradeType: "sell",
                           cryptoAmount: "",
                           paymentMethod: "bank",
@@ -4732,7 +4732,6 @@ export default function MerchantDashboard() {
                     }}
                     className={`flex-[2] py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 ${
                       isCreatingTrade ||
-                      !openTradeForm.customerWallet ||
                       !openTradeForm.cryptoAmount ||
                       parseFloat(openTradeForm.cryptoAmount) <= 0 ||
                       (openTradeForm.tradeType === "sell" && solanaWallet.usdtBalance !== null && parseFloat(openTradeForm.cryptoAmount) > solanaWallet.usdtBalance)
@@ -5442,10 +5441,7 @@ export default function MerchantDashboard() {
         onConnected={(address) => {
           console.log('[Merchant] Wallet connected via modal:', address);
           setShowWalletModal(false);
-          // Trigger authentication after short delay to let wallet state sync
-          setTimeout(() => {
-            handleWalletAuth();
-          }, 100);
+          // Wallet will be linked to merchant account via updateMerchantWallet useEffect
         }}
       />
 
@@ -5600,19 +5596,20 @@ export default function MerchantDashboard() {
 
               {/* Actions */}
               <div className="space-y-2">
-                {/* For pending orders with escrow - show Accept then I've Paid */}
-                {selectedOrderPopup.status === 'pending' && selectedOrderPopup.escrowTxHash && selectedOrderPopup.orderType === 'sell' && (
+                {/* For escrowed sell orders not yet approved - show Go button */}
+                {/* DB status 'escrowed' means user locked escrow but merchant hasn't clicked Go yet */}
+                {selectedOrderPopup.dbOrder?.status === 'escrowed' && selectedOrderPopup.orderType === 'sell' && (
                   <motion.button
                     whileTap={{ scale: 0.98 }}
                     onClick={async () => {
                       await acceptOrder(selectedOrderPopup);
-                      // Update popup to show escrow status
-                      setSelectedOrderPopup(prev => prev ? { ...prev, status: 'escrow' } : null);
+                      // Update popup to show active status (merchant approved, now in Active section)
+                      setSelectedOrderPopup(prev => prev ? { ...prev, status: 'active' } : null);
                     }}
                     className="w-full py-3 rounded-xl bg-emerald-500 text-white font-semibold flex items-center justify-center gap-2"
                   >
                     <Zap className="w-4 h-4" />
-                    Accept Order
+                    Go
                   </motion.button>
                 )}
 
@@ -5627,12 +5624,13 @@ export default function MerchantDashboard() {
                     className="w-full py-3 rounded-xl bg-emerald-500 text-white font-semibold flex items-center justify-center gap-2"
                   >
                     <Zap className="w-4 h-4" />
-                    Accept Order
+                    Go
                   </motion.button>
                 )}
 
-                {/* For escrow orders - show I've Paid button */}
-                {selectedOrderPopup.status === 'escrow' && selectedOrderPopup.orderType === 'sell' && (
+                {/* For sell orders after merchant accepted - show I've Paid button */}
+                {/* DB status 'accepted' means merchant has accepted, now needs to mark payment sent */}
+                {selectedOrderPopup.dbOrder?.status === 'accepted' && selectedOrderPopup.orderType === 'sell' && selectedOrderPopup.escrowTxHash && (
                   <motion.button
                     whileTap={{ scale: 0.98 }}
                     onClick={() => markPaymentSent(selectedOrderPopup)}
