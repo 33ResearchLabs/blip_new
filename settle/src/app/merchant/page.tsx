@@ -3106,6 +3106,7 @@ export default function MerchantDashboard() {
                     {completedOrders.length > 0 ? (
                       completedOrders.map((order, i) => {
                         const profit = order.amount * TRADER_CUT_CONFIG.best; // 0.5% trader cut
+                        const isM2MTrade = order.isM2M || order.buyerMerchantId || order.acceptorWallet;
                         return (
                           <motion.div
                             key={order.id}
@@ -3114,15 +3115,16 @@ export default function MerchantDashboard() {
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ delay: i * 0.03 }}
-                            className="p-2.5 bg-[#141414] rounded-lg border border-emerald-500/10 hover:border-emerald-500/20 transition-all"
+                            className={`p-2.5 bg-[#141414] rounded-lg border transition-all ${isM2MTrade ? 'border-purple-500/20 hover:border-purple-500/30' : 'border-emerald-500/10 hover:border-emerald-500/20'}`}
                           >
                             <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                                <span className="text-[10px] font-bold text-emerald-400">
-                                  {order.user.slice(0, 2).toUpperCase()}
+                              <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${isM2MTrade ? 'bg-purple-500/10 border border-purple-500/20' : 'bg-emerald-500/10 border border-emerald-500/20'}`}>
+                                <span className={`text-[10px] font-bold ${isM2MTrade ? 'text-purple-400' : 'text-emerald-400'}`}>
+                                  {isM2MTrade ? '🤝' : order.user.slice(0, 2).toUpperCase()}
                                 </span>
                               </div>
                               <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
+                              {isM2MTrade && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded">M2M</span>}
                               <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
                               <span className="text-xs font-bold text-emerald-400">+${Math.round(profit)}</span>
                               <Check className="w-3.5 h-3.5 text-emerald-400" />
