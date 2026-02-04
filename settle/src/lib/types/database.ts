@@ -133,6 +133,8 @@ export interface Order {
   extension_requested_by: ActorType | null;
   extension_requested_at: Date | null;
   extension_minutes: number;
+  // Chat categorization
+  has_manual_message: boolean;
 }
 
 export interface OrderEvent {

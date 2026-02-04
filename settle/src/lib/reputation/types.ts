@@ -137,6 +137,7 @@ export interface ReputationEvent {
 export type ReputationEventType =
   | 'order_completed'
   | 'order_cancelled'
+  | 'order_timeout'      // Timeout cancellation - heavier penalty than regular cancellation
   | 'order_disputed'
   | 'dispute_won'
   | 'dispute_lost'

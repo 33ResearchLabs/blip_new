@@ -672,8 +672,36 @@ export async function markMessagesAsRead(
   );
 }
 
+// Update has_manual_message flag when user/merchant sends a message
+export async function markOrderHasManualMessage(orderId: string): Promise<void> {
+  await query(
+    `UPDATE orders SET has_manual_message = true WHERE id = $1 AND has_manual_message = false`,
+    [orderId]
+  );
+}
+
 // Expired orders cleanup - Global 15-minute timeout from creation
 export async function expireOldOrders(): Promise<number> {
+  // First, get the orders that will be expired (we need user_id and merchant_id for reputation)
+  const ordersToExpire = await query<{
+    id: string;
+    user_id: string;
+    merchant_id: string;
+    status: string;
+    fiat_amount: number;
+    fiat_currency: string;
+  }>(
+    `SELECT id, user_id, merchant_id, status, fiat_amount, fiat_currency
+     FROM orders
+     WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed')
+       AND created_at < NOW() - INTERVAL '15 minutes'`
+  );
+
+  if (ordersToExpire.length === 0) {
+    return 0;
+  }
+
+  // Update the orders to cancelled/disputed
   const result = await query(
     `UPDATE orders
      SET
@@ -690,5 +718,42 @@ export async function expireOldOrders(): Promise<number> {
        AND created_at < NOW() - INTERVAL '15 minutes'
      RETURNING id`
   );
+
+  // Record reputation events for each expired order
+  for (const order of ordersToExpire) {
+    const isEscrowLocked = ['escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'releasing'].includes(order.status);
+    const eventType = isEscrowLocked ? 'order_disputed' : 'order_timeout';
+    const reason = `Order timeout - not completed within 15 minutes (was in ${order.status} status)`;
+
+    try {
+      // Record event for user
+      await recordReputationEvent(
+        order.user_id,
+        'user',
+        eventType,
+        reason,
+        { orderId: order.id, previousStatus: order.status, amount: order.fiat_amount, currency: order.fiat_currency }
+      );
+
+      // Record event for merchant
+      await recordReputationEvent(
+        order.merchant_id,
+        'merchant',
+        eventType,
+        reason,
+        { orderId: order.id, previousStatus: order.status, amount: order.fiat_amount, currency: order.fiat_currency }
+      );
+
+      logger.info('Recorded reputation events for expired order', {
+        orderId: order.id,
+        eventType,
+        userId: order.user_id,
+        merchantId: order.merchant_id,
+      });
+    } catch (repErr) {
+      logger.warn('Failed to record reputation events for expired order', { orderId: order.id, error: repErr });
+    }
+  }
+
   return result.length;
 }

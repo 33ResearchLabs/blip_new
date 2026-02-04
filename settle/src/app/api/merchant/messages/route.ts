@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0', 10);
     const orderStatus = searchParams.get('order_status'); // Filter by order status
     const search = searchParams.get('search'); // Search in message content
+    const tab = searchParams.get('tab'); // 'direct' | 'automated' | 'dispute' | 'all'
 
     if (!merchantId) {
       return validationErrorResponse(['merchant_id is required']);
@@ -54,6 +55,7 @@ export async function GET(request: NextRequest) {
         o.fiat_amount,
         o.fiat_currency,
         o.created_at as order_created_at,
+        COALESCE(o.has_manual_message, false) as has_manual_message,
         json_build_object(
           'id', u.id,
           'username', u.username,
@@ -103,6 +105,15 @@ export async function GET(request: NextRequest) {
       conversationsQuery += ` AND o.status = ANY($${paramIndex}::text[])`;
       queryParams.push(statuses as unknown as string);
       paramIndex++;
+    }
+
+    // Filter by chat tab
+    if (tab === 'direct') {
+      conversationsQuery += ` AND COALESCE(o.has_manual_message, false) = true AND o.status != 'disputed'`;
+    } else if (tab === 'automated') {
+      conversationsQuery += ` AND COALESCE(o.has_manual_message, false) = false AND o.status != 'disputed'`;
+    } else if (tab === 'dispute') {
+      conversationsQuery += ` AND o.status = 'disputed'`;
     }
 
     // Only include orders with messages
@@ -163,6 +174,32 @@ export async function GET(request: NextRequest) {
     );
     const totalUnread = (unreadResult[0] as { total_unread?: number })?.total_unread || 0;
 
+    // Get tab counts and unread counts per tab
+    const tabCountsResult = await query(
+      `SELECT
+        COUNT(*) FILTER (WHERE COALESCE(o.has_manual_message, false) = true AND o.status != 'disputed')::int as direct_count,
+        COUNT(*) FILTER (WHERE COALESCE(o.has_manual_message, false) = false AND o.status != 'disputed')::int as automated_count,
+        COUNT(*) FILTER (WHERE o.status = 'disputed')::int as dispute_count
+       FROM orders o
+       WHERE o.merchant_id = $1
+         AND EXISTS (SELECT 1 FROM chat_messages cm WHERE cm.order_id = o.id)`,
+      [merchantId]
+    );
+    const tabCounts = tabCountsResult[0] as { direct_count: number; automated_count: number; dispute_count: number } || { direct_count: 0, automated_count: 0, dispute_count: 0 };
+
+    // Get unread counts per tab
+    const tabUnreadResult = await query(
+      `SELECT
+        COUNT(*) FILTER (WHERE COALESCE(o.has_manual_message, false) = true AND o.status != 'disputed')::int as direct_unread,
+        COUNT(*) FILTER (WHERE COALESCE(o.has_manual_message, false) = false AND o.status != 'disputed')::int as automated_unread,
+        COUNT(*) FILTER (WHERE o.status = 'disputed')::int as dispute_unread
+       FROM chat_messages cm
+       JOIN orders o ON cm.order_id = o.id
+       WHERE o.merchant_id = $1 AND cm.sender_type != 'merchant' AND cm.is_read = false`,
+      [merchantId]
+    );
+    const tabUnread = tabUnreadResult[0] as { direct_unread: number; automated_unread: number; dispute_unread: number } || { direct_unread: 0, automated_unread: 0, dispute_unread: 0 };
+
     return successResponse({
       conversations: conversationsResult,
       pagination: {
@@ -172,6 +209,14 @@ export async function GET(request: NextRequest) {
         hasMore: offset + limit < total,
       },
       totalUnread,
+      tabCounts: {
+        direct: tabCounts.direct_count,
+        automated: tabCounts.automated_count,
+        dispute: tabCounts.dispute_count,
+        directUnread: tabUnread.direct_unread,
+        automatedUnread: tabUnread.automated_unread,
+        disputeUnread: tabUnread.dispute_unread,
+      },
     });
   } catch (error) {
     console.error('Error fetching merchant messages:', error);

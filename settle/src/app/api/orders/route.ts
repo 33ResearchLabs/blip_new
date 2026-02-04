@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createOrder, getUserOrders } from '@/lib/db/repositories/orders';
+import { createOrder, getUserOrders, sendMessage } from '@/lib/db/repositories/orders';
 import { findBestOffer, getOfferWithMerchant } from '@/lib/db/repositories/merchants';
 import { OfferType, PaymentMethod } from '@/lib/types/database';
 import {
@@ -194,6 +194,33 @@ export async function POST(request: NextRequest) {
     });
 
     logger.order.created(order.id, user_id, offer.merchant_id, crypto_amount);
+
+    // Send auto welcome messages for the chat
+    try {
+      await sendMessage({
+        order_id: order.id,
+        sender_type: 'system',
+        sender_id: order.id,
+        content: `Order #${order.order_number} created for ${crypto_amount} USDC`,
+        message_type: 'system',
+      });
+      await sendMessage({
+        order_id: order.id,
+        sender_type: 'system',
+        sender_id: order.id,
+        content: `Rate: ${offer.rate} AED/USDC • Total: ${fiatAmount.toFixed(2)} AED`,
+        message_type: 'system',
+      });
+      await sendMessage({
+        order_id: order.id,
+        sender_type: 'system',
+        sender_id: order.id,
+        content: `⏱ This order expires in 15 minutes`,
+        message_type: 'system',
+      });
+    } catch (msgError) {
+      console.error('[API] Failed to send auto messages:', msgError);
+    }
 
     // Notify merchant of new order via Pusher
     try {

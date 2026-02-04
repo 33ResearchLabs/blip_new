@@ -43,6 +43,7 @@ import { useSounds } from "@/hooks/useSounds";
 import { useWebSocketChat } from "@/hooks/useWebSocketChat";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
 import { MessageHistory } from "@/components/merchant/MessageHistory";
+import { MerchantChatTabs } from "@/components/merchant/MerchantChatTabs";
 import { OrderDetailsPanel } from "@/components/merchant/OrderDetailsPanel";
 import { AnalyticsDashboard } from "@/components/merchant/AnalyticsDashboard";
 
@@ -4191,11 +4192,18 @@ export default function MerchantDashboard() {
                     </div>
                   </div>
                 </>
+              ) : merchantId ? (
+                <MerchantChatTabs
+                  merchantId={merchantId}
+                  onOpenChat={(orderId, user, emoji) => {
+                    openChat(user, emoji, orderId);
+                    setActiveChatId(`chat_${Date.now()}`);
+                  }}
+                />
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center py-12">
                   <MessageCircle className="w-12 h-12 text-gray-600 mb-3" />
-                  <p className="text-sm text-gray-500">No active chat</p>
-                  <p className="text-xs text-gray-600 mt-1">Click a user to start chatting</p>
+                  <p className="text-sm text-gray-500">Loading chats...</p>
                 </div>
               )}
             </div>

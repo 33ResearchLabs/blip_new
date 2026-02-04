@@ -458,6 +458,8 @@ export function calculateScoreChangeForEvent(
       return 5; // Base points for completing an order
     case 'order_cancelled':
       return -2;
+    case 'order_timeout':
+      return -5; // Heavier penalty for letting order timeout (worse than regular cancel)
     case 'order_disputed':
       return -5;
     case 'dispute_won':

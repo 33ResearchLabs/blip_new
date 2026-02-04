@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMerchantOrders, createOrder, getOrderWithRelations, getAllPendingOrdersForMerchant } from '@/lib/db/repositories/orders';
+import { getMerchantOrders, createOrder, getOrderWithRelations, getAllPendingOrdersForMerchant, sendMessage } from '@/lib/db/repositories/orders';
 import { getMerchantOffers, getOfferWithMerchant } from '@/lib/db/repositories/merchants';
 import { createUser } from '@/lib/db/repositories/users';
 import { OrderStatus, OfferType, PaymentMethod } from '@/lib/types/database';
@@ -254,6 +254,33 @@ export async function POST(request: NextRequest) {
       orderType,
       isM2MTrade,
     });
+
+    // Send auto welcome messages for the chat
+    try {
+      await sendMessage({
+        order_id: order.id,
+        sender_type: 'system',
+        sender_id: order.id,
+        content: `Order #${order.order_number} created for ${crypto_amount} USDC`,
+        message_type: 'system',
+      });
+      await sendMessage({
+        order_id: order.id,
+        sender_type: 'system',
+        sender_id: order.id,
+        content: `Rate: ${offer.rate} AED/USDC • Total: ${fiatAmount.toFixed(2)} AED`,
+        message_type: 'system',
+      });
+      await sendMessage({
+        order_id: order.id,
+        sender_type: 'system',
+        sender_id: order.id,
+        content: `⏱ This order expires in 15 minutes`,
+        message_type: 'system',
+      });
+    } catch (msgError) {
+      console.error('[API] Failed to send auto messages:', msgError);
+    }
 
     // Get full order with relations for response
     const orderWithRelations = await getOrderWithRelations(order.id);

@@ -216,7 +216,10 @@ CREATE TABLE orders (
   last_extended_at TIMESTAMP,
 
   -- Buyer wallet (for buy orders)
-  buyer_wallet_address VARCHAR(64)
+  buyer_wallet_address VARCHAR(64),
+
+  -- Chat categorization (for merchant chat tabs)
+  has_manual_message BOOLEAN DEFAULT false
 );
 
 CREATE INDEX idx_orders_user ON orders(user_id, status);
@@ -226,6 +229,7 @@ CREATE INDEX idx_orders_status ON orders(status, created_at);
 CREATE INDEX idx_orders_fiat_amount ON orders(merchant_id, fiat_amount DESC) WHERE status NOT IN ('cancelled', 'expired');
 CREATE INDEX idx_orders_custom ON orders(merchant_id, is_custom) WHERE is_custom = true;
 CREATE INDEX idx_orders_extension_pending ON orders(extension_requested_at) WHERE extension_requested_by IS NOT NULL AND status NOT IN ('completed', 'cancelled', 'expired');
+CREATE INDEX idx_orders_chat_categorization ON orders(merchant_id, has_manual_message, status) WHERE status NOT IN ('completed', 'cancelled', 'expired');
 
 -- Order Events (Audit Log)
 CREATE TABLE order_events (

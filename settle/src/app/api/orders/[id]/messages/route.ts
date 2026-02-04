@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getOrderMessages, sendMessage, markMessagesAsRead, getOrderById } from '@/lib/db/repositories/orders';
+import { getOrderMessages, sendMessage, markMessagesAsRead, getOrderById, markOrderHasManualMessage } from '@/lib/db/repositories/orders';
 import {
   sendMessageSchema,
   markMessagesReadSchema,
@@ -116,6 +116,11 @@ export async function POST(
       message_type,
       image_url,
     });
+
+    // Mark order as having manual messages (transition from automated to direct chat)
+    if (sender_type !== 'system' && message_type !== 'system') {
+      await markOrderHasManualMessage(id);
+    }
 
     // Trigger real-time notification
     notifyNewMessage({
