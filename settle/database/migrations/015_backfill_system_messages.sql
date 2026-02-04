@@ -7,7 +7,7 @@ SELECT
   uuid_generate_v4(),
   oe.order_id,
   'system'::actor_type,
-  oe.order_id::text,
+  oe.order_id,
   CASE oe.new_status
     WHEN 'pending' THEN '📝 Order created'
     WHEN 'accepted' THEN '✅ Order accepted by merchant'
@@ -45,7 +45,7 @@ SELECT
   uuid_generate_v4(),
   o.id,
   'system'::actor_type,
-  o.id::text,
+  o.id,
   'Order #' || o.order_number || ' created for ' || o.crypto_amount || ' ' || o.crypto_currency,
   'system'::message_type,
   o.created_at
@@ -63,7 +63,7 @@ SELECT
   uuid_generate_v4(),
   o.id,
   'system'::actor_type,
-  o.id::text,
+  o.id,
   'Rate: ' || o.rate || ' AED/USDC • Total: ' || ROUND(o.fiat_amount::numeric, 2) || ' AED',
   'system'::message_type,
   o.created_at + INTERVAL '1 second'
