@@ -1,11 +1,28 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { MessageCircle, Zap, AlertTriangle, Search, X, ChevronRight, Clock, CheckCheck } from 'lucide-react';
+import { MessageCircle, ShoppingBag, Search, X, ChevronRight, Clock, CheckCheck, Zap, Star, Users } from 'lucide-react';
 
-type ChatTab = 'direct' | 'automated' | 'dispute';
+type MainTab = 'direct' | 'orders';
 
-interface Conversation {
+interface DirectConversation {
+  contact_id: string;
+  user_id: string;
+  username: string;
+  nickname: string | null;
+  is_favorite: boolean;
+  trades_count: number;
+  last_message: {
+    content: string;
+    sender_type: string;
+    created_at: string;
+    is_read: boolean;
+  } | null;
+  unread_count: number;
+  last_activity: string | null;
+}
+
+interface OrderConversation {
   order_id: string;
   order_number: string;
   order_status: string;
@@ -34,18 +51,10 @@ interface Conversation {
   last_activity: string;
 }
 
-interface TabCounts {
-  direct: number;
-  automated: number;
-  dispute: number;
-  directUnread: number;
-  automatedUnread: number;
-  disputeUnread: number;
-}
-
 interface MerchantChatTabsProps {
   merchantId: string;
   onOpenChat: (orderId: string, user: string, emoji: string) => void;
+  onOpenDirectChat?: (userId: string, username: string) => void;
   onClose?: () => void;
 }
 
@@ -91,106 +100,92 @@ function truncate(text: string, maxLength: number): string {
   return text.slice(0, maxLength - 3) + '...';
 }
 
-export function MerchantChatTabs({ merchantId, onOpenChat, onClose }: MerchantChatTabsProps) {
-  const [activeTab, setActiveTab] = useState<ChatTab>('automated');
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+export function MerchantChatTabs({ merchantId, onOpenChat, onOpenDirectChat, onClose }: MerchantChatTabsProps) {
+  const [activeTab, setActiveTab] = useState<MainTab>('orders');
+  const [directConversations, setDirectConversations] = useState<DirectConversation[]>([]);
+  const [orderConversations, setOrderConversations] = useState<OrderConversation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [tabCounts, setTabCounts] = useState<TabCounts>({
-    direct: 0,
-    automated: 0,
-    dispute: 0,
-    directUnread: 0,
-    automatedUnread: 0,
-    disputeUnread: 0,
-  });
+  const [directUnread, setDirectUnread] = useState(0);
+  const [orderUnread, setOrderUnread] = useState(0);
 
-  const fetchConversations = useCallback(async () => {
-    setIsLoading(true);
+  // Fetch direct conversations
+  const fetchDirectConversations = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/merchant/direct-messages?merchant_id=${merchantId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success) {
+        setDirectConversations(data.data.conversations || []);
+        setDirectUnread(data.data.totalUnread || 0);
+      }
+    } catch (error) {
+      console.error('Failed to fetch direct conversations:', error);
+    }
+  }, [merchantId]);
+
+  // Fetch order conversations
+  const fetchOrderConversations = useCallback(async () => {
     try {
       const params = new URLSearchParams({
         merchant_id: merchantId,
         limit: '50',
-        tab: activeTab,
       });
-
       if (searchQuery) {
         params.set('search', searchQuery);
       }
 
       const res = await fetch(`/api/merchant/messages?${params}`);
-      if (!res.ok) throw new Error('Failed to fetch');
-
+      if (!res.ok) return;
       const data = await res.json();
       if (data.success) {
-        setConversations(data.data.conversations);
-        if (data.data.tabCounts) {
-          setTabCounts(data.data.tabCounts);
-        }
+        setOrderConversations(data.data.conversations || []);
+        setOrderUnread(data.data.totalUnread || 0);
       }
     } catch (error) {
-      console.error('Failed to fetch conversations:', error);
-    } finally {
-      setIsLoading(false);
+      console.error('Failed to fetch order conversations:', error);
     }
-  }, [merchantId, activeTab, searchQuery]);
+  }, [merchantId, searchQuery]);
 
   useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
+    setIsLoading(true);
+    Promise.all([fetchDirectConversations(), fetchOrderConversations()]).finally(() => {
+      setIsLoading(false);
+    });
+  }, [fetchDirectConversations, fetchOrderConversations]);
 
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchConversations();
+      if (activeTab === 'orders') {
+        fetchOrderConversations();
+      }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, fetchConversations]);
+  }, [searchQuery, activeTab, fetchOrderConversations]);
 
-  const handleOpenChat = (conv: Conversation) => {
+  const handleOpenOrderChat = (conv: OrderConversation) => {
     const emoji = getUserEmoji(conv.user.username);
     onOpenChat(conv.order_id, conv.user.username, emoji);
   };
 
-  const getTabIcon = (tab: ChatTab) => {
-    switch (tab) {
-      case 'direct':
-        return <MessageCircle className="w-4 h-4" />;
-      case 'automated':
-        return <Zap className="w-4 h-4" />;
-      case 'dispute':
-        return <AlertTriangle className="w-4 h-4" />;
+  const handleOpenDirectChat = (conv: DirectConversation) => {
+    if (onOpenDirectChat) {
+      onOpenDirectChat(conv.user_id, conv.nickname || conv.username);
     }
   };
 
-  const getTabLabel = (tab: ChatTab) => {
-    switch (tab) {
-      case 'direct':
-        return 'Direct';
-      case 'automated':
-        return 'Automated';
-      case 'dispute':
-        return 'Disputes';
-    }
-  };
-
-  const getTabUnread = (tab: ChatTab) => {
-    switch (tab) {
-      case 'direct':
-        return tabCounts.directUnread;
-      case 'automated':
-        return tabCounts.automatedUnread;
-      case 'dispute':
-        return tabCounts.disputeUnread;
-    }
-  };
+  // Filter conversations based on search
+  const filteredDirectConversations = directConversations.filter(conv =>
+    (conv.nickname || conv.username).toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <div className="h-full flex flex-col bg-zinc-900/50 rounded-xl border border-white/10">
+    <div className="h-full flex flex-col bg-[#0a0a0a]">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] bg-[#0d0d0d]">
         <div className="flex items-center gap-2">
-          <MessageCircle className="w-5 h-5 text-emerald-400" />
+          <MessageCircle className="w-5 h-5 text-[#c9a962]" />
           <span className="font-medium text-white">Chats</span>
         </div>
         {onClose && (
@@ -203,149 +198,238 @@ export function MerchantChatTabs({ merchantId, onOpenChat, onClose }: MerchantCh
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 px-4 py-3 border-b border-white/5">
-        {(['automated', 'direct', 'dispute'] as ChatTab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-              activeTab === tab
-                ? tab === 'dispute'
-                  ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
-                  : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                : 'bg-white/5 text-white/60 hover:bg-white/10 border border-transparent'
-            }`}
-          >
-            {getTabIcon(tab)}
-            <span>{getTabLabel(tab)}</span>
-            {getTabUnread(tab) > 0 && (
-              <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
-                tab === 'dispute' ? 'bg-orange-500' : 'bg-emerald-500'
-              } text-white`}>
-                {getTabUnread(tab)}
-              </span>
-            )}
-          </button>
-        ))}
+      {/* Main Tabs */}
+      <div className="flex border-b border-white/[0.04] bg-[#0d0d0d]">
+        <button
+          onClick={() => setActiveTab('direct')}
+          className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-all border-b-2 ${
+            activeTab === 'direct'
+              ? 'text-[#c9a962] border-[#c9a962]'
+              : 'text-gray-500 border-transparent hover:text-gray-300'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>Direct</span>
+          {directUnread > 0 && (
+            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#c9a962] text-black">
+              {directUnread}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('orders')}
+          className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-all border-b-2 ${
+            activeTab === 'orders'
+              ? 'text-[#c9a962] border-[#c9a962]'
+              : 'text-gray-500 border-transparent hover:text-gray-300'
+          }`}
+        >
+          <ShoppingBag className="w-4 h-4" />
+          <span>Orders</span>
+          {orderUnread > 0 && (
+            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#c9a962] text-black">
+              {orderUnread}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Search */}
-      <div className="px-4 py-3 border-b border-white/5">
+      <div className="px-4 py-3 border-b border-white/[0.04] bg-[#0d0d0d]">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
           <input
             type="text"
-            placeholder="Search messages..."
+            placeholder={activeTab === 'direct' ? "Search contacts..." : "Search orders..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-sm bg-white/5 border border-white/10 rounded-lg
-                       text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-500/50"
+            className="w-full pl-9 pr-4 py-2 text-sm bg-white/[0.04] border border-white/[0.08] rounded-lg
+                       text-white placeholder:text-white/40 focus:outline-none focus:border-[#c9a962]/50"
           />
         </div>
       </div>
 
       {/* Conversations List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pb-20">
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-[#c9a962] border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : conversations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-white/40">
-            {activeTab === 'automated' && <Zap className="w-12 h-12 mb-2 opacity-50" />}
-            {activeTab === 'direct' && <MessageCircle className="w-12 h-12 mb-2 opacity-50" />}
-            {activeTab === 'dispute' && <AlertTriangle className="w-12 h-12 mb-2 opacity-50" />}
-            <p>No {getTabLabel(activeTab).toLowerCase()} chats</p>
-            {activeTab === 'automated' && (
-              <p className="text-xs mt-1">New orders will appear here</p>
-            )}
-          </div>
+        ) : activeTab === 'direct' ? (
+          // Direct Messages Tab
+          filteredDirectConversations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-white/40">
+              <Users className="w-12 h-12 mb-3 opacity-50" />
+              <p className="text-sm">No contacts yet</p>
+              <p className="text-xs mt-1 text-center px-8">
+                Complete trades to add users as contacts
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-white/[0.04]">
+              {filteredDirectConversations.map((conv) => (
+                <button
+                  key={conv.contact_id}
+                  onClick={() => handleOpenDirectChat(conv)}
+                  className="w-full px-4 py-3 hover:bg-white/[0.04] transition-colors text-left group"
+                >
+                  <div className="flex items-start gap-3">
+                    {/* User Avatar */}
+                    <div className="relative flex-shrink-0">
+                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#c9a962]/20 to-amber-400/20
+                                      flex items-center justify-center text-lg">
+                        {getUserEmoji(conv.username)}
+                      </div>
+                      {conv.unread_count > 0 && (
+                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-[#c9a962] text-black
+                                         text-xs font-bold rounded-full flex items-center justify-center">
+                          {conv.unread_count > 9 ? '9+' : conv.unread_count}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-white truncate">
+                            {conv.nickname || conv.username}
+                          </span>
+                          {conv.is_favorite && (
+                            <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                          )}
+                        </div>
+                        {conv.last_message && (
+                          <span className="text-[11px] text-white/40">
+                            {formatRelativeTime(conv.last_message.created_at)}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Trades info */}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[11px] text-white/50">
+                          {conv.trades_count} trade{conv.trades_count !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+
+                      {/* Last Message Preview */}
+                      {conv.last_message && (
+                        <div className="flex items-center gap-1 mt-1">
+                          {conv.last_message.sender_type === 'merchant' && (
+                            <CheckCheck className={`w-3 h-3 flex-shrink-0 ${
+                              conv.last_message.is_read ? 'text-[#c9a962]' : 'text-white/30'
+                            }`} />
+                          )}
+                          <p className={`text-sm truncate ${
+                            conv.unread_count > 0 ? 'text-white font-medium' : 'text-white/60'
+                          }`}>
+                            {truncate(conv.last_message.content, 40)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-white/40 transition-colors
+                                            self-center flex-shrink-0" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          )
         ) : (
-          <div className="divide-y divide-white/5">
-            {conversations.map((conv) => (
-              <button
-                key={conv.order_id}
-                onClick={() => handleOpenChat(conv)}
-                className="w-full px-4 py-3 hover:bg-white/5 transition-colors text-left group"
-              >
-                <div className="flex items-start gap-3">
-                  {/* User Avatar */}
-                  <div className="relative flex-shrink-0">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400/20 to-cyan-400/20
-                                    flex items-center justify-center text-lg">
-                      {getUserEmoji(conv.user.username)}
-                    </div>
-                    {conv.unread_count > 0 && (
-                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 text-white
-                                       text-xs font-medium rounded-full flex items-center justify-center">
-                        {conv.unread_count > 9 ? '9+' : conv.unread_count}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-white truncate">
-                          {conv.user.username}
+          // Orders Tab
+          orderConversations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-white/40">
+              <ShoppingBag className="w-12 h-12 mb-3 opacity-50" />
+              <p className="text-sm">No order chats</p>
+              <p className="text-xs mt-1">New orders will appear here</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-white/[0.04]">
+              {orderConversations.map((conv) => (
+                <button
+                  key={conv.order_id}
+                  onClick={() => handleOpenOrderChat(conv)}
+                  className="w-full px-4 py-3 hover:bg-white/[0.04] transition-colors text-left group"
+                >
+                  <div className="flex items-start gap-3">
+                    {/* User Avatar */}
+                    <div className="relative flex-shrink-0">
+                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-emerald-400/20 to-cyan-400/20
+                                      flex items-center justify-center text-lg">
+                        {getUserEmoji(conv.user.username)}
+                      </div>
+                      {conv.unread_count > 0 && (
+                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 text-white
+                                         text-xs font-bold rounded-full flex items-center justify-center">
+                          {conv.unread_count > 9 ? '9+' : conv.unread_count}
                         </span>
-                        <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded uppercase
-                          ${STATUS_COLORS[conv.order_status] || 'bg-zinc-500/20 text-zinc-400'}`}>
-                          {conv.order_status}
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-white truncate">
+                            {conv.user.username}
+                          </span>
+                          <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded uppercase
+                            ${STATUS_COLORS[conv.order_status] || 'bg-zinc-500/20 text-zinc-400'}`}>
+                            {conv.order_status}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-white/40 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {conv.last_message ? formatRelativeTime(conv.last_message.created_at) : ''}
                         </span>
                       </div>
-                      <span className="text-xs text-white/40 flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {conv.last_message ? formatRelativeTime(conv.last_message.created_at) : ''}
-                      </span>
-                    </div>
 
-                    {/* Order Info */}
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-xs text-white/50">
-                        {conv.order_number}
-                      </span>
-                      <span className="text-xs text-white/30">•</span>
-                      <span className={`text-xs ${conv.order_type === 'buy' ? 'text-emerald-400' : 'text-cyan-400'}`}>
-                        {conv.order_type === 'buy' ? 'Buy' : 'Sell'}
-                      </span>
-                      <span className="text-xs text-white/50">
-                        {conv.fiat_amount.toLocaleString()} {conv.fiat_currency}
-                      </span>
-                    </div>
-
-                    {/* Last Message Preview */}
-                    {conv.last_message && (
-                      <div className="flex items-center gap-1 mt-1">
-                        {conv.last_message.sender_type === 'merchant' && (
-                          <CheckCheck className={`w-3 h-3 flex-shrink-0 ${
-                            conv.last_message.is_read ? 'text-emerald-400' : 'text-white/30'
-                          }`} />
-                        )}
-                        {conv.last_message.message_type === 'system' && (
-                          <Zap className="w-3 h-3 flex-shrink-0 text-amber-400" />
-                        )}
-                        <p className={`text-sm truncate ${
-                          conv.unread_count > 0 ? 'text-white font-medium' : 'text-white/60'
-                        }`}>
-                          {conv.last_message.message_type === 'image'
-                            ? '📷 Photo'
-                            : truncate(conv.last_message.content, 50)
-                          }
-                        </p>
+                      {/* Order Info */}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[11px] text-white/50">
+                          {conv.order_number}
+                        </span>
+                        <span className="text-[11px] text-white/30">•</span>
+                        <span className={`text-[11px] ${conv.order_type === 'buy' ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                          {conv.order_type === 'buy' ? 'Buy' : 'Sell'}
+                        </span>
+                        <span className="text-[11px] text-white/50">
+                          {conv.fiat_amount.toLocaleString()} {conv.fiat_currency}
+                        </span>
                       </div>
-                    )}
-                  </div>
 
-                  {/* Arrow */}
-                  <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-white/40 transition-colors
-                                          self-center flex-shrink-0" />
-                </div>
-              </button>
-            ))}
-          </div>
+                      {/* Last Message Preview */}
+                      {conv.last_message && (
+                        <div className="flex items-center gap-1 mt-1">
+                          {conv.last_message.sender_type === 'merchant' && (
+                            <CheckCheck className={`w-3 h-3 flex-shrink-0 ${
+                              conv.last_message.is_read ? 'text-emerald-400' : 'text-white/30'
+                            }`} />
+                          )}
+                          {conv.last_message.message_type === 'system' && (
+                            <Zap className="w-3 h-3 flex-shrink-0 text-amber-400" />
+                          )}
+                          <p className={`text-sm truncate ${
+                            conv.unread_count > 0 ? 'text-white font-medium' : 'text-white/60'
+                          }`}>
+                            {conv.last_message.message_type === 'image'
+                              ? '📷 Photo'
+                              : truncate(conv.last_message.content, 40)
+                            }
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-white/40 transition-colors
+                                            self-center flex-shrink-0" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          )
         )}
       </div>
     </div>

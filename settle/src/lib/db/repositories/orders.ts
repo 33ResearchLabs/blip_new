@@ -19,6 +19,7 @@ import {
 } from '../../orders/stateMachine';
 import { logger } from '../../logger';
 import { recordReputationEvent } from '../../reputation';
+import { upsertMerchantContact } from './directMessages';
 
 // Result type for status updates
 export interface StatusUpdateResult {
@@ -322,6 +323,41 @@ export async function createOrder(data: {
 }
 
 /**
+ * Generate system message for status changes
+ */
+function getStatusChangeMessage(
+  newStatus: OrderStatus,
+  order: Order,
+  actorType: ActorType,
+  metadata?: Record<string, unknown>
+): string | null {
+  const amount = `${order.crypto_amount} USDC`;
+  const fiat = `${order.fiat_amount.toLocaleString()} ${order.fiat_currency}`;
+
+  switch (newStatus) {
+    case 'accepted':
+      return `✓ Order accepted by ${actorType === 'merchant' ? 'merchant' : 'counterparty'}`;
+    case 'escrowed':
+      return `🔒 ${amount} locked in escrow`;
+    case 'payment_sent':
+      return `💸 Payment of ${fiat} marked as sent`;
+    case 'payment_confirmed':
+      return `✓ Payment confirmed`;
+    case 'completed':
+      return `✅ Trade completed successfully! ${amount} released`;
+    case 'cancelled':
+      const reason = metadata?.reason ? `: ${metadata.reason}` : '';
+      return `❌ Order cancelled${reason}`;
+    case 'expired':
+      return `⏰ Order expired (15 minute timeout)`;
+    case 'disputed':
+      return `⚠️ Order is now under dispute`;
+    default:
+      return null;
+  }
+}
+
+/**
  * Update order status with state machine validation
  * Returns a result object instead of throwing to allow proper error handling
  */
@@ -540,6 +576,22 @@ export async function updateOrderStatus(
         } catch (repErr) {
           logger.warn('Failed to record reputation events for completed order', { orderId, error: repErr });
         }
+
+        // Auto-add user as merchant contact for direct messaging
+        try {
+          await upsertMerchantContact({
+            merchant_id: currentOrder.merchant_id,
+            user_id: currentOrder.user_id,
+            trade_volume: currentOrder.fiat_amount,
+          });
+          logger.info('Added/updated merchant contact from completed order', {
+            orderId,
+            merchantId: currentOrder.merchant_id,
+            userId: currentOrder.user_id,
+          });
+        } catch (contactErr) {
+          logger.warn('Failed to upsert merchant contact', { orderId, error: contactErr });
+        }
       }
 
       // Handle side effects: cancellation
@@ -566,6 +618,21 @@ export async function updateOrderStatus(
 
       // Log the status change
       logger.order.statusChanged(orderId, oldStatus, newStatus, actorType, actorId);
+
+      // Send system message to chat for this status change
+      try {
+        const statusMessage = getStatusChangeMessage(newStatus, updatedOrder, actorType, metadata);
+        if (statusMessage) {
+          // Use non-transactional insert to avoid blocking
+          await query(
+            `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
+             VALUES ($1, 'system', $2, $3, 'system')`,
+            [orderId, orderId, statusMessage]
+          );
+        }
+      } catch (msgErr) {
+        logger.warn('Failed to send status change message to chat', { orderId, error: msgErr });
+      }
 
       return { success: true, order: updatedOrder };
     });
@@ -719,13 +786,26 @@ export async function expireOldOrders(): Promise<number> {
      RETURNING id`
   );
 
-  // Record reputation events for each expired order
+  // Record reputation events and send system messages for each expired order
   for (const order of ordersToExpire) {
     const isEscrowLocked = ['escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'releasing'].includes(order.status);
     const eventType = isEscrowLocked ? 'order_disputed' : 'order_timeout';
     const reason = `Order timeout - not completed within 15 minutes (was in ${order.status} status)`;
 
     try {
+      // Send system message about expiration
+      const expiryMessage = isEscrowLocked
+        ? `⏰ Order expired - moved to dispute for resolution (escrow was locked)`
+        : `⏰ Order expired - not completed within 15 minutes`;
+
+      await sendMessage({
+        order_id: order.id,
+        sender_type: 'system',
+        sender_id: order.id,
+        content: expiryMessage,
+        message_type: 'system',
+      });
+
       // Record event for user
       await recordReputationEvent(
         order.user_id,

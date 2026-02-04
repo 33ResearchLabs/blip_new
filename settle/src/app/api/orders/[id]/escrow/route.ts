@@ -4,6 +4,7 @@ import {
   getOrderById,
   getOrderWithRelations,
   updateOrderStatus,
+  sendMessage,
 } from '@/lib/db/repositories/orders';
 import { query } from '@/lib/db';
 import {
@@ -194,6 +195,19 @@ export async function POST(
     // Get updated order
     const updatedOrder = await getOrderWithRelations(id);
 
+    // Send system message about escrow lock
+    try {
+      await sendMessage({
+        order_id: id,
+        sender_type: 'system',
+        sender_id: id,
+        content: `🔒 Escrow locked - ${order.crypto_amount} ${order.crypto_currency} secured on-chain`,
+        message_type: 'system',
+      });
+    } catch (msgError) {
+      logger.api.error('POST', `/api/orders/${id}/escrow/system-message`, msgError as Error);
+    }
+
     // Send real-time notification about escrow lock
     if (updatedOrder) {
       notifyOrderStatusUpdated({
@@ -315,6 +329,26 @@ export async function PATCH(
         { success: false, error: result.error },
         { status: 400 }
       );
+    }
+
+    // Send system messages for escrow release and completion
+    try {
+      await sendMessage({
+        order_id: id,
+        sender_type: 'system',
+        sender_id: id,
+        content: `🔓 Escrow released - funds sent to merchant`,
+        message_type: 'system',
+      });
+      await sendMessage({
+        order_id: id,
+        sender_type: 'system',
+        sender_id: id,
+        content: `🎉 Trade completed successfully!`,
+        message_type: 'system',
+      });
+    } catch (msgError) {
+      logger.api.error('PATCH', `/api/orders/${id}/escrow/system-message`, msgError as Error);
     }
 
     // Send real-time notification

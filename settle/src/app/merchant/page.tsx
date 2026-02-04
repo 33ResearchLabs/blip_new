@@ -4110,7 +4110,7 @@ export default function MerchantDashboard() {
 
           {/* Mobile: Chat View */}
           {mobileView === 'chat' && (
-            <div className="h-full flex flex-col -m-3">
+            <div className="h-full flex flex-col pb-16">
               {activeChat ? (
                 <>
                   {/* Chat Header */}

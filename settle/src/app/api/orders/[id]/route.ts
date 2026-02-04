@@ -5,6 +5,7 @@ import {
   getOrderWithRelations,
   updateOrderStatus,
   cancelOrder,
+  sendMessage,
 } from '@/lib/db/repositories/orders';
 import { OrderStatus, ActorType } from '@/lib/types/database';
 import {
@@ -158,6 +159,40 @@ export async function PATCH(
     // Fetch full order with relations for notification (includes merchant info for popup)
     const fullOrder = await getOrderWithRelations(id);
 
+    // Send system message for status change
+    const systemMessages: Record<OrderStatus, string> = {
+      pending: '',
+      accepted: `✅ Order accepted by merchant`,
+      escrow_pending: `⏳ Waiting for escrow deposit...`,
+      escrowed: `🔒 Escrow locked - funds secured on-chain`,
+      payment_pending: `⏳ Waiting for payment...`,
+      payment_sent: actor_type === 'merchant'
+        ? `💸 Merchant sent payment - waiting for confirmation`
+        : `💸 Payment sent - waiting for merchant confirmation`,
+      payment_confirmed: `✅ Payment confirmed`,
+      releasing: `⏳ Releasing escrow...`,
+      completed: `🎉 Trade completed successfully!`,
+      cancelled: reason ? `❌ Order cancelled: ${reason}` : `❌ Order cancelled`,
+      disputed: `⚠️ Dispute opened`,
+      expired: `⏰ Order expired`,
+    };
+
+    const message = systemMessages[status];
+    if (message) {
+      try {
+        await sendMessage({
+          order_id: id,
+          sender_type: 'system',
+          sender_id: id,
+          content: message,
+          message_type: 'system',
+        });
+      } catch (msgError) {
+        // Log but don't fail the request
+        logger.api.error('PATCH', `/api/orders/${id}/system-message`, msgError as Error);
+      }
+    }
+
     // Trigger real-time notification with full order data including merchant
     if (fullOrder) {
       notifyOrderStatusUpdated({
@@ -241,6 +276,35 @@ export async function DELETE(
         { success: false, error: result.error },
         { status: 400 }
       );
+    }
+
+    // Send system message for cancellation
+    const cancelledBy = actorType === 'user' ? 'user' : 'merchant';
+    const cancelMessage = reason
+      ? `❌ Order cancelled by ${cancelledBy}: ${reason}`
+      : `❌ Order cancelled by ${cancelledBy}`;
+
+    try {
+      await sendMessage({
+        order_id: id,
+        sender_type: 'system',
+        sender_id: id,
+        content: cancelMessage,
+        message_type: 'system',
+      });
+
+      // Notify via Pusher
+      notifyOrderCancelled({
+        orderId: id,
+        userId: order.user_id,
+        merchantId: order.merchant_id,
+        status: 'cancelled',
+        previousStatus: order.status,
+        updatedAt: new Date().toISOString(),
+        data: { cancelledBy: actorType, reason: reason || undefined },
+      });
+    } catch (msgError) {
+      logger.api.error('DELETE', `/api/orders/${id}/system-message`, msgError as Error);
     }
 
     logger.api.request('DELETE', `/api/orders/${id}`, actorId);

@@ -250,3 +250,58 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
 }
+
+// Direct Messaging Types
+export interface MerchantContact {
+  id: string;
+  merchant_id: string;
+  user_id: string;
+  nickname: string | null;
+  notes: string | null;
+  is_favorite: boolean;
+  trades_count: number;
+  total_volume: number;
+  last_trade_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface MerchantContactWithUser extends MerchantContact {
+  user: {
+    id: string;
+    username: string;
+    rating: number;
+    total_trades: number;
+  };
+}
+
+export interface DirectMessage {
+  id: string;
+  sender_type: 'merchant' | 'user';
+  sender_id: string;
+  recipient_type: 'merchant' | 'user';
+  recipient_id: string;
+  content: string;
+  message_type: 'text' | 'image';
+  image_url: string | null;
+  is_read: boolean;
+  read_at: Date | null;
+  created_at: Date;
+}
+
+export interface DirectConversation {
+  contact_id: string;
+  user_id: string;
+  username: string;
+  nickname: string | null;
+  is_favorite: boolean;
+  trades_count: number;
+  last_message: {
+    content: string;
+    sender_type: string;
+    created_at: string;
+    is_read: boolean;
+  } | null;
+  unread_count: number;
+  last_activity: string | null;
+}
