@@ -5013,52 +5013,42 @@ export default function MerchantDashboard() {
                   )}
 
                   {/* Warning / Info */}
-                  {!escrowTxHash && !isLockingEscrow && (
-                    <>
-                      {escrowOrder.isM2M ? (
-                        // M2M trade - show merchant info
-                        escrowOrder.buyerMerchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.buyerMerchantWallet) ? (
-                          <div className="bg-purple-500/10 rounded-xl p-3 border border-purple-500/20">
-                            <p className="text-xs text-purple-400">
-                              🤝 <strong>M2M Trade:</strong> You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow.
-                              This will be released to the buying merchant after they pay the fiat amount.
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
-                            <p className="text-xs text-red-400">
-                              ⚠️ Buying merchant hasn&apos;t connected their wallet. They need to connect their wallet first.
-                            </p>
-                          </div>
-                        )
-                      ) : escrowOrder.acceptorWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.acceptorWallet) ? (
-                        // Merchant-initiated order accepted by another merchant
+                  {!escrowTxHash && !isLockingEscrow && (() => {
+                    // Determine recipient wallet - check all possible sources
+                    const validWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+                    const hasBuyerMerchantWallet = escrowOrder.buyerMerchantWallet && validWalletRegex.test(escrowOrder.buyerMerchantWallet);
+                    const hasAcceptorWallet = escrowOrder.acceptorWallet && validWalletRegex.test(escrowOrder.acceptorWallet);
+                    const hasUserWallet = escrowOrder.userWallet && validWalletRegex.test(escrowOrder.userWallet);
+                    const hasValidRecipient = hasBuyerMerchantWallet || hasAcceptorWallet || hasUserWallet;
+                    const isMerchantTrade = escrowOrder.isM2M || hasAcceptorWallet;
+
+                    if (hasValidRecipient) {
+                      return isMerchantTrade ? (
                         <div className="bg-purple-500/10 rounded-xl p-3 border border-purple-500/20">
                           <p className="text-xs text-purple-400">
                             🤝 <strong>Merchant Trade:</strong> You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow.
-                            This will be released to the accepting merchant after they pay the fiat amount.
+                            This will be released to the other merchant after they pay the fiat amount.
                           </p>
                         </div>
                       ) : (
-                        // Regular user trade
-                        escrowOrder.userWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.userWallet) ? (
-                          <div className="bg-amber-500/10 rounded-xl p-3 border border-amber-500/20">
-                            <p className="text-xs text-amber-400">
-                              ⚠️ You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow on-chain.
-                              This will be released to the buyer after they pay you the fiat amount.
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
-                            <p className="text-xs text-red-400">
-                              ⚠️ User hasn&apos;t connected their Solana wallet yet. On-chain escrow requires the user&apos;s wallet address.
-                              Please ask them to connect their wallet in the app first.
-                            </p>
-                          </div>
-                        )
-                      )}
-                    </>
-                  )}
+                        <div className="bg-amber-500/10 rounded-xl p-3 border border-amber-500/20">
+                          <p className="text-xs text-amber-400">
+                            ⚠️ You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow on-chain.
+                            This will be released to the buyer after they pay you the fiat amount.
+                          </p>
+                        </div>
+                      );
+                    } else {
+                      return (
+                        <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
+                          <p className="text-xs text-red-400">
+                            ⚠️ {isMerchantTrade ? "The other merchant hasn't" : "User hasn't"} connected their Solana wallet yet.
+                            On-chain escrow requires a valid wallet address.
+                          </p>
+                        </div>
+                      );
+                    }
+                  })()}
 
                 </div>
 
@@ -5087,12 +5077,9 @@ export default function MerchantDashboard() {
                         disabled={
                           isLockingEscrow ||
                           (solanaWallet.usdtBalance || 0) < escrowOrder.amount ||
-                          // Check for valid recipient wallet:
-                          // 1. M2M: buyer merchant wallet
-                          // 2. Merchant-initiated with acceptor: acceptor wallet
-                          // 3. Regular: user wallet
+                          // Check for ANY valid recipient wallet
                           !(
-                            (escrowOrder.isM2M && escrowOrder.buyerMerchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.buyerMerchantWallet)) ||
+                            (escrowOrder.buyerMerchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.buyerMerchantWallet)) ||
                             (escrowOrder.acceptorWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.acceptorWallet)) ||
                             (escrowOrder.userWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.userWallet))
                           )
