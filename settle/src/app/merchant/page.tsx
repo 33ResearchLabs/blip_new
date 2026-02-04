@@ -2051,15 +2051,29 @@ export default function MerchantDashboard() {
     setBigOrders(prev => prev.filter(o => o.id !== id));
   };
 
+  // Global 15-minute timeout check - orders older than 15 mins should not show in active views
+  const isOrderExpired = (order: Order) => {
+    const fifteenMinsAgo = Date.now() - (15 * 60 * 1000);
+    return order.timestamp.getTime() < fifteenMinsAgo;
+  };
+
   // Filter orders by status - Flow: New Orders → Active → Ongoing → Completed
   // "pending" = New Orders (including escrowed sell orders waiting for merchant to click "Go")
-  const pendingOrders = orders.filter(o => o.status === "pending" && o.expiresIn > 0 && !o.isMyOrder);
+  const pendingOrders = orders.filter(o => o.status === "pending" && o.expiresIn > 0 && !o.isMyOrder && !isOrderExpired(o));
   // "active" = Active (merchant clicked "Go", now needs to sign tx or send payment)
-  const activeOrders = orders.filter(o => o.status === "active");
+  // Filter out orders older than 15 minutes - they should be cancelled
+  const activeOrders = orders.filter(o => o.status === "active" && !isOrderExpired(o));
   // "escrow" = Ongoing (tx signed, trade in progress)
-  const ongoingOrders = orders.filter(o => o.status === "escrow");
+  // Filter out orders older than 15 minutes - they should go to disputed
+  const ongoingOrders = orders.filter(o => o.status === "escrow" && !isOrderExpired(o));
   const completedOrders = orders.filter(o => o.status === "completed");
-  const cancelledOrders = orders.filter(o => o.status === "cancelled" || o.status === "disputed");
+  // Include expired orders in cancelled view (client-side check)
+  const cancelledOrders = orders.filter(o =>
+    o.status === "cancelled" ||
+    o.status === "disputed" ||
+    // Also include active/escrow orders that are expired (15+ mins old)
+    ((o.status === "active" || o.status === "escrow" || o.status === "pending") && isOrderExpired(o))
+  );
 
   // Debug logging for UI state
   console.log('[Merchant UI] State:', {

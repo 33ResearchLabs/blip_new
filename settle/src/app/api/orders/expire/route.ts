@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { expireOldOrders } from '@/lib/db/repositories/orders';
 
 export async function POST() {
   try {
-    // Call the auto_expire_orders function
-    await query('SELECT auto_expire_orders()');
+    // Use repository function for global 15-minute timeout
+    const expiredCount = await expireOldOrders();
 
     return NextResponse.json({
       success: true,
-      message: 'Orders expiration check completed',
+      message: `Orders expiration check completed. Expired ${expiredCount} orders.`,
+      expiredCount,
     });
   } catch (error) {
     console.error('Error expiring orders:', error);
