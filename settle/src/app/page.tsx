@@ -301,6 +301,7 @@ export default function Home() {
   const [amount, setAmount] = useState("");
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [activityTab, setActivityTab] = useState<'active' | 'completed'>('active');
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [showAddBank, setShowAddBank] = useState(false);
@@ -3610,72 +3611,156 @@ export default function Home() {
               <h1 className="text-[28px] font-semibold text-white">Activity</h1>
             </div>
 
-            <div className="flex-1 px-5 pb-24">
-              {orders.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-20">
-                  <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center mb-4">
-                    <Clock className="w-8 h-8 text-neutral-600" />
-                  </div>
-                  <p className="text-[17px] font-medium text-white mb-1">No activity yet</p>
-                  <p className="text-[15px] text-neutral-500">Your trades will appear here</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {orders.map(order => (
-                    <motion.button
-                      key={order.id}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => {
-                        setActiveOrderId(order.id);
-                        setScreen("order");
-                      }}
-                      className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center gap-3"
-                    >
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        order.status === "complete" ? "bg-emerald-500/10" : "bg-amber-500/10"
-                      }`}>
-                        {order.status === "complete" ? (
-                          <Check className="w-5 h-5 text-emerald-400" />
-                        ) : (
-                          <motion.div
-                            className="w-2 h-2 rounded-full bg-amber-400"
-                            animate={{ scale: [1, 1.3, 1] }}
-                            transition={{ duration: 1.5, repeat: Infinity }}
-                          />
-                        )}
+            {/* Activity Tabs */}
+            <div className="px-5 mb-4">
+              <div className="flex bg-neutral-900 rounded-xl p-1">
+                <button
+                  onClick={() => setActivityTab('active')}
+                  className={`flex-1 py-2.5 rounded-lg text-[13px] font-medium transition-all flex items-center justify-center gap-2 ${
+                    activityTab === 'active'
+                      ? 'bg-neutral-800 text-white'
+                      : 'text-neutral-500'
+                  }`}
+                >
+                  <motion.div
+                    className="w-2 h-2 rounded-full bg-amber-400"
+                    animate={activityTab === 'active' ? { scale: [1, 1.3, 1] } : {}}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  />
+                  Active
+                  {pendingOrders.length > 0 && (
+                    <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded-full">
+                      {pendingOrders.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setActivityTab('completed')}
+                  className={`flex-1 py-2.5 rounded-lg text-[13px] font-medium transition-all flex items-center justify-center gap-2 ${
+                    activityTab === 'completed'
+                      ? 'bg-neutral-800 text-white'
+                      : 'text-neutral-500'
+                  }`}
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  Completed
+                  {completedOrders.length > 0 && (
+                    <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] rounded-full">
+                      {completedOrders.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 px-5 pb-24 overflow-y-auto">
+              {/* Active Orders Tab */}
+              {activityTab === 'active' && (
+                <>
+                  {pendingOrders.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center py-20">
+                      <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center mb-4">
+                        <Clock className="w-8 h-8 text-neutral-600" />
                       </div>
-                      <div className="flex-1 text-left">
-                        <p className="text-[15px] font-medium text-white">
-                          {order.type === "buy" ? "Bought" : "Sold"} ${order.cryptoAmount} USDC
-                        </p>
-                        <p className="text-[13px] text-neutral-500">
-                          د.إ {parseFloat(order.fiatAmount).toLocaleString()}
-                        </p>
+                      <p className="text-[17px] font-medium text-white mb-1">No active trades</p>
+                      <p className="text-[15px] text-neutral-500">Start a new trade from the home screen</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {pendingOrders.map(order => (
+                        <motion.button
+                          key={order.id}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => {
+                            setActiveOrderId(order.id);
+                            setScreen("order");
+                          }}
+                          className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center gap-3"
+                        >
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-amber-500/10">
+                            <motion.div
+                              className="w-2 h-2 rounded-full bg-amber-400"
+                              animate={{ scale: [1, 1.3, 1] }}
+                              transition={{ duration: 1.5, repeat: Infinity }}
+                            />
+                          </div>
+                          <div className="flex-1 text-left">
+                            <p className="text-[15px] font-medium text-white">
+                              {order.type === "buy" ? "Buying" : "Selling"} ${order.cryptoAmount} USDC
+                            </p>
+                            <p className="text-[13px] text-neutral-500">
+                              د.إ {parseFloat(order.fiatAmount).toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[13px] font-medium text-amber-400">
+                              Step {order.step}/4
+                            </p>
+                            {order.dbStatus === 'pending' && order.expiresAt ? (
+                              <p className={`text-[11px] font-mono ${
+                                Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)) < 60
+                                  ? "text-red-400"
+                                  : "text-amber-400"
+                              }`}>
+                                {(() => {
+                                  const secs = Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000));
+                                  return `${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, '0')}`;
+                                })()}
+                              </p>
+                            ) : (
+                              <p className="text-[11px] text-neutral-600">{order.createdAt.toLocaleDateString()}</p>
+                            )}
+                          </div>
+                        </motion.button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Completed Orders Tab */}
+              {activityTab === 'completed' && (
+                <>
+                  {completedOrders.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center py-20">
+                      <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center mb-4">
+                        <Check className="w-8 h-8 text-neutral-600" />
                       </div>
-                      <div className="text-right">
-                        <p className={`text-[13px] font-medium ${
-                          order.status === "complete" ? "text-emerald-400" : "text-amber-400"
-                        }`}>
-                          {order.status === "complete" ? "Done" : `Step ${order.step}/4`}
-                        </p>
-                        {order.dbStatus === 'pending' && order.expiresAt ? (
-                          <p className={`text-[11px] font-mono ${
-                            Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)) < 60
-                              ? "text-red-400"
-                              : "text-amber-400"
-                          }`}>
-                            {(() => {
-                              const secs = Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000));
-                              return `${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, '0')}`;
-                            })()}
-                          </p>
-                        ) : (
-                          <p className="text-[11px] text-neutral-600">{order.createdAt.toLocaleDateString()}</p>
-                        )}
-                      </div>
-                    </motion.button>
-                  ))}
-                </div>
+                      <p className="text-[17px] font-medium text-white mb-1">No completed trades</p>
+                      <p className="text-[15px] text-neutral-500">Your completed transactions will appear here</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {completedOrders.map(order => (
+                        <motion.button
+                          key={order.id}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => {
+                            setActiveOrderId(order.id);
+                            setScreen("order");
+                          }}
+                          className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center gap-3"
+                        >
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-emerald-500/10">
+                            <Check className="w-5 h-5 text-emerald-400" />
+                          </div>
+                          <div className="flex-1 text-left">
+                            <p className="text-[15px] font-medium text-white">
+                              {order.type === "buy" ? "Bought" : "Sold"} ${order.cryptoAmount} USDC
+                            </p>
+                            <p className="text-[13px] text-neutral-500">
+                              د.إ {parseFloat(order.fiatAmount).toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[13px] font-medium text-emerald-400">Completed</p>
+                            <p className="text-[11px] text-neutral-600">{order.createdAt.toLocaleDateString()}</p>
+                          </div>
+                        </motion.button>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
 

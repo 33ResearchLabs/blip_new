@@ -33,6 +33,7 @@ import {
   ExternalLink,
   RotateCcw,
   BarChart3,
+  History,
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -480,8 +481,8 @@ export default function MerchantDashboard() {
   });
   // Order view filter: 'new' (pending only) | 'all' (all orders including completed)
   const [orderViewFilter, setOrderViewFilter] = useState<'new' | 'all'>('new');
-  // Mobile view state: 'orders' | 'escrow' | 'chat' | 'stats'
-  const [mobileView, setMobileView] = useState<'orders' | 'active' | 'escrow' | 'chat' | 'stats'>('orders');
+  // Mobile view state: 'orders' | 'escrow' | 'chat' | 'stats' | 'history'
+  const [mobileView, setMobileView] = useState<'orders' | 'active' | 'escrow' | 'chat' | 'stats' | 'history'>('orders');
   // Order detail popup state
   const [selectedOrderPopup, setSelectedOrderPopup] = useState<Order | null>(null);
   const [markingDone, setMarkingDone] = useState(false);
@@ -4191,6 +4192,72 @@ export default function MerchantDashboard() {
               </div>
             </div>
           )}
+
+          {/* Mobile: History View - All Completed Transactions */}
+          {mobileView === 'history' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold">Transaction History</h2>
+                <span className="text-xs text-gray-500">{completedOrders.length} trades</span>
+              </div>
+
+              {completedOrders.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20">
+                  <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center mb-4">
+                    <History className="w-8 h-8 text-neutral-600" />
+                  </div>
+                  <p className="text-sm font-medium text-white mb-1">No completed trades yet</p>
+                  <p className="text-xs text-neutral-500">Your completed transactions will appear here</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {completedOrders.map((order) => (
+                    <motion.div
+                      key={order.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-4 bg-[#151515] rounded-xl border border-white/[0.04]"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                          <span className="text-sm">{order.emoji}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-white truncate">{order.user}</p>
+                            {order.isM2M && (
+                              <span className="px-1.5 py-0.5 bg-purple-500/10 text-purple-400 text-[10px] rounded">M2M</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {order.orderType === 'buy' ? 'Bought' : 'Sold'} • {order.timestamp.toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-white">${order.amount.toLocaleString()}</p>
+                          <p className="text-xs text-emerald-400">+${(order.amount * 0.005).toFixed(2)}</p>
+                        </div>
+                        <Check className="w-5 h-5 text-emerald-400" />
+                      </div>
+                      {order.escrowTxHash && (
+                        <div className="mt-3 pt-3 border-t border-white/[0.04]">
+                          <a
+                            href={`https://explorer.solana.com/tx/${order.escrowTxHash}?cluster=devnet`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-white transition-colors"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            View on Solana Explorer
+                          </a>
+                        </div>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
 
@@ -4263,6 +4330,23 @@ export default function MerchantDashboard() {
               )}
             </div>
             <span className={`text-[10px] ${mobileView === 'chat' ? 'text-white' : 'text-gray-500'}`}>Chat</span>
+          </button>
+
+          <button
+            onClick={() => setMobileView('history')}
+            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all ${
+              mobileView === 'history' ? 'bg-white/[0.08]' : ''
+            }`}
+          >
+            <div className="relative">
+              <History className={`w-5 h-5 ${mobileView === 'history' ? 'text-purple-400' : 'text-gray-500'}`} />
+              {completedOrders.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {completedOrders.length > 99 ? '99+' : completedOrders.length}
+                </span>
+              )}
+            </div>
+            <span className={`text-[10px] ${mobileView === 'history' ? 'text-white' : 'text-gray-500'}`}>History</span>
           </button>
 
           <button
