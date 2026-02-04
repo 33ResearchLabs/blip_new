@@ -23,13 +23,17 @@ export const ORDER_STATUSES: readonly OrderStatus[] = [
   'expired',
 ] as const;
 
-// Timeout durations in minutes
+// Global timeout: ALL orders must complete within 15 minutes
+export const GLOBAL_ORDER_TIMEOUT_MINUTES = 15;
+
+// Timeout durations in minutes (legacy per-status - kept for reference)
+// Note: Global 15-minute timeout takes precedence
 export const STATUS_TIMEOUTS: Partial<Record<OrderStatus, number>> = {
   pending: 15,
-  accepted: 30,
-  escrowed: 120,
-  payment_sent: 240,
-  disputed: 4320, // 72 hours
+  accepted: 15,
+  escrowed: 15,
+  payment_sent: 15,
+  disputed: 4320, // 72 hours for dispute resolution
 };
 
 // Define allowed transitions: from -> to[]
@@ -246,13 +250,16 @@ export function getTimestampField(status: OrderStatus): string | null {
 
 /**
  * Get next expiry interval for a given status
+ * Note: Global 15-minute timeout - expires_at is set at creation and doesn't change
  */
 export function getNextExpiryInterval(status: OrderStatus): string | null {
+  // All statuses use the same 15-minute timeout from creation
+  // This function is kept for compatibility but expiry is now based on created_at
   const intervals: Partial<Record<OrderStatus, string>> = {
     pending: "INTERVAL '15 minutes'",
-    accepted: "INTERVAL '30 minutes'",
-    escrowed: "INTERVAL '2 hours'",
-    payment_sent: "INTERVAL '4 hours'",
+    accepted: "INTERVAL '15 minutes'",
+    escrowed: "INTERVAL '15 minutes'",
+    payment_sent: "INTERVAL '15 minutes'",
   };
   return intervals[status] || null;
 }

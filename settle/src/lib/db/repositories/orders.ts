@@ -396,7 +396,8 @@ export async function updateOrderStatus(
       let originalMerchantUpdate = '';
       switch (newStatus) {
         case 'accepted':
-          timestampField = ", accepted_at = NOW(), expires_at = NOW() + INTERVAL '30 minutes'";
+          // Note: expires_at stays at original 15 mins from creation (global timeout)
+          timestampField = ", accepted_at = NOW()";
           // If a different merchant is claiming, reassign the order to them
           // Store the original merchant in buyer_merchant_id so they can track the order
           if (isMerchantClaiming) {
@@ -426,10 +427,12 @@ export async function updateOrderStatus(
           }
           break;
         case 'escrowed':
-          timestampField = ", escrowed_at = NOW(), expires_at = NOW() + INTERVAL '2 hours'";
+          // Note: expires_at stays at original 15 mins from creation (global timeout)
+          timestampField = ", escrowed_at = NOW()";
           break;
         case 'payment_sent':
-          timestampField = ", payment_sent_at = NOW(), expires_at = NOW() + INTERVAL '4 hours'";
+          // Note: expires_at stays at original 15 mins from creation (global timeout)
+          timestampField = ", payment_sent_at = NOW()";
           break;
         case 'payment_confirmed':
           timestampField = ', payment_confirmed_at = NOW()';
@@ -669,13 +672,22 @@ export async function markMessagesAsRead(
   );
 }
 
-// Expired orders cleanup
+// Expired orders cleanup - Global 15-minute timeout from creation
 export async function expireOldOrders(): Promise<number> {
   const result = await query(
     `UPDATE orders
-     SET status = 'expired', cancelled_at = NOW(), cancelled_by = 'system', cancellation_reason = 'Timed out'
-     WHERE status IN ('pending', 'accepted', 'escrowed', 'payment_pending', 'payment_sent')
-       AND expires_at < NOW()
+     SET
+       status = CASE
+         -- If escrow is locked, go to disputed for manual resolution
+         WHEN status IN ('escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'releasing') THEN 'disputed'
+         -- Otherwise just cancel
+         ELSE 'cancelled'
+       END,
+       cancelled_at = NOW(),
+       cancelled_by = 'system',
+       cancellation_reason = 'Order timeout - not completed within 15 minutes'
+     WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed')
+       AND created_at < NOW() - INTERVAL '15 minutes'
      RETURNING id`
   );
   return result.length;
