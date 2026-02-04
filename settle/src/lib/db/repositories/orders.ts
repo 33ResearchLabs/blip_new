@@ -201,11 +201,19 @@ export async function getAllPendingOrdersForMerchant(
              'payment_method', mo.payment_method,
              'location_name', mo.location_name,
              'rate', mo.rate
-           ) as offer
+           ) as offer,
+           CASE WHEN bm.id IS NOT NULL THEN
+             json_build_object(
+               'id', bm.id,
+               'display_name', bm.display_name,
+               'wallet_address', bm.wallet_address
+             )
+           ELSE NULL END as buyer_merchant
     FROM orders o
     JOIN users u ON o.user_id = u.id
     JOIN merchants m ON o.merchant_id = m.id
     JOIN merchant_offers mo ON o.offer_id = mo.id
+    LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
     WHERE o.status NOT IN ('expired', 'cancelled')
       AND (
         (o.status = 'pending' AND (o.buyer_merchant_id IS NULL OR o.buyer_merchant_id != $1))  -- Pending orders, excluding ones I created as M2M buyer

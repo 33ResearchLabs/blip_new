@@ -97,6 +97,13 @@ interface DbOrder {
   escrow_creator_wallet?: string;
   // Buyer's wallet address captured at order creation (for buy orders)
   buyer_wallet_address?: string;
+  // M2M trading: buyer merchant ID and info
+  buyer_merchant_id?: string;
+  buyer_merchant?: {
+    id: string;
+    display_name: string;
+    wallet_address?: string;
+  };
   // Payment details (includes user_bank_account for sell orders)
   payment_details?: {
     user_bank_account?: string;
@@ -141,6 +148,10 @@ interface Order {
   orderType?: "buy" | "sell";
   // User's bank account for sell orders (where merchant sends fiat)
   userBankAccount?: string;
+  // M2M trading
+  isM2M?: boolean;
+  buyerMerchantId?: string;
+  buyerMerchantWallet?: string;
 }
 
 // Leaderboard data
@@ -266,10 +277,13 @@ const mapDbOrderToUI = (dbOrder: DbOrder): Order => {
     ? parseFloat(dbOrder.rate)
     : dbOrder.rate;
 
+  // Check if this is an M2M trade
+  const isM2M = !!dbOrder.buyer_merchant_id;
+
   return {
     id: dbOrder.id,
-    user: userName,
-    emoji: getUserEmoji(userName),
+    user: isM2M ? (dbOrder.buyer_merchant?.display_name || 'Merchant') : userName,
+    emoji: getUserEmoji(isM2M ? (dbOrder.buyer_merchant?.display_name || 'M') : userName),
     amount: cryptoAmount,
     fromCurrency: "USDC",
     toCurrency: "AED",
@@ -287,11 +301,18 @@ const mapDbOrderToUI = (dbOrder: DbOrder): Order => {
     escrowCreatorWallet: dbOrder.escrow_creator_wallet,
     escrowTxHash: dbOrder.escrow_tx_hash,
     // For buy orders, use buyer_wallet_address captured at order creation (more reliable)
+    // For M2M, use buyer merchant's wallet
     // Fall back to user's wallet from users table if buyer_wallet_address not set
-    userWallet: dbOrder.buyer_wallet_address || dbOrder.user?.wallet_address,
+    userWallet: isM2M
+      ? dbOrder.buyer_merchant?.wallet_address
+      : (dbOrder.buyer_wallet_address || dbOrder.user?.wallet_address),
     orderType: dbOrder.type,
     // User's bank account (from payment_details)
     userBankAccount: dbOrder.payment_details?.user_bank_account,
+    // M2M fields
+    isM2M,
+    buyerMerchantId: dbOrder.buyer_merchant_id,
+    buyerMerchantWallet: dbOrder.buyer_merchant?.wallet_address,
   };
 };
 
@@ -4987,20 +5008,39 @@ export default function MerchantDashboard() {
                   {/* Warning / Info */}
                   {!escrowTxHash && !isLockingEscrow && (
                     <>
-                      {escrowOrder.userWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.userWallet) ? (
-                        <div className="bg-amber-500/10 rounded-xl p-3 border border-amber-500/20">
-                          <p className="text-xs text-amber-400">
-                            ⚠️ You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow on-chain.
-                            This will be released to the buyer after they pay you the fiat amount.
-                          </p>
-                        </div>
+                      {escrowOrder.isM2M ? (
+                        // M2M trade - show merchant info
+                        escrowOrder.buyerMerchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.buyerMerchantWallet) ? (
+                          <div className="bg-purple-500/10 rounded-xl p-3 border border-purple-500/20">
+                            <p className="text-xs text-purple-400">
+                              🤝 <strong>M2M Trade:</strong> You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow.
+                              This will be released to the buying merchant after they pay the fiat amount.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
+                            <p className="text-xs text-red-400">
+                              ⚠️ Buying merchant hasn&apos;t connected their wallet. They need to connect their wallet first.
+                            </p>
+                          </div>
+                        )
                       ) : (
-                        <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
-                          <p className="text-xs text-red-400">
-                            ⚠️ User hasn&apos;t connected their Solana wallet yet. On-chain escrow requires the user&apos;s wallet address.
-                            Please ask them to connect their wallet in the app first.
-                          </p>
-                        </div>
+                        // Regular user trade
+                        escrowOrder.userWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.userWallet) ? (
+                          <div className="bg-amber-500/10 rounded-xl p-3 border border-amber-500/20">
+                            <p className="text-xs text-amber-400">
+                              ⚠️ You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow on-chain.
+                              This will be released to the buyer after they pay you the fiat amount.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
+                            <p className="text-xs text-red-400">
+                              ⚠️ User hasn&apos;t connected their Solana wallet yet. On-chain escrow requires the user&apos;s wallet address.
+                              Please ask them to connect their wallet in the app first.
+                            </p>
+                          </div>
+                        )
                       )}
                     </>
                   )}
@@ -5029,7 +5069,14 @@ export default function MerchantDashboard() {
                       <motion.button
                         whileTap={{ scale: 0.98 }}
                         onClick={executeLockEscrow}
-                        disabled={isLockingEscrow || (solanaWallet.usdtBalance || 0) < escrowOrder.amount || !escrowOrder.userWallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.userWallet)}
+                        disabled={
+                          isLockingEscrow ||
+                          (solanaWallet.usdtBalance || 0) < escrowOrder.amount ||
+                          // For M2M: check buyer merchant wallet, for regular: check user wallet
+                          (escrowOrder.isM2M
+                            ? (!escrowOrder.buyerMerchantWallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.buyerMerchantWallet))
+                            : (!escrowOrder.userWallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.userWallet)))
+                        }
                         className="flex-[2] py-3 rounded-xl text-sm font-bold bg-blue-500 text-white hover:bg-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         {isLockingEscrow ? (
