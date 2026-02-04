@@ -74,7 +74,7 @@ const useSolanaWalletHook = () => {
 };
 
 // Types
-type Screen = "home" | "order" | "escrow" | "orders" | "profile" | "chats" | "create-offer" | "cash-confirm" | "matching" | "welcome";
+type Screen = "home" | "order" | "escrow" | "orders" | "profile" | "chats" | "chat-view" | "create-offer" | "cash-confirm" | "matching" | "welcome";
 type TradeType = "buy" | "sell";
 type TradePreference = "fast" | "cheap" | "best";
 type PaymentMethod = "bank" | "cash";
@@ -404,6 +404,35 @@ export default function Home() {
 
   // Wallet linking removed - no automatic wallet actions
 
+  // Request notification permission on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+  }, []);
+
+  // Helper to show browser notification
+  const showBrowserNotification = useCallback((title: string, body: string, orderId?: string) => {
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      const notification = new Notification(title, {
+        body,
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        tag: orderId || 'chat-message',
+      });
+      notification.onclick = () => {
+        window.focus();
+        if (orderId) {
+          setActiveOrderId(orderId);
+          setScreen('chat-view');
+        }
+        notification.close();
+      };
+    }
+  }, []);
+
   // Real-time chat hook (replaces polling)
   const {
     chatWindows,
@@ -412,8 +441,27 @@ export default function Home() {
   } = useRealtimeChat({
     actorType: "user",
     actorId: userId || undefined,
-    onNewMessage: () => {
+    onNewMessage: (chatId, message) => {
       playSound('message');
+
+      // Update unread count for the order
+      setOrders(prev => prev.map(o => {
+        if (o.id === chatId && message.from === 'them') {
+          return { ...o, unreadCount: (o.unreadCount || 0) + 1 };
+        }
+        return o;
+      }));
+
+      // Show browser notification if not on the chat screen or if it's a different order
+      if (message.from === 'them' && (screen !== 'order' || activeOrderId !== chatId)) {
+        const order = orders.find(o => o.id === chatId);
+        const merchantName = order?.merchant?.name || 'Merchant';
+        showBrowserNotification(
+          `New message from ${merchantName}`,
+          message.text.substring(0, 100),
+          chatId
+        );
+      }
     },
   });
 
@@ -946,7 +994,7 @@ export default function Home() {
     }
   }, []);
 
-  // Open chat when showChat is toggled
+  // Open chat when showChat is toggled or when entering chat-view screen
   const handleOpenChat = useCallback(() => {
     if (activeOrder) {
       openChat(
@@ -958,12 +1006,23 @@ export default function Home() {
     setShowChat(true);
   }, [activeOrder, openChat]);
 
+  // Auto-open chat when entering chat-view screen
+  useEffect(() => {
+    if (screen === "chat-view" && activeOrder) {
+      openChat(
+        activeOrder.merchant.name,
+        "🏪",
+        activeOrder.id
+      );
+    }
+  }, [screen, activeOrder, openChat]);
+
   // Scroll to bottom when chat messages change
   useEffect(() => {
-    if (showChat && chatMessagesRef.current) {
+    if ((showChat || screen === "chat-view") && chatMessagesRef.current) {
       chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
     }
-  }, [showChat, activeChat?.messages]);
+  }, [showChat, screen, activeChat?.messages]);
 
   // Handle sending message
   const handleSendMessage = useCallback(() => {
@@ -3783,27 +3842,38 @@ export default function Home() {
                     {[
                       { key: "home", icon: Wallet, label: "Home" },
                       { key: "orders", icon: Clock, label: "Activity" },
+                      { key: "chats", icon: MessageCircle, label: "Messages" },
                       { key: "profile", icon: User, label: "Profile" },
-                    ].map(({ key, icon: Icon, label }) => (
-                      <motion.button
-                        key={key}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => setScreen(key as Screen)}
-                        className={`flex flex-col items-center gap-1 relative px-4 py-1 rounded-xl transition-all ${
-                          screen === key ? "text-orange-400" : "text-neutral-600"
-                        }`}
-                      >
-                        {screen === key && (
-                          <motion.div
-                            layoutId="nav-indicator-orders"
-                            className="absolute inset-0 bg-orange-500/10 rounded-xl"
-                            transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                          />
-                        )}
-                        <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
-                        <span className="text-[10px] font-medium relative z-10">{label}</span>
-                      </motion.button>
-                    ))}
+                    ].map(({ key, icon: Icon, label }) => {
+                      const unreadTotal = key === "chats" ? orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) : 0;
+                      return (
+                        <motion.button
+                          key={key}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => setScreen(key as Screen)}
+                          className={`flex flex-col items-center gap-1 relative px-3 py-1 rounded-xl transition-all ${
+                            screen === key ? "text-orange-400" : "text-neutral-600"
+                          }`}
+                        >
+                          {screen === key && (
+                            <motion.div
+                              layoutId="nav-indicator-orders"
+                              className="absolute inset-0 bg-orange-500/10 rounded-xl"
+                              transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+                            />
+                          )}
+                          <div className="relative">
+                            <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
+                            {unreadTotal > 0 && (
+                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                                {unreadTotal > 99 ? '99+' : unreadTotal}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-medium relative z-10">{label}</span>
+                        </motion.button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -4187,27 +4257,38 @@ export default function Home() {
                     {[
                       { key: "home", icon: Wallet, label: "Home" },
                       { key: "orders", icon: Clock, label: "Activity" },
+                      { key: "chats", icon: MessageCircle, label: "Messages" },
                       { key: "profile", icon: User, label: "Profile" },
-                    ].map(({ key, icon: Icon, label }) => (
-                      <motion.button
-                        key={key}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => setScreen(key as Screen)}
-                        className={`flex flex-col items-center gap-1 relative px-4 py-1 rounded-xl transition-all ${
-                          screen === key ? "text-orange-400" : "text-neutral-600"
-                        }`}
-                      >
-                        {screen === key && (
-                          <motion.div
-                            layoutId="nav-indicator-profile"
-                            className="absolute inset-0 bg-orange-500/10 rounded-xl"
-                            transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                          />
-                        )}
-                        <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
-                        <span className="text-[10px] font-medium relative z-10">{label}</span>
-                      </motion.button>
-                    ))}
+                    ].map(({ key, icon: Icon, label }) => {
+                      const unreadTotal = key === "chats" ? orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) : 0;
+                      return (
+                        <motion.button
+                          key={key}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => setScreen(key as Screen)}
+                          className={`flex flex-col items-center gap-1 relative px-3 py-1 rounded-xl transition-all ${
+                            screen === key ? "text-orange-400" : "text-neutral-600"
+                          }`}
+                        >
+                          {screen === key && (
+                            <motion.div
+                              layoutId="nav-indicator-profile"
+                              className="absolute inset-0 bg-orange-500/10 rounded-xl"
+                              transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+                            />
+                          )}
+                          <div className="relative">
+                            <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
+                            {unreadTotal > 0 && (
+                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                                {unreadTotal > 99 ? '99+' : unreadTotal}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-medium relative z-10">{label}</span>
+                        </motion.button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -4233,7 +4314,7 @@ export default function Home() {
               <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">Messages</h1>
             </div>
 
-            <div className="flex-1 px-5 pb-8">
+            <div className="flex-1 px-5 pb-28 overflow-y-auto">
               {orders.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center py-20">
                   <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center mb-4">
@@ -4244,13 +4325,15 @@ export default function Home() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {orders.slice(0, 10).map(order => (
+                  {orders.map(order => (
                     <motion.button
                       key={order.id}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => {
                         setActiveOrderId(order.id);
-                        setScreen("order");
+                        setScreen("chat-view");
+                        // Clear unread count when opening chat
+                        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, unreadCount: 0 } : o));
                       }}
                       className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center gap-3"
                     >
@@ -4292,6 +4375,208 @@ export default function Home() {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* Bottom Nav */}
+            <div className="fixed bottom-0 left-0 right-0 z-50">
+              <div className={`${maxW} mx-auto`}>
+                <div className="glass-card border-t border-white/5 px-6 pb-8 pt-3">
+                  <div className="flex items-center justify-around">
+                    {[
+                      { key: "home", icon: Wallet, label: "Home" },
+                      { key: "orders", icon: Clock, label: "Activity" },
+                      { key: "chats", icon: MessageCircle, label: "Messages" },
+                      { key: "profile", icon: User, label: "Profile" },
+                    ].map(({ key, icon: Icon, label }) => {
+                      const unreadTotal = key === "chats" ? orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) : 0;
+                      return (
+                        <motion.button
+                          key={key}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => setScreen(key as Screen)}
+                          className={`flex flex-col items-center gap-1 relative px-3 py-1 rounded-xl transition-all ${
+                            screen === key ? "text-orange-400" : "text-neutral-600"
+                          }`}
+                        >
+                          {screen === key && (
+                            <motion.div
+                              layoutId="nav-indicator-chats"
+                              className="absolute inset-0 bg-orange-500/10 rounded-xl"
+                              transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+                            />
+                          )}
+                          <div className="relative">
+                            <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
+                            {unreadTotal > 0 && (
+                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                                {unreadTotal > 99 ? '99+' : unreadTotal}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-medium relative z-10">{label}</span>
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* CHAT VIEW - WhatsApp-style chat conversation */}
+        {screen === "chat-view" && activeOrder && (
+          <motion.div
+            key="chat-view"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className={`flex-1 w-full ${maxW} flex flex-col bg-black h-dvh`}
+          >
+            {/* Chat Header */}
+            <div className="bg-neutral-900 border-b border-neutral-800 pt-12 pb-3 px-4">
+              <div className="flex items-center gap-3">
+                <button onClick={() => setScreen("chats")} className="p-2 -ml-2">
+                  <ChevronLeft className="w-6 h-6 text-white" />
+                </button>
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-400 flex items-center justify-center text-white font-semibold">
+                  {activeOrder.merchant.name.charAt(0)}
+                </div>
+                <div className="flex-1">
+                  <p className="text-[15px] font-semibold text-white">{activeOrder.merchant.name}</p>
+                  <p className="text-[12px] text-emerald-400">Online</p>
+                </div>
+                <button
+                  onClick={() => setScreen("order")}
+                  className="p-2 bg-neutral-800 rounded-full"
+                >
+                  <ArrowUpRight className="w-4 h-4 text-neutral-400" />
+                </button>
+              </div>
+              {/* Order summary bar */}
+              <div className="mt-3 bg-neutral-800/50 rounded-xl px-3 py-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    activeOrder.status === 'complete' ? 'bg-emerald-400' :
+                    activeOrder.status === 'disputed' ? 'bg-red-400' : 'bg-amber-400'
+                  }`} />
+                  <span className="text-[12px] text-neutral-400">
+                    {activeOrder.type === "buy" ? "Buying" : "Selling"} {activeOrder.cryptoAmount} USDC
+                  </span>
+                </div>
+                <span className="text-[12px] text-neutral-500">
+                  د.إ {parseFloat(activeOrder.fiatAmount).toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* Messages Area */}
+            <div
+              ref={chatMessagesRef}
+              className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
+              style={{ background: 'linear-gradient(to bottom, #0a0a0a, #111)' }}
+            >
+              {activeChat && activeChat.messages.length > 0 ? (
+                activeChat.messages.map((msg) => {
+                  // Parse dispute/resolution messages
+                  if (msg.messageType === 'dispute') {
+                    try {
+                      const data = JSON.parse(msg.text);
+                      return (
+                        <div key={msg.id} className="flex justify-center">
+                          <div className="w-full max-w-[90%] bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <AlertTriangle className="w-4 h-4 text-red-400" />
+                              <span className="text-[13px] font-semibold text-red-400">Dispute Opened</span>
+                            </div>
+                            <p className="text-[14px] text-white mb-1">
+                              <span className="text-neutral-400">Reason:</span> {data.reason?.replace(/_/g, ' ')}
+                            </p>
+                            {data.description && (
+                              <p className="text-[13px] text-neutral-400">{data.description}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    } catch {
+                      // Fall back to regular message
+                    }
+                  }
+
+                  if (msg.messageType === 'system') {
+                    return (
+                      <div key={msg.id} className="flex justify-center">
+                        <div className="bg-neutral-800/50 px-4 py-1.5 rounded-full">
+                          <p className="text-[12px] text-neutral-400">{msg.text}</p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Regular messages - WhatsApp style
+                  const isMe = msg.from === "me";
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${
+                          isMe
+                            ? "bg-orange-500 text-white rounded-br-md"
+                            : "bg-neutral-800 text-white rounded-bl-md"
+                        }`}
+                      >
+                        <p className="text-[15px] leading-relaxed">{msg.text}</p>
+                        <p className={`text-[10px] mt-1 ${isMe ? 'text-orange-200' : 'text-neutral-500'}`}>
+                          {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center py-20">
+                  <div className="w-16 h-16 rounded-full bg-neutral-800 flex items-center justify-center mb-4">
+                    <MessageCircle className="w-8 h-8 text-neutral-600" />
+                  </div>
+                  <p className="text-[15px] text-neutral-500">No messages yet</p>
+                  <p className="text-[13px] text-neutral-600 mt-1">Send a message to start the conversation</p>
+                </div>
+              )}
+            </div>
+
+            {/* Message Input - WhatsApp style */}
+            <div className="bg-neutral-900 border-t border-neutral-800 px-4 py-3 pb-8">
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Type a message..."
+                  className="flex-1 bg-neutral-800 rounded-full px-5 py-3 text-[15px] text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-orange-500/30"
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && chatMessage.trim()) {
+                      sendChatMessage(activeOrder.id, chatMessage.trim());
+                      setChatMessage('');
+                    }
+                  }}
+                />
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    if (chatMessage.trim()) {
+                      sendChatMessage(activeOrder.id, chatMessage.trim());
+                      setChatMessage('');
+                    }
+                  }}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                    chatMessage.trim() ? 'bg-orange-500' : 'bg-neutral-800'
+                  }`}
+                >
+                  <ArrowUpRight className={`w-5 h-5 ${chatMessage.trim() ? 'text-white' : 'text-neutral-500'}`} />
+                </motion.button>
+              </div>
             </div>
           </motion.div>
         )}
