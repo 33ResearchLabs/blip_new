@@ -1281,12 +1281,23 @@ export default function MerchantDashboard() {
       return;
     }
 
-    // Check if user has a valid Solana wallet (base58 format) - REQUIRED for on-chain escrow
-    const userWallet = escrowOrder.userWallet;
-    const isValidSolanaAddress = userWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(userWallet);
+    // Check for valid recipient wallet - M2M trades use buyerMerchantWallet, regular trades use userWallet
+    const validWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
-    if (!isValidSolanaAddress) {
-      setEscrowError('User has not connected their Solana wallet yet. Ask them to connect their wallet in the app first.');
+    // Priority: buyerMerchantWallet (M2M) > userWallet (regular trade)
+    const recipientWallet =
+      (escrowOrder.buyerMerchantWallet && validWalletRegex.test(escrowOrder.buyerMerchantWallet))
+        ? escrowOrder.buyerMerchantWallet
+        : (escrowOrder.userWallet && validWalletRegex.test(escrowOrder.userWallet))
+          ? escrowOrder.userWallet
+          : null;
+
+    const isMerchantTrade = escrowOrder.isM2M || !!escrowOrder.buyerMerchantWallet;
+
+    if (!recipientWallet) {
+      setEscrowError(isMerchantTrade
+        ? 'The other merchant has not connected their Solana wallet yet.'
+        : 'User has not connected their Solana wallet yet. Ask them to connect their wallet in the app first.');
       return;
     }
 
@@ -1296,12 +1307,13 @@ export default function MerchantDashboard() {
     try {
       console.log('[Merchant] Executing on-chain escrow lock...', {
         amount: escrowOrder.amount,
-        userWallet: userWallet,
+        recipientWallet,
+        isMerchantTrade,
       });
 
       const escrowResult = await solanaWallet.depositToEscrow({
         amount: escrowOrder.amount,
-        merchantWallet: userWallet, // User's wallet to receive the USDC
+        merchantWallet: recipientWallet, // Recipient's wallet to receive the USDC
       });
       console.log('[Merchant] depositToEscrow result:', escrowResult);
 

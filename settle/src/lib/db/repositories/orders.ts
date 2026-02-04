@@ -187,7 +187,7 @@ export async function getAllPendingOrdersForMerchant(
 ): Promise<OrderWithRelations[]> {
   let sql = `
     SELECT o.*,
-           (o.merchant_id = $1 AND o.buyer_merchant_id IS NULL) as is_my_order,
+           ((o.merchant_id = $1 AND o.buyer_merchant_id IS NULL) OR o.buyer_merchant_id = $1) as is_my_order,
            json_build_object(
              'id', u.id,
              'name', u.username,
@@ -274,9 +274,9 @@ export async function createOrder(data: {
       `INSERT INTO orders (
          user_id, merchant_id, offer_id, type, payment_method,
          crypto_amount, fiat_amount, rate, payment_details,
-         status, expires_at, buyer_wallet_address
+         status, expires_at, buyer_wallet_address, buyer_merchant_id
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', NOW() + INTERVAL '15 minutes', $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', NOW() + INTERVAL '15 minutes', $10, $11)
        RETURNING *`,
       [
         data.user_id,
@@ -289,6 +289,7 @@ export async function createOrder(data: {
         data.rate,
         JSON.stringify(data.payment_details || {}),
         data.buyer_wallet_address || null,
+        data.buyer_merchant_id || null,
       ]
     );
 
