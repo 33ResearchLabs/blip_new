@@ -155,13 +155,18 @@ interface LeaderboardEntry {
 
 // Helper to map DB status to UI status
 // hasEscrow: true when escrow_tx_hash exists (escrow already locked)
-const mapDbStatusToUI = (dbStatus: string, hasEscrow?: boolean): "pending" | "active" | "escrow" | "completed" | "disputed" | "cancelled" => {
+// orderType: 'buy' or 'sell' - determines flow
+const mapDbStatusToUI = (dbStatus: string, hasEscrow?: boolean, orderType?: string): "pending" | "active" | "escrow" | "completed" | "disputed" | "cancelled" => {
   switch (dbStatus) {
     case "pending":
       return "pending"; // New Orders
     case "escrowed":
-      // User locked escrow but merchant hasn't approved yet - stays in New Orders
-      return "pending";
+      // For BUY orders: merchant locked escrow -> goes to Ongoing (waiting for user fiat payment)
+      // For SELL orders: user locked escrow but merchant hasn't approved yet -> stays in New Orders
+      if (orderType === 'buy') {
+        return "escrow"; // Ongoing - merchant locked escrow, waiting for user payment
+      }
+      return "pending"; // New Orders - sell order waiting for merchant to click Go
     case "accepted":
       // Merchant approved (clicked "Go") - now in Active section, needs to sign tx or send payment
       return "active";
@@ -271,7 +276,7 @@ const mapDbOrderToUI = (dbOrder: DbOrder): Order => {
     rate: rate,
     total: fiatAmount,
     timestamp: new Date(dbOrder.created_at),
-    status: mapDbStatusToUI(dbOrder.status, !!dbOrder.escrow_tx_hash),
+    status: mapDbStatusToUI(dbOrder.status, !!dbOrder.escrow_tx_hash, dbOrder.type),
     expiresIn,
     isNew: (dbOrder.user?.total_trades || 0) < 3,
     tradeVolume: (dbOrder.user?.total_trades || 0) * 500, // Estimated volume
