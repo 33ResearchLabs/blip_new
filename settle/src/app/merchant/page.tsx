@@ -126,6 +126,9 @@ interface DbOrder {
     payment_method: string;
     location_name?: string;
   };
+  // Cancellation info
+  cancellation_reason?: string;
+  cancelled_at?: string;
 }
 
 // UI Order type
@@ -483,6 +486,8 @@ export default function MerchantDashboard() {
   const [orderViewFilter, setOrderViewFilter] = useState<'new' | 'all'>('new');
   // Mobile view state: 'orders' | 'escrow' | 'chat' | 'stats' | 'history'
   const [mobileView, setMobileView] = useState<'orders' | 'active' | 'escrow' | 'chat' | 'stats' | 'history'>('orders');
+  // History tab filter: 'completed' | 'cancelled'
+  const [historyTab, setHistoryTab] = useState<'completed' | 'cancelled'>('completed');
   // Order detail popup state
   const [selectedOrderPopup, setSelectedOrderPopup] = useState<Order | null>(null);
   const [markingDone, setMarkingDone] = useState(false);
@@ -2054,6 +2059,7 @@ export default function MerchantDashboard() {
   // "escrow" = Ongoing (tx signed, trade in progress)
   const ongoingOrders = orders.filter(o => o.status === "escrow");
   const completedOrders = orders.filter(o => o.status === "completed");
+  const cancelledOrders = orders.filter(o => o.status === "cancelled" || o.status === "disputed");
 
   // Debug logging for UI state
   console.log('[Merchant UI] State:', {
@@ -4267,68 +4273,168 @@ export default function MerchantDashboard() {
             </div>
           )}
 
-          {/* Mobile: History View - All Completed Transactions */}
+          {/* Mobile: History View - Completed & Cancelled Transactions */}
           {mobileView === 'history' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-2">
                 <h2 className="text-sm font-semibold">Transaction History</h2>
-                <span className="text-xs text-gray-500">{completedOrders.length} trades</span>
               </div>
 
-              {completedOrders.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20">
-                  <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center mb-4">
-                    <History className="w-8 h-8 text-neutral-600" />
-                  </div>
-                  <p className="text-sm font-medium text-white mb-1">No completed trades yet</p>
-                  <p className="text-xs text-neutral-500">Your completed transactions will appear here</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {completedOrders.map((order) => (
-                    <motion.div
-                      key={order.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-4 bg-[#151515] rounded-xl border border-white/[0.04]"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                          <span className="text-sm">{order.emoji}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-white truncate">{order.user}</p>
-                            {order.isM2M && (
-                              <span className="px-1.5 py-0.5 bg-purple-500/10 text-purple-400 text-[10px] rounded">M2M</span>
-                            )}
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            {order.orderType === 'buy' ? 'Bought' : 'Sold'} • {order.timestamp.toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold text-white">${order.amount.toLocaleString()}</p>
-                          <p className="text-xs text-emerald-400">+${(order.amount * 0.005).toFixed(2)}</p>
-                        </div>
-                        <Check className="w-5 h-5 text-emerald-400" />
+              {/* History Tabs */}
+              <div className="flex bg-[#151515] rounded-xl p-1 mb-4">
+                <button
+                  onClick={() => setHistoryTab('completed')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${
+                    historyTab === 'completed'
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : 'text-gray-500'
+                  }`}
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  Completed
+                  {completedOrders.length > 0 && (
+                    <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] rounded-full">
+                      {completedOrders.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setHistoryTab('cancelled')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${
+                    historyTab === 'cancelled'
+                      ? 'bg-red-500/20 text-red-400'
+                      : 'text-gray-500'
+                  }`}
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Cancelled
+                  {cancelledOrders.length > 0 && (
+                    <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] rounded-full">
+                      {cancelledOrders.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* Completed Orders Tab */}
+              {historyTab === 'completed' && (
+                <>
+                  {completedOrders.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20">
+                      <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center mb-4">
+                        <Check className="w-8 h-8 text-neutral-600" />
                       </div>
-                      {order.escrowTxHash && (
-                        <div className="mt-3 pt-3 border-t border-white/[0.04]">
-                          <a
-                            href={`https://explorer.solana.com/tx/${order.escrowTxHash}?cluster=devnet`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-white transition-colors"
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            View on Solana Explorer
-                          </a>
-                        </div>
-                      )}
-                    </motion.div>
-                  ))}
-                </div>
+                      <p className="text-sm font-medium text-white mb-1">No completed trades yet</p>
+                      <p className="text-xs text-neutral-500">Your completed transactions will appear here</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {completedOrders.map((order) => (
+                        <motion.div
+                          key={order.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="p-4 bg-[#151515] rounded-xl border border-white/[0.04]"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                              <span className="text-sm">{order.emoji}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium text-white truncate">{order.user}</p>
+                                {order.isM2M && (
+                                  <span className="px-1.5 py-0.5 bg-purple-500/10 text-purple-400 text-[10px] rounded">M2M</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500">
+                                {order.orderType === 'buy' ? 'Bought' : 'Sold'} • {order.timestamp.toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-white">${order.amount.toLocaleString()}</p>
+                              <p className="text-xs text-emerald-400">+${(order.amount * 0.005).toFixed(2)}</p>
+                            </div>
+                            <Check className="w-5 h-5 text-emerald-400" />
+                          </div>
+                          {order.escrowTxHash && (
+                            <div className="mt-3 pt-3 border-t border-white/[0.04]">
+                              <a
+                                href={`https://explorer.solana.com/tx/${order.escrowTxHash}?cluster=devnet`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-white transition-colors"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                View on Solana Explorer
+                              </a>
+                            </div>
+                          )}
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Cancelled Orders Tab */}
+              {historyTab === 'cancelled' && (
+                <>
+                  {cancelledOrders.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20">
+                      <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center mb-4">
+                        <X className="w-8 h-8 text-neutral-600" />
+                      </div>
+                      <p className="text-sm font-medium text-white mb-1">No cancelled trades</p>
+                      <p className="text-xs text-neutral-500">Cancelled or disputed orders will appear here</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {cancelledOrders.map((order) => (
+                        <motion.div
+                          key={order.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="p-4 bg-[#151515] rounded-xl border border-red-500/10"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                              <span className="text-sm">{order.emoji}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium text-white truncate">{order.user}</p>
+                                {order.status === 'disputed' && (
+                                  <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded">DISPUTED</span>
+                                )}
+                                {order.isM2M && (
+                                  <span className="px-1.5 py-0.5 bg-purple-500/10 text-purple-400 text-[10px] rounded">M2M</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500">
+                                {order.orderType === 'buy' ? 'Buy' : 'Sell'} • {order.timestamp.toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-white">${order.amount.toLocaleString()}</p>
+                              <p className="text-xs text-red-400">
+                                {order.status === 'disputed' ? 'In dispute' : 'Cancelled'}
+                              </p>
+                            </div>
+                            <X className="w-5 h-5 text-red-400" />
+                          </div>
+                          {order.dbOrder?.cancellation_reason && (
+                            <div className="mt-3 pt-3 border-t border-white/[0.04]">
+                              <p className="text-[10px] text-gray-500">
+                                Reason: {order.dbOrder.cancellation_reason}
+                              </p>
+                            </div>
+                          )}
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -4414,9 +4520,9 @@ export default function MerchantDashboard() {
           >
             <div className="relative">
               <History className={`w-5 h-5 ${mobileView === 'history' ? 'text-purple-400' : 'text-gray-500'}`} />
-              {completedOrders.length > 0 && (
+              {(completedOrders.length + cancelledOrders.length) > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                  {completedOrders.length > 99 ? '99+' : completedOrders.length}
+                  {(completedOrders.length + cancelledOrders.length) > 99 ? '99+' : completedOrders.length + cancelledOrders.length}
                 </span>
               )}
             </div>
