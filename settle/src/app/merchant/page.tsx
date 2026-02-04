@@ -5085,7 +5085,7 @@ export default function MerchantDashboard() {
                     const hasAcceptorWallet = escrowOrder.acceptorWallet && validWalletRegex.test(escrowOrder.acceptorWallet);
                     const hasUserWallet = escrowOrder.userWallet && validWalletRegex.test(escrowOrder.userWallet);
                     const hasValidRecipient = hasBuyerMerchantWallet || hasAcceptorWallet || hasUserWallet;
-                    const isMerchantTrade = escrowOrder.isM2M || hasAcceptorWallet;
+                    const isMerchantTrade = escrowOrder.isM2M || hasBuyerMerchantWallet || hasAcceptorWallet;
 
                     if (hasValidRecipient) {
                       return isMerchantTrade ? (
@@ -5104,11 +5104,12 @@ export default function MerchantDashboard() {
                         </div>
                       );
                     } else {
+                      // No recipient yet (SELL order before anyone accepts)
                       return (
-                        <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
-                          <p className="text-xs text-red-400">
-                            ⚠️ {isMerchantTrade ? "The other merchant hasn't" : "User hasn't"} connected their Solana wallet yet.
-                            On-chain escrow requires a valid wallet address.
+                        <div className="bg-blue-500/10 rounded-xl p-3 border border-blue-500/20">
+                          <p className="text-xs text-blue-400">
+                            🔒 You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow.
+                            Once locked, your order will be visible to other merchants who can accept it.
                           </p>
                         </div>
                       );
@@ -5141,13 +5142,7 @@ export default function MerchantDashboard() {
                         onClick={executeLockEscrow}
                         disabled={
                           isLockingEscrow ||
-                          (solanaWallet.usdtBalance || 0) < escrowOrder.amount ||
-                          // Check for ANY valid recipient wallet
-                          !(
-                            (escrowOrder.buyerMerchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.buyerMerchantWallet)) ||
-                            (escrowOrder.acceptorWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.acceptorWallet)) ||
-                            (escrowOrder.userWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.userWallet))
-                          )
+                          (solanaWallet.usdtBalance || 0) < escrowOrder.amount
                         }
                         className="flex-[2] py-3 rounded-xl text-sm font-bold bg-blue-500 text-white hover:bg-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
