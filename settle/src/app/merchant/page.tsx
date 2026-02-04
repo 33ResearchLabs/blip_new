@@ -3161,55 +3161,111 @@ export default function MerchantDashboard() {
               </div>
             </div>
 
-            {/* Column 3: Completed */}
-            <div className="flex flex-col h-[calc(100vh-80px)]">
-              <div className="flex items-center gap-2 mb-3">
-                <Check className="w-4 h-4 text-emerald-500" />
-                <span className="text-sm font-semibold">Completed</span>
-                <span className="ml-auto text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-medium">
-                  {completedOrders.length}
-                </span>
+            {/* Column 3: Completed + Cancelled (50/50 split) */}
+            <div className="flex flex-col h-[calc(100vh-80px)] gap-3">
+              {/* Top Half: Completed */}
+              <div className="flex flex-col h-1/2">
+                <div className="flex items-center gap-2 mb-2">
+                  <Check className="w-4 h-4 text-emerald-500" />
+                  <span className="text-sm font-semibold">Completed</span>
+                  <span className="ml-auto text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-medium">
+                    {completedOrders.length}
+                  </span>
+                </div>
+
+                <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden">
+                  <div className="h-full overflow-y-auto p-2 space-y-2">
+                    <AnimatePresence mode="popLayout">
+                      {completedOrders.length > 0 ? (
+                        completedOrders.map((order, i) => {
+                          const profit = order.amount * TRADER_CUT_CONFIG.best; // 0.5% trader cut
+                          const isM2MTrade = order.isM2M || order.buyerMerchantId || order.acceptorWallet;
+                          return (
+                            <motion.div
+                              key={order.id}
+                              layout
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ delay: i * 0.03 }}
+                              className={`p-2.5 bg-[#141414] rounded-lg border transition-all ${isM2MTrade ? 'border-purple-500/20 hover:border-purple-500/30' : 'border-emerald-500/10 hover:border-emerald-500/20'}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${isM2MTrade ? 'bg-purple-500/10 border border-purple-500/20' : 'bg-emerald-500/10 border border-emerald-500/20'}`}>
+                                  <span className={`text-[10px] font-bold ${isM2MTrade ? 'text-purple-400' : 'text-emerald-400'}`}>
+                                    {isM2MTrade ? '🤝' : order.user.slice(0, 2).toUpperCase()}
+                                  </span>
+                                </div>
+                                <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
+                                {isM2MTrade && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded">M2M</span>}
+                                <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
+                                <span className="text-xs font-bold text-emerald-400">+${Math.round(profit)}</span>
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              </div>
+                            </motion.div>
+                          );
+                        })
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full py-4 text-gray-600">
+                          <Check className="w-5 h-5 mb-1 opacity-20" />
+                          <p className="text-[10px] font-mono text-gray-500">No completed trades</p>
+                        </div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden">
-                <div className="h-full overflow-y-auto p-2 space-y-2">
-                  <AnimatePresence mode="popLayout">
-                    {completedOrders.length > 0 ? (
-                      completedOrders.map((order, i) => {
-                        const profit = order.amount * TRADER_CUT_CONFIG.best; // 0.5% trader cut
-                        const isM2MTrade = order.isM2M || order.buyerMerchantId || order.acceptorWallet;
-                        return (
-                          <motion.div
-                            key={order.id}
-                            layout
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={{ delay: i * 0.03 }}
-                            className={`p-2.5 bg-[#141414] rounded-lg border transition-all ${isM2MTrade ? 'border-purple-500/20 hover:border-purple-500/30' : 'border-emerald-500/10 hover:border-emerald-500/20'}`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${isM2MTrade ? 'bg-purple-500/10 border border-purple-500/20' : 'bg-emerald-500/10 border border-emerald-500/20'}`}>
-                                <span className={`text-[10px] font-bold ${isM2MTrade ? 'text-purple-400' : 'text-emerald-400'}`}>
-                                  {isM2MTrade ? '🤝' : order.user.slice(0, 2).toUpperCase()}
-                                </span>
+              {/* Bottom Half: Cancelled */}
+              <div className="flex flex-col h-1/2">
+                <div className="flex items-center gap-2 mb-2">
+                  <X className="w-4 h-4 text-red-500" />
+                  <span className="text-sm font-semibold">Cancelled</span>
+                  <span className="ml-auto text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-medium">
+                    {cancelledOrders.length}
+                  </span>
+                </div>
+
+                <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-red-500/10 overflow-hidden">
+                  <div className="h-full overflow-y-auto p-2 space-y-2">
+                    <AnimatePresence mode="popLayout">
+                      {cancelledOrders.length > 0 ? (
+                        cancelledOrders.map((order, i) => {
+                          const isDisputed = order.status === 'disputed';
+                          const isM2MTrade = order.isM2M || order.buyerMerchantId || order.acceptorWallet;
+                          return (
+                            <motion.div
+                              key={order.id}
+                              layout
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ delay: i * 0.03 }}
+                              className={`p-2.5 bg-[#141414] rounded-lg border transition-all ${isDisputed ? 'border-amber-500/20 hover:border-amber-500/30' : 'border-red-500/10 hover:border-red-500/20'}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${isDisputed ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+                                  <span className={`text-[10px] font-bold ${isDisputed ? 'text-amber-400' : 'text-red-400'}`}>
+                                    {order.user.slice(0, 2).toUpperCase()}
+                                  </span>
+                                </div>
+                                <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
+                                {isDisputed && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded">DISPUTE</span>}
+                                {isM2MTrade && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded">M2M</span>}
+                                <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
+                                <X className={`w-3.5 h-3.5 ${isDisputed ? 'text-amber-400' : 'text-red-400'}`} />
                               </div>
-                              <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
-                              {isM2MTrade && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded">M2M</span>}
-                              <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
-                              <span className="text-xs font-bold text-emerald-400">+${Math.round(profit)}</span>
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
-                            </div>
-                          </motion.div>
-                        );
-                      })
-                    ) : (
-                      <div className="flex flex-col items-center justify-center h-full py-8 text-gray-600">
-                        <Check className="w-6 h-6 mb-1 opacity-20" />
-                        <p className="text-[10px] font-mono text-gray-500">No completed trades</p>
-                      </div>
-                    )}
-                  </AnimatePresence>
+                            </motion.div>
+                          );
+                        })
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full py-4 text-gray-600">
+                          <X className="w-5 h-5 mb-1 opacity-20" />
+                          <p className="text-[10px] font-mono text-gray-500">No cancelled trades</p>
+                        </div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
               </div>
             </div>
