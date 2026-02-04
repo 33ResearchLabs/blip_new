@@ -620,12 +620,11 @@ export async function updateOrderStatus(
       // Log the status change
       logger.order.statusChanged(orderId, oldStatus, newStatus, actorType, actorId);
 
-      // Send system message to chat for this status change
+      // Send system message to chat for this status change (use client within transaction)
       try {
         const statusMessage = getStatusChangeMessage(newStatus, updatedOrder, actorType, metadata);
         if (statusMessage) {
-          // Use non-transactional insert to avoid blocking
-          await query(
+          await client.query(
             `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
              VALUES ($1, 'system', $2, $3, 'system')`,
             [orderId, orderId, statusMessage]
