@@ -539,8 +539,14 @@ export async function updateOrderStatus(
       return { success: true, order: updatedOrder };
     });
   } catch (error) {
-    logger.order.error(orderId, 'updateStatus', error as Error);
-    return { success: false, error: 'Failed to update order status' };
+    const err = error as Error;
+    console.error('[DB] updateOrderStatus error:', {
+      orderId,
+      name: err.name,
+      message: err.message,
+    });
+    logger.order.error(orderId, 'updateStatus', err);
+    return { success: false, error: `Failed to update order status: ${err.message}` };
   }
 }
 
