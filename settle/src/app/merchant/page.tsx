@@ -97,6 +97,8 @@ interface DbOrder {
   escrow_creator_wallet?: string;
   // Buyer's wallet address captured at order creation (for buy orders)
   buyer_wallet_address?: string;
+  // Acceptor's wallet address (merchant who accepted the order)
+  acceptor_wallet_address?: string;
   // M2M trading: buyer merchant ID and info
   buyer_merchant_id?: string;
   buyer_merchant?: {
@@ -152,6 +154,8 @@ interface Order {
   isM2M?: boolean;
   buyerMerchantId?: string;
   buyerMerchantWallet?: string;
+  // Acceptor wallet (for merchant-initiated orders accepted by another merchant)
+  acceptorWallet?: string;
 }
 
 // Leaderboard data
@@ -300,12 +304,13 @@ const mapDbOrderToUI = (dbOrder: DbOrder): Order => {
     escrowTradePda: dbOrder.escrow_trade_pda,
     escrowCreatorWallet: dbOrder.escrow_creator_wallet,
     escrowTxHash: dbOrder.escrow_tx_hash,
-    // For buy orders, use buyer_wallet_address captured at order creation (more reliable)
-    // For M2M, use buyer merchant's wallet
-    // Fall back to user's wallet from users table if buyer_wallet_address not set
+    // Determine the recipient wallet for escrow:
+    // 1. M2M: use buyer merchant's wallet
+    // 2. Merchant-initiated with acceptor: use acceptor's wallet (another merchant accepted)
+    // 3. Regular: use buyer_wallet_address or user's wallet
     userWallet: isM2M
       ? dbOrder.buyer_merchant?.wallet_address
-      : (dbOrder.buyer_wallet_address || dbOrder.user?.wallet_address),
+      : (dbOrder.acceptor_wallet_address || dbOrder.buyer_wallet_address || dbOrder.user?.wallet_address),
     orderType: dbOrder.type,
     // User's bank account (from payment_details)
     userBankAccount: dbOrder.payment_details?.user_bank_account,
@@ -313,6 +318,8 @@ const mapDbOrderToUI = (dbOrder: DbOrder): Order => {
     isM2M,
     buyerMerchantId: dbOrder.buyer_merchant_id,
     buyerMerchantWallet: dbOrder.buyer_merchant?.wallet_address,
+    // Acceptor wallet (for merchant-initiated orders)
+    acceptorWallet: dbOrder.acceptor_wallet_address,
   };
 };
 
@@ -5024,6 +5031,14 @@ export default function MerchantDashboard() {
                             </p>
                           </div>
                         )
+                      ) : escrowOrder.acceptorWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.acceptorWallet) ? (
+                        // Merchant-initiated order accepted by another merchant
+                        <div className="bg-purple-500/10 rounded-xl p-3 border border-purple-500/20">
+                          <p className="text-xs text-purple-400">
+                            🤝 <strong>Merchant Trade:</strong> You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow.
+                            This will be released to the accepting merchant after they pay the fiat amount.
+                          </p>
+                        </div>
                       ) : (
                         // Regular user trade
                         escrowOrder.userWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.userWallet) ? (
@@ -5072,10 +5087,15 @@ export default function MerchantDashboard() {
                         disabled={
                           isLockingEscrow ||
                           (solanaWallet.usdtBalance || 0) < escrowOrder.amount ||
-                          // For M2M: check buyer merchant wallet, for regular: check user wallet
-                          (escrowOrder.isM2M
-                            ? (!escrowOrder.buyerMerchantWallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.buyerMerchantWallet))
-                            : (!escrowOrder.userWallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.userWallet)))
+                          // Check for valid recipient wallet:
+                          // 1. M2M: buyer merchant wallet
+                          // 2. Merchant-initiated with acceptor: acceptor wallet
+                          // 3. Regular: user wallet
+                          !(
+                            (escrowOrder.isM2M && escrowOrder.buyerMerchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.buyerMerchantWallet)) ||
+                            (escrowOrder.acceptorWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.acceptorWallet)) ||
+                            (escrowOrder.userWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(escrowOrder.userWallet))
+                          )
                         }
                         className="flex-[2] py-3 rounded-xl text-sm font-bold bg-blue-500 text-white hover:bg-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
