@@ -127,6 +127,7 @@ export function MerchantChatTabs({ merchantId, onOpenChat, onOpenDirectChat, onC
   // Fetch order conversations
   const fetchOrderConversations = useCallback(async () => {
     try {
+      console.log('[MerchantChatTabs] Fetching orders for merchant:', merchantId);
       const params = new URLSearchParams({
         merchant_id: merchantId,
         limit: '50',
@@ -136,9 +137,15 @@ export function MerchantChatTabs({ merchantId, onOpenChat, onOpenDirectChat, onC
       }
 
       const res = await fetch(`/api/merchant/messages?${params}`);
-      if (!res.ok) return;
+      console.log('[MerchantChatTabs] Response status:', res.status);
+      if (!res.ok) {
+        console.error('[MerchantChatTabs] API error:', res.status, res.statusText);
+        return;
+      }
       const data = await res.json();
+      console.log('[MerchantChatTabs] API response:', data);
       if (data.success) {
+        console.log('[MerchantChatTabs] Got', data.data.conversations?.length || 0, 'conversations');
         setOrderConversations(data.data.conversations || []);
         setOrderUnread(data.data.totalUnread || 0);
       }
