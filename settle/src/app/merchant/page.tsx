@@ -6144,16 +6144,16 @@ export default function MerchantDashboard() {
         />
       )}
 
-      {/* Message History Panel */}
+      {/* Message History Panel (Desktop) */}
       <AnimatePresence>
         {showMessageHistory && merchantId && (
           <motion.div
             initial={{ opacity: 0, x: 300 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 300 }}
-            className="fixed right-0 top-0 h-full w-full max-w-md z-50 shadow-2xl"
+            className="fixed right-0 top-0 h-full w-full max-w-md z-50 shadow-2xl bg-[#0a0a0a] border-l border-white/[0.04]"
           >
-            <MessageHistory
+            <MerchantChatTabs
               merchantId={merchantId}
               onOpenChat={(orderId, user, emoji) => {
                 openChat(user, emoji, orderId);
