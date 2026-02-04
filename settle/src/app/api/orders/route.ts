@@ -215,7 +215,15 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    logger.api.error('POST', '/api/orders', error as Error);
-    return errorResponse('Internal server error');
+    const err = error as Error;
+    console.error('[API] POST /api/orders error:', {
+      name: err.name,
+      message: err.message,
+      stack: err.stack,
+    });
+    logger.api.error('POST', '/api/orders', err);
+
+    // Return specific error to help debug
+    return errorResponse(`${err.name}: ${err.message}`);
   }
 }
