@@ -175,17 +175,19 @@ interface LeaderboardEntry {
 // Helper to map DB status to UI status
 // hasEscrow: true when escrow_tx_hash exists (escrow already locked)
 // orderType: 'buy' or 'sell' - determines flow
-const mapDbStatusToUI = (dbStatus: string, hasEscrow?: boolean, orderType?: string): "pending" | "active" | "escrow" | "completed" | "disputed" | "cancelled" => {
+// isMyOrder: true if I created this order (for determining escrow display)
+const mapDbStatusToUI = (dbStatus: string, hasEscrow?: boolean, orderType?: string, isMyOrder?: boolean): "pending" | "active" | "escrow" | "completed" | "disputed" | "cancelled" => {
   switch (dbStatus) {
     case "pending":
       return "pending"; // New Orders
     case "escrowed":
-      // For BUY orders: merchant locked escrow -> goes to Ongoing (waiting for user fiat payment)
-      // For SELL orders: user locked escrow but merchant hasn't approved yet -> stays in New Orders
-      if (orderType === 'buy') {
-        return "escrow"; // Ongoing - merchant locked escrow, waiting for user payment
+      // If it's MY order and I locked escrow: show in Ongoing (waiting for someone to accept/pay)
+      // If it's SOMEONE ELSE's order: show in New Orders (I can accept it)
+      if (isMyOrder) {
+        return "escrow"; // Ongoing - I locked escrow, waiting for acceptor
       }
-      return "pending"; // New Orders - sell order waiting for merchant to click Go
+      // For other merchants' escrowed orders (they locked funds, I can accept)
+      return "pending"; // New Orders - available for me to accept
     case "accepted":
       // Merchant approved (clicked "Go") - now in Active section, needs to sign tx or send payment
       return "active";
@@ -298,7 +300,7 @@ const mapDbOrderToUI = (dbOrder: DbOrder): Order => {
     rate: rate,
     total: fiatAmount,
     timestamp: new Date(dbOrder.created_at),
-    status: mapDbStatusToUI(dbOrder.status, !!dbOrder.escrow_tx_hash, dbOrder.type),
+    status: mapDbStatusToUI(dbOrder.status, !!dbOrder.escrow_tx_hash, dbOrder.type, dbOrder.is_my_order),
     expiresIn,
     isNew: (dbOrder.user?.total_trades || 0) < 3,
     tradeVolume: (dbOrder.user?.total_trades || 0) * 500, // Estimated volume
@@ -4780,19 +4782,32 @@ export default function MerchantDashboard() {
 
                         console.log('[Merchant] Trade created successfully:', data.data);
 
-                        // Success - close modal and refresh orders
+                        // Success - close modal
                         setShowOpenTradeModal(false);
                         setOpenTradeForm({
                           tradeType: "sell",
                           cryptoAmount: "",
                           paymentMethod: "bank",
                         });
-                        addNotification('order', `Trade created for ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC`, data.data?.id);
 
                         // Add to orders list
                         if (data.data) {
                           const newOrder = mapDbOrderToUI(data.data);
                           setOrders(prev => [newOrder, ...prev]);
+
+                          // For SELL orders (stored as 'buy'), immediately open escrow modal
+                          // Merchant needs to lock their USDC before the order is visible to others
+                          if (openTradeForm.tradeType === "sell") {
+                            addNotification('escrow', `Lock ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC to make your order visible`, data.data?.id);
+                            // Open escrow modal with the new order
+                            setEscrowOrder(newOrder);
+                            setEscrowTxHash(null);
+                            setEscrowError(null);
+                            setIsLockingEscrow(false);
+                            setShowEscrowModal(true);
+                          } else {
+                            addNotification('order', `Trade created for ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC`, data.data?.id);
+                          }
                         }
                       } catch (error) {
                         console.error("Error creating trade:", error);

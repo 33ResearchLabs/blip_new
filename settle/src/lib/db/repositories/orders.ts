@@ -220,7 +220,12 @@ export async function getAllPendingOrdersForMerchant(
     WHERE o.status NOT IN ('expired', 'cancelled')
       AND (
         -- PENDING orders from OTHER merchants (New Orders - can accept these)
-        (o.status = 'pending' AND o.merchant_id != $1)
+        -- But exclude merchant-created orders that haven't locked escrow yet
+        (o.status = 'pending' AND o.merchant_id != $1 AND o.buyer_merchant_id IS NULL)
+
+        -- ESCROWED orders from OTHER merchants (creator locked funds, ready for someone to accept)
+        -- This is for SELL orders where creator locked escrow first
+        OR (o.status = 'escrowed' AND o.merchant_id != $1 AND o.buyer_merchant_id IS NULL)
 
         -- All orders where I'm the merchant (includes my pending orders for tracking)
         OR (o.merchant_id = $1)
