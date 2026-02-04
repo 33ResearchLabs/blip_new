@@ -3581,6 +3581,80 @@ export default function MerchantDashboard() {
           {/* Mobile: Orders View */}
           {mobileView === 'orders' && (
             <div className="space-y-1">
+              {/* Big Orders Section */}
+              {bigOrders.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between px-2 py-2 border-b border-amber-500/20">
+                    <div className="flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-amber-400" />
+                      <span className="text-xs font-mono text-amber-400 uppercase tracking-wide">Whale Orders</span>
+                    </div>
+                    <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] font-bold rounded-full">
+                      {bigOrders.length}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-amber-500/10">
+                    {bigOrders.slice(0, 3).map((order) => (
+                      <motion.div
+                        key={order.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="px-2 py-3 bg-gradient-to-r from-amber-500/5 to-transparent"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 flex items-center justify-center">
+                            <span className="text-lg">{order.emoji}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-white">{order.user}</span>
+                              {order.premium > 0 && (
+                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-mono rounded">
+                                  +{order.premium}%
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 truncate">{order.message}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-bold text-amber-400">
+                              {order.currency === 'AED' ? 'د.إ' : '$'}{order.amount.toLocaleString()}
+                            </p>
+                            <p className="text-[10px] text-gray-500">
+                              {order.timestamp.toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2 ml-13">
+                          <motion.button
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => {
+                              // TODO: Handle big order acceptance
+                              console.log('Accept big order:', order.id);
+                            }}
+                            className="flex-1 h-8 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 rounded-lg text-xs font-medium text-amber-400 flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <DollarSign className="w-3.5 h-3.5" />
+                            Contact
+                          </motion.button>
+                          <button
+                            onClick={() => dismissBigOrder(order.id)}
+                            className="h-8 w-8 border border-white/10 hover:border-red-500/30 hover:bg-red-500/10 rounded-lg flex items-center justify-center transition-colors group"
+                          >
+                            <X className="w-4 h-4 text-gray-500 group-hover:text-red-400" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                  {bigOrders.length > 3 && (
+                    <button className="w-full py-2 text-xs text-amber-400/70 hover:text-amber-400 transition-colors">
+                      View all {bigOrders.length} whale orders
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Header Row */}
               <div className="flex items-center justify-between px-2 py-2 border-b border-white/[0.06]">
                 <div className="flex items-center gap-2">
