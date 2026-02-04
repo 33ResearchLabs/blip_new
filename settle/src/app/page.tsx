@@ -2258,27 +2258,38 @@ export default function Home() {
                     {[
                       { key: "home", icon: Wallet, label: "Home" },
                       { key: "orders", icon: Clock, label: "Activity" },
+                      { key: "chats", icon: MessageCircle, label: "Messages" },
                       { key: "profile", icon: User, label: "Profile" },
-                    ].map(({ key, icon: Icon, label }) => (
-                      <motion.button
-                        key={key}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => setScreen(key as Screen)}
-                        className={`flex flex-col items-center gap-1 relative px-4 py-1 rounded-xl transition-all ${
-                          screen === key ? "text-orange-400" : "text-neutral-600"
-                        }`}
-                      >
-                        {screen === key && (
-                          <motion.div
-                            layoutId="nav-indicator"
-                            className="absolute inset-0 bg-orange-500/10 rounded-xl"
-                            transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                          />
-                        )}
-                        <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
-                        <span className="text-[10px] font-medium relative z-10">{label}</span>
-                      </motion.button>
-                    ))}
+                    ].map(({ key, icon: Icon, label }) => {
+                      const unreadTotal = key === "chats" ? orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) : 0;
+                      return (
+                        <motion.button
+                          key={key}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => setScreen(key as Screen)}
+                          className={`flex flex-col items-center gap-1 relative px-3 py-1 rounded-xl transition-all ${
+                            screen === key ? "text-orange-400" : "text-neutral-600"
+                          }`}
+                        >
+                          {screen === key && (
+                            <motion.div
+                              layoutId="nav-indicator"
+                              className="absolute inset-0 bg-orange-500/10 rounded-xl"
+                              transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
+                            />
+                          )}
+                          <div className="relative">
+                            <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
+                            {unreadTotal > 0 && (
+                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                                {unreadTotal > 99 ? '99+' : unreadTotal}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-medium relative z-10">{label}</span>
+                        </motion.button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
