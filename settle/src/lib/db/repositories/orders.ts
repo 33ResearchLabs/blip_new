@@ -175,12 +175,14 @@ export async function getMerchantOrders(
 /**
  * Get ALL pending orders (broadcast model) + merchant's own active orders
  * This allows any merchant to see and accept new orders
+ * For M2M trades: excludes orders created by this merchant (buyer_merchant_id = this merchant)
  */
 export async function getAllPendingOrdersForMerchant(
   merchantId: string,
   status?: OrderStatus[]
 ): Promise<OrderWithRelations[]> {
   // Get ALL pending orders (any merchant can accept) + this merchant's active orders
+  // For M2M: don't show pending orders to the merchant who created them (they're the buyer)
   let sql = `
     SELECT o.*,
            json_build_object(
@@ -206,8 +208,9 @@ export async function getAllPendingOrdersForMerchant(
     JOIN merchant_offers mo ON o.offer_id = mo.id
     WHERE o.status NOT IN ('expired', 'cancelled')
       AND (
-        o.status = 'pending'  -- All pending orders visible to all merchants
+        (o.status = 'pending' AND (o.buyer_merchant_id IS NULL OR o.buyer_merchant_id != $1))  -- Pending orders, excluding ones I created as M2M buyer
         OR o.merchant_id = $1  -- This merchant's own orders (any status)
+        OR o.buyer_merchant_id = $1  -- M2M orders I created (for tracking)
       )
   `;
 
