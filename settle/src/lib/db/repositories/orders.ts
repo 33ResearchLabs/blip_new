@@ -173,18 +173,21 @@ export async function getMerchantOrders(
 }
 
 /**
- * Get ALL pending orders (broadcast model) + merchant's own active orders
- * This allows any merchant to see and accept new orders
- * For M2M trades: excludes orders created by this merchant (buyer_merchant_id = this merchant)
+ * Get orders for merchant dashboard:
+ * 1. PENDING orders from OTHER merchants (to accept in "New Orders")
+ * 2. All orders where I'm the merchant_id (my orders - active, completed, etc.)
+ * 3. Orders where I'm buyer_merchant (orders I created that someone else claimed)
+ *
+ * Frontend filters: "New Orders" should exclude orders where merchant_id = me (can't accept own order)
+ * The 'is_my_order' flag helps frontend distinguish own orders from others
  */
 export async function getAllPendingOrdersForMerchant(
   merchantId: string,
   status?: OrderStatus[]
 ): Promise<OrderWithRelations[]> {
-  // Get ALL pending orders (any merchant can accept) + this merchant's active orders
-  // For M2M: don't show pending orders to the merchant who created them (they're the buyer)
   let sql = `
     SELECT o.*,
+           (o.merchant_id = $1 AND o.buyer_merchant_id IS NULL) as is_my_order,
            json_build_object(
              'id', u.id,
              'name', u.username,
@@ -216,9 +219,14 @@ export async function getAllPendingOrdersForMerchant(
     LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
     WHERE o.status NOT IN ('expired', 'cancelled')
       AND (
-        (o.status = 'pending' AND (o.buyer_merchant_id IS NULL OR o.buyer_merchant_id != $1))  -- Pending orders, excluding ones I created as M2M buyer
-        OR o.merchant_id = $1  -- This merchant's own orders (any status)
-        OR o.buyer_merchant_id = $1  -- M2M orders I created (for tracking)
+        -- PENDING orders from OTHER merchants (New Orders - can accept these)
+        (o.status = 'pending' AND o.merchant_id != $1)
+
+        -- All orders where I'm the merchant (includes my pending orders for tracking)
+        OR (o.merchant_id = $1)
+
+        -- Orders I created that someone else claimed
+        OR (o.buyer_merchant_id = $1)
       )
   `;
 

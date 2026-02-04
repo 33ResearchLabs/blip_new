@@ -106,6 +106,8 @@ interface DbOrder {
     display_name: string;
     wallet_address?: string;
   };
+  // Flag: true if this merchant created the order (can't accept own order)
+  is_my_order?: boolean;
   // Payment details (includes user_bank_account for sell orders)
   payment_details?: {
     user_bank_account?: string;
@@ -156,6 +158,8 @@ interface Order {
   buyerMerchantWallet?: string;
   // Acceptor wallet (for merchant-initiated orders accepted by another merchant)
   acceptorWallet?: string;
+  // Flag: true if I created this order (can't accept own order)
+  isMyOrder?: boolean;
 }
 
 // Leaderboard data
@@ -320,6 +324,8 @@ const mapDbOrderToUI = (dbOrder: DbOrder): Order => {
     buyerMerchantWallet: dbOrder.buyer_merchant?.wallet_address,
     // Acceptor wallet (for merchant-initiated orders)
     acceptorWallet: dbOrder.acceptor_wallet_address,
+    // Flag: true if I created this order (from API is_my_order field)
+    isMyOrder: dbOrder.is_my_order,
   };
 };
 
@@ -1997,7 +2003,7 @@ export default function MerchantDashboard() {
 
   // Filter orders by status - Flow: New Orders → Active → Ongoing → Completed
   // "pending" = New Orders (including escrowed sell orders waiting for merchant to click "Go")
-  const pendingOrders = orders.filter(o => o.status === "pending" && o.expiresIn > 0);
+  const pendingOrders = orders.filter(o => o.status === "pending" && o.expiresIn > 0 && !o.isMyOrder);
   // "active" = Active (merchant clicked "Go", now needs to sign tx or send payment)
   const activeOrders = orders.filter(o => o.status === "active");
   // "escrow" = Ongoing (tx signed, trade in progress)
