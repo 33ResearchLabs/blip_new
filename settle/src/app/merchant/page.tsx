@@ -1281,18 +1281,36 @@ export default function MerchantDashboard() {
       return;
     }
 
-    // Check for valid recipient wallet - M2M trades use buyerMerchantWallet, regular trades use userWallet
+    // Check for valid recipient wallet
+    // The recipient is the OTHER party (not the one locking escrow)
     const validWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+    const myWallet = solanaWallet.walletAddress;
 
-    // Priority: buyerMerchantWallet (M2M) > userWallet (regular trade)
-    const recipientWallet =
-      (escrowOrder.buyerMerchantWallet && validWalletRegex.test(escrowOrder.buyerMerchantWallet))
-        ? escrowOrder.buyerMerchantWallet
-        : (escrowOrder.userWallet && validWalletRegex.test(escrowOrder.userWallet))
-          ? escrowOrder.userWallet
+    // For M2M trades, determine who I am and who receives:
+    // - If I'm the creator (my wallet = buyerMerchantWallet): recipient = acceptor
+    // - If I'm the acceptor: recipient = creator (buyerMerchantWallet)
+    const isMerchantTrade = escrowOrder.isM2M || !!escrowOrder.buyerMerchantWallet || !!escrowOrder.acceptorWallet;
+    const iAmCreator = myWallet && escrowOrder.buyerMerchantWallet === myWallet;
+
+    let recipientWallet: string | null = null;
+    if (isMerchantTrade) {
+      if (iAmCreator) {
+        // I created the order, I'm locking, recipient is the acceptor
+        recipientWallet = escrowOrder.acceptorWallet && validWalletRegex.test(escrowOrder.acceptorWallet)
+          ? escrowOrder.acceptorWallet
           : null;
-
-    const isMerchantTrade = escrowOrder.isM2M || !!escrowOrder.buyerMerchantWallet;
+      } else {
+        // I accepted the order, I'm locking, recipient is the creator
+        recipientWallet = escrowOrder.buyerMerchantWallet && validWalletRegex.test(escrowOrder.buyerMerchantWallet)
+          ? escrowOrder.buyerMerchantWallet
+          : null;
+      }
+    } else {
+      // Regular trade - recipient is the user
+      recipientWallet = escrowOrder.userWallet && validWalletRegex.test(escrowOrder.userWallet)
+        ? escrowOrder.userWallet
+        : null;
+    }
 
     if (!recipientWallet) {
       setEscrowError(isMerchantTrade
