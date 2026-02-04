@@ -219,18 +219,14 @@ export async function getAllPendingOrdersForMerchant(
     LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
     WHERE o.status NOT IN ('expired', 'cancelled')
       AND (
-        -- PENDING orders from OTHER merchants (New Orders - can accept these)
-        -- But exclude merchant-created orders that haven't locked escrow yet
-        (o.status = 'pending' AND o.merchant_id != $1 AND o.buyer_merchant_id IS NULL)
+        -- PENDING or ESCROWED orders from OTHER merchants (New Orders - can accept these)
+        -- Any merchant can see and accept these orders (broadcast model)
+        (o.status IN ('pending', 'escrowed') AND o.merchant_id != $1)
 
-        -- ESCROWED orders from OTHER merchants (creator locked funds, ready for someone to accept)
-        -- This is for SELL orders where creator locked escrow first
-        OR (o.status = 'escrowed' AND o.merchant_id != $1 AND o.buyer_merchant_id IS NULL)
-
-        -- All orders where I'm the merchant (includes my pending orders for tracking)
+        -- All orders where I'm the merchant (my active orders)
         OR (o.merchant_id = $1)
 
-        -- Orders I created that someone else claimed
+        -- Orders I created as buyer_merchant (M2M orders I initiated)
         OR (o.buyer_merchant_id = $1)
       )
   `;
