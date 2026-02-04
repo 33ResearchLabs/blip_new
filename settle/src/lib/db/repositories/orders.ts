@@ -18,6 +18,7 @@ import {
   isTerminalStatus,
 } from '../../orders/stateMachine';
 import { logger } from '../../logger';
+import { notifyNewMessage } from '../../pusher/server';
 import { recordReputationEvent } from '../../reputation';
 import { upsertMerchantContact } from './directMessages';
 
@@ -798,12 +799,23 @@ export async function expireOldOrders(): Promise<number> {
         ? `⏰ Order expired - moved to dispute for resolution (escrow was locked)`
         : `⏰ Order expired - not completed within 15 minutes`;
 
-      await sendMessage({
+      const savedMessage = await sendMessage({
         order_id: order.id,
         sender_type: 'system',
         sender_id: order.id,
         content: expiryMessage,
         message_type: 'system',
+      });
+
+      // Send real-time notification for the system message
+      notifyNewMessage({
+        orderId: order.id,
+        messageId: savedMessage.id,
+        senderType: 'system',
+        senderId: order.id,
+        content: expiryMessage,
+        messageType: 'system',
+        createdAt: savedMessage.created_at.toISOString(),
       });
 
       // Record event for user

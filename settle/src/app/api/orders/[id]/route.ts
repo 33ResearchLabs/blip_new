@@ -22,7 +22,7 @@ import {
   errorResponse,
 } from '@/lib/middleware/auth';
 import { logger } from '@/lib/logger';
-import { notifyOrderStatusUpdated, notifyOrderCancelled } from '@/lib/pusher/server';
+import { notifyOrderStatusUpdated, notifyOrderCancelled, notifyNewMessage } from '@/lib/pusher/server';
 
 // Validate order ID parameter
 async function validateOrderId(id: string): Promise<{ valid: boolean; error?: string }> {
@@ -177,15 +177,26 @@ export async function PATCH(
       expired: `⏰ Order expired`,
     };
 
-    const message = systemMessages[status];
-    if (message) {
+    const messageContent = systemMessages[status];
+    if (messageContent) {
       try {
-        await sendMessage({
+        const savedMessage = await sendMessage({
           order_id: id,
           sender_type: 'system',
           sender_id: id,
-          content: message,
+          content: messageContent,
           message_type: 'system',
+        });
+
+        // Trigger real-time notification for the system message
+        notifyNewMessage({
+          orderId: id,
+          messageId: savedMessage.id,
+          senderType: 'system',
+          senderId: id,
+          content: messageContent,
+          messageType: 'system',
+          createdAt: savedMessage.created_at.toISOString(),
         });
       } catch (msgError) {
         // Log but don't fail the request
@@ -285,7 +296,7 @@ export async function DELETE(
       : `❌ Order cancelled by ${cancelledBy}`;
 
     try {
-      await sendMessage({
+      const savedMessage = await sendMessage({
         order_id: id,
         sender_type: 'system',
         sender_id: id,
@@ -293,7 +304,18 @@ export async function DELETE(
         message_type: 'system',
       });
 
-      // Notify via Pusher
+      // Trigger real-time notification for the system message
+      notifyNewMessage({
+        orderId: id,
+        messageId: savedMessage.id,
+        senderType: 'system',
+        senderId: id,
+        content: cancelMessage,
+        messageType: 'system',
+        createdAt: savedMessage.created_at.toISOString(),
+      });
+
+      // Notify order cancellation via Pusher
       notifyOrderCancelled({
         orderId: id,
         userId: order.user_id,

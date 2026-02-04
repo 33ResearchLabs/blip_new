@@ -20,7 +20,7 @@ import {
   errorResponse,
 } from '@/lib/middleware/auth';
 import { logger } from '@/lib/logger';
-import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
+import { notifyOrderStatusUpdated, notifyNewMessage } from '@/lib/pusher/server';
 import { waitForConfirmation, getConnection } from '@/lib/solana';
 
 // Schema for escrow deposit
@@ -197,12 +197,24 @@ export async function POST(
 
     // Send system message about escrow lock
     try {
-      await sendMessage({
+      const escrowMessage = `🔒 Escrow locked - ${order.crypto_amount} ${order.crypto_currency} secured on-chain`;
+      const savedMessage = await sendMessage({
         order_id: id,
         sender_type: 'system',
         sender_id: id,
-        content: `🔒 Escrow locked - ${order.crypto_amount} ${order.crypto_currency} secured on-chain`,
+        content: escrowMessage,
         message_type: 'system',
+      });
+
+      // Trigger real-time notification for the system message
+      notifyNewMessage({
+        orderId: id,
+        messageId: savedMessage.id,
+        senderType: 'system',
+        senderId: id,
+        content: escrowMessage,
+        messageType: 'system',
+        createdAt: savedMessage.created_at.toISOString(),
       });
     } catch (msgError) {
       logger.api.error('POST', `/api/orders/${id}/escrow/system-message`, msgError as Error);
@@ -333,19 +345,40 @@ export async function PATCH(
 
     // Send system messages for escrow release and completion
     try {
-      await sendMessage({
+      const releaseMsg = await sendMessage({
         order_id: id,
         sender_type: 'system',
         sender_id: id,
         content: `🔓 Escrow released - funds sent to merchant`,
         message_type: 'system',
       });
-      await sendMessage({
+
+      notifyNewMessage({
+        orderId: id,
+        messageId: releaseMsg.id,
+        senderType: 'system',
+        senderId: id,
+        content: `🔓 Escrow released - funds sent to merchant`,
+        messageType: 'system',
+        createdAt: releaseMsg.created_at.toISOString(),
+      });
+
+      const completeMsg = await sendMessage({
         order_id: id,
         sender_type: 'system',
         sender_id: id,
         content: `🎉 Trade completed successfully!`,
         message_type: 'system',
+      });
+
+      notifyNewMessage({
+        orderId: id,
+        messageId: completeMsg.id,
+        senderType: 'system',
+        senderId: id,
+        content: `🎉 Trade completed successfully!`,
+        messageType: 'system',
+        createdAt: completeMsg.created_at.toISOString(),
       });
     } catch (msgError) {
       logger.api.error('PATCH', `/api/orders/${id}/escrow/system-message`, msgError as Error);
