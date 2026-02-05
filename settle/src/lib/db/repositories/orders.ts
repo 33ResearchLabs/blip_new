@@ -641,6 +641,70 @@ export async function updateOrderStatus(
             [orderId, orderId, statusMessage]
           );
         }
+
+        // Auto-send bank info message when order is accepted (for bank payment method)
+        if (newStatus === 'accepted' && updatedOrder.payment_method === 'bank') {
+          const paymentDetails = updatedOrder.payment_details as Record<string, unknown> | null;
+          if (paymentDetails) {
+            // For buy orders: user needs to send fiat to merchant's bank
+            // For sell orders: merchant needs to send fiat to user's bank
+            const bankInfoMessage = JSON.stringify({
+              type: 'bank_info',
+              text: updatedOrder.type === 'buy'
+                ? '🏦 Payment Details - Send fiat to this account'
+                : '🏦 Payment Details - Merchant will send fiat here',
+              data: {
+                bank_name: paymentDetails.bank_name,
+                bank_account_name: paymentDetails.bank_account_name,
+                bank_iban: paymentDetails.bank_iban,
+                user_bank_account: paymentDetails.user_bank_account,
+              },
+            });
+            await client.query(
+              `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
+               VALUES ($1, 'system', $2, $3, 'system')`,
+              [orderId, orderId, bankInfoMessage]
+            );
+          }
+        }
+
+        // Auto-send escrow info message when crypto is locked
+        if (newStatus === 'escrowed' && updatedOrder.escrow_tx_hash) {
+          const escrowInfoMessage = JSON.stringify({
+            type: 'escrow_locked',
+            text: `🔒 ${updatedOrder.crypto_amount} ${updatedOrder.crypto_currency} locked in escrow`,
+            data: {
+              amount: updatedOrder.crypto_amount,
+              currency: updatedOrder.crypto_currency,
+              txHash: updatedOrder.escrow_tx_hash,
+              escrowPda: updatedOrder.escrow_pda || updatedOrder.escrow_trade_pda,
+            },
+          });
+          await client.query(
+            `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
+             VALUES ($1, 'system', $2, $3, 'system')`,
+            [orderId, orderId, escrowInfoMessage]
+          );
+        }
+
+        // Auto-send release info message when trade completes
+        if (newStatus === 'completed' && updatedOrder.release_tx_hash) {
+          const releaseInfoMessage = JSON.stringify({
+            type: 'escrow_released',
+            text: `✅ ${updatedOrder.crypto_amount} ${updatedOrder.crypto_currency} released`,
+            data: {
+              amount: updatedOrder.crypto_amount,
+              currency: updatedOrder.crypto_currency,
+              txHash: updatedOrder.release_tx_hash,
+              escrowPda: updatedOrder.escrow_pda || updatedOrder.escrow_trade_pda,
+            },
+          });
+          await client.query(
+            `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
+             VALUES ($1, 'system', $2, $3, 'system')`,
+            [orderId, orderId, releaseInfoMessage]
+          );
+        }
       } catch (msgErr) {
         logger.warn('Failed to send status change message to chat', { orderId, error: msgErr });
       }

@@ -115,7 +115,14 @@ export interface Order {
   status: OrderStatus;
   escrow_tx_hash: string | null;
   escrow_address: string | null;
+  escrow_trade_id: number | null;
+  escrow_trade_pda: string | null;
+  escrow_pda: string | null;
+  escrow_creator_wallet: string | null;
   release_tx_hash: string | null;
+  refund_tx_hash: string | null;
+  buyer_wallet_address: string | null;
+  acceptor_wallet_address: string | null;
   payment_details: Record<string, unknown> | null;
   created_at: Date;
   accepted_at: Date | null;
