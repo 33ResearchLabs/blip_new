@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import {
   X, ExternalLink, Clock, User, Wallet, Building2, MapPin,
   Copy, Check, AlertTriangle, CheckCircle, XCircle, Shield,
-  ArrowRight, ChevronDown, ChevronUp
+  ArrowRight, ChevronDown, ChevronUp, MessageCircle, Store,
+  Hash, Link as LinkIcon
 } from 'lucide-react';
 
 interface OrderDetails {
@@ -27,7 +28,12 @@ interface OrderDetails {
   };
   escrow_tx_hash?: string;
   escrow_address?: string;
+  escrow_pda?: string;
+  escrow_trade_pda?: string;
+  escrow_trade_id?: number;
+  escrow_slot?: number;
   release_tx_hash?: string;
+  release_slot?: number;
   refund_tx_hash?: string;
   buyer_wallet_address?: string;
   created_at: string;
@@ -44,11 +50,32 @@ interface OrderDetails {
   max_extensions?: number;
   user: {
     id: string;
-    username: string;
+    username?: string;
+    name?: string;
     wallet_address?: string;
     rating: number;
     total_trades: number;
     total_volume?: number;
+  };
+  merchant?: {
+    id: string;
+    display_name?: string;
+    business_name?: string;
+    wallet_address?: string;
+    rating: number;
+    total_trades: number;
+    is_online?: boolean;
+  };
+  offer?: {
+    id: string;
+    type: string;
+    payment_method: string;
+    rate: number;
+    bank_name?: string;
+    bank_account_name?: string;
+    bank_iban?: string;
+    location_name?: string;
+    location_address?: string;
   };
   dispute?: {
     id: string;
@@ -63,20 +90,23 @@ interface OrderDetails {
 interface OrderDetailsPanelProps {
   orderId: string;
   onClose: () => void;
+  onOpenChat?: (orderId: string, username: string, emoji: string) => void;
 }
 
 // Status configuration
-const STATUS_CONFIG: Record<string, { color: string; icon: typeof CheckCircle; label: string }> = {
-  pending: { color: 'text-yellow-400', icon: Clock, label: 'Pending' },
-  accepted: { color: 'text-blue-400', icon: Check, label: 'Accepted' },
-  escrowed: { color: 'text-purple-400', icon: Shield, label: 'Escrowed' },
-  payment_sent: { color: 'text-cyan-400', icon: ArrowRight, label: 'Payment Sent' },
-  payment_confirmed: { color: 'text-teal-400', icon: Check, label: 'Payment Confirmed' },
-  releasing: { color: 'text-emerald-400', icon: ArrowRight, label: 'Releasing' },
-  completed: { color: 'text-emerald-400', icon: CheckCircle, label: 'Completed' },
-  cancelled: { color: 'text-red-400', icon: XCircle, label: 'Cancelled' },
-  disputed: { color: 'text-orange-400', icon: AlertTriangle, label: 'Disputed' },
-  expired: { color: 'text-zinc-400', icon: Clock, label: 'Expired' },
+const STATUS_CONFIG: Record<string, { color: string; bgColor: string; icon: typeof CheckCircle; label: string }> = {
+  pending: { color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', icon: Clock, label: 'Pending' },
+  accepted: { color: 'text-blue-400', bgColor: 'bg-blue-400/10', icon: Check, label: 'Accepted' },
+  escrow_pending: { color: 'text-purple-400', bgColor: 'bg-purple-400/10', icon: Clock, label: 'Escrow Pending' },
+  escrowed: { color: 'text-purple-400', bgColor: 'bg-purple-400/10', icon: Shield, label: 'Escrowed' },
+  payment_pending: { color: 'text-cyan-400', bgColor: 'bg-cyan-400/10', icon: Clock, label: 'Payment Pending' },
+  payment_sent: { color: 'text-cyan-400', bgColor: 'bg-cyan-400/10', icon: ArrowRight, label: 'Payment Sent' },
+  payment_confirmed: { color: 'text-teal-400', bgColor: 'bg-teal-400/10', icon: Check, label: 'Payment Confirmed' },
+  releasing: { color: 'text-emerald-400', bgColor: 'bg-emerald-400/10', icon: ArrowRight, label: 'Releasing' },
+  completed: { color: 'text-emerald-400', bgColor: 'bg-emerald-400/10', icon: CheckCircle, label: 'Completed' },
+  cancelled: { color: 'text-red-400', bgColor: 'bg-red-400/10', icon: XCircle, label: 'Cancelled' },
+  disputed: { color: 'text-orange-400', bgColor: 'bg-orange-400/10', icon: AlertTriangle, label: 'Disputed' },
+  expired: { color: 'text-zinc-400', bgColor: 'bg-zinc-400/10', icon: Clock, label: 'Expired' },
 };
 
 // Timeline steps
@@ -107,16 +137,26 @@ function truncateHash(hash: string, startChars = 6, endChars = 4): string {
   return `${hash.slice(0, startChars)}...${hash.slice(-endChars)}`;
 }
 
-// Solscan URL
-function getSolscanUrl(hash: string): string {
-  return `https://solscan.io/tx/${hash}?cluster=devnet`;
+// Blipscan URL (local explorer)
+const BLIPSCAN_URL = process.env.NEXT_PUBLIC_BLIPSCAN_URL || 'http://localhost:3003';
+
+function getBlipscanTradeUrl(escrowPda: string): string {
+  return `${BLIPSCAN_URL}/trade/${escrowPda}`;
 }
 
-export function OrderDetailsPanel({ orderId, onClose }: OrderDetailsPanelProps) {
+// Solscan fallback for tx hashes
+function getSolscanUrl(hash: string): string {
+  const network = process.env.NEXT_PUBLIC_SOLANA_NETWORK || 'devnet';
+  const cluster = network === 'mainnet-beta' ? '' : `?cluster=${network}`;
+  return `https://solscan.io/tx/${hash}${cluster}`;
+}
+
+export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetailsPanelProps) {
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showTimeline, setShowTimeline] = useState(true);
+  const [showBankDetails, setShowBankDetails] = useState(true);
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -142,6 +182,13 @@ export function OrderDetailsPanel({ orderId, onClose }: OrderDetailsPanelProps) 
     await navigator.clipboard.writeText(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const handleOpenChat = () => {
+    if (order && onOpenChat) {
+      const username = order.user?.username || order.user?.name || 'User';
+      onOpenChat(order.id, username, '🦊');
+    }
   };
 
   if (isLoading) {
@@ -173,17 +220,36 @@ export function OrderDetailsPanel({ orderId, onClose }: OrderDetailsPanelProps) 
 
   const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
   const StatusIcon = statusConfig.icon;
+  const username = order.user?.username || order.user?.name || 'User';
+
+  // Determine buyer and seller based on order type
+  const isBuyOrder = order.type === 'buy';
+  const buyerName = isBuyOrder
+    ? (order.user?.username || order.user?.name || 'User')
+    : (order.merchant?.display_name || order.merchant?.business_name || 'Merchant');
+  const sellerName = isBuyOrder
+    ? (order.merchant?.display_name || order.merchant?.business_name || 'Merchant')
+    : (order.user?.username || order.user?.name || 'User');
+  const buyerWallet = isBuyOrder ? order.user?.wallet_address : order.merchant?.wallet_address;
+  const sellerWallet = isBuyOrder ? order.merchant?.wallet_address : order.user?.wallet_address;
+  const buyerTrades = isBuyOrder ? order.user?.total_trades : order.merchant?.total_trades;
+  const sellerTrades = isBuyOrder ? order.merchant?.total_trades : order.user?.total_trades;
+  const buyerRating = isBuyOrder ? order.user?.rating : order.merchant?.rating;
+  const sellerRating = isBuyOrder ? order.merchant?.rating : order.user?.rating;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-zinc-900 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden border border-white/10">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-[#0a0a0a] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden border border-white/10"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/[0.02]">
           <div>
             <div className="flex items-center gap-3">
               <h2 className="text-lg font-semibold text-white">{order.order_number}</h2>
-              <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium
-                ${statusConfig.color} bg-current/10`}>
+              <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium
+                ${statusConfig.color} ${statusConfig.bgColor}`}>
                 <StatusIcon className="w-3 h-3" />
                 {statusConfig.label}
               </span>
@@ -192,45 +258,56 @@ export function OrderDetailsPanel({ orderId, onClose }: OrderDetailsPanelProps) 
               Created {formatDate(order.created_at)}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-          >
-            <X className="w-5 h-5 text-white/60" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenChat && (
+              <button
+                onClick={handleOpenChat}
+                className="p-2 rounded-lg bg-[#c9a962]/20 text-[#c9a962] hover:bg-[#c9a962]/30 transition-colors"
+                title="Open Chat"
+              >
+                <MessageCircle className="w-5 h-5" />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+            >
+              <X className="w-5 h-5 text-white/60" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
-        <div className="overflow-y-auto max-h-[calc(90vh-80px)] p-6 space-y-6">
+        <div className="overflow-y-auto max-h-[calc(90vh-80px)] p-6 space-y-4">
           {/* Trade Summary */}
-          <div className="bg-white/5 rounded-xl p-4">
+          <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-white/50">Amount</p>
                 <p className="text-2xl font-bold text-white">
-                  {order.crypto_amount.toLocaleString()} {order.crypto_currency}
+                  {Number(order.crypto_amount).toLocaleString()} {order.crypto_currency}
                 </p>
                 <p className="text-lg text-white/70">
-                  {order.fiat_amount.toLocaleString()} {order.fiat_currency}
+                  {Number(order.fiat_amount).toLocaleString()} {order.fiat_currency}
                 </p>
               </div>
               <div className="text-right">
                 <p className="text-sm text-white/50">Rate</p>
                 <p className="text-lg font-medium text-white">
-                  1 {order.crypto_currency} = {order.rate} {order.fiat_currency}
+                  1 {order.crypto_currency} = {Number(order.rate).toFixed(2)} {order.fiat_currency}
                 </p>
                 <span className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-medium
                   ${order.type === 'buy' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-cyan-500/20 text-cyan-400'}`}>
-                  {order.type === 'buy' ? 'Buy' : 'Sell'}
+                  {order.type === 'buy' ? 'Buy Order' : 'Sell Order'}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* User Info */}
-          <div className="bg-white/5 rounded-xl p-4">
+          {/* Buyer Info */}
+          <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
             <h3 className="text-sm font-medium text-white/50 mb-3 flex items-center gap-2">
-              <User className="w-4 h-4" /> Customer
+              <User className="w-4 h-4" /> Buyer
             </h3>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -239,90 +316,158 @@ export function OrderDetailsPanel({ orderId, onClose }: OrderDetailsPanelProps) 
                   🦊
                 </div>
                 <div>
-                  <p className="font-medium text-white">{order.user.username}</p>
+                  <p className="font-medium text-white">{buyerName}</p>
                   <p className="text-sm text-white/50">
-                    {order.user.total_trades} trades • ⭐ {order.user.rating?.toFixed(2) || 'N/A'}
+                    {buyerTrades || 0} trades • ⭐ {buyerRating?.toFixed(2) || 'N/A'}
                   </p>
                 </div>
               </div>
-              {order.user.wallet_address && (
+              {buyerWallet && (
                 <button
-                  onClick={() => handleCopy(order.user.wallet_address!, 'user_wallet')}
-                  className="flex items-center gap-1 px-3 py-1 bg-white/5 rounded-lg text-sm text-white/60
-                             hover:bg-white/10 transition-colors"
+                  onClick={() => handleCopy(buyerWallet, 'buyer_wallet')}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-white/[0.04] rounded-lg text-sm text-white/60
+                             hover:bg-white/[0.08] transition-colors border border-white/[0.06]"
                 >
                   <Wallet className="w-4 h-4" />
-                  {truncateHash(order.user.wallet_address)}
-                  {copiedField === 'user_wallet' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  {truncateHash(buyerWallet)}
+                  {copiedField === 'buyer_wallet' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                 </button>
               )}
             </div>
           </div>
 
-          {/* Payment Details */}
-          <div className="bg-white/5 rounded-xl p-4">
+          {/* Seller Info */}
+          <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
             <h3 className="text-sm font-medium text-white/50 mb-3 flex items-center gap-2">
-              {order.payment_method === 'bank' ? <Building2 className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
-              Payment Details
+              <Store className="w-4 h-4" /> Seller
             </h3>
-            {order.payment_method === 'bank' ? (
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-white/50">Bank</span>
-                  <span className="text-white">{order.payment_details?.bank_name || '-'}</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400/20 to-pink-400/20
+                                flex items-center justify-center text-lg">
+                  🏪
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-white/50">Account Name</span>
-                  <span className="text-white">{order.payment_details?.account_name || '-'}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-white/50">IBAN</span>
-                  <button
-                    onClick={() => order.payment_details?.iban && handleCopy(order.payment_details.iban, 'iban')}
-                    className="flex items-center gap-1 text-white hover:text-emerald-400 transition-colors"
-                  >
-                    {order.payment_details?.iban || '-'}
-                    {order.payment_details?.iban && (
-                      copiedField === 'iban' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />
+                <div>
+                  <p className="font-medium text-white">{sellerName}</p>
+                  <p className="text-sm text-white/50">
+                    {sellerTrades || 0} trades • ⭐ {sellerRating?.toFixed(2) || 'N/A'}
+                    {order.merchant?.is_online && isBuyOrder && (
+                      <span className="ml-2 text-emerald-400">• Online</span>
                     )}
-                  </button>
+                  </p>
                 </div>
               </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-white/50">Location</span>
-                  <span className="text-white">{order.payment_details?.location_name || '-'}</span>
+              {sellerWallet && (
+                <button
+                  onClick={() => handleCopy(sellerWallet, 'seller_wallet')}
+                  className="flex items-center gap-1 px-3 py-1.5 bg-white/[0.04] rounded-lg text-sm text-white/60
+                             hover:bg-white/[0.08] transition-colors border border-white/[0.06]"
+                >
+                  <Wallet className="w-4 h-4" />
+                  {truncateHash(sellerWallet)}
+                  {copiedField === 'seller_wallet' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Bank/Payment Details */}
+          <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
+            <button
+              onClick={() => setShowBankDetails(!showBankDetails)}
+              className="w-full flex items-center justify-between text-sm font-medium text-white/50 mb-3"
+            >
+              <span className="flex items-center gap-2">
+                {order.payment_method === 'bank' ? <Building2 className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
+                Payment Details
+              </span>
+              {showBankDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+            {showBankDetails && (
+              order.payment_method === 'bank' ? (
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-white/50">Bank</span>
+                    <span className="text-white">{order.offer?.bank_name || order.payment_details?.bank_name || '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/50">Account Name</span>
+                    <span className="text-white">{order.offer?.bank_account_name || order.payment_details?.account_name || '-'}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-white/50">IBAN</span>
+                    <button
+                      onClick={() => {
+                        const iban = order.offer?.bank_iban || order.payment_details?.iban;
+                        if (iban) handleCopy(iban, 'iban');
+                      }}
+                      className="flex items-center gap-1 text-white hover:text-emerald-400 transition-colors"
+                    >
+                      {order.offer?.bank_iban || order.payment_details?.iban || '-'}
+                      {(order.offer?.bank_iban || order.payment_details?.iban) && (
+                        copiedField === 'iban' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-white/50">Address</span>
-                  <span className="text-white">{order.payment_details?.location_address || '-'}</span>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-white/50">Location</span>
+                    <span className="text-white">{order.offer?.location_name || order.payment_details?.location_name || '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/50">Address</span>
+                    <span className="text-white">{order.offer?.location_address || order.payment_details?.location_address || '-'}</span>
+                  </div>
                 </div>
-              </div>
+              )
             )}
           </div>
 
-          {/* Escrow Details */}
-          {(order.escrow_tx_hash || order.release_tx_hash) && (
-            <div className="bg-white/5 rounded-xl p-4">
+          {/* Escrow & Blockchain Details */}
+          {(order.escrow_tx_hash || order.escrow_pda || order.escrow_trade_pda || order.release_tx_hash || order.escrow_address) && (
+            <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
               <h3 className="text-sm font-medium text-white/50 mb-3 flex items-center gap-2">
-                <Shield className="w-4 h-4" /> Escrow
+                <Shield className="w-4 h-4" /> Escrow & Blockchain
               </h3>
-              <div className="space-y-2">
-                {order.escrow_tx_hash && (
+              <div className="space-y-3">
+                {/* Trade ID */}
+                {order.escrow_trade_id && (
                   <div className="flex justify-between items-center">
-                    <span className="text-white/50">Deposit TX</span>
-                    <a
-                      href={getSolscanUrl(order.escrow_tx_hash)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors"
-                    >
-                      {truncateHash(order.escrow_tx_hash)}
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
+                    <span className="text-white/50 flex items-center gap-1">
+                      <Hash className="w-3 h-3" /> Trade ID
+                    </span>
+                    <span className="text-white font-mono">{order.escrow_trade_id}</span>
                   </div>
                 )}
+
+                {/* Escrow PDA with Blipscan link */}
+                {(order.escrow_pda || order.escrow_trade_pda) && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-white/50">Escrow PDA</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleCopy(order.escrow_pda || order.escrow_trade_pda!, 'escrow_pda')}
+                        className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
+                      >
+                        {truncateHash(order.escrow_pda || order.escrow_trade_pda!, 8, 6)}
+                        {copiedField === 'escrow_pda' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      </button>
+                      <a
+                        href={getBlipscanTradeUrl(order.escrow_pda || order.escrow_trade_pda!)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[#c9a962] hover:text-[#d4b978] transition-colors"
+                        title="View on Blipscan"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {/* Escrow Address */}
                 {order.escrow_address && (
                   <div className="flex justify-between items-center">
                     <span className="text-white/50">Escrow Address</span>
@@ -335,18 +480,74 @@ export function OrderDetailsPanel({ orderId, onClose }: OrderDetailsPanelProps) 
                     </button>
                   </div>
                 )}
+
+                {/* Deposit TX */}
+                {order.escrow_tx_hash && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-white/50">Deposit TX</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleCopy(order.escrow_tx_hash!, 'deposit_tx')}
+                        className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
+                      >
+                        {truncateHash(order.escrow_tx_hash)}
+                        {copiedField === 'deposit_tx' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      </button>
+                      <a
+                        href={getSolscanUrl(order.escrow_tx_hash)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                        title="View on Solscan"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {/* Block/Slot */}
+                {order.escrow_slot && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-white/50 flex items-center gap-1">
+                      <LinkIcon className="w-3 h-3" /> Slot
+                    </span>
+                    <span className="text-white font-mono">{order.escrow_slot.toLocaleString()}</span>
+                  </div>
+                )}
+
+                {/* Release TX */}
                 {order.release_tx_hash && (
                   <div className="flex justify-between items-center">
                     <span className="text-white/50">Release TX</span>
-                    <a
-                      href={getSolscanUrl(order.release_tx_hash)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors"
-                    >
-                      {truncateHash(order.release_tx_hash)}
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleCopy(order.release_tx_hash!, 'release_tx')}
+                        className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
+                      >
+                        {truncateHash(order.release_tx_hash)}
+                        {copiedField === 'release_tx' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      </button>
+                      <a
+                        href={getSolscanUrl(order.release_tx_hash)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                        title="View on Solscan"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {/* Release Slot */}
+                {order.release_slot && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-white/50 flex items-center gap-1">
+                      <LinkIcon className="w-3 h-3" /> Release Slot
+                    </span>
+                    <span className="text-white font-mono">{order.release_slot.toLocaleString()}</span>
                   </div>
                 )}
               </div>
@@ -354,7 +555,7 @@ export function OrderDetailsPanel({ orderId, onClose }: OrderDetailsPanelProps) 
           )}
 
           {/* Timeline */}
-          <div className="bg-white/5 rounded-xl p-4">
+          <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
             <button
               onClick={() => setShowTimeline(!showTimeline)}
               className="w-full flex items-center justify-between text-sm font-medium text-white/50 mb-3"
@@ -458,12 +659,24 @@ export function OrderDetailsPanel({ orderId, onClose }: OrderDetailsPanelProps) 
 
           {/* Extensions */}
           {(order.extension_count || 0) > 0 && (
-            <div className="bg-white/5 rounded-xl p-4">
+            <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
               <h3 className="text-sm font-medium text-white/50 mb-2">Extensions</h3>
               <p className="text-white">
                 {order.extension_count} of {order.max_extensions || 3} extensions used
               </p>
             </div>
+          )}
+
+          {/* Chat Button (Bottom) */}
+          {onOpenChat && (
+            <button
+              onClick={handleOpenChat}
+              className="w-full py-3 rounded-xl bg-[#c9a962]/20 text-[#c9a962] font-semibold flex items-center justify-center gap-2
+                         hover:bg-[#c9a962]/30 transition-colors border border-[#c9a962]/30"
+            >
+              <MessageCircle className="w-5 h-5" />
+              Open Chat with {username}
+            </button>
           )}
         </div>
       </div>

@@ -6149,6 +6149,10 @@ export default function MerchantDashboard() {
         <OrderDetailsPanel
           orderId={selectedOrderId}
           onClose={() => setSelectedOrderId(null)}
+          onOpenChat={(orderId, username, emoji) => {
+            handleOpenChat(username, emoji, orderId);
+            setSelectedOrderId(null);
+          }}
         />
       )}
 
