@@ -442,10 +442,19 @@ export async function updateOrderStatus(
         newStatus === 'accepted' &&
         currentOrder.merchant_id !== actorId;
 
+      // Check if this is M2M acceptance (merchant accepting another merchant's escrowed order)
+      // In M2M: seller stays as merchant_id, buyer becomes buyer_merchant_id
+      const isM2MAcceptance =
+        actorType === 'merchant' &&
+        oldStatus === 'escrowed' &&
+        (newStatus === 'accepted' || newStatus === 'payment_pending') &&
+        currentOrder.merchant_id !== actorId;
+
       // Build update query with appropriate timestamp
       let timestampField = '';
       let merchantReassign = '';
       let acceptorWalletUpdate = '';
+      let buyerMerchantUpdate = '';
       switch (newStatus) {
         case 'accepted':
           // Note: expires_at stays at original 15 mins from creation (global timeout)
@@ -459,6 +468,16 @@ export async function updateOrderStatus(
               orderId,
               previousMerchantId: currentOrder.merchant_id,
               newMerchantId: actorId,
+            });
+          }
+          // For M2M: set buyer_merchant_id instead of reassigning merchant_id
+          if (isM2MAcceptance) {
+            buyerMerchantUpdate = `, buyer_merchant_id = '${actorId}'`;
+            merchantReassign = ''; // Don't reassign - seller stays as merchant_id
+            logger.info('M2M acceptance: setting buyer_merchant_id', {
+              orderId,
+              sellerMerchantId: currentOrder.merchant_id,
+              buyerMerchantId: actorId,
             });
           }
           // Store acceptor's wallet address when accepting (for sell orders with escrow)
@@ -477,6 +496,26 @@ export async function updateOrderStatus(
         case 'escrowed':
           // Note: expires_at stays at original 15 mins from creation (global timeout)
           timestampField = ", escrowed_at = NOW()";
+          break;
+        case 'payment_pending':
+          // M2M flow: when merchant accepts escrowed order and goes directly to payment_pending
+          // This skips 'accepted' state, so we need to set accepted_at here too
+          if (isM2MAcceptance) {
+            timestampField = ", accepted_at = NOW()";
+            buyerMerchantUpdate = `, buyer_merchant_id = '${actorId}'`;
+            logger.info('M2M direct acceptance to payment_pending', {
+              orderId,
+              sellerMerchantId: currentOrder.merchant_id,
+              buyerMerchantId: actorId,
+            });
+            // Store acceptor's wallet address
+            if (metadata?.acceptor_wallet_address) {
+              const wallet = String(metadata.acceptor_wallet_address);
+              if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
+                acceptorWalletUpdate = `, acceptor_wallet_address = '${wallet}'`;
+              }
+            }
+          }
           break;
         case 'payment_sent':
           // Note: expires_at stays at original 15 mins from creation (global timeout)
@@ -500,7 +539,7 @@ export async function updateOrderStatus(
       }
 
       const updateParams: unknown[] = [newStatus, orderId];
-      let sql = `UPDATE orders SET status = $1${timestampField}${merchantReassign}${acceptorWalletUpdate} WHERE id = $2 RETURNING *`;
+      let sql = `UPDATE orders SET status = $1${timestampField}${merchantReassign}${acceptorWalletUpdate}${buyerMerchantUpdate} WHERE id = $2 RETURNING *`;
 
       if (newStatus === 'cancelled') {
         updateParams.push(actorType, metadata?.reason || null);
