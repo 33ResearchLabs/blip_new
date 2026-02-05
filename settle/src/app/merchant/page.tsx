@@ -877,8 +877,21 @@ export default function MerchantDashboard() {
       if (data.success && data.data) {
         console.log('[Merchant] Raw orders from API:', data.data);
         const mappedOrders = data.data.map(mapDbOrderToUI);
+
+        // Fix status for my escrowed orders (isMyOrder is false for pending/escrowed in SQL)
+        // If I'm the merchant who created/escrowed this order, it should show in Ongoing
+        const fixedOrders = mappedOrders.map((order: Order) => {
+          const iAmCreator = order.orderMerchantId === merchantId;
+          const isEscrowedByMe = order.dbOrder?.status === 'escrowed' && iAmCreator;
+          if (isEscrowedByMe && order.status === 'pending') {
+            console.log('[Merchant] Fixing status for my escrowed order:', order.id);
+            return { ...order, status: 'escrow' as const };
+          }
+          return order;
+        });
+
         // Filter out pending orders that have already expired
-        const validOrders = mappedOrders.filter((order: Order) => {
+        const validOrders = fixedOrders.filter((order: Order) => {
           if (order.status === "pending" && order.expiresIn <= 0) {
             console.log('[Merchant] Filtering out expired pending order:', order.id);
             return false;
