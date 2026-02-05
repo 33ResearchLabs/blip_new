@@ -1210,6 +1210,13 @@ export default function MerchantDashboard() {
       console.log('[Sign] Wallet signature obtained for claim');
 
       // Update order to payment_pending (claimed, now needs to pay)
+      console.log('[SignToClaim] Sending API request:', {
+        orderId: order.id,
+        currentStatus: order.dbOrder?.status,
+        targetStatus: 'payment_pending',
+        merchantId,
+      });
+
       const res = await fetch(`/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -1222,9 +1229,11 @@ export default function MerchantDashboard() {
         }),
       });
 
+      const responseData = await res.json().catch(() => ({}));
+      console.log('[SignToClaim] API response:', { ok: res.ok, status: res.status, data: responseData });
+
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        addNotification('system', `Failed to claim order: ${errorData.error || 'Unknown error'}`, order.id);
+        addNotification('system', `Failed to claim order: ${responseData.error || 'Unknown error'}`, order.id);
         playSound('error');
         return;
       }
@@ -3267,6 +3276,17 @@ export default function MerchantDashboard() {
                                 // Check if I'm the escrow creator (seller who locked funds)
                                 const iAmEscrowCreator = order.escrowCreatorWallet && order.escrowCreatorWallet === solanaWallet.walletAddress;
                                 const escrowExistsFromOther = order.escrowTxHash && !iAmEscrowCreator;
+
+                                console.log('[Active] Order action check:', {
+                                  orderId: order.id,
+                                  orderType: order.orderType,
+                                  escrowTxHash: order.escrowTxHash,
+                                  escrowCreatorWallet: order.escrowCreatorWallet,
+                                  myWallet: solanaWallet.walletAddress,
+                                  iAmEscrowCreator,
+                                  escrowExistsFromOther,
+                                  dbStatus: order.dbOrder?.status,
+                                });
 
                                 if (order.orderType === 'buy' && !order.escrowTxHash) {
                                   // Buy order, no escrow yet - I need to sign/lock
