@@ -148,11 +148,14 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         console.log('[useRealtimeChat] Fetched messages:', { orderId, chatId, count: data.data?.length });
 
         if (data.success && data.data) {
+          console.log('[useRealtimeChat] API returned messages:', { orderId, count: data.data.length, first: data.data[0] });
           const messages: ChatMessage[] = data.data.map((m: DbMessage) =>
             mapDbMessageToUI(m, actorType)
           );
 
           setChatWindows((prev) => {
+            const windowToUpdate = prev.find(w => w.id === chatId);
+            console.log('[useRealtimeChat] Looking for window to update:', { chatId, found: !!windowToUpdate, windows: prev.map(w => w.id) });
             const updated = prev.map((w) => {
               if (w.id !== chatId) return w;
               console.log('[useRealtimeChat] Updating chat window with messages:', { chatId, messageCount: messages.length });
@@ -172,6 +175,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   // Subscribe to real-time messages for an order
   const subscribeToOrder = useCallback(
     (orderId: string, chatId: string) => {
+      console.log('[useRealtimeChat] subscribeToOrder called:', { orderId, chatId, alreadySubscribed: subscribedChannelsRef.current.get(orderId) });
       if (!pusher || subscribedChannelsRef.current.get(orderId)) return;
 
       const channelName = getOrderChannel(orderId);
@@ -288,20 +292,44 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
 
   const openChat = useCallback(
     (user: string, emoji: string, orderId?: string) => {
+      console.log('[useRealtimeChat] openChat called:', { user, orderId });
       setChatWindows((prev) => {
-        // Check if chat already exists
+        console.log('[useRealtimeChat] Current chat windows:', prev.map(w => ({ id: w.id, orderId: w.orderId, user: w.user, msgCount: w.messages.length })));
+        // Check if chat already exists - prioritize orderId match over user name match
         const existingIndex = prev.findIndex(
-          (w) => w.orderId === orderId || w.user === user
+          (w) => w.orderId === orderId
         );
+
         if (existingIndex >= 0) {
-          // Bring to front and unminimize
+          // Exact orderId match - just bring to front and refresh messages
           const existing = prev[existingIndex];
-          // Schedule subscription after state update
-          if (orderId && existing.orderId) {
+          if (orderId) {
             setTimeout(() => subscribeToOrder(orderId, existing.id), 0);
           }
           return prev.map((w, i) =>
             i === existingIndex ? { ...w, minimized: false, unread: 0 } : w
+          );
+        }
+
+        // Check if there's a window with same user but different order
+        // In this case, we need to update the orderId and clear messages
+        const userMatchIndex = prev.findIndex(
+          (w) => w.user === user && w.orderId !== orderId
+        );
+
+        if (userMatchIndex >= 0 && orderId) {
+          // Reuse window but update orderId and clear messages for fresh load
+          const existing = prev[userMatchIndex];
+          // Unsubscribe from old order if exists
+          if (existing.orderId) {
+            unsubscribeFromOrder(existing.orderId);
+          }
+          // Subscribe to new order after state update
+          setTimeout(() => subscribeToOrder(orderId, existing.id), 0);
+          return prev.map((w, i) =>
+            i === userMatchIndex
+              ? { ...w, orderId, minimized: false, unread: 0, messages: [] }
+              : w
           );
         }
 

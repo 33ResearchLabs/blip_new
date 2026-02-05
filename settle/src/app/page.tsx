@@ -636,6 +636,19 @@ export default function Home() {
 
   // Get active chat for current order
   const activeChat = activeOrder ? chatWindows.find(w => w.orderId === activeOrder.id) : null;
+
+  // Debug logging for chat issues
+  useEffect(() => {
+    if (screen === "chat-view") {
+      console.log('[page.tsx] chat-view debug:', {
+        activeOrderId,
+        activeOrderExists: !!activeOrder,
+        activeChatExists: !!activeChat,
+        activeChatMessages: activeChat?.messages?.length ?? 0,
+        chatWindows: chatWindows.map(w => ({ id: w.id, orderId: w.orderId, msgCount: w.messages.length })),
+      });
+    }
+  }, [screen, activeOrderId, activeOrder, activeChat, chatWindows]);
   const pendingOrders = orders.filter(o => o.status !== "complete");
   const completedOrders = orders.filter(o => o.status === "complete");
 
