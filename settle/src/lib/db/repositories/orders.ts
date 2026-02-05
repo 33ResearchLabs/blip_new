@@ -175,32 +175,48 @@ export async function getMerchantOrders(
 }
 
 /**
- * Get orders for merchant dashboard:
- * 1. PENDING orders from OTHER merchants (to accept in "New Orders")
- * 2. All orders where I'm the merchant_id (my orders - active, completed, etc.)
- * 3. Orders where I'm buyer_merchant (orders I created that someone else claimed)
+ * Get orders for merchant dashboard (broadcast model):
  *
- * Frontend filters: "New Orders" should exclude orders where merchant_id = me (can't accept own order)
- * The 'is_my_order' flag helps frontend distinguish own orders from others
+ * NEW ORDERS (is_my_order = false):
+ * - ALL pending orders (buy orders awaiting merchant acceptance)
+ * - ALL escrowed orders (sell orders where user locked escrow, awaiting merchant acceptance)
+ *
+ * ACTIVE/ONGOING (is_my_order = true after acceptance):
+ * - Orders where I'm merchant_id AND accepted_at IS NOT NULL
+ * - Orders where I'm buyer_merchant (M2M orders I initiated)
+ *
+ * Key insight: Both buy AND sell orders appear in "New Orders" for ALL merchants.
+ * is_my_order is ONLY true after a merchant accepts the order.
  */
 export async function getAllPendingOrdersForMerchant(
   merchantId: string,
   status?: OrderStatus[]
 ): Promise<OrderWithRelations[]> {
+  // is_my_order logic:
+  // - For pending/escrowed orders: ALWAYS false (no one has accepted yet, all can see in New Orders)
+  // - For accepted+ orders: true if I'm the merchant who accepted OR I'm the buyer_merchant (M2M)
+  // This ensures user sell orders with escrow show in "New Orders" for ALL merchants
   let sql = `
     SELECT o.*,
-           ((o.merchant_id = $1 AND o.buyer_merchant_id IS NULL) OR o.buyer_merchant_id = $1) as is_my_order,
+           CASE
+             -- Pending/escrowed orders: NEVER "my order" - available for any merchant to accept
+             WHEN o.status IN ('pending', 'escrowed') THEN false
+             -- After acceptance: it's my order if I'm assigned merchant OR buyer_merchant (M2M)
+             ELSE ((o.merchant_id = $1 AND o.accepted_at IS NOT NULL) OR o.buyer_merchant_id = $1)
+           END as is_my_order,
            json_build_object(
              'id', u.id,
              'name', u.username,
              'rating', u.rating,
-             'total_trades', u.total_trades
+             'total_trades', u.total_trades,
+             'wallet_address', u.wallet_address
            ) as user,
            json_build_object(
              'id', m.id,
              'display_name', m.display_name,
              'username', m.username,
-             'rating', m.rating
+             'rating', m.rating,
+             'wallet_address', m.wallet_address
            ) as merchant,
            json_build_object(
              'payment_method', mo.payment_method,
@@ -221,11 +237,11 @@ export async function getAllPendingOrdersForMerchant(
     LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
     WHERE o.status NOT IN ('expired', 'cancelled')
       AND (
-        -- PENDING or ESCROWED orders from OTHER merchants (New Orders - can accept these)
-        -- Any merchant can see and accept these orders (broadcast model)
-        (o.status IN ('pending', 'escrowed') AND o.merchant_id != $1)
+        -- PENDING or ESCROWED orders: ALL merchants can see (New Orders - broadcast model)
+        -- Both buy orders (pending) and sell orders (escrowed by user) show here
+        (o.status IN ('pending', 'escrowed'))
 
-        -- All orders where I'm the merchant (my active orders)
+        -- All orders where I'm the merchant (my active/ongoing orders after acceptance)
         OR (o.merchant_id = $1)
 
         -- Orders I created as buyer_merchant (M2M orders I initiated)
