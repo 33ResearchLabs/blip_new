@@ -1297,25 +1297,32 @@ export default function MerchantDashboard() {
     const validWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
     const myWallet = solanaWallet.walletAddress;
 
+    // Check wallet validity
+    const hasAcceptorWallet = escrowOrder.acceptorWallet && validWalletRegex.test(escrowOrder.acceptorWallet);
+    const hasUserWallet = escrowOrder.userWallet && validWalletRegex.test(escrowOrder.userWallet);
+
     // Check if this is my SELL order before anyone accepted (no recipient yet)
-    // In this case, escrow locks to treasury placeholder and will be released to acceptor later
     const isMyPendingSellOrder = escrowOrder.isMyOrder && escrowOrder.dbOrder?.status === 'pending';
 
-    // For M2M trades, determine who I am and who receives:
-    // - If I'm the creator (my wallet = buyerMerchantWallet): recipient = acceptor
-    // - If I'm the acceptor: recipient = creator (buyerMerchantWallet)
-    // M2M detection: isM2M flag, buyerMerchantWallet, OR acceptorWallet is set (merchant accepted open order)
-    const hasAcceptorWallet = escrowOrder.acceptorWallet && validWalletRegex.test(escrowOrder.acceptorWallet);
-    const isMerchantTrade = escrowOrder.isM2M || !!escrowOrder.buyerMerchantWallet || hasAcceptorWallet;
+    // For M2M: if it's my order and acceptor hasn't connected wallet, allow escrow to treasury
+    // This handles the case where order is accepted but acceptor wallet isn't set yet
+    const isMyOrderNoAcceptorWallet = escrowOrder.isMyOrder && !hasAcceptorWallet && !hasUserWallet;
+
+    // M2M detection: isM2M flag, buyerMerchantWallet, acceptorWallet, OR my order with no user wallet (placeholder)
+    const isMerchantInitiated = escrowOrder.isMyOrder && !hasUserWallet;
+    const isMerchantTrade = escrowOrder.isM2M || !!escrowOrder.buyerMerchantWallet || hasAcceptorWallet || isMerchantInitiated;
     // For open SELL orders, the creator is determined by isMyOrder flag (buyerMerchantWallet may not be set)
     const iAmCreator = escrowOrder.isMyOrder || (myWallet && escrowOrder.buyerMerchantWallet === myWallet);
 
     let recipientWallet: string | undefined = undefined;
-    if (isMyPendingSellOrder) {
-      // My SELL order, no acceptor yet - escrow will use treasury placeholder
-      // Recipient will be set when someone accepts
+    // Allow escrow to treasury if: pending order OR my order where acceptor hasn't connected wallet
+    const canEscrowToTreasury = isMyPendingSellOrder || isMyOrderNoAcceptorWallet;
+
+    if (canEscrowToTreasury) {
+      // My order, no acceptor wallet yet - escrow will use treasury placeholder
+      // Recipient will be set when acceptor provides wallet
       recipientWallet = undefined;
-      console.log('[Escrow] My pending SELL order - locking to treasury placeholder, will release to acceptor later');
+      console.log('[Escrow] My order without acceptor wallet - locking to treasury placeholder');
     } else if (isMerchantTrade) {
       if (iAmCreator) {
         // I created the order, I'm locking, recipient is the acceptor
@@ -1335,8 +1342,8 @@ export default function MerchantDashboard() {
         : undefined;
     }
 
-    // Only require recipient for non-pending orders (someone has accepted)
-    if (!recipientWallet && !isMyPendingSellOrder) {
+    // Only require recipient if we can't escrow to treasury
+    if (!recipientWallet && !canEscrowToTreasury) {
       setEscrowError(isMerchantTrade
         ? 'The other merchant has not connected their Solana wallet yet.'
         : 'User has not connected their Solana wallet yet. Ask them to connect their wallet in the app first.');
@@ -1351,7 +1358,7 @@ export default function MerchantDashboard() {
         amount: escrowOrder.amount,
         recipientWallet: recipientWallet || '(treasury placeholder)',
         isMerchantTrade,
-        isMyPendingSellOrder,
+        canEscrowToTreasury,
       });
 
       const escrowResult = await solanaWallet.depositToEscrow({
