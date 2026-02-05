@@ -30,6 +30,8 @@ import {
   FundLaneParams,
   WithdrawLaneParams,
   CreateTradeParams,
+  FundEscrowParams,
+  AcceptTradeParams,
   LockEscrowParams,
   ReleaseEscrowParams,
   RefundEscrowParams,
@@ -395,6 +397,72 @@ export async function buildCreateTradeTx(
       protocolConfig: protocolConfigPda,
       trade: tradePda,
       mint,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+
+  const transaction = new Transaction().add(instruction);
+  return transaction;
+}
+
+/**
+ * Build fund escrow transaction (WITHOUT counterparty)
+ * Use this when you want to fund the escrow first and let someone join later.
+ *
+ * Flow: create_trade → fund_escrow (Funded) → accept_trade (Locked) → release_escrow
+ */
+export async function buildFundEscrowTx(
+  program: Program,
+  depositor: PublicKey,
+  tradePda: PublicKey,
+  mint: PublicKey
+): Promise<Transaction> {
+  const [escrowPda] = findEscrowPda(tradePda);
+  const [vaultAuthority] = findVaultAuthorityPda(escrowPda);
+  const vaultAta = await getAssociatedTokenAddress(mint, vaultAuthority, true);
+  const depositorAta = await getAssociatedTokenAddress(mint, depositor);
+
+  // fundEscrow takes no args - counterparty is set later via acceptTrade
+  const instruction = await (program.methods as any)
+    .fundEscrow()
+    .accounts({
+      depositor,
+      trade: tradePda,
+      escrow: escrowPda,
+      vaultAuthority,
+      vaultAta,
+      depositorAta,
+      mint,
+      tokenProgram: TOKEN_PROGRAM_ID,
+      associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+
+  const transaction = new Transaction().add(instruction);
+  return transaction;
+}
+
+/**
+ * Build accept trade transaction (counterparty joins a funded escrow)
+ * Use this after fund_escrow to join as the counterparty.
+ *
+ * Flow: create_trade → fund_escrow (Funded) → accept_trade (Locked) → release_escrow
+ */
+export async function buildAcceptTradeTx(
+  program: Program,
+  acceptor: PublicKey,
+  tradePda: PublicKey
+): Promise<Transaction> {
+  const [escrowPda] = findEscrowPda(tradePda);
+
+  // acceptTrade takes no args - the signer becomes the counterparty
+  const instruction = await (program.methods as any)
+    .acceptTrade()
+    .accounts({
+      acceptor,
+      trade: tradePda,
+      escrow: escrowPda,
       systemProgram: SystemProgram.programId,
     })
     .instruction();

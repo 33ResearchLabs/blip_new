@@ -1143,6 +1143,8 @@ export default function MerchantDashboard() {
       dbOrderStatus: order.dbOrder?.status,
       isEscrowedByOther,
       escrowTxHash: order.escrowTxHash,
+      escrowTradeId: order.escrowTradeId,
+      escrowCreatorWallet: order.escrowCreatorWallet,
     });
 
     // For M2M where seller already escrowed: require wallet to receive funds
@@ -1153,6 +1155,33 @@ export default function MerchantDashboard() {
     }
 
     try {
+      // If escrow is already funded by seller, call acceptTrade on-chain first
+      if (isEscrowedByOther && order.escrowCreatorWallet && order.escrowTradeId !== undefined) {
+        addNotification('system', 'Joining escrow on-chain... Please approve the transaction.', order.id);
+
+        try {
+          const acceptResult = await solanaWallet.acceptTrade({
+            creatorPubkey: order.escrowCreatorWallet,
+            tradeId: order.escrowTradeId,
+          });
+
+          if (!acceptResult.success) {
+            console.error('[Go] Failed to accept trade on-chain:', acceptResult.error);
+            addNotification('system', `Failed to join escrow: ${acceptResult.error}`, order.id);
+            playSound('error');
+            return;
+          }
+
+          console.log('[Go] Trade accepted on-chain:', acceptResult.txSignature);
+          addNotification('system', 'Successfully joined escrow on-chain!', order.id);
+        } catch (acceptError) {
+          console.error('[Go] Error accepting trade on-chain:', acceptError);
+          addNotification('system', `Failed to join escrow: ${acceptError instanceof Error ? acceptError.message : 'Unknown error'}`, order.id);
+          playSound('error');
+          return;
+        }
+      }
+
       // Build the request body
       // Always go to 'accepted' first - buyer will then Sign to move to payment_pending
       const targetStatus = "accepted";
@@ -1467,18 +1496,19 @@ export default function MerchantDashboard() {
     setEscrowError(null);
 
     try {
-      console.log('[Merchant] Executing on-chain escrow lock...', {
+      console.log('[Merchant] Executing on-chain escrow lock (unified flow)...', {
         amount: escrowOrder.amount,
-        recipientWallet: recipientWallet || '(treasury placeholder)',
-        isMerchantTrade,
-        canEscrowToTreasury,
+        side: 'sell',
+        note: 'Using depositToEscrowOpen - counterparty will join via acceptTrade',
       });
 
-      const escrowResult = await solanaWallet.depositToEscrow({
+      // Use unified flow: fund escrow WITHOUT counterparty
+      // Buyer (user or merchant B) will call acceptTrade() to join later
+      const escrowResult = await solanaWallet.depositToEscrowOpen({
         amount: escrowOrder.amount,
-        merchantWallet: recipientWallet, // Recipient's wallet or undefined for treasury placeholder
+        side: 'sell', // Seller is funding the escrow
       });
-      console.log('[Merchant] depositToEscrow result:', escrowResult);
+      console.log('[Merchant] depositToEscrowOpen result:', escrowResult);
 
       if (!escrowResult.success || !escrowResult.txHash) {
         throw new Error(escrowResult.error || 'Transaction failed');
@@ -3078,6 +3108,9 @@ export default function MerchantDashboard() {
                           // Buyer needs to click "I've Paid" when:
                           // M2M buyer with payment_pending status (after accepting)
                           const canMarkPaid = dbStatus === "payment_pending" && iAmBuyer;
+                          // Check if escrow is just funded (waiting for counterparty to accept)
+                          // vs locked (counterparty has accepted and trade is in progress)
+                          const isFundedOnly = dbStatus === "escrowed" && iAmEscrowCreator;
                           return (
                             <motion.div
                               key={order.id}
@@ -3111,6 +3144,8 @@ export default function MerchantDashboard() {
                                   <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded font-mono">READY</span>
                                 ) : canMarkPaid ? (
                                   <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded font-mono">SEND</span>
+                                ) : isFundedOnly ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 rounded font-mono">FUNDED</span>
                                 ) : (
                                   <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded font-mono">LOCKED</span>
                                 )}
@@ -5324,6 +5359,36 @@ export default function MerchantDashboard() {
                       setCreateTradeError(null);
 
                       try {
+                        // For SELL orders: find matching BUY offer to get counterparty wallet
+                        // This mirrors U2M flow where user matches to merchant's offer first
+                        let matchedOffer: { id: string; merchant?: { wallet_address?: string; display_name?: string } } | null = null;
+
+                        if (openTradeForm.tradeType === "sell") {
+                          // Find a merchant BUY offer to match with
+                          const offerParams = new URLSearchParams({
+                            amount: openTradeForm.cryptoAmount,
+                            type: 'buy', // We're selling, so we need buy offers
+                            payment_method: openTradeForm.paymentMethod,
+                            exclude_merchant: merchantId, // Don't match with ourselves
+                          });
+                          const offerRes = await fetch(`/api/offers?${offerParams}`);
+                          const offerData = await offerRes.json();
+
+                          if (offerRes.ok && offerData.success && offerData.data) {
+                            matchedOffer = offerData.data;
+                            console.log('[M2M] Matched to offer:', matchedOffer?.merchant?.display_name);
+                          }
+
+                          // Validate counterparty wallet
+                          const counterpartyWallet = matchedOffer?.merchant?.wallet_address;
+                          const isValidWallet = counterpartyWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(counterpartyWallet);
+
+                          if (!isValidWallet) {
+                            setCreateTradeError('No matching merchant with a linked wallet found. Please try a different amount or wait for merchants to add liquidity.');
+                            return;
+                          }
+                        }
+
                         const res = await fetch("/api/merchant/orders", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
@@ -5332,6 +5397,7 @@ export default function MerchantDashboard() {
                             type: openTradeForm.tradeType,
                             crypto_amount: parseFloat(openTradeForm.cryptoAmount),
                             payment_method: openTradeForm.paymentMethod,
+                            matched_offer_id: matchedOffer?.id, // Pass matched offer for order creation
                           }),
                         });
 
@@ -5345,6 +5411,26 @@ export default function MerchantDashboard() {
 
                         console.log('[Merchant] Trade created successfully:', data.data);
 
+                        // Add to orders list
+                        if (data.data) {
+                          const newOrder = mapDbOrderToUI(data.data);
+                          setOrders(prev => [newOrder, ...prev]);
+
+                          // For SELL orders: open escrow modal with matched merchant's wallet
+                          if (openTradeForm.tradeType === "sell" && matchedOffer?.merchant?.wallet_address) {
+                            // Add the counterparty wallet to the order for escrow
+                            newOrder.userWallet = matchedOffer.merchant.wallet_address;
+                            addNotification('escrow', `Lock ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC to complete your sell order`, data.data?.id);
+                            setEscrowOrder(newOrder);
+                            setEscrowTxHash(null);
+                            setEscrowError(null);
+                            setIsLockingEscrow(false);
+                            setShowEscrowModal(true);
+                          } else {
+                            addNotification('order', `Buy order created for ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC`, data.data?.id);
+                          }
+                        }
+
                         // Success - close modal
                         setShowOpenTradeModal(false);
                         setOpenTradeForm({
@@ -5352,21 +5438,6 @@ export default function MerchantDashboard() {
                           cryptoAmount: "",
                           paymentMethod: "bank",
                         });
-
-                        // Add to orders list
-                        if (data.data) {
-                          const newOrder = mapDbOrderToUI(data.data);
-                          setOrders(prev => [newOrder, ...prev]);
-
-                          // For M2M orders, DON'T lock escrow immediately
-                          // Wait for another merchant to accept and provide their wallet first
-                          // This ensures the escrow counterparty is set correctly for release
-                          if (openTradeForm.tradeType === "sell") {
-                            addNotification('order', `Sell order created for ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC. Waiting for a buyer to accept...`, data.data?.id);
-                          } else {
-                            addNotification('order', `Buy order created for ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC`, data.data?.id);
-                          }
-                        }
                       } catch (error) {
                         console.error("Error creating trade:", error);
                         setCreateTradeError("Network error. Please try again.");

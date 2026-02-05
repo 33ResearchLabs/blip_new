@@ -58,6 +58,8 @@ import {
   buildFundLaneTx,
   buildWithdrawLaneTx,
   buildCreateTradeTx,
+  buildFundEscrowTx,
+  buildAcceptTradeTx,
   buildLockEscrowTx,
   buildReleaseEscrowTx,
   buildRefundEscrowTx,
@@ -312,6 +314,21 @@ interface SolanaWalletContextType {
     tradeId: number;
   }) => Promise<TradeOperationResult>;
 
+  // Fund escrow WITHOUT counterparty (for M2M open orders)
+  // Creates trade + funds escrow, counterparty joins later via acceptTrade
+  fundEscrowOnly: (params: {
+    tradeId: number;
+    amount: number;
+    side: 'buy' | 'sell';
+  }) => Promise<TradeOperationResult>;
+
+  // Accept a funded trade as the counterparty (M2M flow)
+  // Transitions trade from Funded → Locked
+  acceptTrade: (params: {
+    creatorPubkey: string;
+    tradeId: number;
+  }) => Promise<TradeOperationResult>;
+
   // Escrow function - creates trade and locks funds using V2.2 program
   // merchantWallet is optional - if not provided, uses treasury as placeholder counterparty
   // This allows locking escrow before a merchant is assigned (for sell orders)
@@ -319,6 +336,20 @@ interface SolanaWalletContextType {
     amount: number;
     merchantWallet?: string;
     tradeId?: number;
+  }) => Promise<{
+    txHash: string;
+    success: boolean;
+    tradePda?: string;
+    escrowPda?: string;
+    tradeId?: number;
+  }>;
+
+  // Deposit to escrow WITHOUT counterparty (M2M open order flow)
+  // Uses fundEscrow instead of lockEscrow - counterparty joins later
+  depositToEscrowOpen: (params: {
+    amount: number;
+    tradeId?: number;
+    side?: 'buy' | 'sell';
   }) => Promise<{
     txHash: string;
     success: boolean;
@@ -1076,6 +1107,203 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [publicKey, program, signTransaction, connection, refreshBalances]);
 
+  // Fund escrow WITHOUT counterparty (unified flow for U2M and M2M)
+  // Creates trade + funds escrow, counterparty joins later via acceptTrade
+  const fundEscrowOnly = useCallback(async (params: {
+    tradeId: number;
+    amount: number;
+    side: 'buy' | 'sell';
+  }): Promise<TradeOperationResult> => {
+    if (!publicKey || !program || !signTransaction) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      // Ensure protocol config is initialized
+      await ensureProtocolConfigInitialized();
+
+      const [tradePda] = findTradePda(publicKey, params.tradeId);
+      const [escrowPda] = findEscrowPda(tradePda);
+
+      // Convert amount to token units (USDT has 6 decimals)
+      const amountBN = new BN(Math.floor(params.amount * 1_000_000));
+      const sideEnum = params.side === 'buy' ? TradeSide.Buy : TradeSide.Sell;
+
+      console.log('[fundEscrowOnly] Creating trade + funding escrow:', {
+        tradeId: params.tradeId,
+        amount: amountBN.toString(),
+        side: params.side,
+        tradePda: tradePda.toString(),
+      });
+
+      // Step 1: Build create trade transaction
+      const createTradeTx = await buildCreateTradeTx(
+        program,
+        publicKey,
+        USDT_MINT,
+        {
+          tradeId: params.tradeId,
+          amount: amountBN,
+          side: sideEnum,
+        }
+      );
+
+      // Step 2: Build fund escrow transaction (NO counterparty!)
+      const fundEscrowTx = await buildFundEscrowTx(
+        program,
+        publicKey,
+        tradePda,
+        USDT_MINT
+      );
+
+      // Combine both transactions
+      const transaction = new Transaction();
+      for (const ix of createTradeTx.instructions) {
+        transaction.add(ix);
+      }
+      for (const ix of fundEscrowTx.instructions) {
+        transaction.add(ix);
+      }
+
+      // Get recent blockhash
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = publicKey;
+
+      // Sign transaction
+      const signedTx = await signTransaction(transaction);
+
+      // Send transaction
+      const txHash = await connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: true,
+        maxRetries: 5,
+      });
+
+      // Confirm transaction
+      await connection.confirmTransaction({
+        signature: txHash,
+        blockhash,
+        lastValidBlockHeight,
+      });
+
+      console.log('[fundEscrowOnly] Success! Trade funded, waiting for counterparty to accept');
+
+      await refreshBalances();
+
+      return {
+        txHash,
+        success: true,
+        tradePda: tradePda.toString(),
+        escrowPda: escrowPda.toString(),
+        tradeId: params.tradeId,
+      };
+    } catch (error: any) {
+      console.error('Fund escrow failed:', error);
+
+      // Parse Anchor/Solana error codes for better UX
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+
+      if (errorMessage.includes('CannotFund') || errorMessage.includes('6010')) {
+        throw new Error('Trade cannot be funded - it may already be funded or in wrong state');
+      }
+      if (errorMessage.includes('InsufficientFunds') || errorMessage.includes('insufficient funds')) {
+        throw new Error('Insufficient USDC balance to fund escrow');
+      }
+      if (errorMessage.includes('User rejected')) {
+        throw new Error('Transaction cancelled by user');
+      }
+      if (errorMessage.includes('TokenAccountNotFound') || errorMessage.includes('could not find account')) {
+        throw new Error('USDC token account not found - ensure you have USDC in your wallet');
+      }
+
+      throw error;
+    }
+  }, [publicKey, program, signTransaction, connection, refreshBalances, ensureProtocolConfigInitialized]);
+
+  // Accept a funded trade as the counterparty (unified flow)
+  // Transitions trade from Funded → Locked, sets counterparty to signer
+  const acceptTrade = useCallback(async (params: {
+    creatorPubkey: string;
+    tradeId: number;
+  }): Promise<TradeOperationResult> => {
+    if (!publicKey || !program || !signTransaction) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      const creatorPk = new PublicKey(params.creatorPubkey);
+      const [tradePda] = findTradePda(creatorPk, params.tradeId);
+      const [escrowPda] = findEscrowPda(tradePda);
+
+      console.log('[acceptTrade] Accepting trade as counterparty:', {
+        creator: params.creatorPubkey,
+        tradeId: params.tradeId,
+        acceptor: publicKey.toString(),
+        tradePda: tradePda.toString(),
+      });
+
+      // Build accept trade transaction
+      const transaction = await buildAcceptTradeTx(
+        program,
+        publicKey,
+        tradePda
+      );
+
+      // Get recent blockhash
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = publicKey;
+
+      // Sign transaction
+      const signedTx = await signTransaction(transaction);
+
+      // Send transaction
+      const txHash = await connection.sendRawTransaction(signedTx.serialize());
+
+      // Confirm transaction
+      await connection.confirmTransaction({
+        signature: txHash,
+        blockhash,
+        lastValidBlockHeight,
+      });
+
+      console.log('[acceptTrade] Success! You are now the counterparty');
+
+      await refreshBalances();
+
+      return {
+        txHash,
+        success: true,
+        tradePda: tradePda.toString(),
+        escrowPda: escrowPda.toString(),
+        tradeId: params.tradeId,
+      };
+    } catch (error: any) {
+      console.error('Accept trade failed:', error);
+
+      // Parse Anchor/Solana error codes for better UX
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+
+      if (errorMessage.includes('CannotAccept') || errorMessage.includes('6011')) {
+        throw new Error('Trade cannot be accepted - it may already be locked or in wrong state');
+      }
+      if (errorMessage.includes('CannotAcceptOwnTrade') || errorMessage.includes('6012')) {
+        throw new Error('Cannot accept your own trade');
+      }
+      if (errorMessage.includes('AccountNotFound') || errorMessage.includes('Account does not exist')) {
+        throw new Error('Trade not found - it may have been cancelled or completed');
+      }
+      if (errorMessage.includes('InsufficientFunds') || errorMessage.includes('insufficient funds')) {
+        throw new Error('Insufficient SOL for transaction fees');
+      }
+      if (errorMessage.includes('User rejected')) {
+        throw new Error('Transaction cancelled by user');
+      }
+
+      throw error;
+    }
+  }, [publicKey, program, signTransaction, connection, refreshBalances]);
+
   // Deposit to escrow using V2.2 program - creates trade and locks funds
   // merchantWallet is optional - if not provided, uses treasury as placeholder counterparty
   const depositToEscrow = useCallback(async (params: {
@@ -1270,6 +1498,46 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [publicKey, signTransaction, connection, program, refreshBalances, ensureProtocolConfigInitialized]);
 
+  // Deposit to escrow WITHOUT counterparty (unified flow for U2M and M2M)
+  // This is the NEW preferred method - uses fund_escrow instead of lock_escrow
+  // Counterparty joins later via acceptTrade
+  const depositToEscrowOpen = useCallback(async (params: {
+    amount: number;
+    tradeId?: number;
+    side?: 'buy' | 'sell';
+  }): Promise<{
+    txHash: string;
+    success: boolean;
+    tradePda?: string;
+    escrowPda?: string;
+    tradeId?: number;
+  }> => {
+    // Generate a unique trade ID if not provided
+    const tradeId = params.tradeId ?? Date.now();
+    const side = params.side ?? 'sell';
+
+    console.log('[depositToEscrowOpen] Starting unified flow (no counterparty):', {
+      amount: params.amount,
+      tradeId,
+      side,
+    });
+
+    // Use fundEscrowOnly which creates trade + funds escrow without counterparty
+    const result = await fundEscrowOnly({
+      tradeId,
+      amount: params.amount,
+      side,
+    });
+
+    return {
+      txHash: result.txHash,
+      success: result.success,
+      tradePda: result.tradePda,
+      escrowPda: result.escrowPda,
+      tradeId: result.tradeId,
+    };
+  }, [fundEscrowOnly]);
+
   const value: SolanaWalletContextType = {
     connected,
     connecting,
@@ -1290,7 +1558,10 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     lockEscrow,
     releaseEscrow,
     refundEscrow,
+    fundEscrowOnly,
+    acceptTrade,
     depositToEscrow,
+    depositToEscrowOpen,
     network: SOLANA_NETWORK,
     programReady: !!program,
     reinitializeProgram,

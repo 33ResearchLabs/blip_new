@@ -8,6 +8,7 @@ import { BN } from '@coral-xyz/anchor';
 // Trade status enum
 export enum TradeStatus {
   Created = 'Created',
+  Funded = 'Funded',  // Escrow funded, waiting for counterparty to accept
   Locked = 'Locked',
   Released = 'Released',
   Refunded = 'Refunded',
@@ -97,6 +98,17 @@ export interface CreateTradeParams {
   tradeId: number;
   amount: BN;
   side: TradeSide;
+}
+
+// Fund escrow params (no counterparty needed)
+export interface FundEscrowParams {
+  tradePda: PublicKey;
+  mint: PublicKey;
+}
+
+// Accept trade params (counterparty joins)
+export interface AcceptTradeParams {
+  tradePda: PublicKey;
 }
 
 // Lock escrow params

@@ -33,6 +33,32 @@
       ]
     },
     {
+      "name": "fundEscrow",
+      "accounts": [
+        { "name": "depositor", "isMut": true, "isSigner": true },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": true, "isSigner": false },
+        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
+        { "name": "vaultAta", "isMut": true, "isSigner": false },
+        { "name": "depositorAta", "isMut": true, "isSigner": false },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "associatedTokenProgram", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "acceptTrade",
+      "accounts": [
+        { "name": "acceptor", "isMut": true, "isSigner": true },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
       "name": "lockEscrow",
       "accounts": [
         { "name": "depositor", "isMut": true, "isSigner": true },
@@ -212,6 +238,7 @@
         "kind": "enum",
         "variants": [
           { "name": "Created" },
+          { "name": "Funded" },
           { "name": "Locked" },
           { "name": "Released" },
           { "name": "Refunded" }
@@ -234,9 +261,12 @@
     { "code": 6001, "name": "InvalidTreasury", "msg": "Treasury account does not match protocol config" },
     { "code": 6002, "name": "InvalidTradeState", "msg": "Trade is in invalid state for this operation" },
     { "code": 6003, "name": "Unauthorized", "msg": "Unauthorized signer for this operation" },
-    { "code": 6012, "name": "CannotLock", "msg": "Trade cannot be locked in current state" },
-    { "code": 6013, "name": "CannotRelease", "msg": "Trade cannot be released in current state" },
-    { "code": 6014, "name": "CannotRefund", "msg": "Trade cannot be refunded in current state" }
+    { "code": 6010, "name": "CannotFund", "msg": "Trade cannot be funded in current state" },
+    { "code": 6011, "name": "CannotAccept", "msg": "Trade cannot be accepted in current state" },
+    { "code": 6012, "name": "CannotAcceptOwnTrade", "msg": "Cannot accept your own trade" },
+    { "code": 6013, "name": "CannotLock", "msg": "Trade cannot be locked in current state" },
+    { "code": 6014, "name": "CannotRelease", "msg": "Trade cannot be released in current state" },
+    { "code": 6015, "name": "CannotRefund", "msg": "Trade cannot be refunded in current state" }
   ],
   "metadata": {
     "address": "6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87"
