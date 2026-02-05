@@ -430,24 +430,19 @@ export async function updateOrderStatus(
       let timestampField = '';
       let merchantReassign = '';
       let acceptorWalletUpdate = '';
-      let originalMerchantUpdate = '';
       switch (newStatus) {
         case 'accepted':
           // Note: expires_at stays at original 15 mins from creation (global timeout)
           timestampField = ", accepted_at = NOW()";
           // If a different merchant is claiming, reassign the order to them
-          // Store the original merchant in buyer_merchant_id so they can track the order
+          // Note: We do NOT set buyer_merchant_id here - that field is ONLY for M2M trades
+          // where a merchant is the buyer (set at order creation time)
           if (isMerchantClaiming) {
             merchantReassign = `, merchant_id = '${actorId}'`;
-            // Only set buyer_merchant_id if not already set (preserve M2M buyer)
-            if (!currentOrder.buyer_merchant_id) {
-              originalMerchantUpdate = `, buyer_merchant_id = '${currentOrder.merchant_id}'`;
-            }
             logger.info('Merchant claiming order', {
               orderId,
               previousMerchantId: currentOrder.merchant_id,
               newMerchantId: actorId,
-              originalMerchantStoredAs: 'buyer_merchant_id',
             });
           }
           // Store acceptor's wallet address when accepting (for sell orders with escrow)
@@ -489,7 +484,7 @@ export async function updateOrderStatus(
       }
 
       const updateParams: unknown[] = [newStatus, orderId];
-      let sql = `UPDATE orders SET status = $1${timestampField}${merchantReassign}${acceptorWalletUpdate}${originalMerchantUpdate} WHERE id = $2 RETURNING *`;
+      let sql = `UPDATE orders SET status = $1${timestampField}${merchantReassign}${acceptorWalletUpdate} WHERE id = $2 RETURNING *`;
 
       if (newStatus === 'cancelled') {
         updateParams.push(actorType, metadata?.reason || null);
