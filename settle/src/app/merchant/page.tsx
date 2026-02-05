@@ -1181,6 +1181,70 @@ export default function MerchantDashboard() {
     }
   };
 
+  // Buyer signs to claim order (for M2M where seller already escrowed)
+  // This just claims the order without marking payment sent yet
+  const signToClaimOrder = async (order: Order) => {
+    if (!merchantId) return;
+
+    // Require wallet connection for signing
+    if (!solanaWallet.connected) {
+      addNotification('system', 'Please connect your wallet to sign.');
+      setShowWalletModal(true);
+      return;
+    }
+
+    if (!solanaWallet.walletAddress || !solanaWallet.signMessage) {
+      addNotification('system', 'Wallet not ready. Please reconnect.');
+      playSound('error');
+      return;
+    }
+
+    try {
+      // Sign message to prove wallet ownership and claim the order
+      const message = `Claim order ${order.id} - I will send fiat payment. Wallet: ${solanaWallet.walletAddress}`;
+      const messageBytes = new TextEncoder().encode(message);
+
+      addNotification('system', 'Please sign in your wallet to claim this order...', order.id);
+      const signatureBytes = await solanaWallet.signMessage(messageBytes);
+      const signature = Buffer.from(signatureBytes).toString('base64');
+      console.log('[Sign] Wallet signature obtained for claim');
+
+      // Update order to payment_pending (claimed, now needs to pay)
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "payment_pending",
+          actor_type: "merchant",
+          actor_id: merchantId,
+          acceptor_wallet_address: solanaWallet.walletAddress,
+          acceptor_wallet_signature: signature,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        addNotification('system', `Failed to claim order: ${errorData.error || 'Unknown error'}`, order.id);
+        playSound('error');
+        return;
+      }
+
+      // Update local state to show in Ongoing section
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "escrow" as const } : o));
+      fetchOrders();
+      playSound('click');
+      addNotification('system', 'Order claimed! Now send the fiat payment and click "I\'ve Paid".', order.id);
+    } catch (error: any) {
+      if (error?.message?.includes('User rejected')) {
+        addNotification('system', 'Signature rejected. Please sign to claim.');
+      } else {
+        console.error("Error signing:", error);
+        addNotification('system', 'Failed to sign. Please try again.');
+      }
+      playSound('error');
+    }
+  };
+
   // Sign and proceed for sell orders (Active -> Ongoing)
   // Merchant signs to confirm they will send fiat payment
   const signAndProceed = async (order: Order) => {
@@ -2962,14 +3026,20 @@ export default function MerchantDashboard() {
                           const timePercent = (order.expiresIn / 900) * 100;
                           const dbStatus = order.dbOrder?.status;
                           const canComplete = dbStatus === "payment_confirmed";
-                          // For BUY orders: merchant can confirm & release when user has sent payment
-                          // For SELL orders: merchant waits for user to release (merchant already paid)
-                          const canConfirmPayment = dbStatus === "payment_sent" && order.orderType === "buy";
-                          // For sell orders after merchant paid, show waiting for user
-                          const waitingForUser = dbStatus === "payment_sent" && order.orderType === "sell";
-                          // For sell orders in Ongoing section, merchant needs to click "I've Paid"
-                          // After signing in Active, status is 'payment_sent' which maps to Ongoing
-                          const canMarkPaid = dbStatus === "payment_sent" && order.orderType === "sell";
+                          // Check if I'm the escrow creator (seller) or the buyer
+                          const iAmEscrowCreator = order.escrowCreatorWallet && order.escrowCreatorWallet === solanaWallet.walletAddress;
+                          const iAmBuyer = order.escrowTxHash && !iAmEscrowCreator;
+                          // Seller (escrow creator) can release when buyer has sent payment
+                          const canConfirmPayment = dbStatus === "payment_sent" && iAmEscrowCreator;
+                          // Buyer waits after paying - seller will release
+                          const waitingForRelease = dbStatus === "payment_sent" && iAmBuyer;
+                          // For sell orders after merchant paid, show waiting for user (legacy)
+                          const waitingForUser = dbStatus === "payment_sent" && order.orderType === "sell" && !iAmBuyer;
+                          // Buyer needs to click "I've Paid" when:
+                          // 1. Regular sell order with payment_sent status (legacy)
+                          // 2. M2M buyer with payment_pending status (after claiming)
+                          const canMarkPaid = (dbStatus === "payment_sent" && order.orderType === "sell" && !iAmEscrowCreator) ||
+                                             (dbStatus === "payment_pending" && iAmBuyer);
                           return (
                             <motion.div
                               key={order.id}
@@ -2991,7 +3061,9 @@ export default function MerchantDashboard() {
                                 <div className={`text-[11px] font-mono ${timePercent < 20 ? "text-red-400" : "text-amber-400/70"}`}>
                                   {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
                                 </div>
-                                {waitingForUser ? (
+                                {waitingForRelease ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded font-mono">RELEASING</span>
+                                ) : waitingForUser ? (
                                   <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded font-mono">RELEASING</span>
                                 ) : canConfirmPayment ? (
                                   <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded font-mono">PAID</span>
@@ -3081,12 +3153,16 @@ export default function MerchantDashboard() {
                                 {canMarkPaid ? (
                                   <motion.button
                                     whileTap={{ scale: 0.95 }}
-                                    onClick={() => markPaymentSent(order)}
+                                    onClick={() => markFiatPaymentSent(order)}
                                     disabled={markingDone}
                                     className="px-2.5 py-1.5 bg-orange-500 hover:bg-orange-400 rounded text-[11px] font-bold text-white disabled:opacity-50"
                                   >
                                     {markingDone ? '...' : "I've Paid"}
                                   </motion.button>
+                                ) : waitingForRelease ? (
+                                  <span className="px-2.5 py-1.5 bg-blue-500/10 rounded text-[11px] font-mono text-blue-400">
+                                    Waiting
+                                  </span>
                                 ) : waitingForUser ? (
                                   <span className="px-2.5 py-1.5 bg-blue-500/10 rounded text-[11px] font-mono text-blue-400">
                                     Waiting
@@ -3204,14 +3280,14 @@ export default function MerchantDashboard() {
                                     </motion.button>
                                   );
                                 } else if (escrowExistsFromOther) {
-                                  // Escrow exists but I didn't create it - I'm the buyer, show "I've Paid"
+                                  // Escrow exists but I didn't create it - I'm the buyer, sign to claim
                                   return (
                                     <motion.button
                                       whileTap={{ scale: 0.95 }}
-                                      onClick={() => markFiatPaymentSent(order)}
-                                      className="px-2.5 py-1.5 bg-orange-500 hover:bg-orange-400 rounded text-[11px] font-bold text-white"
+                                      onClick={() => signToClaimOrder(order)}
+                                      className="px-2.5 py-1.5 bg-blue-500 hover:bg-blue-400 rounded text-[11px] font-bold text-white"
                                     >
-                                      I've Paid
+                                      Sign
                                     </motion.button>
                                   );
                                 } else if (order.orderType === 'sell') {
