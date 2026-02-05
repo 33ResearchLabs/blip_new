@@ -3057,15 +3057,15 @@ export default function MerchantDashboard() {
                           const iAmBuyer = order.escrowTxHash && !iAmEscrowCreator;
                           // Seller (escrow creator) can release when buyer has sent payment
                           const canConfirmPayment = dbStatus === "payment_sent" && iAmEscrowCreator;
+                          // Seller waiting for buyer to pay (payment_pending)
+                          const waitingForBuyerToPay = dbStatus === "payment_pending" && iAmEscrowCreator;
                           // Buyer waits after paying - seller will release
                           const waitingForRelease = dbStatus === "payment_sent" && iAmBuyer;
                           // For sell orders after merchant paid, show waiting for user (legacy)
-                          const waitingForUser = dbStatus === "payment_sent" && order.orderType === "sell" && !iAmBuyer;
+                          const waitingForUser = dbStatus === "payment_sent" && order.orderType === "sell" && !iAmBuyer && !iAmEscrowCreator;
                           // Buyer needs to click "I've Paid" when:
-                          // 1. Regular sell order with payment_sent status (legacy)
-                          // 2. M2M buyer with payment_pending status (after claiming)
-                          const canMarkPaid = (dbStatus === "payment_sent" && order.orderType === "sell" && !iAmEscrowCreator) ||
-                                             (dbStatus === "payment_pending" && iAmBuyer);
+                          // M2M buyer with payment_pending status (after accepting)
+                          const canMarkPaid = dbStatus === "payment_pending" && iAmBuyer;
                           return (
                             <motion.div
                               key={order.id}
@@ -3087,7 +3087,9 @@ export default function MerchantDashboard() {
                                 <div className={`text-[11px] font-mono ${timePercent < 20 ? "text-red-400" : "text-amber-400/70"}`}>
                                   {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
                                 </div>
-                                {waitingForRelease ? (
+                                {waitingForBuyerToPay ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded font-mono">AWAIT PAY</span>
+                                ) : waitingForRelease ? (
                                   <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded font-mono">RELEASING</span>
                                 ) : waitingForUser ? (
                                   <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded font-mono">RELEASING</span>
@@ -3185,6 +3187,10 @@ export default function MerchantDashboard() {
                                   >
                                     {markingDone ? '...' : "I've Paid"}
                                   </motion.button>
+                                ) : waitingForBuyerToPay ? (
+                                  <span className="px-2.5 py-1.5 bg-purple-500/10 rounded text-[11px] font-mono text-purple-400">
+                                    Awaiting
+                                  </span>
                                 ) : waitingForRelease ? (
                                   <span className="px-2.5 py-1.5 bg-blue-500/10 rounded text-[11px] font-mono text-blue-400">
                                     Waiting
