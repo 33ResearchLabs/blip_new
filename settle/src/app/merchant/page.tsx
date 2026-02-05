@@ -1697,6 +1697,43 @@ export default function MerchantDashboard() {
     setIsCancellingEscrow(false);
   };
 
+  // Merchant marks that they've sent fiat payment (for M2M buy side)
+  const markFiatPaymentSent = async (order: Order) => {
+    if (!merchantId) return;
+    setMarkingDone(true);
+
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "payment_sent",
+          actor_type: "merchant",
+          actor_id: merchantId,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "escrow" as const } : o));
+          fetchOrders();
+          playSound('click');
+          addNotification('system', `Payment marked as sent. Waiting for seller to release escrow.`, order.id);
+        }
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        addNotification('system', `Failed: ${errorData.error || 'Unknown error'}`, order.id);
+        playSound('error');
+      }
+    } catch (error) {
+      console.error("Error marking payment sent:", error);
+      playSound('error');
+    } finally {
+      setMarkingDone(false);
+    }
+  };
+
   // Merchant marks payment as sent -> moves to Completed
   const markPaymentSent = async (order: Order) => {
     if (!merchantId) return;
@@ -3150,31 +3187,59 @@ export default function MerchantDashboard() {
                               >
                                 <MessageCircle className="w-3.5 h-3.5 text-gray-500 hover:text-blue-400" />
                               </button>
-                              {order.orderType === 'buy' && !order.escrowTxHash ? (
-                                <motion.button
-                                  whileTap={{ scale: 0.95 }}
-                                  onClick={() => openEscrowModal(order)}
-                                  className="px-2.5 py-1.5 bg-blue-500 hover:bg-blue-400 rounded text-[11px] font-bold text-white"
-                                >
-                                  Sign
-                                </motion.button>
-                              ) : order.orderType === 'sell' ? (
-                                <motion.button
-                                  whileTap={{ scale: 0.95 }}
-                                  onClick={() => signAndProceed(order)}
-                                  className="px-2.5 py-1.5 bg-blue-500 hover:bg-blue-400 rounded text-[11px] font-bold text-white"
-                                >
-                                  Sign
-                                </motion.button>
-                              ) : order.escrowTxHash ? (
-                                <span className="px-2.5 py-1.5 bg-emerald-500/10 text-emerald-400 rounded text-[11px] font-mono">
-                                  Signed
-                                </span>
-                              ) : (
-                                <span className="px-2.5 py-1.5 bg-white/[0.04] rounded text-[11px] font-mono text-gray-500">
-                                  Waiting
-                                </span>
-                              )}
+                              {(() => {
+                                // Check if I'm the escrow creator (seller who locked funds)
+                                const iAmEscrowCreator = order.escrowCreatorWallet && order.escrowCreatorWallet === solanaWallet.walletAddress;
+                                const escrowExistsFromOther = order.escrowTxHash && !iAmEscrowCreator;
+
+                                if (order.orderType === 'buy' && !order.escrowTxHash) {
+                                  // Buy order, no escrow yet - I need to sign/lock
+                                  return (
+                                    <motion.button
+                                      whileTap={{ scale: 0.95 }}
+                                      onClick={() => openEscrowModal(order)}
+                                      className="px-2.5 py-1.5 bg-blue-500 hover:bg-blue-400 rounded text-[11px] font-bold text-white"
+                                    >
+                                      Sign
+                                    </motion.button>
+                                  );
+                                } else if (escrowExistsFromOther) {
+                                  // Escrow exists but I didn't create it - I'm the buyer, show "I've Paid"
+                                  return (
+                                    <motion.button
+                                      whileTap={{ scale: 0.95 }}
+                                      onClick={() => markFiatPaymentSent(order)}
+                                      className="px-2.5 py-1.5 bg-orange-500 hover:bg-orange-400 rounded text-[11px] font-bold text-white"
+                                    >
+                                      I've Paid
+                                    </motion.button>
+                                  );
+                                } else if (order.orderType === 'sell') {
+                                  // Sell order - need to sign
+                                  return (
+                                    <motion.button
+                                      whileTap={{ scale: 0.95 }}
+                                      onClick={() => signAndProceed(order)}
+                                      className="px-2.5 py-1.5 bg-blue-500 hover:bg-blue-400 rounded text-[11px] font-bold text-white"
+                                    >
+                                      Sign
+                                    </motion.button>
+                                  );
+                                } else if (order.escrowTxHash) {
+                                  // Escrow exists and I created it - show Signed
+                                  return (
+                                    <span className="px-2.5 py-1.5 bg-emerald-500/10 text-emerald-400 rounded text-[11px] font-mono">
+                                      Signed
+                                    </span>
+                                  );
+                                } else {
+                                  return (
+                                    <span className="px-2.5 py-1.5 bg-white/[0.04] rounded text-[11px] font-mono text-gray-500">
+                                      Waiting
+                                    </span>
+                                  );
+                                }
+                              })()}
                             </div>
                           </motion.div>
                         ))
