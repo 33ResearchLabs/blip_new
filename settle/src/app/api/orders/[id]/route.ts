@@ -105,10 +105,11 @@ export async function PATCH(
     // Special case: Any merchant can claim a pending or escrowed order (Uber-like model)
     // This allows orders to be broadcast to all merchants and first to accept wins
     // For sell orders, user locks escrow first (status = escrowed), then merchant accepts
+    // M2M flow: escrowed orders can go directly to payment_pending (skipping accepted)
     const isMerchantClaimingOrder =
       actor_type === 'merchant' &&
       (order.status === 'pending' || order.status === 'escrowed') &&
-      status === 'accepted';
+      (status === 'accepted' || (order.status === 'escrowed' && status === 'payment_pending'));
 
     if (!isMerchantClaimingOrder) {
       // Verify actor can access this order (for all other cases)
