@@ -318,12 +318,12 @@ const mapDbOrderToUI = (dbOrder: DbOrder): Order => {
     escrowTradePda: dbOrder.escrow_trade_pda,
     escrowCreatorWallet: dbOrder.escrow_creator_wallet,
     escrowTxHash: dbOrder.escrow_tx_hash,
-    // Determine the recipient wallet for escrow:
-    // 1. M2M: use buyer merchant's wallet
+    // Determine the recipient wallet for escrow release:
+    // 1. M2M: use buyer merchant's wallet OR acceptor_wallet_address (fallback)
     // 2. Merchant-initiated with acceptor: use acceptor's wallet (another merchant accepted)
     // 3. Regular: use buyer_wallet_address or user's wallet
     userWallet: isM2M
-      ? dbOrder.buyer_merchant?.wallet_address
+      ? (dbOrder.buyer_merchant?.wallet_address || dbOrder.acceptor_wallet_address)
       : (dbOrder.acceptor_wallet_address || dbOrder.buyer_wallet_address || dbOrder.user?.wallet_address),
     orderType: dbOrder.type,
     // User's bank account (from payment_details)
