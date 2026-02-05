@@ -1154,9 +1154,8 @@ export default function MerchantDashboard() {
 
     try {
       // Build the request body
-      // If already escrowed by other party, go straight to payment_pending (Ongoing)
-      // Otherwise, go to accepted (Active)
-      const targetStatus = isEscrowedByOther ? "payment_pending" : "accepted";
+      // Always go to 'accepted' first - buyer will then Sign to move to payment_pending
+      const targetStatus = "accepted";
       const requestBody: Record<string, unknown> = {
         status: targetStatus,
         actor_type: "merchant",
