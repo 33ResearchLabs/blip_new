@@ -1123,8 +1123,19 @@ export default function MerchantDashboard() {
       dbOrderStatus: order.dbOrder?.status,
     });
 
-    // "Go" button does NOT require wallet connection or signature
-    // That happens in the Active section when signing tx for next step
+    // Wallet REQUIRED when accepting orders:
+    // - Escrowed orders: acceptor receives crypto directly
+    // - M2M orders: acceptor needs wallet for escrow release (even if not escrowed yet)
+    // - All orders: wallet needed for escrow operations anyway
+    if (!solanaWallet.walletAddress) {
+      addNotification('system', 'Please connect your Solana wallet first to accept this order.', order.id);
+      playSound('error');
+      // Trigger wallet connection
+      if (!solanaWallet.isConnected) {
+        solanaWallet.connect?.();
+      }
+      return;
+    }
 
     try {
       // Build the request body - just accept the order, no signature needed
@@ -1134,7 +1145,7 @@ export default function MerchantDashboard() {
         actor_id: merchantId,
       };
 
-      // Include wallet address if connected (for tracking, not required)
+      // Include wallet address - REQUIRED for sell orders (to receive escrow)
       if (solanaWallet.walletAddress) {
         requestBody.acceptor_wallet_address = solanaWallet.walletAddress;
       }
