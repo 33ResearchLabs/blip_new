@@ -46,6 +46,7 @@ import { MessageHistory } from "@/components/merchant/MessageHistory";
 import { MerchantChatTabs } from "@/components/merchant/MerchantChatTabs";
 import { OrderDetailsPanel } from "@/components/merchant/OrderDetailsPanel";
 import { AnalyticsDashboard } from "@/components/merchant/AnalyticsDashboard";
+import { TradeChat } from "@/components/merchant/TradeChat";
 
 // Dynamically import wallet components (client-side only)
 const MerchantWalletModal = dynamic(() => import("@/components/MerchantWalletModal"), { ssr: false });
@@ -1303,9 +1304,11 @@ export default function MerchantDashboard() {
     // For M2M trades, determine who I am and who receives:
     // - If I'm the creator (my wallet = buyerMerchantWallet): recipient = acceptor
     // - If I'm the acceptor: recipient = creator (buyerMerchantWallet)
-    // Note: Only check isM2M and buyerMerchantWallet - acceptorWallet exists on ALL orders, not just M2M
-    const isMerchantTrade = escrowOrder.isM2M || !!escrowOrder.buyerMerchantWallet;
-    const iAmCreator = myWallet && escrowOrder.buyerMerchantWallet === myWallet;
+    // M2M detection: isM2M flag, buyerMerchantWallet, OR acceptorWallet is set (merchant accepted open order)
+    const hasAcceptorWallet = escrowOrder.acceptorWallet && validWalletRegex.test(escrowOrder.acceptorWallet);
+    const isMerchantTrade = escrowOrder.isM2M || !!escrowOrder.buyerMerchantWallet || hasAcceptorWallet;
+    // For open SELL orders, the creator is determined by isMyOrder flag (buyerMerchantWallet may not be set)
+    const iAmCreator = escrowOrder.isMyOrder || (myWallet && escrowOrder.buyerMerchantWallet === myWallet);
 
     let recipientWallet: string | undefined = undefined;
     if (isMyPendingSellOrder) {
@@ -2650,8 +2653,8 @@ export default function MerchantDashboard() {
           <div className="hidden md:grid md:grid-cols-2 xl:grid-cols-3 gap-3">
             {/* Column 1: New Orders + Big Orders (stacked) */}
             <div className="flex flex-col h-[calc(100vh-80px)] gap-3">
-              {/* Orders - takes remaining space or 50% when big orders visible */}
-              <div className={`flex flex-col ${showBigOrderWidget && bigOrders.length > 0 ? 'h-1/2' : 'flex-1'}`}>
+              {/* Orders - takes remaining space or 70% when big orders visible */}
+              <div className={`flex flex-col ${showBigOrderWidget && bigOrders.length > 0 ? 'h-[70%]' : 'flex-1'}`}>
                 <div className="flex items-center gap-2 mb-3">
                   {/* Tab switcher */}
                   <div className="flex items-center bg-[#151515] rounded-lg p-0.5 border border-white/[0.04]">
@@ -2813,7 +2816,7 @@ export default function MerchantDashboard() {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="flex flex-col h-1/2 min-h-0"
+                    className="flex flex-col h-[30%] min-h-0"
                   >
                     <div className="flex items-center gap-2 mb-3">
                       <Zap className="w-4 h-4 text-white/60" />
@@ -4119,86 +4122,53 @@ export default function MerchantDashboard() {
           {mobileView === 'chat' && (
             <div className="h-full flex flex-col pb-16">
               {activeChat ? (
-                <>
-                  {/* Chat Header */}
-                  <div className="px-4 py-3 border-b border-white/[0.04] flex items-center gap-3 bg-[#0d0d0d]">
-                    <button
-                      onClick={() => setMobileView('orders')}
-                      className="p-2 hover:bg-white/[0.04] rounded-lg"
-                    >
-                      <ChevronLeft className="w-5 h-5 text-gray-400" />
-                    </button>
-                    <div className="w-10 h-10 rounded-full bg-[#1f1f1f] flex items-center justify-center text-xl">
-                      {activeChat.emoji}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{activeChat.user}</p>
-                      <p className="text-xs text-emerald-500">online</p>
-                    </div>
-                    <button
-                      onClick={() => { closeChat(activeChat.id); setActiveChatId(null); }}
-                      className="p-2 hover:bg-white/[0.04] rounded-lg"
-                    >
-                      <X className="w-5 h-5 text-gray-500" />
-                    </button>
-                  </div>
+                (() => {
+                  // Get order info for the active chat
+                  const chatOrder = activeChat.orderId
+                    ? orders.find(o => o.id === activeChat.orderId)
+                    : null;
 
-                  {/* Messages */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#0a0a0a]">
-                    {activeChat.messages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm ${
-                            msg.from === "me"
-                              ? "bg-[#c9a962] text-black"
-                              : msg.from === "system"
-                                ? "bg-white/[0.04] text-gray-400"
-                                : "bg-[#1f1f1f] text-gray-200"
-                          }`}
-                        >
-                          {msg.text}
-                        </div>
-                      </div>
-                    ))}
-                    <div ref={messagesEndRef} />
-                  </div>
+                  // Build trade info from order
+                  const tradeInfo = chatOrder?.dbOrder ? {
+                    orderId: chatOrder.id,
+                    orderNumber: chatOrder.dbOrder.order_number,
+                    orderType: chatOrder.orderType || 'buy',
+                    status: chatOrder.dbOrder.status,
+                    cryptoAmount: chatOrder.amount,
+                    fiatAmount: chatOrder.total,
+                    fiatCurrency: chatOrder.toCurrency,
+                    user: {
+                      id: chatOrder.dbOrder.user_id,
+                      username: chatOrder.user,
+                      rating: chatOrder.dbOrder.user?.rating,
+                      totalTrades: chatOrder.dbOrder.user?.total_trades,
+                    },
+                    merchant: {
+                      id: chatOrder.dbOrder.merchant_id || merchantId || '',
+                      displayName: merchantInfo?.display_name || merchantInfo?.username || 'Merchant',
+                    },
+                    createdAt: chatOrder.timestamp,
+                  } : undefined;
 
-                  {/* Input */}
-                  <div className="p-3 bg-[#0d0d0d] border-t border-white/[0.04]">
-                    <div className="flex gap-2">
-                      <input
-                        ref={(el) => { chatInputRefs.current[activeChat.id] = el; }}
-                        type="text"
-                        placeholder="Type a message..."
-                        className="flex-1 bg-[#1f1f1f] rounded-xl px-4 py-3 outline-none text-sm"
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && e.currentTarget.value.trim()) {
-                            sendMessage(activeChat.id, e.currentTarget.value);
-                            e.currentTarget.value = "";
-                            playSound('send');
-                          }
-                        }}
-                      />
-                      <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => {
-                          const input = chatInputRefs.current[activeChat.id];
-                          if (input && input.value.trim()) {
-                            sendMessage(activeChat.id, input.value);
-                            input.value = "";
-                            playSound('send');
-                          }
-                        }}
-                        className="w-12 h-12 rounded-xl bg-[#c9a962] flex items-center justify-center"
-                      >
-                        <Send className="w-5 h-5 text-black" />
-                      </motion.button>
-                    </div>
-                  </div>
-                </>
+                  return (
+                    <TradeChat
+                      tradeInfo={tradeInfo}
+                      messages={activeChat.messages}
+                      isLoading={activeChat.messages.length === 0}
+                      onSendMessage={(text, imageUrl) => {
+                        sendMessage(activeChat.id, text, imageUrl);
+                        playSound('send');
+                      }}
+                      onBack={() => {
+                        closeChat(activeChat.id);
+                        setActiveChatId(null);
+                      }}
+                      currentUserType="merchant"
+                      userName={activeChat.user}
+                      userEmoji={activeChat.emoji}
+                    />
+                  );
+                })()
               ) : merchantId ? (
                 <MerchantChatTabs
                   merchantId={merchantId}
@@ -5434,8 +5404,8 @@ export default function MerchantDashboard() {
                     const hasAcceptorWallet = escrowOrder.acceptorWallet && validWalletRegex.test(escrowOrder.acceptorWallet);
                     const hasUserWallet = escrowOrder.userWallet && validWalletRegex.test(escrowOrder.userWallet);
                     const hasValidRecipient = hasBuyerMerchantWallet || hasAcceptorWallet || hasUserWallet;
-                    // M2M trade is only when buyer is a merchant (has buyerMerchantWallet), not just any acceptor wallet
-                    const isMerchantTrade = escrowOrder.isM2M || !!hasBuyerMerchantWallet;
+                    // M2M trade: isM2M flag, buyerMerchantWallet, OR acceptorWallet (merchant accepted open order)
+                    const isMerchantTrade = escrowOrder.isM2M || !!hasBuyerMerchantWallet || hasAcceptorWallet;
 
                     if (hasValidRecipient) {
                       return isMerchantTrade ? (
