@@ -62,6 +62,7 @@ import {
   buildReleaseEscrowTx,
   buildRefundEscrowTx,
   fetchLane,
+  fetchTrade,
   findLanePda,
   findTradePda,
   findEscrowPda,
@@ -956,8 +957,22 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
 
     try {
       const creatorPk = new PublicKey(params.creatorPubkey);
-      const counterpartyPk = new PublicKey(params.counterparty);
       const [tradePda] = findTradePda(creatorPk, params.tradeId);
+
+      // Fetch the on-chain trade to get the actual stored counterparty
+      // This is critical for M2M orders where escrow was locked to treasury placeholder
+      const onChainTrade = await fetchTrade(program, creatorPk, params.tradeId);
+      let counterpartyPk: PublicKey;
+
+      if (onChainTrade?.counterparty) {
+        // Use the counterparty stored on-chain (this is what the program validates)
+        counterpartyPk = onChainTrade.counterparty;
+        console.log('[releaseEscrow] Using on-chain counterparty:', counterpartyPk.toString());
+      } else {
+        // Fallback to passed counterparty if trade not found
+        counterpartyPk = new PublicKey(params.counterparty);
+        console.log('[releaseEscrow] Using passed counterparty (trade not found):', counterpartyPk.toString());
+      }
 
       const transaction = await buildReleaseEscrowTx(
         program,
