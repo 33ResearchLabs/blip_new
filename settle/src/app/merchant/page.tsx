@@ -3181,7 +3181,7 @@ export default function MerchantDashboard() {
                       {completedOrders.length > 0 ? (
                         completedOrders.map((order, i) => {
                           const profit = order.amount * TRADER_CUT_CONFIG.best; // 0.5% trader cut
-                          const isM2MTrade = order.isM2M || order.buyerMerchantId || order.acceptorWallet;
+                          const isM2MTrade = order.isM2M || !!order.buyerMerchantId;
                           return (
                             <motion.div
                               key={order.id}
@@ -3234,7 +3234,7 @@ export default function MerchantDashboard() {
                       {cancelledOrders.length > 0 ? (
                         cancelledOrders.map((order, i) => {
                           const isDisputed = order.status === 'disputed';
-                          const isM2MTrade = order.isM2M || order.buyerMerchantId || order.acceptorWallet;
+                          const isM2MTrade = order.isM2M || !!order.buyerMerchantId;
                           return (
                             <motion.div
                               key={order.id}
@@ -5428,7 +5428,8 @@ export default function MerchantDashboard() {
                     const hasAcceptorWallet = escrowOrder.acceptorWallet && validWalletRegex.test(escrowOrder.acceptorWallet);
                     const hasUserWallet = escrowOrder.userWallet && validWalletRegex.test(escrowOrder.userWallet);
                     const hasValidRecipient = hasBuyerMerchantWallet || hasAcceptorWallet || hasUserWallet;
-                    const isMerchantTrade = escrowOrder.isM2M || hasBuyerMerchantWallet || hasAcceptorWallet;
+                    // M2M trade is only when buyer is a merchant (has buyerMerchantWallet), not just any acceptor wallet
+                    const isMerchantTrade = escrowOrder.isM2M || !!hasBuyerMerchantWallet;
 
                     if (hasValidRecipient) {
                       return isMerchantTrade ? (
