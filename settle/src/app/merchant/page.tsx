@@ -3311,6 +3311,10 @@ export default function MerchantDashboard() {
                                 // Check if I'm the escrow creator (seller who locked funds)
                                 const iAmEscrowCreator = order.escrowCreatorWallet && order.escrowCreatorWallet === solanaWallet.walletAddress;
                                 const escrowExistsFromOther = order.escrowTxHash && !iAmEscrowCreator;
+                                // M2M: Check if I created this sell order and buyer has accepted with wallet
+                                const iAmOrderCreator = order.orderMerchantId === merchantId;
+                                const buyerAcceptedWithWallet = order.dbOrder?.status === 'accepted' && order.acceptorWallet;
+                                const isM2MSellNeedingEscrow = iAmOrderCreator && !order.escrowTxHash && buyerAcceptedWithWallet;
 
                                 console.log('[Active] Order action check:', {
                                   orderId: order.id,
@@ -3321,9 +3325,23 @@ export default function MerchantDashboard() {
                                   iAmEscrowCreator,
                                   escrowExistsFromOther,
                                   dbStatus: order.dbOrder?.status,
+                                  iAmOrderCreator,
+                                  acceptorWallet: order.acceptorWallet,
+                                  isM2MSellNeedingEscrow,
                                 });
 
-                                if (order.orderType === 'buy' && !order.escrowTxHash) {
+                                // M2M: I created sell order, buyer accepted with wallet - I need to lock escrow
+                                if (isM2MSellNeedingEscrow) {
+                                  return (
+                                    <motion.button
+                                      whileTap={{ scale: 0.95 }}
+                                      onClick={() => openEscrowModal(order)}
+                                      className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 rounded text-[11px] font-bold text-black"
+                                    >
+                                      Lock Escrow
+                                    </motion.button>
+                                  );
+                                } else if (order.orderType === 'buy' && !order.escrowTxHash) {
                                   // Buy order, no escrow yet - I need to sign/lock
                                   return (
                                     <motion.button
@@ -5340,18 +5358,13 @@ export default function MerchantDashboard() {
                           const newOrder = mapDbOrderToUI(data.data);
                           setOrders(prev => [newOrder, ...prev]);
 
-                          // For SELL orders (stored as 'buy'), immediately open escrow modal
-                          // Merchant needs to lock their USDC before the order is visible to others
+                          // For M2M orders, DON'T lock escrow immediately
+                          // Wait for another merchant to accept and provide their wallet first
+                          // This ensures the escrow counterparty is set correctly for release
                           if (openTradeForm.tradeType === "sell") {
-                            addNotification('escrow', `Lock ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC to make your order visible`, data.data?.id);
-                            // Open escrow modal with the new order
-                            setEscrowOrder(newOrder);
-                            setEscrowTxHash(null);
-                            setEscrowError(null);
-                            setIsLockingEscrow(false);
-                            setShowEscrowModal(true);
+                            addNotification('order', `Sell order created for ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC. Waiting for a buyer to accept...`, data.data?.id);
                           } else {
-                            addNotification('order', `Trade created for ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC`, data.data?.id);
+                            addNotification('order', `Buy order created for ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC`, data.data?.id);
                           }
                         }
                       } catch (error) {
