@@ -135,32 +135,38 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   const fetchMessages = useCallback(
     async (orderId: string, chatId: string) => {
       try {
-        const res = await fetch(`/api/orders/${orderId}/messages`);
+        // Include auth params in URL
+        const authParam = actorId ? `?user_id=${actorId}` : '';
+        const res = await fetch(`/api/orders/${orderId}/messages${authParam}`);
         if (!res.ok) {
           // API not available (demo mode) - use empty messages
-          console.log('Messages API not available - using demo mode');
+          console.log('Messages API not available - using demo mode', res.status);
           return;
         }
         const data = await res.json();
+
+        console.log('[useRealtimeChat] Fetched messages:', { orderId, chatId, count: data.data?.length });
 
         if (data.success && data.data) {
           const messages: ChatMessage[] = data.data.map((m: DbMessage) =>
             mapDbMessageToUI(m, actorType)
           );
 
-          setChatWindows((prev) =>
-            prev.map((w) => {
+          setChatWindows((prev) => {
+            const updated = prev.map((w) => {
               if (w.id !== chatId) return w;
+              console.log('[useRealtimeChat] Updating chat window with messages:', { chatId, messageCount: messages.length });
               return { ...w, messages };
-            })
-          );
+            });
+            return updated;
+          });
         }
       } catch (error) {
         // Silently fail in demo mode
-        console.log('Messages API error - running in demo mode');
+        console.log('Messages API error - running in demo mode', error);
       }
     },
-    [actorType, mapDbMessageToUI]
+    [actorType, actorId, mapDbMessageToUI]
   );
 
   // Subscribe to real-time messages for an order
@@ -290,8 +296,9 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         if (existingIndex >= 0) {
           // Bring to front and unminimize
           const existing = prev[existingIndex];
+          // Schedule subscription after state update
           if (orderId && existing.orderId) {
-            subscribeToOrder(orderId, existing.id);
+            setTimeout(() => subscribeToOrder(orderId, existing.id), 0);
           }
           return prev.map((w, i) =>
             i === existingIndex ? { ...w, minimized: false, unread: 0 } : w
@@ -311,9 +318,9 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
           isTyping: false,
         };
 
-        // Subscribe to real-time updates if we have an orderId
+        // Schedule subscription after state update so fetchMessages can find the chat window
         if (orderId) {
-          subscribeToOrder(orderId, chatId);
+          setTimeout(() => subscribeToOrder(orderId, chatId), 0);
         }
 
         const updated = [...prev, newWindow];
