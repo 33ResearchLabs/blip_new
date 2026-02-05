@@ -1120,30 +1120,43 @@ export default function MerchantDashboard() {
     const isBuyOrder = order.orderType === 'buy';
     const isSellOrder = order.orderType === 'sell';
 
+    // Check if order is already escrowed by someone else (M2M flow)
+    const isEscrowedByOther = order.escrowTxHash && order.dbOrder?.status === 'escrowed';
+
     // Debug logging
     console.log('[Go] Accepting order:', {
       id: order.id,
       orderType: order.orderType,
       dbOrderStatus: order.dbOrder?.status,
+      isEscrowedByOther,
+      escrowTxHash: order.escrowTxHash,
     });
 
-    // "Go" button does NOT require wallet connection or signature
-    // That happens in the Active section when signing tx for next step
+    // For M2M where seller already escrowed: require wallet to receive funds
+    if (isEscrowedByOther && !solanaWallet.walletAddress) {
+      addNotification('system', 'Please connect your wallet first to receive the USDC.', order.id);
+      setShowWalletModal(true);
+      return;
+    }
 
     try {
-      // Build the request body - just accept the order, no signature needed
+      // Build the request body
+      // If already escrowed by other party, go straight to payment_pending (Ongoing)
+      // Otherwise, go to accepted (Active)
+      const targetStatus = isEscrowedByOther ? "payment_pending" : "accepted";
       const requestBody: Record<string, unknown> = {
-        status: "accepted",
+        status: targetStatus,
         actor_type: "merchant",
         actor_id: merchantId,
       };
 
-      // Include wallet address if connected (for tracking, not required)
+      // Include wallet address if connected
       if (solanaWallet.walletAddress) {
         requestBody.acceptor_wallet_address = solanaWallet.walletAddress;
       }
 
-      // Step 1: Accept the order (moves to 'accepted' status - shown in Active section)
+      console.log('[Go] Sending accept request:', { targetStatus, merchantId });
+
       const acceptRes = await fetch(`/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -1165,15 +1178,19 @@ export default function MerchantDashboard() {
         return;
       }
 
-      // Update local state to show in Active section (needs signing for next step)
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: "active" as const, expiresIn: 1800 } : o));
+      // Update local state based on target status
+      const uiStatus = isEscrowedByOther ? "escrow" : "active";
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: uiStatus as "escrow" | "active", expiresIn: 1800 } : o));
       handleOpenChat(order.user, order.emoji, order.id);
       fetchOrders();
       playSound('click');
-      // Next step: sign tx in Active section
-      const nextStepMsg = isBuyOrder
-        ? 'Now sign to lock your USDC in escrow.'
-        : 'Now sign to confirm and proceed.';
+
+      // Show appropriate message
+      const nextStepMsg = isEscrowedByOther
+        ? 'Order claimed! Send the fiat payment and click "I\'ve Paid".'
+        : isBuyOrder
+          ? 'Now sign to lock your USDC in escrow.'
+          : 'Now sign to confirm and proceed.';
       addNotification('system', `Order accepted! ${nextStepMsg}`, order.id);
     } catch (error) {
       console.error("Error accepting order:", error);
