@@ -1303,7 +1303,8 @@ export default function MerchantDashboard() {
     // For M2M trades, determine who I am and who receives:
     // - If I'm the creator (my wallet = buyerMerchantWallet): recipient = acceptor
     // - If I'm the acceptor: recipient = creator (buyerMerchantWallet)
-    const isMerchantTrade = escrowOrder.isM2M || !!escrowOrder.buyerMerchantWallet || !!escrowOrder.acceptorWallet;
+    // Note: Only check isM2M and buyerMerchantWallet - acceptorWallet exists on ALL orders, not just M2M
+    const isMerchantTrade = escrowOrder.isM2M || !!escrowOrder.buyerMerchantWallet;
     const iAmCreator = myWallet && escrowOrder.buyerMerchantWallet === myWallet;
 
     let recipientWallet: string | undefined = undefined;
