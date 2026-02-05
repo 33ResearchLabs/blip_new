@@ -124,7 +124,7 @@ export async function PATCH(
     // - Users: can mark payment_sent (for buy orders), complete (for sell orders after releasing escrow), cancelled, disputed
     // - Merchants: can accept, escrow, mark payment_sent (for sell orders), confirm payment, complete, cancel, dispute
     const userAllowedStatuses: OrderStatus[] = ['payment_sent', 'completed', 'cancelled', 'disputed'];
-    const merchantAllowedStatuses: OrderStatus[] = ['accepted', 'escrowed', 'payment_sent', 'payment_confirmed', 'completed', 'cancelled', 'disputed'];
+    const merchantAllowedStatuses: OrderStatus[] = ['accepted', 'escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'completed', 'cancelled', 'disputed'];
 
     if (actor_type === 'user' && !userAllowedStatuses.includes(status)) {
       return forbiddenResponse(`Users cannot set status to '${status}'`);
