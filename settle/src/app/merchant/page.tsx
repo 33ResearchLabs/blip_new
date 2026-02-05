@@ -1086,7 +1086,7 @@ export default function MerchantDashboard() {
     },
   });
 
-  // Update timers and filter out expired pending orders
+  // Update timers and handle expired orders (pending and escrowed)
   useEffect(() => {
     const interval = setInterval(() => {
       setOrders(prev => {
@@ -1113,12 +1113,37 @@ export default function MerchantDashboard() {
             }).catch(console.error);
             return false; // Remove from list
           }
+
+          // Handle escrowed orders that have expired - prompt for refund
+          if (order.status === "escrow" && order.expiresIn <= 0) {
+            const iAmEscrowCreator = order.escrowCreatorWallet === solanaWallet.walletAddress;
+
+            // Mark as expired in backend
+            fetch(`/api/orders/${order.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                status: 'expired',
+                actor_type: 'system',
+                actor_id: 'system',
+              }),
+            }).catch(console.error);
+
+            // If I'm the escrow creator, show notification to claim refund
+            if (iAmEscrowCreator && order.escrowTradeId !== undefined) {
+              addNotification('system', `Order ${order.id} has expired! Click "Cancel & Withdraw" to refund your USDC.`, order.id);
+            }
+
+            // Keep in list so user can claim refund
+            return true;
+          }
+
           return true;
         });
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [solanaWallet.walletAddress]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -3111,6 +3136,9 @@ export default function MerchantDashboard() {
                           // Check if escrow is just funded (waiting for counterparty to accept)
                           // vs locked (counterparty has accepted and trade is in progress)
                           const isFundedOnly = dbStatus === "escrowed" && iAmEscrowCreator;
+                          // Check if order has expired - can claim refund
+                          const isExpired = order.expiresIn <= 0;
+                          const canClaimRefund = isExpired && iAmEscrowCreator && order.escrowTradeId !== undefined;
                           return (
                             <motion.div
                               key={order.id}
@@ -3132,7 +3160,9 @@ export default function MerchantDashboard() {
                                 <div className={`text-[11px] font-mono ${timePercent < 20 ? "text-red-400" : "text-amber-400/70"}`}>
                                   {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
                                 </div>
-                                {waitingForBuyerToPay ? (
+                                {isExpired ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded font-mono">EXPIRED</span>
+                                ) : waitingForBuyerToPay ? (
                                   <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded font-mono">AWAIT PAY</span>
                                 ) : waitingForRelease ? (
                                   <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded font-mono">RELEASING</span>
@@ -3225,7 +3255,15 @@ export default function MerchantDashboard() {
                                 </div>
 
                                 {/* Action button */}
-                                {canMarkPaid ? (
+                                {canClaimRefund ? (
+                                  <motion.button
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => openCancelModal(order)}
+                                    className="px-2.5 py-1.5 bg-red-500 hover:bg-red-400 rounded text-[11px] font-bold text-white"
+                                  >
+                                    Refund
+                                  </motion.button>
+                                ) : canMarkPaid ? (
                                   <motion.button
                                     whileTap={{ scale: 0.95 }}
                                     onClick={() => markFiatPaymentSent(order)}
