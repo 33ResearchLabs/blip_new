@@ -1420,7 +1420,13 @@ export default function MerchantDashboard() {
       setIsLockingEscrow(false);
     } catch (error) {
       console.error("Error locking escrow:", error);
-      setEscrowError(error instanceof Error ? error.message : 'Failed to lock escrow. Please try again.');
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      // Check for blockhash expiration (user took too long to approve)
+      if (errorMsg.includes('block height exceeded') || errorMsg.includes('has expired')) {
+        setEscrowError('Transaction expired. Please approve the wallet popup faster (within 60 seconds). Try again.');
+      } else {
+        setEscrowError(errorMsg || 'Failed to lock escrow. Please try again.');
+      }
       setIsLockingEscrow(false);
       playSound('error');
     }

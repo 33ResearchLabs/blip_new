@@ -82,6 +82,8 @@ function defaultIsRetryable(error: any): boolean {
     'etimedout',
     'blockhash not found', // Solana-specific transient error
     'node is unhealthy', // Solana RPC error
+    'block height exceeded', // Blockhash expired - user took too long to approve
+    'has expired', // Alternative wording for blockhash expiry
   ];
 
   return transientErrors.some(
