@@ -166,6 +166,8 @@ interface Order {
   acceptorWallet?: string;
   // Flag: true if I created this order (can't accept own order)
   isMyOrder?: boolean;
+  // The merchant ID assigned to this order (creator for pending orders)
+  orderMerchantId?: string;
 }
 
 // Leaderboard data
@@ -334,6 +336,8 @@ const mapDbOrderToUI = (dbOrder: DbOrder): Order => {
     acceptorWallet: dbOrder.acceptor_wallet_address,
     // Flag: true if I created this order (from API is_my_order field)
     isMyOrder: dbOrder.is_my_order,
+    // The merchant ID assigned to this order (creator for pending orders)
+    orderMerchantId: dbOrder.merchant_id,
   };
 };
 
@@ -1301,18 +1305,25 @@ export default function MerchantDashboard() {
     const hasAcceptorWallet = escrowOrder.acceptorWallet && validWalletRegex.test(escrowOrder.acceptorWallet);
     const hasUserWallet = escrowOrder.userWallet && validWalletRegex.test(escrowOrder.userWallet);
 
+    // For pending orders, isMyOrder is always false (so all merchants see new orders)
+    // Check if I'm the actual creator by comparing merchant IDs
+    const iAmOrderCreator = escrowOrder.orderMerchantId === merchantId;
+    const isPendingOrEscrowed = escrowOrder.dbOrder?.status === 'pending' || escrowOrder.dbOrder?.status === 'escrowed';
+
+    // I created this order if: isMyOrder flag OR (pending/escrowed AND my merchant ID matches)
+    const isMyOrder = escrowOrder.isMyOrder || (isPendingOrEscrowed && iAmOrderCreator);
+
     // Check if this is my SELL order before anyone accepted (no recipient yet)
-    const isMyPendingSellOrder = escrowOrder.isMyOrder && escrowOrder.dbOrder?.status === 'pending';
+    const isMyPendingSellOrder = isMyOrder && escrowOrder.dbOrder?.status === 'pending';
 
     // For M2M: if it's my order and acceptor hasn't connected wallet, allow escrow to treasury
-    // This handles the case where order is accepted but acceptor wallet isn't set yet
-    const isMyOrderNoAcceptorWallet = escrowOrder.isMyOrder && !hasAcceptorWallet && !hasUserWallet;
+    const isMyOrderNoAcceptorWallet = isMyOrder && !hasAcceptorWallet && !hasUserWallet;
 
     // M2M detection: isM2M flag, buyerMerchantWallet, acceptorWallet, OR my order with no user wallet (placeholder)
-    const isMerchantInitiated = escrowOrder.isMyOrder && !hasUserWallet;
+    const isMerchantInitiated = isMyOrder && !hasUserWallet;
     const isMerchantTrade = escrowOrder.isM2M || !!escrowOrder.buyerMerchantWallet || hasAcceptorWallet || isMerchantInitiated;
     // For open SELL orders, the creator is determined by isMyOrder flag (buyerMerchantWallet may not be set)
-    const iAmCreator = escrowOrder.isMyOrder || (myWallet && escrowOrder.buyerMerchantWallet === myWallet);
+    const iAmCreator = isMyOrder || (myWallet && escrowOrder.buyerMerchantWallet === myWallet);
 
     let recipientWallet: string | undefined = undefined;
     // Allow escrow to treasury if: pending order OR my order where acceptor hasn't connected wallet
