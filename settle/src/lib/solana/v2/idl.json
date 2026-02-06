@@ -1,6 +1,6 @@
 {
   "address": "6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "name": "blip_protocol_v2",
   "instructions": [
     {
@@ -94,6 +94,17 @@
       "args": []
     },
     {
+      "name": "extendEscrow",
+      "accounts": [
+        { "name": "depositor", "isMut": true, "isSigner": true },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "extensionSeconds", "type": "i64" }
+      ]
+    },
+    {
       "name": "refundEscrow",
       "accounts": [
         { "name": "signer", "isMut": true, "isSigner": true },
@@ -107,6 +118,43 @@
         { "name": "tokenProgram", "isMut": false, "isSigner": false }
       ],
       "args": []
+    },
+    {
+      "name": "confirmPayment",
+      "accounts": [
+        { "name": "buyer", "isMut": true, "isSigner": true },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "openDispute",
+      "accounts": [
+        { "name": "initiator", "isMut": true, "isSigner": true },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "resolveDispute",
+      "accounts": [
+        { "name": "arbiter", "isMut": true, "isSigner": true },
+        { "name": "protocolConfig", "isMut": false, "isSigner": false },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": true, "isSigner": false },
+        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
+        { "name": "vaultAta", "isMut": true, "isSigner": false },
+        { "name": "recipientAta", "isMut": true, "isSigner": false },
+        { "name": "treasuryAta", "isMut": true, "isSigner": false },
+        { "name": "creator", "isMut": true, "isSigner": false },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "resolution", "type": { "defined": "DisputeResolution" } }
+      ]
     },
     {
       "name": "createLane",
@@ -190,7 +238,11 @@
           { "name": "createdAt", "type": "i64" },
           { "name": "lockedAt", "type": "i64" },
           { "name": "settledAt", "type": "i64" },
-          { "name": "side", "type": { "defined": "TradeSide" } }
+          { "name": "side", "type": { "defined": "TradeSide" } },
+          { "name": "expiresAt", "type": "i64" },
+          { "name": "paymentConfirmedAt", "type": "i64" },
+          { "name": "disputedAt", "type": "i64" },
+          { "name": "disputeInitiator", "type": "publicKey" }
         ]
       }
     },
@@ -240,6 +292,8 @@
           { "name": "Created" },
           { "name": "Funded" },
           { "name": "Locked" },
+          { "name": "PaymentSent" },
+          { "name": "Disputed" },
           { "name": "Released" },
           { "name": "Refunded" }
         ]
@@ -254,6 +308,16 @@
           { "name": "Sell" }
         ]
       }
+    },
+    {
+      "name": "DisputeResolution",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          { "name": "ReleaseToBuyer" },
+          { "name": "RefundToSeller" }
+        ]
+      }
     }
   ],
   "errors": [
@@ -266,7 +330,19 @@
     { "code": 6012, "name": "CannotAcceptOwnTrade", "msg": "Cannot accept your own trade" },
     { "code": 6013, "name": "CannotLock", "msg": "Trade cannot be locked in current state" },
     { "code": 6014, "name": "CannotRelease", "msg": "Trade cannot be released in current state" },
-    { "code": 6015, "name": "CannotRefund", "msg": "Trade cannot be refunded in current state" }
+    { "code": 6015, "name": "CannotRefund", "msg": "Trade cannot be refunded in current state" },
+    { "code": 6020, "name": "EscrowExpired", "msg": "Escrow has expired - auto-refund available" },
+    { "code": 6021, "name": "NotExpired", "msg": "Escrow has not expired yet" },
+    { "code": 6022, "name": "NotDepositor", "msg": "Only the depositor can extend escrow" },
+    { "code": 6023, "name": "CannotExtend", "msg": "Cannot extend - escrow already expired" },
+    { "code": 6030, "name": "CannotConfirmPayment", "msg": "Cannot confirm payment in current state" },
+    { "code": 6031, "name": "NotBuyer", "msg": "Only the buyer can confirm payment" },
+    { "code": 6032, "name": "CannotDispute", "msg": "Cannot dispute in current state" },
+    { "code": 6033, "name": "NotParty", "msg": "Only trade parties can open dispute" },
+    { "code": 6034, "name": "NotDisputed", "msg": "Trade is not in disputed state" },
+    { "code": 6035, "name": "NotArbiter", "msg": "Only authorized arbiters can resolve disputes" },
+    { "code": 6036, "name": "MustUseDispute", "msg": "Must use dispute resolution - payment already confirmed" },
+    { "code": 6037, "name": "BuyerPayWindowActive", "msg": "Buyer payment window still active - cannot cancel yet" }
   ],
   "metadata": {
     "address": "6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87"

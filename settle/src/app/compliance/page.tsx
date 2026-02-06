@@ -54,6 +54,9 @@ const useSolanaWalletHook = () => {
       refreshBalances: async () => {},
       releaseEscrow: async () => ({ txHash: '', success: false }),
       refundEscrow: async () => ({ txHash: '', success: false }),
+      // V2.3: Dispute resolution (arbiter only)
+      resolveDispute: async () => ({ txHash: '', success: false }),
+      openDispute: async () => ({ txHash: '', success: false }),
       network: 'devnet' as const,
     };
   }
@@ -476,28 +479,23 @@ export default function ComplianceDashboard() {
           const escrow = data.data.escrowDetails;
 
           try {
-            if (resolveForm.resolution === 'user') {
-              // Release to user/buyer
-              addNotification('system', `Attempting on-chain release...`, selectedDispute.id);
+            // V2.3: Use resolveDispute for proper on-chain dispute resolution
+            // Maps 'user' -> release_to_buyer, 'merchant' -> refund_to_seller
+            if (resolveForm.resolution === 'user' || resolveForm.resolution === 'merchant') {
+              const resolutionType = resolveForm.resolution === 'user' ? 'release_to_buyer' : 'refund_to_seller';
+              addNotification('system', `Resolving dispute on-chain (${resolutionType})...`, selectedDispute.id);
 
-              // Determine recipient based on order type
-              // For buy orders: user is buyer, receives crypto
-              // For sell orders: merchant is buyer, receives crypto
-              const recipientWallet = selectedDispute.type === 'buy'
-                ? escrow.user_wallet
-                : escrow.merchant_wallet;
-
-              const result = await solanaWallet.releaseEscrow({
+              const result = await solanaWallet.resolveDispute({
                 creatorPubkey: escrow.escrow_creator_wallet,
                 tradeId: escrow.escrow_trade_id,
-                counterparty: recipientWallet,
+                resolution: resolutionType,
               });
 
               if (result.success && result.txHash) {
                 txHash = result.txHash;
-                addNotification('resolution', `On-chain release successful: ${result.txHash.slice(0, 8)}...`, selectedDispute.id);
+                addNotification('resolution', `On-chain dispute resolved: ${result.txHash.slice(0, 8)}...`, selectedDispute.id);
 
-                // Update the order with the release tx hash
+                // Update the order with the resolution tx hash
                 await fetch(`/api/orders/${selectedDispute.id}/escrow`, {
                   method: "PATCH",
                   headers: { "Content-Type": "application/json" },
@@ -508,22 +506,7 @@ export default function ComplianceDashboard() {
                   }),
                 });
               } else {
-                throw new Error(result.error || 'Release failed');
-              }
-            } else if (resolveForm.resolution === 'merchant') {
-              // Refund to merchant/creator (escrow depositor gets funds back)
-              addNotification('system', `Attempting on-chain refund...`, selectedDispute.id);
-
-              const result = await solanaWallet.refundEscrow({
-                creatorPubkey: escrow.escrow_creator_wallet,
-                tradeId: escrow.escrow_trade_id,
-              });
-
-              if (result.success && result.txHash) {
-                txHash = result.txHash;
-                addNotification('resolution', `On-chain refund successful: ${result.txHash.slice(0, 8)}...`, selectedDispute.id);
-              } else {
-                throw new Error(result.error || 'Refund failed');
+                throw new Error('Dispute resolution failed');
               }
             }
           } catch (chainError) {

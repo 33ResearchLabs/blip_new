@@ -49,7 +49,7 @@ import { Program, AnchorProvider, BN, Idl } from '@coral-xyz/anchor';
 // Import wallet adapter styles
 import '@solana/wallet-adapter-react-ui/styles.css';
 
-// Import V2.2 SDK
+// Import V2.3 SDK
 import {
   BLIP_V2_PROGRAM_ID,
   checkProtocolConfigExists,
@@ -63,12 +63,18 @@ import {
   buildLockEscrowTx,
   buildReleaseEscrowTx,
   buildRefundEscrowTx,
+  buildExtendEscrowTx,
+  // V2.3: Payment confirmation & disputes
+  buildConfirmPaymentTx,
+  buildOpenDisputeTx,
+  buildResolveDisputeTx,
   fetchLane,
   fetchTrade,
   findLanePda,
   findTradePda,
   findEscrowPda,
   TradeSide,
+  DisputeResolution,
   type Lane,
   getUsdtMint,
 } from '@/lib/solana/v2';
@@ -314,6 +320,13 @@ interface SolanaWalletContextType {
     tradeId: number;
   }) => Promise<TradeOperationResult>;
 
+  // Extend escrow expiration (depositor only)
+  extendEscrow: (params: {
+    creatorPubkey: string;
+    tradeId: number;
+    extensionSeconds: number;  // Additional seconds to extend (e.g., 86400 for 24 hours)
+  }) => Promise<TradeOperationResult>;
+
   // Fund escrow WITHOUT counterparty (for M2M open orders)
   // Creates trade + funds escrow, counterparty joins later via acceptTrade
   fundEscrowOnly: (params: {
@@ -357,6 +370,29 @@ interface SolanaWalletContextType {
     escrowPda?: string;
     tradeId?: number;
   }>;
+
+  // V2.3: Payment confirmation (buyer only)
+  // Transitions: Locked → PaymentSent
+  // CRITICAL: After this, auto-refund is FORBIDDEN
+  confirmPayment: (params: {
+    creatorPubkey: string;
+    tradeId: number;
+  }) => Promise<TradeOperationResult>;
+
+  // V2.3: Open dispute (either party)
+  // Transitions: Locked/PaymentSent → Disputed
+  openDispute: (params: {
+    creatorPubkey: string;
+    tradeId: number;
+  }) => Promise<TradeOperationResult>;
+
+  // V2.3: Resolve dispute (arbiter only)
+  // Transitions: Disputed → Released or Refunded
+  resolveDispute: (params: {
+    creatorPubkey: string;
+    tradeId: number;
+    resolution: 'release_to_buyer' | 'refund_to_seller';
+  }) => Promise<TradeOperationResult>;
 
   // Network
   network: 'devnet' | 'mainnet-beta';
@@ -1107,6 +1143,62 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [publicKey, program, signTransaction, connection, refreshBalances]);
 
+  // Extend escrow expiration (depositor only)
+  const extendEscrow = useCallback(async (params: {
+    creatorPubkey: string;
+    tradeId: number;
+    extensionSeconds: number;
+  }): Promise<TradeOperationResult> => {
+    if (!publicKey || !program || !signTransaction) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      const creatorPk = new PublicKey(params.creatorPubkey);
+      const [tradePda] = findTradePda(creatorPk, params.tradeId);
+
+      const transaction = await buildExtendEscrowTx(
+        program,
+        publicKey,
+        {
+          tradePda,
+          extensionSeconds: new BN(params.extensionSeconds),
+        }
+      );
+
+      // Get recent blockhash
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = publicKey;
+
+      // Sign transaction
+      const signedTx = await signTransaction(transaction);
+
+      // Send transaction
+      const txHash = await connection.sendRawTransaction(signedTx.serialize());
+
+      // Confirm transaction
+      await connection.confirmTransaction({
+        signature: txHash,
+        blockhash,
+        lastValidBlockHeight,
+      });
+
+      const [escrowPda] = findEscrowPda(tradePda);
+
+      return {
+        txHash,
+        success: true,
+        tradePda: tradePda.toString(),
+        escrowPda: escrowPda.toString(),
+        tradeId: params.tradeId,
+      };
+    } catch (error) {
+      console.error('Extend escrow failed:', error);
+      throw error;
+    }
+  }, [publicKey, program, signTransaction, connection]);
+
   // Fund escrow WITHOUT counterparty (unified flow for U2M and M2M)
   // Creates trade + funds escrow, counterparty joins later via acceptTrade
   const fundEscrowOnly = useCallback(async (params: {
@@ -1538,6 +1630,236 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     };
   }, [fundEscrowOnly]);
 
+  // ============ V2.3: PAYMENT CONFIRMATION & DISPUTES ============
+
+  // Confirm payment (buyer only) - transitions Locked → PaymentSent
+  // CRITICAL: After this, auto-refund is FORBIDDEN
+  const confirmPayment = useCallback(async (params: {
+    creatorPubkey: string;
+    tradeId: number;
+  }): Promise<TradeOperationResult> => {
+    if (!publicKey || !program || !signTransaction) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      const creatorPk = new PublicKey(params.creatorPubkey);
+      const [tradePda] = findTradePda(creatorPk, params.tradeId);
+      const [escrowPda] = findEscrowPda(tradePda);
+
+      console.log('[confirmPayment] Confirming fiat payment sent:', {
+        creator: params.creatorPubkey,
+        tradeId: params.tradeId,
+        buyer: publicKey.toString(),
+        tradePda: tradePda.toString(),
+      });
+
+      const transaction = await buildConfirmPaymentTx(
+        program,
+        publicKey,
+        { tradePda }
+      );
+
+      // Get recent blockhash
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = publicKey;
+
+      // Sign transaction
+      const signedTx = await signTransaction(transaction);
+
+      // Send transaction
+      const txHash = await connection.sendRawTransaction(signedTx.serialize());
+
+      // Confirm transaction
+      await connection.confirmTransaction({
+        signature: txHash,
+        blockhash,
+        lastValidBlockHeight,
+      });
+
+      console.log('[confirmPayment] Payment confirmed! Auto-refund now disabled');
+
+      return {
+        txHash,
+        success: true,
+        tradePda: tradePda.toString(),
+        escrowPda: escrowPda.toString(),
+        tradeId: params.tradeId,
+      };
+    } catch (error: any) {
+      console.error('Confirm payment failed:', error);
+
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+
+      if (errorMessage.includes('NotBuyer') || errorMessage.includes('6019')) {
+        throw new Error('Only the buyer can confirm payment');
+      }
+      if (errorMessage.includes('CannotConfirmPayment') || errorMessage.includes('6018')) {
+        throw new Error('Payment cannot be confirmed - trade must be in Locked state');
+      }
+      if (errorMessage.includes('User rejected')) {
+        throw new Error('Transaction cancelled by user');
+      }
+
+      throw error;
+    }
+  }, [publicKey, program, signTransaction, connection]);
+
+  // Open dispute (either party) - transitions Locked/PaymentSent → Disputed
+  const openDispute = useCallback(async (params: {
+    creatorPubkey: string;
+    tradeId: number;
+  }): Promise<TradeOperationResult> => {
+    if (!publicKey || !program || !signTransaction) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      const creatorPk = new PublicKey(params.creatorPubkey);
+      const [tradePda] = findTradePda(creatorPk, params.tradeId);
+      const [escrowPda] = findEscrowPda(tradePda);
+
+      console.log('[openDispute] Opening dispute:', {
+        creator: params.creatorPubkey,
+        tradeId: params.tradeId,
+        initiator: publicKey.toString(),
+        tradePda: tradePda.toString(),
+      });
+
+      const transaction = await buildOpenDisputeTx(
+        program,
+        publicKey,
+        { tradePda }
+      );
+
+      // Get recent blockhash
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = publicKey;
+
+      // Sign transaction
+      const signedTx = await signTransaction(transaction);
+
+      // Send transaction
+      const txHash = await connection.sendRawTransaction(signedTx.serialize());
+
+      // Confirm transaction
+      await connection.confirmTransaction({
+        signature: txHash,
+        blockhash,
+        lastValidBlockHeight,
+      });
+
+      console.log('[openDispute] Dispute opened! Funds frozen until arbiter resolves');
+
+      return {
+        txHash,
+        success: true,
+        tradePda: tradePda.toString(),
+        escrowPda: escrowPda.toString(),
+        tradeId: params.tradeId,
+      };
+    } catch (error: any) {
+      console.error('Open dispute failed:', error);
+
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+
+      if (errorMessage.includes('NotParty') || errorMessage.includes('6021')) {
+        throw new Error('Only trade parties can open a dispute');
+      }
+      if (errorMessage.includes('CannotDispute') || errorMessage.includes('6020')) {
+        throw new Error('Cannot open dispute - trade must be in Locked or PaymentSent state');
+      }
+      if (errorMessage.includes('User rejected')) {
+        throw new Error('Transaction cancelled by user');
+      }
+
+      throw error;
+    }
+  }, [publicKey, program, signTransaction, connection]);
+
+  // Resolve dispute (arbiter only) - transitions Disputed → Released or Refunded
+  const resolveDispute = useCallback(async (params: {
+    creatorPubkey: string;
+    tradeId: number;
+    resolution: 'release_to_buyer' | 'refund_to_seller';
+  }): Promise<TradeOperationResult> => {
+    if (!publicKey || !program || !signTransaction) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      const creatorPk = new PublicKey(params.creatorPubkey);
+      const [tradePda] = findTradePda(creatorPk, params.tradeId);
+      const [escrowPda] = findEscrowPda(tradePda);
+
+      const resolution = params.resolution === 'release_to_buyer'
+        ? DisputeResolution.ReleaseToBuyer
+        : DisputeResolution.RefundToSeller;
+
+      console.log('[resolveDispute] Resolving dispute:', {
+        creator: params.creatorPubkey,
+        tradeId: params.tradeId,
+        arbiter: publicKey.toString(),
+        resolution: params.resolution,
+        tradePda: tradePda.toString(),
+      });
+
+      const transaction = await buildResolveDisputeTx(
+        program,
+        publicKey,
+        { tradePda, resolution, mint: USDT_MINT }
+      );
+
+      // Get recent blockhash
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = publicKey;
+
+      // Sign transaction
+      const signedTx = await signTransaction(transaction);
+
+      // Send transaction
+      const txHash = await connection.sendRawTransaction(signedTx.serialize());
+
+      // Confirm transaction
+      await connection.confirmTransaction({
+        signature: txHash,
+        blockhash,
+        lastValidBlockHeight,
+      });
+
+      console.log('[resolveDispute] Dispute resolved!', params.resolution);
+
+      await refreshBalances();
+
+      return {
+        txHash,
+        success: true,
+        tradePda: tradePda.toString(),
+        escrowPda: escrowPda.toString(),
+        tradeId: params.tradeId,
+      };
+    } catch (error: any) {
+      console.error('Resolve dispute failed:', error);
+
+      const errorMessage = error?.message || error?.toString() || 'Unknown error';
+
+      if (errorMessage.includes('NotArbiter') || errorMessage.includes('6023')) {
+        throw new Error('Only the protocol authority (arbiter) can resolve disputes');
+      }
+      if (errorMessage.includes('NotDisputed') || errorMessage.includes('6022')) {
+        throw new Error('Cannot resolve - trade must be in Disputed state');
+      }
+      if (errorMessage.includes('User rejected')) {
+        throw new Error('Transaction cancelled by user');
+      }
+
+      throw error;
+    }
+  }, [publicKey, program, signTransaction, connection, refreshBalances]);
+
   const value: SolanaWalletContextType = {
     connected,
     connecting,
@@ -1558,10 +1880,15 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     lockEscrow,
     releaseEscrow,
     refundEscrow,
+    extendEscrow,
     fundEscrowOnly,
     acceptTrade,
     depositToEscrow,
     depositToEscrowOpen,
+    // V2.3: Payment confirmation & disputes
+    confirmPayment,
+    openDispute,
+    resolveDispute,
     network: SOLANA_NETWORK,
     programReady: !!program,
     reinitializeProgram,

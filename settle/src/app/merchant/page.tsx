@@ -72,6 +72,9 @@ const useSolanaWalletHook = () => {
       depositToEscrow: async () => ({ txHash: '', success: false }),
       releaseEscrow: async () => ({ txHash: '', success: false }),
       refundEscrow: async () => ({ txHash: '', success: false }),
+      // V2.3: Payment confirmation & disputes
+      confirmPayment: async () => ({ txHash: '', success: false }),
+      openDispute: async () => ({ txHash: '', success: false }),
       network: 'devnet' as const,
     };
   }
@@ -2068,8 +2071,37 @@ export default function MerchantDashboard() {
   const submitDispute = async () => {
     if (!disputeOrderId || !merchantId || !disputeReason) return;
 
+    // Find the order to get escrow details
+    const order = orders.find(o => o.id === disputeOrderId);
+
     setIsSubmittingDispute(true);
     try {
+      // V2.3: If wallet connected and order has escrow, open dispute on-chain first
+      if (solanaWallet.connected && order?.escrowTradeId && order?.escrowCreatorWallet) {
+        console.log('[Merchant] Opening on-chain dispute:', {
+          tradeId: order.escrowTradeId,
+          creatorWallet: order.escrowCreatorWallet,
+        });
+
+        try {
+          const disputeResult = await solanaWallet.openDispute({
+            creatorPubkey: order.escrowCreatorWallet,
+            tradeId: order.escrowTradeId,
+          });
+
+          if (disputeResult.success) {
+            console.log('[Merchant] On-chain dispute opened:', disputeResult.txHash);
+            addNotification('system', `Dispute opened on-chain: ${disputeResult.txHash?.slice(0, 8)}...`, disputeOrderId);
+          } else {
+            console.warn('[Merchant] On-chain dispute failed, continuing with API only');
+          }
+        } catch (chainError) {
+          // Log but continue - the API dispute will still be recorded
+          console.warn('[Merchant] On-chain dispute failed:', chainError);
+        }
+      }
+
+      // Submit dispute to API (always, regardless of on-chain result)
       const res = await fetch(`/api/orders/${disputeOrderId}/dispute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

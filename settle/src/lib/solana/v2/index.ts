@@ -1,6 +1,7 @@
 /**
- * Blip Protocol V2.2 SDK for Settle App
+ * Blip Protocol V2.3 SDK for Settle App
  * Exports all types, config, PDAs, and program functions
+ * Includes payment confirmation and dispute resolution
  */
 
 // Config
@@ -34,6 +35,7 @@ export {
 export {
   TradeStatus,
   TradeSide,
+  DisputeResolution,
   type Lane,
   type Trade,
   type Escrow,
@@ -47,6 +49,10 @@ export {
   type LockEscrowParams,
   type ReleaseEscrowParams,
   type RefundEscrowParams,
+  type ExtendEscrowParams,
+  type ConfirmPaymentParams,
+  type OpenDisputeParams,
+  type ResolveDisputeParams,
 } from './types';
 
 // Program functions
@@ -66,6 +72,11 @@ export {
   buildLockEscrowTx,
   buildReleaseEscrowTx,
   buildRefundEscrowTx,
+  buildExtendEscrowTx,
+  // V2.3: Payment confirmation & disputes
+  buildConfirmPaymentTx,
+  buildOpenDisputeTx,
+  buildResolveDisputeTx,
   fetchTrade,
   fetchEscrow,
 } from './program';

@@ -1,5 +1,6 @@
 /**
- * Blip Protocol V2.2 Types
+ * Blip Protocol V2.3 Types
+ * Includes PaymentSent, Disputed states and dispute resolution
  */
 
 import { PublicKey } from '@solana/web3.js';
@@ -8,8 +9,10 @@ import { BN } from '@coral-xyz/anchor';
 // Trade status enum
 export enum TradeStatus {
   Created = 'Created',
-  Funded = 'Funded',  // Escrow funded, waiting for counterparty to accept
-  Locked = 'Locked',
+  Funded = 'Funded',       // Escrow funded, waiting for counterparty to accept
+  Locked = 'Locked',       // Counterparty set, awaiting fiat payment
+  PaymentSent = 'PaymentSent',  // Buyer claims fiat sent (NO auto-refund)
+  Disputed = 'Disputed',   // Trade frozen for arbitration
   Released = 'Released',
   Refunded = 'Refunded',
 }
@@ -18,6 +21,12 @@ export enum TradeStatus {
 export enum TradeSide {
   Buy = 'Buy',
   Sell = 'Sell',
+}
+
+// Dispute resolution outcome
+export enum DisputeResolution {
+  ReleaseToBuyer = 'ReleaseToBuyer',
+  RefundToSeller = 'RefundToSeller',
 }
 
 // On-chain Lane account structure
@@ -52,6 +61,10 @@ export interface Trade {
   lockedAt: BN;
   settledAt: BN;
   side: TradeSide;
+  expiresAt: BN;            // Escrow expiration (0 = no expiration after payment confirmed)
+  paymentConfirmedAt: BN;   // When buyer confirmed payment (0 if not confirmed)
+  disputedAt: BN;           // When dispute was opened (0 if not disputed)
+  disputeInitiator: PublicKey;  // Who opened the dispute
 }
 
 // On-chain Escrow account structure
@@ -126,5 +139,28 @@ export interface ReleaseEscrowParams {
 // Refund escrow params
 export interface RefundEscrowParams {
   tradePda: PublicKey;
+  mint: PublicKey;
+}
+
+// Extend escrow params (depositor only)
+export interface ExtendEscrowParams {
+  tradePda: PublicKey;
+  extensionSeconds: BN;  // Additional seconds to extend (e.g., 86400 for 24 hours)
+}
+
+// Confirm payment params (buyer only)
+export interface ConfirmPaymentParams {
+  tradePda: PublicKey;
+}
+
+// Open dispute params (either party)
+export interface OpenDisputeParams {
+  tradePda: PublicKey;
+}
+
+// Resolve dispute params (arbiter only)
+export interface ResolveDisputeParams {
+  tradePda: PublicKey;
+  resolution: DisputeResolution;
   mint: PublicKey;
 }

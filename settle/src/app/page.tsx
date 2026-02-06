@@ -66,6 +66,10 @@ const useSolanaWalletHook = () => {
         escrowPda: undefined,
         tradeId: undefined,
       }),
+      releaseEscrow: async () => ({ txHash: '', success: false }),
+      // V2.3: Payment confirmation & disputes
+      confirmPayment: async () => ({ txHash: '', success: false }),
+      openDispute: async () => ({ txHash: '', success: false }),
       network: 'devnet' as const,
       programReady: false,
       reinitializeProgram: () => {},
@@ -1477,6 +1481,33 @@ export default function Home() {
 
     setIsLoading(true);
     try {
+      // V2.3: If wallet connected and order has escrow, confirm payment on-chain first
+      // This transitions the trade from Locked → PaymentSent on-chain
+      // CRITICAL: After this, auto-refund is FORBIDDEN - only dispute resolution can adjudicate
+      if (solanaWallet.connected && activeOrder.escrowTradeId && activeOrder.escrowCreatorWallet) {
+        console.log('[User] Confirming payment on-chain:', {
+          tradeId: activeOrder.escrowTradeId,
+          creatorWallet: activeOrder.escrowCreatorWallet,
+        });
+
+        try {
+          const confirmResult = await solanaWallet.confirmPayment({
+            creatorPubkey: activeOrder.escrowCreatorWallet,
+            tradeId: activeOrder.escrowTradeId,
+          });
+
+          if (confirmResult.success) {
+            console.log('[User] On-chain payment confirmed:', confirmResult.txHash);
+          } else {
+            console.warn('[User] On-chain confirmation failed, continuing with API');
+          }
+        } catch (chainError) {
+          // Log but continue - the API update will still happen
+          console.warn('[User] On-chain confirmation failed:', chainError);
+        }
+      }
+
+      // Update status in API (always, regardless of on-chain result)
       const res = await fetch(`/api/orders/${activeOrder.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -1645,6 +1676,31 @@ export default function Home() {
 
     setIsSubmittingDispute(true);
     try {
+      // V2.3: If wallet connected and order has escrow, open dispute on-chain first
+      if (solanaWallet.connected && activeOrder.escrowTradeId && activeOrder.escrowCreatorWallet) {
+        console.log('[User] Opening on-chain dispute:', {
+          tradeId: activeOrder.escrowTradeId,
+          creatorWallet: activeOrder.escrowCreatorWallet,
+        });
+
+        try {
+          const disputeResult = await solanaWallet.openDispute({
+            creatorPubkey: activeOrder.escrowCreatorWallet,
+            tradeId: activeOrder.escrowTradeId,
+          });
+
+          if (disputeResult.success) {
+            console.log('[User] On-chain dispute opened:', disputeResult.txHash);
+          } else {
+            console.warn('[User] On-chain dispute failed, continuing with API');
+          }
+        } catch (chainError) {
+          // Log but continue - the API dispute will still be recorded
+          console.warn('[User] On-chain dispute failed:', chainError);
+        }
+      }
+
+      // Submit dispute to API (always, regardless of on-chain result)
       const res = await fetch(`/api/orders/${activeOrder.id}/dispute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

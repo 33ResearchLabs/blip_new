@@ -1,6 +1,7 @@
 /**
- * Blip Protocol V2.2 Program Interactions
+ * Blip Protocol V2.3 Program Interactions
  * Lane management, trade creation, escrow lock/release/refund
+ * Payment confirmation and dispute resolution
  */
 
 import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
@@ -35,10 +36,15 @@ import {
   LockEscrowParams,
   ReleaseEscrowParams,
   RefundEscrowParams,
+  ExtendEscrowParams,
+  ConfirmPaymentParams,
+  OpenDisputeParams,
+  ResolveDisputeParams,
   Lane,
   Trade,
   Escrow,
   TradeSide,
+  DisputeResolution,
 } from './types';
 import {
   getV2ProgramId,
@@ -633,6 +639,172 @@ export async function buildRefundEscrowTx(
     .instruction();
 
   const transaction = new Transaction().add(refundIx);
+  return transaction;
+}
+
+/**
+ * Build extend escrow transaction (depositor only)
+ * Extends the escrow expiration time. Only the depositor who funded can extend.
+ * Cannot extend if already expired.
+ */
+export async function buildExtendEscrowTx(
+  program: Program,
+  depositor: PublicKey,
+  params: ExtendEscrowParams
+): Promise<Transaction> {
+  const { tradePda, extensionSeconds } = params;
+  const [escrowPda] = findEscrowPda(tradePda);
+
+  const instruction = await (program.methods as any)
+    .extendEscrow(extensionSeconds)
+    .accounts({
+      depositor,
+      trade: tradePda,
+      escrow: escrowPda,
+    })
+    .instruction();
+
+  const transaction = new Transaction().add(instruction);
+  return transaction;
+}
+
+// ============ V2.3: PAYMENT CONFIRMATION & DISPUTES ============
+
+/**
+ * Build confirm payment transaction (buyer only)
+ * Buyer confirms they have sent fiat payment.
+ * Transitions: Locked → PaymentSent
+ *
+ * CRITICAL: After this, auto-refund is FORBIDDEN.
+ * Only dispute resolution can adjudicate.
+ */
+export async function buildConfirmPaymentTx(
+  program: Program,
+  buyer: PublicKey,
+  params: ConfirmPaymentParams
+): Promise<Transaction> {
+  const { tradePda } = params;
+  const [escrowPda] = findEscrowPda(tradePda);
+
+  const instruction = await (program.methods as any)
+    .confirmPayment()
+    .accounts({
+      buyer,
+      trade: tradePda,
+      escrow: escrowPda,
+    })
+    .instruction();
+
+  const transaction = new Transaction().add(instruction);
+  return transaction;
+}
+
+/**
+ * Build open dispute transaction (either party)
+ * Either buyer or seller can open a dispute when trade is Locked or PaymentSent.
+ * Transitions: Locked/PaymentSent → Disputed
+ *
+ * Funds are frozen until arbiter resolves.
+ */
+export async function buildOpenDisputeTx(
+  program: Program,
+  initiator: PublicKey,
+  params: OpenDisputeParams
+): Promise<Transaction> {
+  const { tradePda } = params;
+  const [escrowPda] = findEscrowPda(tradePda);
+
+  const instruction = await (program.methods as any)
+    .openDispute()
+    .accounts({
+      initiator,
+      trade: tradePda,
+      escrow: escrowPda,
+    })
+    .instruction();
+
+  const transaction = new Transaction().add(instruction);
+  return transaction;
+}
+
+/**
+ * Build resolve dispute transaction (arbiter only)
+ * Protocol authority (arbiter) resolves the dispute.
+ * Transitions: Disputed → Released (ReleaseToBuyer) or Refunded (RefundToSeller)
+ */
+export async function buildResolveDisputeTx(
+  program: Program,
+  arbiter: PublicKey,
+  params: ResolveDisputeParams
+): Promise<Transaction> {
+  const { tradePda, resolution, mint } = params;
+  const connection = program.provider.connection;
+
+  const [escrowPda] = findEscrowPda(tradePda);
+  const [vaultAuthority] = findVaultAuthorityPda(escrowPda);
+  const [protocolConfigPda] = findProtocolConfigPda();
+  const vaultAta = await getAssociatedTokenAddress(mint, vaultAuthority, true);
+  const treasury = getFeeTreasury();
+  const treasuryAta = await getAssociatedTokenAddress(mint, treasury);
+
+  // Fetch trade and escrow to get parties
+  const trade = await (program.account as any).trade.fetch(tradePda);
+  const escrow = await (program.account as any).escrow.fetch(escrowPda);
+
+  const buyerAta = await getAssociatedTokenAddress(mint, trade.counterparty);
+  const sellerAta = await getAssociatedTokenAddress(mint, escrow.depositor);
+
+  const transaction = new Transaction();
+
+  // Ensure buyer ATA exists
+  try {
+    await getAccount(connection, buyerAta);
+  } catch (error) {
+    const createAtaIx = createAssociatedTokenAccountInstruction(
+      arbiter,
+      buyerAta,
+      trade.counterparty,
+      mint
+    );
+    transaction.add(createAtaIx);
+  }
+
+  // Ensure treasury ATA exists
+  try {
+    await getAccount(connection, treasuryAta);
+  } catch (error) {
+    const createAtaIx = createAssociatedTokenAccountInstruction(
+      arbiter,
+      treasuryAta,
+      treasury,
+      mint
+    );
+    transaction.add(createAtaIx);
+  }
+
+  // Convert resolution enum to Anchor format
+  const resolutionEnum = resolution === DisputeResolution.ReleaseToBuyer
+    ? { releaseToBuyer: {} }
+    : { refundToSeller: {} };
+
+  const instruction = await (program.methods as any)
+    .resolveDispute(resolutionEnum)
+    .accounts({
+      arbiter,
+      protocolConfig: protocolConfigPda,
+      trade: tradePda,
+      escrow: escrowPda,
+      vaultAuthority,
+      vaultAta,
+      buyerAta,
+      sellerAta,
+      treasuryAta,
+      mint,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .instruction();
+
+  transaction.add(instruction);
   return transaction;
 }
 
