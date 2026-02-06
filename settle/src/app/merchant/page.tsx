@@ -3815,6 +3815,11 @@ export default function MerchantDashboard() {
                 // Get order info from conversations or orders
                 const orderInfo = orderConversations.find(c => c.order_id === activeChat.orderId);
                 const orderFromList = orders.find(o => o.id === activeChat.orderId);
+                console.log('[Chat View] activeChat:', activeChat);
+                console.log('[Chat View] activeChat.orderId:', activeChat.orderId);
+                console.log('[Chat View] orderFromList:', orderFromList);
+                console.log('[Chat View] dbOrder:', orderFromList?.dbOrder);
+                console.log('[Chat View] messages:', activeChat.messages);
                 const statusColors: Record<string, string> = {
                   pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
                   accepted: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
