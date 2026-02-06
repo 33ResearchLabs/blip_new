@@ -1111,7 +1111,7 @@ export default function MerchantDashboard() {
               body: JSON.stringify({
                 status: 'expired',
                 actor_type: 'system',
-                actor_id: 'system',
+                actor_id: '00000000-0000-0000-0000-000000000000', // Nil UUID for system
               }),
             }).catch(console.error);
             return false; // Remove from list
@@ -1128,7 +1128,7 @@ export default function MerchantDashboard() {
               body: JSON.stringify({
                 status: 'expired',
                 actor_type: 'system',
-                actor_id: 'system',
+                actor_id: '00000000-0000-0000-0000-000000000000', // Nil UUID for system
               }),
             }).catch(console.error);
 
