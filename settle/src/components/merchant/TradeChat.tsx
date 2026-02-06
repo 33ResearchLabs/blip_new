@@ -544,15 +544,24 @@ export function TradeChat({
               </div>
             )}
 
-            {/* System messages / Event log */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+            {/* System messages / Event log - Show last 10 only */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
               {systemMessages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-gray-500">
                   <Bot className="w-10 h-10 mb-2 opacity-30" />
                   <p className="text-xs">No events yet</p>
                 </div>
               ) : (
-                systemMessages.map((msg, index) => {
+                <>
+                  {/* Show indicator if there are more than 10 events */}
+                  {systemMessages.length > 10 && (
+                    <div className="text-center py-2 border-b border-white/[0.04] mb-2">
+                      <span className="text-[10px] text-gray-500">
+                        Showing last 10 of {systemMessages.length} events
+                      </span>
+                    </div>
+                  )}
+                  {systemMessages.slice(-10).map((msg, index) => {
                   let structuredData: { type: string; text: string; data?: Record<string, unknown> } | null = null;
                   try {
                     if (msg.text.startsWith('{')) {
@@ -645,7 +654,8 @@ export function TradeChat({
                       />
                     </motion.div>
                   );
-                })
+                })}
+                </>
               )}
             </div>
           </div>
