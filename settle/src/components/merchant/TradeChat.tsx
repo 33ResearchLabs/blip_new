@@ -494,10 +494,10 @@ export function TradeChat({
       </div>
 
       {/* Main content area - 50/50 split */}
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left Panel - Timeline & Notifications (50%) */}
         {showTimeline && (
-          <div className="w-1/2 flex flex-col border-r border-white/[0.04]">
+          <div className="w-1/2 flex flex-col border-r border-white/[0.04] min-h-0 overflow-hidden">
             {/* Timeline header */}
             <div className="px-4 py-3 border-b border-white/[0.04] bg-[#0d0d0d]/50">
               <div className="flex items-center gap-2">
@@ -548,7 +548,7 @@ export function TradeChat({
             )}
 
             {/* System messages / Event log - Show last 10 only */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
               {systemMessages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-gray-500">
                   <Bot className="w-10 h-10 mb-2 opacity-30" />
@@ -665,7 +665,7 @@ export function TradeChat({
         )}
 
         {/* Right Panel - Chat Messages (50% or 100% if no timeline) */}
-        <div className={`${showTimeline ? 'w-1/2' : 'w-full'} flex flex-col`}>
+        <div className={`${showTimeline ? 'w-1/2' : 'w-full'} flex flex-col min-h-0 overflow-hidden`}>
           {/* Chat tabs header */}
           <div className="border-b border-white/[0.04] bg-[#0d0d0d]/50">
             <div className="flex">
@@ -711,7 +711,7 @@ export function TradeChat({
           </div>
 
           {/* Chat messages area */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
             {/* Order Chat Content */}
             {activeChatTab === 'order' && (
               <>
