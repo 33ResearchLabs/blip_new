@@ -573,6 +573,25 @@ export default function MerchantDashboard() {
   }[]>([]);
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
 
+  // Active chat order details (for timeline when order not in main orders list)
+  const [activeChatOrderDetails, setActiveChatOrderDetails] = useState<DbOrder | null>(null);
+
+  // Fetch order details for timeline when opening chat
+  const fetchOrderDetailsForChat = useCallback(async (orderId: string) => {
+    try {
+      console.log('[Chat] Fetching order details for:', orderId);
+      const res = await fetch(`/api/orders/${orderId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success && data.data) {
+        console.log('[Chat] Order details fetched:', data.data);
+        setActiveChatOrderDetails(data.data);
+      }
+    } catch (error) {
+      console.error('[Chat] Failed to fetch order details:', error);
+    }
+  }, []);
+
   // Fetch order conversations for sidebar
   const fetchOrderConversations = useCallback(async () => {
     if (!merchantId) return;
@@ -3815,10 +3834,13 @@ export default function MerchantDashboard() {
                 // Get order info from conversations or orders
                 const orderInfo = orderConversations.find(c => c.order_id === activeChat.orderId);
                 const orderFromList = orders.find(o => o.id === activeChat.orderId);
+                // Use fetched order details if order not in main list
+                const dbOrder = orderFromList?.dbOrder || activeChatOrderDetails;
                 console.log('[Chat View] activeChat:', activeChat);
                 console.log('[Chat View] activeChat.orderId:', activeChat.orderId);
                 console.log('[Chat View] orderFromList:', orderFromList);
-                console.log('[Chat View] dbOrder:', orderFromList?.dbOrder);
+                console.log('[Chat View] activeChatOrderDetails:', activeChatOrderDetails);
+                console.log('[Chat View] dbOrder:', dbOrder);
                 console.log('[Chat View] messages:', activeChat.messages);
                 const statusColors: Record<string, string> = {
                   pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
@@ -3882,7 +3904,7 @@ export default function MerchantDashboard() {
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
                   {/* Order Timeline Events (from timestamps) */}
                   {(() => {
-                    const dbOrder = orderFromList?.dbOrder;
+                    // dbOrder is already defined above - use it directly
                     const timelineEvents: { icon: React.ReactNode; color: string; label: string; time: string }[] = [];
 
                     if (dbOrder?.created_at) {
@@ -4257,6 +4279,8 @@ export default function MerchantDashboard() {
                             openChat(conv.user.username, emoji, conv.order_id);
                             // Set activeChatId to orderId to find the chat window
                             setActiveChatId(conv.order_id);
+                            // Fetch order details for timeline
+                            fetchOrderDetailsForChat(conv.order_id);
                           }}
                           className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors text-left"
                         >
