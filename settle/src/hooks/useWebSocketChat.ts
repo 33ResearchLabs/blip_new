@@ -124,17 +124,21 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   const fetchMessages = useCallback(
     async (orderId: string, chatId: string) => {
       try {
+        console.log('[Chat] Fetching messages for order:', orderId);
         const res = await fetch(`/api/orders/${orderId}/messages`);
         if (!res.ok) {
-          console.log('Messages API not available - using demo mode');
+          console.log('[Chat] Messages API not available - using demo mode');
           return;
         }
         const data = await res.json();
 
         if (data.success && data.data) {
+          console.log('[Chat] Raw messages from API:', data.data);
           const messages: ChatMessage[] = data.data.map((m: DbMessage) =>
             mapDbMessageToUI(m, actorType)
           );
+          console.log('[Chat] Mapped messages:', messages);
+          console.log('[Chat] System messages:', messages.filter(m => m.from === 'system'));
 
           setChatWindows((prev) =>
             prev.map((w) => {
@@ -144,7 +148,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
           );
         }
       } catch (error) {
-        console.log('Messages API error - running in demo mode');
+        console.log('[Chat] Messages API error - running in demo mode', error);
       }
     },
     [actorType, mapDbMessageToUI]
@@ -224,13 +228,13 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   // Subscribe to order via WebSocket
   const subscribeToOrder = useCallback(
     (orderId: string, chatId: string) => {
+      // Always fetch initial messages, even without WebSocket
+      fetchMessages(orderId, chatId);
+
       if (!wsContext || subscribedOrdersRef.current.has(orderId)) return;
 
       wsContext.subscribe(orderId);
       subscribedOrdersRef.current.add(orderId);
-
-      // Fetch initial messages
-      fetchMessages(orderId, chatId);
     },
     [wsContext, fetchMessages]
   );
