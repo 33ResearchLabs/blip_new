@@ -38,6 +38,7 @@ import {
   CheckCircle2,
   XCircle,
   Bot,
+  Paperclip,
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -3901,74 +3902,125 @@ export default function MerchantDashboard() {
 
                 {/* Timeline Messages */}
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                  {/* Order Timeline Events (from timestamps) */}
+                  {/* Order Timeline Events (from timestamps) - Centered */}
                   {(() => {
                     // dbOrder is already defined above - use it directly
-                    const timelineEvents: { icon: React.ReactNode; color: string; label: string; time: string }[] = [];
+                    const formatDuration = (ms: number) => {
+                      const seconds = Math.floor(ms / 1000);
+                      const minutes = Math.floor(seconds / 60);
+                      const hours = Math.floor(minutes / 60);
+                      const days = Math.floor(hours / 24);
+                      if (days > 0) return `${days}d ${hours % 24}h`;
+                      if (hours > 0) return `${hours}h ${minutes % 60}m`;
+                      if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+                      return `${seconds}s`;
+                    };
+
+                    const timelineEvents: { icon: React.ReactNode; color: string; label: string; time: Date; duration?: string }[] = [];
+                    let prevTime: Date | null = null;
 
                     if (dbOrder?.created_at) {
+                      const time = new Date(dbOrder.created_at);
                       timelineEvents.push({
-                        icon: <Plus className="w-3 h-3" />,
-                        color: 'text-blue-400 bg-blue-500/20',
-                        label: 'Order created',
-                        time: new Date(dbOrder.created_at).toLocaleString(),
+                        icon: <Plus className="w-3.5 h-3.5" />,
+                        color: 'text-blue-400 bg-blue-500/20 border-blue-500/30',
+                        label: 'Order Created',
+                        time,
                       });
+                      prevTime = time;
                     }
                     if (dbOrder?.accepted_at) {
+                      const time = new Date(dbOrder.accepted_at);
+                      const duration = prevTime ? formatDuration(time.getTime() - prevTime.getTime()) : undefined;
                       timelineEvents.push({
-                        icon: <Check className="w-3 h-3" />,
-                        color: 'text-cyan-400 bg-cyan-500/20',
-                        label: 'Order accepted',
-                        time: new Date(dbOrder.accepted_at).toLocaleString(),
+                        icon: <Check className="w-3.5 h-3.5" />,
+                        color: 'text-cyan-400 bg-cyan-500/20 border-cyan-500/30',
+                        label: 'Order Accepted',
+                        time,
+                        duration,
                       });
+                      prevTime = time;
                     }
                     if (dbOrder?.escrowed_at) {
+                      const time = new Date(dbOrder.escrowed_at);
+                      const duration = prevTime ? formatDuration(time.getTime() - prevTime.getTime()) : undefined;
                       timelineEvents.push({
-                        icon: <Lock className="w-3 h-3" />,
-                        color: 'text-purple-400 bg-purple-500/20',
-                        label: 'Escrow locked',
-                        time: new Date(dbOrder.escrowed_at).toLocaleString(),
+                        icon: <Lock className="w-3.5 h-3.5" />,
+                        color: 'text-purple-400 bg-purple-500/20 border-purple-500/30',
+                        label: 'Escrow Locked',
+                        time,
+                        duration,
                       });
+                      prevTime = time;
                     }
                     if (dbOrder?.payment_sent_at) {
+                      const time = new Date(dbOrder.payment_sent_at);
+                      const duration = prevTime ? formatDuration(time.getTime() - prevTime.getTime()) : undefined;
                       timelineEvents.push({
-                        icon: <DollarSign className="w-3 h-3" />,
-                        color: 'text-amber-400 bg-amber-500/20',
-                        label: 'Payment sent',
-                        time: new Date(dbOrder.payment_sent_at).toLocaleString(),
+                        icon: <DollarSign className="w-3.5 h-3.5" />,
+                        color: 'text-amber-400 bg-amber-500/20 border-amber-500/30',
+                        label: 'Payment Sent',
+                        time,
+                        duration,
                       });
+                      prevTime = time;
                     }
                     if (dbOrder?.completed_at) {
+                      const time = new Date(dbOrder.completed_at);
+                      const duration = prevTime ? formatDuration(time.getTime() - prevTime.getTime()) : undefined;
+                      const totalDuration = dbOrder?.created_at ? formatDuration(time.getTime() - new Date(dbOrder.created_at).getTime()) : undefined;
                       timelineEvents.push({
-                        icon: <CheckCircle2 className="w-3 h-3" />,
-                        color: 'text-emerald-400 bg-emerald-500/20',
-                        label: 'Trade completed',
-                        time: new Date(dbOrder.completed_at).toLocaleString(),
+                        icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+                        color: 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30',
+                        label: 'Trade Completed',
+                        time,
+                        duration: duration ? `+${duration}${totalDuration ? ` (Total: ${totalDuration})` : ''}` : undefined,
                       });
                     }
                     if (dbOrder?.cancelled_at) {
+                      const time = new Date(dbOrder.cancelled_at);
+                      const duration = prevTime ? formatDuration(time.getTime() - prevTime.getTime()) : undefined;
+                      const totalDuration = dbOrder?.created_at ? formatDuration(time.getTime() - new Date(dbOrder.created_at).getTime()) : undefined;
                       timelineEvents.push({
-                        icon: <XCircle className="w-3 h-3" />,
-                        color: 'text-red-400 bg-red-500/20',
-                        label: 'Order cancelled',
-                        time: new Date(dbOrder.cancelled_at).toLocaleString(),
+                        icon: <XCircle className="w-3.5 h-3.5" />,
+                        color: 'text-red-400 bg-red-500/20 border-red-500/30',
+                        label: 'Order Cancelled',
+                        time,
+                        duration: duration ? `+${duration}${totalDuration ? ` (Total: ${totalDuration})` : ''}` : undefined,
                       });
                     }
 
                     if (timelineEvents.length === 0) return null;
 
                     return (
-                      <div className="mb-3 pb-3 border-b border-white/[0.06]">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Order Timeline</p>
-                        <div className="space-y-1.5">
+                      <div className="mb-4 pb-4 border-b border-white/[0.06]">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3 text-center">Order Timeline</p>
+                        <div className="flex flex-col items-center">
                           {timelineEvents.map((event, idx) => (
-                            <div key={idx} className="flex items-start gap-2">
-                              <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${event.color}`}>
-                                {event.icon}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-[11px] text-gray-300">{event.label}</p>
-                                <p className="text-[9px] text-gray-600">{event.time}</p>
+                            <div key={idx} className="flex flex-col items-center">
+                              {/* Duration from previous event */}
+                              {event.duration && (
+                                <div className="flex items-center gap-1 py-1">
+                                  <div className="w-px h-3 bg-white/10" />
+                                  <span className="text-[9px] text-gray-500 px-1.5 py-0.5 bg-white/[0.03] rounded">
+                                    {event.duration}
+                                  </span>
+                                  <div className="w-px h-3 bg-white/10" />
+                                </div>
+                              )}
+                              {/* Connector line */}
+                              {idx > 0 && !event.duration && (
+                                <div className="w-px h-4 bg-white/10" />
+                              )}
+                              {/* Event node */}
+                              <div className="flex flex-col items-center">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${event.color}`}>
+                                  {event.icon}
+                                </div>
+                                <p className="text-[11px] font-medium text-gray-200 mt-1">{event.label}</p>
+                                <p className="text-[9px] text-gray-500">
+                                  {event.time.toLocaleDateString()} {event.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </p>
                               </div>
                             </div>
                           ))}
@@ -4198,11 +4250,34 @@ export default function MerchantDashboard() {
 
                 {/* Input */}
                 <div className="p-3 border-t border-white/[0.04] shrink-0">
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
+                    {/* Attachment Button */}
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => {
+                        // TODO: Implement file upload
+                        const fileInput = document.createElement('input');
+                        fileInput.type = 'file';
+                        fileInput.accept = 'image/*,.pdf,.doc,.docx';
+                        fileInput.onchange = (e) => {
+                          const file = (e.target as HTMLInputElement).files?.[0];
+                          if (file) {
+                            console.log('File selected:', file.name);
+                            // TODO: Upload file and send as message
+                            addNotification('system', `Attachment feature coming soon. Selected: ${file.name}`);
+                          }
+                        };
+                        fileInput.click();
+                      }}
+                      className="w-9 h-9 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center transition-all"
+                      title="Attach file"
+                    >
+                      <Paperclip className="w-4 h-4 text-gray-400" />
+                    </motion.button>
                     <input
                       ref={(el) => { chatInputRefs.current[activeChat.id] = el; }}
                       type="text"
-                      placeholder="type a message..."
+                      placeholder="Type a message..."
                       className="flex-1 bg-[#1f1f1f] rounded-lg px-4 py-2.5 outline-none text-sm placeholder:text-gray-600"
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && e.currentTarget.value.trim()) {
@@ -4222,7 +4297,7 @@ export default function MerchantDashboard() {
                           playSound('send');
                         }
                       }}
-                      className="w-10 h-10 rounded-lg border border-white/30 hover:border-white/50 hover:bg-white/5 flex items-center justify-center transition-all"
+                      className="w-9 h-9 rounded-lg bg-white/[0.08] hover:bg-white/[0.12] flex items-center justify-center transition-all"
                     >
                       <Send className="w-4 h-4 text-white/80" />
                     </motion.button>
