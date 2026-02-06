@@ -3996,32 +3996,22 @@ export default function MerchantDashboard() {
 
                     return (
                       <div className="mb-4 pb-4 border-b border-white/[0.06]">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3 text-center">Order Timeline</p>
-                        <div className="flex flex-col items-center">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">Order Timeline</p>
+                        <div className="space-y-3">
                           {timelineEvents.map((event, idx) => (
-                            <div key={idx} className="flex flex-col items-center">
-                              {/* Duration from previous event */}
-                              {event.duration && (
-                                <div className="flex items-center gap-1 py-1">
-                                  <div className="w-px h-3 bg-white/10" />
-                                  <span className="text-[9px] text-gray-500 px-1.5 py-0.5 bg-white/[0.03] rounded">
-                                    {event.duration}
-                                  </span>
-                                  <div className="w-px h-3 bg-white/10" />
-                                </div>
-                              )}
-                              {/* Connector line */}
-                              {idx > 0 && !event.duration && (
-                                <div className="w-px h-4 bg-white/10" />
-                              )}
-                              {/* Event node */}
-                              <div className="flex flex-col items-center">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${event.color}`}>
-                                  {event.icon}
-                                </div>
-                                <p className="text-[11px] font-medium text-gray-200 mt-1">{event.label}</p>
+                            <div key={idx} className="flex items-start gap-2">
+                              {/* Event icon */}
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border ${event.color}`}>
+                                {event.icon}
+                              </div>
+                              {/* Event content */}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[11px] font-medium text-gray-200">{event.label}</p>
                                 <p className="text-[9px] text-gray-500">
                                   {event.time.toLocaleDateString()} {event.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  {event.duration && (
+                                    <span className="ml-2 text-gray-600">({event.duration})</span>
+                                  )}
                                 </p>
                               </div>
                             </div>
