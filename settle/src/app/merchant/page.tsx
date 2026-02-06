@@ -360,7 +360,7 @@ const TRADER_CUT_CONFIG = {
 // Leaderboard data
 const leaderboardData: LeaderboardEntry[] = [];
 
-const notifications: { id: number; type: string; message: string; time: string; read: boolean }[] = [];
+// Notifications are managed via useState inside the component
 
 // Big order requests - special orders above threshold
 interface BigOrderRequest {
@@ -520,7 +520,7 @@ export default function MerchantDashboard() {
   };
 
   // Add notification helper
-  const addNotification = (type: 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system', message: string, orderId?: string) => {
+  const addNotification = useCallback((type: 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system', message: string, orderId?: string) => {
     const newNotif = {
       id: `notif-${Date.now()}`,
       type,
@@ -529,8 +529,9 @@ export default function MerchantDashboard() {
       read: false,
       orderId,
     };
+    console.log('[Notifications] Adding notification:', newNotif);
     setNotifications(prev => [newNotif, ...prev].slice(0, 50)); // Keep max 50 notifications
-  };
+  }, []);
 
   // Order conversations state (for sidebar Messages section)
   const [orderConversations, setOrderConversations] = useState<{
@@ -593,6 +594,16 @@ export default function MerchantDashboard() {
       fetchOrderConversations();
     }
   }, [merchantId, isLoggedIn, fetchOrderConversations]);
+
+  // Add welcome notification when merchant logs in
+  const hasShownWelcome = useRef(false);
+  useEffect(() => {
+    if (merchantId && isLoggedIn && !hasShownWelcome.current) {
+      console.log('[Notifications] Merchant logged in, adding welcome notification');
+      hasShownWelcome.current = true;
+      addNotification('system', 'Welcome back! You are now online.');
+    }
+  }, [merchantId, isLoggedIn, addNotification]);
 
   // Real-time Pusher context
   const { setActor } = usePusher();
@@ -2596,7 +2607,7 @@ export default function MerchantDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col">
+    <div className="h-screen bg-[#0a0a0a] text-white flex flex-col overflow-hidden">
       {/* Ambient */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-1/3 w-[600px] h-[400px] bg-white/[0.04] rounded-full blur-[150px]" />
@@ -2824,25 +2835,46 @@ export default function MerchantDashboard() {
                     <button className="text-[10px] text-white">Mark all read</button>
                   </div>
                   <div className="max-h-80 overflow-y-auto">
-                    {notifications.map(notif => (
-                      <div
-                        key={notif.id}
-                        className={`px-3 py-2.5 border-b border-white/[0.02] hover:bg-white/[0.02] cursor-pointer ${
-                          !notif.read ? "bg-white/[0.05]" : ""
-                        }`}
-                      >
-                        <div className="flex items-start gap-2">
-                          <div className={`w-2 h-2 rounded-full mt-1 ${
-                            notif.type === "order" ? "border border-white/40" :
-                            notif.type === "complete" ? "bg-emerald-500" : "bg-amber-500"
-                          }`} />
-                          <div className="flex-1">
-                            <p className="text-xs text-gray-300">{notif.message}</p>
-                            <p className="text-[10px] text-gray-600 mt-0.5">{notif.time}</p>
+                    {notifications.length > 0 ? (
+                      notifications.map(notif => (
+                        <div
+                          key={notif.id}
+                          onClick={() => markNotificationRead(notif.id)}
+                          className={`px-3 py-2.5 border-b border-white/[0.02] hover:bg-white/[0.02] cursor-pointer ${
+                            !notif.read ? "bg-white/[0.05]" : ""
+                          }`}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className={`w-6 h-6 rounded-md flex items-center justify-center text-xs ${
+                              notif.type === 'order' ? 'bg-emerald-500/20' :
+                              notif.type === 'escrow' ? 'bg-amber-500/20' :
+                              notif.type === 'payment' ? 'bg-blue-500/20' :
+                              notif.type === 'dispute' ? 'bg-red-500/20' :
+                              notif.type === 'complete' ? 'bg-emerald-500/20' :
+                              'bg-white/[0.08]'
+                            }`}>
+                              {notif.type === 'order' ? '📥' :
+                               notif.type === 'escrow' ? '🔒' :
+                               notif.type === 'payment' ? '💸' :
+                               notif.type === 'dispute' ? '⚠️' :
+                               notif.type === 'complete' ? '✅' : '🔔'}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-xs text-gray-300">{notif.message}</p>
+                              <p className="text-[10px] text-gray-600 mt-0.5">{notif.time}</p>
+                            </div>
+                            {!notif.read && (
+                              <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0 mt-1" />
+                            )}
                           </div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="py-8 text-center text-gray-500">
+                        <Bell className="w-6 h-6 mx-auto mb-2 opacity-30" />
+                        <p className="text-xs">No notifications</p>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </motion.div>
               )}
