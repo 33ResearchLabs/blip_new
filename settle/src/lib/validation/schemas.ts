@@ -41,7 +41,7 @@ export const orderStatusSchema = z.enum([
   'expired',
 ]);
 
-export const actorTypeSchema = z.enum(['user', 'merchant', 'system']);
+export const actorTypeSchema = z.enum(['user', 'merchant', 'system', 'compliance']);
 
 export const offerTypeSchema = z.enum(['buy', 'sell']);
 

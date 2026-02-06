@@ -19,7 +19,7 @@ export type OrderStatus =
   | 'cancelled'
   | 'disputed'
   | 'expired';
-export type ActorType = 'user' | 'merchant' | 'system';
+export type ActorType = 'user' | 'merchant' | 'system' | 'compliance';
 export type MessageType = 'text' | 'image' | 'system';
 export type DisputeReason =
   | 'payment_not_received'
@@ -142,6 +142,8 @@ export interface Order {
   extension_minutes: number;
   // Chat categorization
   has_manual_message: boolean;
+  // Compliance assignment
+  assigned_compliance_id: string | null;
 }
 
 export interface OrderEvent {

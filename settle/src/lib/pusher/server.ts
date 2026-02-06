@@ -189,7 +189,7 @@ export async function notifyOrderCancelled(data: OrderEventData): Promise<void> 
 interface ChatMessageData {
   orderId: string;
   messageId: string;
-  senderType: 'user' | 'merchant' | 'system';
+  senderType: 'user' | 'merchant' | 'system' | 'compliance';
   senderId: string | null;
   content: string;
   messageType: 'text' | 'image' | 'system';
@@ -220,7 +220,7 @@ export async function notifyNewMessage(data: ChatMessageData): Promise<void> {
  */
 export async function notifyMessagesRead(
   orderId: string,
-  readerType: 'user' | 'merchant' | 'system',
+  readerType: 'user' | 'merchant' | 'system' | 'compliance',
   readAt: string
 ): Promise<void> {
   const channel = getOrderChannel(orderId);
@@ -258,7 +258,7 @@ interface ExtensionRequestData {
   orderId: string;
   userId: string;
   merchantId: string;
-  requestedBy: 'user' | 'merchant' | 'system';
+  requestedBy: 'user' | 'merchant' | 'system' | 'compliance';
   extensionMinutes: number;
   extensionCount: number;
   maxExtensions: number;
@@ -269,7 +269,7 @@ interface ExtensionResponseData {
   userId: string;
   merchantId: string;
   accepted: boolean;
-  respondedBy: 'user' | 'merchant' | 'system';
+  respondedBy: 'user' | 'merchant' | 'system' | 'compliance';
   newExpiresAt?: string;
   newStatus?: string;
 }
