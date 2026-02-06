@@ -35,6 +35,9 @@ import {
   BarChart3,
   History,
   ShoppingBag,
+  CheckCircle2,
+  XCircle,
+  Bot,
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -3801,33 +3804,71 @@ export default function MerchantDashboard() {
             {/* Chat List / Active Chat */}
             <div className="flex-1 flex flex-col min-h-0">
             {activeChat ? (
-              // Active Chat View
+              // Active Chat View with Timeline
+              (() => {
+                // Get order info from conversations or orders
+                const orderInfo = orderConversations.find(c => c.order_id === activeChat.orderId);
+                const orderFromList = orders.find(o => o.id === activeChat.orderId);
+                const statusColors: Record<string, string> = {
+                  pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+                  accepted: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+                  escrowed: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+                  payment_pending: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+                  payment_sent: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+                  completed: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+                  cancelled: 'bg-red-500/20 text-red-400 border-red-500/30',
+                  disputed: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+                };
+                const currentStatus = orderInfo?.order_status || orderFromList?.status || 'pending';
+                const getEventIcon = (text: string, type?: string) => {
+                  if (type === 'dispute') return { icon: <AlertTriangle className="w-3 h-3" />, color: 'text-red-400 bg-red-500/20' };
+                  if (type === 'resolution' || type === 'resolution_proposed') return { icon: <Shield className="w-3 h-3" />, color: 'text-blue-400 bg-blue-500/20' };
+                  if (text.includes('accepted')) return { icon: <Check className="w-3 h-3" />, color: 'text-blue-400 bg-blue-500/20' };
+                  if (text.includes('escrow') || text.includes('locked')) return { icon: <Lock className="w-3 h-3" />, color: 'text-purple-400 bg-purple-500/20' };
+                  if (text.includes('Payment') && text.includes('sent')) return { icon: <DollarSign className="w-3 h-3" />, color: 'text-cyan-400 bg-cyan-500/20' };
+                  if (text.includes('completed') || text.includes('released')) return { icon: <CheckCircle2 className="w-3 h-3" />, color: 'text-emerald-400 bg-emerald-500/20' };
+                  if (text.includes('cancelled')) return { icon: <XCircle className="w-3 h-3" />, color: 'text-red-400 bg-red-500/20' };
+                  if (text.includes('expired')) return { icon: <Clock className="w-3 h-3" />, color: 'text-zinc-400 bg-zinc-500/20' };
+                  return { icon: <Bot className="w-3 h-3" />, color: 'text-gray-400 bg-white/[0.08]' };
+                };
+                return (
               <>
-                {/* Chat User Header */}
-                <div className="px-4 py-3 border-b border-white/[0.04] flex items-center gap-3 shrink-0">
-                  <button
-                    onClick={() => setActiveChatId(null)}
-                    className="p-1.5 hover:bg-white/[0.04] rounded transition-colors"
-                  >
-                    <ChevronLeft className="w-5 h-5 text-gray-500" />
-                  </button>
-                  <div className="w-10 h-10 rounded-full bg-[#1f1f1f] flex items-center justify-center text-xl">
-                    {activeChat.emoji}
+                {/* Compact Header with Order Info */}
+                <div className="px-3 py-2 border-b border-white/[0.04] shrink-0">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setActiveChatId(null)}
+                      className="p-1 hover:bg-white/[0.04] rounded transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4 text-gray-500" />
+                    </button>
+                    <div className="w-8 h-8 rounded-full bg-[#1f1f1f] flex items-center justify-center text-base">
+                      {activeChat.emoji}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{activeChat.user}</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-1.5 py-0.5 text-[9px] font-medium rounded border ${statusColors[currentStatus] || 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30'}`}>
+                          {currentStatus.replace(/_/g, ' ').toUpperCase()}
+                        </span>
+                        {orderInfo && (
+                          <span className="text-[10px] text-gray-500">
+                            {orderInfo.crypto_amount} USDC
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => { closeChat(activeChat.id); setActiveChatId(null); }}
+                      className="p-1 hover:bg-white/[0.04] rounded transition-colors"
+                    >
+                      <X className="w-4 h-4 text-gray-500" />
+                    </button>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{activeChat.user}</p>
-                    <p className="text-xs text-emerald-500">online</p>
-                  </div>
-                  <button
-                    onClick={() => { closeChat(activeChat.id); setActiveChatId(null); }}
-                    className="p-1.5 hover:bg-white/[0.04] rounded transition-colors"
-                  >
-                    <X className="w-5 h-5 text-gray-500" />
-                  </button>
                 </div>
 
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {/* Timeline Messages */}
+                <div className="flex-1 overflow-y-auto p-3 space-y-2">
                   {activeChat.messages.map((msg) => {
                     // Parse dispute/resolution messages from JSON content
                     if (msg.messageType === 'dispute') {
@@ -3950,22 +3991,41 @@ export default function MerchantDashboard() {
                       }
                     }
 
-                    // Regular messages
+                    // System messages - show as timeline events
+                    if (msg.from === "system") {
+                      const eventStyle = getEventIcon(msg.text, msg.messageType);
+                      return (
+                        <div key={msg.id} className="flex items-start gap-2">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${eventStyle.color}`}>
+                            {eventStyle.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] text-gray-300 leading-relaxed">{msg.text}</p>
+                            <p className="text-[9px] text-gray-600 mt-0.5">
+                              {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Regular chat messages
                     return (
                       <div
                         key={msg.id}
-                        className={`flex ${msg.from === "me" ? "justify-end" : msg.from === "system" ? "justify-center" : "justify-start"}`}
+                        className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}
                       >
                         <div
-                          className={`max-w-[80%] px-4 py-2 rounded-xl text-sm ${
+                          className={`max-w-[85%] px-3 py-1.5 rounded-lg text-xs ${
                             msg.from === "me"
-                              ? "border border-white/30 text-white/90"
-                              : msg.from === "system"
-                              ? "bg-[#252525] text-gray-400 text-xs"
-                              : "bg-[#1f1f1f] text-gray-200"
+                              ? "bg-white/[0.08] border border-white/20 text-white/90"
+                              : "bg-[#1a1a1a] text-gray-300"
                           }`}
                         >
                           {msg.text}
+                          <span className="text-[9px] text-gray-600 ml-2">
+                            {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
                         </div>
                       </div>
                     );
@@ -4057,6 +4117,8 @@ export default function MerchantDashboard() {
                   </div>
                 </div>
               </>
+                );
+              })()
             ) : (
               // Order Conversations List
               <div className="flex-1 overflow-y-auto">
