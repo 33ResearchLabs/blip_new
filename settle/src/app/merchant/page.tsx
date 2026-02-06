@@ -39,6 +39,7 @@ import {
   XCircle,
   Bot,
   Paperclip,
+  FileText,
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -52,6 +53,7 @@ import { MerchantChatTabs } from "@/components/merchant/MerchantChatTabs";
 import { OrderDetailsPanel } from "@/components/merchant/OrderDetailsPanel";
 import { AnalyticsDashboard } from "@/components/merchant/AnalyticsDashboard";
 import { TradeChat } from "@/components/merchant/TradeChat";
+import { FileUpload } from "@/components/chat/FileUpload";
 
 // Dynamically import wallet components (client-side only)
 const MerchantWalletModal = dynamic(() => import("@/components/MerchantWalletModal"), { ssr: false });
@@ -4173,6 +4175,64 @@ export default function MerchantDashboard() {
                       );
                     }
 
+                    // Image messages
+                    if (msg.messageType === 'image' && msg.imageUrl) {
+                      const isDocument = msg.imageUrl.includes('/raw/') ||
+                        msg.imageUrl.match(/\.(pdf|doc|docx)$/i);
+
+                      return (
+                        <div
+                          key={msg.id}
+                          className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}
+                        >
+                          <div
+                            className={`max-w-[85%] rounded-lg overflow-hidden ${
+                              msg.from === "me"
+                                ? "bg-white/[0.08] border border-white/20"
+                                : "bg-[#1a1a1a]"
+                            }`}
+                          >
+                            {isDocument ? (
+                              // Document attachment
+                              <a
+                                href={msg.imageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 px-3 py-2 hover:bg-white/[0.05] transition-colors"
+                              >
+                                <div className="w-8 h-8 rounded bg-white/[0.1] flex items-center justify-center">
+                                  <FileText className="w-4 h-4 text-gray-400" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs text-gray-200 truncate">{msg.text || 'Document'}</p>
+                                  <p className="text-[9px] text-gray-500">Click to open</p>
+                                </div>
+                              </a>
+                            ) : (
+                              // Image attachment
+                              <a
+                                href={msg.imageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <img
+                                  src={msg.imageUrl}
+                                  alt="Shared image"
+                                  className="max-w-full max-h-48 object-contain"
+                                  loading="lazy"
+                                />
+                              </a>
+                            )}
+                            <div className="px-3 py-1.5">
+                              <span className="text-[9px] text-gray-600">
+                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
                     // Regular chat messages
                     return (
                       <div
@@ -4251,29 +4311,22 @@ export default function MerchantDashboard() {
                 {/* Input */}
                 <div className="p-3 border-t border-white/[0.04] shrink-0">
                   <div className="flex gap-2 items-center">
-                    {/* Attachment Button */}
-                    <motion.button
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => {
-                        // TODO: Implement file upload
-                        const fileInput = document.createElement('input');
-                        fileInput.type = 'file';
-                        fileInput.accept = 'image/*,.pdf,.doc,.docx';
-                        fileInput.onchange = (e) => {
-                          const file = (e.target as HTMLInputElement).files?.[0];
-                          if (file) {
-                            console.log('File selected:', file.name);
-                            // TODO: Upload file and send as message
-                            addNotification('system', `Attachment feature coming soon. Selected: ${file.name}`);
-                          }
-                        };
-                        fileInput.click();
+                    {/* File Upload Button */}
+                    <FileUpload
+                      orderId={activeChat.orderId || ''}
+                      compact
+                      onUploadComplete={(fileUrl, fileType, fileName) => {
+                        // Send file as message
+                        const messageText = fileType === 'image' ? '📷 Photo' : `📎 ${fileName}`;
+                        sendMessage(activeChat.id, messageText, fileUrl);
+                        playSound('send');
+                        addNotification('system', `File sent: ${fileName}`);
                       }}
-                      className="w-9 h-9 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center transition-all"
-                      title="Attach file"
-                    >
-                      <Paperclip className="w-4 h-4 text-gray-400" />
-                    </motion.button>
+                      onUploadError={(error) => {
+                        addNotification('system', error);
+                      }}
+                      disabled={!activeChat.orderId}
+                    />
                     <input
                       ref={(el) => { chatInputRefs.current[activeChat.id] = el; }}
                       type="text"
