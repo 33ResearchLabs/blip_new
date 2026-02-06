@@ -3724,9 +3724,9 @@ export default function MerchantDashboard() {
         </main>
 
         {/* Right Sidebar - Notifications + Chat (50/50 split) */}
-        <aside className="hidden lg:flex w-80 border-l border-white/[0.04] bg-[#0d0d0d]/50 flex-col">
+        <aside className="hidden lg:flex w-80 h-full min-h-0 border-l border-white/[0.04] bg-[#0d0d0d]/50 flex-col shrink-0">
           {/* Top Half - Notifications */}
-          <div className="h-1/2 flex flex-col border-b border-white/[0.08]">
+          <div className="h-1/2 min-h-0 flex flex-col border-b border-white/[0.08]">
             <div className="h-12 px-4 flex items-center gap-2 border-b border-white/[0.04] shrink-0">
               <Bell className="w-4 h-4 text-gray-400" />
               <span className="text-sm font-semibold">Notifications</span>
@@ -3786,7 +3786,7 @@ export default function MerchantDashboard() {
           </div>
 
           {/* Bottom Half - Chat */}
-          <div className="h-1/2 flex flex-col">
+          <div className="h-1/2 min-h-0 flex flex-col">
             {/* Chat Header */}
             <div className="h-12 px-4 flex items-center gap-2 border-b border-white/[0.04] shrink-0">
               <MessageCircle className="w-4 h-4 text-gray-400" />
