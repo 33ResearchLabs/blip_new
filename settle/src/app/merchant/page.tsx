@@ -34,6 +34,7 @@ import {
   RotateCcw,
   BarChart3,
   History,
+  ShoppingBag,
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -531,6 +532,68 @@ export default function MerchantDashboard() {
     setNotifications(prev => [newNotif, ...prev].slice(0, 50)); // Keep max 50 notifications
   };
 
+  // Order conversations state (for sidebar Messages section)
+  const [orderConversations, setOrderConversations] = useState<{
+    order_id: string;
+    order_number: string;
+    order_status: string;
+    order_type: 'buy' | 'sell';
+    crypto_amount: number;
+    fiat_amount: number;
+    fiat_currency: string;
+    order_created_at: string;
+    has_manual_message: boolean;
+    user: {
+      id: string;
+      username: string;
+      rating: number;
+      total_trades: number;
+    };
+    message_count: number;
+    unread_count: number;
+    last_message: {
+      id: string;
+      content: string;
+      sender_type: string;
+      message_type: string;
+      created_at: string;
+      is_read: boolean;
+    } | null;
+    last_activity: string;
+  }[]>([]);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+
+  // Fetch order conversations for sidebar
+  const fetchOrderConversations = useCallback(async () => {
+    if (!merchantId) return;
+
+    setIsLoadingConversations(true);
+    try {
+      const res = await fetch(`/api/merchant/messages?merchant_id=${merchantId}&limit=50`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success) {
+        setOrderConversations(data.data.conversations || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch order conversations:', error);
+    } finally {
+      setIsLoadingConversations(false);
+    }
+  }, [merchantId]);
+
+  // Keep ref updated for use in callbacks
+  useEffect(() => {
+    fetchOrderConversationsRef.current = fetchOrderConversations;
+  }, [fetchOrderConversations]);
+
+  // Fetch conversations when logged in
+  useEffect(() => {
+    if (merchantId && isLoggedIn) {
+      fetchOrderConversations();
+    }
+  }, [merchantId, isLoggedIn, fetchOrderConversations]);
+
   // Real-time Pusher context
   const { setActor } = usePusher();
 
@@ -542,6 +605,9 @@ export default function MerchantDashboard() {
       setActor('merchant', merchantId);
     }
   }, [merchantId, setActor]);
+
+  // Ref to hold fetchOrderConversations for use in callbacks
+  const fetchOrderConversationsRef = useRef<(() => Promise<void>) | undefined>(undefined);
 
   // Real-time chat hook via WebSocket (replaces Pusher for chat)
   const {
@@ -555,6 +621,8 @@ export default function MerchantDashboard() {
     actorId: merchantId || undefined,
     onNewMessage: () => {
       playSound('message');
+      // Refresh conversations to show latest message preview in sidebar
+      fetchOrderConversationsRef.current?.();
     },
   });
 
@@ -1034,12 +1102,14 @@ export default function MerchantDashboard() {
       // Refetch orders when a new order comes in
       console.log('[Merchant] Real-time: New order created!', order);
       fetchOrders();
+      fetchOrderConversations(); // Refresh sidebar conversations
       playSound('notification');
       addNotification('order', 'New order received');
     },
     onOrderStatusUpdated: (orderId, newStatus) => {
       // Refetch orders when status changes
       fetchOrders();
+      fetchOrderConversations(); // Refresh sidebar conversations
       if (newStatus === 'payment_sent') {
         addNotification('payment', 'Payment sent for order', orderId);
         playSound('notification');
@@ -3956,40 +4026,106 @@ export default function MerchantDashboard() {
                 </div>
               </>
             ) : (
-              // Chat List View
+              // Order Conversations List
               <div className="flex-1 overflow-y-auto">
-                {chatWindows.length > 0 ? (
-                  chatWindows.map((chat) => (
-                    <motion.button
-                      key={chat.id}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setActiveChatId(chat.id)}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] border-b border-white/[0.02] transition-colors text-left"
-                    >
-                      <div className="relative">
-                        <div className="w-11 h-11 rounded-full bg-[#1f1f1f] flex items-center justify-center text-xl">
-                          {chat.emoji}
-                        </div>
-                        <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-[#0d0d0d]" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{chat.user}</p>
-                        <p className="text-xs text-gray-500 truncate">
-                          {chat.messages[chat.messages.length - 1]?.text || "Start chatting..."}
-                        </p>
-                      </div>
-                      {chat.unread > 0 && (
-                        <span className="w-6 h-6 border border-white/30 rounded-full text-xs font-bold flex items-center justify-center text-white/80">
-                          {chat.unread}
-                        </span>
-                      )}
-                    </motion.button>
-                  ))
+                {isLoadingConversations ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="w-5 h-5 border-2 border-[#c9a962] border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : orderConversations.length > 0 ? (
+                  <div className="divide-y divide-white/[0.04]">
+                    {orderConversations.map((conv) => {
+                      const emojis = ['🦊', '🐻', '🐼', '🐨', '🦁', '🐯', '🐸', '🐙', '🦋', '🐳', '🦄', '🐲'];
+                      const hash = conv.user.username.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+                      const emoji = emojis[hash % emojis.length];
+                      const statusColors: Record<string, string> = {
+                        pending: 'bg-yellow-500/20 text-yellow-400',
+                        accepted: 'bg-blue-500/20 text-blue-400',
+                        escrowed: 'bg-purple-500/20 text-purple-400',
+                        payment_pending: 'bg-cyan-500/20 text-cyan-400',
+                        payment_sent: 'bg-cyan-500/20 text-cyan-400',
+                        payment_confirmed: 'bg-teal-500/20 text-teal-400',
+                        completed: 'bg-emerald-500/20 text-emerald-400',
+                        cancelled: 'bg-red-500/20 text-red-400',
+                        disputed: 'bg-orange-500/20 text-orange-400',
+                        expired: 'bg-zinc-500/20 text-zinc-400',
+                      };
+                      const formatTime = (dateStr: string) => {
+                        const date = new Date(dateStr);
+                        const now = new Date();
+                        const diffMs = now.getTime() - date.getTime();
+                        const diffMins = Math.floor(diffMs / 60000);
+                        const diffHours = Math.floor(diffMs / 3600000);
+                        const diffDays = Math.floor(diffMs / 86400000);
+                        if (diffMins < 1) return 'now';
+                        if (diffMins < 60) return `${diffMins}m`;
+                        if (diffHours < 24) return `${diffHours}h`;
+                        if (diffDays < 7) return `${diffDays}d`;
+                        return date.toLocaleDateString();
+                      };
+
+                      return (
+                        <motion.button
+                          key={conv.order_id}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => {
+                            openChat(conv.user.username, emoji, conv.order_id);
+                            setActiveChatId(`chat_${Date.now()}`);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors text-left"
+                        >
+                          <div className="relative flex-shrink-0">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 flex items-center justify-center text-lg">
+                              {emoji}
+                            </div>
+                            {conv.unread_count > 0 && (
+                              <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                                {conv.unread_count > 9 ? '9+' : conv.unread_count}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-sm font-medium text-white truncate">
+                                  {conv.user.username}
+                                </span>
+                                <span className={`px-1.5 py-0.5 text-[9px] font-medium rounded uppercase whitespace-nowrap ${statusColors[conv.order_status] || 'bg-zinc-500/20 text-zinc-400'}`}>
+                                  {conv.order_status.replace(/_/g, ' ')}
+                                </span>
+                              </div>
+                              {conv.last_message && (
+                                <span className="text-[10px] text-white/40 whitespace-nowrap">
+                                  {formatTime(conv.last_message.created_at)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[10px] text-white/40">{conv.order_number}</span>
+                              <span className="text-[10px] text-white/30">•</span>
+                              <span className={`text-[10px] ${conv.order_type === 'buy' ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                                {conv.order_type === 'buy' ? 'Buy' : 'Sell'}
+                              </span>
+                              <span className="text-[10px] text-white/40">
+                                {conv.fiat_amount.toLocaleString()} {conv.fiat_currency}
+                              </span>
+                            </div>
+                            {conv.last_message && (
+                              <p className={`text-xs truncate mt-1 ${conv.unread_count > 0 ? 'text-white font-medium' : 'text-white/50'}`}>
+                                {conv.last_message.message_type === 'image' ? '📷 Photo' : conv.last_message.content.slice(0, 35)}
+                                {conv.last_message.content.length > 35 ? '...' : ''}
+                              </p>
+                            )}
+                          </div>
+                        </motion.button>
+                      );
+                    })}
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full py-12 text-gray-600">
-                    <Users className="w-10 h-10 mb-3 opacity-30" />
-                    <p className="text-sm text-gray-500">No active chats</p>
-                    <p className="text-xs text-gray-600 mt-1">Click a user to start chatting</p>
+                    <ShoppingBag className="w-10 h-10 mb-3 opacity-30" />
+                    <p className="text-sm text-gray-500">No order chats</p>
+                    <p className="text-xs text-gray-600 mt-1">New orders will appear here</p>
                   </div>
                 )}
               </div>
