@@ -99,6 +99,12 @@ interface DbOrder {
   status: string;
   created_at: string;
   expires_at: string;
+  // Timeline timestamps
+  accepted_at?: string;
+  escrowed_at?: string;
+  payment_sent_at?: string;
+  completed_at?: string;
+  cancelled_at?: string;
   // Escrow reference fields
   escrow_tx_hash?: string;
   escrow_trade_id?: number;
@@ -3869,6 +3875,86 @@ export default function MerchantDashboard() {
 
                 {/* Timeline Messages */}
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                  {/* Order Timeline Events (from timestamps) */}
+                  {(() => {
+                    const dbOrder = orderFromList?.dbOrder;
+                    const timelineEvents: { icon: React.ReactNode; color: string; label: string; time: string }[] = [];
+
+                    if (dbOrder?.created_at) {
+                      timelineEvents.push({
+                        icon: <Plus className="w-3 h-3" />,
+                        color: 'text-blue-400 bg-blue-500/20',
+                        label: 'Order created',
+                        time: new Date(dbOrder.created_at).toLocaleString(),
+                      });
+                    }
+                    if (dbOrder?.accepted_at) {
+                      timelineEvents.push({
+                        icon: <Check className="w-3 h-3" />,
+                        color: 'text-cyan-400 bg-cyan-500/20',
+                        label: 'Order accepted',
+                        time: new Date(dbOrder.accepted_at).toLocaleString(),
+                      });
+                    }
+                    if (dbOrder?.escrowed_at) {
+                      timelineEvents.push({
+                        icon: <Lock className="w-3 h-3" />,
+                        color: 'text-purple-400 bg-purple-500/20',
+                        label: 'Escrow locked',
+                        time: new Date(dbOrder.escrowed_at).toLocaleString(),
+                      });
+                    }
+                    if (dbOrder?.payment_sent_at) {
+                      timelineEvents.push({
+                        icon: <DollarSign className="w-3 h-3" />,
+                        color: 'text-amber-400 bg-amber-500/20',
+                        label: 'Payment sent',
+                        time: new Date(dbOrder.payment_sent_at).toLocaleString(),
+                      });
+                    }
+                    if (dbOrder?.completed_at) {
+                      timelineEvents.push({
+                        icon: <CheckCircle2 className="w-3 h-3" />,
+                        color: 'text-emerald-400 bg-emerald-500/20',
+                        label: 'Trade completed',
+                        time: new Date(dbOrder.completed_at).toLocaleString(),
+                      });
+                    }
+                    if (dbOrder?.cancelled_at) {
+                      timelineEvents.push({
+                        icon: <XCircle className="w-3 h-3" />,
+                        color: 'text-red-400 bg-red-500/20',
+                        label: 'Order cancelled',
+                        time: new Date(dbOrder.cancelled_at).toLocaleString(),
+                      });
+                    }
+
+                    if (timelineEvents.length === 0) return null;
+
+                    return (
+                      <div className="mb-3 pb-3 border-b border-white/[0.06]">
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Order Timeline</p>
+                        <div className="space-y-1.5">
+                          {timelineEvents.map((event, idx) => (
+                            <div key={idx} className="flex items-start gap-2">
+                              <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${event.color}`}>
+                                {event.icon}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[11px] text-gray-300">{event.label}</p>
+                                <p className="text-[9px] text-gray-600">{event.time}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Chat Messages */}
+                  {activeChat.messages.length > 0 && (
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Messages</p>
+                  )}
                   {activeChat.messages.map((msg) => {
                     // Parse dispute/resolution messages from JSON content
                     if (msg.messageType === 'dispute') {
