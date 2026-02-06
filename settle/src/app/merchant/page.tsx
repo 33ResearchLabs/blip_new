@@ -2360,7 +2360,7 @@ export default function MerchantDashboard() {
 
   // Fetch dispute info when viewing a chat for a disputed order
   useEffect(() => {
-    const activeChat = chatWindows.find(c => c.id === activeChatId);
+    const activeChat = chatWindows.find(c => c.id === activeChatId || c.orderId === activeChatId);
     if (activeChat?.orderId) {
       const order = orders.find(o => o.id === activeChat.orderId);
       if (order?.status === 'disputed') {
@@ -2432,7 +2432,7 @@ export default function MerchantDashboard() {
   const totalTradedVolume = completedOrders.reduce((sum, o) => sum + o.amount, 0);
   const pendingEarnings = ongoingOrders.reduce((sum, o) => sum + o.amount * TRADER_CUT_CONFIG.best, 0);
 
-  const activeChat = chatWindows.find(c => c.id === activeChatId);
+  const activeChat = chatWindows.find(c => c.id === activeChatId || c.orderId === activeChatId);
   const totalUnread = chatWindows.reduce((sum, c) => sum + c.unread, 0);
 
   // Loading screen - show while checking session
@@ -4164,7 +4164,8 @@ export default function MerchantDashboard() {
                           whileTap={{ scale: 0.98 }}
                           onClick={() => {
                             openChat(conv.user.username, emoji, conv.order_id);
-                            setActiveChatId(`chat_${Date.now()}`);
+                            // Set activeChatId to orderId to find the chat window
+                            setActiveChatId(conv.order_id);
                           }}
                           className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors text-left"
                         >
