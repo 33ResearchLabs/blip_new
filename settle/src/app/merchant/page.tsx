@@ -143,7 +143,6 @@ interface DbOrder {
   };
   // Cancellation info
   cancellation_reason?: string;
-  cancelled_at?: string;
 }
 
 // UI Order type
