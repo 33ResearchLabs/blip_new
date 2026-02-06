@@ -16,7 +16,9 @@ import {
   CheckCircle2,
   XCircle,
   Timer,
-  Loader2
+  Loader2,
+  MessageSquare,
+  Users
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { BankInfoCard, EscrowCard, StatusEventCard, detectEventType } from '../chat/cards';
@@ -251,6 +253,7 @@ export function TradeChat({
   showTimeline = true,
 }: TradeChatProps) {
   const [messageText, setMessageText] = useState('');
+  const [activeChatTab, setActiveChatTab] = useState<'order' | 'direct'>('order');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -663,31 +666,67 @@ export function TradeChat({
 
         {/* Right Panel - Chat Messages (50% or 100% if no timeline) */}
         <div className={`${showTimeline ? 'w-1/2' : 'w-full'} flex flex-col`}>
-          {/* Chat header */}
-          <div className="px-4 py-3 border-b border-white/[0.04] bg-[#0d0d0d]/50">
-            <div className="flex items-center gap-2">
-              <Send className="w-4 h-4 text-gray-500" />
-              <span className="text-xs font-medium text-gray-400">Chat</span>
-              {chatMessages.length > 0 && (
-                <span className="text-[10px] text-gray-600">({chatMessages.length} messages)</span>
-              )}
+          {/* Chat tabs header */}
+          <div className="border-b border-white/[0.04] bg-[#0d0d0d]/50">
+            <div className="flex">
+              {/* Order Chat Tab */}
+              <button
+                onClick={() => setActiveChatTab('order')}
+                className={`flex-1 px-4 py-3 flex items-center justify-center gap-2 text-xs font-medium transition-colors relative ${
+                  activeChatTab === 'order'
+                    ? 'text-[#c9a962]'
+                    : 'text-gray-500 hover:text-gray-400'
+                }`}
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Order Chat</span>
+                {chatMessages.length > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                    activeChatTab === 'order' ? 'bg-[#c9a962]/20 text-[#c9a962]' : 'bg-gray-700 text-gray-400'
+                  }`}>
+                    {chatMessages.length}
+                  </span>
+                )}
+                {activeChatTab === 'order' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#c9a962]" />
+                )}
+              </button>
+
+              {/* Direct Chat Tab */}
+              <button
+                onClick={() => setActiveChatTab('direct')}
+                className={`flex-1 px-4 py-3 flex items-center justify-center gap-2 text-xs font-medium transition-colors relative ${
+                  activeChatTab === 'direct'
+                    ? 'text-[#c9a962]'
+                    : 'text-gray-500 hover:text-gray-400'
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                <span>Direct Chat</span>
+                {activeChatTab === 'direct' && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#c9a962]" />
+                )}
+              </button>
             </div>
           </div>
 
-          {/* Chat messages */}
+          {/* Chat messages area */}
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 text-[#c9a962] animate-spin" />
-              </div>
-            ) : chatMessages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                <Send className="w-10 h-10 mb-2 opacity-30" />
-                <p className="text-sm">No messages yet</p>
-                <p className="text-xs mt-1">Start the conversation</p>
-              </div>
-            ) : (
-              groupedChatMessages.map((group, groupIndex) => (
+            {/* Order Chat Content */}
+            {activeChatTab === 'order' && (
+              <>
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 text-[#c9a962] animate-spin" />
+                  </div>
+                ) : chatMessages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                    <MessageSquare className="w-10 h-10 mb-2 opacity-30" />
+                    <p className="text-sm">No order messages yet</p>
+                    <p className="text-xs mt-1">Messages about this trade will appear here</p>
+                  </div>
+                ) : (
+                  groupedChatMessages.map((group, groupIndex) => (
                 <div key={groupIndex}>
                   {/* Date separator */}
                   <div className="flex items-center gap-3 my-4">
@@ -763,7 +802,24 @@ export function TradeChat({
                   </div>
                 </div>
               ))
+                )}
+              </>
             )}
+
+            {/* Direct Chat Content */}
+            {activeChatTab === 'direct' && (
+              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                <Users className="w-10 h-10 mb-2 opacity-30" />
+                <p className="text-sm">Direct Chat</p>
+                <p className="text-xs mt-1 text-center px-4">
+                  Private messages between you and the counterparty
+                </p>
+                <p className="text-[10px] mt-3 text-gray-600 bg-white/[0.02] px-3 py-2 rounded-lg">
+                  Coming soon
+                </p>
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
 
