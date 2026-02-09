@@ -3,6 +3,7 @@ import { query } from '@/lib/db';
 import { verifyWalletSignature } from '@/lib/solana/verifySignature';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import crypto from 'crypto';
+import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
 
 // Simple password hashing using Node's crypto
 function hashPassword(password: string): string {
@@ -325,7 +326,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Create merchant
+      // Create merchant (auto-funded in mock mode)
+      const merchantBalance = MOCK_MODE ? MOCK_INITIAL_BALANCE : 0;
       const result = await query(
         `INSERT INTO merchants (
           wallet_address,
@@ -334,10 +336,11 @@ export async function POST(request: NextRequest) {
           display_name,
           email,
           status,
-          is_online
-        ) VALUES ($1, $2, $3, $4, $5, 'active', true)
+          is_online,
+          balance
+        ) VALUES ($1, $2, $3, $4, $5, 'active', true, $6)
         RETURNING id, username, display_name, business_name, wallet_address, rating, total_trades`,
-        [wallet_address, username, username, username, `${username}@merchant.blip.money`]
+        [wallet_address, username, username, username, `${username}@merchant.blip.money`, merchantBalance]
       );
 
       const merchant = result[0] as {
@@ -350,7 +353,7 @@ export async function POST(request: NextRequest) {
         total_trades: number;
       };
 
-      console.log('[API] New merchant created:', merchant.id, merchant.username);
+      console.log('[API] New merchant created:', merchant.id, merchant.username, MOCK_MODE ? `(mock balance: ${merchantBalance})` : '');
 
       // Auto-create default offers for new merchant (so they can start receiving orders immediately)
       try {
@@ -696,7 +699,8 @@ export async function POST(request: NextRequest) {
       // Hash password
       const passwordHash = hashPassword(password);
 
-      // Create merchant
+      // Create merchant (auto-funded in mock mode)
+      const regBalance = MOCK_MODE ? MOCK_INITIAL_BALANCE : 0;
       const result = await query(
         `INSERT INTO merchants (
           email,
@@ -705,10 +709,11 @@ export async function POST(request: NextRequest) {
           business_name,
           display_name,
           status,
-          is_online
-        ) VALUES ($1, $2, $3, $4, $5, 'active', true)
+          is_online,
+          balance
+        ) VALUES ($1, $2, $3, $4, $5, 'active', true, $6)
         RETURNING id, username, display_name, business_name, wallet_address, email, rating, total_trades`,
-        [email.toLowerCase(), passwordHash, username, business_name || username, business_name || username]
+        [email.toLowerCase(), passwordHash, username, business_name || username, business_name || username, regBalance]
       );
 
       const merchant = result[0] as {

@@ -404,7 +404,8 @@ interface SolanaWalletContextType {
   reinitializeProgram: () => void;
 }
 
-const SolanaWalletContext = createContext<SolanaWalletContextType | null>(null);
+// Export the context so MockWalletContext can provide values into the same context
+export const SolanaWalletContext = createContext<SolanaWalletContextType | null>(null);
 
 // Inner provider that has access to wallet hooks
 const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {

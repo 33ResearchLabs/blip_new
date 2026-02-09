@@ -44,6 +44,7 @@ export interface User {
   rating: number;
   push_token: string | null;
   notification_settings: Record<string, unknown>;
+  balance: number;
   created_at: Date;
   updated_at: Date;
 }
@@ -67,6 +68,7 @@ export interface Merchant {
   last_seen_at: Date | null;
   auto_accept_enabled: boolean;
   auto_accept_max_amount: number | null;
+  balance: number;
   created_at: Date;
   updated_at: Date;
 }

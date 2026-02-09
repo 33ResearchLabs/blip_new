@@ -3,41 +3,48 @@
 import { useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Wallet, ExternalLink, ChevronRight, Loader2, Check, LogOut, Smartphone } from 'lucide-react';
+import { MOCK_MODE } from '@/lib/config/mockMode';
+
+// ============================================================================
+// REAL WALLET IMPORTS (commented out in mock mode, kept for easy restoration)
+// When MOCK_MODE=false, these are used for real Solana wallet connections.
+// ============================================================================
+/* MOCK_MODE_TOGGLE: Real wallet imports - uncomment when MOCK_MODE=false */
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useSolanaWallet } from '@/context/SolanaWalletContext';
 import { useWalletConnection } from '@/hooks/useWalletConnection';
 import { useMobileDetect } from '@/hooks/useMobileDetect';
 import { hasMobileDeepLink, getAppStoreLink } from '@/lib/wallet/deepLinks';
 
-// Theme configurations
+// Ultra-minimal theme configurations - NO colors, only subtle grays
 const THEMES = {
   user: {
-    primary: 'purple-500',
-    secondary: 'blue-500',
-    gradient: 'from-purple-500 to-blue-500',
-    gradientHover: 'hover:from-purple-600 hover:to-blue-600',
-    border: 'border-white/10',
-    borderAccent: 'border-purple-500/50',
-    bgAccent: 'bg-purple-500/20',
-    bgAccentHover: 'hover:bg-purple-500/30',
-    textAccent: 'text-purple-500',
-    textAccentLight: 'text-purple-400',
-    loaderColor: 'text-purple-500',
+    primary: 'white',
+    secondary: 'white/80',
+    gradient: 'from-white/10 to-white/10',
+    gradientHover: 'hover:from-white/20 hover:to-white/20',
+    border: 'border-white/6',
+    borderAccent: 'border-white/12',
+    bgAccent: 'bg-white/5',
+    bgAccentHover: 'hover:bg-white/10',
+    textAccent: 'text-white',
+    textAccentLight: 'text-white/70',
+    loaderColor: 'text-white',
     subtitle: 'Solana Devnet',
     footer: 'By connecting, you agree to the Terms of Service',
   },
   merchant: {
-    primary: '[#c9a962]',
-    secondary: '[#a88b4a]',
-    gradient: 'from-[#c9a962] to-[#a88b4a]',
-    gradientHover: 'hover:from-[#d4b56d] hover:to-[#b39655]',
-    border: 'border-[#c9a962]/30',
-    borderAccent: 'border-[#c9a962]/50',
-    bgAccent: 'bg-[#c9a962]/20',
-    bgAccentHover: 'hover:bg-[#c9a962]/30',
-    textAccent: 'text-[#c9a962]',
-    textAccentLight: 'text-[#c9a962]',
-    loaderColor: 'text-[#c9a962]',
+    primary: 'white',
+    secondary: 'white/80',
+    gradient: 'from-white/10 to-white/10',
+    gradientHover: 'hover:from-white/20 hover:to-white/20',
+    border: 'border-white/6',
+    borderAccent: 'border-white/12',
+    bgAccent: 'bg-white/5',
+    bgAccentHover: 'hover:bg-white/10',
+    textAccent: 'text-white',
+    textAccentLight: 'text-white/70',
+    loaderColor: 'text-white',
     subtitle: 'Merchant Dashboard',
     footer: 'Solana Devnet - Merchant Portal',
   },
@@ -94,6 +101,67 @@ export default function WalletModal({
   walletFilter,
   showMobileOptions = true,
 }: WalletModalProps) {
+  // ============================================================================
+  // MOCK MODE: Show simplified "Mock Connected" UI instead of real wallet list
+  // ============================================================================
+  if (MOCK_MODE) {
+    return (
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              onClick={onClose}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto bg-black rounded-2xl border border-white/6 overflow-hidden z-50"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/6">
+                <div>
+                  <h2 className="text-[22px] font-semibold text-white tracking-tight leading-none">Mock Mode</h2>
+                  <p className="text-[13px] text-white/50 mt-0.5">Wallet connect disabled - using test coins</p>
+                </div>
+                <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors">
+                  <X className="w-5 h-5 text-white/50" />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                  <p className="text-sm text-amber-400 font-medium mb-1">Test Mode Active</p>
+                  <p className="text-xs text-white/50">
+                    Real wallet connections are disabled. All accounts are auto-funded with 10,000 USDT test coins.
+                    Login or register to get started.
+                  </p>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="w-full py-3 bg-white/10 text-white font-medium rounded-xl hover:bg-white/20 transition-colors border border-white/10"
+                >
+                  Got it
+                </button>
+              </div>
+              <div className="p-4 border-t border-white/6 bg-white/5">
+                <p className="text-xs text-white/40 text-center">
+                  Set NEXT_PUBLIC_MOCK_MODE=false to enable real wallets
+                </p>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    );
+  }
+
+  // ============================================================================
+  // REAL WALLET MODE (below) - used when MOCK_MODE=false
+  // ============================================================================
   const { wallets, connected, wallet, disconnect } = useWallet();
   const { walletAddress, solBalance, usdtBalance, refreshBalances } = useSolanaWallet();
   const { isMobile, platform, isInAppBrowser } = useMobileDetect();
@@ -183,30 +251,25 @@ export default function WalletModal({
             onClick={onClose}
           />
 
-          {/* Modal */}
+          {/* Modal - Apple-inspired minimal */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ type: 'spring', duration: 0.3 }}
-            className={`fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto bg-[#1a1a1a] rounded-2xl border ${themeConfig.border} overflow-hidden z-50 max-h-[85vh] flex flex-col`}
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ duration: 0.2, ease: [0.4, 0.0, 0.2, 1] }}
+            className={`fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto bg-black rounded-2xl border ${themeConfig.border} overflow-hidden z-50 max-h-[85vh] flex flex-col`}
           >
-            {/* Header */}
-            <div className={`flex items-center justify-between p-4 border-b ${themeConfig.border}`}>
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${themeConfig.gradient} flex items-center justify-center`}>
-                  <Wallet className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-white">Connect Wallet</h2>
-                  <p className="text-xs text-white/50">{themeConfig.subtitle}</p>
-                </div>
+            {/* Header - Minimal */}
+            <div className={`flex items-center justify-between px-6 py-4 border-b ${themeConfig.border}`}>
+              <div>
+                <h2 className="text-[22px] font-semibold text-white tracking-tight leading-none">Connect Wallet</h2>
+                <p className="text-[13px] text-white/50 mt-0.5">{themeConfig.subtitle}</p>
               </div>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                className="p-2 hover:bg-white/5 rounded-full transition-colors"
               >
-                <X className="w-5 h-5 text-white/60" />
+                <X className="w-5 h-5 text-white/50" />
               </button>
             </div>
 
@@ -268,7 +331,7 @@ export default function WalletModal({
                     </button>
                     <button
                       onClick={onClose}
-                      className={`flex-1 py-3 bg-gradient-to-r ${themeConfig.gradient} text-white font-medium rounded-xl hover:opacity-90 transition-opacity`}
+                      className="flex-1 py-3 bg-white/10 text-white font-medium rounded-xl hover:bg-white/20 transition-colors active:scale-98 border border-white/10 hover:border-white/20"
                     >
                       Continue
                     </button>
@@ -328,7 +391,7 @@ export default function WalletModal({
                             <button
                               key={`mobile-${walletAdapter.adapter.name}`}
                               onClick={() => handleMobileWalletOpen(walletAdapter.adapter.name)}
-                              className={`w-full flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r ${themeConfig.gradient} ${themeConfig.gradientHover} transition-all`}
+                              className="w-full flex items-center gap-3 p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-all border border-white/6 hover:border-white/12"
                             >
                               {walletAdapter.adapter.icon ? (
                                 <img
@@ -337,15 +400,15 @@ export default function WalletModal({
                                   className="w-10 h-10 rounded-lg"
                                 />
                               ) : (
-                                <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-xl">
+                                <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-xl">
                                   {info.icon}
                                 </div>
                               )}
                               <div className="flex-1 text-left">
-                                <p className="text-sm font-medium text-white">Open {info.name}</p>
-                                <p className="text-xs text-white/70">Continue in app</p>
+                                <p className="text-[15px] font-medium text-white">{info.name}</p>
+                                <p className="text-[13px] text-white/50">Continue in app</p>
                               </div>
-                              <ExternalLink className="w-5 h-5 text-white/70" />
+                              <ChevronRight className="w-5 h-5 text-white/30" />
                             </button>
                           );
                         })}
@@ -373,10 +436,10 @@ export default function WalletModal({
                               key={walletAdapter.adapter.name}
                               onClick={() => handleWalletSelect(walletAdapter.adapter.name)}
                               disabled={isConnecting}
-                              className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                              className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-all ${
                                 isSelected
-                                  ? `${themeConfig.bgAccent} ${themeConfig.borderAccent}`
-                                  : `bg-white/5 border-transparent hover:bg-white/10 hover:border-white/20`
+                                  ? 'bg-white/10 border-white/12'
+                                  : 'bg-white/5 border-white/6 hover:bg-white/10 hover:border-white/12'
                               } ${isConnecting && !isSelected ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                               {walletAdapter.adapter.icon ? (
@@ -391,11 +454,11 @@ export default function WalletModal({
                                 </div>
                               )}
                               <div className="flex-1 text-left">
-                                <p className="text-sm font-medium text-white">{info.name}</p>
-                                <p className="text-xs text-white/50">{info.description}</p>
+                                <p className="text-[15px] font-medium text-white">{info.name}</p>
+                                <p className="text-[13px] text-white/50">{info.description}</p>
                               </div>
                               {isSelected && isConnecting ? (
-                                <Loader2 className={`w-5 h-5 ${themeConfig.loaderColor} animate-spin`} />
+                                <Loader2 className="w-5 h-5 text-white animate-spin" />
                               ) : (
                                 <ChevronRight className="w-5 h-5 text-white/30" />
                               )}

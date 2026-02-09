@@ -1,6 +1,7 @@
 import { query, queryOne } from '../index';
 import { User, UserBankAccount } from '../../types/database';
 import crypto from 'crypto';
+import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
 
 // Simple password hashing (in production, use bcrypt)
 function hashPassword(password: string): string {
@@ -64,10 +65,12 @@ export async function createUser(
 ): Promise<Omit<User, 'password_hash'>> {
   // Password is optional for wallet-based authentication
   const passwordHash = data.password ? hashPassword(data.password) : null;
+  // In mock mode, auto-fund new accounts with initial USDT balance
+  const initialBalance = MOCK_MODE ? MOCK_INITIAL_BALANCE : 0;
   const result = await queryOne<User>(
     `
-    INSERT INTO users (username, password_hash, wallet_address, name)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO users (username, password_hash, wallet_address, name, balance)
+    VALUES ($1, $2, $3, $4, $5)
     RETURNING *
     `,
     [
@@ -75,6 +78,7 @@ export async function createUser(
       passwordHash,
       data.wallet_address ?? null,
       data.name ?? null,
+      initialBalance,
     ]
   );
 
