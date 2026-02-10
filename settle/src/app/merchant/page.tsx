@@ -3450,7 +3450,7 @@ export default function MerchantDashboard() {
                                     <ExternalLink className="w-3.5 h-3.5 text-white" />
                                   </a>
                                 )}
-                                {order.status === 'pending' && (
+                                {order.status === 'pending' && !order.isMyOrder && (
                                   <motion.button
                                     whileTap={{ scale: 0.92 }}
                                     onClick={(e) => { e.stopPropagation(); acceptOrder(order); }}
@@ -4987,17 +4987,19 @@ export default function MerchantDashboard() {
 
                       {/* Action Row */}
                       <div className="flex items-center gap-2 mt-2.5 pl-11">
-                        <motion.button
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => acceptOrder(order)}
-                          className="flex-1 h-9 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-lg text-xs font-medium text-white flex items-center justify-center gap-1.5 transition-colors"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          Go
-                        </motion.button>
+                        {!order.isMyOrder && (
+                          <motion.button
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => acceptOrder(order)}
+                            className="flex-1 h-9 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-lg text-xs font-medium text-white flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            Go
+                          </motion.button>
+                        )}
                         <button
                           onClick={() => { handleOpenChat(order.user, order.emoji, order.id); setMobileView('chat'); }}
-                          className="h-9 w-9 border border-white/10 hover:border-white/20 rounded-lg flex items-center justify-center transition-colors"
+                          className={`h-9 w-9 border border-white/10 hover:border-white/20 rounded-lg flex items-center justify-center transition-colors ${order.isMyOrder ? 'flex-1' : ''}`}
                         >
                           <MessageCircle className="w-4 h-4 text-gray-400" />
                         </button>
@@ -7309,7 +7311,7 @@ export default function MerchantDashboard() {
               <div className="space-y-2">
                 {/* For escrowed sell orders not yet approved - show Go button */}
                 {/* DB status 'escrowed' means user locked escrow but merchant hasn't clicked Go yet */}
-                {selectedOrderPopup.dbOrder?.status === 'escrowed' && selectedOrderPopup.orderType === 'sell' && (
+                {selectedOrderPopup.dbOrder?.status === 'escrowed' && selectedOrderPopup.orderType === 'sell' && !selectedOrderPopup.isMyOrder && (
                   <motion.button
                     whileTap={{ scale: 0.98 }}
                     onClick={async () => {
@@ -7325,7 +7327,7 @@ export default function MerchantDashboard() {
                 )}
 
                 {/* For pending orders without escrow (regular flow) */}
-                {selectedOrderPopup.status === 'pending' && !selectedOrderPopup.escrowTxHash && (
+                {selectedOrderPopup.status === 'pending' && !selectedOrderPopup.escrowTxHash && !selectedOrderPopup.isMyOrder && (
                   <motion.button
                     whileTap={{ scale: 0.98 }}
                     onClick={() => {

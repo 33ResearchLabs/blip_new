@@ -197,14 +197,17 @@ export async function getAllPendingOrdersForMerchant(
   status?: OrderStatus[]
 ): Promise<OrderWithRelations[]> {
   // is_my_order logic:
-  // - For pending/escrowed orders: ALWAYS false (no one has accepted yet, all can see in New Orders)
+  // - For pending/escrowed orders: true if I created it (buyer_merchant_id OR escrow_creator_wallet matches my wallet)
   // - For accepted+ orders: true if I'm the merchant who accepted OR I'm the buyer_merchant (M2M)
-  // This ensures user sell orders with escrow show in "New Orders" for ALL merchants
+  // This ensures merchant-initiated sell orders with escrow show in "Ongoing" for the creator
   let sql = `
     SELECT o.*,
            CASE
-             -- Pending/escrowed orders: NEVER "my order" - available for any merchant to accept
-             WHEN o.status IN ('pending', 'escrowed') THEN false
+             -- Pending/escrowed orders: Check if I created this order
+             WHEN o.status IN ('pending', 'escrowed') THEN (
+               o.buyer_merchant_id = $1 OR
+               (o.escrow_creator_wallet IS NOT NULL AND o.escrow_creator_wallet = current_m.wallet_address)
+             )
              -- After acceptance: it's my order if I'm assigned merchant OR buyer_merchant (M2M)
              ELSE ((o.merchant_id = $1 AND o.accepted_at IS NOT NULL) OR o.buyer_merchant_id = $1)
            END as is_my_order,
@@ -260,6 +263,7 @@ export async function getAllPendingOrdersForMerchant(
     JOIN merchants m ON o.merchant_id = m.id
     JOIN merchant_offers mo ON o.offer_id = mo.id
     LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
+    LEFT JOIN merchants current_m ON current_m.id = $1
     WHERE (
         -- PENDING or ESCROWED orders: ALL merchants can see (New Orders - broadcast model)
         -- Exclude expired/cancelled from broadcast pool
