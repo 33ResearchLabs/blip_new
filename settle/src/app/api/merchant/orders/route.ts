@@ -3,6 +3,7 @@ import { getMerchantOrders, createOrder, getOrderWithRelations, getAllPendingOrd
 import { getMerchantOffers, getOfferWithMerchant } from '@/lib/db/repositories/merchants';
 import { createUser } from '@/lib/db/repositories/users';
 import { query } from '@/lib/db';
+import { MOCK_MODE } from '@/lib/config/mockMode';
 import { OrderStatus, OfferType, PaymentMethod } from '@/lib/types/database';
 import {
   merchantOrdersQuerySchema,
@@ -258,7 +259,7 @@ export async function POST(request: NextRequest) {
     });
 
     // In mock mode: if escrow already locked, deduct balance from merchant
-    if (escrow_tx_hash && process.env.MOCK_MODE === 'true') {
+    if (escrow_tx_hash && MOCK_MODE) {
       const amount = crypto_amount;
       const merchantIdToDeduct = merchant_id; // The merchant who created the order and locked escrow
       try {
@@ -358,8 +359,14 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    logger.api.error('POST', '/api/merchant/orders', error as Error);
-    console.error('[API] Error creating merchant order:', error);
-    return errorResponse('Internal server error');
+    const err = error as Error;
+    logger.api.error('POST', '/api/merchant/orders', err);
+    console.error('[API] Error creating merchant order:', {
+      name: err.name,
+      message: err.message,
+      stack: err.stack?.split('\n').slice(0, 5).join('\n'),
+    });
+    // Return specific error to help debug
+    return errorResponse(`${err.name}: ${err.message}`);
   }
 }
