@@ -158,6 +158,8 @@ interface DbOrder {
   unread_count?: number;
   has_manual_message?: boolean;
   message_count?: number;
+  last_human_message?: string;
+  last_human_message_sender?: string;
 }
 
 // UI Order type
@@ -198,6 +200,8 @@ interface Order {
   // Message tracking
   unreadCount?: number;
   hasMessages?: boolean;
+  lastHumanMessage?: string;
+  lastHumanMessageSender?: string;
 }
 
 // Leaderboard data
@@ -376,6 +380,8 @@ const mapDbOrderToUI = (dbOrder: DbOrder): Order => {
     // Message tracking
     unreadCount: dbOrder.unread_count || 0,
     hasMessages: (dbOrder.message_count || 0) > 0 || dbOrder.has_manual_message || false,
+    lastHumanMessage: dbOrder.last_human_message,
+    lastHumanMessageSender: dbOrder.last_human_message_sender,
   };
 };
 
@@ -1751,7 +1757,8 @@ export default function MerchantDashboard() {
     }
 
     // Only require recipient if we can't escrow to treasury
-    if (!recipientWallet && !canEscrowToTreasury) {
+    // In mock mode, skip recipient wallet check entirely (DB-backed coins, no on-chain escrow)
+    if (!recipientWallet && !canEscrowToTreasury && !isMockMode) {
       setEscrowError(isMerchantTrade
         ? 'The other merchant has not connected their Solana wallet yet.'
         : 'User has not connected their Solana wallet yet. Ask them to connect their wallet in the app first.');
@@ -3634,6 +3641,21 @@ export default function MerchantDashboard() {
                                     </span>
                                   </div>
 
+                                  {/* Last human message preview */}
+                                  {order.lastHumanMessage && (
+                                    <div className="flex items-center gap-1.5 pl-9 mb-1.5 cursor-pointer" onClick={() => handleOpenChat(order.user, order.emoji, order.id)}>
+                                      <MessageCircle className="w-3 h-3 text-gray-500 shrink-0" />
+                                      <span className="text-[10px] text-gray-400 truncate">
+                                        {order.lastHumanMessageSender === 'merchant' ? 'You: ' : ''}{order.lastHumanMessage.length > 50 ? order.lastHumanMessage.slice(0, 50) + '...' : order.lastHumanMessage}
+                                      </span>
+                                      {(order.unreadCount || 0) > 0 && (
+                                        <span className="w-4 h-4 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black shrink-0">
+                                          {order.unreadCount! > 9 ? '9+' : order.unreadCount}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+
                                   <div className="flex items-center gap-2 pl-9">
                                     <div className="flex-1 flex items-center gap-2">
                                       <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
@@ -3643,10 +3665,15 @@ export default function MerchantDashboard() {
                                     </div>
                                     <button
                                       onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
-                                      className="p-1.5 hover:bg-white/[0.04] rounded transition-colors"
+                                      className="relative p-1.5 hover:bg-white/[0.04] rounded transition-colors"
                                       title="Chat"
                                     >
                                       <MessageCircle className="w-3.5 h-3.5 text-gray-500 hover:text-white/70" />
+                                      {(order.unreadCount || 0) > 0 && !order.lastHumanMessage && (
+                                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black">
+                                          {order.unreadCount! > 9 ? '9+' : order.unreadCount}
+                                        </span>
+                                      )}
                                     </button>
                                     {isM2MSellNeedingEscrow ? (
                                       <motion.button
@@ -3780,6 +3807,21 @@ export default function MerchantDashboard() {
                                 )}
                               </div>
 
+                              {/* Last human message preview */}
+                              {order.lastHumanMessage && (
+                                <div className="flex items-center gap-1.5 pl-9 mb-1 cursor-pointer" onClick={() => handleOpenChat(order.user, order.emoji, order.id)}>
+                                  <MessageCircle className="w-3 h-3 text-gray-500 shrink-0" />
+                                  <span className="text-[10px] text-gray-400 truncate">
+                                    {order.lastHumanMessageSender === 'merchant' ? 'You: ' : ''}{order.lastHumanMessage.length > 50 ? order.lastHumanMessage.slice(0, 50) + '...' : order.lastHumanMessage}
+                                  </span>
+                                  {(order.unreadCount || 0) > 0 && (
+                                    <span className="w-4 h-4 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black shrink-0">
+                                      {order.unreadCount! > 9 ? '9+' : order.unreadCount}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
                               {/* Row 2: Amount + Actions */}
                               <div className="flex items-center gap-2 pl-9">
                                 <div className="flex-1 min-w-0">
@@ -3828,10 +3870,15 @@ export default function MerchantDashboard() {
                                   ) : null}
                                   <button
                                     onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
-                                    className="p-1.5 hover:bg-white/[0.04] rounded transition-colors"
+                                    className="relative p-1.5 hover:bg-white/[0.04] rounded transition-colors"
                                     title="Chat"
                                   >
                                     <MessageCircle className="w-3.5 h-3.5 text-gray-500 hover:text-white/70" />
+                                    {(order.unreadCount || 0) > 0 && !order.lastHumanMessage && (
+                                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black">
+                                        {order.unreadCount! > 9 ? '9+' : order.unreadCount}
+                                      </span>
+                                    )}
                                   </button>
                                   <button
                                     onClick={() => openDisputeModal(order.id)}
@@ -5175,6 +5222,21 @@ export default function MerchantDashboard() {
                         </div>
                       </div>
 
+                      {/* Last human message preview */}
+                      {order.lastHumanMessage && (
+                        <div className="flex items-center gap-1.5 mt-1.5 pl-11 cursor-pointer" onClick={() => { handleOpenChat(order.user, order.emoji, order.id); setMobileView('chat'); }}>
+                          <MessageCircle className="w-3 h-3 text-gray-500 shrink-0" />
+                          <span className="text-[10px] text-gray-400 truncate flex-1">
+                            {order.lastHumanMessageSender === 'merchant' ? 'You: ' : ''}{order.lastHumanMessage.length > 40 ? order.lastHumanMessage.slice(0, 40) + '...' : order.lastHumanMessage}
+                          </span>
+                          {(order.unreadCount || 0) > 0 && (
+                            <span className="w-4 h-4 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black shrink-0">
+                              {order.unreadCount! > 9 ? '9+' : order.unreadCount}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {/* Action Row */}
                       <div className="flex items-center gap-2 mt-2.5 pl-11">
                         {mobileCanMarkPaid ? (
@@ -5220,9 +5282,14 @@ export default function MerchantDashboard() {
                         )}
                         <button
                           onClick={() => { handleOpenChat(order.user, order.emoji, order.id); setMobileView('chat'); }}
-                          className="h-9 w-9 border border-white/10 hover:border-white/20 rounded-lg flex items-center justify-center transition-colors"
+                          className="relative h-9 w-9 border border-white/10 hover:border-white/20 rounded-lg flex items-center justify-center transition-colors"
                         >
                           <MessageCircle className="w-4 h-4 text-gray-400" />
+                          {(order.unreadCount || 0) > 0 && (
+                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black">
+                              {order.unreadCount! > 9 ? '9+' : order.unreadCount}
+                            </span>
+                          )}
                         </button>
                         <button
                           onClick={() => {

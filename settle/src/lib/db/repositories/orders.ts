@@ -101,6 +101,7 @@ export async function getUserOrders(
              SELECT COUNT(*)::int FROM chat_messages cm
              WHERE cm.order_id = o.id
                AND cm.sender_type = 'merchant'
+               AND cm.message_type != 'system'
                AND cm.is_read = false
            ), 0) as unread_count,
            (
@@ -111,6 +112,8 @@ export async function getUserOrders(
              )
              FROM chat_messages cm
              WHERE cm.order_id = o.id
+               AND cm.message_type != 'system'
+               AND cm.sender_type != 'system'
              ORDER BY cm.created_at DESC
              LIMIT 1
            ) as last_message
@@ -234,9 +237,23 @@ export async function getAllPendingOrdersForMerchant(
              SELECT COUNT(*)::int FROM chat_messages cm
              WHERE cm.order_id = o.id
                AND cm.sender_type != 'merchant'
+               AND cm.sender_type != 'system'
+               AND cm.message_type != 'system'
                AND cm.is_read = false
            ), 0) as unread_count,
-           (SELECT COUNT(*)::int FROM chat_messages cm WHERE cm.order_id = o.id) as message_count
+           (SELECT COUNT(*)::int FROM chat_messages cm WHERE cm.order_id = o.id AND cm.message_type != 'system') as message_count,
+           (SELECT cm.content FROM chat_messages cm
+             WHERE cm.order_id = o.id
+               AND cm.message_type != 'system'
+               AND cm.sender_type != 'system'
+             ORDER BY cm.created_at DESC LIMIT 1
+           ) as last_human_message,
+           (SELECT cm.sender_type FROM chat_messages cm
+             WHERE cm.order_id = o.id
+               AND cm.message_type != 'system'
+               AND cm.sender_type != 'system'
+             ORDER BY cm.created_at DESC LIMIT 1
+           ) as last_human_message_sender
     FROM orders o
     JOIN users u ON o.user_id = u.id
     JOIN merchants m ON o.merchant_id = m.id
