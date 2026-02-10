@@ -131,21 +131,49 @@ export async function POST(request: NextRequest) {
     // Create a placeholder user for merchant-initiated orders
     // This allows merchants to create orders that any customer can accept later
     let user;
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
     const placeholderUsername = isM2MTrade
-      ? `m2m_${merchant_id.slice(0, 8)}_${Date.now()}`
-      : `open_order_${Date.now()}`;
-    try {
-      user = await createUser({
-        username: placeholderUsername,
-        name: isM2MTrade ? 'M2M Trade' : 'Open Order',
-      });
-      logger.info('Created placeholder user for merchant order', {
-        userId: user.id,
-        isM2MTrade,
-      });
-    } catch (createError) {
-      logger.error('Failed to create placeholder user', { error: createError });
-      return errorResponse('Failed to create order');
+      ? `m2m_${merchant_id.slice(0, 8)}_${Date.now()}_${randomSuffix}`
+      : `open_order_${Date.now()}_${randomSuffix}`;
+    // Retry up to 3 times if username conflicts occur
+    let createAttempts = 0;
+    const maxAttempts = 3;
+    while (createAttempts < maxAttempts) {
+      try {
+        const attemptSuffix = createAttempts > 0 ? `_r${createAttempts}` : '';
+        user = await createUser({
+          username: placeholderUsername + attemptSuffix,
+          name: isM2MTrade ? 'M2M Trade' : 'Open Order',
+        });
+        logger.info('Created placeholder user for merchant order', {
+          userId: user.id,
+          isM2MTrade,
+          attempts: createAttempts + 1,
+        });
+        break;
+      } catch (createError: any) {
+        createAttempts++;
+        const isUniqueViolation = createError?.message?.includes('duplicate') ||
+                                 createError?.message?.includes('unique') ||
+                                 createError?.code === '23505';
+
+        if (isUniqueViolation && createAttempts < maxAttempts) {
+          logger.warn('Username conflict, retrying...', { attempt: createAttempts });
+          continue;
+        }
+
+        logger.error('Failed to create placeholder user', {
+          error: createError,
+          message: createError?.message,
+          code: createError?.code,
+          attempts: createAttempts,
+        });
+        return errorResponse(`Failed to create order: ${createError?.message || 'Unknown error'}`);
+      }
+    }
+
+    if (!user) {
+      return errorResponse('Failed to create order after multiple attempts');
     }
 
     // Determine which merchant's offer to use
