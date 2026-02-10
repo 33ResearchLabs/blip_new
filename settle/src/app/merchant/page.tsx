@@ -1617,15 +1617,23 @@ export default function MerchantDashboard() {
       return;
     }
 
+    // In mock mode, skip on-chain wallet validation (wallets are DB-backed, not Solana addresses)
+    const isLockMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+
     // Determine recipient wallet for escrow
     // The recipient is the OTHER party (not the one locking escrow)
     // For SELL orders before anyone accepts: no recipient yet, escrow goes to treasury placeholder
     const validWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+    // In mock mode, accept any non-empty string as a valid wallet
+    const isValidWallet = (addr: string | undefined | null): boolean => {
+      if (!addr) return false;
+      return isLockMockMode ? addr.length > 0 : validWalletRegex.test(addr);
+    };
     const myWallet = solanaWallet.walletAddress;
 
     // Check wallet validity
-    const hasAcceptorWallet = escrowOrder.acceptorWallet && validWalletRegex.test(escrowOrder.acceptorWallet);
-    const hasUserWallet = escrowOrder.userWallet && validWalletRegex.test(escrowOrder.userWallet);
+    const hasAcceptorWallet = isValidWallet(escrowOrder.acceptorWallet);
+    const hasUserWallet = isValidWallet(escrowOrder.userWallet);
 
     // For pending orders, isMyOrder is always false (so all merchants see new orders)
     // Check if I'm the actual creator by comparing merchant IDs
@@ -1659,19 +1667,19 @@ export default function MerchantDashboard() {
     } else if (isMerchantTrade) {
       if (iAmCreator) {
         // I created the order, I'm locking, recipient is the acceptor
-        recipientWallet = escrowOrder.acceptorWallet && validWalletRegex.test(escrowOrder.acceptorWallet)
-          ? escrowOrder.acceptorWallet
+        recipientWallet = isValidWallet(escrowOrder.acceptorWallet)
+          ? escrowOrder.acceptorWallet!
           : undefined;
       } else {
         // I accepted the order, I'm locking, recipient is the creator
-        recipientWallet = escrowOrder.buyerMerchantWallet && validWalletRegex.test(escrowOrder.buyerMerchantWallet)
-          ? escrowOrder.buyerMerchantWallet
+        recipientWallet = isValidWallet(escrowOrder.buyerMerchantWallet)
+          ? escrowOrder.buyerMerchantWallet!
           : undefined;
       }
     } else {
       // Regular trade - recipient is the user
-      recipientWallet = escrowOrder.userWallet && validWalletRegex.test(escrowOrder.userWallet)
-        ? escrowOrder.userWallet
+      recipientWallet = isValidWallet(escrowOrder.userWallet)
+        ? escrowOrder.userWallet!
         : undefined;
     }
 
@@ -2725,13 +2733,12 @@ export default function MerchantDashboard() {
     <div className="h-screen bg-[#0a0a0a] text-white flex flex-col overflow-hidden">
       {/* Ambient */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-0 right-1/3 w-[600px] h-[400px] bg-white/[0.04] rounded-full blur-[150px]" />
-        <div className="absolute bottom-0 left-1/4 w-[500px] h-[300px] bg-white/[0.01] rounded-full blur-[150px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-white/[0.015] rounded-full blur-[200px]" />
+        <div className="absolute top-0 right-1/3 w-[600px] h-[400px] bg-white/[0.02] rounded-full blur-[150px]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-white/[0.01] rounded-full blur-[200px]" />
       </div>
 
-      {/* Top Navbar - Apple-inspired */}
-      <header className="sticky top-0 z-50 bg-black border-b border-white/[0.06]">
+      {/* Top Navbar */}
+      <header className="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/[0.08]">
         <div className="px-4 h-[52px] flex items-center">
           {/* Left: Logo + Action Buttons */}
           <div className="flex items-center gap-3 shrink-0">
@@ -2921,7 +2928,7 @@ export default function MerchantDashboard() {
       {/* Main Layout: Content + Sidebar */}
       <div className="flex-1 flex overflow-hidden w-full pb-16 md:pb-0">
         {/* Main Content */}
-        <main className="flex-1 p-3 md:p-4 overflow-auto relative z-10">
+        <main className="flex-1 p-3 md:p-5 overflow-auto relative z-10">
           {/* No Active Offers Warning */}
           {activeOffers.length === 0 && (
             <motion.div
@@ -2948,7 +2955,7 @@ export default function MerchantDashboard() {
           )}
 
           {/* Desktop: Grid layout, Mobile: Single view based on mobileView state */}
-          <div className="hidden md:grid md:grid-cols-3 gap-3">
+          <div className="hidden md:grid gap-4" style={{ gridTemplateColumns: 'minmax(220px, 1fr) 2.2fr 1.8fr' }}>
             {/* Column 1: Balance (top) + Leaderboard (bottom) */}
             <div className="flex flex-col h-[calc(100vh-80px)] gap-3">
               {/* Balance & Transaction History */}
@@ -6532,9 +6539,14 @@ export default function MerchantDashboard() {
                   {!escrowTxHash && !isLockingEscrow && (() => {
                     // Determine recipient wallet - check all possible sources
                     const validWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-                    const hasBuyerMerchantWallet = escrowOrder.buyerMerchantWallet && validWalletRegex.test(escrowOrder.buyerMerchantWallet);
-                    const hasAcceptorWallet = escrowOrder.acceptorWallet && validWalletRegex.test(escrowOrder.acceptorWallet);
-                    const hasUserWallet = escrowOrder.userWallet && validWalletRegex.test(escrowOrder.userWallet);
+                    const isMockModeUI = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+                    const isValidWalletUI = (addr: string | undefined | null): boolean => {
+                      if (!addr) return false;
+                      return isMockModeUI ? addr.length > 0 : validWalletRegex.test(addr);
+                    };
+                    const hasBuyerMerchantWallet = isValidWalletUI(escrowOrder.buyerMerchantWallet);
+                    const hasAcceptorWallet = isValidWalletUI(escrowOrder.acceptorWallet);
+                    const hasUserWallet = isValidWalletUI(escrowOrder.userWallet);
                     const hasValidRecipient = hasBuyerMerchantWallet || hasAcceptorWallet || hasUserWallet;
                     // M2M trade: isM2M flag, buyerMerchantWallet, OR acceptorWallet (merchant accepted open order)
                     const isMerchantTrade = escrowOrder.isM2M || !!hasBuyerMerchantWallet || hasAcceptorWallet;
