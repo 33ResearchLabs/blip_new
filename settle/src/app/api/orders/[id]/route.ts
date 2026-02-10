@@ -7,6 +7,8 @@ import {
   cancelOrder,
   sendMessage,
 } from '@/lib/db/repositories/orders';
+import { query } from '@/lib/db';
+import { MOCK_MODE } from '@/lib/config/mockMode';
 import { OrderStatus, ActorType } from '@/lib/types/database';
 import {
   updateOrderStatusSchema,
@@ -157,6 +159,57 @@ export async function PATCH(
       );
     }
 
+    // Mock mode balance handling for status transitions
+    if (MOCK_MODE) {
+      const amount = parseFloat(String(order.crypto_amount));
+      const hadEscrow = !!order.escrow_tx_hash;
+
+      if (status === 'completed' && hadEscrow && !order.release_tx_hash) {
+        // Order completed (not via escrow release endpoint) - credit the buyer
+        // For BUY orders: user buys USDC → credit user (or buyer_merchant for M2M)
+        // For SELL orders: merchant buys USDC → credit merchant
+        const isBuyOrder = order.type === 'buy';
+        const recipientId = isBuyOrder
+          ? (order.buyer_merchant_id || order.user_id)
+          : order.merchant_id;
+        const recipientTable = isBuyOrder
+          ? (order.buyer_merchant_id ? 'merchants' : 'users')
+          : 'merchants';
+
+        try {
+          await query(
+            `UPDATE ${recipientTable} SET balance = balance + $1 WHERE id = $2`,
+            [amount, recipientId]
+          );
+          logger.info('[Mock] Credited buyer on completion', { recipientId, amount, table: recipientTable });
+        } catch (creditErr) {
+          logger.api.error('PATCH', `/api/orders/${id}/mock-credit`, creditErr as Error);
+        }
+      }
+
+      if (status === 'cancelled' && hadEscrow) {
+        // Order cancelled after escrow was locked - refund the seller
+        // The escrow creator (seller) gets their funds back
+        // For BUY orders: merchant locked escrow → refund merchant
+        // For SELL orders: user locked escrow → refund user
+        const isBuyOrder = order.type === 'buy';
+        const refundId = isBuyOrder ? order.merchant_id : order.user_id;
+        const refundTable = isBuyOrder ? 'merchants' : 'users';
+
+        // If escrow_creator_wallet hints at a merchant, use that
+        // But for M2M, the seller is always the order's merchant
+        try {
+          await query(
+            `UPDATE ${refundTable} SET balance = balance + $1 WHERE id = $2`,
+            [amount, refundId]
+          );
+          logger.info('[Mock] Refunded seller on cancellation', { refundId, amount, table: refundTable });
+        } catch (refundErr) {
+          logger.api.error('PATCH', `/api/orders/${id}/mock-refund`, refundErr as Error);
+        }
+      }
+    }
+
     // Fetch full order with relations for notification (includes merchant info for popup)
     const fullOrder = await getOrderWithRelations(id);
 
@@ -288,6 +341,25 @@ export async function DELETE(
         { success: false, error: result.error },
         { status: 400 }
       );
+    }
+
+    // Mock mode: refund seller if escrow was locked
+    if (MOCK_MODE && order.escrow_tx_hash) {
+      const amount = parseFloat(String(order.crypto_amount));
+      // Refund the escrow creator (seller)
+      const isBuyOrder = order.type === 'buy';
+      const refundId = isBuyOrder ? order.merchant_id : order.user_id;
+      const refundTable = isBuyOrder ? 'merchants' : 'users';
+
+      try {
+        await query(
+          `UPDATE ${refundTable} SET balance = balance + $1 WHERE id = $2`,
+          [amount, refundId]
+        );
+        logger.info('[Mock] Refunded seller on DELETE cancellation', { refundId, amount, table: refundTable });
+      } catch (refundErr) {
+        logger.api.error('DELETE', `/api/orders/${id}/mock-refund`, refundErr as Error);
+      }
     }
 
     // Send system message for cancellation

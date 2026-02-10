@@ -9,6 +9,7 @@ import {
   OfferType,
   PaymentMethod,
 } from '../../types/database';
+import { MOCK_MODE } from '../../config/mockMode';
 import { updateOfferAvailability, restoreOfferAvailability } from './merchants';
 import { incrementUserStats } from './users';
 import {
@@ -465,11 +466,12 @@ export async function updateOrderStatus(
         newStatus === 'accepted' &&
         currentOrder.merchant_id !== actorId;
 
-      // Check if this is M2M acceptance (merchant accepting another merchant's escrowed order)
-      // In M2M: seller stays as merchant_id, buyer becomes buyer_merchant_id
+      // Check if this is M2M acceptance (merchant accepting another merchant's order)
+      // In M2M: original merchant stays as merchant_id, acceptor becomes buyer_merchant_id
+      // This covers: escrowed orders AND pending orders created by a merchant (not a user)
       const isM2MAcceptance =
         actorType === 'merchant' &&
-        oldStatus === 'escrowed' &&
+        (oldStatus === 'escrowed' || oldStatus === 'pending') &&
         (newStatus === 'accepted' || newStatus === 'payment_pending') &&
         currentOrder.merchant_id !== actorId;
 
@@ -480,8 +482,8 @@ export async function updateOrderStatus(
       let buyerMerchantUpdate = '';
       switch (newStatus) {
         case 'accepted':
-          // Note: expires_at stays at original 15 mins from creation (global timeout)
-          timestampField = ", accepted_at = NOW()";
+          // Extend timer to 120 minutes from acceptance
+          timestampField = ", accepted_at = NOW(), expires_at = NOW() + INTERVAL '120 minutes'";
           // If a different merchant is claiming, reassign the order to them
           // Note: We do NOT set buyer_merchant_id here - that field is ONLY for M2M trades
           // where a merchant is the buyer (set at order creation time)
@@ -505,9 +507,9 @@ export async function updateOrderStatus(
           }
           // Store acceptor's wallet address when accepting (for sell orders with escrow)
           if (metadata?.acceptor_wallet_address) {
-            // Sanitize: only allow valid Solana addresses
             const wallet = String(metadata.acceptor_wallet_address);
-            if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
+            // Allow valid Solana addresses and mock wallet addresses
+            if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet) || (MOCK_MODE && wallet.length > 0)) {
               acceptorWalletUpdate = `, acceptor_wallet_address = '${wallet}'`;
               logger.info('Storing acceptor wallet address', {
                 orderId,
@@ -517,14 +519,14 @@ export async function updateOrderStatus(
           }
           break;
         case 'escrowed':
-          // Note: expires_at stays at original 15 mins from creation (global timeout)
-          timestampField = ", escrowed_at = NOW()";
+          // Extend timer on escrow lock
+          timestampField = ", escrowed_at = NOW(), expires_at = NOW() + INTERVAL '120 minutes'";
           break;
         case 'payment_pending':
           // M2M flow: when merchant accepts escrowed order and goes directly to payment_pending
           // This skips 'accepted' state, so we need to set accepted_at here too
           if (isM2MAcceptance) {
-            timestampField = ", accepted_at = NOW()";
+            timestampField = ", accepted_at = NOW(), expires_at = NOW() + INTERVAL '120 minutes'";
             buyerMerchantUpdate = `, buyer_merchant_id = '${actorId}'`;
             logger.info('M2M direct acceptance to payment_pending', {
               orderId,
@@ -887,53 +889,120 @@ export async function markOrderHasManualMessage(orderId: string): Promise<void> 
 // Expired orders cleanup - Global 15-minute timeout from creation
 export async function expireOldOrders(): Promise<number> {
   // First, get the orders that will be expired (we need user_id and merchant_id for reputation)
+  // Two timeout tiers:
+  // 1. Pending orders (no one accepted): 15 minutes from creation
+  // 2. Accepted/in-progress orders: 120 minutes from acceptance to complete
   const ordersToExpire = await query<{
     id: string;
     user_id: string;
     merchant_id: string;
+    buyer_merchant_id: string | null;
     status: string;
+    type: string;
+    crypto_amount: number;
     fiat_amount: number;
     fiat_currency: string;
+    escrow_tx_hash: string | null;
+    accepted_at: string | null;
   }>(
-    `SELECT id, user_id, merchant_id, status, fiat_amount, fiat_currency
+    `SELECT id, user_id, merchant_id, buyer_merchant_id, status, type, crypto_amount, fiat_amount, fiat_currency, escrow_tx_hash, accepted_at
      FROM orders
      WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed')
-       AND created_at < NOW() - INTERVAL '15 minutes'`
+       AND (
+         -- Pending orders: 15 min from creation
+         (status = 'pending' AND created_at < NOW() - INTERVAL '15 minutes')
+         -- Accepted/in-progress orders: 120 min from acceptance (or creation if accepted_at is null)
+         OR (status NOT IN ('pending') AND COALESCE(accepted_at, created_at) < NOW() - INTERVAL '120 minutes')
+       )`
   );
 
   if (ordersToExpire.length === 0) {
     return 0;
   }
 
-  // Update the orders to cancelled/disputed
-  const result = await query(
-    `UPDATE orders
-     SET
-       status = CASE
-         -- If escrow is locked, go to disputed for manual resolution
-         WHEN status IN ('escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'releasing') THEN 'disputed'::order_status
-         -- Otherwise just cancel
-         ELSE 'cancelled'::order_status
-       END,
-       cancelled_at = NOW(),
-       cancelled_by = 'system',
-       cancellation_reason = 'Order timeout - not completed within 15 minutes'
-     WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed')
-       AND created_at < NOW() - INTERVAL '15 minutes'
-     RETURNING id`
-  );
+  // Separate into pending (cancel) vs accepted (return to pool or dispute)
+  const pendingExpired = ordersToExpire.filter(o => o.status === 'pending');
+  const acceptedExpired = ordersToExpire.filter(o => o.status !== 'pending');
+
+  let totalExpired = 0;
+
+  // Cancel pending orders (no one accepted them)
+  if (pendingExpired.length > 0) {
+    const pendingIds = pendingExpired.map(o => o.id);
+    const cancelResult = await query(
+      `UPDATE orders
+       SET status = 'cancelled'::order_status,
+           cancelled_at = NOW(),
+           cancelled_by = 'system',
+           cancellation_reason = 'Order timeout - no one accepted within 15 minutes'
+       WHERE id = ANY($1)
+       RETURNING id`,
+      [pendingIds]
+    );
+    totalExpired += cancelResult?.length || 0;
+  }
+
+  // Handle accepted/in-progress orders that timed out (120 min)
+  if (acceptedExpired.length > 0) {
+    const acceptedIds = acceptedExpired.map(o => o.id);
+
+    // Orders with escrow locked go to disputed
+    // Orders without escrow (just accepted) get cancelled
+    const updateResult = await query(
+      `UPDATE orders
+       SET
+         status = CASE
+           WHEN status IN ('escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'releasing') THEN 'disputed'::order_status
+           ELSE 'cancelled'::order_status
+         END,
+         cancelled_at = NOW(),
+         cancelled_by = 'system',
+         cancellation_reason = 'Order timeout - not completed within 120 minutes after acceptance'
+       WHERE id = ANY($1)
+       RETURNING id`,
+      [acceptedIds]
+    );
+    totalExpired += updateResult?.length || 0;
+  }
+
+  // Mock mode: refund escrowed amounts back to sellers for expired/disputed orders
+  if (MOCK_MODE) {
+    for (const order of ordersToExpire) {
+      if (order.escrow_tx_hash) {
+        const amount = parseFloat(String(order.crypto_amount));
+        // Refund the seller (escrow creator)
+        const isBuyOrder = order.type === 'buy';
+        const refundId = isBuyOrder ? order.merchant_id : order.user_id;
+        const refundTable = isBuyOrder ? 'merchants' : 'users';
+
+        try {
+          await query(
+            `UPDATE ${refundTable} SET balance = balance + $1 WHERE id = $2`,
+            [amount, refundId]
+          );
+          console.log(`[Mock] Refunded ${amount} to ${refundTable} ${refundId} on order expiry/dispute`);
+        } catch (refundErr) {
+          console.error(`[Mock] Failed to refund on expiry:`, refundErr);
+        }
+      }
+    }
+  }
 
   // Record reputation events and send system messages for each expired order
   for (const order of ordersToExpire) {
     const isEscrowLocked = ['escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'releasing'].includes(order.status);
+    const isPending = order.status === 'pending';
     const eventType = isEscrowLocked ? 'order_disputed' : 'order_timeout';
-    const reason = `Order timeout - not completed within 15 minutes (was in ${order.status} status)`;
+    const timeout = isPending ? '15 minutes' : '120 minutes';
+    const reason = `Order timeout - not completed within ${timeout} (was in ${order.status} status)`;
 
     try {
       // Send system message about expiration
       const expiryMessage = isEscrowLocked
         ? `⏰ Order expired - moved to dispute for resolution (escrow was locked)`
-        : `⏰ Order expired - not completed within 15 minutes`;
+        : isPending
+          ? `⏰ Order expired - no one accepted within 15 minutes`
+          : `⏰ Order expired - not completed within 120 minutes after acceptance`;
 
       const savedMessage = await sendMessage({
         order_id: order.id,
@@ -983,5 +1052,5 @@ export async function expireOldOrders(): Promise<number> {
     }
   }
 
-  return result.length;
+  return totalExpired;
 }

@@ -7,6 +7,7 @@ import {
   sendMessage,
 } from '@/lib/db/repositories/orders';
 import { query } from '@/lib/db';
+import { MOCK_MODE } from '@/lib/config/mockMode';
 import {
   uuidSchema,
 } from '@/lib/validation/schemas';
@@ -168,6 +169,24 @@ export async function POST(
       logger.info('Demo escrow transaction - skipping on-chain verification', { txHash: tx_hash, orderId: id });
     }
 
+    // In mock mode, deduct the escrowed amount from the seller's balance
+    if (MOCK_MODE) {
+      const amount = parseFloat(String(order.crypto_amount));
+      // Determine who is locking escrow (the seller)
+      const sellerTable = actor_type === 'merchant' ? 'merchants' : 'users';
+      const deductResult = await query(
+        `UPDATE ${sellerTable} SET balance = balance - $1 WHERE id = $2 AND balance >= $1 RETURNING balance`,
+        [amount, actor_id]
+      );
+      if (!deductResult || deductResult.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Insufficient balance to lock escrow' },
+          { status: 400 }
+        );
+      }
+      logger.info('[Mock] Deducted escrow from seller', { actorId: actor_id, amount, table: sellerTable });
+    }
+
     // Update order with escrow details (including on-chain references for release)
     // Also update status to 'escrowed' since funds are now locked on-chain
     await query(
@@ -316,6 +335,31 @@ export async function PATCH(
       }
     } else {
       logger.info('Demo escrow release - skipping on-chain verification', { txHash: tx_hash, orderId: id });
+    }
+
+    // In mock mode, credit the buyer's balance with the released amount
+    if (MOCK_MODE) {
+      const amount = parseFloat(String(order.crypto_amount));
+      // Determine who receives the funds (the buyer)
+      // For BUY orders: user buys USDC → credit user (or buyer_merchant for M2M)
+      // For SELL orders: merchant buys USDC → credit merchant
+      const isBuyOrder = order.type === 'buy';
+      const recipientId = isBuyOrder
+        ? (order.buyer_merchant_id || order.user_id)
+        : order.merchant_id;
+      const recipientTable = isBuyOrder
+        ? (order.buyer_merchant_id ? 'merchants' : 'users')
+        : 'merchants';
+
+      try {
+        await query(
+          `UPDATE ${recipientTable} SET balance = balance + $1 WHERE id = $2`,
+          [amount, recipientId]
+        );
+        logger.info('[Mock] Credited buyer on release', { recipientId, amount, table: recipientTable });
+      } catch (creditErr) {
+        logger.api.error('PATCH', `/api/orders/${id}/escrow/mock-credit`, creditErr as Error);
+      }
     }
 
     // Update order with release details

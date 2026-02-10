@@ -95,7 +95,8 @@ const MockWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) => {
     }
   }, [mockUserId, refreshBalances]);
 
-  // Mock deposit to escrow - deducts from DB balance
+  // Mock deposit to escrow - returns demo tx hash
+  // Balance deduction is handled server-side in the escrow POST endpoint
   const depositToEscrow = useCallback(async (params: {
     amount: number;
     merchantWallet?: string;
@@ -106,37 +107,17 @@ const MockWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) => {
     const tradeId = params.tradeId ?? Date.now();
     const txHash = `demo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-    try {
-      const res = await fetch('/api/mock/balance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: mockUserId,
-          type: mockUserType,
-          action: 'deduct',
-          amount: params.amount,
-        }),
-      });
+    // Refresh balance after a short delay (server deducts on escrow record)
+    setTimeout(() => refreshBalances(), 1000);
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to deduct balance');
-      }
-
-      await refreshBalances();
-
-      return {
-        txHash,
-        success: true,
-        tradePda: `mock-trade-${tradeId}`,
-        escrowPda: `mock-escrow-${tradeId}`,
-        tradeId,
-      };
-    } catch (error) {
-      console.error('[MockWallet] Deposit failed:', error);
-      throw error;
-    }
-  }, [mockUserId, mockUserType, refreshBalances]);
+    return {
+      txHash,
+      success: true,
+      tradePda: `mock-trade-${tradeId}`,
+      escrowPda: `mock-escrow-${tradeId}`,
+      tradeId,
+    };
+  }, [mockUserId, refreshBalances]);
 
   // Mock deposit open (same as deposit)
   const depositToEscrowOpen = useCallback(async (params: {

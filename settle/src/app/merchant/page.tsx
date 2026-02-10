@@ -1838,6 +1838,7 @@ export default function MerchantDashboard() {
       if (recorded) {
         playSound('trade_complete');
         addNotification('escrow', `${escrowOrder.amount} USDC locked in escrow - waiting for user payment`, escrowOrder.id);
+        refreshBalance(); // Update balance after server deduction
       } else {
         console.error('[Merchant] Failed to record escrow on backend after retries');
         addNotification('system', 'Escrow locked on-chain but server sync failed. It will sync automatically.', escrowOrder.id);
@@ -1958,34 +1959,7 @@ export default function MerchantDashboard() {
         console.log('[Release] Escrow released successfully:', releaseResult.txHash);
         setReleaseTxHash(releaseResult.txHash);
 
-        // In mock mode, credit the USDC recipient's balance
-        if (isMockMode && releaseOrder.dbOrder) {
-          const dbOrd = releaseOrder.dbOrder;
-          // Determine who receives the released USDC:
-          // - sell order (user sells USDC → merchant buys): credit merchant (me)
-          // - buy order (user buys USDC → merchant sells): credit user or buyer_merchant
-          const isSellOrder = dbOrd.type === 'sell';
-          const recipientId = isSellOrder ? merchantId : (dbOrd.buyer_merchant_id || dbOrd.user_id);
-          const recipientType = isSellOrder ? 'merchant' : (dbOrd.buyer_merchant_id ? 'merchant' : 'user');
-
-          try {
-            await fetch('/api/mock/balance', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                userId: recipientId,
-                type: recipientType,
-                action: 'credit',
-                amount: releaseOrder.amount,
-              }),
-            });
-            console.log('[Release][Mock] Credited', releaseOrder.amount, 'USDC to', recipientType, recipientId);
-          } catch (balErr) {
-            console.error('[Release][Mock] Failed to credit balance:', balErr);
-          }
-        }
-
-        // Record the release on backend
+        // Record the release on backend (server handles mock balance credit)
         await fetch(`/api/orders/${releaseOrder.id}/escrow`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -2072,7 +2046,7 @@ export default function MerchantDashboard() {
     try {
       const { escrowTradeId, escrowCreatorWallet } = cancelOrder;
 
-      if (!escrowTradeId || !escrowCreatorWallet) {
+      if (!isMockMode && (!escrowTradeId || !escrowCreatorWallet)) {
         setCancelError('Missing escrow details. The escrow may not have been locked on-chain.');
         setIsCancellingEscrow(false);
         return;
@@ -2081,19 +2055,20 @@ export default function MerchantDashboard() {
       console.log('[Cancel] Refunding escrow:', {
         tradeId: escrowTradeId,
         creatorWallet: escrowCreatorWallet,
+        mockMode: isMockMode,
       });
 
-      // Call the on-chain refund function
+      // Call the on-chain refund function (mock mode returns instant success)
       const refundResult = await solanaWallet.refundEscrow({
-        creatorPubkey: escrowCreatorWallet,
-        tradeId: escrowTradeId,
+        creatorPubkey: escrowCreatorWallet || 'mock',
+        tradeId: escrowTradeId || 0,
       });
 
       if (refundResult.success) {
         console.log('[Cancel] Escrow refunded successfully:', refundResult.txHash);
         setCancelTxHash(refundResult.txHash);
 
-        // Update order status to cancelled on backend
+        // Update order status to cancelled on backend (server handles mock balance refund)
         await fetch(`/api/orders/${cancelOrder.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -2107,8 +2082,9 @@ export default function MerchantDashboard() {
         // Update local state
         setOrders(prev => prev.map(o => o.id === cancelOrder.id ? { ...o, status: "cancelled" as const } : o));
         fetchOrders();
+        refreshBalance();
         playSound('click');
-        addNotification('system', `Escrow cancelled. ${cancelOrder.amount} USDC returned to your wallet.`, cancelOrder.id);
+        addNotification('system', `Escrow cancelled. ${cancelOrder.amount} USDC returned to your balance.`, cancelOrder.id);
       } else {
         setCancelError(refundResult.error || 'Failed to refund escrow');
         playSound('error');
