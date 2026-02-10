@@ -1837,7 +1837,57 @@ export default function MerchantDashboard() {
 
       if (recorded) {
         playSound('trade_complete');
-        addNotification('escrow', `${escrowOrder.amount} USDC locked in escrow - waiting for user payment`, escrowOrder.id);
+
+        // Check if this is a new sell order (escrow-first flow)
+        const pendingSellOrder = (window as any).__pendingSellOrder;
+        if (pendingSellOrder && escrowOrder.id.startsWith('temp-')) {
+          console.log('[Merchant] Creating sell order after escrow lock:', pendingSellOrder);
+
+          try {
+            // Now create the order in DB with escrow already locked
+            const res = await fetch("/api/merchant/orders", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                merchant_id: pendingSellOrder.merchantId,
+                type: pendingSellOrder.tradeType,
+                crypto_amount: pendingSellOrder.cryptoAmount,
+                payment_method: pendingSellOrder.paymentMethod,
+                matched_offer_id: pendingSellOrder.matchedOfferId,
+                escrow_tx_hash: escrowResult.txHash,
+                escrow_trade_id: escrowResult.tradeId,
+                escrow_trade_pda: escrowResult.tradePda,
+                escrow_pda: escrowResult.escrowPda,
+                escrow_creator_wallet: solanaWallet.walletAddress,
+              }),
+            });
+
+            const data = await res.json();
+
+            if (res.ok && data.success && data.data) {
+              console.log('[Merchant] Sell order created with escrow:', data.data);
+
+              // Add to orders list
+              const newOrder = mapDbOrderToUI(data.data);
+              setOrders(prev => [newOrder, ...prev]);
+
+              addNotification('escrow', `Sell order created! ${escrowOrder.amount} USDC locked in escrow`, data.data.id);
+
+              // Clear the pending order
+              delete (window as any).__pendingSellOrder;
+            } else {
+              console.error('[Merchant] Failed to create order after escrow:', data);
+              addNotification('system', 'Escrow locked but order creation failed. Contact support.', escrowOrder.id);
+            }
+          } catch (createError) {
+            console.error('[Merchant] Error creating order after escrow:', createError);
+            addNotification('system', 'Escrow locked but order creation failed. Contact support.', escrowOrder.id);
+          }
+        } else {
+          // Regular escrow flow (order already exists)
+          addNotification('escrow', `${escrowOrder.amount} USDC locked in escrow - waiting for user payment`, escrowOrder.id);
+        }
+
         refreshBalance(); // Update balance after server deduction
       } else {
         console.error('[Merchant] Failed to record escrow on backend after retries');
@@ -6317,15 +6367,15 @@ export default function MerchantDashboard() {
                     }
                     onClick={async () => {
                       if (!merchantId) return;
-                      setIsCreatingTrade(true);
-                      setCreateTradeError(null);
 
-                      try {
-                        // For SELL orders: find matching BUY offer to get counterparty wallet
-                        // This mirrors U2M flow where user matches to merchant's offer first
-                        let matchedOffer: { id: string; merchant?: { wallet_address?: string; display_name?: string } } | null = null;
+                      // For SELL orders: Lock escrow FIRST, then create order
+                      // For BUY orders: Create order immediately (acceptor will lock escrow)
+                      if (openTradeForm.tradeType === "sell") {
+                        // Step 1: Find matching merchant and validate
+                        setIsCreatingTrade(true);
+                        setCreateTradeError(null);
 
-                        if (openTradeForm.tradeType === "sell") {
+                        try {
                           // Find a merchant BUY offer to match with
                           const offerParams = new URLSearchParams({
                             amount: openTradeForm.cryptoAmount,
@@ -6336,23 +6386,73 @@ export default function MerchantDashboard() {
                           const offerRes = await fetch(`/api/offers?${offerParams}`);
                           const offerData = await offerRes.json();
 
+                          let matchedOffer: { id: string; merchant?: { wallet_address?: string; display_name?: string } } | null = null;
                           if (offerRes.ok && offerData.success && offerData.data) {
                             matchedOffer = offerData.data;
                             console.log('[M2M] Matched to offer:', matchedOffer?.merchant?.display_name);
                           }
 
-                          // Validate counterparty wallet (skip in mock mode - uses in-app coins)
+                          // Validate counterparty wallet (skip in mock mode)
                           if (!isMockMode) {
                             const counterpartyWallet = matchedOffer?.merchant?.wallet_address;
                             const isValidWallet = counterpartyWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(counterpartyWallet);
 
                             if (!isValidWallet) {
                               setCreateTradeError('No matching merchant with a linked wallet found. Please try a different amount or wait for merchants to add liquidity.');
+                              setIsCreatingTrade(false);
                               return;
                             }
                           }
-                        }
 
+                          // Step 2: Store the trade params and open escrow modal BEFORE creating order
+                          // This ensures escrow is locked before order becomes visible to others
+                          (window as any).__pendingSellOrder = {
+                            merchantId,
+                            tradeType: openTradeForm.tradeType,
+                            cryptoAmount: parseFloat(openTradeForm.cryptoAmount),
+                            paymentMethod: openTradeForm.paymentMethod,
+                            matchedOfferId: matchedOffer?.id,
+                            counterpartyWallet: matchedOffer?.merchant?.wallet_address,
+                          };
+
+                          // Create a temporary order object for the escrow modal
+                          const tempOrder: Order = {
+                            id: 'temp-' + Date.now(),
+                            user: matchedOffer?.merchant?.display_name || 'Merchant',
+                            emoji: '🏪',
+                            amount: parseFloat(openTradeForm.cryptoAmount),
+                            fromCurrency: 'USDC',
+                            toCurrency: 'AED',
+                            rate: 3.67,
+                            total: parseFloat(openTradeForm.cryptoAmount) * 3.67,
+                            timestamp: new Date(),
+                            status: 'pending',
+                            expiresIn: 900,
+                            orderType: 'sell',
+                            userWallet: matchedOffer?.merchant?.wallet_address,
+                          };
+
+                          setEscrowOrder(tempOrder);
+                          setEscrowTxHash(null);
+                          setEscrowError(null);
+                          setIsLockingEscrow(false);
+                          setShowEscrowModal(true);
+                          setShowOpenTradeModal(false); // Close open trade modal
+                          setIsCreatingTrade(false);
+
+                        } catch (error) {
+                          console.error("Error preparing sell order:", error);
+                          setCreateTradeError("Network error. Please try again.");
+                          setIsCreatingTrade(false);
+                        }
+                        return;
+                      }
+
+                      // For BUY orders: Create order immediately (no escrow needed from creator)
+                      setIsCreatingTrade(true);
+                      setCreateTradeError(null);
+
+                      try {
                         const res = await fetch("/api/merchant/orders", {
                           method: "POST",
                           headers: { "Content-Type": "application/json" },
@@ -6361,7 +6461,6 @@ export default function MerchantDashboard() {
                             type: openTradeForm.tradeType,
                             crypto_amount: parseFloat(openTradeForm.cryptoAmount),
                             payment_method: openTradeForm.paymentMethod,
-                            matched_offer_id: matchedOffer?.id, // Pass matched offer for order creation
                           }),
                         });
 
@@ -6373,26 +6472,13 @@ export default function MerchantDashboard() {
                           return;
                         }
 
-                        console.log('[Merchant] Trade created successfully:', data.data);
+                        console.log('[Merchant] Buy order created successfully:', data.data);
 
                         // Add to orders list
                         if (data.data) {
                           const newOrder = mapDbOrderToUI(data.data);
                           setOrders(prev => [newOrder, ...prev]);
-
-                          // For SELL orders: open escrow modal with matched merchant's wallet
-                          if (openTradeForm.tradeType === "sell" && matchedOffer?.merchant?.wallet_address) {
-                            // Add the counterparty wallet to the order for escrow
-                            newOrder.userWallet = matchedOffer.merchant.wallet_address;
-                            addNotification('escrow', `Lock ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC to complete your sell order`, data.data?.id);
-                            setEscrowOrder(newOrder);
-                            setEscrowTxHash(null);
-                            setEscrowError(null);
-                            setIsLockingEscrow(false);
-                            setShowEscrowModal(true);
-                          } else {
-                            addNotification('order', `Buy order created for ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC`, data.data?.id);
-                          }
+                          addNotification('order', `Buy order created for ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC`, data.data?.id);
                         }
 
                         // Success - close modal
@@ -6403,7 +6489,7 @@ export default function MerchantDashboard() {
                           paymentMethod: "bank",
                         });
                       } catch (error) {
-                        console.error("Error creating trade:", error);
+                        console.error("Error creating buy order:", error);
                         setCreateTradeError("Network error. Please try again.");
                       } finally {
                         setIsCreatingTrade(false);

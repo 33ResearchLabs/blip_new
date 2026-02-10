@@ -305,6 +305,12 @@ export async function createOrder(data: {
   payment_details?: Record<string, unknown>;
   buyer_wallet_address?: string; // Buyer's Solana wallet for receiving crypto (buy orders)
   buyer_merchant_id?: string; // For M2M trading: the merchant acting as buyer
+  // Optional escrow details (for escrow-first sell orders)
+  escrow_tx_hash?: string;
+  escrow_trade_id?: number;
+  escrow_trade_pda?: string;
+  escrow_pda?: string;
+  escrow_creator_wallet?: string;
 }): Promise<Order> {
   return transaction(async (client) => {
     console.log('[DB] createOrder called with:', {
@@ -313,17 +319,22 @@ export async function createOrder(data: {
       offer_id: data.offer_id,
       type: data.type,
       crypto_amount: data.crypto_amount,
+      hasEscrow: !!data.escrow_tx_hash,
     });
 
-    // Create the order with explicit 'pending' status
-    // Note: buyer_merchant_id column requires migration 007
+    // Determine initial status: 'escrowed' if escrow details provided, otherwise 'pending'
+    const initialStatus = data.escrow_tx_hash ? 'escrowed' : 'pending';
+    const expiresInterval = data.escrow_tx_hash ? '120 minutes' : '15 minutes';
+
+    // Create the order
     const result = await client.query(
       `INSERT INTO orders (
          user_id, merchant_id, offer_id, type, payment_method,
          crypto_amount, fiat_amount, rate, payment_details,
-         status, expires_at, buyer_wallet_address, buyer_merchant_id
+         status, expires_at, buyer_wallet_address, buyer_merchant_id,
+         escrow_tx_hash, escrow_trade_id, escrow_trade_pda, escrow_pda, escrow_creator_wallet, escrowed_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', NOW() + INTERVAL '15 minutes', $10, $11)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW() + INTERVAL '${expiresInterval}', $11, $12, $13, $14, $15, $16, $17, ${initialStatus === 'escrowed' ? 'NOW()' : 'NULL'})
        RETURNING *`,
       [
         data.user_id,
@@ -335,8 +346,14 @@ export async function createOrder(data: {
         data.fiat_amount,
         data.rate,
         JSON.stringify(data.payment_details || {}),
+        initialStatus,
         data.buyer_wallet_address || null,
         data.buyer_merchant_id || null,
+        data.escrow_tx_hash || null,
+        data.escrow_trade_id || null,
+        data.escrow_trade_pda || null,
+        data.escrow_pda || null,
+        data.escrow_creator_wallet || null,
       ]
     );
 

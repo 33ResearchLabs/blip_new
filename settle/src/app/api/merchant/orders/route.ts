@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMerchantOrders, createOrder, getOrderWithRelations, getAllPendingOrdersForMerchant, sendMessage } from '@/lib/db/repositories/orders';
 import { getMerchantOffers, getOfferWithMerchant } from '@/lib/db/repositories/merchants';
 import { createUser } from '@/lib/db/repositories/users';
+import { query } from '@/lib/db';
 import { OrderStatus, OfferType, PaymentMethod } from '@/lib/types/database';
 import {
   merchantOrdersQuerySchema,
@@ -101,6 +102,12 @@ export async function POST(request: NextRequest) {
       payment_method,
       offer_id,
       target_merchant_id,
+      escrow_tx_hash,
+      escrow_trade_id,
+      escrow_trade_pda,
+      escrow_pda,
+      escrow_creator_wallet,
+      matched_offer_id,
     } = parseResult.data;
 
     // Verify the creating merchant exists
@@ -231,7 +238,7 @@ export async function POST(request: NextRequest) {
     const orderMerchantId = isM2MTrade ? target_merchant_id : merchant_id;
     const buyerMerchantId = isM2MTrade ? merchant_id : undefined;
 
-    // Create the order
+    // Create the order (with optional escrow details for escrow-first sell orders)
     const order = await createOrder({
       user_id: user.id,
       merchant_id: orderMerchantId,
@@ -243,7 +250,28 @@ export async function POST(request: NextRequest) {
       rate: offer.rate,
       payment_details: paymentDetails,
       buyer_merchant_id: buyerMerchantId,
+      escrow_tx_hash,
+      escrow_trade_id,
+      escrow_trade_pda,
+      escrow_pda,
+      escrow_creator_wallet,
     });
+
+    // In mock mode: if escrow already locked, deduct balance from merchant
+    if (escrow_tx_hash && process.env.MOCK_MODE === 'true') {
+      const amount = crypto_amount;
+      const merchantIdToDeduct = merchant_id; // The merchant who created the order and locked escrow
+      try {
+        await query(
+          `UPDATE merchants SET balance = balance - $1 WHERE id = $2 AND balance >= $1 RETURNING balance`,
+          [amount, merchantIdToDeduct]
+        );
+        logger.info('[Mock] Deducted escrow from merchant (escrow-first)', { merchantId: merchantIdToDeduct, amount });
+      } catch (deductErr) {
+        logger.error('[Mock] Failed to deduct escrow balance', { error: deductErr });
+        // Don't fail the whole operation, balance will be corrected later
+      }
+    }
 
     logger.info('Merchant-initiated order created', {
       orderId: order.id,
@@ -253,6 +281,7 @@ export async function POST(request: NextRequest) {
       cryptoAmount: crypto_amount,
       orderType,
       isM2MTrade,
+      hasEscrow: !!escrow_tx_hash,
     });
 
     // Send auto welcome messages for the chat
@@ -275,9 +304,19 @@ export async function POST(request: NextRequest) {
         order_id: order.id,
         sender_type: 'system',
         sender_id: order.id,
-        content: `⏱ This order expires in 15 minutes`,
+        content: `⏱ This order expires in ${escrow_tx_hash ? '120' : '15'} minutes`,
         message_type: 'system',
       });
+      // If escrow is already locked, add escrow locked message
+      if (escrow_tx_hash) {
+        await sendMessage({
+          order_id: order.id,
+          sender_type: 'system',
+          sender_id: order.id,
+          content: `🔒 Escrow locked - ${crypto_amount} USDC secured on-chain`,
+          message_type: 'system',
+        });
+      }
     } catch (msgError) {
       console.error('[API] Failed to send auto messages:', msgError);
     }

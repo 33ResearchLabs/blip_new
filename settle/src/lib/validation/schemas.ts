@@ -242,6 +242,13 @@ export const merchantCreateOrderSchema = z.object({
   payment_method: paymentMethodSchema,
   offer_id: uuidSchema.optional(), // If not provided, use merchant's active offer
   target_merchant_id: uuidSchema.optional(), // For M2M trading: trade with another merchant
+  // Optional escrow details (for escrow-first sell orders)
+  escrow_tx_hash: z.string().optional(),
+  escrow_trade_id: z.number().optional(),
+  escrow_trade_pda: z.string().optional(),
+  escrow_pda: z.string().optional(),
+  escrow_creator_wallet: z.string().optional(),
+  matched_offer_id: uuidSchema.optional(), // Matched offer for M2M
 });
 
 // Helper function to sanitize messages (basic XSS prevention)
