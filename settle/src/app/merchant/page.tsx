@@ -52,6 +52,7 @@ import { usePusher } from "@/context/PusherContext";
 import { useSounds } from "@/hooks/useSounds";
 import { useWebSocketChat } from "@/hooks/useWebSocketChat";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
+import { NotificationToastContainer, useToast, ConnectionIndicator, ActionPulse } from "@/components/NotificationToast";
 import { MessageHistory } from "@/components/merchant/MessageHistory";
 import { MerchantChatTabs } from "@/components/merchant/MerchantChatTabs";
 import { OrderDetailsPanel } from "@/components/merchant/OrderDetailsPanel";
@@ -423,8 +424,10 @@ interface MerchantInfo {
 
 export default function MerchantDashboard() {
   const { playSound } = useSounds();
+  const toast = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [merchantId, setMerchantId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [merchantInfo, setMerchantInfo] = useState<MerchantInfo | null>(null);
   const [activeOffers, setActiveOffers] = useState<{ id: string; type: string; available_amount: number; is_active: boolean }[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -457,6 +460,7 @@ export default function MerchantDashboard() {
   const [cancelTxHash, setCancelTxHash] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const solanaWallet = useSolanaWalletHook();
+  const isMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({ email: "", password: "", confirmPassword: "", businessName: "" });
   const [authTab, setAuthTab] = useState<'signin' | 'create'>('signin');
@@ -689,10 +693,12 @@ export default function MerchantDashboard() {
     maxWindows: 10,
     actorType: "merchant",
     actorId: merchantId || undefined,
-    onNewMessage: () => {
+    onNewMessage: (chatId?: string, message?: { from: string; text: string }) => {
       playSound('message');
-      // Refresh conversations to show latest message preview in sidebar
       fetchOrderConversationsRef.current?.();
+      if (message && message.from !== 'me') {
+        toast.showNewMessage('User', message.text?.substring(0, 80));
+      }
     },
   });
 
@@ -1184,34 +1190,55 @@ export default function MerchantDashboard() {
     actorType: 'merchant',
     actorId: merchantId,
     onOrderCreated: (order) => {
-      // Refetch orders when a new order comes in
       console.log('[Merchant] Real-time: New order created!', order);
       fetchOrders();
-      fetchOrderConversations(); // Refresh sidebar conversations
+      fetchOrderConversations();
       playSound('notification');
       addNotification('order', 'New order received');
+      toast.showOrderCreated(
+        order ? `${order.type === 'buy' ? 'Buy' : 'Sell'} ${order.crypto_amount} USDC for ${order.fiat_amount} AED` : undefined
+      );
     },
     onOrderStatusUpdated: (orderId, newStatus) => {
-      // Refetch orders when status changes
       fetchOrders();
-      fetchOrderConversations(); // Refresh sidebar conversations
+      fetchOrderConversations();
       if (newStatus === 'payment_sent') {
         addNotification('payment', 'Payment sent for order', orderId);
         playSound('notification');
+        toast.showPaymentSent(orderId);
+      } else if (newStatus === 'escrowed') {
+        addNotification('escrow', 'Escrow locked on order', orderId);
+        playSound('notification');
+        toast.showEscrowLocked();
       } else if (newStatus === 'completed') {
         addNotification('complete', 'Trade completed!', orderId);
         playSound('trade_complete');
-        // Refresh on-chain wallet balance to sync with platform balance
+        toast.showTradeComplete();
         if (solanaWallet.connected) {
           solanaWallet.refreshBalances();
         }
       } else if (newStatus === 'disputed') {
         addNotification('dispute', 'Dispute opened on order', orderId);
         playSound('error');
+        toast.showDisputeOpened(orderId);
+      } else if (newStatus === 'cancelled') {
+        addNotification('system', 'Order cancelled', orderId);
+        playSound('error');
+        toast.showOrderCancelled();
+      } else if (newStatus === 'expired') {
+        addNotification('system', 'Order expired', orderId);
+        toast.showOrderExpired();
+      } else if (newStatus === 'accepted') {
+        addNotification('order', 'Order accepted', orderId);
+        playSound('notification');
+        toast.show({ type: 'order', title: 'Order Accepted', message: 'An order has been accepted' });
+      } else if (newStatus === 'payment_confirmed') {
+        addNotification('payment', 'Payment confirmed!', orderId);
+        playSound('notification');
+        toast.show({ type: 'payment', title: 'Payment Confirmed', message: 'Payment has been confirmed. Ready to release.' });
       }
     },
     onExtensionRequested: (data) => {
-      // User requested an extension
       if (data.requestedBy === 'user') {
         setExtensionRequests(prev => {
           const newMap = new Map(prev);
@@ -1225,10 +1252,10 @@ export default function MerchantDashboard() {
         });
         addNotification('system', `User requested ${data.extensionMinutes}min extension`, data.orderId);
         playSound('notification');
+        toast.showExtensionRequest('User', data.extensionMinutes);
       }
     },
     onExtensionResponse: (data) => {
-      // Remove from local tracking
       setExtensionRequests(prev => {
         const newMap = new Map(prev);
         newMap.delete(data.orderId);
@@ -1236,10 +1263,12 @@ export default function MerchantDashboard() {
       });
       if (data.accepted) {
         addNotification('system', 'Extension accepted', data.orderId);
-        fetchOrders(); // Refresh to get new expires_at
+        fetchOrders();
+        toast.show({ type: 'system', title: 'Extension Accepted', message: 'Time has been extended' });
       } else {
         addNotification('system', `Extension declined - order ${data.newStatus || 'updated'}`, data.orderId);
         fetchOrders();
+        toast.showWarning('Extension request was declined');
       }
     },
   });
@@ -1330,8 +1359,8 @@ export default function MerchantDashboard() {
       escrowCreatorWallet: order.escrowCreatorWallet,
     });
 
-    // For M2M where seller already escrowed: require wallet to receive funds
-    if (isEscrowedByOther && !solanaWallet.walletAddress) {
+    // For M2M where seller already escrowed: require wallet to receive funds (skip in mock mode)
+    if (!isMockMode && isEscrowedByOther && !solanaWallet.walletAddress) {
       addNotification('system', 'Please connect your wallet first to receive the USDC.', order.id);
       setShowWalletModal(true);
       return;
@@ -1427,14 +1456,14 @@ export default function MerchantDashboard() {
   const signToClaimOrder = async (order: Order) => {
     if (!merchantId) return;
 
-    // Require wallet connection for signing
-    if (!solanaWallet.connected) {
+    // Require wallet connection for signing (skip in mock mode)
+    if (!isMockMode && !solanaWallet.connected) {
       addNotification('system', 'Please connect your wallet to sign.');
       setShowWalletModal(true);
       return;
     }
 
-    if (!solanaWallet.walletAddress || !solanaWallet.signMessage) {
+    if (!isMockMode && (!solanaWallet.walletAddress || !solanaWallet.signMessage)) {
       addNotification('system', 'Wallet not ready. Please reconnect.');
       playSound('error');
       return;
@@ -1442,10 +1471,11 @@ export default function MerchantDashboard() {
 
     try {
       // Sign message to prove wallet ownership and claim the order
-      const message = `Claim order ${order.id} - I will send fiat payment. Wallet: ${solanaWallet.walletAddress}`;
+      const walletAddr = solanaWallet.walletAddress || 'mock-wallet';
+      const message = `Claim order ${order.id} - I will send fiat payment. Wallet: ${walletAddr}`;
       const messageBytes = new TextEncoder().encode(message);
 
-      addNotification('system', 'Please sign in your wallet to claim this order...', order.id);
+      addNotification('system', isMockMode ? 'Processing...' : 'Please sign in your wallet to claim this order...', order.id);
       const signatureBytes = await solanaWallet.signMessage(messageBytes);
       const signature = Buffer.from(signatureBytes).toString('base64');
       console.log('[Sign] Wallet signature obtained for claim');
@@ -1504,14 +1534,14 @@ export default function MerchantDashboard() {
   const signAndProceed = async (order: Order) => {
     if (!merchantId) return;
 
-    // Require wallet connection for signing
-    if (!solanaWallet.connected) {
+    // Require wallet connection for signing (skip in mock mode)
+    if (!isMockMode && !solanaWallet.connected) {
       addNotification('system', 'Please connect your wallet to sign.');
       setShowWalletModal(true);
       return;
     }
 
-    if (!solanaWallet.walletAddress || !solanaWallet.signMessage) {
+    if (!isMockMode && (!solanaWallet.walletAddress || !solanaWallet.signMessage)) {
       addNotification('system', 'Wallet not ready. Please reconnect.');
       playSound('error');
       return;
@@ -1519,10 +1549,11 @@ export default function MerchantDashboard() {
 
     try {
       // Sign message to prove wallet ownership
-      const message = `Confirm order ${order.id} - I will send fiat payment. Wallet: ${solanaWallet.walletAddress}`;
+      const walletAddr = solanaWallet.walletAddress || 'mock-wallet';
+      const message = `Confirm order ${order.id} - I will send fiat payment. Wallet: ${walletAddr}`;
       const messageBytes = new TextEncoder().encode(message);
 
-      addNotification('system', 'Please sign in your wallet to proceed...', order.id);
+      addNotification('system', isMockMode ? 'Processing...' : 'Please sign in your wallet to proceed...', order.id);
       const signatureBytes = await solanaWallet.signMessage(messageBytes);
       const signature = Buffer.from(signatureBytes).toString('base64');
       console.log('[Sign] Wallet signature obtained');
@@ -1577,8 +1608,8 @@ export default function MerchantDashboard() {
       return;
     }
 
-    // Check wallet connection
-    if (!solanaWallet.connected) {
+    // Check wallet connection (skip in mock mode - uses in-app coins)
+    if (!isMockMode && !solanaWallet.connected) {
       addNotification('system', 'Please connect your wallet to lock escrow.');
       setShowWalletModal(true);
       return;
@@ -1617,17 +1648,14 @@ export default function MerchantDashboard() {
       return;
     }
 
-    // In mock mode, skip on-chain wallet validation (wallets are DB-backed, not Solana addresses)
-    const isLockMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
-
     // Determine recipient wallet for escrow
     // The recipient is the OTHER party (not the one locking escrow)
     // For SELL orders before anyone accepts: no recipient yet, escrow goes to treasury placeholder
     const validWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-    // In mock mode, accept any non-empty string as a valid wallet
+    // In mock mode, accept any non-empty string as a valid wallet (DB-backed, not Solana addresses)
     const isValidWallet = (addr: string | undefined | null): boolean => {
       if (!addr) return false;
-      return isLockMockMode ? addr.length > 0 : validWalletRegex.test(addr);
+      return isMockMode ? addr.length > 0 : validWalletRegex.test(addr);
     };
     const myWallet = solanaWallet.walletAddress;
 
@@ -1799,8 +1827,8 @@ export default function MerchantDashboard() {
   const openReleaseModal = async (order: Order) => {
     if (!merchantId) return;
 
-    // Check wallet connection
-    if (!solanaWallet.connected) {
+    // Check wallet connection (skip in mock mode)
+    if (!isMockMode && !solanaWallet.connected) {
       addNotification('system', 'Please connect your wallet to release escrow.');
       setShowWalletModal(true);
       return;
@@ -1840,8 +1868,6 @@ export default function MerchantDashboard() {
   };
 
   // Execute the escrow release transaction
-  const isMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
-
   const executeRelease = async () => {
     if (!merchantId || !releaseOrder) return;
 
@@ -2731,6 +2757,9 @@ export default function MerchantDashboard() {
 
   return (
     <div className="h-screen bg-[#0a0a0a] text-white flex flex-col overflow-hidden">
+      {/* Toast Notifications */}
+      <NotificationToastContainer position="top-right" />
+
       {/* Ambient */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-1/3 w-[600px] h-[400px] bg-white/[0.02] rounded-full blur-[150px]" />
@@ -2811,7 +2840,9 @@ export default function MerchantDashboard() {
               <Search className="absolute left-2.5 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
               <input
                 type="text"
-                placeholder="Search orders..."
+                placeholder="Search orders, users..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-[360px] pl-8 pr-3 py-1.5 bg-white/[0.04] border border-white/[0.06] rounded-lg text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-white/15 focus:bg-white/[0.06] transition-all"
               />
             </div>
@@ -2856,9 +2887,9 @@ export default function MerchantDashboard() {
             >
               <div className="w-1.5 h-1.5 rounded-full bg-[#26A17B] animate-pulse" />
               <span className="text-[11px] font-bold text-[#26A17B]">
-                {solanaWallet.connected && solanaWallet.usdtBalance !== null
+                {solanaWallet.usdtBalance !== null
                   ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-                  : '10,000'}
+                  : '—'}
                 <span className="text-[9px] ml-0.5">USDT</span>
               </span>
             </motion.button>
@@ -2869,7 +2900,10 @@ export default function MerchantDashboard() {
               </div>
               <div className="hidden sm:block">
                 <p className="text-[11px] font-medium">{merchantInfo?.username || merchantInfo?.display_name || merchantInfo?.business_name || 'Merchant'}</p>
-                <p className="text-[9px] text-gray-500">{merchantInfo?.rating?.toFixed(2) || '5.00'}★</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[9px] text-gray-500">{merchantInfo?.rating?.toFixed(2) || '5.00'}★</p>
+                  <ConnectionIndicator isConnected={isPusherConnected} />
+                </div>
               </div>
               <motion.button
                 whileTap={{ scale: 0.95 }}
@@ -2898,7 +2932,7 @@ export default function MerchantDashboard() {
           className="flex items-center gap-1 px-2 py-1 bg-[#26A17B]/10 rounded-md border border-[#26A17B]/20 shrink-0"
         >
           <span className="text-[11px] font-mono text-[#26A17B]">
-            {solanaWallet.connected && solanaWallet.usdtBalance !== null
+            {solanaWallet.usdtBalance !== null
               ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
               : "—"}
           </span>
@@ -3306,6 +3340,16 @@ export default function MerchantDashboard() {
                       {(() => {
                         const baseOrders = orderViewFilter === 'new' ? pendingOrders : orders;
                         const filteredOrders = baseOrders.filter(order => {
+                          // Search filter
+                          if (searchQuery.trim()) {
+                            const q = searchQuery.toLowerCase();
+                            const matchesUser = order.user?.toLowerCase().includes(q);
+                            const matchesAmount = order.amount.toString().includes(q);
+                            const matchesTotal = Math.round(order.total).toString().includes(q);
+                            const matchesId = order.id?.toLowerCase().includes(q);
+                            const matchesOrderNum = order.dbOrder?.order_number?.toLowerCase().includes(q);
+                            if (!matchesUser && !matchesAmount && !matchesTotal && !matchesId && !matchesOrderNum) return false;
+                          }
                           if (orderFilters.type !== 'all' && order.orderType !== orderFilters.type) return false;
                           if (orderFilters.amount === 'small' && order.amount >= 500) return false;
                           if (orderFilters.amount === 'medium' && (order.amount < 500 || order.amount > 2000)) return false;
@@ -3702,11 +3746,11 @@ export default function MerchantDashboard() {
                                 ) : waitingForUser ? (
                                   <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">RELEASING</span>
                                 ) : canConfirmPayment ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white rounded font-mono">PAID</span>
+                                  <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded font-mono"><ActionPulse size="sm" />PAID</span>
                                 ) : canComplete ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white rounded font-mono">READY</span>
+                                  <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded font-mono"><ActionPulse size="sm" />READY</span>
                                 ) : canMarkPaid ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">SEND</span>
+                                  <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded font-mono"><ActionPulse size="sm" />SEND</span>
                                 ) : isFundedOnly ? (
                                   <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">FUNDED</span>
                                 ) : (
@@ -4037,14 +4081,24 @@ export default function MerchantDashboard() {
                           ? 'bg-[#151515] border-white/[0.04] opacity-60'
                           : 'bg-[#1a1a1a] border-white/[0.08] hover:border-white/[0.12]'
                       }`}
-                      onClick={() => markNotificationRead(notif.id)}
+                      onClick={() => {
+                        markNotificationRead(notif.id);
+                        if (notif.orderId) {
+                          const targetOrder = orders.find(o => o.id === notif.orderId);
+                          if (targetOrder) {
+                            handleOpenChat(targetOrder.user, targetOrder.emoji, targetOrder.id);
+                            setShowNotifications(false);
+                          }
+                        }
+                      }}
                     >
                       <div className="flex items-start gap-2">
                         <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 ${
-                          notif.type === 'order' ? 'bg-white/10' :
-                          notif.type === 'escrow' ? 'bg-white/10' :
-                          notif.type === 'payment' ? 'bg-white/10' :
+                          notif.type === 'order' ? 'bg-orange-500/15' :
+                          notif.type === 'escrow' ? 'bg-blue-500/15' :
+                          notif.type === 'payment' ? 'bg-emerald-500/15' :
                           notif.type === 'dispute' ? 'bg-red-500/20' :
+                          notif.type === 'complete' ? 'bg-emerald-500/15' :
                           'bg-white/[0.08]'
                         }`}>
                           {notif.type === 'order' ? '📥' :
@@ -4055,10 +4109,13 @@ export default function MerchantDashboard() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs text-gray-300 leading-tight">{notif.message}</p>
-                          <p className="text-[10px] text-gray-600 mt-0.5">{notif.time}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-[10px] text-gray-600">{notif.time}</p>
+                            {notif.orderId && <span className="text-[9px] text-orange-400/60">tap to view</span>}
+                          </div>
                         </div>
                         {!notif.read && (
-                          <div className="w-2 h-2 rounded-full bg-white/10 shrink-0 mt-1" />
+                          <div className="w-2 h-2 rounded-full bg-orange-400 shrink-0 mt-1" />
                         )}
                       </div>
                     </motion.div>
@@ -5067,7 +5124,7 @@ export default function MerchantDashboard() {
                             )}
                             {/* Status badge */}
                             {mobileCanMarkPaid && (
-                              <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">SEND</span>
+                              <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded font-mono"><ActionPulse size="sm" />SEND</span>
                             )}
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
@@ -5265,9 +5322,9 @@ export default function MerchantDashboard() {
               >
                 <p className="text-xs text-[#26A17B] mb-1">USDT Balance</p>
                 <p className="text-xl font-bold text-[#26A17B]">
-                  {solanaWallet.connected && solanaWallet.usdtBalance !== null
+                  {solanaWallet.usdtBalance !== null
                     ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
-                    : "Connect Wallet"}
+                    : (isMockMode ? "Loading..." : "Connect Wallet")}
                 </p>
               </button>
 
@@ -6218,7 +6275,6 @@ export default function MerchantDashboard() {
                           }
 
                           // Validate counterparty wallet (skip in mock mode - uses in-app coins)
-                          const isMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
                           if (!isMockMode) {
                             const counterpartyWallet = matchedOffer?.merchant?.wallet_address;
                             const isValidWallet = counterpartyWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(counterpartyWallet);
@@ -6539,10 +6595,9 @@ export default function MerchantDashboard() {
                   {!escrowTxHash && !isLockingEscrow && (() => {
                     // Determine recipient wallet - check all possible sources
                     const validWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-                    const isMockModeUI = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
                     const isValidWalletUI = (addr: string | undefined | null): boolean => {
                       if (!addr) return false;
-                      return isMockModeUI ? addr.length > 0 : validWalletRegex.test(addr);
+                      return isMockMode ? addr.length > 0 : validWalletRegex.test(addr);
                     };
                     const hasBuyerMerchantWallet = isValidWalletUI(escrowOrder.buyerMerchantWallet);
                     const hasAcceptorWallet = isValidWalletUI(escrowOrder.acceptorWallet);
@@ -7041,7 +7096,7 @@ export default function MerchantDashboard() {
 
       {/* Wallet Connection Prompt - shown after login if no wallet connected */}
       <AnimatePresence>
-        {showWalletPrompt && !solanaWallet.connected && (
+        {showWalletPrompt && !isMockMode && !solanaWallet.connected && (
           <>
             <motion.div
               initial={{ opacity: 0 }}
