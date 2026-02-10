@@ -2606,7 +2606,7 @@ export default function MerchantDashboard() {
             </button>
           </div>
 
-          <div className="bg-[#0d0d0d] rounded-2xl border border-white/[0.04] p-6 space-y-4">
+          <div className="bg-[#0d0d0d] rounded-2xl border border-white/[0.06] p-6 space-y-4">
             {loginError && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400">
                 {loginError}
@@ -2957,7 +2957,7 @@ export default function MerchantDashboard() {
           {/* Desktop: Grid layout, Mobile: Single view based on mobileView state */}
           <div className="hidden md:grid gap-4" style={{ gridTemplateColumns: 'minmax(220px, 1fr) 2.2fr 1.8fr' }}>
             {/* Column 1: Balance (top) + Leaderboard (bottom) */}
-            <div className="flex flex-col h-[calc(100vh-80px)] gap-3">
+            <div className="flex flex-col h-[calc(100vh-92px)] gap-3">
               {/* Balance & Transaction History */}
               <div className="flex flex-col h-[45%]">
                 <div className="flex items-center gap-2 mb-2">
@@ -2965,9 +2965,9 @@ export default function MerchantDashboard() {
                   <span className="text-sm font-semibold">Balance</span>
                 </div>
 
-                <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden flex flex-col">
+                <div className="flex-1 bg-[#111111] rounded-xl border border-white/[0.06] overflow-hidden flex flex-col">
                   {/* Balance Display */}
-                  <div className="p-4 border-b border-white/[0.04]">
+                  <div className="p-4 border-b border-white/[0.06]">
                     <div className="flex items-center gap-2">
                       <span className="text-2xl font-bold text-white">
                         {solanaWallet.usdtBalance !== null
@@ -2996,7 +2996,7 @@ export default function MerchantDashboard() {
                   </div>
 
                   {/* Transaction History */}
-                  <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.04]">
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06]">
                     <History className="w-3 h-3 text-gray-500" />
                     <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Recent Transactions</span>
                   </div>
@@ -3069,7 +3069,7 @@ export default function MerchantDashboard() {
                   </span>
                 </div>
 
-                <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden min-h-0">
+                <div className="flex-1 bg-[#111111] rounded-xl border border-white/[0.06] overflow-hidden min-h-0">
                   <div className="h-full overflow-y-auto p-2 space-y-1">
                     {leaderboardData.length > 0 ? (
                       leaderboardData.map((trader, i) => {
@@ -3145,12 +3145,12 @@ export default function MerchantDashboard() {
             </div>
 
             {/* Column 2: New Orders + Active */}
-            <div className="flex flex-col h-[calc(100vh-80px)] gap-3">
+            <div className="flex flex-col h-[calc(100vh-92px)] gap-3">
               {/* New Orders - top */}
               <div className={`flex flex-col ${showBigOrderWidget && bigOrders.length > 0 ? 'h-[45%]' : 'h-1/2'}`}>
                 <div className="flex items-center gap-2 mb-3">
                   {/* Tab switcher */}
-                  <div className="flex items-center bg-[#151515] rounded-lg p-0.5 border border-white/[0.04]">
+                  <div className="flex items-center bg-[#151515] rounded-lg p-0.5 border border-white/[0.06]">
                     <button
                       onClick={() => setOrderViewFilter('new')}
                       className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
@@ -3204,7 +3204,7 @@ export default function MerchantDashboard() {
                       exit={{ height: 0, opacity: 0 }}
                       className="overflow-hidden"
                     >
-                      <div className="flex flex-wrap items-center gap-1.5 mb-2 p-2 bg-[#0d0d0d] rounded-lg border border-white/[0.04]">
+                      <div className="flex flex-wrap items-center gap-1.5 mb-2 p-2 bg-[#111111] rounded-xl border border-white/[0.06]">
                         {/* Type filter */}
                         <div className="flex items-center gap-0.5 bg-white/[0.03] rounded-md p-0.5">
                           {(['all', 'buy', 'sell'] as const).map((t) => (
@@ -3300,7 +3300,7 @@ export default function MerchantDashboard() {
                   )}
                 </AnimatePresence>
 
-                <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden min-h-0">
+                <div className="flex-1 bg-[#111111] rounded-xl border border-white/[0.06] overflow-hidden min-h-0">
                   <div className="h-full overflow-y-auto p-2 space-y-2">
                     <AnimatePresence mode="popLayout">
                       {(() => {
@@ -3456,7 +3456,7 @@ export default function MerchantDashboard() {
                       </button>
                     </div>
 
-                    <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden min-h-0">
+                    <div className="flex-1 bg-[#111111] rounded-xl border border-white/[0.06] overflow-hidden min-h-0">
                       <div className="h-full overflow-y-auto p-2 space-y-2">
                         {bigOrders.map((order, i) => (
                           <motion.div
@@ -3521,7 +3521,7 @@ export default function MerchantDashboard() {
                   </span>
                 </div>
 
-                <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden min-h-0">
+                <div className="flex-1 bg-[#111111] rounded-xl border border-white/[0.06] overflow-hidden min-h-0">
                   <div className="h-full overflow-y-auto p-2 space-y-2">
                     <AnimatePresence mode="popLayout">
                       {activeOrders.length > 0 ? (
@@ -3643,7 +3643,7 @@ export default function MerchantDashboard() {
             </div>
 
             {/* Column 3: Ongoing + Completed/Cancelled */}
-            <div className="flex flex-col h-[calc(100vh-80px)] gap-3">
+            <div className="flex flex-col h-[calc(100vh-92px)] gap-3">
               {/* Ongoing - top */}
               <div className="flex flex-col flex-1 min-h-0">
                 <div className="flex items-center gap-2 mb-3">
@@ -3654,7 +3654,7 @@ export default function MerchantDashboard() {
                   </span>
                 </div>
 
-                <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden min-h-0">
+                <div className="flex-1 bg-[#111111] rounded-xl border border-white/[0.06] overflow-hidden min-h-0">
                   <div className="h-full overflow-y-auto p-2 space-y-2">
                     <AnimatePresence mode="popLayout">
                       {ongoingOrders.length > 0 ? (
@@ -3858,7 +3858,7 @@ export default function MerchantDashboard() {
               {/* Completed/Cancelled History */}
               <div className="flex flex-col h-[45%]">
               {/* Toggle Tabs */}
-              <div className="flex items-center gap-1 mb-2 bg-[#0d0d0d] rounded-lg p-1 border border-white/[0.04]">
+              <div className="flex items-center gap-1 mb-2 bg-[#111111] rounded-xl p-1 border border-white/[0.06]">
                 <button
                   onClick={() => setHistoryTab('completed')}
                   className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-semibold transition-all ${
@@ -3894,8 +3894,8 @@ export default function MerchantDashboard() {
               </div>
 
               {/* Order List */}
-              <div className={`flex-1 bg-[#0d0d0d] rounded-lg border overflow-hidden ${
-                historyTab === 'cancelled' ? 'border-red-500/10' : 'border-white/[0.04]'
+              <div className={`flex-1 bg-[#111111] rounded-xl border overflow-hidden ${
+                historyTab === 'cancelled' ? 'border-red-500/10' : 'border-white/[0.06]'
               }`}>
                 <div className="h-full overflow-y-auto p-2 space-y-2">
                   <AnimatePresence mode="popLayout">
@@ -4012,10 +4012,10 @@ export default function MerchantDashboard() {
         </main>
 
         {/* Right Sidebar - Notifications + Chat (50/50 split) */}
-        <aside className="hidden lg:flex w-80 h-full min-h-0 border-l border-white/[0.04] bg-[#0d0d0d]/50 flex-col shrink-0">
+        <aside className="hidden lg:flex w-72 h-full min-h-0 border-l border-white/[0.06] bg-[#0a0a0a]/80 backdrop-blur-sm flex-col shrink-0">
           {/* Top Half - Notifications */}
           <div className="h-1/2 min-h-0 flex flex-col border-b border-white/[0.08]">
-            <div className="h-12 px-4 flex items-center gap-2 border-b border-white/[0.04] shrink-0">
+            <div className="h-12 px-4 flex items-center gap-2 border-b border-white/[0.06] shrink-0">
               <Bell className="w-4 h-4 text-gray-400" />
               <span className="text-sm font-semibold">Notifications</span>
               {notifications.filter(n => !n.read).length > 0 && (
@@ -4076,7 +4076,7 @@ export default function MerchantDashboard() {
           {/* Bottom Half - Chat */}
           <div className="h-1/2 min-h-0 flex flex-col">
             {/* Chat Header */}
-            <div className="h-12 px-4 flex items-center gap-2 border-b border-white/[0.04] shrink-0">
+            <div className="h-12 px-4 flex items-center gap-2 border-b border-white/[0.06] shrink-0">
               <MessageCircle className="w-4 h-4 text-gray-400" />
               <span className="text-sm font-semibold">Messages</span>
               {totalUnread > 0 && (
@@ -4127,7 +4127,7 @@ export default function MerchantDashboard() {
                 return (
               <>
                 {/* Compact Header with Order Info */}
-                <div className="px-3 py-2 border-b border-white/[0.04] shrink-0">
+                <div className="px-3 py-2 border-b border-white/[0.06] shrink-0">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setActiveChatId(null)}
@@ -5272,7 +5272,7 @@ export default function MerchantDashboard() {
               </button>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="p-4 bg-[#151515] rounded-xl border border-white/[0.04]">
+                <div className="p-4 bg-[#151515] rounded-xl border border-white/[0.06]">
                   <p className="text-xs text-gray-500 mb-1">Today&apos;s Volume</p>
                   <p className="text-xl font-bold">${totalTradedVolume.toLocaleString()}</p>
                 </div>
@@ -5284,7 +5284,7 @@ export default function MerchantDashboard() {
                   <p className="text-xs text-white/70 mb-1">Pending</p>
                   <p className="text-xl font-bold text-white/70">+${Math.round(pendingEarnings)}</p>
                 </div>
-                <div className="p-4 bg-[#151515] rounded-xl border border-white/[0.04]">
+                <div className="p-4 bg-[#151515] rounded-xl border border-white/[0.06]">
                   <p className="text-xs text-gray-500 mb-1">Trades</p>
                   <p className="text-xl font-bold">{completedOrders.length}</p>
                 </div>
@@ -5321,7 +5321,7 @@ export default function MerchantDashboard() {
                   <h3 className="text-sm font-semibold mb-3">Resolved Disputes</h3>
                   <div className="space-y-2">
                     {resolvedDisputes.map(dispute => (
-                      <div key={dispute.id} className="p-3 bg-[#151515] rounded-xl border border-white/[0.04]">
+                      <div key={dispute.id} className="p-3 bg-[#151515] rounded-xl border border-white/[0.06]">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-medium text-white">#{dispute.orderNumber}</span>
@@ -5360,7 +5360,7 @@ export default function MerchantDashboard() {
                 <h3 className="text-xs font-mono text-gray-400 uppercase tracking-wide mb-3">Account</h3>
                 <div className="space-y-2">
                   {/* Merchant Info */}
-                  <div className="p-3 bg-[#151515] rounded-xl border border-white/[0.04]">
+                  <div className="p-3 bg-[#151515] rounded-xl border border-white/[0.06]">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center text-lg">
                         {(merchantInfo?.username || merchantInfo?.display_name)?.charAt(0)?.toUpperCase() || '🐋'}
@@ -5447,7 +5447,7 @@ export default function MerchantDashboard() {
                           key={order.id}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className="p-4 bg-[#151515] rounded-xl border border-white/[0.04]"
+                          className="p-4 bg-[#151515] rounded-xl border border-white/[0.06]"
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
@@ -5720,7 +5720,7 @@ export default function MerchantDashboard() {
             >
               <div className="bg-[#151515] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.08] flex items-center justify-center">
                       <ArrowLeftRight className="w-5 h-5 text-white" />
@@ -6027,7 +6027,7 @@ export default function MerchantDashboard() {
             >
               <div className="bg-[#151515] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
                       <ArrowLeftRight className="w-5 h-5 text-white" />
@@ -6137,7 +6137,7 @@ export default function MerchantDashboard() {
 
                   {/* Trade Preview */}
                   {openTradeForm.cryptoAmount && parseFloat(openTradeForm.cryptoAmount) > 0 && (
-                    <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.04]">
+                    <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.06]">
                       <div className="flex items-center gap-2 mb-3">
                         <Zap className="w-3.5 h-3.5 text-white" />
                         <span className="text-[11px] font-medium text-white">Trade Preview</span>
@@ -6333,7 +6333,7 @@ export default function MerchantDashboard() {
             >
               <div className="bg-[#151515] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
                       <AlertTriangle className="w-5 h-5 text-red-400" />
@@ -6362,7 +6362,7 @@ export default function MerchantDashboard() {
                     <select
                       value={disputeReason}
                       onChange={(e) => setDisputeReason(e.target.value)}
-                      className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm text-white outline-none appearance-none border border-white/[0.04]"
+                      className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm text-white outline-none appearance-none border border-white/[0.06]"
                     >
                       <option value="">Select a reason...</option>
                       <option value="payment_not_received">Payment not received</option>
@@ -6380,7 +6380,7 @@ export default function MerchantDashboard() {
                       onChange={(e) => setDisputeDescription(e.target.value)}
                       placeholder="Describe the issue in detail..."
                       rows={3}
-                      className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm text-white outline-none placeholder:text-gray-600 border border-white/[0.04] resize-none"
+                      className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm text-white outline-none placeholder:text-gray-600 border border-white/[0.06] resize-none"
                     />
                   </div>
                 </div>
@@ -6432,7 +6432,7 @@ export default function MerchantDashboard() {
             >
               <div className="bg-[#151515] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
                       <Lock className="w-5 h-5 text-white/70" />
@@ -6455,7 +6455,7 @@ export default function MerchantDashboard() {
                 {/* Body */}
                 <div className="p-5 space-y-4">
                   {/* Order Info */}
-                  <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.04]">
+                  <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.06]">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-2xl">
                         {escrowOrder.emoji}
@@ -6478,7 +6478,7 @@ export default function MerchantDashboard() {
                   </div>
 
                   {/* Wallet Balance */}
-                  <div className="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-3 border border-white/[0.04]">
+                  <div className="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-3 border border-white/[0.06]">
                     <span className="text-xs text-gray-500">Your USDC Balance</span>
                     <span className={`text-sm font-bold ${(solanaWallet.usdtBalance || 0) >= escrowOrder.amount ? 'text-white' : 'text-red-400'}`}>
                       {solanaWallet.usdtBalance?.toFixed(2) || '0.00'} USDC
@@ -6650,7 +6650,7 @@ export default function MerchantDashboard() {
             >
               <div className="bg-[#151515] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
                       <Unlock className="w-5 h-5 text-white" />
@@ -6673,7 +6673,7 @@ export default function MerchantDashboard() {
                 {/* Body */}
                 <div className="p-5 space-y-4">
                   {/* Order Info */}
-                  <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.04]">
+                  <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.06]">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-2xl">
                         {releaseOrder.emoji}
@@ -6697,7 +6697,7 @@ export default function MerchantDashboard() {
 
                   {/* Escrow Details */}
                   {releaseOrder.escrowTradeId && (
-                    <div className="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-3 border border-white/[0.04]">
+                    <div className="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-3 border border-white/[0.06]">
                       <span className="text-xs text-gray-500">Escrow Trade ID</span>
                       <span className="text-xs font-mono text-gray-400">#{releaseOrder.escrowTradeId}</span>
                     </div>
@@ -6843,7 +6843,7 @@ export default function MerchantDashboard() {
             >
               <div className="bg-[#151515] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
                       <RotateCcw className="w-5 h-5 text-white/70" />
@@ -6866,7 +6866,7 @@ export default function MerchantDashboard() {
                 {/* Body */}
                 <div className="p-5 space-y-4">
                   {/* Order Info */}
-                  <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.04]">
+                  <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.06]">
                     <div className="flex items-center gap-3 mb-3">
                       <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-2xl">
                         {cancelOrder.emoji}
@@ -6890,7 +6890,7 @@ export default function MerchantDashboard() {
 
                   {/* Escrow Details */}
                   {cancelOrder.escrowTradeId && (
-                    <div className="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-3 border border-white/[0.04]">
+                    <div className="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-3 border border-white/[0.06]">
                       <span className="text-xs text-gray-500">Escrow Trade ID</span>
                       <span className="text-xs font-mono text-gray-400">#{cancelOrder.escrowTradeId}</span>
                     </div>
