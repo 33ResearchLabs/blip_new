@@ -39,15 +39,15 @@ interface MessageHistoryProps {
 
 // Status badge colors
 const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-500/20 text-yellow-400',
-  accepted: 'bg-blue-500/20 text-blue-400',
-  escrowed: 'bg-purple-500/20 text-purple-400',
-  payment_sent: 'bg-cyan-500/20 text-cyan-400',
-  payment_confirmed: 'bg-teal-500/20 text-teal-400',
-  completed: 'bg-emerald-500/20 text-emerald-400',
-  cancelled: 'bg-red-500/20 text-red-400',
-  disputed: 'bg-orange-500/20 text-orange-400',
-  expired: 'bg-zinc-500/20 text-zinc-400',
+  pending: 'bg-white/10 text-white/70',
+  accepted: 'bg-white/10 text-white/70',
+  escrowed: 'bg-white/10 text-white/70',
+  payment_sent: 'bg-white/10 text-white/70',
+  payment_confirmed: 'bg-white/10 text-white/70',
+  completed: 'bg-white/10 text-white/70',
+  cancelled: 'bg-white/10 text-white/70',
+  disputed: 'bg-white/10 text-white/70',
+  expired: 'bg-white/10 text-white/70',
 };
 
 // User emojis based on username hash
@@ -139,10 +139,10 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
         <div className="flex items-center gap-2">
-          <MessageCircle className="w-5 h-5 text-emerald-400" />
+          <MessageCircle className="w-5 h-5 text-white/70" />
           <span className="font-medium text-white">Message History</span>
           {totalUnread > 0 && (
-            <span className="px-2 py-0.5 text-xs font-medium bg-emerald-500 text-white rounded-full">
+            <span className="px-2 py-0.5 text-xs font-medium bg-white/10 text-white rounded-full">
               {totalUnread}
             </span>
           )}
@@ -167,7 +167,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-sm bg-white/5 border border-white/10 rounded-lg
-                       text-white placeholder:text-white/40 focus:outline-none focus:border-emerald-500/50"
+                       text-white placeholder:text-white/40 focus:outline-none focus:border-white/6"
           />
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
@@ -177,7 +177,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
               onClick={() => setStatusFilter(status)}
               className={`px-3 py-1 text-xs font-medium rounded-full whitespace-nowrap transition-colors
                 ${statusFilter === status
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  ? 'bg-white/10 text-white border border-white/6'
                   : 'bg-white/5 text-white/60 hover:bg-white/10 border border-transparent'
                 }`}
             >
@@ -191,7 +191,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
-            <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-white/10 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : conversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-white/40">
@@ -209,12 +209,12 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
                 <div className="flex items-start gap-3">
                   {/* User Avatar */}
                   <div className="relative flex-shrink-0">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400/20 to-cyan-400/20
+                    <div className="w-10 h-10 rounded-full bg-white/5 border border-white/6
                                     flex items-center justify-center text-lg">
                       {getUserEmoji(conv.user.username)}
                     </div>
                     {conv.unread_count > 0 && (
-                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 text-white
+                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-white/10 text-white
                                        text-xs font-medium rounded-full flex items-center justify-center">
                         {conv.unread_count > 9 ? '9+' : conv.unread_count}
                       </span>
@@ -229,7 +229,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
                           {conv.user.username}
                         </span>
                         <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded uppercase
-                          ${STATUS_COLORS[conv.order_status] || 'bg-zinc-500/20 text-zinc-400'}`}>
+                          ${STATUS_COLORS[conv.order_status] || 'bg-white/10 text-white/70'}`}>
                           {conv.order_status}
                         </span>
                       </div>
@@ -245,7 +245,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
                         {conv.order_number}
                       </span>
                       <span className="text-xs text-white/30">•</span>
-                      <span className={`text-xs ${conv.order_type === 'buy' ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                      <span className={`text-xs ${conv.order_type === 'buy' ? 'text-white/70' : 'text-white/70'}`}>
                         {conv.order_type === 'buy' ? 'Buy' : 'Sell'}
                       </span>
                       <span className="text-xs text-white/50">
@@ -258,7 +258,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
                       <div className="flex items-center gap-1 mt-1">
                         {conv.last_message.sender_type === 'merchant' && (
                           <CheckCheck className={`w-3 h-3 flex-shrink-0 ${
-                            conv.last_message.is_read ? 'text-emerald-400' : 'text-white/30'
+                            conv.last_message.is_read ? 'text-white/70' : 'text-white/30'
                           }`} />
                         )}
                         <p className={`text-sm truncate ${

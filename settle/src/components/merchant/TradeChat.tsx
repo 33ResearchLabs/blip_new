@@ -117,13 +117,13 @@ interface TradeChatProps {
 // Status colors for badges
 const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
   pending: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', icon: <Timer className="w-3 h-3" /> },
-  accepted: { bg: 'bg-blue-500/20', text: 'text-blue-400', icon: <Check className="w-3 h-3" /> },
-  escrowed: { bg: 'bg-purple-500/20', text: 'text-purple-400', icon: <Lock className="w-3 h-3" /> },
+  accepted: { bg: 'bg-white/10', text: 'text-white/70', icon: <Check className="w-3 h-3" /> },
+  escrowed: { bg: 'bg-white/10', text: 'text-white/70', icon: <Lock className="w-3 h-3" /> },
   payment_sent: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', icon: <DollarSign className="w-3 h-3" /> },
   payment_confirmed: { bg: 'bg-teal-500/20', text: 'text-teal-400', icon: <CheckCircle2 className="w-3 h-3" /> },
-  completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', icon: <CheckCircle2 className="w-3 h-3" /> },
+  completed: { bg: 'bg-white/10', text: 'text-white/70', icon: <CheckCircle2 className="w-3 h-3" /> },
   cancelled: { bg: 'bg-red-500/20', text: 'text-red-400', icon: <XCircle className="w-3 h-3" /> },
-  disputed: { bg: 'bg-orange-500/20', text: 'text-orange-400', icon: <AlertTriangle className="w-3 h-3" /> },
+  disputed: { bg: 'bg-white/10', text: 'text-white/70', icon: <AlertTriangle className="w-3 h-3" /> },
   expired: { bg: 'bg-zinc-500/20', text: 'text-zinc-400', icon: <Clock className="w-3 h-3" /> },
 };
 
@@ -166,9 +166,9 @@ function TimelineStep({ status, label, time, isFirst, isLast }: TimelineStepProp
     switch (status) {
       case 'completed':
         return {
-          dot: 'bg-emerald-500',
-          line: 'bg-emerald-500/50',
-          text: 'text-emerald-400',
+          dot: 'bg-white/10',
+          line: 'bg-white/10/50',
+          text: 'text-white/70',
         };
       case 'current':
         return {
@@ -186,7 +186,7 @@ function TimelineStep({ status, label, time, isFirst, isLast }: TimelineStepProp
         return {
           dot: 'bg-orange-500',
           line: 'bg-orange-500/50',
-          text: 'text-orange-400',
+          text: 'text-white/70',
         };
       default:
         return {
@@ -282,7 +282,7 @@ export function TradeChat({
       return {
         name: 'Trade Bot',
         avatar: (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
             <Bot className="w-4 h-4 text-amber-400" />
           </div>
         ),
@@ -296,7 +296,7 @@ export function TradeChat({
       return {
         name: complianceName,
         avatar: (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500/20 to-rose-500/20 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
             <Shield className="w-4 h-4 text-red-400" />
           </div>
         ),
@@ -310,7 +310,7 @@ export function TradeChat({
         return {
           name: tradeInfo?.compliance?.name || 'You (Compliance)',
           avatar: (
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500/20 to-rose-500/20 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
               <Shield className="w-4 h-4 text-red-400" />
             </div>
           ),
@@ -320,7 +320,7 @@ export function TradeChat({
       return {
         name: currentUserType === 'merchant' ? (tradeInfo?.merchant.displayName || 'You') : 'You',
         avatar: (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#c9a962]/20 to-amber-400/20 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
             {currentUserType === 'merchant' ? (
               <Store className="w-4 h-4 text-[#c9a962]" />
             ) : (
@@ -339,11 +339,11 @@ export function TradeChat({
       return {
         name: otherName,
         avatar: (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
             <span className="text-sm">{userEmoji || getUserEmoji(otherName)}</span>
           </div>
         ),
-        color: 'text-emerald-400',
+        color: 'text-white/70',
       };
     } else if (currentUserType === 'compliance') {
       // When compliance views, determine sender type from senderType field
@@ -352,7 +352,7 @@ export function TradeChat({
         return {
           name: otherName,
           avatar: (
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#c9a962]/20 to-amber-400/20 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
               <Store className="w-4 h-4 text-[#c9a962]" />
             </div>
           ),
@@ -363,11 +363,11 @@ export function TradeChat({
         return {
           name: otherName,
           avatar: (
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
               <span className="text-sm">{userEmoji || getUserEmoji(otherName)}</span>
             </div>
           ),
-          color: 'text-emerald-400',
+          color: 'text-white/70',
         };
       }
     } else {
@@ -376,11 +376,11 @@ export function TradeChat({
       return {
         name: otherName,
         avatar: (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400/20 to-pink-400/20 flex items-center justify-center">
-            <Store className="w-4 h-4 text-purple-400" />
+          <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
+            <Store className="w-4 h-4 text-white/70" />
           </div>
         ),
-        color: 'text-purple-400',
+        color: 'text-white/70',
       };
     }
   };
@@ -442,13 +442,13 @@ export function TradeChat({
           <div className="flex items-center gap-4 text-xs flex-wrap">
             {/* User */}
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 flex items-center justify-center">
+              <div className="w-6 h-6 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
                 <span className="text-[10px]">{userEmoji || getUserEmoji(tradeInfo?.user.username || userName || 'User')}</span>
               </div>
               <span className="text-gray-400">
                 {tradeInfo?.user.username || userName || 'User'}
                 {tradeInfo?.user.rating && (
-                  <span className="text-emerald-400 ml-1">★ {tradeInfo.user.rating.toFixed(1)}</span>
+                  <span className="text-white/70 ml-1">★ {tradeInfo.user.rating.toFixed(1)}</span>
                 )}
               </span>
             </div>
@@ -457,7 +457,7 @@ export function TradeChat({
 
             {/* Merchant */}
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#c9a962]/20 to-amber-400/20 flex items-center justify-center">
+              <div className="w-6 h-6 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
                 <Store className="w-3 h-3 text-[#c9a962]" />
               </div>
               <span className="text-gray-400">
@@ -469,7 +469,7 @@ export function TradeChat({
 
             {/* Bot */}
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center">
+              <div className="w-6 h-6 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
                 <Bot className="w-3 h-3 text-amber-400" />
               </div>
               <span className="text-amber-400/70">Trade Bot</span>
@@ -480,7 +480,7 @@ export function TradeChat({
               <>
                 <span className="text-gray-600">•</span>
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-red-500/20 to-rose-500/20 flex items-center justify-center">
+                  <div className="w-6 h-6 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
                     <Shield className="w-3 h-3 text-red-400" />
                   </div>
                   <span className="text-red-400/70">

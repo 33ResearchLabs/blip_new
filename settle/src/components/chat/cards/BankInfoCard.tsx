@@ -47,16 +47,14 @@ export function BankInfoCard({
     return null;
   }
 
-  const iconBg = variant === 'user'
-    ? 'from-emerald-500/20 to-cyan-500/20'
-    : 'from-blue-500/20 to-indigo-500/20';
-  const iconColor = variant === 'user' ? 'text-emerald-400' : 'text-blue-400';
+  const iconBg = 'bg-white/5 border border-white/6';
+  const iconColor = 'text-white/70';
 
   return (
-    <div className="bg-gradient-to-br from-white/[0.04] to-white/[0.02] rounded-xl border border-white/[0.08] overflow-hidden">
+    <div className="bg-white/5 border border-white/6 rounded-xl overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 bg-white/[0.02] border-b border-white/[0.06] flex items-center gap-3">
-        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${iconBg} flex items-center justify-center`}>
+        <div className={`w-8 h-8 rounded-lg ${iconBg} flex items-center justify-center`}>
           {variant === 'user' ? (
             <User className={`w-4 h-4 ${iconColor}`} />
           ) : (
@@ -92,11 +90,11 @@ export function BankInfoCard({
             <span className="text-xs text-white/50">IBAN</span>
             <button
               onClick={() => handleCopy(iban, 'iban')}
-              className="flex items-center gap-2 text-sm text-white hover:text-emerald-400 transition-colors font-mono"
+              className="flex items-center gap-2 text-sm text-white hover:text-white/70 transition-colors font-mono"
             >
               <span className="truncate max-w-[180px]">{iban}</span>
               {copiedField === 'iban' ? (
-                <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                <Check className="w-3.5 h-3.5 text-white/70 flex-shrink-0" />
               ) : (
                 <Copy className="w-3.5 h-3.5 flex-shrink-0" />
               )}

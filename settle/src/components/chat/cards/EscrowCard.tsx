@@ -48,24 +48,24 @@ export function EscrowCard({ data, status = 'locked' }: EscrowCardProps) {
   const statusConfig = {
     locked: {
       icon: Lock,
-      bg: 'from-purple-500/20 to-indigo-500/20',
-      iconColor: 'text-purple-400',
+      bg: 'bg-white/5 border border-white/6',
+      iconColor: 'text-white/70',
       label: 'Escrow Locked',
-      borderColor: 'border-purple-500/20',
+      borderColor: 'border-white/6',
     },
     released: {
       icon: Unlock,
-      bg: 'from-emerald-500/20 to-green-500/20',
-      iconColor: 'text-emerald-400',
+      bg: 'bg-white/5 border border-white/6',
+      iconColor: 'text-white/70',
       label: 'Escrow Released',
-      borderColor: 'border-emerald-500/20',
+      borderColor: 'border-white/6',
     },
     refunded: {
       icon: Shield,
-      bg: 'from-orange-500/20 to-amber-500/20',
-      iconColor: 'text-orange-400',
+      bg: 'bg-white/5 border border-white/6',
+      iconColor: 'text-white/70',
       label: 'Escrow Refunded',
-      borderColor: 'border-orange-500/20',
+      borderColor: 'border-white/6',
     },
   };
 
@@ -73,10 +73,10 @@ export function EscrowCard({ data, status = 'locked' }: EscrowCardProps) {
   const Icon = config.icon;
 
   return (
-    <div className={`bg-gradient-to-br from-white/[0.04] to-white/[0.02] rounded-xl border ${config.borderColor} overflow-hidden`}>
+    <div className={`bg-white/5 border border-white/6 rounded-xl ${config.borderColor} overflow-hidden`}>
       {/* Header */}
       <div className="px-4 py-3 bg-white/[0.02] border-b border-white/[0.06] flex items-center gap-3">
-        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${config.bg} flex items-center justify-center`}>
+        <div className={`w-8 h-8 rounded-lg ${config.bg} flex items-center justify-center`}>
           <Icon className={`w-4 h-4 ${config.iconColor}`} />
         </div>
         <div>
@@ -101,7 +101,7 @@ export function EscrowCard({ data, status = 'locked' }: EscrowCardProps) {
               >
                 {truncateHash(data.txHash)}
                 {copiedField === 'txHash' ? (
-                  <Check className="w-3 h-3 text-emerald-400" />
+                  <Check className="w-3 h-3 text-white/70" />
                 ) : (
                   <Copy className="w-3 h-3" />
                 )}
@@ -129,7 +129,7 @@ export function EscrowCard({ data, status = 'locked' }: EscrowCardProps) {
               >
                 {truncateHash(data.escrowPda)}
                 {copiedField === 'escrowPda' ? (
-                  <Check className="w-3 h-3 text-emerald-400" />
+                  <Check className="w-3 h-3 text-white/70" />
                 ) : (
                   <Copy className="w-3 h-3" />
                 )}

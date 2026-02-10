@@ -96,16 +96,16 @@ interface OrderDetailsPanelProps {
 // Status configuration
 const STATUS_CONFIG: Record<string, { color: string; bgColor: string; icon: typeof CheckCircle; label: string }> = {
   pending: { color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', icon: Clock, label: 'Pending' },
-  accepted: { color: 'text-blue-400', bgColor: 'bg-blue-400/10', icon: Check, label: 'Accepted' },
-  escrow_pending: { color: 'text-purple-400', bgColor: 'bg-purple-400/10', icon: Clock, label: 'Escrow Pending' },
-  escrowed: { color: 'text-purple-400', bgColor: 'bg-purple-400/10', icon: Shield, label: 'Escrowed' },
+  accepted: { color: 'text-white/70', bgColor: 'bg-white/10', icon: Check, label: 'Accepted' },
+  escrow_pending: { color: 'text-white/70', bgColor: 'bg-white/10', icon: Clock, label: 'Escrow Pending' },
+  escrowed: { color: 'text-white/70', bgColor: 'bg-white/10', icon: Shield, label: 'Escrowed' },
   payment_pending: { color: 'text-cyan-400', bgColor: 'bg-cyan-400/10', icon: Clock, label: 'Payment Pending' },
   payment_sent: { color: 'text-cyan-400', bgColor: 'bg-cyan-400/10', icon: ArrowRight, label: 'Payment Sent' },
   payment_confirmed: { color: 'text-teal-400', bgColor: 'bg-teal-400/10', icon: Check, label: 'Payment Confirmed' },
-  releasing: { color: 'text-emerald-400', bgColor: 'bg-emerald-400/10', icon: ArrowRight, label: 'Releasing' },
-  completed: { color: 'text-emerald-400', bgColor: 'bg-emerald-400/10', icon: CheckCircle, label: 'Completed' },
+  releasing: { color: 'text-white/70', bgColor: 'bg-white/10', icon: ArrowRight, label: 'Releasing' },
+  completed: { color: 'text-white/70', bgColor: 'bg-white/10', icon: CheckCircle, label: 'Completed' },
   cancelled: { color: 'text-red-400', bgColor: 'bg-red-400/10', icon: XCircle, label: 'Cancelled' },
-  disputed: { color: 'text-orange-400', bgColor: 'bg-orange-400/10', icon: AlertTriangle, label: 'Disputed' },
+  disputed: { color: 'text-white/70', bgColor: 'bg-white/10', icon: AlertTriangle, label: 'Disputed' },
   expired: { color: 'text-zinc-400', bgColor: 'bg-zinc-400/10', icon: Clock, label: 'Expired' },
 };
 
@@ -297,7 +297,7 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
                   1 {order.crypto_currency} = {Number(order.rate).toFixed(2)} {order.fiat_currency}
                 </p>
                 <span className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-medium
-                  ${order.type === 'buy' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-cyan-500/20 text-cyan-400'}`}>
+                  ${order.type === 'buy' ? 'bg-white/10 text-white/70' : 'bg-white/10 text-white/70'}`}>
                   {order.type === 'buy' ? 'Buy Order' : 'Sell Order'}
                 </span>
               </div>
@@ -311,7 +311,7 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
             </h3>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400/20 to-cyan-400/20
+                <div className="w-10 h-10 rounded-full bg-white/5 border border-white/6
                                 flex items-center justify-center text-lg">
                   🦊
                 </div>
@@ -330,7 +330,7 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
                 >
                   <Wallet className="w-4 h-4" />
                   {truncateHash(buyerWallet)}
-                  {copiedField === 'buyer_wallet' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  {copiedField === 'buyer_wallet' ? <Check className="w-3 h-3 text-white/70" /> : <Copy className="w-3 h-3" />}
                 </button>
               )}
             </div>
@@ -343,7 +343,7 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
             </h3>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400/20 to-pink-400/20
+                <div className="w-10 h-10 rounded-full bg-white/5 border border-white/6
                                 flex items-center justify-center text-lg">
                   🏪
                 </div>
@@ -352,7 +352,7 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
                   <p className="text-sm text-white/50">
                     {sellerTrades || 0} trades • ⭐ {sellerRating?.toFixed(2) || 'N/A'}
                     {order.merchant?.is_online && isBuyOrder && (
-                      <span className="ml-2 text-emerald-400">• Online</span>
+                      <span className="ml-2 text-white/70">• Online</span>
                     )}
                   </p>
                 </div>
@@ -365,7 +365,7 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
                 >
                   <Wallet className="w-4 h-4" />
                   {truncateHash(sellerWallet)}
-                  {copiedField === 'seller_wallet' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  {copiedField === 'seller_wallet' ? <Check className="w-3 h-3 text-white/70" /> : <Copy className="w-3 h-3" />}
                 </button>
               )}
             </div>
@@ -401,11 +401,11 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
                         const iban = order.offer?.bank_iban || order.payment_details?.iban;
                         if (iban) handleCopy(iban, 'iban');
                       }}
-                      className="flex items-center gap-1 text-white hover:text-emerald-400 transition-colors"
+                      className="flex items-center gap-1 text-white hover:text-white/70 transition-colors"
                     >
                       {order.offer?.bank_iban || order.payment_details?.iban || '-'}
                       {(order.offer?.bank_iban || order.payment_details?.iban) && (
-                        copiedField === 'iban' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />
+                        copiedField === 'iban' ? <Check className="w-3 h-3 text-white/70" /> : <Copy className="w-3 h-3" />
                       )}
                     </button>
                   </div>
@@ -452,7 +452,7 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
                         className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
                       >
                         {truncateHash(order.escrow_pda || order.escrow_trade_pda!, 8, 6)}
-                        {copiedField === 'escrow_pda' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        {copiedField === 'escrow_pda' ? <Check className="w-3 h-3 text-white/70" /> : <Copy className="w-3 h-3" />}
                       </button>
                       <a
                         href={getBlipscanTradeUrl(order.escrow_pda || order.escrow_trade_pda!)}
@@ -476,7 +476,7 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
                       className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
                     >
                       {truncateHash(order.escrow_address, 8, 6)}
-                      {copiedField === 'escrow_addr' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      {copiedField === 'escrow_addr' ? <Check className="w-3 h-3 text-white/70" /> : <Copy className="w-3 h-3" />}
                     </button>
                   </div>
                 )}
@@ -491,13 +491,13 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
                         className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
                       >
                         {truncateHash(order.escrow_tx_hash)}
-                        {copiedField === 'deposit_tx' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        {copiedField === 'deposit_tx' ? <Check className="w-3 h-3 text-white/70" /> : <Copy className="w-3 h-3" />}
                       </button>
                       <a
                         href={getSolscanUrl(order.escrow_tx_hash)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                        className="text-white/70 hover:text-white/70 transition-colors"
                         title="View on Solscan"
                       >
                         <ExternalLink className="w-4 h-4" />
@@ -526,13 +526,13 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
                         className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
                       >
                         {truncateHash(order.release_tx_hash)}
-                        {copiedField === 'release_tx' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        {copiedField === 'release_tx' ? <Check className="w-3 h-3 text-white/70" /> : <Copy className="w-3 h-3" />}
                       </button>
                       <a
                         href={getSolscanUrl(order.release_tx_hash)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                        className="text-white/70 hover:text-white/70 transition-colors"
                         title="View on Solscan"
                       >
                         <ExternalLink className="w-4 h-4" />
@@ -582,7 +582,7 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
                     <div key={step.status} className="flex items-start gap-3">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0
                         ${isCompleted
-                          ? 'bg-emerald-500/20 text-emerald-400'
+                          ? 'bg-white/10 text-white/70'
                           : isCurrent
                             ? 'bg-yellow-500/20 text-yellow-400 animate-pulse'
                             : 'bg-white/5 text-white/20'
@@ -628,8 +628,8 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
 
           {/* Dispute Info */}
           {order.dispute && (
-            <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
-              <h3 className="text-sm font-medium text-orange-400 mb-3 flex items-center gap-2">
+            <div className="bg-white/5 border border-white/6 rounded-xl p-4">
+              <h3 className="text-sm font-medium text-white/70 mb-3 flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4" /> Dispute
               </h3>
               <div className="space-y-2 text-sm">
@@ -645,7 +645,7 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
                 )}
                 <div className="flex justify-between">
                   <span className="text-white/50">Status</span>
-                  <span className="text-orange-400">{order.dispute.status}</span>
+                  <span className="text-white/70">{order.dispute.status}</span>
                 </div>
                 {order.dispute.resolution && (
                   <div>

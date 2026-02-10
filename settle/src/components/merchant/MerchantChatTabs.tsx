@@ -60,15 +60,15 @@ interface MerchantChatTabsProps {
 
 // Status badge colors
 const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-500/20 text-yellow-400',
-  accepted: 'bg-blue-500/20 text-blue-400',
-  escrowed: 'bg-purple-500/20 text-purple-400',
-  payment_sent: 'bg-cyan-500/20 text-cyan-400',
-  payment_confirmed: 'bg-teal-500/20 text-teal-400',
-  completed: 'bg-emerald-500/20 text-emerald-400',
-  cancelled: 'bg-red-500/20 text-red-400',
-  disputed: 'bg-orange-500/20 text-orange-400',
-  expired: 'bg-zinc-500/20 text-zinc-400',
+  pending: 'bg-white/10 text-white/70',
+  accepted: 'bg-white/10 text-white/70',
+  escrowed: 'bg-white/10 text-white/70',
+  payment_sent: 'bg-white/10 text-white/70',
+  payment_confirmed: 'bg-white/10 text-white/70',
+  completed: 'bg-white/10 text-white/70',
+  cancelled: 'bg-white/10 text-white/70',
+  disputed: 'bg-white/10 text-white/70',
+  expired: 'bg-white/10 text-white/70',
 };
 
 // User emojis based on username hash
@@ -283,7 +283,7 @@ export function MerchantChatTabs({ merchantId, onOpenChat, onOpenDirectChat, onC
                   <div className="flex items-start gap-3">
                     {/* User Avatar */}
                     <div className="relative flex-shrink-0">
-                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#c9a962]/20 to-amber-400/20
+                      <div className="w-11 h-11 rounded-full bg-white/5 border border-white/6
                                       flex items-center justify-center text-lg">
                         {getUserEmoji(conv.username)}
                       </div>
@@ -303,7 +303,7 @@ export function MerchantChatTabs({ merchantId, onOpenChat, onOpenDirectChat, onC
                             {conv.nickname || conv.username}
                           </span>
                           {conv.is_favorite && (
-                            <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                            <Star className="w-3 h-3 text-white/70 fill-white/70" />
                           )}
                         </div>
                         {conv.last_message && (
@@ -363,12 +363,12 @@ export function MerchantChatTabs({ merchantId, onOpenChat, onOpenDirectChat, onC
                   <div className="flex items-start gap-3">
                     {/* User Avatar */}
                     <div className="relative flex-shrink-0">
-                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-emerald-400/20 to-cyan-400/20
+                      <div className="w-11 h-11 rounded-full bg-white/5 border border-white/6
                                       flex items-center justify-center text-lg">
                         {getUserEmoji(conv.user.username)}
                       </div>
                       {conv.unread_count > 0 && (
-                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 text-white
+                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-white/10 text-white
                                          text-xs font-bold rounded-full flex items-center justify-center">
                           {conv.unread_count > 9 ? '9+' : conv.unread_count}
                         </span>
@@ -383,7 +383,7 @@ export function MerchantChatTabs({ merchantId, onOpenChat, onOpenDirectChat, onC
                             {conv.user.username}
                           </span>
                           <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded uppercase
-                            ${STATUS_COLORS[conv.order_status] || 'bg-zinc-500/20 text-zinc-400'}`}>
+                            ${STATUS_COLORS[conv.order_status] || 'bg-white/10 text-white/70'}`}>
                             {conv.order_status}
                           </span>
                         </div>
@@ -399,7 +399,7 @@ export function MerchantChatTabs({ merchantId, onOpenChat, onOpenDirectChat, onC
                           {conv.order_number}
                         </span>
                         <span className="text-[11px] text-white/30">•</span>
-                        <span className={`text-[11px] ${conv.order_type === 'buy' ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                        <span className={`text-[11px] ${conv.order_type === 'buy' ? 'text-white/70' : 'text-white/70'}`}>
                           {conv.order_type === 'buy' ? 'Buy' : 'Sell'}
                         </span>
                         <span className="text-[11px] text-white/50">
@@ -412,11 +412,11 @@ export function MerchantChatTabs({ merchantId, onOpenChat, onOpenDirectChat, onC
                         <div className="flex items-center gap-1 mt-1">
                           {conv.last_message.sender_type === 'merchant' && (
                             <CheckCheck className={`w-3 h-3 flex-shrink-0 ${
-                              conv.last_message.is_read ? 'text-emerald-400' : 'text-white/30'
+                              conv.last_message.is_read ? 'text-white/70' : 'text-white/30'
                             }`} />
                           )}
                           {conv.last_message.message_type === 'system' && (
-                            <Zap className="w-3 h-3 flex-shrink-0 text-amber-400" />
+                            <Zap className="w-3 h-3 flex-shrink-0 text-white/70" />
                           )}
                           <p className={`text-sm truncate ${
                             conv.unread_count > 0 ? 'text-white font-medium' : 'text-white/60'

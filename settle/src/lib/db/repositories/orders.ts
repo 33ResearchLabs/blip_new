@@ -235,13 +235,12 @@ export async function getAllPendingOrdersForMerchant(
     JOIN merchants m ON o.merchant_id = m.id
     JOIN merchant_offers mo ON o.offer_id = mo.id
     LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
-    WHERE o.status NOT IN ('expired', 'cancelled')
-      AND (
+    WHERE (
         -- PENDING or ESCROWED orders: ALL merchants can see (New Orders - broadcast model)
-        -- Both buy orders (pending) and sell orders (escrowed by user) show here
-        (o.status IN ('pending', 'escrowed'))
+        -- Exclude expired/cancelled from broadcast pool
+        (o.status IN ('pending', 'escrowed') AND o.status NOT IN ('expired', 'cancelled'))
 
-        -- All orders where I'm the merchant (my active/ongoing orders after acceptance)
+        -- All orders where I'm the merchant (include ALL statuses so merchant sees completed/cancelled/escrowed)
         OR (o.merchant_id = $1)
 
         -- Orders I created as buyer_merchant (M2M orders I initiated)
@@ -888,9 +887,9 @@ export async function expireOldOrders(): Promise<number> {
      SET
        status = CASE
          -- If escrow is locked, go to disputed for manual resolution
-         WHEN status IN ('escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'releasing') THEN 'disputed'
+         WHEN status IN ('escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'releasing') THEN 'disputed'::order_status
          -- Otherwise just cancel
-         ELSE 'cancelled'
+         ELSE 'cancelled'::order_status
        END,
        cancelled_at = NOW(),
        cancelled_by = 'system',

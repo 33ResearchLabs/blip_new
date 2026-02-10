@@ -23,18 +23,35 @@ const MockWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) => {
     const checkUser = () => {
       try {
         // Check for user session
-        const userId = localStorage.getItem('blip_user');
-        const merchantId = localStorage.getItem('blip_merchant');
+        // Note: blip_user and blip_merchant store full JSON objects, not just IDs
+        const userRaw = localStorage.getItem('blip_user');
+        const merchantRaw = localStorage.getItem('blip_merchant');
         const wallet = localStorage.getItem('blip_wallet');
 
-        if (merchantId) {
-          setMockUserId(merchantId);
-          setMockUserType('merchant');
-          setMockWalletAddress(wallet || `MOCK_MERCHANT_${merchantId.slice(0, 8)}`);
-        } else if (userId) {
-          setMockUserId(userId);
-          setMockUserType('user');
-          setMockWalletAddress(wallet || `MOCK_USER_${userId.slice(0, 8)}`);
+        if (merchantRaw) {
+          try {
+            const merchant = JSON.parse(merchantRaw);
+            const id = merchant.id || merchantRaw;
+            setMockUserId(id);
+            setMockUserType('merchant');
+            setMockWalletAddress(merchant.wallet_address || wallet || `MOCK_MERCHANT_${id.slice(0, 8)}`);
+          } catch {
+            setMockUserId(merchantRaw);
+            setMockUserType('merchant');
+            setMockWalletAddress(wallet || `MOCK_MERCHANT_${merchantRaw.slice(0, 8)}`);
+          }
+        } else if (userRaw) {
+          try {
+            const user = JSON.parse(userRaw);
+            const id = user.id || userRaw;
+            setMockUserId(id);
+            setMockUserType('user');
+            setMockWalletAddress(user.wallet_address || wallet || `MOCK_USER_${id.slice(0, 8)}`);
+          } catch {
+            setMockUserId(userRaw);
+            setMockUserType('user');
+            setMockWalletAddress(wallet || `MOCK_USER_${userRaw.slice(0, 8)}`);
+          }
         } else {
           setMockUserId(null);
           setMockWalletAddress(null);
@@ -160,7 +177,12 @@ const MockWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) => {
       setUsdtBalance(null);
     },
     openWalletModal: () => { /* no-op in mock mode */ },
-    signMessage: undefined,
+    signMessage: async (message: Uint8Array) => {
+      // Return a fake signature in mock mode
+      const fakeSignature = new Uint8Array(64);
+      for (let i = 0; i < 64; i++) fakeSignature[i] = Math.floor(Math.random() * 256);
+      return fakeSignature;
+    },
 
     // Balance - USDT from DB, SOL is fake
     solBalance: 1.5,

@@ -19,16 +19,27 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'userId is required' }, { status: 400 });
   }
 
+  const DEFAULT_BALANCE = 10000;
+
   try {
     const table = type === 'merchant' ? 'merchants' : 'users';
     const row = await queryOne<{ balance: number }>(
-      `SELECT COALESCE(balance, 0) as balance FROM ${table} WHERE id = $1`,
+      `SELECT balance FROM ${table} WHERE id = $1`,
       [userId]
     );
 
+    if (row && (row.balance === null || row.balance === undefined || parseFloat(String(row.balance)) === 0)) {
+      // Auto-initialize balance to default
+      await query(
+        `UPDATE ${table} SET balance = $1 WHERE id = $2`,
+        [DEFAULT_BALANCE, userId]
+      );
+      return NextResponse.json({ success: true, balance: DEFAULT_BALANCE });
+    }
+
     return NextResponse.json({
       success: true,
-      balance: row ? parseFloat(String(row.balance)) : 0,
+      balance: row ? parseFloat(String(row.balance)) : DEFAULT_BALANCE,
     });
   } catch (error) {
     console.error('[Mock Balance] GET error:', error);

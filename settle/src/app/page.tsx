@@ -1545,23 +1545,23 @@ export default function Home() {
 
     try {
       // For sell orders, user needs to release escrow to merchant
-      if (activeOrder.type === 'sell' && activeOrder.escrowTradeId && activeOrder.escrowCreatorWallet) {
-        // IMPORTANT: Use the same wallet that was used when locking escrow
-        // The escrow was locked with merchant.walletAddress (from the offer)
-        // acceptorWalletAddress is just for verification, but release MUST go to the locked counterparty
+      const userIsMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+      if (activeOrder.type === 'sell' && (userIsMockMode || (activeOrder.escrowTradeId && activeOrder.escrowCreatorWallet))) {
         const merchantWallet = activeOrder.merchant.walletAddress;
         const isValidSolanaAddress = merchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
 
-        if (!solanaWallet.connected) {
-          alert('Please connect your wallet to release the escrow.');
-          setIsLoading(false);
-          return;
-        }
+        if (!userIsMockMode) {
+          if (!solanaWallet.connected) {
+            alert('Please connect your wallet to release the escrow.');
+            setIsLoading(false);
+            return;
+          }
 
-        if (!isValidSolanaAddress) {
-          alert('Merchant wallet address is invalid. Please contact support.');
-          setIsLoading(false);
-          return;
+          if (!isValidSolanaAddress) {
+            alert('Merchant wallet address is invalid. Please contact support.');
+            setIsLoading(false);
+            return;
+          }
         }
 
         console.log('[Release] Releasing escrow to merchant:', {
@@ -1569,23 +1569,43 @@ export default function Home() {
           tradeId: activeOrder.escrowTradeId,
           counterparty: merchantWallet,
           merchantName: activeOrder.merchant.name,
+          mockMode: userIsMockMode,
         });
 
-        // Release escrow on-chain - this MUST succeed
+        // Release escrow (mock mode returns instant success)
         const releaseResult = await solanaWallet.releaseEscrow({
-          creatorPubkey: activeOrder.escrowCreatorWallet,
-          tradeId: activeOrder.escrowTradeId,
-          counterparty: merchantWallet,
+          creatorPubkey: activeOrder.escrowCreatorWallet || 'mock',
+          tradeId: activeOrder.escrowTradeId || 0,
+          counterparty: merchantWallet || 'mock',
         });
 
         if (!releaseResult.success) {
-          console.error('[Release] On-chain escrow release failed:', releaseResult.error);
+          console.error('[Release] Escrow release failed:', releaseResult.error);
           alert(`Failed to release escrow: ${releaseResult.error || 'Unknown error'}`);
           setIsLoading(false);
-          return; // Don't mark as completed if escrow release failed
+          return;
         }
 
         console.log('[Release] Escrow released:', releaseResult.txHash);
+
+        // In mock mode, credit the merchant with the USDC
+        if (userIsMockMode) {
+          try {
+            await fetch('/api/mock/balance', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: activeOrder.merchant.id,
+                type: 'merchant',
+                action: 'credit',
+                amount: parseFloat(activeOrder.cryptoAmount),
+              }),
+            });
+            console.log('[Release][Mock] Credited', activeOrder.cryptoAmount, 'USDC to merchant', activeOrder.merchant.id);
+          } catch (balErr) {
+            console.error('[Release][Mock] Failed to credit merchant balance:', balErr);
+          }
+        }
 
         // Record the release on the backend - this also marks order as completed
         const escrowRes = await fetch(`/api/orders/${activeOrder.id}/escrow`, {
@@ -1599,20 +1619,16 @@ export default function Home() {
         });
 
         if (escrowRes.ok) {
-          // Escrow release API already marked order as completed, update UI and return
           setOrders(prev => prev.map(o =>
             o.id === activeOrder.id ? { ...o, status: "complete" as OrderStatus, step: 4 as OrderStep, dbStatus: 'completed' } : o
           ));
           playSound('trade_complete');
-          // Refresh on-chain wallet balance
           if (solanaWallet.connected) {
             solanaWallet.refreshBalances();
           }
           setIsLoading(false);
           return;
         } else {
-          // Release succeeded on-chain but backend update failed - still show success
-          // The release_tx_hash was recorded, order will be completed
           setOrders(prev => prev.map(o =>
             o.id === activeOrder.id ? { ...o, status: "complete" as OrderStatus, step: 4 as OrderStep, dbStatus: 'completed' } : o
           ));
@@ -1945,7 +1961,7 @@ export default function Home() {
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: "spring", damping: 15, stiffness: 200 }}
-              className="w-20 h-20 rounded-full bg-gradient-to-br from-orange-500 to-orange-400 flex items-center justify-center mb-8 glow-accent"
+              className="w-20 h-20 rounded-full bg-white/10 border border-white/10 flex items-center justify-center mb-8"
             >
               <Wallet className="w-10 h-10 text-white" />
             </motion.div>
@@ -1955,7 +1971,7 @@ export default function Home() {
               transition={{ delay: 0.1 }}
               className="text-[32px] font-bold text-white mb-3 text-center"
             >
-              Welcome to Blip <span className="text-orange-500">Money</span>
+              Welcome to Blip <span className="text-white">Money</span>
             </motion.h1>
             <motion.p
               initial={{ y: 20, opacity: 0 }}
@@ -1986,7 +2002,7 @@ export default function Home() {
               <button
                 onClick={() => { setAuthMode('login'); setLoginError(''); }}
                 className={`flex-1 py-2 rounded-lg text-[14px] font-medium transition-colors ${
-                  authMode === 'login' ? 'bg-orange-500 text-white' : 'text-neutral-400'
+                  authMode === 'login' ? 'bg-white/10 text-white border border-white/10' : 'text-neutral-400'
                 }`}
               >
                 Sign In
@@ -1994,7 +2010,7 @@ export default function Home() {
               <button
                 onClick={() => { setAuthMode('register'); setLoginError(''); }}
                 className={`flex-1 py-2 rounded-lg text-[14px] font-medium transition-colors ${
-                  authMode === 'register' ? 'bg-orange-500 text-white' : 'text-neutral-400'
+                  authMode === 'register' ? 'bg-white/10 text-white border border-white/10' : 'text-neutral-400'
                 }`}
               >
                 Create Account
@@ -2040,7 +2056,7 @@ export default function Home() {
               <button
                 onClick={authMode === 'login' ? handleUserLogin : handleUserRegister}
                 disabled={isLoggingIn}
-                className="w-full py-4 rounded-2xl text-[17px] font-semibold flex items-center justify-center gap-2 bg-orange-500 text-white disabled:opacity-50 hover:bg-orange-600 transition-colors"
+                className="w-full py-4 rounded-2xl text-[17px] font-semibold flex items-center justify-center gap-2 bg-white/10 text-white disabled:opacity-50 hover:bg-white/20 transition-colors"
               >
                 {isLoggingIn ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -2072,7 +2088,7 @@ export default function Home() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setScreen("profile")}
-                  className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-400 flex items-center justify-center text-white text-sm font-semibold"
+                  className="w-10 h-10 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white text-sm font-semibold"
                 >
                   {userName.charAt(0).toUpperCase()}
                 </button>
@@ -2092,7 +2108,7 @@ export default function Home() {
                 >
                   <MessageCircle className="w-[18px] h-[18px] text-neutral-400" />
                   {orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) > 0 && (
-                    <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-orange-500 border-2 border-black flex items-center justify-center">
+                    <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-white/10 border-2 border-black flex items-center justify-center">
                       <span className="text-[8px] font-bold text-white">
                         {orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0)}
                       </span>
@@ -2104,7 +2120,7 @@ export default function Home() {
                   className={`h-10 rounded-full flex items-center justify-center gap-2 px-3 transition-all ${
                     solanaWallet.connected
                       ? 'bg-[#26A17B]/10 border border-[#26A17B]/30'
-                      : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:opacity-90'
+                      : 'bg-white/10 border border-white/10 hover:bg-white/20'
                   }`}
                 >
                   {solanaWallet.connected ? (
@@ -2132,11 +2148,11 @@ export default function Home() {
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="w-full bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30 rounded-2xl p-4 mb-4"
+                  className="w-full bg-white/5 border border-white/6 rounded-2xl p-4 mb-4"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
-                      <Wallet className="w-5 h-5 text-purple-400" />
+                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+                      <Wallet className="w-5 h-5 text-white/70" />
                     </div>
                     <div className="flex-1">
                       <p className="text-[15px] font-medium text-white mb-1">Connect Your Wallet</p>
@@ -2145,7 +2161,7 @@ export default function Home() {
                       </p>
                       <button
                         onClick={() => setShowWalletModal(true)}
-                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white text-[13px] font-semibold hover:opacity-90 transition-opacity"
+                        className="px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-white text-[13px] font-semibold hover:bg-white/20 transition-all"
                       >
                         Connect Wallet
                       </button>
@@ -2210,7 +2226,7 @@ export default function Home() {
                       onClick={() => setTradeType(type)}
                       className={`px-4 py-1.5 rounded-full text-[13px] font-medium transition-all ${
                         tradeType === type
-                          ? "bg-orange-500 text-white"
+                          ? "bg-white/10 text-white"
                           : "text-neutral-500"
                       }`}
                     >
@@ -2238,7 +2254,7 @@ export default function Home() {
                   ) : (
                     <button
                       onClick={() => setShowWalletModal(true)}
-                      className="text-[13px] text-purple-400 hover:text-purple-300 transition-colors"
+                      className="text-[13px] text-white/70 hover:text-white transition-colors"
                     >
                       Connect Wallet
                     </button>
@@ -2345,7 +2361,7 @@ export default function Home() {
                       onClick={() => setTradePreference(key)}
                       className={`flex-1 py-2.5 rounded-xl text-[13px] font-medium transition-all ${
                         tradePreference === key
-                          ? "bg-orange-500/20 text-orange-400 ring-1 ring-orange-500/30"
+                          ? "bg-white/10 text-white ring-1 ring-white/10"
                           : "bg-neutral-900 text-neutral-400"
                       }`}
                     >
@@ -2362,7 +2378,7 @@ export default function Home() {
                 disabled={!amount || parseFloat(amount) <= 0 || isLoading || !userId}
                 className={`w-full py-4 rounded-2xl text-[17px] font-semibold transition-all flex items-center justify-center gap-2 press-effect ${
                   amount && parseFloat(amount) > 0 && !isLoading
-                    ? "bg-orange-500 text-white glow-accent"
+                    ? "bg-white/10 text-white glow-accent"
                     : "bg-neutral-900 text-neutral-600"
                 }`}
               >
@@ -2374,7 +2390,7 @@ export default function Home() {
                 onClick={() => setScreen("create-offer")}
                 className="w-full mt-3 py-3 text-[15px] text-neutral-500 font-medium"
               >
-                Have a large amount? <span className="text-orange-400">Create an offer</span>
+                Have a large amount? <span className="text-white">Create an offer</span>
               </button>
             </motion.div>
 
@@ -2396,20 +2412,20 @@ export default function Home() {
                           whileTap={{ scale: 0.95 }}
                           onClick={() => setScreen(key as Screen)}
                           className={`flex flex-col items-center gap-1 relative px-3 py-1 rounded-xl transition-all ${
-                            screen === key ? "text-orange-400" : "text-neutral-600"
+                            screen === key ? "text-white" : "text-neutral-600"
                           }`}
                         >
                           {screen === key && (
                             <motion.div
                               layoutId="nav-indicator"
-                              className="absolute inset-0 bg-orange-500/10 rounded-xl"
+                              className="absolute inset-0 bg-white/5 rounded-xl"
                               transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
                             />
                           )}
                           <div className="relative">
                             <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
                             {unreadTotal > 0 && (
-                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-white/10 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
                                 {unreadTotal > 99 ? '99+' : unreadTotal}
                               </span>
                             )}
@@ -2445,7 +2461,7 @@ export default function Home() {
 
             <div className="flex-1 px-5 flex flex-col">
               <div className="flex-1 flex flex-col items-center justify-center text-center">
-                <div className="w-20 h-20 rounded-full bg-orange-500/10 flex items-center justify-center mb-6">
+                <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
                   <Shield className="w-10 h-10 text-violet-400" />
                 </div>
                 <h2 className="text-[22px] font-semibold text-white mb-2">Lock {amount} USDT</h2>
@@ -2459,8 +2475,8 @@ export default function Home() {
                     <span className="text-[15px] text-neutral-500">Wallet</span>
                     {solanaWallet.connected ? (
                       <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                        <span className="text-[14px] text-emerald-400 font-mono">
+                        <span className="w-2 h-2 rounded-full bg-white/10" />
+                        <span className="text-[14px] text-white font-mono">
                           {solanaWallet.walletAddress?.slice(0, 4)}...{solanaWallet.walletAddress?.slice(-4)}
                         </span>
                       </div>
@@ -2478,7 +2494,7 @@ export default function Home() {
                       <span className="text-[15px] text-neutral-500">Balance</span>
                       <span className={`text-[15px] font-medium ${
                         solanaWallet.usdtBalance !== null && solanaWallet.usdtBalance >= parseFloat(amount || '0')
-                          ? 'text-emerald-400'
+                          ? 'text-white'
                           : 'text-red-400'
                       }`}>
                         {solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : '...'} USDT
@@ -2495,7 +2511,7 @@ export default function Home() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[15px] text-neutral-500">You'll receive</span>
-                    <span className="text-[15px] font-medium text-emerald-400">د.إ {parseFloat(fiatAmount).toLocaleString()}</span>
+                    <span className="text-[15px] font-medium text-white">د.إ {parseFloat(fiatAmount).toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[15px] text-neutral-500">Rate</span>
@@ -2524,11 +2540,11 @@ export default function Home() {
 
                 {/* Program Not Ready Warning - shows when wallet connected but Anchor program failed to initialize */}
                 {solanaWallet.connected && !solanaWallet.programReady && (
-                  <div className="w-full mt-4 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                  <div className="w-full mt-4 bg-white/5 border border-white/6 rounded-xl p-4">
                     <div className="flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                      <AlertTriangle className="w-5 h-5 text-white/70 flex-shrink-0 mt-0.5" />
                       <div className="text-left flex-1">
-                        <p className="text-[14px] text-amber-400 font-medium">Wallet Needs Reconnection</p>
+                        <p className="text-[14px] text-white/70 font-medium">Wallet Needs Reconnection</p>
                         <p className="text-[13px] text-neutral-400 mt-1">
                           The escrow program is not ready. Please reconnect your wallet.
                         </p>
@@ -2540,7 +2556,7 @@ export default function Home() {
                           solanaWallet.disconnect();
                           setTimeout(() => setShowWalletModal(true), 100);
                         }}
-                        className="flex-1 py-2 rounded-lg bg-amber-500/20 text-[14px] text-amber-400 font-medium"
+                        className="flex-1 py-2 rounded-lg bg-white/10 text-[14px] text-white/70 font-medium"
                       >
                         Reconnect Wallet
                       </button>
@@ -2578,13 +2594,13 @@ export default function Home() {
               {escrowTxStatus === 'success' ? (
                 <div className="pb-10 space-y-4">
                   {/* Success indicator */}
-                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4">
+                  <div className="bg-white/5 border border-white/6 rounded-2xl p-4">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                        <Lock className="w-5 h-5 text-emerald-400" />
+                      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                        <Lock className="w-5 h-5 text-white" />
                       </div>
                       <div>
-                        <p className="text-[15px] font-semibold text-emerald-400">Escrow Locked</p>
+                        <p className="text-[15px] font-semibold text-white">Escrow Locked</p>
                         <p className="text-[13px] text-neutral-400">Your USDC is secured on-chain</p>
                       </div>
                     </div>
@@ -2593,7 +2609,7 @@ export default function Home() {
                         href={`https://explorer.solana.com/tx/${escrowTxHash}?cluster=devnet`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-[13px] text-emerald-400/70 hover:text-emerald-400"
+                        className="flex items-center gap-1 text-[13px] text-white/50 hover:text-white"
                       >
                         View Transaction <ExternalLink className="w-3 h-3" />
                       </a>
@@ -2603,8 +2619,8 @@ export default function Home() {
                   {/* Waiting for merchant */}
                   <div className="bg-neutral-900 rounded-2xl p-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
-                        <Clock className="w-5 h-5 text-amber-400" />
+                      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                        <Clock className="w-5 h-5 text-white/70" />
                       </div>
                       <div className="flex-1">
                         <p className="text-[15px] font-medium text-white">Waiting for merchant</p>
@@ -2613,7 +2629,7 @@ export default function Home() {
                     </div>
                     <div className="mt-3 h-1 bg-neutral-800 rounded-full overflow-hidden">
                       <motion.div
-                        className="h-full bg-amber-400"
+                        className="h-full bg-white/10"
                         animate={{ x: ["-100%", "100%"] }}
                         transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
                         style={{ width: "30%" }}
@@ -2635,7 +2651,7 @@ export default function Home() {
                     whileTap={{ scale: 0.98 }}
                     onClick={confirmEscrow}
                     disabled={isLoading || (solanaWallet.connected && !solanaWallet.programReady)}
-                    className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-orange-500 text-white flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-white/10 text-white flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {escrowTxStatus === 'signing' && (
                       <>
@@ -2690,10 +2706,10 @@ export default function Home() {
               <div className="bg-neutral-900 rounded-2xl p-4 mb-4">
                 <div className="flex items-center gap-3 mb-4">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    activeOrder.type === "buy" ? "bg-emerald-500/10" : "bg-orange-500/10"
+                    activeOrder.type === "buy" ? "bg-white/5" : "bg-white/5"
                   }`}>
                     {activeOrder.type === "buy"
-                      ? <ArrowDownLeft className="w-5 h-5 text-emerald-400" />
+                      ? <ArrowDownLeft className="w-5 h-5 text-white" />
                       : <ArrowUpRight className="w-5 h-5 text-violet-400" />
                     }
                   </div>
@@ -2713,7 +2729,7 @@ export default function Home() {
                     <div
                       key={step}
                       className={`flex-1 h-1 rounded-full ${
-                        step <= activeOrder.step ? "bg-emerald-400" : "bg-neutral-800"
+                        step <= activeOrder.step ? "bg-white/10" : "bg-neutral-800"
                       }`}
                     />
                   ))}
@@ -2734,8 +2750,8 @@ export default function Home() {
                         Your USDC is secured on-chain
                       </p>
                     </div>
-                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                      <Check className="w-4 h-4 text-emerald-400" />
+                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                      <Check className="w-4 h-4 text-white" />
                     </div>
                   </div>
 
@@ -2769,11 +2785,11 @@ export default function Home() {
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-orange-500/10 border border-orange-500/30 rounded-2xl p-4 mb-4"
+                  className="bg-white/5 border border-white/6 rounded-2xl p-4 mb-4"
                 >
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
-                      <Clock className="w-5 h-5 text-orange-400" />
+                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                      <Clock className="w-5 h-5 text-white/70" />
                     </div>
                     <div className="flex-1">
                       <p className="text-[15px] font-semibold text-white">Extension Requested</p>
@@ -2787,7 +2803,7 @@ export default function Home() {
                       whileTap={{ scale: 0.97 }}
                       onClick={() => respondToExtension(true)}
                       disabled={requestingExtension}
-                      className="flex-1 py-3 rounded-xl bg-emerald-500 text-white text-[15px] font-semibold disabled:opacity-50"
+                      className="flex-1 py-3 rounded-xl bg-white/10 text-white text-[15px] font-semibold disabled:opacity-50"
                     >
                       {requestingExtension ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Accept"}
                     </motion.button>
@@ -2831,8 +2847,8 @@ export default function Home() {
                 <div className={`p-4 rounded-2xl ${activeOrder.step >= 1 ? "bg-neutral-900" : "bg-neutral-950"}`}>
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold ${
-                      activeOrder.step > 1 ? "bg-emerald-400 text-black" :
-                      activeOrder.step === 1 ? "bg-amber-400 text-black" : "bg-neutral-800 text-neutral-500"
+                      activeOrder.step > 1 ? "bg-white/10 text-black" :
+                      activeOrder.step === 1 ? "bg-white/10 text-black" : "bg-neutral-800 text-neutral-500"
                     }`}>
                       {activeOrder.step > 1 ? <Check className="w-4 h-4" /> : "1"}
                     </div>
@@ -2845,13 +2861,13 @@ export default function Home() {
                       )}
                       {/* For sell orders in pending status, show waiting for merchant to accept */}
                       {activeOrder.step === 1 && activeOrder.type === "sell" && activeOrder.dbStatus === 'pending' && (
-                        <div className="mt-3 bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+                        <div className="mt-3 bg-white/5 border border-white/6 rounded-xl p-4">
                           <div className="flex items-center gap-3 mb-2">
-                            <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
-                              <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+                            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                              <Loader2 className="w-4 h-4 text-white/70 animate-spin" />
                             </div>
                             <div>
-                              <p className="text-[14px] font-medium text-amber-400">Waiting for Merchant</p>
+                              <p className="text-[14px] font-medium text-white/70">Waiting for Merchant</p>
                               <p className="text-[12px] text-neutral-400">Merchant will sign with their wallet to accept</p>
                             </div>
                           </div>
@@ -2868,8 +2884,8 @@ export default function Home() {
                 <div className={`p-4 rounded-2xl ${activeOrder.step >= 2 ? "bg-neutral-900" : "bg-neutral-950"}`}>
                   <div className="flex items-start gap-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
-                      activeOrder.step > 2 ? "bg-emerald-400 text-black" :
-                      activeOrder.step === 2 ? "bg-amber-400 text-black" : "bg-neutral-800 text-neutral-500"
+                      activeOrder.step > 2 ? "bg-white/10 text-black" :
+                      activeOrder.step === 2 ? "bg-white/10 text-black" : "bg-neutral-800 text-neutral-500"
                     }`}>
                       {activeOrder.step > 2 ? <Check className="w-4 h-4" /> : "2"}
                     </div>
@@ -2884,11 +2900,11 @@ export default function Home() {
 
                       {/* Funds Locked indicator - show when escrow is locked */}
                       {activeOrder.step === 2 && activeOrder.dbStatus === 'escrowed' && (
-                        <div className="mt-2 flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-2">
-                          <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                            <Lock className="w-3 h-3 text-emerald-400" />
+                        <div className="mt-2 flex items-center gap-2 bg-white/5 border border-white/6 rounded-lg px-3 py-2">
+                          <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center">
+                            <Lock className="w-3 h-3 text-white" />
                           </div>
-                          <span className="text-[13px] font-medium text-emerald-400">
+                          <span className="text-[13px] font-medium text-white">
                             {activeOrder.type === "buy" ? "Funds locked in escrow" : "Your USDT locked in escrow"}
                           </span>
                         </div>
@@ -2897,19 +2913,19 @@ export default function Home() {
                       {/* Show escrow funding in progress for buy orders when escrow not yet funded */}
                       {activeOrder.step === 2 && activeOrder.type === "buy" && activeOrder.dbStatus !== 'escrowed' && (
                         <div className="mt-3 space-y-3">
-                          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+                          <div className="bg-white/5 border border-white/6 rounded-xl p-4">
                             <div className="flex items-center gap-3 mb-3">
-                              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
-                                <Loader2 className="w-5 h-5 text-amber-400 animate-spin" />
+                              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                                <Loader2 className="w-5 h-5 text-white/70 animate-spin" />
                               </div>
                               <div>
-                                <p className="text-[15px] font-medium text-amber-400">Escrow Funding in Progress</p>
+                                <p className="text-[15px] font-medium text-white/70">Escrow Funding in Progress</p>
                                 <p className="text-[12px] text-neutral-400">Merchant is locking USDT in escrow</p>
                               </div>
                             </div>
                             <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
                               <motion.div
-                                className="h-full bg-amber-400"
+                                className="h-full bg-white/10"
                                 animate={{ x: ["-100%", "100%"] }}
                                 transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
                                 style={{ width: "40%" }}
@@ -2945,13 +2961,13 @@ export default function Home() {
                                   }}
                                 >
                                   {/* Fallback map UI */}
-                                  <div className="absolute inset-0 bg-gradient-to-b from-neutral-800/50 to-neutral-900/80" />
+                                  <div className="absolute inset-0 bg-white/5" />
                                   <div className="absolute inset-0 flex items-center justify-center">
                                     <div className="flex flex-col items-center">
-                                      <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center shadow-lg shadow-violet-500/30 mb-1">
+                                      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shadow-lg shadow-white/10 mb-1">
                                         <MapPin className="w-5 h-5 text-white" />
                                       </div>
-                                      <div className="w-1 h-3 bg-orange-500 rounded-b-full" />
+                                      <div className="w-1 h-3 bg-white/10 rounded-b-full" />
                                     </div>
                                   </div>
                                   {/* Grid pattern for map feel */}
@@ -2988,7 +3004,7 @@ export default function Home() {
                                 <div className="pt-2 border-t border-neutral-700">
                                   <div className="flex items-center justify-between">
                                     <span className="text-[13px] text-neutral-500">Cash Amount</span>
-                                    <span className="text-[17px] font-semibold text-emerald-400">
+                                    <span className="text-[17px] font-semibold text-white">
                                       د.إ {parseFloat(activeOrder.fiatAmount).toLocaleString()}
                                     </span>
                                   </div>
@@ -3007,7 +3023,7 @@ export default function Home() {
                                 <motion.button
                                   whileTap={{ scale: 0.98 }}
                                   onClick={markPaymentSent}
-                                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold bg-orange-500 text-white"
+                                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold bg-white/10 text-white"
                                 >
                                   I'm at the location
                                 </motion.button>
@@ -3025,7 +3041,7 @@ export default function Home() {
                                   <div className="flex items-center gap-2">
                                     <span className="text-[13px] text-white font-mono">{activeOrder.merchant.iban}</span>
                                     <button onClick={() => handleCopy(activeOrder.merchant.iban || '')}>
-                                      {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-neutral-500" />}
+                                      {copied ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4 text-neutral-500" />}
                                     </button>
                                   </div>
                                 </div>
@@ -3054,7 +3070,7 @@ export default function Home() {
                                   whileTap={{ scale: 0.98 }}
                                   onClick={markPaymentSent}
                                   disabled={isLoading}
-                                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold bg-orange-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold bg-white/10 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                   {isLoading ? 'Processing...' : "I've sent the payment"}
                                 </motion.button>
@@ -3068,13 +3084,13 @@ export default function Home() {
                       {/* Also check escrowTxHash as backup - if it exists, escrow is already locked */}
                       {activeOrder.step === 2 && activeOrder.type === "sell" && activeOrder.dbStatus === 'accepted' && !activeOrder.escrowTxHash && (
                         <div className="mt-3 space-y-3">
-                          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
+                          <div className="bg-white/5 border border-white/6 rounded-xl p-4">
                             <div className="flex items-center gap-3 mb-3">
-                              <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                                <Lock className="w-5 h-5 text-emerald-400" />
+                              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                                <Lock className="w-5 h-5 text-white" />
                               </div>
                               <div>
-                                <p className="text-[15px] font-medium text-emerald-400">Merchant Accepted - Lock Escrow</p>
+                                <p className="text-[15px] font-medium text-white">Merchant Accepted - Lock Escrow</p>
                                 <p className="text-[12px] text-neutral-400">Merchant verified their wallet. Lock funds to proceed.</p>
                               </div>
                             </div>
@@ -3137,7 +3153,7 @@ export default function Home() {
                                 }
                               }}
                               disabled={isLoading || (solanaWallet.connected && !solanaWallet.programReady)}
-                              className="w-full py-3 rounded-xl text-[15px] font-semibold bg-emerald-500 text-white flex items-center justify-center gap-2 disabled:opacity-50"
+                              className="w-full py-3 rounded-xl text-[15px] font-semibold bg-white/10 text-white flex items-center justify-center gap-2 disabled:opacity-50"
                             >
                               {isLoading ? (
                                 <>
@@ -3179,7 +3195,7 @@ export default function Home() {
                           <div className="mt-3 bg-neutral-800 rounded-xl p-3">
                             <div className="flex items-center justify-between mb-2">
                               <span className="text-[12px] text-neutral-500">Expected payment</span>
-                              <span className="text-[15px] font-semibold text-emerald-400">
+                              <span className="text-[15px] font-semibold text-white">
                                 د.إ {parseFloat(activeOrder.fiatAmount).toLocaleString()}
                               </span>
                             </div>
@@ -3213,8 +3229,8 @@ export default function Home() {
                 <div className={`p-4 rounded-2xl ${activeOrder.step >= 3 ? "bg-neutral-900" : "bg-neutral-950"}`}>
                   <div className="flex items-start gap-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
-                      activeOrder.step > 3 ? "bg-emerald-400 text-black" :
-                      activeOrder.step === 3 ? "bg-amber-400 text-black" : "bg-neutral-800 text-neutral-500"
+                      activeOrder.step > 3 ? "bg-white/10 text-black" :
+                      activeOrder.step === 3 ? "bg-white/10 text-black" : "bg-neutral-800 text-neutral-500"
                     }`}>
                       {activeOrder.step > 3 ? <Check className="w-4 h-4" /> : "3"}
                     </div>
@@ -3228,7 +3244,7 @@ export default function Home() {
                           <p className="text-[13px] text-neutral-500">Seller is verifying your payment...</p>
                           <div className="mt-2 h-1 bg-neutral-800 rounded-full overflow-hidden">
                             <motion.div
-                              className="h-full bg-amber-400"
+                              className="h-full bg-white/10"
                               animate={{ x: ["-100%", "100%"] }}
                               transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
                               style={{ width: "30%" }}
@@ -3246,8 +3262,8 @@ export default function Home() {
 
                       {activeOrder.step === 3 && activeOrder.type === "sell" && (
                         <div className="mt-3">
-                          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 mb-3">
-                            <p className="text-[13px] text-amber-400">
+                          <div className="bg-white/5 border border-white/6 rounded-xl p-3 mb-3">
+                            <p className="text-[13px] text-white/70">
                               Merchant has sent د.إ {parseFloat(activeOrder.fiatAmount).toLocaleString()} to your bank.
                             </p>
                             <p className="text-[12px] text-neutral-500 mt-1">
@@ -3266,7 +3282,7 @@ export default function Home() {
                               whileTap={{ scale: 0.98 }}
                               onClick={confirmFiatReceived}
                               disabled={isLoading}
-                              className="flex-[2] py-3 rounded-xl text-[15px] font-semibold bg-emerald-500 text-white flex items-center justify-center gap-2 disabled:opacity-50"
+                              className="flex-[2] py-3 rounded-xl text-[15px] font-semibold bg-white/10 text-white flex items-center justify-center gap-2 disabled:opacity-50"
                             >
                               {isLoading ? (
                                 <>
@@ -3294,7 +3310,7 @@ export default function Home() {
                 <div className={`p-4 rounded-2xl ${activeOrder.step >= 4 ? "bg-neutral-900" : "bg-neutral-950"}`}>
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold ${
-                      activeOrder.step >= 4 ? "bg-emerald-400 text-black" : "bg-neutral-800 text-neutral-500"
+                      activeOrder.step >= 4 ? "bg-white/10 text-black" : "bg-neutral-800 text-neutral-500"
                     }`}>
                       {activeOrder.step >= 4 ? <Check className="w-4 h-4" /> : "4"}
                     </div>
@@ -3303,7 +3319,7 @@ export default function Home() {
                         Complete
                       </p>
                       {activeOrder.step >= 4 && (
-                        <p className="text-[13px] text-emerald-400">Trade completed successfully</p>
+                        <p className="text-[13px] text-white">Trade completed successfully</p>
                       )}
                     </div>
                   </div>
@@ -3320,7 +3336,7 @@ export default function Home() {
                     <div className="flex justify-center gap-2">
                       {[1, 2, 3, 4, 5].map(star => (
                         <button key={star} onClick={() => setRating(star)}>
-                          <Star className={`w-8 h-8 ${star <= rating ? "fill-amber-400 text-amber-400" : "text-neutral-700"}`} />
+                          <Star className={`w-8 h-8 ${star <= rating ? "fill-amber-400 text-white/70" : "text-neutral-700"}`} />
                         </button>
                       ))}
                     </div>
@@ -3332,7 +3348,7 @@ export default function Home() {
               <div className="mt-4 bg-neutral-900 rounded-2xl p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-400 flex items-center justify-center text-white font-semibold">
+                    <div className="w-10 h-10 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white font-semibold">
                       {activeOrder.merchant.name.charAt(0)}
                     </div>
                     <div>
@@ -3340,14 +3356,14 @@ export default function Home() {
                         <p className="text-[15px] font-medium text-white">{activeOrder.merchant.name}</p>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
                           activeOrder.merchant.paymentMethod === "cash"
-                            ? "bg-emerald-500/10 text-emerald-400"
-                            : "bg-orange-500/10 text-orange-400"
+                            ? "bg-white/5 text-white"
+                            : "bg-white/10 text-white/70"
                         }`}>
                           {activeOrder.merchant.paymentMethod === "cash" ? "Cash" : "Bank"}
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                        <Star className="w-3 h-3 fill-amber-400 text-white/70" />
                         <span className="text-[13px] text-neutral-400">{activeOrder.merchant.rating} · {activeOrder.merchant.trades} trades</span>
                       </div>
                     </div>
@@ -3501,10 +3517,10 @@ export default function Home() {
                   >
                     <div className="flex items-center justify-between p-4 border-b border-neutral-800">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-orange-400" />
+                        <div className="w-8 h-8 rounded-full bg-white/10 border border-white/10" />
                         <div>
                           <p className="text-[15px] font-medium text-white">{activeOrder.merchant.name}</p>
-                          <p className="text-[11px] text-emerald-400">Online</p>
+                          <p className="text-[11px] text-white">Online</p>
                         </div>
                       </div>
                       <button onClick={() => setShowChat(false)} className="p-2">
@@ -3550,10 +3566,10 @@ export default function Home() {
                               const data = JSON.parse(msg.text);
                               return (
                                 <div key={msg.id} className="flex justify-center">
-                                  <div className="w-full max-w-[90%] bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4">
+                                  <div className="w-full max-w-[90%] bg-white/5 border border-white/6 rounded-2xl p-4">
                                     <div className="flex items-center gap-2 mb-2">
-                                      <Shield className="w-4 h-4 text-orange-400" />
-                                      <span className="text-[13px] font-semibold text-orange-400">
+                                      <Shield className="w-4 h-4 text-white/70" />
+                                      <span className="text-[13px] font-semibold text-white/70">
                                         {data.type === 'resolution_proposed' ? 'Resolution Proposed' : 'Resolution Finalized'}
                                       </span>
                                     </div>
@@ -3575,14 +3591,14 @@ export default function Home() {
                                         <button
                                           onClick={() => respondToResolution('accept')}
                                           disabled={isRespondingToResolution}
-                                          className="flex-1 py-2 rounded-xl text-[13px] font-semibold bg-orange-500 text-white disabled:opacity-50"
+                                          className="flex-1 py-2 rounded-xl text-[13px] font-semibold bg-white/10 text-white disabled:opacity-50"
                                         >
                                           Accept
                                         </button>
                                       </div>
                                     )}
                                     {disputeInfo?.user_confirmed && !disputeInfo?.merchant_confirmed && (
-                                      <p className="text-[11px] text-emerald-400 mt-2">
+                                      <p className="text-[11px] text-white mt-2">
                                         You accepted. Waiting for merchant confirmation...
                                       </p>
                                     )}
@@ -3600,10 +3616,10 @@ export default function Home() {
                               const data = JSON.parse(msg.text);
                               return (
                                 <div key={msg.id} className="flex justify-center">
-                                  <div className="w-full max-w-[90%] bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4">
+                                  <div className="w-full max-w-[90%] bg-white/5 border border-white/6 rounded-2xl p-4">
                                     <div className="flex items-center gap-2 mb-2">
-                                      <Check className="w-4 h-4 text-emerald-400" />
-                                      <span className="text-[13px] font-semibold text-emerald-400">Resolution Finalized</span>
+                                      <Check className="w-4 h-4 text-white" />
+                                      <span className="text-[13px] font-semibold text-white">Resolution Finalized</span>
                                     </div>
                                     <p className="text-[14px] text-white">
                                       Decision: {data.resolution?.replace(/_/g, ' ')}
@@ -3627,7 +3643,7 @@ export default function Home() {
                               return (
                                 <div key={msg.id} className="flex justify-center">
                                   <div className={`px-4 py-2 rounded-2xl text-[13px] ${
-                                    isAccepted ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                                    isAccepted ? 'bg-white/5 text-white' : 'bg-red-500/10 text-red-400'
                                   }`}>
                                     {data.party === 'user' ? 'You' : 'Merchant'} {isAccepted ? 'accepted' : 'rejected'} the resolution
                                   </div>
@@ -3667,10 +3683,10 @@ export default function Home() {
                       {/* Show pending resolution if dispute exists and has a proposal */}
                       {disputeInfo?.status === 'pending_confirmation' && disputeInfo.proposed_resolution && !activeChat?.messages.some(m => m.messageType === 'resolution') && (
                         <div className="flex justify-center">
-                          <div className="w-full max-w-[90%] bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4">
+                          <div className="w-full max-w-[90%] bg-white/5 border border-white/6 rounded-2xl p-4">
                             <div className="flex items-center gap-2 mb-2">
-                              <Shield className="w-4 h-4 text-orange-400" />
-                              <span className="text-[13px] font-semibold text-orange-400">Resolution Proposed</span>
+                              <Shield className="w-4 h-4 text-white/70" />
+                              <span className="text-[13px] font-semibold text-white/70">Resolution Proposed</span>
                             </div>
                             <p className="text-[14px] text-white mb-1">
                               <span className="text-neutral-400">Decision:</span> {disputeInfo.proposed_resolution.replace(/_/g, ' ')}
@@ -3690,14 +3706,14 @@ export default function Home() {
                                 <button
                                   onClick={() => respondToResolution('accept')}
                                   disabled={isRespondingToResolution}
-                                  className="flex-1 py-2 rounded-xl text-[13px] font-semibold bg-orange-500 text-white disabled:opacity-50"
+                                  className="flex-1 py-2 rounded-xl text-[13px] font-semibold bg-white/10 text-white disabled:opacity-50"
                                 >
                                   Accept
                                 </button>
                               </div>
                             )}
                             {disputeInfo.user_confirmed && !disputeInfo.merchant_confirmed && (
-                              <p className="text-[11px] text-emerald-400 mt-2">
+                              <p className="text-[11px] text-white mt-2">
                                 You accepted. Waiting for merchant confirmation...
                               </p>
                             )}
@@ -3762,13 +3778,13 @@ export default function Home() {
                   }`}
                 >
                   <motion.div
-                    className="w-2 h-2 rounded-full bg-amber-400"
+                    className="w-2 h-2 rounded-full bg-white/10"
                     animate={activityTab === 'active' ? { scale: [1, 1.3, 1] } : {}}
                     transition={{ duration: 1.5, repeat: Infinity }}
                   />
                   Active
                   {pendingOrders.length > 0 && (
-                    <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded-full">
+                    <span className="px-1.5 py-0.5 bg-white/10 text-white/70 text-[10px] rounded-full">
                       {pendingOrders.length}
                     </span>
                   )}
@@ -3784,7 +3800,7 @@ export default function Home() {
                   <Check className="w-3.5 h-3.5" />
                   Completed
                   {completedOrders.length > 0 && (
-                    <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] rounded-full">
+                    <span className="px-1.5 py-0.5 bg-white/10 text-white text-[10px] rounded-full">
                       {completedOrders.length}
                     </span>
                   )}
@@ -3816,9 +3832,9 @@ export default function Home() {
                           }}
                           className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center gap-3"
                         >
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-amber-500/10">
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5">
                             <motion.div
-                              className="w-2 h-2 rounded-full bg-amber-400"
+                              className="w-2 h-2 rounded-full bg-white/10"
                               animate={{ scale: [1, 1.3, 1] }}
                               transition={{ duration: 1.5, repeat: Infinity }}
                             />
@@ -3832,14 +3848,14 @@ export default function Home() {
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="text-[13px] font-medium text-amber-400">
+                            <p className="text-[13px] font-medium text-white/70">
                               Step {order.step}/4
                             </p>
                             {order.dbStatus === 'pending' && order.expiresAt ? (
                               <p className={`text-[11px] font-mono ${
                                 Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)) < 60
                                   ? "text-red-400"
-                                  : "text-amber-400"
+                                  : "text-white/70"
                               }`}>
                                 {(() => {
                                   const secs = Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000));
@@ -3880,8 +3896,8 @@ export default function Home() {
                           }}
                           className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center gap-3"
                         >
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-emerald-500/10">
-                            <Check className="w-5 h-5 text-emerald-400" />
+                          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5">
+                            <Check className="w-5 h-5 text-white" />
                           </div>
                           <div className="flex-1 text-left">
                             <p className="text-[15px] font-medium text-white">
@@ -3892,7 +3908,7 @@ export default function Home() {
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="text-[13px] font-medium text-emerald-400">Completed</p>
+                            <p className="text-[13px] font-medium text-white">Completed</p>
                             <p className="text-[11px] text-neutral-600">{order.createdAt.toLocaleDateString()}</p>
                           </div>
                         </motion.button>
@@ -3921,20 +3937,20 @@ export default function Home() {
                           whileTap={{ scale: 0.95 }}
                           onClick={() => setScreen(key as Screen)}
                           className={`flex flex-col items-center gap-1 relative px-3 py-1 rounded-xl transition-all ${
-                            screen === key ? "text-orange-400" : "text-neutral-600"
+                            screen === key ? "text-white" : "text-neutral-600"
                           }`}
                         >
                           {screen === key && (
                             <motion.div
                               layoutId="nav-indicator-orders"
-                              className="absolute inset-0 bg-orange-500/10 rounded-xl"
+                              className="absolute inset-0 bg-white/5 rounded-xl"
                               transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
                             />
                           )}
                           <div className="relative">
                             <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
                             {unreadTotal > 0 && (
-                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-white/10 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
                                 {unreadTotal > 99 ? '99+' : unreadTotal}
                               </span>
                             )}
@@ -3968,7 +3984,7 @@ export default function Home() {
             <div className="flex-1 px-5 pb-24 overflow-y-auto">
               {/* User */}
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-500 to-orange-400 flex items-center justify-center text-white text-xl font-semibold">
+                <div className="w-16 h-16 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white text-xl font-semibold">
                   {userName.charAt(0).toUpperCase()}
                 </div>
                 <div>
@@ -3988,7 +4004,7 @@ export default function Home() {
                   <div className="flex items-center gap-3 mb-4">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                       solanaWallet.connected
-                        ? 'bg-gradient-to-br from-purple-500 to-blue-500'
+                        ? 'bg-white/10'
                         : 'bg-neutral-700'
                     }`}>
                       <Wallet className="w-5 h-5 text-white" />
@@ -4014,7 +4030,7 @@ export default function Home() {
                       className="p-2"
                     >
                       {copied ? (
-                        <Check className="w-5 h-5 text-emerald-400" />
+                        <Check className="w-5 h-5 text-white" />
                       ) : (
                         <Copy className="w-5 h-5 text-neutral-500" />
                       )}
@@ -4059,7 +4075,7 @@ export default function Home() {
                   {!solanaWallet.connected && (
                     <button
                       onClick={() => setShowWalletModal(true)}
-                      className="w-full mt-4 py-3 rounded-xl text-[14px] font-medium bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+                      className="w-full mt-4 py-3 rounded-xl text-[14px] font-medium bg-white/10 border border-white/10 text-white hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
                     >
                       <Wallet className="w-4 h-4" />
                       Connect Solana Wallet
@@ -4083,14 +4099,14 @@ export default function Home() {
                 {bankAccounts.map(acc => (
                   <div key={acc.id} className="bg-neutral-900 rounded-2xl p-4 mb-2">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
                         <span className="text-lg">🏦</span>
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <p className="text-[15px] font-medium text-white">{acc.bank}</p>
                           {acc.isDefault && (
-                            <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 text-[11px] rounded-full">Default</span>
+                            <span className="px-2 py-0.5 bg-white/5 text-white text-[11px] rounded-full">Default</span>
                           )}
                         </div>
                         <p className="text-[13px] text-neutral-500 font-mono">{acc.iban}</p>
@@ -4125,8 +4141,8 @@ export default function Home() {
                   className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center justify-between hover:bg-neutral-800 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center">
-                      <Clock className="w-5 h-5 text-orange-400" />
+                    <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
+                      <Clock className="w-5 h-5 text-white/70" />
                     </div>
                     <div>
                       <p className="text-[15px] font-medium text-white">Console</p>
@@ -4134,7 +4150,7 @@ export default function Home() {
                     </div>
                   </div>
                   {timedOutOrders.length > 0 && (
-                    <span className="px-2 py-1 bg-amber-500/10 text-amber-400 text-[11px] rounded-full font-medium">
+                    <span className="px-2 py-1 bg-white/5 text-white/70 text-[11px] rounded-full font-medium">
                       {timedOutOrders.length} timeout{timedOutOrders.length !== 1 ? 's' : ''}
                     </span>
                   )}
@@ -4153,10 +4169,10 @@ export default function Home() {
                             <span className="text-[13px] font-medium text-white">#{dispute.orderNumber}</span>
                             <span className={`px-2 py-0.5 text-[10px] rounded-full ${
                               dispute.resolvedInFavorOf === 'user'
-                                ? 'bg-emerald-500/10 text-emerald-400'
+                                ? 'bg-white/5 text-white'
                                 : dispute.resolvedInFavorOf === 'merchant'
-                                ? 'bg-orange-500/10 text-orange-400'
-                                : 'bg-blue-500/10 text-blue-400'
+                                ? 'bg-white/10 text-white/70'
+                                : 'bg-white/5 text-white/70'
                             }`}>
                               {dispute.resolvedInFavorOf === 'user' ? 'Won' :
                                dispute.resolvedInFavorOf === 'merchant' ? 'Lost' : 'Split'}
@@ -4190,16 +4206,16 @@ export default function Home() {
                 >
                   <div className="flex items-center gap-3">
                     {theme === 'dark' ? (
-                      <Moon className="w-5 h-5 text-orange-400" />
+                      <Moon className="w-5 h-5 text-white/70" />
                     ) : (
-                      <Sun className="w-5 h-5 text-amber-400" />
+                      <Sun className="w-5 h-5 text-white/70" />
                     )}
                     <span className="text-[15px] text-white">
                       {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
                     </span>
                   </div>
                   <div className={`w-12 h-7 rounded-full p-1 transition-colors ${
-                    theme === 'light' ? 'bg-orange-500' : 'bg-neutral-700'
+                    theme === 'light' ? 'bg-white/10' : 'bg-neutral-700'
                   }`}>
                     <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
                       theme === 'light' ? 'translate-x-5' : 'translate-x-0'
@@ -4306,7 +4322,7 @@ export default function Home() {
                         disabled={!newBank.bank || !newBank.iban || !newBank.name}
                         className={`w-full py-4 rounded-2xl text-[17px] font-semibold ${
                           newBank.bank && newBank.iban && newBank.name
-                            ? "bg-orange-500 text-white"
+                            ? "bg-white/10 text-white"
                             : "bg-neutral-800 text-neutral-600"
                         }`}
                       >
@@ -4336,20 +4352,20 @@ export default function Home() {
                           whileTap={{ scale: 0.95 }}
                           onClick={() => setScreen(key as Screen)}
                           className={`flex flex-col items-center gap-1 relative px-3 py-1 rounded-xl transition-all ${
-                            screen === key ? "text-orange-400" : "text-neutral-600"
+                            screen === key ? "text-white" : "text-neutral-600"
                           }`}
                         >
                           {screen === key && (
                             <motion.div
                               layoutId="nav-indicator-profile"
-                              className="absolute inset-0 bg-orange-500/10 rounded-xl"
+                              className="absolute inset-0 bg-white/5 rounded-xl"
                               transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
                             />
                           )}
                           <div className="relative">
                             <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
                             {unreadTotal > 0 && (
-                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-white/10 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
                                 {unreadTotal > 99 ? '99+' : unreadTotal}
                               </span>
                             )}
@@ -4407,11 +4423,11 @@ export default function Home() {
                       className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center gap-3"
                     >
                       <div className="relative">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-orange-400 flex items-center justify-center text-white font-semibold">
+                        <div className="w-12 h-12 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white font-semibold">
                           {order.merchant.name.charAt(0)}
                         </div>
                         {(order.unreadCount || 0) > 0 && (
-                          <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center">
+                          <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-white/10 flex items-center justify-center">
                             <span className="text-[10px] font-bold text-white">{order.unreadCount}</span>
                           </div>
                         )}
@@ -4464,20 +4480,20 @@ export default function Home() {
                           whileTap={{ scale: 0.95 }}
                           onClick={() => setScreen(key as Screen)}
                           className={`flex flex-col items-center gap-1 relative px-3 py-1 rounded-xl transition-all ${
-                            screen === key ? "text-orange-400" : "text-neutral-600"
+                            screen === key ? "text-white" : "text-neutral-600"
                           }`}
                         >
                           {screen === key && (
                             <motion.div
                               layoutId="nav-indicator-chats"
-                              className="absolute inset-0 bg-orange-500/10 rounded-xl"
+                              className="absolute inset-0 bg-white/5 rounded-xl"
                               transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
                             />
                           )}
                           <div className="relative">
                             <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
                             {unreadTotal > 0 && (
-                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-orange-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-white/10 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
                                 {unreadTotal > 99 ? '99+' : unreadTotal}
                               </span>
                             )}
@@ -4508,12 +4524,12 @@ export default function Home() {
                 <button onClick={() => setScreen("chats")} className="p-2 -ml-2">
                   <ChevronLeft className="w-6 h-6 text-white" />
                 </button>
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-500 to-orange-400 flex items-center justify-center text-white font-semibold">
+                <div className="w-10 h-10 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white font-semibold">
                   {activeOrder.merchant.name.charAt(0)}
                 </div>
                 <div className="flex-1">
                   <p className="text-[15px] font-semibold text-white">{activeOrder.merchant.name}</p>
-                  <p className="text-[12px] text-emerald-400">Online</p>
+                  <p className="text-[12px] text-white">Online</p>
                 </div>
                 <button
                   onClick={() => setScreen("order")}
@@ -4526,8 +4542,8 @@ export default function Home() {
               <div className="mt-3 bg-neutral-800/50 rounded-xl px-3 py-2 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${
-                    activeOrder.status === 'complete' ? 'bg-emerald-400' :
-                    activeOrder.status === 'disputed' ? 'bg-red-400' : 'bg-amber-400'
+                    activeOrder.status === 'complete' ? 'bg-white/10' :
+                    activeOrder.status === 'disputed' ? 'bg-red-400' : 'bg-white/10'
                   }`} />
                   <span className="text-[12px] text-neutral-400">
                     {activeOrder.type === "buy" ? "Buying" : "Selling"} {activeOrder.cryptoAmount} USDC
@@ -4592,12 +4608,12 @@ export default function Home() {
                       <div
                         className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${
                           isMe
-                            ? "bg-orange-500 text-white rounded-br-md"
+                            ? "bg-white/10 text-white rounded-br-md"
                             : "bg-neutral-800 text-white rounded-bl-md"
                         }`}
                       >
                         <p className="text-[15px] leading-relaxed">{msg.text}</p>
-                        <p className={`text-[10px] mt-1 ${isMe ? 'text-orange-200' : 'text-neutral-500'}`}>
+                        <p className={`text-[10px] mt-1 ${isMe ? 'text-white/70' : 'text-neutral-500'}`}>
                           {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
@@ -4640,7 +4656,7 @@ export default function Home() {
                     }
                   }}
                   className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    chatMessage.trim() ? 'bg-orange-500' : 'bg-neutral-800'
+                    chatMessage.trim() ? 'bg-white/10' : 'bg-neutral-800'
                   }`}
                 >
                   <ArrowUpRight className={`w-5 h-5 ${chatMessage.trim() ? 'text-white' : 'text-neutral-500'}`} />
@@ -4683,7 +4699,7 @@ export default function Home() {
                       onClick={() => setTradeType(type)}
                       className={`flex-1 py-3 rounded-xl text-[15px] font-medium transition-all ${
                         tradeType === type
-                          ? "bg-orange-500 text-white"
+                          ? "bg-white/10 text-white"
                           : "bg-neutral-900 text-neutral-400"
                       }`}
                     >
@@ -4755,7 +4771,7 @@ export default function Home() {
             <div className="px-5 pb-10">
               <motion.button
                 whileTap={{ scale: 0.98 }}
-                className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-orange-500 text-white"
+                className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-white/10 text-white"
               >
                 Post Offer
               </motion.button>
@@ -4801,14 +4817,14 @@ export default function Home() {
               <div className="bg-neutral-900 rounded-2xl p-4 mb-4">
                 <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-3">Meeting with</p>
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-orange-400 flex items-center justify-center text-white text-lg font-semibold">
+                  <div className="w-12 h-12 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white text-lg font-semibold">
                     {selectedOffer.merchant.display_name.charAt(0)}
                   </div>
                   <div className="flex-1">
                     <p className="text-[17px] font-medium text-white">{selectedOffer.merchant.display_name}</p>
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-1">
-                        <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                        <Star className="w-3 h-3 fill-amber-400 text-white/70" />
                         <span className="text-[13px] text-neutral-400">{selectedOffer.merchant.rating}</span>
                       </div>
                       <span className="text-neutral-600">·</span>
@@ -4821,13 +4837,13 @@ export default function Home() {
               {/* Location Preview */}
               <div className="bg-neutral-900 rounded-2xl overflow-hidden mb-4">
                 <div className="relative h-36">
-                  <div className="absolute inset-0 bg-gradient-to-b from-neutral-800/50 to-neutral-900/80" />
+                  <div className="absolute inset-0 bg-black/30" />
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="flex flex-col items-center">
-                      <div className="w-12 h-12 rounded-full bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/30 mb-1">
+                      <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center shadow-lg shadow-white/10 mb-1">
                         <MapPin className="w-6 h-6 text-white" />
                       </div>
-                      <div className="w-1 h-4 bg-emerald-500 rounded-b-full" />
+                      <div className="w-1 h-4 bg-white/10 rounded-b-full" />
                     </div>
                   </div>
                   {/* Grid pattern */}
@@ -4856,7 +4872,7 @@ export default function Home() {
                     <div className="pt-3 border-t border-neutral-800">
                       <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-1">Meeting spot</p>
                       <div className="flex items-start gap-2">
-                        <Navigation className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                        <Navigation className="w-4 h-4 text-white flex-shrink-0 mt-0.5" />
                         <p className="text-[13px] text-white">{selectedOffer.meeting_instructions}</p>
                       </div>
                     </div>
@@ -4865,11 +4881,11 @@ export default function Home() {
               </div>
 
               {/* Safety Notice */}
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 mb-4">
+              <div className="bg-white/5 border border-white/6 rounded-2xl p-4 mb-4">
                 <div className="flex items-start gap-3">
-                  <Shield className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <Shield className="w-5 h-5 text-white/70 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-[13px] font-medium text-amber-400 mb-1">Safety tips</p>
+                    <p className="text-[13px] font-medium text-white/70 mb-1">Safety tips</p>
                     <ul className="text-[12px] text-neutral-400 space-y-1">
                       <li>• Meet in public places only</li>
                       <li>• Verify the amount before handing over cash</li>
@@ -4886,7 +4902,7 @@ export default function Home() {
                 whileTap={{ scale: 0.98 }}
                 onClick={confirmCashOrder}
                 disabled={isLoading}
-                className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-orange-500 text-white flex items-center justify-center gap-2"
+                className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-white/10 text-white flex items-center justify-center gap-2"
               >
                 {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirm & Start Trade"}
               </motion.button>
@@ -4954,14 +4970,14 @@ export default function Home() {
                 className="glass-card rounded-2xl p-4 mb-4"
               >
                 <div className="flex items-center gap-3 mb-4 pb-4 border-b border-neutral-800">
-                  <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center relative">
+                  <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center relative">
                     <motion.div
-                      className="absolute inset-0 rounded-full border-2 border-orange-500/30"
+                      className="absolute inset-0 rounded-full border-2 border-white/6"
                       animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0, 0.5] }}
                       transition={{ duration: 2, repeat: Infinity }}
                     />
                     <motion.div
-                      className="w-3 h-3 rounded-full bg-orange-500"
+                      className="w-3 h-3 rounded-full bg-white/10"
                       animate={{ scale: [1, 0.8, 1] }}
                       transition={{ duration: 1.5, repeat: Infinity }}
                     />
@@ -5005,8 +5021,8 @@ export default function Home() {
               >
                 <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-2">Time remaining</p>
                 <div className="flex items-center justify-center gap-2">
-                  <Clock className={`w-5 h-5 ${matchingTimeLeft < 60 ? 'text-red-400' : matchingTimeLeft < 180 ? 'text-amber-400' : 'text-orange-400'}`} />
-                  <p className={`text-[28px] font-semibold tracking-tight ${matchingTimeLeft < 60 ? 'text-red-400' : matchingTimeLeft < 180 ? 'text-amber-400' : 'text-white'}`}>
+                  <Clock className={`w-5 h-5 ${matchingTimeLeft < 60 ? 'text-red-400' : matchingTimeLeft < 180 ? 'text-white/70' : 'text-white/70'}`} />
+                  <p className={`text-[28px] font-semibold tracking-tight ${matchingTimeLeft < 60 ? 'text-red-400' : matchingTimeLeft < 180 ? 'text-white/70' : 'text-white'}`}>
                     {formatTimeLeft(matchingTimeLeft)}
                   </p>
                 </div>
@@ -5014,7 +5030,7 @@ export default function Home() {
                   <motion.p
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="text-[12px] text-amber-400 mt-2"
+                    className="text-[12px] text-white/70 mt-2"
                   >
                     {matchingTimeLeft < 60 ? 'Order will expire soon!' : 'Hurry! Time is running out'}
                   </motion.p>
@@ -5022,7 +5038,7 @@ export default function Home() {
                 {/* Progress bar */}
                 <div className="w-full h-1 bg-neutral-800 rounded-full mt-3 overflow-hidden">
                   <motion.div
-                    className={`h-full rounded-full ${matchingTimeLeft < 60 ? 'bg-red-500' : matchingTimeLeft < 180 ? 'bg-amber-500' : 'bg-orange-500'}`}
+                    className={`h-full rounded-full ${matchingTimeLeft < 60 ? 'bg-red-500' : matchingTimeLeft < 180 ? 'bg-white/10' : 'bg-white/10'}`}
                     initial={{ width: '100%' }}
                     animate={{ width: `${(matchingTimeLeft / (15 * 60)) * 100}%` }}
                     transition={{ duration: 0.5 }}
@@ -5053,7 +5069,7 @@ export default function Home() {
               <motion.button
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setScreen("home")}
-                className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-orange-500 text-white"
+                className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-white/10 text-white"
               >
                 Done
               </motion.button>
@@ -5135,15 +5151,15 @@ export default function Home() {
             exit={{ opacity: 0, y: -50, scale: 0.9 }}
             className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm"
           >
-            <div className="bg-[#1a1a1a] rounded-2xl p-4 border border-emerald-500/30 shadow-xl shadow-emerald-500/10">
+            <div className="bg-[#1a1a1a] rounded-2xl p-4 border border-white/6 shadow-xl shadow-emerald-500/10">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                  <Check className="w-5 h-5 text-emerald-400" />
+                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
+                  <Check className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white mb-1">Order Accepted!</p>
                   <p className="text-xs text-gray-400 mb-2">
-                    <span className="text-emerald-400 font-medium">{acceptedOrderInfo.merchantName}</span> accepted your {acceptedOrderInfo.orderType === 'sell' ? 'sell' : 'buy'} order
+                    <span className="text-white font-medium">{acceptedOrderInfo.merchantName}</span> accepted your {acceptedOrderInfo.orderType === 'sell' ? 'sell' : 'buy'} order
                   </p>
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-gray-300 font-medium">{acceptedOrderInfo.cryptoAmount} USDC</span>

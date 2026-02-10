@@ -40,6 +40,10 @@ import {
   Bot,
   Paperclip,
   FileText,
+  ArrowUpRight,
+  ArrowDownRight,
+  Search,
+  SlidersHorizontal,
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -54,6 +58,9 @@ import { OrderDetailsPanel } from "@/components/merchant/OrderDetailsPanel";
 import { AnalyticsDashboard } from "@/components/merchant/AnalyticsDashboard";
 import { TradeChat } from "@/components/merchant/TradeChat";
 import { FileUpload } from "@/components/chat/FileUpload";
+import { Marketplace } from "@/components/merchant/Marketplace";
+import { MyOffers } from "@/components/merchant/MyOffers";
+import { Package } from "lucide-react";
 
 // Dynamically import wallet components (client-side only)
 const MerchantWalletModal = dynamic(() => import("@/components/MerchantWalletModal"), { ssr: false });
@@ -188,11 +195,16 @@ interface Order {
 // Leaderboard data
 interface LeaderboardEntry {
   rank: number;
-  user: string;
-  emoji: string;
-  volume: number;
-  trades: number;
-  isTop1Percent: boolean;
+  id: string;
+  displayName: string;
+  username: string;
+  totalTrades: number;
+  totalVolume: number;
+  rating: number;
+  ratingCount: number;
+  isOnline: boolean;
+  avgResponseMins: number;
+  completedCount: number;
 }
 
 // Helper to map DB status to UI status
@@ -246,7 +258,7 @@ const getUserEmoji = (name: string): string => {
 // Mini Sparkline Component - Shows activity over time
 const MiniSparkline = ({ data, color = "emerald", height = 24 }: { data: number[]; color?: string; height?: number }) => {
   const max = Math.max(...data, 1);
-  const colorClass = color === "emerald" ? "bg-emerald-400" : color === "purple" ? "bg-purple-400" : "bg-cyan-400";
+  const colorClass = color === "emerald" ? "bg-white/10" : color === "purple" ? "bg-white/10" : "bg-white/10";
 
   return (
     <div className="flex items-end gap-0.5" style={{ height }}>
@@ -368,8 +380,7 @@ const TRADER_CUT_CONFIG = {
   average: 0.00583, // Average across all preferences for display
 } as const;
 
-// Leaderboard data
-const leaderboardData: LeaderboardEntry[] = [];
+// Leaderboard data loaded from API
 
 // Notifications are managed via useState inside the component
 
@@ -407,6 +418,7 @@ export default function MerchantDashboard() {
   const [merchantInfo, setMerchantInfo] = useState<MerchantInfo | null>(null);
   const [activeOffers, setActiveOffers] = useState<{ id: string; type: string; available_amount: number; is_active: boolean }[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
 
   // Solana wallet state
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -505,8 +517,15 @@ export default function MerchantDashboard() {
   });
   // Order view filter: 'new' (pending only) | 'all' (all orders including completed)
   const [orderViewFilter, setOrderViewFilter] = useState<'new' | 'all'>('new');
+  const [orderFilters, setOrderFilters] = useState({
+    type: 'all' as 'all' | 'buy' | 'sell',
+    amount: 'all' as 'all' | 'small' | 'medium' | 'large',
+    method: 'all' as 'all' | 'bank' | 'cash',
+    secured: 'all' as 'all' | 'yes' | 'no',
+  });
+  const [showOrderFilters, setShowOrderFilters] = useState(false);
   // Mobile view state: 'orders' | 'escrow' | 'chat' | 'stats' | 'history'
-  const [mobileView, setMobileView] = useState<'orders' | 'active' | 'escrow' | 'chat' | 'stats' | 'history'>('orders');
+  const [mobileView, setMobileView] = useState<'orders' | 'active' | 'escrow' | 'chat' | 'stats' | 'history' | 'marketplace' | 'offers'>('orders');
   // History tab filter: 'completed' | 'cancelled'
   const [historyTab, setHistoryTab] = useState<'completed' | 'cancelled'>('completed');
   // Order detail popup state
@@ -1089,6 +1108,20 @@ export default function MerchantDashboard() {
     }
   }, [merchantId]);
 
+  // Fetch leaderboard data
+  const fetchLeaderboard = useCallback(async () => {
+    try {
+      const res = await fetch('/api/merchants/leaderboard');
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success && data.data) {
+        setLeaderboardData(data.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch leaderboard:', err);
+    }
+  }, []);
+
   // Fetch orders when merchant ID is available
   // Real-time updates come via Pusher WebSocket (useRealtimeOrders hook)
   useEffect(() => {
@@ -1097,7 +1130,8 @@ export default function MerchantDashboard() {
     fetchResolvedDisputes();
     fetchBigOrders();
     fetchActiveOffers();
-  }, [merchantId, fetchOrders, fetchResolvedDisputes, fetchBigOrders, fetchActiveOffers]);
+    fetchLeaderboard();
+  }, [merchantId, fetchOrders, fetchResolvedDisputes, fetchBigOrders, fetchActiveOffers, fetchLeaderboard]);
 
   // WebSocket-first approach with minimal polling fallback
   const { isConnected: isPusherConnected } = usePusher();
@@ -1330,8 +1364,8 @@ export default function MerchantDashboard() {
         actor_id: merchantId,
       };
 
-      // Include wallet address if connected
-      if (solanaWallet.walletAddress) {
+      // Include wallet address if connected (skip mock addresses that fail Solana validation)
+      if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
         requestBody.acceptor_wallet_address = solanaWallet.walletAddress;
       }
 
@@ -1414,16 +1448,20 @@ export default function MerchantDashboard() {
         merchantId,
       });
 
-      const res = await fetch(`/api/orders/${order.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const claimBody: Record<string, string> = {
           status: "payment_pending",
           actor_type: "merchant",
           actor_id: merchantId,
-          acceptor_wallet_address: solanaWallet.walletAddress,
-          acceptor_wallet_signature: signature,
-        }),
+      };
+      if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
+        claimBody.acceptor_wallet_address = solanaWallet.walletAddress;
+        claimBody.acceptor_wallet_signature = signature;
+      }
+
+      const res = await fetch(`/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(claimBody),
       });
 
       const responseData = await res.json().catch(() => ({}));
@@ -1480,16 +1518,20 @@ export default function MerchantDashboard() {
       console.log('[Sign] Wallet signature obtained');
 
       // Update order to payment_sent (moves to Ongoing)
+      const proceedBody: Record<string, string> = {
+        status: "payment_sent",
+        actor_type: "merchant",
+        actor_id: merchantId,
+      };
+      if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
+        proceedBody.acceptor_wallet_address = solanaWallet.walletAddress;
+        proceedBody.acceptor_wallet_signature = signature;
+      }
+
       const res = await fetch(`/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "payment_sent",
-          actor_type: "merchant",
-          actor_id: merchantId,
-          acceptor_wallet_address: solanaWallet.walletAddress,
-          acceptor_wallet_signature: signature,
-        }),
+        body: JSON.stringify(proceedBody),
       });
 
       if (!res.ok) {
@@ -1780,6 +1822,8 @@ export default function MerchantDashboard() {
   };
 
   // Execute the escrow release transaction
+  const isMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+
   const executeRelease = async () => {
     if (!merchantId || !releaseOrder) return;
 
@@ -1787,38 +1831,69 @@ export default function MerchantDashboard() {
     setReleaseError(null);
 
     try {
-      // Validate escrow details
       const { escrowTradeId, escrowCreatorWallet, userWallet } = releaseOrder;
-      const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
-      if (!escrowTradeId || !escrowCreatorWallet || !userWallet) {
-        setReleaseError('Missing escrow details. The escrow may not have been locked on-chain.');
-        setIsReleasingEscrow(false);
-        return;
-      }
+      // In mock mode, skip on-chain validation
+      if (!isMockMode) {
+        const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
-      if (!base58Regex.test(userWallet)) {
-        setReleaseError('Invalid user wallet address format.');
-        setIsReleasingEscrow(false);
-        return;
+        if (!escrowTradeId || !escrowCreatorWallet || !userWallet) {
+          setReleaseError('Missing escrow details. The escrow may not have been locked on-chain.');
+          setIsReleasingEscrow(false);
+          return;
+        }
+
+        if (!base58Regex.test(userWallet)) {
+          setReleaseError('Invalid user wallet address format.');
+          setIsReleasingEscrow(false);
+          return;
+        }
       }
 
       console.log('[Release] Releasing escrow:', {
         tradeId: escrowTradeId,
         creatorWallet: escrowCreatorWallet,
         counterparty: userWallet,
+        mockMode: isMockMode,
       });
 
-      // Call the on-chain release function (this will trigger wallet popup)
+      // Call the release function (mock mode returns instant success)
       const releaseResult = await solanaWallet.releaseEscrow({
-        creatorPubkey: escrowCreatorWallet,
-        tradeId: escrowTradeId,
-        counterparty: userWallet,
+        creatorPubkey: escrowCreatorWallet || 'mock',
+        tradeId: escrowTradeId || 0,
+        counterparty: userWallet || 'mock',
       });
 
       if (releaseResult.success) {
         console.log('[Release] Escrow released successfully:', releaseResult.txHash);
         setReleaseTxHash(releaseResult.txHash);
+
+        // In mock mode, credit the USDC recipient's balance
+        if (isMockMode && releaseOrder.dbOrder) {
+          const dbOrd = releaseOrder.dbOrder;
+          // Determine who receives the released USDC:
+          // - sell order (user sells USDC → merchant buys): credit merchant (me)
+          // - buy order (user buys USDC → merchant sells): credit user or buyer_merchant
+          const isSellOrder = dbOrd.type === 'sell';
+          const recipientId = isSellOrder ? merchantId : (dbOrd.buyer_merchant_id || dbOrd.user_id);
+          const recipientType = isSellOrder ? 'merchant' : (dbOrd.buyer_merchant_id ? 'merchant' : 'user');
+
+          try {
+            await fetch('/api/mock/balance', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                userId: recipientId,
+                type: recipientType,
+                action: 'credit',
+                amount: releaseOrder.amount,
+              }),
+            });
+            console.log('[Release][Mock] Credited', releaseOrder.amount, 'USDC to', recipientType, recipientId);
+          } catch (balErr) {
+            console.error('[Release][Mock] Failed to credit balance:', balErr);
+          }
+        }
 
         // Record the release on backend
         await fetch(`/api/orders/${releaseOrder.id}/escrow`, {
@@ -1834,7 +1909,7 @@ export default function MerchantDashboard() {
         // Update local state
         setOrders(prev => prev.map(o => o.id === releaseOrder.id ? { ...o, status: "completed" as const } : o));
         fetchOrders();
-        // Refresh on-chain wallet balance to sync with platform balance
+        // Refresh wallet balance
         if (solanaWallet.connected) {
           solanaWallet.refreshBalances();
         }
@@ -2521,7 +2596,7 @@ export default function MerchantDashboard() {
             )}
 
             {isAuthenticating && (
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-sm text-blue-400 flex items-center gap-2">
+              <div className="bg-white/5 border border-white/6 rounded-xl p-3 text-sm text-white/70 flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Authenticating with wallet...
               </div>
@@ -2620,7 +2695,7 @@ export default function MerchantDashboard() {
                   whileTap={{ scale: 0.98 }}
                   onClick={handleRegister}
                   disabled={isRegistering || !registerForm.email || !registerForm.password || !registerForm.confirmPassword}
-                  className="w-full py-3.5 rounded-xl text-sm font-bold bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="w-full py-3.5 rounded-xl text-sm font-bold bg-white/10 border border-white/10 text-white hover:bg-white/20 transition-all disabled:opacity-50"
                 >
                   {isRegistering ? "Creating Account..." : "Create Account"}
                 </motion.button>
@@ -2641,315 +2716,152 @@ export default function MerchantDashboard() {
       {/* Ambient */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-1/3 w-[600px] h-[400px] bg-white/[0.04] rounded-full blur-[150px]" />
-        <div className="absolute bottom-0 left-1/4 w-[500px] h-[300px] bg-emerald-500/[0.02] rounded-full blur-[150px]" />
+        <div className="absolute bottom-0 left-1/4 w-[500px] h-[300px] bg-white/[0.01] rounded-full blur-[150px]" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-white/[0.015] rounded-full blur-[200px]" />
       </div>
 
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-50 bg-[#0a0a0a]/90 backdrop-blur-xl border-b border-white/[0.04]">
-        <div className="px-4 h-12 flex items-center gap-3">
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg border border-white/20 flex items-center justify-center text-white font-bold text-xs">
-              B
-            </div>
-            <span className="text-sm font-semibold hidden sm:block">Merchant</span>
+      {/* Top Navbar - Apple-inspired */}
+      <header className="sticky top-0 z-50 bg-black border-b border-white/[0.06]">
+        <div className="px-4 h-[52px] flex items-center">
+          {/* Left: Logo + Action Buttons */}
+          <div className="flex items-center gap-3 shrink-0">
+            <Link href="/merchant" className="flex items-center mr-2">
+              <h1 className="text-[18px] font-bold text-white tracking-tight leading-none whitespace-nowrap">
+                Blip Money
+              </h1>
+            </Link>
+
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => {
+                if (!solanaWallet.connected) {
+                  setShowWalletModal(true);
+                } else {
+                  setShowCreateModal(true);
+                }
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all bg-white/10 text-white hover:bg-white/20 border border-white/10 hover:border-white/20"
+            >
+              {solanaWallet.connected ? (
+                <>
+                  <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  <span className="hidden sm:inline">Corridor</span>
+                </>
+              ) : (
+                <>
+                  <Wallet className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  <span className="hidden sm:inline">Connect</span>
+                </>
+              )}
+            </motion.button>
+
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => {
+                if (!solanaWallet.connected) {
+                  setShowWalletModal(true);
+                } else {
+                  setShowOpenTradeModal(true);
+                }
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-white/5 text-white hover:bg-white/10 border border-white/6 hover:border-white/12 transition-all"
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+              <span className="hidden sm:inline">Trade</span>
+            </motion.button>
           </div>
-
-          {/* Nav Links */}
-          <nav className="flex items-center gap-1 ml-3">
-            <Link
-              href="/merchant"
-              className="px-2.5 py-1 text-[11px] font-medium bg-white/[0.08] rounded-md text-white"
-            >
-              Console
-            </Link>
-            <Link
-              href="/merchant/analytics"
-              className="px-2.5 py-1 text-[11px] font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-md transition-all"
-            >
-              Analytics
-            </Link>
-          </nav>
-
-          {/* Create Corridor - Prominent CTA */}
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => {
-              if (!solanaWallet.connected) {
-                setShowWalletModal(true);
-              } else {
-                setShowCreateModal(true);
-              }
-            }}
-            className={`ml-4 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
-              solanaWallet.connected
-                ? 'bg-white text-black hover:bg-white/90'
-                : 'bg-[#26A17B] text-white hover:bg-[#26A17B]/90'
-            }`}
-          >
-            {solanaWallet.connected ? (
-              <>
-                <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
-                <span className="hidden sm:inline">Open Corridor</span>
-              </>
-            ) : (
-              <>
-                <Wallet className="w-3.5 h-3.5" strokeWidth={2.5} />
-                <span className="hidden sm:inline">Connect to Trade</span>
-              </>
-            )}
-          </motion.button>
-
-          {/* Open Trade - Merchant initiates trade */}
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => {
-              if (!solanaWallet.connected) {
-                setShowWalletModal(true);
-              } else {
-                setShowOpenTradeModal(true);
-              }
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all"
-          >
-            <ArrowLeftRight className="w-3.5 h-3.5" strokeWidth={2.5} />
-            <span className="hidden sm:inline">Open Trade</span>
-          </motion.button>
 
           <div className="flex-1" />
 
-          {/* Quick Stats */}
-          <div className="hidden lg:flex items-center gap-1.5">
-            {/* Total Earned - Inline with animation */}
-            <motion.div
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 rounded-md border border-emerald-500/20"
-              title="Total Earned Today"
-              whileHover={{ scale: 1.02, borderColor: "rgba(16, 185, 129, 0.4)" }}
-            >
-              <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-xs font-bold text-emerald-400">
-                $<AnimatedCounter value={Math.round(todayEarnings + pendingEarnings)} />
-              </span>
-            </motion.div>
+          {/* Center: Nav + Search */}
+          <div className="flex items-center gap-4">
+            <nav className="flex items-center gap-1 bg-white/[0.04] rounded-lg p-0.5">
+              <Link
+                href="/merchant"
+                className="px-3 py-1.5 rounded-md text-[13px] font-medium bg-white/10 text-white transition-colors"
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="/merchant/analytics"
+                className="px-3 py-1.5 rounded-md text-[13px] font-medium text-white/50 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                Analytics
+              </Link>
+            </nav>
 
-            {/* USDT Balance */}
-            <motion.button
-              onClick={() => setShowWalletModal(true)}
-              className="flex items-center gap-1 px-2 py-1 bg-[#26A17B]/10 rounded-md border border-[#26A17B]/20 hover:bg-[#26A17B]/20 transition-colors"
-              title={solanaWallet.connected ? "USDT Balance" : "Connect Wallet"}
-              whileHover={{ scale: 1.02 }}
-            >
-              <span className="text-[11px] font-mono text-[#26A17B]">
-                {solanaWallet.connected && solanaWallet.usdtBalance !== null
-                  ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USDT`
-                  : "Connect"}
-              </span>
-            </motion.button>
-
-            {/* Volume with mini sparkline */}
-            <motion.div
-              className="flex items-center gap-2 px-2.5 py-1 bg-white/[0.03] rounded-md border border-white/[0.06]"
-              title="Total Volume Today"
-              whileHover={{ scale: 1.02, borderColor: "rgba(255, 255, 255, 0.12)" }}
-            >
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[9px] text-gray-500 leading-none">VOL</span>
-                <span className="text-[11px] font-mono text-gray-300 leading-none">${totalTradedVolume.toLocaleString()}</span>
-              </div>
-              <div className="w-12 h-4">
-                <MiniSparkline
-                  data={[...orders.slice(-8).map(o => o.amount), totalTradedVolume / 10]}
-                  color="cyan"
-                  height={16}
-                />
-              </div>
-            </motion.div>
-
-            {/* Activity with live pulse */}
-            <motion.div
-              className="flex items-center gap-1.5 px-2 py-1 bg-purple-500/10 rounded-md border border-purple-500/20"
-              title="Active Orders"
-              whileHover={{ scale: 1.02 }}
-            >
-              <div className="relative">
-                <BarChart3 className="w-3 h-3 text-purple-400" />
-                {pendingOrders.length > 0 && (
-                  <motion.div
-                    className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-purple-400 rounded-full"
-                    animate={{ scale: [1, 1.3, 1], opacity: [1, 0.7, 1] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                  />
-                )}
-              </div>
-              <span className="text-[11px] font-mono text-purple-400">{pendingOrders.length + activeOrders.length + ongoingOrders.length}</span>
-            </motion.div>
-          </div>
-
-          {/* Online Status */}
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
-            <motion.div
-              className="w-1.5 h-1.5 rounded-full bg-emerald-500"
-              animate={{ opacity: [1, 0.4, 1] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            />
-            <span className="text-[10px] text-emerald-400 font-medium">Online</span>
-          </div>
-
-          {/* Wallet & Logout Button */}
-          {solanaWallet.walletAddress && (
-            <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-[#151515] rounded-md border border-white/[0.04]">
-              <Wallet className="w-3 h-3 text-gray-500" />
-              <span className="text-[10px] text-gray-400 font-mono">
-                {solanaWallet.walletAddress.slice(0, 4)}...{solanaWallet.walletAddress.slice(-4)}
-              </span>
+            <div className="relative hidden md:flex items-center">
+              <Search className="absolute left-2.5 w-3.5 h-3.5 text-gray-500 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search orders..."
+                className="w-[360px] pl-8 pr-3 py-1.5 bg-white/[0.04] border border-white/[0.06] rounded-lg text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-white/15 focus:bg-white/[0.06] transition-all"
+              />
             </div>
-          )}
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={handleLogout}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-500/10 rounded-md border border-red-500/20 hover:bg-red-500/20 transition-colors group"
-            title="Disconnect wallet & logout"
-          >
-            <LogOut className="w-4 h-4 text-red-400" />
-            <span className="text-xs text-red-400 font-medium">Logout</span>
-          </motion.button>
+          </div>
 
-          {/* Message History */}
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowMessageHistory(!showMessageHistory)}
-            className="p-1.5 bg-[#151515] rounded-md border border-white/[0.04] relative group"
-            title="Message History"
-          >
-            <MessageCircle className="w-4 h-4 text-gray-400 group-hover:text-emerald-400" />
-          </motion.button>
+          <div className="flex-1" />
 
-          {/* Analytics */}
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowAnalytics(!showAnalytics)}
-            className="p-1.5 bg-[#151515] rounded-md border border-white/[0.04] relative group"
-            title="Analytics"
-          >
-            <TrendingUp className="w-4 h-4 text-gray-400 group-hover:text-cyan-400" />
-          </motion.button>
+          {/* Right: Stats + Balance + Profile */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden lg:flex items-center gap-1.5">
+              <div
+                className="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded-md border border-white/6"
+                title="Total Earned Today"
+              >
+                <DollarSign className="w-3 h-3 text-white" />
+                <span className="text-[11px] font-bold text-white">
+                  $<AnimatedCounter value={Math.round(todayEarnings + pendingEarnings)} />
+                </span>
+              </div>
 
-          {/* Notifications */}
-          <div className="relative">
+              <div
+                className="flex items-center gap-1.5 px-2 py-1 bg-white/[0.03] rounded-md border border-white/[0.06]"
+                title="Total Volume"
+              >
+                <span className="text-[10px] font-mono text-gray-400">${totalTradedVolume.toLocaleString()}</span>
+              </div>
+
+              <div
+                className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-md border border-white/6"
+                title="Active Orders"
+              >
+                <BarChart3 className="w-3 h-3 text-white/70" />
+                <span className="text-[10px] font-mono text-white/70">{pendingOrders.length + activeOrders.length + ongoingOrders.length}</span>
+              </div>
+            </div>
+
             <motion.button
               whileTap={{ scale: 0.95 }}
-              onClick={() => setShowNotifications(!showNotifications)}
-              className="p-1.5 bg-[#151515] rounded-md border border-white/[0.04] relative"
+              onClick={() => setShowWalletModal(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all bg-[#26A17B]/10 border-[#26A17B]/30 hover:bg-[#26A17B]/20"
+              title="USDT Balance"
             >
-              <Bell className="w-4 h-4 text-gray-400" />
-              {notifications.filter(n => !n.read).length > 0 && (
-                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 border border-white/40 rounded-full text-[8px] font-bold flex items-center justify-center text-white bg-[#0a0a0a]">
-                  {notifications.filter(n => !n.read).length}
-                </span>
-              )}
+              <div className="w-1.5 h-1.5 rounded-full bg-[#26A17B] animate-pulse" />
+              <span className="text-[11px] font-bold text-[#26A17B]">
+                {solanaWallet.connected && solanaWallet.usdtBalance !== null
+                  ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+                  : '10,000'}
+                <span className="text-[9px] ml-0.5">USDT</span>
+              </span>
             </motion.button>
 
-            <AnimatePresence>
-              {showNotifications && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute top-full right-0 mt-2 w-72 bg-[#151515] rounded-xl border border-white/[0.08] shadow-2xl overflow-hidden"
-                >
-                  <div className="p-3 border-b border-white/[0.04] flex items-center justify-between">
-                    <p className="text-xs font-semibold">Notifications</p>
-                    <button className="text-[10px] text-white">Mark all read</button>
-                  </div>
-                  <div className="max-h-80 overflow-y-auto">
-                    {notifications.length > 0 ? (
-                      notifications.map(notif => (
-                        <div
-                          key={notif.id}
-                          onClick={() => markNotificationRead(notif.id)}
-                          className={`px-3 py-2.5 border-b border-white/[0.02] hover:bg-white/[0.02] cursor-pointer ${
-                            !notif.read ? "bg-white/[0.05]" : ""
-                          }`}
-                        >
-                          <div className="flex items-start gap-2">
-                            <div className={`w-6 h-6 rounded-md flex items-center justify-center text-xs ${
-                              notif.type === 'order' ? 'bg-emerald-500/20' :
-                              notif.type === 'escrow' ? 'bg-amber-500/20' :
-                              notif.type === 'payment' ? 'bg-blue-500/20' :
-                              notif.type === 'dispute' ? 'bg-red-500/20' :
-                              notif.type === 'complete' ? 'bg-emerald-500/20' :
-                              'bg-white/[0.08]'
-                            }`}>
-                              {notif.type === 'order' ? '📥' :
-                               notif.type === 'escrow' ? '🔒' :
-                               notif.type === 'payment' ? '💸' :
-                               notif.type === 'dispute' ? '⚠️' :
-                               notif.type === 'complete' ? '✅' : '🔔'}
-                            </div>
-                            <div className="flex-1">
-                              <p className="text-xs text-gray-300">{notif.message}</p>
-                              <p className="text-[10px] text-gray-600 mt-0.5">{notif.time}</p>
-                            </div>
-                            {!notif.read && (
-                              <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0 mt-1" />
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="py-8 text-center text-gray-500">
-                        <Bell className="w-6 h-6 mx-auto mb-2 opacity-30" />
-                        <p className="text-xs">No notifications</p>
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* Wallet Connect Button */}
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowWalletModal(true)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
-              solanaWallet.connected
-                ? 'bg-[#26A17B]/10 border-[#26A17B]/30 hover:bg-[#26A17B]/20'
-                : 'bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20'
-            }`}
-          >
-            {solanaWallet.connected ? (
-              <>
-                <div className="w-2 h-2 rounded-full bg-[#26A17B] animate-pulse" />
-                <span className="text-xs font-medium text-[#26A17B] hidden sm:inline">
-                  {solanaWallet.walletAddress?.slice(0, 4)}...{solanaWallet.walletAddress?.slice(-4)}
-                </span>
-                <span className="text-xs font-bold text-[#26A17B]">
-                  {solanaWallet.usdtBalance !== null
-                    ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : '...'}
-                  <span className="text-[10px] ml-0.5">USDT</span>
-                </span>
-              </>
-            ) : (
-              <>
-                <Wallet className="w-3.5 h-3.5 text-purple-400" />
-                <span className="text-xs font-medium text-purple-400">Connect Wallet</span>
-              </>
-            )}
-          </motion.button>
-
-          {/* Profile */}
-          <div className="flex items-center gap-2 pl-2 border-l border-white/[0.08]">
-            <div className="w-7 h-7 rounded-full border border-white/20 flex items-center justify-center text-sm">
-              {(merchantInfo?.username || merchantInfo?.display_name)?.charAt(0)?.toUpperCase() || '🐋'}
-            </div>
-            <div className="hidden sm:block">
-              <p className="text-[11px] font-medium">{merchantInfo?.username || merchantInfo?.display_name || merchantInfo?.business_name || 'Merchant'}</p>
-              <p className="text-[9px] text-gray-500">{merchantInfo?.rating?.toFixed(2) || '5.00'}★</p>
+            <div className="flex items-center gap-1.5 pl-2 border-l border-white/[0.08]">
+              <div className="w-7 h-7 rounded-full border border-white/20 flex items-center justify-center text-sm">
+                {(merchantInfo?.username || merchantInfo?.display_name)?.charAt(0)?.toUpperCase() || '🐋'}
+              </div>
+              <div className="hidden sm:block">
+                <p className="text-[11px] font-medium">{merchantInfo?.username || merchantInfo?.display_name || merchantInfo?.business_name || 'Merchant'}</p>
+                <p className="text-[9px] text-gray-500">{merchantInfo?.rating?.toFixed(2) || '5.00'}★</p>
+              </div>
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleLogout}
+                className="p-1.5 rounded-md hover:bg-red-500/10 transition-colors"
+                title="Logout"
+              >
+                <LogOut className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
+              </motion.button>
             </div>
           </div>
         </div>
@@ -2958,9 +2870,9 @@ export default function MerchantDashboard() {
       {/* Mobile Stats Bar - Shows on mobile only */}
       <div className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-[#0d0d0d] border-b border-white/[0.06]">
         {/* Total Earned - Inline */}
-        <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/10 rounded-md border border-emerald-500/20 shrink-0">
-          <DollarSign className="w-3 h-3 text-emerald-400" />
-          <span className="text-xs font-bold text-emerald-400">${Math.round(todayEarnings + pendingEarnings)}</span>
+        <div className="flex items-center gap-1 px-2 py-1 bg-white/5 rounded-md border border-white/6 shrink-0">
+          <DollarSign className="w-3 h-3 text-white" />
+          <span className="text-xs font-bold text-white">${Math.round(todayEarnings + pendingEarnings)}</span>
         </div>
 
         {/* USDT Balance */}
@@ -3005,19 +2917,19 @@ export default function MerchantDashboard() {
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl"
+              className="mb-4 p-4 bg-white/5 border border-white/6 rounded-xl"
             >
               <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                <AlertTriangle className="w-5 h-5 text-white/70 flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-amber-400">No Active Corridors</p>
-                  <p className="text-xs text-amber-400/70 mt-1">
+                  <p className="text-sm font-medium text-white/70">No Active Corridors</p>
+                  <p className="text-xs text-white/50 mt-1">
                     You need to open a corridor to receive orders from users. Click &quot;Open Corridor&quot; to create one.
                   </p>
                 </div>
                 <button
                   onClick={() => setShowCreateModal(true)}
-                  className="px-3 py-1.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-lg hover:bg-amber-500/30 transition-colors"
+                  className="px-3 py-1.5 bg-white/10 text-white/70 text-xs font-medium rounded-lg hover:bg-white/20 transition-colors"
                 >
                   Open Corridor
                 </button>
@@ -3026,11 +2938,195 @@ export default function MerchantDashboard() {
           )}
 
           {/* Desktop: Grid layout, Mobile: Single view based on mobileView state */}
-          <div className="hidden md:grid md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {/* Column 1: New Orders + Big Orders (stacked) */}
+          <div className="hidden md:grid md:grid-cols-3 gap-3">
+            {/* Column 1: Balance (top) + Leaderboard (bottom) */}
             <div className="flex flex-col h-[calc(100vh-80px)] gap-3">
-              {/* Orders - takes remaining space or 70% when big orders visible */}
-              <div className={`flex flex-col ${showBigOrderWidget && bigOrders.length > 0 ? 'h-[70%]' : 'flex-1'}`}>
+              {/* Balance & Transaction History */}
+              <div className="flex flex-col h-[45%]">
+                <div className="flex items-center gap-2 mb-2">
+                  <Wallet className="w-4 h-4 text-white/70" />
+                  <span className="text-sm font-semibold">Balance</span>
+                </div>
+
+                <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden flex flex-col">
+                  {/* Balance Display */}
+                  <div className="p-4 border-b border-white/[0.04]">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-2xl font-bold text-white">
+                        {solanaWallet.usdtBalance !== null
+                          ? solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                          : '—'}
+                      </span>
+                      <span className="text-xs text-gray-500 font-mono">USDC</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-2">
+                      <div className="flex items-center gap-1 text-[10px] text-gray-500">
+                        <TrendingUp className="w-3 h-3" />
+                        <span>Earned: <span className="text-white font-medium">${todayEarnings.toFixed(2)}</span></span>
+                      </div>
+                      <div className="flex items-center gap-1 text-[10px] text-gray-500">
+                        <Activity className="w-3 h-3" />
+                        <span>Volume: <span className="text-white font-medium">{totalTradedVolume.toLocaleString()} USDC</span></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Transaction History */}
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.04]">
+                    <History className="w-3 h-3 text-gray-500" />
+                    <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Recent Transactions</span>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                    {[...completedOrders, ...cancelledOrders]
+                      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+                      .slice(0, 20)
+                      .map((order) => {
+                        const isCompleted = order.status === 'completed';
+                        const isIncoming = order.dbOrder?.type === 'sell'; // user sells USDC to me = I receive
+                        return (
+                          <div
+                            key={`tx-${order.id}`}
+                            className="flex items-center gap-2 p-2 rounded-md hover:bg-white/[0.03] transition-colors cursor-pointer"
+                            onClick={() => {
+                              setSelectedOrderForChat(order);
+                              setShowOrderDetails(true);
+                            }}
+                          >
+                            <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${
+                              isCompleted
+                                ? (isIncoming ? 'bg-emerald-500/10' : 'bg-blue-500/10')
+                                : 'bg-red-500/10'
+                            }`}>
+                              {isCompleted ? (
+                                isIncoming
+                                  ? <ArrowDownRight className="w-3 h-3 text-emerald-400" />
+                                  : <ArrowUpRight className="w-3 h-3 text-blue-400" />
+                              ) : (
+                                <X className="w-3 h-3 text-red-400" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] font-medium text-white truncate">{order.user}</p>
+                              <p className="text-[9px] text-gray-500 font-mono">
+                                {order.timestamp.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                {' · '}
+                                {order.timestamp.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className={`text-[11px] font-mono font-medium ${
+                                isCompleted
+                                  ? (isIncoming ? 'text-emerald-400' : 'text-blue-400')
+                                  : 'text-red-400 line-through'
+                              }`}>
+                                {isCompleted && isIncoming ? '+' : isCompleted ? '-' : ''}{order.amount.toLocaleString()} USDC
+                              </p>
+                              <p className="text-[9px] text-gray-500 font-mono">
+                                {isCompleted ? 'Completed' : order.status === 'disputed' ? 'Disputed' : 'Cancelled'}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    {completedOrders.length === 0 && cancelledOrders.length === 0 && (
+                      <div className="flex flex-col items-center justify-center h-full py-6 text-gray-600">
+                        <History className="w-5 h-5 mb-1 opacity-20" />
+                        <p className="text-[10px] font-mono text-gray-500">No transactions yet</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Top Traders Leaderboard */}
+              <div className="flex flex-col h-[55%] min-h-0">
+                <div className="flex items-center gap-2 mb-3">
+                  <Trophy className="w-4 h-4 text-[#c9a962]" />
+                  <span className="text-sm font-semibold">Top Traders</span>
+                  <span className="ml-auto text-xs bg-white/10 text-white/70 px-2 py-0.5 rounded-full font-medium">
+                    {leaderboardData.length}
+                  </span>
+                </div>
+
+                <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden min-h-0">
+                  <div className="h-full overflow-y-auto p-2 space-y-1">
+                    {leaderboardData.length > 0 ? (
+                      leaderboardData.map((trader, i) => {
+                        const isMe = trader.id === merchantId;
+                        const rankIcon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null;
+                        return (
+                          <motion.div
+                            key={trader.id}
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.03 }}
+                            className={`p-2.5 rounded-lg border transition-all ${
+                              isMe
+                                ? 'bg-[#c9a962]/10 border-[#c9a962]/20'
+                                : 'bg-[#141414] border-white/[0.04] hover:border-white/[0.08]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              {/* Rank */}
+                              <div className="w-6 text-center shrink-0">
+                                {rankIcon ? (
+                                  <span className="text-sm">{rankIcon}</span>
+                                ) : (
+                                  <span className="text-[11px] font-mono text-gray-500">#{trader.rank}</span>
+                                )}
+                              </div>
+
+                              {/* Avatar */}
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                                isMe ? 'bg-[#c9a962]/20 border border-[#c9a962]/30' : 'bg-white/5 border border-white/[0.06]'
+                              }`}>
+                                <span className={`text-[10px] font-bold ${isMe ? 'text-[#c9a962]' : 'text-white/70'}`}>
+                                  {(trader.username || trader.displayName).slice(0, 2).toUpperCase()}
+                                </span>
+                              </div>
+
+                              {/* Name + Stats */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`text-sm font-medium truncate ${isMe ? 'text-[#c9a962]' : 'text-white'}`}>
+                                    {trader.username || trader.displayName}
+                                  </span>
+                                  {isMe && <span className="text-[8px] px-1 py-0.5 bg-[#c9a962]/20 text-[#c9a962] rounded font-bold">YOU</span>}
+                                  {trader.isOnline && <div className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />}
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] text-gray-500">{trader.totalTrades} trades</span>
+                                  <span className="text-[10px] text-gray-600">·</span>
+                                  <span className="text-[10px] text-gray-500">{trader.rating.toFixed(1)}★</span>
+                                  <span className="text-[10px] text-gray-600">·</span>
+                                  <span className="text-[10px] text-gray-500">{trader.avgResponseMins}m avg</span>
+                                </div>
+                              </div>
+
+                              {/* Volume */}
+                              <div className="text-right shrink-0">
+                                <span className="text-xs font-bold text-white">${trader.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                                <p className="text-[9px] text-gray-500">volume</p>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full py-8 text-gray-600">
+                        <Trophy className="w-6 h-6 mb-2 opacity-20" />
+                        <p className="text-[10px] font-mono text-gray-500">No traders yet</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Column 2: New Orders + Active */}
+            <div className="flex flex-col h-[calc(100vh-80px)] gap-3">
+              {/* New Orders - top */}
+              <div className={`flex flex-col ${showBigOrderWidget && bigOrders.length > 0 ? 'h-[45%]' : 'h-1/2'}`}>
                 <div className="flex items-center gap-2 mb-3">
                   {/* Tab switcher */}
                   <div className="flex items-center bg-[#151515] rounded-lg p-0.5 border border-white/[0.04]">
@@ -3062,16 +3158,144 @@ export default function MerchantDashboard() {
                       transition={{ duration: 1.5, repeat: Infinity }}
                     />
                   )}
-                  <span className="ml-auto text-xs border border-white/20 text-white/70 px-2 py-0.5 rounded-full font-medium">
+                  <button
+                    onClick={() => setShowOrderFilters(!showOrderFilters)}
+                    className={`ml-auto p-1.5 rounded-md transition-all ${
+                      showOrderFilters || Object.values(orderFilters).some(v => v !== 'all')
+                        ? 'bg-white/10 text-white'
+                        : 'hover:bg-white/5 text-gray-500'
+                    }`}
+                    title="Filter orders"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="text-xs border border-white/20 text-white/70 px-2 py-0.5 rounded-full font-medium">
                     {orderViewFilter === 'new' ? pendingOrders.length : orders.length}
                   </span>
                 </div>
 
+                {/* Filter Bar */}
+                <AnimatePresence>
+                  {showOrderFilters && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex flex-wrap items-center gap-1.5 mb-2 p-2 bg-[#0d0d0d] rounded-lg border border-white/[0.04]">
+                        {/* Type filter */}
+                        <div className="flex items-center gap-0.5 bg-white/[0.03] rounded-md p-0.5">
+                          {(['all', 'buy', 'sell'] as const).map((t) => (
+                            <button
+                              key={t}
+                              onClick={() => setOrderFilters(f => ({ ...f, type: t }))}
+                              className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
+                                orderFilters.type === t
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-gray-500 hover:text-gray-300'
+                              }`}
+                            >
+                              {t === 'all' ? 'Type' : t.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Amount filter */}
+                        <div className="flex items-center gap-0.5 bg-white/[0.03] rounded-md p-0.5">
+                          {([
+                            { key: 'all', label: 'Amount' },
+                            { key: 'small', label: '<500' },
+                            { key: 'medium', label: '500-2k' },
+                            { key: 'large', label: '2k+' },
+                          ] as const).map(({ key, label }) => (
+                            <button
+                              key={key}
+                              onClick={() => setOrderFilters(f => ({ ...f, amount: key }))}
+                              className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
+                                orderFilters.amount === key
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-gray-500 hover:text-gray-300'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Payment method filter */}
+                        <div className="flex items-center gap-0.5 bg-white/[0.03] rounded-md p-0.5">
+                          {([
+                            { key: 'all', label: 'Method' },
+                            { key: 'bank', label: 'Bank' },
+                            { key: 'cash', label: 'Cash' },
+                          ] as const).map(({ key, label }) => (
+                            <button
+                              key={key}
+                              onClick={() => setOrderFilters(f => ({ ...f, method: key }))}
+                              className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
+                                orderFilters.method === key
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-gray-500 hover:text-gray-300'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Secured filter */}
+                        <div className="flex items-center gap-0.5 bg-white/[0.03] rounded-md p-0.5">
+                          {([
+                            { key: 'all', label: 'Escrow' },
+                            { key: 'yes', label: 'Secured' },
+                            { key: 'no', label: 'Open' },
+                          ] as const).map(({ key, label }) => (
+                            <button
+                              key={key}
+                              onClick={() => setOrderFilters(f => ({ ...f, secured: key }))}
+                              className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
+                                orderFilters.secured === key
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-gray-500 hover:text-gray-300'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Clear all */}
+                        {Object.values(orderFilters).some(v => v !== 'all') && (
+                          <button
+                            onClick={() => setOrderFilters({ type: 'all', amount: 'all', method: 'all', secured: 'all' })}
+                            className="px-2 py-1 text-[10px] font-medium text-red-400 hover:text-red-300 transition-colors"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden min-h-0">
                   <div className="h-full overflow-y-auto p-2 space-y-2">
                     <AnimatePresence mode="popLayout">
-                      {(orderViewFilter === 'new' ? pendingOrders : orders).length > 0 ? (
-                        (orderViewFilter === 'new' ? pendingOrders : orders).map((order, i) => {
+                      {(() => {
+                        const baseOrders = orderViewFilter === 'new' ? pendingOrders : orders;
+                        const filteredOrders = baseOrders.filter(order => {
+                          if (orderFilters.type !== 'all' && order.orderType !== orderFilters.type) return false;
+                          if (orderFilters.amount === 'small' && order.amount >= 500) return false;
+                          if (orderFilters.amount === 'medium' && (order.amount < 500 || order.amount > 2000)) return false;
+                          if (orderFilters.amount === 'large' && order.amount <= 2000) return false;
+                          if (orderFilters.method !== 'all' && order.dbOrder?.payment_method !== orderFilters.method) return false;
+                          if (orderFilters.secured === 'yes' && !order.escrowTxHash) return false;
+                          if (orderFilters.secured === 'no' && order.escrowTxHash) return false;
+                          return true;
+                        });
+                        return filteredOrders.length > 0 ? (
+                        filteredOrders.map((order, i) => {
                           const profit = order.amount * TRADER_CUT_CONFIG.best; // 0.5% trader cut
                           return (
                             <motion.div
@@ -3095,19 +3319,19 @@ export default function MerchantDashboard() {
                                   <div className="flex items-center gap-1.5 mb-1">
                                     <span className="text-sm font-medium text-gray-300 truncate">{order.user}</span>
                                     {order.isNew && (
-                                      <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">
+                                      <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-white/10 text-white rounded font-medium">
                                         <Sparkles className="w-2.5 h-2.5" />
                                         NEW
                                       </span>
                                     )}
                                     {(order.tradeVolume || 0) >= TOP_1_PERCENT_THRESHOLD && (
-                                      <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded font-medium">
+                                      <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-white/10 text-white/70 rounded font-medium">
                                         <Crown className="w-2.5 h-2.5" />
                                         TOP 1%
                                       </span>
                                     )}
                                     {order.escrowTxHash && order.orderType === 'sell' && (
-                                      <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded font-medium">
+                                      <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-white/10 text-white rounded font-medium">
                                         <Shield className="w-2.5 h-2.5" />
                                         <Check className="w-2 h-2 -ml-0.5" />
                                         SECURED
@@ -3123,17 +3347,17 @@ export default function MerchantDashboard() {
                                 <div className="text-right shrink-0">
                                   {order.status === 'pending' ? (
                                     <>
-                                      <div className="text-xs font-semibold text-emerald-400">+${Math.round(profit)}</div>
+                                      <div className="text-xs font-semibold text-white">+${Math.round(profit)}</div>
                                       <div className={`text-[11px] font-mono ${order.expiresIn < 30 ? "text-red-400" : "text-gray-500"}`}>
                                         {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
                                       </div>
                                     </>
                                   ) : order.status === 'escrow' ? (
-                                    <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 rounded-full font-medium">
+                                    <span className="text-[10px] px-2 py-0.5 bg-white/10 text-white/70 rounded-full font-medium">
                                       Ongoing
                                     </span>
                                   ) : order.status === 'completed' ? (
-                                    <span className="text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-full font-medium flex items-center gap-1">
+                                    <span className="text-[10px] px-2 py-0.5 bg-white/10 text-white rounded-full font-medium flex items-center gap-1">
                                       <Check className="w-3 h-3" />
                                       Done
                                     </span>
@@ -3153,10 +3377,10 @@ export default function MerchantDashboard() {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     onClick={(e) => e.stopPropagation()}
-                                    className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-md transition-colors shrink-0"
+                                    className="p-1.5 bg-white/5 hover:bg-white/10 rounded-md transition-colors shrink-0"
                                     title="View Escrow TX"
                                   >
-                                    <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
+                                    <ExternalLink className="w-3.5 h-3.5 text-white" />
                                   </a>
                                 )}
                                 {order.status === 'pending' && (
@@ -3176,10 +3400,13 @@ export default function MerchantDashboard() {
                         <div className="flex flex-col items-center justify-center h-full py-8 text-gray-600">
                           <span className="text-xl mb-1 opacity-40">📭</span>
                           <p className="text-[10px] text-gray-500">
-                            {orderViewFilter === 'new' ? 'waiting for orders...' : 'no orders yet'}
+                            {Object.values(orderFilters).some(v => v !== 'all')
+                              ? 'no orders match filters'
+                              : orderViewFilter === 'new' ? 'waiting for orders...' : 'no orders yet'}
                           </p>
                         </div>
-                      )}
+                      );
+                      })()}
                     </AnimatePresence>
                   </div>
                 </div>
@@ -3228,7 +3455,7 @@ export default function MerchantDashboard() {
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1.5 mb-1">
                                   <span className="text-sm font-medium text-gray-300 truncate">{order.user}</span>
-                                  <span className="px-1.5 py-0.5 bg-emerald-500/20 rounded text-[10px] font-medium text-emerald-400">
+                                  <span className="px-1.5 py-0.5 bg-white/10 rounded text-[10px] font-medium text-white">
                                     +{order.premium}%
                                   </span>
                                 </div>
@@ -3261,239 +3488,14 @@ export default function MerchantDashboard() {
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
 
-            {/* Column 2: Ongoing + Leaderboard (stacked) */}
-            <div className="flex flex-col h-[calc(100vh-80px)] gap-3">
-              {/* Ongoing - top portion */}
-              <div className="flex flex-col flex-1 min-h-0">
+              {/* Active Orders - bottom */}
+              {/* Active Orders - bottom portion */}
+              <div className="flex flex-col h-[40%] min-h-0">
                 <div className="flex items-center gap-2 mb-3">
-                  <Lock className="w-4 h-4 text-amber-500" />
-                  <span className="text-sm font-semibold">Ongoing</span>
-                  <span className="ml-auto text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-medium">
-                    {ongoingOrders.length}
-                  </span>
-                </div>
-
-                <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden min-h-0">
-                  <div className="h-full overflow-y-auto p-2 space-y-2">
-                    <AnimatePresence mode="popLayout">
-                      {ongoingOrders.length > 0 ? (
-                        ongoingOrders.map((order, i) => {
-                          const timePercent = (order.expiresIn / 900) * 100;
-                          const dbStatus = order.dbOrder?.status;
-                          const canComplete = dbStatus === "payment_confirmed";
-                          // Check if I'm the escrow creator (seller) or the buyer
-                          const iAmEscrowCreator = order.escrowCreatorWallet && order.escrowCreatorWallet === solanaWallet.walletAddress;
-                          const iAmBuyer = order.escrowTxHash && !iAmEscrowCreator;
-                          // Seller (escrow creator) can release when buyer has sent payment
-                          const canConfirmPayment = dbStatus === "payment_sent" && iAmEscrowCreator;
-                          // Seller waiting for buyer to pay (payment_pending)
-                          const waitingForBuyerToPay = dbStatus === "payment_pending" && iAmEscrowCreator;
-                          // Buyer waits after paying - seller will release
-                          const waitingForRelease = dbStatus === "payment_sent" && iAmBuyer;
-                          // For sell orders after merchant paid, show waiting for user (legacy)
-                          const waitingForUser = dbStatus === "payment_sent" && order.orderType === "sell" && !iAmBuyer && !iAmEscrowCreator;
-                          // Buyer needs to click "I've Paid" when:
-                          // M2M buyer with payment_pending status (after accepting)
-                          const canMarkPaid = dbStatus === "payment_pending" && iAmBuyer;
-                          // Check if escrow is just funded (waiting for counterparty to accept)
-                          // vs locked (counterparty has accepted and trade is in progress)
-                          const isFundedOnly = dbStatus === "escrowed" && iAmEscrowCreator;
-                          // Check if order has expired - can claim refund
-                          const isExpired = order.expiresIn <= 0;
-                          const canClaimRefund = isExpired && iAmEscrowCreator && order.escrowTradeId !== undefined;
-                          return (
-                            <motion.div
-                              key={order.id}
-                              layout
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              exit={{ opacity: 0, x: 20 }}
-                              transition={{ delay: i * 0.03 }}
-                              className="p-2.5 bg-[#141414] rounded-lg border border-amber-500/10 hover:border-amber-500/20 transition-all"
-                            >
-                              {/* Row 1: User + Timer + Status */}
-                              <div className="flex items-center gap-2 mb-2">
-                                <div className="w-7 h-7 rounded-md bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-                                  <span className="text-[10px] font-bold text-amber-400">
-                                    {order.user.slice(0, 2).toUpperCase()}
-                                  </span>
-                                </div>
-                                <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
-                                <div className={`text-[11px] font-mono ${timePercent < 20 ? "text-red-400" : "text-amber-400/70"}`}>
-                                  {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
-                                </div>
-                                {isExpired ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded font-mono">EXPIRED</span>
-                                ) : waitingForBuyerToPay ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded font-mono">AWAIT PAY</span>
-                                ) : waitingForRelease ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded font-mono">RELEASING</span>
-                                ) : waitingForUser ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 text-blue-400 rounded font-mono">RELEASING</span>
-                                ) : canConfirmPayment ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded font-mono">PAID</span>
-                                ) : canComplete ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded font-mono">READY</span>
-                                ) : canMarkPaid ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded font-mono">SEND</span>
-                                ) : isFundedOnly ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 rounded font-mono">FUNDED</span>
-                                ) : (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded font-mono">LOCKED</span>
-                                )}
-                              </div>
-
-                              {/* Row 2: Amount + Actions */}
-                              <div className="flex items-center gap-2 pl-9">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
-                                    <ArrowRight className="w-3 h-3 text-gray-600" />
-                                    <span className="text-sm font-bold text-white">{Math.round(order.total).toLocaleString()}</span>
-                                    <span className="text-[10px] text-gray-500">AED</span>
-                                  </div>
-                                  {/* Show user's bank for sell orders waiting for merchant payment */}
-                                  {canMarkPaid && order.userBankAccount && (
-                                    <div className="mt-1 text-[10px] text-orange-400/80 font-mono truncate" title={order.userBankAccount}>
-                                      → {order.userBankAccount}
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Icon buttons */}
-                                <div className="flex items-center gap-1">
-                                  {/* Extension UI */}
-                                  {extensionRequests.has(order.id) && extensionRequests.get(order.id)?.requestedBy === 'user' ? (
-                                    <div className="flex gap-0.5">
-                                      <button
-                                        onClick={() => respondToExtension(order.id, true)}
-                                        disabled={requestingExtension === order.id}
-                                        className="p-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded text-[10px] disabled:opacity-50"
-                                        title={`Accept +${extensionRequests.get(order.id)?.extensionMinutes}min`}
-                                      >
-                                        <Check className="w-3 h-3" />
-                                      </button>
-                                      <button
-                                        onClick={() => respondToExtension(order.id, false)}
-                                        disabled={requestingExtension === order.id}
-                                        className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded disabled:opacity-50"
-                                      >
-                                        <X className="w-3 h-3" />
-                                      </button>
-                                    </div>
-                                  ) : timePercent < 30 && !extensionRequests.has(order.id) ? (
-                                    <button
-                                      onClick={() => requestExtension(order.id)}
-                                      disabled={requestingExtension === order.id}
-                                      className="p-1.5 hover:bg-orange-500/10 rounded transition-colors disabled:opacity-50"
-                                      title="Request extension"
-                                    >
-                                      <Clock className={`w-3.5 h-3.5 ${requestingExtension === order.id ? 'animate-spin text-orange-400' : 'text-gray-500 hover:text-orange-400'}`} />
-                                    </button>
-                                  ) : null}
-                                  <button
-                                    onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
-                                    className="p-1.5 hover:bg-white/[0.04] rounded transition-colors"
-                                    title="Chat"
-                                  >
-                                    <MessageCircle className="w-3.5 h-3.5 text-gray-500 hover:text-amber-400" />
-                                  </button>
-                                  <button
-                                    onClick={() => openDisputeModal(order.id)}
-                                    className="p-1.5 hover:bg-red-500/10 rounded transition-colors"
-                                    title="Dispute"
-                                  >
-                                    <AlertTriangle className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
-                                  </button>
-                                  {dbStatus === "escrowed" && order.orderType === "buy" && order.escrowCreatorWallet && (
-                                    <button
-                                      onClick={() => openCancelModal(order)}
-                                      className="p-1.5 hover:bg-orange-500/10 rounded transition-colors"
-                                      title="Cancel & Withdraw"
-                                    >
-                                      <RotateCcw className="w-3.5 h-3.5 text-gray-500 hover:text-orange-400" />
-                                    </button>
-                                  )}
-                                </div>
-
-                                {/* Action button */}
-                                {canClaimRefund ? (
-                                  <motion.button
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => openCancelModal(order)}
-                                    className="px-2.5 py-1.5 bg-red-500 hover:bg-red-400 rounded text-[11px] font-bold text-white"
-                                  >
-                                    Refund
-                                  </motion.button>
-                                ) : canMarkPaid ? (
-                                  <motion.button
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => markFiatPaymentSent(order)}
-                                    disabled={markingDone}
-                                    className="px-2.5 py-1.5 bg-orange-500 hover:bg-orange-400 rounded text-[11px] font-bold text-white disabled:opacity-50"
-                                  >
-                                    {markingDone ? '...' : "I've Paid"}
-                                  </motion.button>
-                                ) : waitingForBuyerToPay ? (
-                                  <span className="px-2.5 py-1.5 bg-purple-500/10 rounded text-[11px] font-mono text-purple-400">
-                                    Awaiting
-                                  </span>
-                                ) : waitingForRelease ? (
-                                  <span className="px-2.5 py-1.5 bg-blue-500/10 rounded text-[11px] font-mono text-blue-400">
-                                    Waiting
-                                  </span>
-                                ) : waitingForUser ? (
-                                  <span className="px-2.5 py-1.5 bg-blue-500/10 rounded text-[11px] font-mono text-blue-400">
-                                    Waiting
-                                  </span>
-                                ) : canConfirmPayment ? (
-                                  <motion.button
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => openReleaseModal(order)}
-                                    className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 rounded text-[11px] font-bold text-black"
-                                  >
-                                    Release
-                                  </motion.button>
-                                ) : canComplete ? (
-                                  <motion.button
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => completeOrder(order.id)}
-                                    className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 rounded text-[11px] font-bold text-black"
-                                  >
-                                    Release
-                                  </motion.button>
-                                ) : dbStatus === "escrowed" && order.orderType === "buy" ? (
-                                  <span className="px-2.5 py-1.5 bg-amber-500/10 rounded text-[11px] font-mono text-amber-400">
-                                    Awaiting
-                                  </span>
-                                ) : (
-                                  <span className="px-2.5 py-1.5 bg-white/[0.04] rounded text-[11px] font-mono text-gray-500">
-                                    Waiting
-                                  </span>
-                                )}
-                              </div>
-                            </motion.div>
-                          );
-                        })
-                      ) : (
-                        <div className="flex flex-col items-center justify-center h-full py-8 text-gray-600">
-                          <Lock className="w-6 h-6 mb-1 opacity-20" />
-                          <p className="text-[10px] font-mono text-gray-500">No active escrows</p>
-                        </div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </div>
-              </div>
-
-              {/* Active Orders - bottom 50% (accepted but waiting for escrow lock) */}
-              <div className="flex flex-col h-1/2 min-h-0">
-                <div className="flex items-center gap-2 mb-3">
-                  <Zap className="w-4 h-4 text-blue-500" />
-                  <span className="text-sm font-semibold text-blue-400">Active</span>
-                  <span className="ml-auto text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full font-medium">
+                  <Zap className="w-4 h-4 text-white/70" />
+                  <span className="text-sm font-semibold text-white/70">Active</span>
+                  <span className="ml-auto text-xs bg-white/10 text-white/70 px-2 py-0.5 rounded-full font-medium">
                     {activeOrders.length}
                   </span>
                 </div>
@@ -3510,26 +3512,24 @@ export default function MerchantDashboard() {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -10 }}
                             transition={{ delay: i * 0.03 }}
-                            className="p-2.5 bg-[#141414] rounded-lg border border-blue-500/10 hover:border-blue-500/20 transition-all"
+                            className="p-2.5 bg-[#141414] rounded-lg border border-blue-500/10 hover:border-white/6 transition-all"
                           >
-                            {/* Row 1: User + Type */}
                             <div className="flex items-center gap-2 mb-2">
-                              <div className="w-7 h-7 rounded-md bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
-                                <span className="text-[10px] font-bold text-blue-400">
+                              <div className="w-7 h-7 rounded-md bg-white/5 border border-white/6 flex items-center justify-center shrink-0">
+                                <span className="text-[10px] font-bold text-white/70">
                                   {order.user.slice(0, 2).toUpperCase()}
                                 </span>
                               </div>
                               <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
                               <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
                                 order.orderType === 'buy'
-                                  ? 'bg-emerald-500/10 text-emerald-400'
-                                  : 'bg-blue-500/10 text-blue-400'
+                                  ? 'bg-white/5 text-white'
+                                  : 'bg-white/5 text-white/70'
                               }`}>
                                 {order.orderType?.toUpperCase()}
                               </span>
                             </div>
 
-                            {/* Row 2: Amount + Actions */}
                             <div className="flex items-center gap-2 pl-9">
                               <div className="flex-1 flex items-center gap-2">
                                 <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
@@ -3542,79 +3542,58 @@ export default function MerchantDashboard() {
                                 className="p-1.5 hover:bg-white/[0.04] rounded transition-colors"
                                 title="Chat"
                               >
-                                <MessageCircle className="w-3.5 h-3.5 text-gray-500 hover:text-blue-400" />
+                                <MessageCircle className="w-3.5 h-3.5 text-gray-500 hover:text-white/70" />
                               </button>
                               {(() => {
-                                // Check if I'm the escrow creator (seller who locked funds)
                                 const iAmEscrowCreator = order.escrowCreatorWallet && order.escrowCreatorWallet === solanaWallet.walletAddress;
                                 const escrowExistsFromOther = order.escrowTxHash && !iAmEscrowCreator;
-                                // M2M: Check if I created this sell order and buyer has accepted with wallet
                                 const iAmOrderCreator = order.orderMerchantId === merchantId;
                                 const buyerAcceptedWithWallet = order.dbOrder?.status === 'accepted' && order.acceptorWallet;
                                 const isM2MSellNeedingEscrow = iAmOrderCreator && !order.escrowTxHash && buyerAcceptedWithWallet;
 
-                                console.log('[Active] Order action check:', {
-                                  orderId: order.id,
-                                  orderType: order.orderType,
-                                  escrowTxHash: order.escrowTxHash,
-                                  escrowCreatorWallet: order.escrowCreatorWallet,
-                                  myWallet: solanaWallet.walletAddress,
-                                  iAmEscrowCreator,
-                                  escrowExistsFromOther,
-                                  dbStatus: order.dbOrder?.status,
-                                  iAmOrderCreator,
-                                  acceptorWallet: order.acceptorWallet,
-                                  isM2MSellNeedingEscrow,
-                                });
-
-                                // M2M: I created sell order, buyer accepted with wallet - I need to lock escrow
                                 if (isM2MSellNeedingEscrow) {
                                   return (
                                     <motion.button
                                       whileTap={{ scale: 0.95 }}
                                       onClick={() => openEscrowModal(order)}
-                                      className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 rounded text-[11px] font-bold text-black"
+                                      className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 rounded text-[11px] font-bold text-white transition-all"
                                     >
                                       Lock Escrow
                                     </motion.button>
                                   );
                                 } else if (order.orderType === 'buy' && !order.escrowTxHash) {
-                                  // Buy order, no escrow yet - I need to sign/lock
                                   return (
                                     <motion.button
                                       whileTap={{ scale: 0.95 }}
                                       onClick={() => openEscrowModal(order)}
-                                      className="px-2.5 py-1.5 bg-blue-500 hover:bg-blue-400 rounded text-[11px] font-bold text-white"
+                                      className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 rounded text-[11px] font-bold text-white transition-all"
                                     >
                                       Sign
                                     </motion.button>
                                   );
                                 } else if (escrowExistsFromOther) {
-                                  // Escrow exists but I didn't create it - I'm the buyer, sign to claim
                                   return (
                                     <motion.button
                                       whileTap={{ scale: 0.95 }}
                                       onClick={() => signToClaimOrder(order)}
-                                      className="px-2.5 py-1.5 bg-blue-500 hover:bg-blue-400 rounded text-[11px] font-bold text-white"
+                                      className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 rounded text-[11px] font-bold text-white transition-all"
                                     >
                                       Sign
                                     </motion.button>
                                   );
                                 } else if (order.orderType === 'sell') {
-                                  // Sell order - need to sign
                                   return (
                                     <motion.button
                                       whileTap={{ scale: 0.95 }}
                                       onClick={() => signAndProceed(order)}
-                                      className="px-2.5 py-1.5 bg-blue-500 hover:bg-blue-400 rounded text-[11px] font-bold text-white"
+                                      className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 rounded text-[11px] font-bold text-white transition-all"
                                     >
                                       Sign
                                     </motion.button>
                                   );
                                 } else if (order.escrowTxHash) {
-                                  // Escrow exists and I created it - show Signed
                                   return (
-                                    <span className="px-2.5 py-1.5 bg-emerald-500/10 text-emerald-400 rounded text-[11px] font-mono">
+                                    <span className="px-2.5 py-1.5 bg-white/5 text-white rounded text-[11px] font-mono">
                                       Signed
                                     </span>
                                   );
@@ -3639,26 +3618,270 @@ export default function MerchantDashboard() {
                   </div>
                 </div>
               </div>
+
             </div>
 
-            {/* Column 3: Completed + Cancelled (50/50 split) */}
+            {/* Column 3: Ongoing + Completed/Cancelled */}
             <div className="flex flex-col h-[calc(100vh-80px)] gap-3">
-              {/* Top Half: Completed */}
-              <div className="flex flex-col h-1/2">
-                <div className="flex items-center gap-2 mb-2">
-                  <Check className="w-4 h-4 text-emerald-500" />
-                  <span className="text-sm font-semibold">Completed</span>
-                  <span className="ml-auto text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-medium">
-                    {completedOrders.length}
+              {/* Ongoing - top */}
+              <div className="flex flex-col flex-1 min-h-0">
+                <div className="flex items-center gap-2 mb-3">
+                  <Lock className="w-4 h-4 text-white/70" />
+                  <span className="text-sm font-semibold">Ongoing</span>
+                  <span className="ml-auto text-xs bg-white/10 text-white/70 px-2 py-0.5 rounded-full font-medium">
+                    {ongoingOrders.length}
                   </span>
                 </div>
 
-                <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden">
+                <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden min-h-0">
                   <div className="h-full overflow-y-auto p-2 space-y-2">
                     <AnimatePresence mode="popLayout">
-                      {completedOrders.length > 0 ? (
+                      {ongoingOrders.length > 0 ? (
+                        ongoingOrders.map((order, i) => {
+                          const timePercent = (order.expiresIn / 900) * 100;
+                          const dbStatus = order.dbOrder?.status;
+                          const canComplete = dbStatus === "payment_confirmed";
+                          const iAmEscrowCreator = order.escrowCreatorWallet && order.escrowCreatorWallet === solanaWallet.walletAddress;
+                          const iAmBuyer = order.escrowTxHash && !iAmEscrowCreator;
+                          const canConfirmPayment = dbStatus === "payment_sent" && iAmEscrowCreator;
+                          const waitingForBuyerToPay = dbStatus === "payment_pending" && iAmEscrowCreator;
+                          const waitingForRelease = dbStatus === "payment_sent" && iAmBuyer;
+                          const waitingForUser = dbStatus === "payment_sent" && order.orderType === "sell" && !iAmBuyer && !iAmEscrowCreator;
+                          const canMarkPaid = dbStatus === "payment_pending" && iAmBuyer;
+                          const isFundedOnly = dbStatus === "escrowed" && iAmEscrowCreator;
+                          const isExpired = order.expiresIn <= 0;
+                          const canClaimRefund = isExpired && iAmEscrowCreator && order.escrowTradeId !== undefined;
+                          return (
+                            <motion.div
+                              key={order.id}
+                              layout
+                              initial={{ opacity: 0, x: -20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: 20 }}
+                              transition={{ delay: i * 0.03 }}
+                              className="p-2.5 bg-[#141414] rounded-lg border border-white/6 hover:border-white/12 transition-all"
+                            >
+                              {/* Row 1: User + Timer + Status */}
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-7 h-7 rounded-md bg-white/5 border border-white/6 flex items-center justify-center shrink-0">
+                                  <span className="text-[10px] font-bold text-white/70">
+                                    {order.user.slice(0, 2).toUpperCase()}
+                                  </span>
+                                </div>
+                                <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
+                                <div className={`text-[11px] font-mono ${timePercent < 20 ? "text-red-400" : "text-white/70/70"}`}>
+                                  {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
+                                </div>
+                                {isExpired ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded font-mono">EXPIRED</span>
+                                ) : waitingForBuyerToPay ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">AWAIT PAY</span>
+                                ) : waitingForRelease ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">RELEASING</span>
+                                ) : waitingForUser ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">RELEASING</span>
+                                ) : canConfirmPayment ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white rounded font-mono">PAID</span>
+                                ) : canComplete ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white rounded font-mono">READY</span>
+                                ) : canMarkPaid ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">SEND</span>
+                                ) : isFundedOnly ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">FUNDED</span>
+                                ) : (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">LOCKED</span>
+                                )}
+                              </div>
+
+                              {/* Row 2: Amount + Actions */}
+                              <div className="flex items-center gap-2 pl-9">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
+                                    <ArrowRight className="w-3 h-3 text-gray-600" />
+                                    <span className="text-sm font-bold text-white">{Math.round(order.total).toLocaleString()}</span>
+                                    <span className="text-[10px] text-gray-500">AED</span>
+                                  </div>
+                                  {canMarkPaid && order.userBankAccount && (
+                                    <div className="mt-1 text-[10px] text-white/70/80 font-mono truncate" title={order.userBankAccount}>
+                                      → {order.userBankAccount}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Icon buttons */}
+                                <div className="flex items-center gap-1">
+                                  {extensionRequests.has(order.id) && extensionRequests.get(order.id)?.requestedBy === 'user' ? (
+                                    <div className="flex gap-0.5">
+                                      <button
+                                        onClick={() => respondToExtension(order.id, true)}
+                                        disabled={requestingExtension === order.id}
+                                        className="p-1.5 bg-white/5 hover:bg-white/10 text-white rounded text-[10px] disabled:opacity-50"
+                                        title={`Accept +${extensionRequests.get(order.id)?.extensionMinutes}min`}
+                                      >
+                                        <Check className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        onClick={() => respondToExtension(order.id, false)}
+                                        disabled={requestingExtension === order.id}
+                                        className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded disabled:opacity-50"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ) : timePercent < 30 && !extensionRequests.has(order.id) ? (
+                                    <button
+                                      onClick={() => requestExtension(order.id)}
+                                      disabled={requestingExtension === order.id}
+                                      className="p-1.5 hover:bg-white/5 rounded transition-colors disabled:opacity-50"
+                                      title="Request extension"
+                                    >
+                                      <Clock className={`w-3.5 h-3.5 ${requestingExtension === order.id ? 'animate-spin text-white/70' : 'text-gray-500 hover:text-white/70'}`} />
+                                    </button>
+                                  ) : null}
+                                  <button
+                                    onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
+                                    className="p-1.5 hover:bg-white/[0.04] rounded transition-colors"
+                                    title="Chat"
+                                  >
+                                    <MessageCircle className="w-3.5 h-3.5 text-gray-500 hover:text-white/70" />
+                                  </button>
+                                  <button
+                                    onClick={() => openDisputeModal(order.id)}
+                                    className="p-1.5 hover:bg-red-500/10 rounded transition-colors"
+                                    title="Dispute"
+                                  >
+                                    <AlertTriangle className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
+                                  </button>
+                                  {dbStatus === "escrowed" && order.orderType === "buy" && order.escrowCreatorWallet && (
+                                    <button
+                                      onClick={() => openCancelModal(order)}
+                                      className="p-1.5 hover:bg-white/5 rounded transition-colors"
+                                      title="Cancel & Withdraw"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5 text-gray-500 hover:text-white/70" />
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* Action button */}
+                                {canClaimRefund ? (
+                                  <motion.button
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => openCancelModal(order)}
+                                    className="px-2.5 py-1.5 bg-red-500 hover:bg-red-400 rounded text-[11px] font-bold text-white"
+                                  >
+                                    Refund
+                                  </motion.button>
+                                ) : canMarkPaid ? (
+                                  <motion.button
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => markFiatPaymentSent(order)}
+                                    disabled={markingDone}
+                                    className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 rounded text-[11px] font-bold text-white disabled:opacity-50 transition-all"
+                                  >
+                                    {markingDone ? '...' : "I've Paid"}
+                                  </motion.button>
+                                ) : waitingForBuyerToPay ? (
+                                  <span className="px-2.5 py-1.5 bg-white/5 rounded text-[11px] font-mono text-white/70">
+                                    Awaiting
+                                  </span>
+                                ) : waitingForRelease ? (
+                                  <span className="px-2.5 py-1.5 bg-white/5 rounded text-[11px] font-mono text-white/70">
+                                    Waiting
+                                  </span>
+                                ) : waitingForUser ? (
+                                  <span className="px-2.5 py-1.5 bg-white/5 rounded text-[11px] font-mono text-white/70">
+                                    Waiting
+                                  </span>
+                                ) : canConfirmPayment ? (
+                                  <motion.button
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => openReleaseModal(order)}
+                                    className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 rounded text-[11px] font-bold text-white transition-all"
+                                  >
+                                    Release
+                                  </motion.button>
+                                ) : canComplete ? (
+                                  <motion.button
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => completeOrder(order.id)}
+                                    className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 rounded text-[11px] font-bold text-white transition-all"
+                                  >
+                                    Release
+                                  </motion.button>
+                                ) : dbStatus === "escrowed" && order.orderType === "buy" ? (
+                                  <span className="px-2.5 py-1.5 bg-white/5 rounded text-[11px] font-mono text-white/70">
+                                    Awaiting
+                                  </span>
+                                ) : (
+                                  <span className="px-2.5 py-1.5 bg-white/[0.04] rounded text-[11px] font-mono text-gray-500">
+                                    Waiting
+                                  </span>
+                                )}
+                              </div>
+                            </motion.div>
+                          );
+                        })
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full py-8 text-gray-600">
+                          <Lock className="w-6 h-6 mb-1 opacity-20" />
+                          <p className="text-[10px] font-mono text-gray-500">No active escrows</p>
+                        </div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </div>
+
+              {/* Completed/Cancelled History */}
+              <div className="flex flex-col h-[45%]">
+              {/* Toggle Tabs */}
+              <div className="flex items-center gap-1 mb-2 bg-[#0d0d0d] rounded-lg p-1 border border-white/[0.04]">
+                <button
+                  onClick={() => setHistoryTab('completed')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-semibold transition-all ${
+                    historyTab === 'completed'
+                      ? 'bg-white/10 text-white border border-white/10'
+                      : 'text-gray-500 hover:text-gray-300 border border-transparent'
+                  }`}
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  Completed
+                  <span className={`ml-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+                    historyTab === 'completed' ? 'bg-white/15 text-white' : 'bg-white/5 text-gray-500'
+                  }`}>
+                    {completedOrders.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setHistoryTab('cancelled')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-semibold transition-all ${
+                    historyTab === 'cancelled'
+                      ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                      : 'text-gray-500 hover:text-gray-300 border border-transparent'
+                  }`}
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Cancelled
+                  <span className={`ml-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+                    historyTab === 'cancelled' ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-gray-500'
+                  }`}>
+                    {cancelledOrders.length}
+                  </span>
+                </button>
+              </div>
+
+              {/* Order List */}
+              <div className={`flex-1 bg-[#0d0d0d] rounded-lg border overflow-hidden ${
+                historyTab === 'cancelled' ? 'border-red-500/10' : 'border-white/[0.04]'
+              }`}>
+                <div className="h-full overflow-y-auto p-2 space-y-2">
+                  <AnimatePresence mode="popLayout">
+                    {historyTab === 'completed' ? (
+                      completedOrders.length > 0 ? (
                         completedOrders.map((order, i) => {
-                          const profit = order.amount * TRADER_CUT_CONFIG.best; // 0.5% trader cut
+                          const profit = order.amount * TRADER_CUT_CONFIG.best;
                           const isM2MTrade = order.isM2M || !!order.buyerMerchantId;
                           return (
                             <motion.div
@@ -3668,48 +3891,35 @@ export default function MerchantDashboard() {
                               animate={{ opacity: 1, scale: 1 }}
                               exit={{ opacity: 0 }}
                               transition={{ delay: i * 0.03 }}
-                              className={`p-2.5 bg-[#141414] rounded-lg border transition-all ${isM2MTrade ? 'border-purple-500/20 hover:border-purple-500/30' : 'border-emerald-500/10 hover:border-emerald-500/20'}`}
+                              className="p-2.5 bg-[#141414] rounded-lg border border-white/6 hover:border-white/12 transition-all cursor-pointer"
+                              onClick={() => {
+                                setSelectedOrderForChat(order);
+                                setShowOrderDetails(true);
+                              }}
                             >
                               <div className="flex items-center gap-2">
-                                <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${isM2MTrade ? 'bg-purple-500/10 border border-purple-500/20' : 'bg-emerald-500/10 border border-emerald-500/20'}`}>
-                                  <span className={`text-[10px] font-bold ${isM2MTrade ? 'text-purple-400' : 'text-emerald-400'}`}>
+                                <div className="w-7 h-7 rounded-md bg-white/5 border border-white/6 flex items-center justify-center shrink-0">
+                                  <span className="text-[10px] font-bold text-white">
                                     {isM2MTrade ? '🤝' : order.user.slice(0, 2).toUpperCase()}
                                   </span>
                                 </div>
                                 <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
-                                {isM2MTrade && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded">M2M</span>}
+                                {isM2MTrade && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 text-white/70 rounded">M2M</span>}
                                 <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
-                                <span className="text-xs font-bold text-emerald-400">+${Math.round(profit)}</span>
-                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                <span className="text-xs font-bold text-white">+${Math.round(profit)}</span>
+                                <Check className="w-3.5 h-3.5 text-white" />
                               </div>
                             </motion.div>
                           );
                         })
                       ) : (
-                        <div className="flex flex-col items-center justify-center h-full py-4 text-gray-600">
+                        <div className="flex flex-col items-center justify-center h-full py-8 text-gray-600">
                           <Check className="w-5 h-5 mb-1 opacity-20" />
-                          <p className="text-[10px] font-mono text-gray-500">No completed trades</p>
+                          <p className="text-[10px] font-mono text-gray-500">No completed trades yet</p>
                         </div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Half: Cancelled */}
-              <div className="flex flex-col h-1/2">
-                <div className="flex items-center gap-2 mb-2">
-                  <X className="w-4 h-4 text-red-500" />
-                  <span className="text-sm font-semibold">Cancelled</span>
-                  <span className="ml-auto text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-medium">
-                    {cancelledOrders.length}
-                  </span>
-                </div>
-
-                <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-red-500/10 overflow-hidden">
-                  <div className="h-full overflow-y-auto p-2 space-y-2">
-                    <AnimatePresence mode="popLayout">
-                      {cancelledOrders.length > 0 ? (
+                      )
+                    ) : (
+                      cancelledOrders.length > 0 ? (
                         cancelledOrders.map((order, i) => {
                           const isDisputed = order.status === 'disputed';
                           const isM2MTrade = order.isM2M || !!order.buyerMerchantId;
@@ -3721,32 +3931,37 @@ export default function MerchantDashboard() {
                               animate={{ opacity: 1, scale: 1 }}
                               exit={{ opacity: 0 }}
                               transition={{ delay: i * 0.03 }}
-                              className={`p-2.5 bg-[#141414] rounded-lg border transition-all ${isDisputed ? 'border-amber-500/20 hover:border-amber-500/30' : 'border-red-500/10 hover:border-red-500/20'}`}
+                              className={`p-2.5 bg-[#141414] rounded-lg border transition-all cursor-pointer ${isDisputed ? 'border-white/6 hover:border-white/12' : 'border-red-500/10 hover:border-red-500/20'}`}
+                              onClick={() => {
+                                setSelectedOrderForChat(order);
+                                setShowOrderDetails(true);
+                              }}
                             >
                               <div className="flex items-center gap-2">
-                                <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${isDisputed ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
-                                  <span className={`text-[10px] font-bold ${isDisputed ? 'text-amber-400' : 'text-red-400'}`}>
+                                <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${isDisputed ? 'bg-white/5 border border-white/6' : 'bg-red-500/10 border border-red-500/20'}`}>
+                                  <span className={`text-[10px] font-bold ${isDisputed ? 'text-white/70' : 'text-red-400'}`}>
                                     {order.user.slice(0, 2).toUpperCase()}
                                   </span>
                                 </div>
                                 <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
-                                {isDisputed && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded">DISPUTE</span>}
-                                {isM2MTrade && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded">M2M</span>}
+                                {isDisputed && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 text-white/70 rounded">DISPUTE</span>}
+                                {isM2MTrade && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 text-white/70 rounded">M2M</span>}
                                 <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
-                                <X className={`w-3.5 h-3.5 ${isDisputed ? 'text-amber-400' : 'text-red-400'}`} />
+                                <X className={`w-3.5 h-3.5 ${isDisputed ? 'text-white/70' : 'text-red-400'}`} />
                               </div>
                             </motion.div>
                           );
                         })
                       ) : (
-                        <div className="flex flex-col items-center justify-center h-full py-4 text-gray-600">
+                        <div className="flex flex-col items-center justify-center h-full py-8 text-gray-600">
                           <X className="w-5 h-5 mb-1 opacity-20" />
                           <p className="text-[10px] font-mono text-gray-500">No cancelled trades</p>
                         </div>
-                      )}
-                    </AnimatePresence>
-                  </div>
+                      )
+                    )}
+                  </AnimatePresence>
                 </div>
+              </div>
               </div>
             </div>
 
@@ -3783,9 +3998,9 @@ export default function MerchantDashboard() {
                     >
                       <div className="flex items-start gap-2">
                         <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 ${
-                          notif.type === 'order' ? 'bg-emerald-500/20' :
-                          notif.type === 'escrow' ? 'bg-amber-500/20' :
-                          notif.type === 'payment' ? 'bg-blue-500/20' :
+                          notif.type === 'order' ? 'bg-white/10' :
+                          notif.type === 'escrow' ? 'bg-white/10' :
+                          notif.type === 'payment' ? 'bg-white/10' :
                           notif.type === 'dispute' ? 'bg-red-500/20' :
                           'bg-white/[0.08]'
                         }`}>
@@ -3800,7 +4015,7 @@ export default function MerchantDashboard() {
                           <p className="text-[10px] text-gray-600 mt-0.5">{notif.time}</p>
                         </div>
                         {!notif.read && (
-                          <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0 mt-1" />
+                          <div className="w-2 h-2 rounded-full bg-white/10 shrink-0 mt-1" />
                         )}
                       </div>
                     </motion.div>
@@ -3846,22 +4061,22 @@ export default function MerchantDashboard() {
                 console.log('[Chat View] messages:', activeChat.messages);
                 const statusColors: Record<string, string> = {
                   pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-                  accepted: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-                  escrowed: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-                  payment_pending: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-                  payment_sent: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-                  completed: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+                  accepted: 'bg-white/10 text-white/70 border-white/6',
+                  escrowed: 'bg-white/10 text-white/70 border-white/6',
+                  payment_pending: 'bg-white/10 text-white/70 border-white/6',
+                  payment_sent: 'bg-white/10 text-white/70 border-white/6',
+                  completed: 'bg-white/10 text-white border-white/6',
                   cancelled: 'bg-red-500/20 text-red-400 border-red-500/30',
-                  disputed: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+                  disputed: 'bg-white/10 text-white/70 border-white/6',
                 };
                 const currentStatus = orderInfo?.order_status || orderFromList?.status || 'pending';
                 const getEventIcon = (text: string, type?: string) => {
                   if (type === 'dispute') return { icon: <AlertTriangle className="w-3 h-3" />, color: 'text-red-400 bg-red-500/20' };
-                  if (type === 'resolution' || type === 'resolution_proposed') return { icon: <Shield className="w-3 h-3" />, color: 'text-blue-400 bg-blue-500/20' };
-                  if (text.includes('accepted')) return { icon: <Check className="w-3 h-3" />, color: 'text-blue-400 bg-blue-500/20' };
-                  if (text.includes('escrow') || text.includes('locked')) return { icon: <Lock className="w-3 h-3" />, color: 'text-purple-400 bg-purple-500/20' };
-                  if (text.includes('Payment') && text.includes('sent')) return { icon: <DollarSign className="w-3 h-3" />, color: 'text-cyan-400 bg-cyan-500/20' };
-                  if (text.includes('completed') || text.includes('released')) return { icon: <CheckCircle2 className="w-3 h-3" />, color: 'text-emerald-400 bg-emerald-500/20' };
+                  if (type === 'resolution' || type === 'resolution_proposed') return { icon: <Shield className="w-3 h-3" />, color: 'text-white/70 bg-white/10' };
+                  if (text.includes('accepted')) return { icon: <Check className="w-3 h-3" />, color: 'text-white/70 bg-white/10' };
+                  if (text.includes('escrow') || text.includes('locked')) return { icon: <Lock className="w-3 h-3" />, color: 'text-white/70 bg-white/10' };
+                  if (text.includes('Payment') && text.includes('sent')) return { icon: <DollarSign className="w-3 h-3" />, color: 'text-white/70 bg-white/10' };
+                  if (text.includes('completed') || text.includes('released')) return { icon: <CheckCircle2 className="w-3 h-3" />, color: 'text-white bg-white/10' };
                   if (text.includes('cancelled')) return { icon: <XCircle className="w-3 h-3" />, color: 'text-red-400 bg-red-500/20' };
                   if (text.includes('expired')) return { icon: <Clock className="w-3 h-3" />, color: 'text-zinc-400 bg-zinc-500/20' };
                   return { icon: <Bot className="w-3 h-3" />, color: 'text-gray-400 bg-white/[0.08]' };
@@ -3925,7 +4140,7 @@ export default function MerchantDashboard() {
                       const time = new Date(dbOrder.created_at);
                       timelineEvents.push({
                         icon: <Plus className="w-3.5 h-3.5" />,
-                        color: 'text-blue-400 bg-blue-500/20 border-blue-500/30',
+                        color: 'text-white/70 bg-white/10 border-white/6',
                         label: 'Order Created',
                         time,
                       });
@@ -3936,7 +4151,7 @@ export default function MerchantDashboard() {
                       const duration = prevTime ? formatDuration(time.getTime() - prevTime.getTime()) : undefined;
                       timelineEvents.push({
                         icon: <Check className="w-3.5 h-3.5" />,
-                        color: 'text-cyan-400 bg-cyan-500/20 border-cyan-500/30',
+                        color: 'text-white/70 bg-white/10 border-white/6',
                         label: 'Order Accepted',
                         time,
                         duration,
@@ -3948,7 +4163,7 @@ export default function MerchantDashboard() {
                       const duration = prevTime ? formatDuration(time.getTime() - prevTime.getTime()) : undefined;
                       timelineEvents.push({
                         icon: <Lock className="w-3.5 h-3.5" />,
-                        color: 'text-purple-400 bg-purple-500/20 border-purple-500/30',
+                        color: 'text-white/70 bg-white/10 border-white/6',
                         label: 'Escrow Locked',
                         time,
                         duration,
@@ -3960,7 +4175,7 @@ export default function MerchantDashboard() {
                       const duration = prevTime ? formatDuration(time.getTime() - prevTime.getTime()) : undefined;
                       timelineEvents.push({
                         icon: <DollarSign className="w-3.5 h-3.5" />,
-                        color: 'text-amber-400 bg-amber-500/20 border-amber-500/30',
+                        color: 'text-white/70 bg-white/10 border-white/6',
                         label: 'Payment Sent',
                         time,
                         duration,
@@ -3973,7 +4188,7 @@ export default function MerchantDashboard() {
                       const totalDuration = dbOrder?.created_at ? formatDuration(time.getTime() - new Date(dbOrder.created_at).getTime()) : undefined;
                       timelineEvents.push({
                         icon: <CheckCircle2 className="w-3.5 h-3.5" />,
-                        color: 'text-emerald-400 bg-emerald-500/20 border-emerald-500/30',
+                        color: 'text-white bg-white/10 border-white/6',
                         label: 'Trade Completed',
                         time,
                         duration: duration ? `+${duration}${totalDuration ? ` (Total: ${totalDuration})` : ''}` : undefined,
@@ -4059,10 +4274,10 @@ export default function MerchantDashboard() {
                         const data = JSON.parse(msg.text);
                         return (
                           <div key={msg.id} className="flex justify-center">
-                            <div className="w-full max-w-[90%] bg-blue-500/10 border border-blue-500/20 rounded-xl p-3">
+                            <div className="w-full max-w-[90%] bg-white/5 border border-white/6 rounded-xl p-3">
                               <div className="flex items-center gap-2 mb-2">
-                                <Shield className="w-4 h-4 text-blue-400" />
-                                <span className="text-xs font-semibold text-blue-400">
+                                <Shield className="w-4 h-4 text-white/70" />
+                                <span className="text-xs font-semibold text-white/70">
                                   {data.type === 'resolution_proposed' ? 'Resolution Proposed' : 'Resolution Finalized'}
                                 </span>
                               </div>
@@ -4084,14 +4299,14 @@ export default function MerchantDashboard() {
                                   <button
                                     onClick={() => activeChat.orderId && respondToResolution('accept', activeChat.orderId)}
                                     disabled={isRespondingToResolution}
-                                    className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-blue-500 text-white disabled:opacity-50"
+                                    className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white disabled:opacity-50 transition-all"
                                   >
                                     Accept
                                   </button>
                                 </div>
                               )}
                               {disputeInfo?.merchant_confirmed && !disputeInfo?.user_confirmed && (
-                                <p className="text-[10px] text-emerald-400 mt-2">
+                                <p className="text-[10px] text-white mt-2">
                                   You accepted. Waiting for user confirmation...
                                 </p>
                               )}
@@ -4109,10 +4324,10 @@ export default function MerchantDashboard() {
                         const data = JSON.parse(msg.text);
                         return (
                           <div key={msg.id} className="flex justify-center">
-                            <div className="w-full max-w-[90%] bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
+                            <div className="w-full max-w-[90%] bg-white/5 border border-white/6 rounded-xl p-3">
                               <div className="flex items-center gap-2 mb-2">
-                                <Check className="w-4 h-4 text-emerald-400" />
-                                <span className="text-xs font-semibold text-emerald-400">Resolution Finalized</span>
+                                <Check className="w-4 h-4 text-white" />
+                                <span className="text-xs font-semibold text-white">Resolution Finalized</span>
                               </div>
                               <p className="text-xs text-white">
                                 Decision: {data.resolution?.replace(/_/g, ' ')}
@@ -4136,7 +4351,7 @@ export default function MerchantDashboard() {
                         return (
                           <div key={msg.id} className="flex justify-center">
                             <div className={`px-3 py-1.5 rounded-lg text-[11px] ${
-                              isAccepted ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                              isAccepted ? 'bg-white/5 text-white' : 'bg-red-500/10 text-red-400'
                             }`}>
                               {data.party === 'merchant' ? 'You' : 'User'} {isAccepted ? 'accepted' : 'rejected'} the resolution
                             </div>
@@ -4248,10 +4463,10 @@ export default function MerchantDashboard() {
                   {/* Show pending resolution if dispute exists and has a proposal */}
                   {activeChat.orderId && disputeInfo?.status === 'pending_confirmation' && disputeInfo.proposed_resolution && !activeChat.messages.some(m => m.messageType === 'resolution') && (
                     <div className="flex justify-center">
-                      <div className="w-full max-w-[90%] bg-blue-500/10 border border-blue-500/20 rounded-xl p-3">
+                      <div className="w-full max-w-[90%] bg-white/5 border border-white/6 rounded-xl p-3">
                         <div className="flex items-center gap-2 mb-2">
-                          <Shield className="w-4 h-4 text-blue-400" />
-                          <span className="text-xs font-semibold text-blue-400">Resolution Proposed</span>
+                          <Shield className="w-4 h-4 text-white/70" />
+                          <span className="text-xs font-semibold text-white/70">Resolution Proposed</span>
                         </div>
                         <p className="text-xs text-white mb-1">
                           <span className="text-gray-400">Decision:</span> {disputeInfo.proposed_resolution.replace(/_/g, ' ')}
@@ -4271,14 +4486,14 @@ export default function MerchantDashboard() {
                             <button
                               onClick={() => activeChat.orderId && respondToResolution('accept', activeChat.orderId)}
                               disabled={isRespondingToResolution}
-                              className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-blue-500 text-white disabled:opacity-50"
+                              className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-white/10 text-white disabled:opacity-50"
                             >
                               Accept
                             </button>
                           </div>
                         )}
                         {disputeInfo.merchant_confirmed && !disputeInfo.user_confirmed && (
-                          <p className="text-[10px] text-emerald-400 mt-2">
+                          <p className="text-[10px] text-white mt-2">
                             You accepted. Waiting for user confirmation...
                           </p>
                         )}
@@ -4364,14 +4579,14 @@ export default function MerchantDashboard() {
                       const emoji = emojis[hash % emojis.length];
                       const statusColors: Record<string, string> = {
                         pending: 'bg-yellow-500/20 text-yellow-400',
-                        accepted: 'bg-blue-500/20 text-blue-400',
-                        escrowed: 'bg-purple-500/20 text-purple-400',
-                        payment_pending: 'bg-cyan-500/20 text-cyan-400',
-                        payment_sent: 'bg-cyan-500/20 text-cyan-400',
-                        payment_confirmed: 'bg-teal-500/20 text-teal-400',
-                        completed: 'bg-emerald-500/20 text-emerald-400',
+                        accepted: 'bg-white/10 text-white/70',
+                        escrowed: 'bg-white/10 text-white/70',
+                        payment_pending: 'bg-white/10 text-white/70',
+                        payment_sent: 'bg-white/10 text-white/70',
+                        payment_confirmed: 'bg-white/10 text-white/70',
+                        completed: 'bg-white/10 text-white',
                         cancelled: 'bg-red-500/20 text-red-400',
-                        disputed: 'bg-orange-500/20 text-orange-400',
+                        disputed: 'bg-white/10 text-white/70',
                         expired: 'bg-zinc-500/20 text-zinc-400',
                       };
                       const formatTime = (dateStr: string) => {
@@ -4402,11 +4617,11 @@ export default function MerchantDashboard() {
                           className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors text-left"
                         >
                           <div className="relative flex-shrink-0">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400/20 to-cyan-400/20 flex items-center justify-center text-lg">
+                            <div className="w-10 h-10 rounded-full bg-white/5 border border-white/6 flex items-center justify-center text-lg">
                               {emoji}
                             </div>
                             {conv.unread_count > 0 && (
-                              <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                              <span className="absolute -top-1 -right-1 w-4 h-4 bg-white/10 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                                 {conv.unread_count > 9 ? '9+' : conv.unread_count}
                               </span>
                             )}
@@ -4430,7 +4645,7 @@ export default function MerchantDashboard() {
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-[10px] text-white/40">{conv.order_number}</span>
                               <span className="text-[10px] text-white/30">•</span>
-                              <span className={`text-[10px] ${conv.order_type === 'buy' ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                              <span className={`text-[10px] ${conv.order_type === 'buy' ? 'text-white' : 'text-white/70'}`}>
                                 {conv.order_type === 'buy' ? 'Buy' : 'Sell'}
                               </span>
                               <span className="text-[10px] text-white/40">
@@ -4471,12 +4686,12 @@ export default function MerchantDashboard() {
               {/* Big Orders Section */}
               {bigOrders.length > 0 && (
                 <div className="mb-4">
-                  <div className="flex items-center justify-between px-2 py-2 border-b border-amber-500/20">
+                  <div className="flex items-center justify-between px-2 py-2 border-b border-white/6">
                     <div className="flex items-center gap-2">
-                      <Crown className="w-4 h-4 text-amber-400" />
-                      <span className="text-xs font-mono text-amber-400 uppercase tracking-wide">Whale Orders</span>
+                      <Crown className="w-4 h-4 text-white/70" />
+                      <span className="text-xs font-mono text-white/70 uppercase tracking-wide">Whale Orders</span>
                     </div>
-                    <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] font-bold rounded-full">
+                    <span className="px-2 py-0.5 bg-white/10 text-white/70 text-[10px] font-bold rounded-full">
                       {bigOrders.length}
                     </span>
                   </div>
@@ -4486,17 +4701,17 @@ export default function MerchantDashboard() {
                         key={order.id}
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
-                        className="px-2 py-3 bg-gradient-to-r from-amber-500/5 to-transparent"
+                        className="px-2 py-3 bg-white/5"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/6 flex items-center justify-center">
                             <span className="text-lg">{order.emoji}</span>
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium text-white">{order.user}</span>
                               {order.premium > 0 && (
-                                <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-mono rounded">
+                                <span className="px-1.5 py-0.5 bg-white/10 text-white text-[10px] font-mono rounded">
                                   +{order.premium}%
                                 </span>
                               )}
@@ -4504,7 +4719,7 @@ export default function MerchantDashboard() {
                             <p className="text-xs text-gray-500 truncate">{order.message}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-bold text-amber-400">
+                            <p className="text-sm font-bold text-white/70">
                               {order.currency === 'AED' ? 'د.إ' : '$'}{order.amount.toLocaleString()}
                             </p>
                             <p className="text-[10px] text-gray-500">
@@ -4519,7 +4734,7 @@ export default function MerchantDashboard() {
                               // TODO: Handle big order acceptance
                               console.log('Accept big order:', order.id);
                             }}
-                            className="flex-1 h-8 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 rounded-lg text-xs font-medium text-amber-400 flex items-center justify-center gap-1.5 transition-colors"
+                            className="flex-1 h-8 bg-white/10 hover:bg-white/20 border border-white/6 rounded-lg text-xs font-medium text-white/70 flex items-center justify-center gap-1.5 transition-colors"
                           >
                             <DollarSign className="w-3.5 h-3.5" />
                             Contact
@@ -4535,7 +4750,7 @@ export default function MerchantDashboard() {
                     ))}
                   </div>
                   {bigOrders.length > 3 && (
-                    <button className="w-full py-2 text-xs text-amber-400/70 hover:text-amber-400 transition-colors">
+                    <button className="w-full py-2 text-xs text-white/70/70 hover:text-white/70 transition-colors">
                       View all {bigOrders.length} whale orders
                     </button>
                   )}
@@ -4580,14 +4795,14 @@ export default function MerchantDashboard() {
                             {order.orderType && (
                               <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
                                 order.orderType === 'buy'
-                                  ? 'bg-emerald-500/10 text-emerald-400'
-                                  : 'bg-blue-500/10 text-blue-400'
+                                  ? 'bg-white/5 text-white'
+                                  : 'bg-white/5 text-white/70'
                               }`}>
                                 {order.orderType.toUpperCase()}
                               </span>
                             )}
                             {order.isNew && (
-                              <span className="text-[10px] font-mono px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded">NEW</span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 bg-white/5 text-white/70 rounded">NEW</span>
                             )}
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
@@ -4603,7 +4818,7 @@ export default function MerchantDashboard() {
 
                         {/* Timer & Earnings */}
                         <div className="text-right">
-                          <div className="text-[10px] font-mono text-emerald-400">+${Math.round(order.amount * 0.005)}</div>
+                          <div className="text-[10px] font-mono text-white">+${Math.round(order.amount * 0.005)}</div>
                           <div className={`text-xs font-mono ${order.expiresIn < 30 ? "text-red-400" : "text-gray-500"}`}>
                             {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
                           </div>
@@ -4617,7 +4832,7 @@ export default function MerchantDashboard() {
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="flex items-center justify-center gap-1.5 mt-2 ml-11 py-1.5 bg-emerald-500/10 rounded-lg text-[10px] font-mono text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                          className="flex items-center justify-center gap-1.5 mt-2 ml-11 py-1.5 bg-white/5 rounded-lg text-[10px] font-mono text-white hover:bg-white/10 transition-colors"
                         >
                           <Shield className="w-3 h-3" />
                           <span>Escrow Secured</span>
@@ -4660,10 +4875,10 @@ export default function MerchantDashboard() {
               {/* Header Row */}
               <div className="flex items-center justify-between px-2 py-2 border-b border-white/[0.06]">
                 <div className="flex items-center gap-2">
-                  <Zap className="w-3.5 h-3.5 text-blue-400" />
+                  <Zap className="w-3.5 h-3.5 text-white/70" />
                   <span className="text-xs font-mono text-gray-400 uppercase tracking-wide">Active</span>
                 </div>
-                <span className="text-xs font-mono text-blue-400">{activeOrders.length}</span>
+                <span className="text-xs font-mono text-white/70">{activeOrders.length}</span>
               </div>
 
               {activeOrders.length > 0 ? (
@@ -4678,8 +4893,8 @@ export default function MerchantDashboard() {
                       {/* Main Row */}
                       <div className="flex items-center gap-3">
                         {/* User Avatar - initials */}
-                        <div className="w-8 h-8 rounded-md bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                          <span className="text-xs font-bold text-blue-400">
+                        <div className="w-8 h-8 rounded-md bg-white/5 border border-white/6 flex items-center justify-center">
+                          <span className="text-xs font-bold text-white/70">
                             {order.user.slice(0, 2).toUpperCase()}
                           </span>
                         </div>
@@ -4691,8 +4906,8 @@ export default function MerchantDashboard() {
                             {order.orderType && (
                               <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
                                 order.orderType === 'buy'
-                                  ? 'bg-emerald-500/10 text-emerald-400'
-                                  : 'bg-blue-500/10 text-blue-400'
+                                  ? 'bg-white/5 text-white'
+                                  : 'bg-white/5 text-white/70'
                               }`}>
                                 {order.orderType.toUpperCase()}
                               </span>
@@ -4710,8 +4925,8 @@ export default function MerchantDashboard() {
                         </div>
 
                         {/* Status */}
-                        <div className="flex items-center gap-1.5 text-blue-400">
-                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                        <div className="flex items-center gap-1.5 text-white/70">
+                          <div className="w-1.5 h-1.5 rounded-full bg-white/10 animate-pulse" />
                           <span className="text-[10px] font-mono uppercase">Waiting</span>
                         </div>
                       </div>
@@ -4722,13 +4937,13 @@ export default function MerchantDashboard() {
                           <motion.button
                             whileTap={{ scale: 0.98 }}
                             onClick={() => openEscrowModal(order)}
-                            className="flex-1 h-9 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg text-xs font-medium text-blue-400 flex items-center justify-center gap-1.5 transition-colors"
+                            className="flex-1 h-9 bg-white/5 hover:bg-white/10 border border-white/6 rounded-lg text-xs font-medium text-white/70 flex items-center justify-center gap-1.5 transition-colors"
                           >
                             <Lock className="w-3.5 h-3.5" />
                             Lock Escrow
                           </motion.button>
                         ) : order.escrowTxHash ? (
-                          <div className="flex-1 h-9 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs font-mono text-emerald-400 flex items-center justify-center gap-1.5">
+                          <div className="flex-1 h-9 bg-white/5 border border-white/6 rounded-lg text-xs font-mono text-white flex items-center justify-center gap-1.5">
                             <Check className="w-3.5 h-3.5" />
                             Escrow Locked
                           </div>
@@ -4763,10 +4978,10 @@ export default function MerchantDashboard() {
               {/* Header Row */}
               <div className="flex items-center justify-between px-2 py-2 border-b border-white/[0.06]">
                 <div className="flex items-center gap-2">
-                  <Lock className="w-3.5 h-3.5 text-amber-400" />
+                  <Lock className="w-3.5 h-3.5 text-white/70" />
                   <span className="text-xs font-mono text-gray-400 uppercase tracking-wide">Escrow</span>
                 </div>
-                <span className="text-xs font-mono text-amber-400">{ongoingOrders.length}</span>
+                <span className="text-xs font-mono text-white/70">{ongoingOrders.length}</span>
               </div>
 
               {ongoingOrders.length > 0 ? (
@@ -4788,8 +5003,8 @@ export default function MerchantDashboard() {
                       {/* Main Row */}
                       <div className="flex items-center gap-3">
                         {/* User Avatar - initials instead of emoji */}
-                        <div className="w-8 h-8 rounded-md bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                          <span className="text-xs font-bold text-amber-400">
+                        <div className="w-8 h-8 rounded-md bg-white/5 border border-white/6 flex items-center justify-center">
+                          <span className="text-xs font-bold text-white/70">
                             {order.user.slice(0, 2).toUpperCase()}
                           </span>
                         </div>
@@ -4801,15 +5016,15 @@ export default function MerchantDashboard() {
                             {order.orderType && (
                               <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
                                 order.orderType === 'buy'
-                                  ? 'bg-emerald-500/10 text-emerald-400'
-                                  : 'bg-blue-500/10 text-blue-400'
+                                  ? 'bg-white/5 text-white'
+                                  : 'bg-white/5 text-white/70'
                               }`}>
                                 {order.orderType.toUpperCase()}
                               </span>
                             )}
                             {/* Status badge */}
                             {mobileCanMarkPaid && (
-                              <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded font-mono">SEND</span>
+                              <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">SEND</span>
                             )}
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
@@ -4823,14 +5038,14 @@ export default function MerchantDashboard() {
                           </div>
                           {/* Show user's bank account for sell orders waiting for payment */}
                           {mobileCanMarkPaid && order.userBankAccount && (
-                            <div className="mt-1 text-[10px] text-orange-400/80 font-mono truncate">
+                            <div className="mt-1 text-[10px] text-white/70/80 font-mono truncate">
                               → {order.userBankAccount}
                             </div>
                           )}
                         </div>
 
                         {/* Timer */}
-                        <div className="flex items-center gap-1.5 text-amber-400">
+                        <div className="flex items-center gap-1.5 text-white/70">
                           <Clock className="w-3.5 h-3.5" />
                           <span className="text-xs font-mono">
                             {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
@@ -4845,19 +5060,19 @@ export default function MerchantDashboard() {
                             whileTap={{ scale: 0.98 }}
                             onClick={() => markPaymentSent(order)}
                             disabled={markingDone}
-                            className="flex-1 h-9 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 rounded-lg text-xs font-medium text-orange-400 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                            className="flex-1 h-9 bg-white/5 hover:bg-white/10 border border-white/6 rounded-lg text-xs font-medium text-white/70 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
                           >
                             I&apos;ve Paid
                           </motion.button>
                         ) : mobileWaitingForUser ? (
-                          <span className="flex-1 h-9 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs font-mono text-amber-400 flex items-center justify-center">
+                          <span className="flex-1 h-9 bg-white/5 border border-white/6 rounded-lg text-xs font-mono text-white/70 flex items-center justify-center">
                             Awaiting user
                           </span>
                         ) : mobileCanConfirmPayment ? (
                           <motion.button
                             whileTap={{ scale: 0.98 }}
                             onClick={() => openReleaseModal(order)}
-                            className="flex-1 h-9 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-xs font-medium text-emerald-400 flex items-center justify-center gap-1.5 transition-colors"
+                            className="flex-1 h-9 bg-white/10 hover:bg-white/20 border border-white/6 rounded-lg text-xs font-medium text-white flex items-center justify-center gap-1.5 transition-colors"
                           >
                             <Unlock className="w-3.5 h-3.5" />
                             Confirm & Release
@@ -4866,7 +5081,7 @@ export default function MerchantDashboard() {
                           <motion.button
                             whileTap={{ scale: 0.98 }}
                             onClick={() => openReleaseModal(order)}
-                            className="flex-1 h-9 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-xs font-medium text-emerald-400 flex items-center justify-center gap-1.5 transition-colors"
+                            className="flex-1 h-9 bg-white/10 hover:bg-white/20 border border-white/6 rounded-lg text-xs font-medium text-white flex items-center justify-center gap-1.5 transition-colors"
                           >
                             <Unlock className="w-3.5 h-3.5" />
                             Release
@@ -4875,7 +5090,7 @@ export default function MerchantDashboard() {
                           <motion.button
                             whileTap={{ scale: 0.98 }}
                             onClick={() => openReleaseModal(order)}
-                            className="flex-1 h-9 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-xs font-medium text-emerald-400 flex items-center justify-center gap-1.5 transition-colors"
+                            className="flex-1 h-9 bg-white/10 hover:bg-white/20 border border-white/6 rounded-lg text-xs font-medium text-white flex items-center justify-center gap-1.5 transition-colors"
                           >
                             <Unlock className="w-3.5 h-3.5" />
                             Release
@@ -4899,10 +5114,10 @@ export default function MerchantDashboard() {
                         {order.dbOrder?.status === "escrowed" && order.orderType === "buy" && order.escrowCreatorWallet && (
                           <button
                             onClick={() => openCancelModal(order)}
-                            className="h-9 w-9 border border-white/10 hover:border-orange-500/30 rounded-lg flex items-center justify-center transition-colors group"
+                            className="h-9 w-9 border border-white/10 hover:border-white/6 rounded-lg flex items-center justify-center transition-colors group"
                             title="Cancel & Withdraw"
                           >
-                            <RotateCcw className="w-4 h-4 text-gray-400 group-hover:text-orange-400" />
+                            <RotateCcw className="w-4 h-4 text-gray-400 group-hover:text-white/70" />
                           </button>
                         )}
                       </div>
@@ -4993,7 +5208,7 @@ export default function MerchantDashboard() {
                 <h2 className="text-sm font-semibold">Trading Stats</h2>
                 <button
                   onClick={() => setShowAnalytics(true)}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg text-xs font-medium"
+                  className="flex items-center gap-1 px-3 py-1.5 bg-white/5 text-white rounded-lg text-xs font-medium"
                 >
                   <TrendingUp className="w-3 h-3" />
                   Full Analytics
@@ -5018,13 +5233,13 @@ export default function MerchantDashboard() {
                   <p className="text-xs text-gray-500 mb-1">Today&apos;s Volume</p>
                   <p className="text-xl font-bold">${totalTradedVolume.toLocaleString()}</p>
                 </div>
-                <div className="p-4 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-                  <p className="text-xs text-emerald-400 mb-1">Earnings</p>
-                  <p className="text-xl font-bold text-emerald-400">+${Math.round(todayEarnings)}</p>
+                <div className="p-4 bg-white/5 rounded-xl border border-white/6">
+                  <p className="text-xs text-white mb-1">Earnings</p>
+                  <p className="text-xl font-bold text-white">+${Math.round(todayEarnings)}</p>
                 </div>
-                <div className="p-4 bg-amber-500/10 rounded-xl border border-amber-500/20">
-                  <p className="text-xs text-amber-400 mb-1">Pending</p>
-                  <p className="text-xl font-bold text-amber-400">+${Math.round(pendingEarnings)}</p>
+                <div className="p-4 bg-white/5 rounded-xl border border-white/6">
+                  <p className="text-xs text-white/70 mb-1">Pending</p>
+                  <p className="text-xl font-bold text-white/70">+${Math.round(pendingEarnings)}</p>
                 </div>
                 <div className="p-4 bg-[#151515] rounded-xl border border-white/[0.04]">
                   <p className="text-xs text-gray-500 mb-1">Trades</p>
@@ -5037,8 +5252,8 @@ export default function MerchantDashboard() {
                 <div className="space-y-1 divide-y divide-white/[0.04]">
                   {completedOrders.slice(0, 5).map((order) => (
                     <div key={order.id} className="flex items-center gap-3 py-2.5">
-                      <div className="w-7 h-7 rounded-md bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                        <span className="text-[10px] font-bold text-emerald-400">
+                      <div className="w-7 h-7 rounded-md bg-white/5 border border-white/6 flex items-center justify-center">
+                        <span className="text-[10px] font-bold text-white">
                           {order.user.slice(0, 2).toUpperCase()}
                         </span>
                       </div>
@@ -5048,7 +5263,7 @@ export default function MerchantDashboard() {
                       <div className="text-right">
                         <span className="text-xs font-mono text-gray-400">${order.amount.toLocaleString()}</span>
                       </div>
-                      <Check className="w-4 h-4 text-emerald-400" />
+                      <Check className="w-4 h-4 text-white" />
                     </div>
                   ))}
                   {completedOrders.length === 0 && (
@@ -5069,10 +5284,10 @@ export default function MerchantDashboard() {
                             <span className="text-xs font-medium text-white">#{dispute.orderNumber}</span>
                             <span className={`px-2 py-0.5 text-[10px] rounded-full ${
                               dispute.resolvedInFavorOf === 'merchant'
-                                ? 'bg-emerald-500/10 text-emerald-400'
+                                ? 'bg-white/5 text-white'
                                 : dispute.resolvedInFavorOf === 'user'
                                 ? 'bg-red-500/10 text-red-400'
-                                : 'bg-blue-500/10 text-blue-400'
+                                : 'bg-white/5 text-white/70'
                             }`}>
                               {dispute.resolvedInFavorOf === 'merchant' ? 'Won' :
                                dispute.resolvedInFavorOf === 'user' ? 'Lost' : 'Split'}
@@ -5141,14 +5356,14 @@ export default function MerchantDashboard() {
                   onClick={() => setHistoryTab('completed')}
                   className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2 ${
                     historyTab === 'completed'
-                      ? 'bg-emerald-500/20 text-emerald-400'
+                      ? 'bg-white/10 text-white'
                       : 'text-gray-500'
                   }`}
                 >
                   <Check className="w-3.5 h-3.5" />
                   Completed
                   {completedOrders.length > 0 && (
-                    <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] rounded-full">
+                    <span className="px-1.5 py-0.5 bg-white/10 text-white text-[10px] rounded-full">
                       {completedOrders.length}
                     </span>
                   )}
@@ -5192,14 +5407,14 @@ export default function MerchantDashboard() {
                           className="p-4 bg-[#151515] rounded-xl border border-white/[0.04]"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
                               <span className="text-sm">{order.emoji}</span>
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <p className="text-sm font-medium text-white truncate">{order.user}</p>
                                 {order.isM2M && (
-                                  <span className="px-1.5 py-0.5 bg-purple-500/10 text-purple-400 text-[10px] rounded">M2M</span>
+                                  <span className="px-1.5 py-0.5 bg-white/5 text-white/70 text-[10px] rounded">M2M</span>
                                 )}
                               </div>
                               <p className="text-xs text-gray-500">
@@ -5208,9 +5423,9 @@ export default function MerchantDashboard() {
                             </div>
                             <div className="text-right">
                               <p className="text-sm font-semibold text-white">${order.amount.toLocaleString()}</p>
-                              <p className="text-xs text-emerald-400">+${(order.amount * 0.005).toFixed(2)}</p>
+                              <p className="text-xs text-white">+${(order.amount * 0.005).toFixed(2)}</p>
                             </div>
-                            <Check className="w-5 h-5 text-emerald-400" />
+                            <Check className="w-5 h-5 text-white" />
                           </div>
                           {order.escrowTxHash && (
                             <div className="mt-3 pt-3 border-t border-white/[0.04]">
@@ -5260,10 +5475,10 @@ export default function MerchantDashboard() {
                               <div className="flex items-center gap-2">
                                 <p className="text-sm font-medium text-white truncate">{order.user}</p>
                                 {order.status === 'disputed' && (
-                                  <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded">DISPUTED</span>
+                                  <span className="px-1.5 py-0.5 bg-white/10 text-white/70 text-[10px] rounded">DISPUTED</span>
                                 )}
                                 {order.isM2M && (
-                                  <span className="px-1.5 py-0.5 bg-purple-500/10 text-purple-400 text-[10px] rounded">M2M</span>
+                                  <span className="px-1.5 py-0.5 bg-white/5 text-white/70 text-[10px] rounded">M2M</span>
                                 )}
                               </div>
                               <p className="text-xs text-gray-500">
@@ -5292,6 +5507,33 @@ export default function MerchantDashboard() {
                 </>
               )}
             </div>
+          )}
+
+          {/* Mobile: Marketplace View - Global offers to take */}
+          {mobileView === 'marketplace' && merchantId && (
+            <Marketplace
+              merchantId={merchantId}
+              onTakeOffer={(offer) => {
+                // Navigate to order creation flow with selected offer
+                console.log('[Marketplace] Taking offer:', offer.id);
+                // TODO: Implement order creation from marketplace offer
+                // For now, show the Open Trade modal with pre-filled data
+                setOpenTradeForm({
+                  tradeType: offer.type === 'buy' ? 'sell' : 'buy', // Inverse for user perspective
+                  cryptoAmount: '',
+                  paymentMethod: offer.payment_method,
+                });
+                setShowOpenTradeModal(true);
+              }}
+            />
+          )}
+
+          {/* Mobile: My Offers View - Manage merchant's corridor offers */}
+          {mobileView === 'offers' && merchantId && (
+            <MyOffers
+              merchantId={merchantId}
+              onCreateOffer={() => setShowCreateModal(true)}
+            />
           )}
         </main>
       </div>
@@ -5323,9 +5565,9 @@ export default function MerchantDashboard() {
             }`}
           >
             <div className="relative">
-              <Zap className={`w-5 h-5 ${mobileView === 'active' ? 'text-blue-400' : 'text-gray-500'}`} />
+              <Zap className={`w-5 h-5 ${mobileView === 'active' ? 'text-white/70' : 'text-gray-500'}`} />
               {activeOrders.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-white/10 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                   {activeOrders.length}
                 </span>
               )}
@@ -5340,9 +5582,9 @@ export default function MerchantDashboard() {
             }`}
           >
             <div className="relative">
-              <Lock className={`w-5 h-5 ${mobileView === 'escrow' ? 'text-amber-400' : 'text-gray-500'}`} />
+              <Lock className={`w-5 h-5 ${mobileView === 'escrow' ? 'text-white/70' : 'text-gray-500'}`} />
               {ongoingOrders.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-black text-[10px] font-bold rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-white/10 text-black text-[10px] font-bold rounded-full flex items-center justify-center">
                   {ongoingOrders.length}
                 </span>
               )}
@@ -5374,9 +5616,9 @@ export default function MerchantDashboard() {
             }`}
           >
             <div className="relative">
-              <History className={`w-5 h-5 ${mobileView === 'history' ? 'text-purple-400' : 'text-gray-500'}`} />
+              <History className={`w-5 h-5 ${mobileView === 'history' ? 'text-white/70' : 'text-gray-500'}`} />
               {(completedOrders.length + cancelledOrders.length) > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-purple-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-white/10 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                   {(completedOrders.length + cancelledOrders.length) > 99 ? '99+' : completedOrders.length + cancelledOrders.length}
                 </span>
               )}
@@ -5385,12 +5627,32 @@ export default function MerchantDashboard() {
           </button>
 
           <button
+            onClick={() => setMobileView('marketplace')}
+            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all ${
+              mobileView === 'marketplace' ? 'bg-white/[0.08]' : ''
+            }`}
+          >
+            <Globe className={`w-5 h-5 ${mobileView === 'marketplace' ? 'text-white/70' : 'text-gray-500'}`} />
+            <span className={`text-[10px] ${mobileView === 'marketplace' ? 'text-white' : 'text-gray-500'}`}>Market</span>
+          </button>
+
+          <button
+            onClick={() => setMobileView('offers')}
+            className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all ${
+              mobileView === 'offers' ? 'bg-white/[0.08]' : ''
+            }`}
+          >
+            <Package className={`w-5 h-5 ${mobileView === 'offers' ? 'text-[#c9a962]' : 'text-gray-500'}`} />
+            <span className={`text-[10px] ${mobileView === 'offers' ? 'text-white' : 'text-gray-500'}`}>Offers</span>
+          </button>
+
+          <button
             onClick={() => setMobileView('stats')}
             className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all ${
               mobileView === 'stats' ? 'bg-white/[0.08]' : ''
             }`}
           >
-            <Activity className={`w-5 h-5 ${mobileView === 'stats' ? 'text-emerald-400' : 'text-gray-500'}`} />
+            <Activity className={`w-5 h-5 ${mobileView === 'stats' ? 'text-white' : 'text-gray-500'}`} />
             <span className={`text-[10px] ${mobileView === 'stats' ? 'text-white' : 'text-gray-500'}`}>Stats</span>
           </button>
         </div>
@@ -5549,7 +5811,7 @@ export default function MerchantDashboard() {
                           onChange={(e) => setCorridorForm(prev => ({ ...prev, maxAmount: e.target.value.replace(/[^0-9.]/g, '') }))}
                           className={`w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 ${
                             parseFloat(corridorForm.maxAmount || '0') > parseFloat(corridorForm.availableAmount || '0') && corridorForm.availableAmount
-                              ? 'focus:ring-amber-500/50 border border-amber-500/30'
+                              ? 'focus:ring-white/20 border border-white/6'
                               : 'focus:ring-white/20'
                           }`}
                         />
@@ -5557,7 +5819,7 @@ export default function MerchantDashboard() {
                       </div>
                     </div>
                     {parseFloat(corridorForm.maxAmount || '0') > parseFloat(corridorForm.availableAmount || '0') && corridorForm.availableAmount && (
-                      <p className="text-[10px] text-amber-400 mt-1 ml-1 flex items-center gap-1">
+                      <p className="text-[10px] text-white/70 mt-1 ml-1 flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
                         Max order exceeds available amount
                       </p>
@@ -5597,13 +5859,13 @@ export default function MerchantDashboard() {
                   </div>
 
                   {/* Summary */}
-                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3">
+                  <div className="bg-white/5 border border-white/6 rounded-xl p-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <Globe className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-[11px] font-medium text-emerald-400">Corridor Preview</span>
+                      <Globe className="w-3.5 h-3.5 text-white" />
+                      <span className="text-[11px] font-medium text-white">Corridor Preview</span>
                     </div>
                     <p className="text-xs text-gray-400">
-                      Offering <span className="text-[#26A17B] font-medium">{corridorForm.availableAmount || "0"} USDT</span> total. Accept orders from <span className="text-white font-medium">{corridorForm.minAmount || "100"}</span> to <span className="text-white font-medium">{corridorForm.maxAmount || "10,000"}</span> USDT at <span className="text-white font-medium">{corridorForm.rate || "3.67"}</span> AED + <span className="text-emerald-400 font-medium">{corridorForm.premium || "0.25"}%</span> fee
+                      Offering <span className="text-[#26A17B] font-medium">{corridorForm.availableAmount || "0"} USDT</span> total. Accept orders from <span className="text-white font-medium">{corridorForm.minAmount || "100"}</span> to <span className="text-white font-medium">{corridorForm.maxAmount || "10,000"}</span> USDT at <span className="text-white font-medium">{corridorForm.rate || "3.67"}</span> AED + <span className="text-white font-medium">{corridorForm.premium || "0.25"}%</span> fee
                     </p>
                   </div>
                 </div>
@@ -5724,8 +5986,8 @@ export default function MerchantDashboard() {
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                      <ArrowLeftRight className="w-5 h-5 text-emerald-400" />
+                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
+                      <ArrowLeftRight className="w-5 h-5 text-white" />
                     </div>
                     <div>
                       <h2 className="text-sm font-semibold">Open Trade</h2>
@@ -5753,7 +6015,7 @@ export default function MerchantDashboard() {
                         onClick={() => setOpenTradeForm(prev => ({ ...prev, tradeType: "sell" }))}
                         className={`py-3 rounded-xl text-xs font-medium transition-all ${
                           openTradeForm.tradeType === "sell"
-                            ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                            ? "bg-white/10 text-white border border-white/6"
                             : "bg-[#1f1f1f] text-gray-400 border border-transparent hover:bg-white/[0.04]"
                         }`}
                       >
@@ -5766,7 +6028,7 @@ export default function MerchantDashboard() {
                         onClick={() => setOpenTradeForm(prev => ({ ...prev, tradeType: "buy" }))}
                         className={`py-3 rounded-xl text-xs font-medium transition-all ${
                           openTradeForm.tradeType === "buy"
-                            ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                            ? "bg-white/10 text-white/70 border border-white/6"
                             : "bg-[#1f1f1f] text-gray-400 border border-transparent hover:bg-white/[0.04]"
                         }`}
                       >
@@ -5834,8 +6096,8 @@ export default function MerchantDashboard() {
                   {openTradeForm.cryptoAmount && parseFloat(openTradeForm.cryptoAmount) > 0 && (
                     <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.04]">
                       <div className="flex items-center gap-2 mb-3">
-                        <Zap className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-[11px] font-medium text-emerald-400">Trade Preview</span>
+                        <Zap className="w-3.5 h-3.5 text-white" />
+                        <span className="text-[11px] font-medium text-white">Trade Preview</span>
                       </div>
                       <div className="space-y-2 text-xs">
                         <div className="flex justify-between">
@@ -5848,7 +6110,7 @@ export default function MerchantDashboard() {
                         </div>
                         <div className="flex justify-between pt-2 border-t border-white/[0.04]">
                           <span className="text-gray-400">AED Amount</span>
-                          <span className="text-emerald-400 font-bold">
+                          <span className="text-white font-bold">
                             {(parseFloat(openTradeForm.cryptoAmount) * 3.67).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AED
                           </span>
                         </div>
@@ -5912,13 +6174,16 @@ export default function MerchantDashboard() {
                             console.log('[M2M] Matched to offer:', matchedOffer?.merchant?.display_name);
                           }
 
-                          // Validate counterparty wallet
-                          const counterpartyWallet = matchedOffer?.merchant?.wallet_address;
-                          const isValidWallet = counterpartyWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(counterpartyWallet);
+                          // Validate counterparty wallet (skip in mock mode - uses in-app coins)
+                          const isMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+                          if (!isMockMode) {
+                            const counterpartyWallet = matchedOffer?.merchant?.wallet_address;
+                            const isValidWallet = counterpartyWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(counterpartyWallet);
 
-                          if (!isValidWallet) {
-                            setCreateTradeError('No matching merchant with a linked wallet found. Please try a different amount or wait for merchants to add liquidity.');
-                            return;
+                            if (!isValidWallet) {
+                              setCreateTradeError('No matching merchant with a linked wallet found. Please try a different amount or wait for merchants to add liquidity.');
+                              return;
+                            }
                           }
                         }
 
@@ -5984,7 +6249,7 @@ export default function MerchantDashboard() {
                       parseFloat(openTradeForm.cryptoAmount) <= 0 ||
                       (openTradeForm.tradeType === "sell" && solanaWallet.usdtBalance !== null && parseFloat(openTradeForm.cryptoAmount) > solanaWallet.usdtBalance)
                         ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                        : 'bg-emerald-500 text-black hover:bg-emerald-400'
+                        : 'bg-white/10 text-black hover:bg-white/10'
                     }`}
                   >
                     {isCreatingTrade ? (
@@ -6126,8 +6391,8 @@ export default function MerchantDashboard() {
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                      <Lock className="w-5 h-5 text-blue-400" />
+                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
+                      <Lock className="w-5 h-5 text-white/70" />
                     </div>
                     <div>
                       <h2 className="text-sm font-semibold">Lock Escrow</h2>
@@ -6149,7 +6414,7 @@ export default function MerchantDashboard() {
                   {/* Order Info */}
                   <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.04]">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center text-2xl">
+                      <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-2xl">
                         {escrowOrder.emoji}
                       </div>
                       <div>
@@ -6172,19 +6437,19 @@ export default function MerchantDashboard() {
                   {/* Wallet Balance */}
                   <div className="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-3 border border-white/[0.04]">
                     <span className="text-xs text-gray-500">Your USDC Balance</span>
-                    <span className={`text-sm font-bold ${(solanaWallet.usdtBalance || 0) >= escrowOrder.amount ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <span className={`text-sm font-bold ${(solanaWallet.usdtBalance || 0) >= escrowOrder.amount ? 'text-white' : 'text-red-400'}`}>
                       {solanaWallet.usdtBalance?.toFixed(2) || '0.00'} USDC
                     </span>
                   </div>
 
                   {/* Transaction Status */}
                   {isLockingEscrow && !escrowTxHash && (
-                    <div className="bg-blue-500/10 rounded-xl p-4 border border-blue-500/20">
+                    <div className="bg-white/5 rounded-xl p-4 border border-white/6">
                       <div className="flex items-center gap-3">
-                        <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+                        <Loader2 className="w-5 h-5 text-white/70 animate-spin" />
                         <div>
-                          <p className="text-sm font-medium text-blue-400">Processing Transaction</p>
-                          <p className="text-xs text-blue-400/70">Please approve in your wallet...</p>
+                          <p className="text-sm font-medium text-white/70">Processing Transaction</p>
+                          <p className="text-xs text-white/70/70">Please approve in your wallet...</p>
                         </div>
                       </div>
                     </div>
@@ -6192,21 +6457,21 @@ export default function MerchantDashboard() {
 
                   {/* Success State */}
                   {escrowTxHash && (
-                    <div className="bg-emerald-500/10 rounded-xl p-4 border border-emerald-500/20">
+                    <div className="bg-white/5 rounded-xl p-4 border border-white/6">
                       <div className="flex items-center gap-3 mb-3">
-                        <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                          <Check className="w-4 h-4 text-emerald-400" />
+                        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                          <Check className="w-4 h-4 text-white" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-emerald-400">Escrow Locked Successfully!</p>
-                          <p className="text-xs text-emerald-400/70">USDC is now secured on-chain</p>
+                          <p className="text-sm font-medium text-white">Escrow Locked Successfully!</p>
+                          <p className="text-xs text-white/70">USDC is now secured on-chain</p>
                         </div>
                       </div>
                       <a
                         href={`https://solscan.io/tx/${escrowTxHash}?cluster=devnet`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                        className="flex items-center gap-2 text-xs text-white hover:text-white transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
                         View on Solscan
@@ -6240,15 +6505,15 @@ export default function MerchantDashboard() {
 
                     if (hasValidRecipient) {
                       return isMerchantTrade ? (
-                        <div className="bg-purple-500/10 rounded-xl p-3 border border-purple-500/20">
-                          <p className="text-xs text-purple-400">
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/6">
+                          <p className="text-xs text-white/70">
                             🤝 <strong>Merchant Trade:</strong> You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow.
                             This will be released to the other merchant after they pay the fiat amount.
                           </p>
                         </div>
                       ) : (
-                        <div className="bg-amber-500/10 rounded-xl p-3 border border-amber-500/20">
-                          <p className="text-xs text-amber-400">
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/6">
+                          <p className="text-xs text-white/70">
                             ⚠️ You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow on-chain.
                             This will be released to the buyer after they pay you the fiat amount.
                           </p>
@@ -6257,8 +6522,8 @@ export default function MerchantDashboard() {
                     } else {
                       // No recipient yet (SELL order before anyone accepts)
                       return (
-                        <div className="bg-blue-500/10 rounded-xl p-3 border border-blue-500/20">
-                          <p className="text-xs text-blue-400">
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/6">
+                          <p className="text-xs text-white/70">
                             🔒 You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow.
                             Once locked, your order will be visible to other merchants who can accept it.
                           </p>
@@ -6275,7 +6540,7 @@ export default function MerchantDashboard() {
                     <motion.button
                       whileTap={{ scale: 0.98 }}
                       onClick={closeEscrowModal}
-                      className="flex-1 py-3 rounded-xl text-sm font-bold bg-emerald-500 text-white hover:bg-emerald-400 transition-colors"
+                      className="flex-1 py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white transition-all"
                     >
                       Done
                     </motion.button>
@@ -6295,7 +6560,7 @@ export default function MerchantDashboard() {
                           isLockingEscrow ||
                           (solanaWallet.usdtBalance || 0) < escrowOrder.amount
                         }
-                        className="flex-[2] py-3 rounded-xl text-sm font-bold bg-blue-500 text-white hover:bg-blue-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        className="flex-[2] py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         {isLockingEscrow ? (
                           <>
@@ -6339,8 +6604,8 @@ export default function MerchantDashboard() {
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                      <Unlock className="w-5 h-5 text-emerald-400" />
+                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
+                      <Unlock className="w-5 h-5 text-white" />
                     </div>
                     <div>
                       <h2 className="text-sm font-semibold">Release Escrow</h2>
@@ -6362,7 +6627,7 @@ export default function MerchantDashboard() {
                   {/* Order Info */}
                   <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.04]">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-2xl">
+                      <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-2xl">
                         {releaseOrder.emoji}
                       </div>
                       <div>
@@ -6373,7 +6638,7 @@ export default function MerchantDashboard() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <p className="text-[10px] text-gray-500 uppercase mb-1">Release Amount</p>
-                        <p className="text-lg font-bold text-emerald-400">{releaseOrder.amount} USDC</p>
+                        <p className="text-lg font-bold text-white">{releaseOrder.amount} USDC</p>
                       </div>
                       <div>
                         <p className="text-[10px] text-gray-500 uppercase mb-1">Fiat Received</p>
@@ -6392,12 +6657,12 @@ export default function MerchantDashboard() {
 
                   {/* Transaction Status */}
                   {isReleasingEscrow && !releaseTxHash && (
-                    <div className="bg-emerald-500/10 rounded-xl p-4 border border-emerald-500/20">
+                    <div className="bg-white/5 rounded-xl p-4 border border-white/6">
                       <div className="flex items-center gap-3">
-                        <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
+                        <Loader2 className="w-5 h-5 text-white animate-spin" />
                         <div>
-                          <p className="text-sm font-medium text-emerald-400">Processing Release</p>
-                          <p className="text-xs text-emerald-400/70">Please approve in your wallet...</p>
+                          <p className="text-sm font-medium text-white">Processing Release</p>
+                          <p className="text-xs text-white/70">Please approve in your wallet...</p>
                         </div>
                       </div>
                     </div>
@@ -6405,21 +6670,21 @@ export default function MerchantDashboard() {
 
                   {/* Success State */}
                   {releaseTxHash && (
-                    <div className="bg-emerald-500/10 rounded-xl p-4 border border-emerald-500/20">
+                    <div className="bg-white/5 rounded-xl p-4 border border-white/6">
                       <div className="flex items-center gap-3 mb-3">
-                        <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                          <Check className="w-4 h-4 text-emerald-400" />
+                        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                          <Check className="w-4 h-4 text-white" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-emerald-400">Escrow Released!</p>
-                          <p className="text-xs text-emerald-400/70">{releaseOrder.amount} USDC sent to buyer</p>
+                          <p className="text-sm font-medium text-white">Escrow Released!</p>
+                          <p className="text-xs text-white/70">{releaseOrder.amount} USDC sent to buyer</p>
                         </div>
                       </div>
                       <a
                         href={`https://solscan.io/tx/${releaseTxHash}?cluster=devnet`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                        className="flex items-center gap-2 text-xs text-white hover:text-white transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
                         View on Solscan
@@ -6443,11 +6708,11 @@ export default function MerchantDashboard() {
                   {/* Warning / Info */}
                   {!releaseTxHash && !isReleasingEscrow && (
                     <>
-                      {releaseOrder.escrowTradeId && releaseOrder.escrowCreatorWallet && releaseOrder.userWallet ? (
-                        <div className="bg-amber-500/10 rounded-xl p-3 border border-amber-500/20">
-                          <p className="text-xs text-amber-400">
+                      {(isMockMode || (releaseOrder.escrowTradeId && releaseOrder.escrowCreatorWallet && releaseOrder.userWallet)) ? (
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/6">
+                          <p className="text-xs text-white/70">
                             ⚠️ <strong>Confirm you have received the payment!</strong> Once you release,
-                            <strong> {releaseOrder.amount} USDC</strong> will be sent to the buyer&apos;s wallet
+                            <strong> {releaseOrder.amount} USDC</strong> will be sent to the buyer
                             and cannot be reversed.
                           </p>
                         </div>
@@ -6471,7 +6736,7 @@ export default function MerchantDashboard() {
                     <motion.button
                       whileTap={{ scale: 0.98 }}
                       onClick={closeReleaseModal}
-                      className="flex-1 py-3 rounded-xl text-sm font-bold bg-emerald-500 text-white hover:bg-emerald-400 transition-colors"
+                      className="flex-1 py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white transition-all"
                     >
                       Done
                     </motion.button>
@@ -6487,8 +6752,8 @@ export default function MerchantDashboard() {
                       <motion.button
                         whileTap={{ scale: 0.98 }}
                         onClick={executeRelease}
-                        disabled={isReleasingEscrow || !releaseOrder.escrowTradeId || !releaseOrder.escrowCreatorWallet || !releaseOrder.userWallet}
-                        className="flex-[2] py-3 rounded-xl text-sm font-bold bg-emerald-500 text-white hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        disabled={isReleasingEscrow || (!isMockMode && (!releaseOrder.escrowTradeId || !releaseOrder.escrowCreatorWallet || !releaseOrder.userWallet))}
+                        className="flex-[2] py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         {isReleasingEscrow ? (
                           <>
@@ -6532,8 +6797,8 @@ export default function MerchantDashboard() {
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                      <RotateCcw className="w-5 h-5 text-orange-400" />
+                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
+                      <RotateCcw className="w-5 h-5 text-white/70" />
                     </div>
                     <div>
                       <h2 className="text-sm font-semibold">Cancel & Withdraw</h2>
@@ -6555,7 +6820,7 @@ export default function MerchantDashboard() {
                   {/* Order Info */}
                   <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.04]">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center text-2xl">
+                      <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-2xl">
                         {cancelOrder.emoji}
                       </div>
                       <div>
@@ -6566,7 +6831,7 @@ export default function MerchantDashboard() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <p className="text-[10px] text-gray-500 uppercase mb-1">Withdraw Amount</p>
-                        <p className="text-lg font-bold text-orange-400">{cancelOrder.amount} USDC</p>
+                        <p className="text-lg font-bold text-white/70">{cancelOrder.amount} USDC</p>
                       </div>
                       <div>
                         <p className="text-[10px] text-gray-500 uppercase mb-1">Order Total</p>
@@ -6585,12 +6850,12 @@ export default function MerchantDashboard() {
 
                   {/* Transaction Status */}
                   {isCancellingEscrow && !cancelTxHash && (
-                    <div className="bg-orange-500/10 rounded-xl p-4 border border-orange-500/20">
+                    <div className="bg-white/5 rounded-xl p-4 border border-white/6">
                       <div className="flex items-center gap-3">
-                        <Loader2 className="w-5 h-5 text-orange-400 animate-spin" />
+                        <Loader2 className="w-5 h-5 text-white/70 animate-spin" />
                         <div>
-                          <p className="text-sm font-medium text-orange-400">Processing Refund</p>
-                          <p className="text-xs text-orange-400/70">Please approve in your wallet...</p>
+                          <p className="text-sm font-medium text-white/70">Processing Refund</p>
+                          <p className="text-xs text-white/70/70">Please approve in your wallet...</p>
                         </div>
                       </div>
                     </div>
@@ -6598,21 +6863,21 @@ export default function MerchantDashboard() {
 
                   {/* Success State */}
                   {cancelTxHash && (
-                    <div className="bg-emerald-500/10 rounded-xl p-4 border border-emerald-500/20">
+                    <div className="bg-white/5 rounded-xl p-4 border border-white/6">
                       <div className="flex items-center gap-3 mb-3">
-                        <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                          <Check className="w-4 h-4 text-emerald-400" />
+                        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                          <Check className="w-4 h-4 text-white" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-emerald-400">Escrow Refunded!</p>
-                          <p className="text-xs text-emerald-400/70">{cancelOrder.amount} USDC returned to your wallet</p>
+                          <p className="text-sm font-medium text-white">Escrow Refunded!</p>
+                          <p className="text-xs text-white/70">{cancelOrder.amount} USDC returned to your wallet</p>
                         </div>
                       </div>
                       <a
                         href={`https://solscan.io/tx/${cancelTxHash}?cluster=devnet`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                        className="flex items-center gap-2 text-xs text-white hover:text-white transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
                         View on Solscan
@@ -6637,8 +6902,8 @@ export default function MerchantDashboard() {
                   {!cancelTxHash && !isCancellingEscrow && (
                     <>
                       {cancelOrder.escrowTradeId && cancelOrder.escrowCreatorWallet ? (
-                        <div className="bg-orange-500/10 rounded-xl p-3 border border-orange-500/20">
-                          <p className="text-xs text-orange-400">
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/6">
+                          <p className="text-xs text-white/70">
                             This will cancel the order and return <strong>{cancelOrder.amount} USDC</strong> to your wallet. The buyer will be notified.
                           </p>
                         </div>
@@ -6661,7 +6926,7 @@ export default function MerchantDashboard() {
                     <motion.button
                       whileTap={{ scale: 0.98 }}
                       onClick={closeCancelModal}
-                      className="flex-1 py-3 rounded-xl text-sm font-bold bg-emerald-500 text-white hover:bg-emerald-400 transition-colors"
+                      className="flex-1 py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white transition-all"
                     >
                       Done
                     </motion.button>
@@ -6678,7 +6943,7 @@ export default function MerchantDashboard() {
                         whileTap={{ scale: 0.98 }}
                         onClick={executeCancelEscrow}
                         disabled={isCancellingEscrow || !cancelOrder.escrowTradeId || !cancelOrder.escrowCreatorWallet}
-                        className="flex-[2] py-3 rounded-xl text-sm font-bold bg-orange-500 text-white hover:bg-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        className="flex-[2] py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         {isCancellingEscrow ? (
                           <>
@@ -6815,17 +7080,17 @@ export default function MerchantDashboard() {
 
               {/* Escrow Status */}
               {selectedOrderPopup.escrowTxHash && (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 mb-4">
+                <div className="bg-white/5 border border-white/6 rounded-xl p-3 mb-4">
                   <div className="flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-emerald-400" />
-                    <Check className="w-4 h-4 text-emerald-400 -ml-2" />
-                    <span className="text-sm font-medium text-emerald-400">Escrow Secured</span>
+                    <Shield className="w-5 h-5 text-white" />
+                    <Check className="w-4 h-4 text-white -ml-2" />
+                    <span className="text-sm font-medium text-white">Escrow Secured</span>
                   </div>
                   <a
                     href={`https://explorer.solana.com/tx/${selectedOrderPopup.escrowTxHash}?cluster=devnet`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1 mt-1 text-xs text-emerald-400/70 hover:text-emerald-400"
+                    className="flex items-center gap-1 mt-1 text-xs text-white/70 hover:text-white"
                   >
                     View TX <ExternalLink className="w-3 h-3" />
                   </a>
@@ -6840,18 +7105,26 @@ export default function MerchantDashboard() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-500">Total Fiat</span>
-                  <span className="text-sm font-semibold text-emerald-400">د.إ {Math.round(selectedOrderPopup.total).toLocaleString()}</span>
+                  <span className="text-sm font-semibold text-white">د.إ {Math.round(selectedOrderPopup.total).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-500">Rate</span>
+                  <span className="text-sm text-gray-500 flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    Rate (Locked)
+                  </span>
                   <span className="text-sm text-gray-400">1 USDC = {selectedOrderPopup.rate} AED</span>
                 </div>
+                {selectedOrderPopup.dbOrder?.accepted_at && (
+                  <p className="text-[10px] text-gray-600 text-right">
+                    Locked at {new Date(selectedOrderPopup.dbOrder.accepted_at).toLocaleString()}
+                  </p>
+                )}
               </div>
 
               {/* User's Bank Account (for sell orders) */}
               {selectedOrderPopup.orderType === 'sell' && selectedOrderPopup.userBankAccount && (
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 mb-4">
-                  <p className="text-xs text-amber-400 mb-1">Send AED to this account:</p>
+                <div className="bg-white/5 border border-white/6 rounded-xl p-3 mb-4">
+                  <p className="text-xs text-white/70 mb-1">Send AED to this account:</p>
                   <p className="text-sm font-mono text-white">{selectedOrderPopup.userBankAccount}</p>
                   <p className="text-xs text-gray-500 mt-1">Amount: د.إ {Math.round(selectedOrderPopup.total).toLocaleString()}</p>
                 </div>
@@ -6876,7 +7149,7 @@ export default function MerchantDashboard() {
                       // Update popup to show active status (merchant approved, now in Active section)
                       setSelectedOrderPopup(prev => prev ? { ...prev, status: 'active' } : null);
                     }}
-                    className="w-full py-3 rounded-xl bg-emerald-500 text-white font-semibold flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 transition-all"
                   >
                     <Zap className="w-4 h-4" />
                     Go
@@ -6891,7 +7164,7 @@ export default function MerchantDashboard() {
                       acceptOrder(selectedOrderPopup);
                       setSelectedOrderPopup(null);
                     }}
-                    className="w-full py-3 rounded-xl bg-emerald-500 text-white font-semibold flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 transition-all"
                   >
                     <Zap className="w-4 h-4" />
                     Go
@@ -6905,7 +7178,7 @@ export default function MerchantDashboard() {
                     whileTap={{ scale: 0.98 }}
                     onClick={() => markPaymentSent(selectedOrderPopup)}
                     disabled={markingDone}
-                    className="w-full py-3 rounded-xl bg-orange-500 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
                   >
                     {markingDone ? (
                       <Loader2 className="w-4 h-4 animate-spin" />

@@ -133,6 +133,11 @@ export function checkRateLimit(
   endpoint: string,
   config: RateLimitConfig
 ): NextResponse | null {
+  // Skip rate limiting entirely in mock mode
+  if (process.env.NEXT_PUBLIC_MOCK_MODE === 'true') {
+    return null;
+  }
+
   // Start cleanup timer if not already running
   startCleanupTimer();
 
@@ -208,8 +213,9 @@ export const STRICT_LIMIT: RateLimitConfig = {
 };
 
 /** Auth rate limit: 5 attempts per minute (prevent brute force) */
+/** In mock mode, relaxed to 50 attempts per minute for easier testing */
 export const AUTH_LIMIT: RateLimitConfig = {
-  maxRequests: 5,
+  maxRequests: process.env.NEXT_PUBLIC_MOCK_MODE === 'true' ? 50 : 5,
   windowSeconds: 60,
 };
 
