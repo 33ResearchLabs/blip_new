@@ -229,7 +229,14 @@ export async function getAllPendingOrdersForMerchant(
                'display_name', bm.display_name,
                'wallet_address', bm.wallet_address
              )
-           ELSE NULL END as buyer_merchant
+           ELSE NULL END as buyer_merchant,
+           COALESCE((
+             SELECT COUNT(*)::int FROM chat_messages cm
+             WHERE cm.order_id = o.id
+               AND cm.sender_type != 'merchant'
+               AND cm.is_read = false
+           ), 0) as unread_count,
+           (SELECT COUNT(*)::int FROM chat_messages cm WHERE cm.order_id = o.id) as message_count
     FROM orders o
     JOIN users u ON o.user_id = u.id
     JOIN merchants m ON o.merchant_id = m.id

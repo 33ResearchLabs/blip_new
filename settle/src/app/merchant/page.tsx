@@ -153,6 +153,10 @@ interface DbOrder {
   };
   // Cancellation info
   cancellation_reason?: string;
+  // Message tracking
+  unread_count?: number;
+  has_manual_message?: boolean;
+  message_count?: number;
 }
 
 // UI Order type
@@ -190,6 +194,9 @@ interface Order {
   isMyOrder?: boolean;
   // The merchant ID assigned to this order (creator for pending orders)
   orderMerchantId?: string;
+  // Message tracking
+  unreadCount?: number;
+  hasMessages?: boolean;
 }
 
 // Leaderboard data
@@ -365,6 +372,9 @@ const mapDbOrderToUI = (dbOrder: DbOrder): Order => {
     isMyOrder: dbOrder.is_my_order,
     // The merchant ID assigned to this order (creator for pending orders)
     orderMerchantId: dbOrder.merchant_id,
+    // Message tracking
+    unreadCount: dbOrder.unread_count || 0,
+    hasMessages: (dbOrder.message_count || 0) > 0 || dbOrder.has_manual_message || false,
   };
 };
 
@@ -2994,10 +3004,7 @@ export default function MerchantDashboard() {
                           <div
                             key={`tx-${order.id}`}
                             className="flex items-center gap-2 p-2 rounded-md hover:bg-white/[0.03] transition-colors cursor-pointer"
-                            onClick={() => {
-                              setSelectedOrderForChat(order);
-                              setShowOrderDetails(true);
-                            }}
+                            onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
                           >
                             <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${
                               isCompleted
@@ -3899,10 +3906,7 @@ export default function MerchantDashboard() {
                               exit={{ opacity: 0 }}
                               transition={{ delay: i * 0.03 }}
                               className="p-2.5 bg-[#141414] rounded-lg border border-white/6 hover:border-white/12 transition-all cursor-pointer"
-                              onClick={() => {
-                                setSelectedOrderForChat(order);
-                                setShowOrderDetails(true);
-                              }}
+                              onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
                             >
                               <div className="flex items-center gap-2">
                                 <div className="w-7 h-7 rounded-md bg-white/5 border border-white/6 flex items-center justify-center shrink-0">
@@ -3914,6 +3918,20 @@ export default function MerchantDashboard() {
                                 {isM2MTrade && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 text-white/70 rounded">M2M</span>}
                                 <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
                                 <span className="text-xs font-bold text-white">+${Math.round(profit)}</span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleOpenChat(order.user, order.emoji, order.id); }}
+                                  className="relative p-1 hover:bg-white/5 rounded transition-colors"
+                                  title="Messages"
+                                >
+                                  <MessageCircle className={`w-3.5 h-3.5 ${order.hasMessages ? 'text-white/60' : 'text-gray-600'} hover:text-white`} />
+                                  {(order.unreadCount || 0) > 0 ? (
+                                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black">
+                                      {order.unreadCount! > 9 ? '9+' : order.unreadCount}
+                                    </span>
+                                  ) : order.hasMessages ? (
+                                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-white/40 rounded-full" />
+                                  ) : null}
+                                </button>
                                 <Check className="w-3.5 h-3.5 text-white" />
                               </div>
                             </motion.div>
@@ -3939,10 +3957,7 @@ export default function MerchantDashboard() {
                               exit={{ opacity: 0 }}
                               transition={{ delay: i * 0.03 }}
                               className={`p-2.5 bg-[#141414] rounded-lg border transition-all cursor-pointer ${isDisputed ? 'border-white/6 hover:border-white/12' : 'border-red-500/10 hover:border-red-500/20'}`}
-                              onClick={() => {
-                                setSelectedOrderForChat(order);
-                                setShowOrderDetails(true);
-                              }}
+                              onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
                             >
                               <div className="flex items-center gap-2">
                                 <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${isDisputed ? 'bg-white/5 border border-white/6' : 'bg-red-500/10 border border-red-500/20'}`}>
@@ -3954,6 +3969,20 @@ export default function MerchantDashboard() {
                                 {isDisputed && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 text-white/70 rounded">DISPUTE</span>}
                                 {isM2MTrade && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 text-white/70 rounded">M2M</span>}
                                 <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleOpenChat(order.user, order.emoji, order.id); }}
+                                  className="relative p-1 hover:bg-white/5 rounded transition-colors"
+                                  title="Messages"
+                                >
+                                  <MessageCircle className={`w-3.5 h-3.5 ${order.hasMessages ? 'text-white/60' : 'text-gray-600'} hover:text-white`} />
+                                  {(order.unreadCount || 0) > 0 ? (
+                                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black">
+                                      {order.unreadCount! > 9 ? '9+' : order.unreadCount}
+                                    </span>
+                                  ) : order.hasMessages ? (
+                                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-white/40 rounded-full" />
+                                  ) : null}
+                                </button>
                                 <X className={`w-3.5 h-3.5 ${isDisputed ? 'text-white/70' : 'text-red-400'}`} />
                               </div>
                             </motion.div>
