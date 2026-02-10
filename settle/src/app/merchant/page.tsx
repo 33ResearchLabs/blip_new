@@ -1637,8 +1637,12 @@ export default function MerchantDashboard() {
   const openEscrowModal = async (order: Order) => {
     if (!merchantId) return;
 
-    // Only for buy orders where merchant needs to lock their USDC
-    if (order.orderType !== 'buy') {
+    // Allow escrow locking for:
+    // 1. Buy orders (merchant sells USDC to user/buyer)
+    // 2. M2M sell orders where I'm the seller (I created the sell order, I lock my USDC)
+    const iAmSeller = order.isMyOrder || order.orderMerchantId === merchantId;
+    const isM2MSell = order.orderType === 'sell' && (order.isM2M || !!order.acceptorWallet || !!order.buyerMerchantWallet || iAmSeller);
+    if (order.orderType !== 'buy' && !isM2MSell) {
       addNotification('system', 'Escrow is locked by the user for sell orders.');
       return;
     }
@@ -3594,98 +3598,101 @@ export default function MerchantDashboard() {
                             transition={{ delay: i * 0.03 }}
                             className="p-2.5 bg-[#141414] rounded-lg border border-blue-500/10 hover:border-white/6 transition-all"
                           >
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="w-7 h-7 rounded-md bg-white/5 border border-white/6 flex items-center justify-center shrink-0">
-                                <span className="text-[10px] font-bold text-white/70">
-                                  {order.user.slice(0, 2).toUpperCase()}
-                                </span>
-                              </div>
-                              <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                                order.orderType === 'buy'
-                                  ? 'bg-white/5 text-white'
-                                  : 'bg-white/5 text-white/70'
-                              }`}>
-                                {order.orderType?.toUpperCase()}
-                              </span>
-                            </div>
+                            {(() => {
+                              const iAmEscrowCreator = order.escrowCreatorWallet && order.escrowCreatorWallet === solanaWallet.walletAddress;
+                              const escrowExistsFromOther = order.escrowTxHash && !iAmEscrowCreator;
+                              const iAmOrderCreator = order.orderMerchantId === merchantId;
+                              const buyerAcceptedWithWallet = order.dbOrder?.status === 'accepted' && (order.acceptorWallet || isMockMode);
+                              const isM2MSellNeedingEscrow = iAmOrderCreator && !order.escrowTxHash && buyerAcceptedWithWallet;
+                              const needsMyAction = isM2MSellNeedingEscrow || (order.orderType === 'buy' && !order.escrowTxHash) || escrowExistsFromOther || order.orderType === 'sell';
 
-                            <div className="flex items-center gap-2 pl-9">
-                              <div className="flex-1 flex items-center gap-2">
-                                <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
-                                <ArrowRight className="w-3 h-3 text-gray-600" />
-                                <span className="text-sm font-bold text-white">{Math.round(order.total).toLocaleString()}</span>
-                                <span className="text-[10px] text-gray-500">AED</span>
-                              </div>
-                              <button
-                                onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
-                                className="p-1.5 hover:bg-white/[0.04] rounded transition-colors"
-                                title="Chat"
-                              >
-                                <MessageCircle className="w-3.5 h-3.5 text-gray-500 hover:text-white/70" />
-                              </button>
-                              {(() => {
-                                const iAmEscrowCreator = order.escrowCreatorWallet && order.escrowCreatorWallet === solanaWallet.walletAddress;
-                                const escrowExistsFromOther = order.escrowTxHash && !iAmEscrowCreator;
-                                const iAmOrderCreator = order.orderMerchantId === merchantId;
-                                const buyerAcceptedWithWallet = order.dbOrder?.status === 'accepted' && order.acceptorWallet;
-                                const isM2MSellNeedingEscrow = iAmOrderCreator && !order.escrowTxHash && buyerAcceptedWithWallet;
+                              return (
+                                <>
+                                  {/* Action required banner */}
+                                  {needsMyAction && !order.escrowTxHash && (
+                                    <div className="flex items-center gap-1.5 mb-2 px-2 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                                      <ActionPulse size="sm" />
+                                      <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wide">
+                                        {isM2MSellNeedingEscrow ? 'Lock Escrow Required' : escrowExistsFromOther ? 'Sign to Claim' : order.orderType === 'buy' ? 'Lock Escrow' : 'Sign Required'}
+                                      </span>
+                                    </div>
+                                  )}
 
-                                if (isM2MSellNeedingEscrow) {
-                                  return (
-                                    <motion.button
-                                      whileTap={{ scale: 0.95 }}
-                                      onClick={() => openEscrowModal(order)}
-                                      className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 rounded text-[11px] font-bold text-white transition-all"
-                                    >
-                                      Lock Escrow
-                                    </motion.button>
-                                  );
-                                } else if (order.orderType === 'buy' && !order.escrowTxHash) {
-                                  return (
-                                    <motion.button
-                                      whileTap={{ scale: 0.95 }}
-                                      onClick={() => openEscrowModal(order)}
-                                      className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 rounded text-[11px] font-bold text-white transition-all"
-                                    >
-                                      Sign
-                                    </motion.button>
-                                  );
-                                } else if (escrowExistsFromOther) {
-                                  return (
-                                    <motion.button
-                                      whileTap={{ scale: 0.95 }}
-                                      onClick={() => signToClaimOrder(order)}
-                                      className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 rounded text-[11px] font-bold text-white transition-all"
-                                    >
-                                      Sign
-                                    </motion.button>
-                                  );
-                                } else if (order.orderType === 'sell') {
-                                  return (
-                                    <motion.button
-                                      whileTap={{ scale: 0.95 }}
-                                      onClick={() => signAndProceed(order)}
-                                      className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 rounded text-[11px] font-bold text-white transition-all"
-                                    >
-                                      Sign
-                                    </motion.button>
-                                  );
-                                } else if (order.escrowTxHash) {
-                                  return (
-                                    <span className="px-2.5 py-1.5 bg-white/5 text-white rounded text-[11px] font-mono">
-                                      Signed
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <div className="w-7 h-7 rounded-md bg-white/5 border border-white/6 flex items-center justify-center shrink-0">
+                                      <span className="text-[10px] font-bold text-white/70">
+                                        {order.user.slice(0, 2).toUpperCase()}
+                                      </span>
+                                    </div>
+                                    <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                                      order.orderType === 'buy'
+                                        ? 'bg-white/5 text-white'
+                                        : 'bg-white/5 text-white/70'
+                                    }`}>
+                                      {order.orderType?.toUpperCase()}
                                     </span>
-                                  );
-                                } else {
-                                  return (
-                                    <span className="px-2.5 py-1.5 bg-white/[0.04] rounded text-[11px] font-mono text-gray-500">
-                                      Waiting
-                                    </span>
-                                  );
-                                }
-                              })()}
-                            </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 pl-9">
+                                    <div className="flex-1 flex items-center gap-2">
+                                      <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
+                                      <ArrowRight className="w-3 h-3 text-gray-600" />
+                                      <span className="text-sm font-bold text-white">{Math.round(order.total).toLocaleString()}</span>
+                                      <span className="text-[10px] text-gray-500">AED</span>
+                                    </div>
+                                    <button
+                                      onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
+                                      className="p-1.5 hover:bg-white/[0.04] rounded transition-colors"
+                                      title="Chat"
+                                    >
+                                      <MessageCircle className="w-3.5 h-3.5 text-gray-500 hover:text-white/70" />
+                                    </button>
+                                    {isM2MSellNeedingEscrow ? (
+                                      <motion.button
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => openEscrowModal(order)}
+                                        className="px-2.5 py-1.5 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 hover:border-orange-500/40 rounded text-[11px] font-bold text-orange-400 transition-all"
+                                      >
+                                        Lock Escrow
+                                      </motion.button>
+                                    ) : (order.orderType === 'buy' && !order.escrowTxHash) ? (
+                                      <motion.button
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => openEscrowModal(order)}
+                                        className="px-2.5 py-1.5 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 hover:border-orange-500/40 rounded text-[11px] font-bold text-orange-400 transition-all"
+                                      >
+                                        Lock Escrow
+                                      </motion.button>
+                                    ) : escrowExistsFromOther ? (
+                                      <motion.button
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => signToClaimOrder(order)}
+                                        className="px-2.5 py-1.5 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 hover:border-orange-500/40 rounded text-[11px] font-bold text-orange-400 transition-all"
+                                      >
+                                        Sign
+                                      </motion.button>
+                                    ) : order.orderType === 'sell' ? (
+                                      <motion.button
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => signAndProceed(order)}
+                                        className="px-2.5 py-1.5 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 hover:border-orange-500/40 rounded text-[11px] font-bold text-orange-400 transition-all"
+                                      >
+                                        Sign
+                                      </motion.button>
+                                    ) : order.escrowTxHash ? (
+                                      <span className="px-2.5 py-1.5 bg-white/5 text-white rounded text-[11px] font-mono">
+                                        Signed
+                                      </span>
+                                    ) : (
+                                      <span className="px-2.5 py-1.5 bg-white/[0.04] rounded text-[11px] font-mono text-gray-500">
+                                        Waiting
+                                      </span>
+                                    )}
+                                  </div>
+                                </>
+                              );
+                            })()}
                           </motion.div>
                         ))
                       ) : (
