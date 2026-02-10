@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
 
     // Update users with 0 or null balance
     const usersResult = await query(
-      'UPDATE users SET balance = $1 WHERE balance IS NULL OR balance = 0 RETURNING id, display_name, balance',
+      'UPDATE users SET balance = $1 WHERE balance IS NULL OR balance = 0 RETURNING id, balance',
       [MOCK_INITIAL_BALANCE]
     );
 
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
 
     // Update merchants with 0 or null balance
     const merchantsResult = await query(
-      'UPDATE merchants SET balance = $1 WHERE balance IS NULL OR balance = 0 RETURNING id, display_name, balance',
+      'UPDATE merchants SET balance = $1 WHERE balance IS NULL OR balance = 0 RETURNING id, balance',
       [MOCK_INITIAL_BALANCE]
     );
 
