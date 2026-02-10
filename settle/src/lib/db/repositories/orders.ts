@@ -324,7 +324,7 @@ export async function createOrder(data: {
 
     // Determine initial status: 'escrowed' if escrow details provided, otherwise 'pending'
     const initialStatus = data.escrow_tx_hash ? 'escrowed' : 'pending';
-    const expiresInterval = data.escrow_tx_hash ? '120 minutes' : '15 minutes';
+    const expiresMinutes = data.escrow_tx_hash ? 120 : 15;
 
     // Create the order
     const result = await client.query(
@@ -334,7 +334,7 @@ export async function createOrder(data: {
          status, expires_at, buyer_wallet_address, buyer_merchant_id,
          escrow_tx_hash, escrow_trade_id, escrow_trade_pda, escrow_pda, escrow_creator_wallet, escrowed_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW() + INTERVAL '${expiresInterval}', $11, $12, $13, $14, $15, $16, $17, ${initialStatus === 'escrowed' ? 'NOW()' : 'NULL'})
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW() + ($11 || ' minutes')::INTERVAL, $12, $13, $14, $15, $16, $17, $18, CASE WHEN $14 IS NOT NULL THEN NOW() ELSE NULL END)
        RETURNING *`,
       [
         data.user_id,
@@ -347,6 +347,7 @@ export async function createOrder(data: {
         data.rate,
         JSON.stringify(data.payment_details || {}),
         initialStatus,
+        expiresMinutes.toString(),
         data.buyer_wallet_address || null,
         data.buyer_merchant_id || null,
         data.escrow_tx_hash || null,
