@@ -462,7 +462,8 @@ export default function MerchantDashboard() {
   const solanaWallet = useSolanaWalletHook();
   const isMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
   // In-app balance for mock mode (fetched from DB instead of on-chain)
-  const [inAppBalance, setInAppBalance] = useState<number | null>(null);
+  // Default to 10000 (MOCK_INITIAL_BALANCE) so balance shows immediately while DB fetch loads
+  const [inAppBalance, setInAppBalance] = useState<number | null>(isMockMode ? 10000 : null);
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({ email: "", password: "", confirmPassword: "", businessName: "" });
   const [authTab, setAuthTab] = useState<'signin' | 'create'>('signin');
