@@ -86,10 +86,12 @@ const MockWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) => {
     }
   }, [mockUserId, mockUserType]);
 
-  // Refresh balance when user changes
+  // Refresh balance when user changes + poll every 5s
   useEffect(() => {
     if (mockUserId) {
       refreshBalances();
+      const interval = setInterval(refreshBalances, 5000);
+      return () => clearInterval(interval);
     }
   }, [mockUserId, refreshBalances]);
 

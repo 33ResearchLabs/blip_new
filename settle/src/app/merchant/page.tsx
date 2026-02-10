@@ -2951,13 +2951,20 @@ export default function MerchantDashboard() {
                 <div className="flex-1 bg-[#0d0d0d] rounded-lg border border-white/[0.04] overflow-hidden flex flex-col">
                   {/* Balance Display */}
                   <div className="p-4 border-b border-white/[0.04]">
-                    <div className="flex items-baseline gap-2">
+                    <div className="flex items-center gap-2">
                       <span className="text-2xl font-bold text-white">
                         {solanaWallet.usdtBalance !== null
                           ? solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                          : '—'}
+                          : '0.00'}
                       </span>
-                      <span className="text-xs text-gray-500 font-mono">USDC</span>
+                      <span className="text-xs text-gray-500 font-mono">USDT</span>
+                      <button
+                        onClick={() => solanaWallet.refreshBalances()}
+                        className="ml-auto p-1 hover:bg-white/5 rounded transition-colors"
+                        title="Refresh balance"
+                      >
+                        <RotateCcw className="w-3 h-3 text-gray-500 hover:text-white" />
+                      </button>
                     </div>
                     <div className="flex items-center gap-3 mt-2">
                       <div className="flex items-center gap-1 text-[10px] text-gray-500">
