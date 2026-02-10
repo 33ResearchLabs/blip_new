@@ -817,9 +817,8 @@ export default function MerchantDashboard() {
         setMerchantInfo(data.data.merchant);
         setIsLoggedIn(true);
         localStorage.setItem('blip_merchant', JSON.stringify(data.data.merchant));
-        // Prompt to connect wallet if merchant doesn't have one linked
-        // Wallet is required for receiving escrow releases on sell orders
-        if (!data.data.merchant.wallet_address) {
+        // Prompt to connect wallet if merchant doesn't have one linked (skip in mock mode)
+        if (!isMockMode && !data.data.merchant.wallet_address) {
           console.log('[Merchant] No wallet linked, showing connect prompt');
           setTimeout(() => setShowWalletPrompt(true), 500);
         }
@@ -870,10 +869,11 @@ export default function MerchantDashboard() {
         setMerchantInfo(data.data.merchant);
         setIsLoggedIn(true);
         localStorage.setItem('blip_merchant', JSON.stringify(data.data.merchant));
-        // Prompt to connect wallet after registration
-        // Wallet is required for receiving escrow releases on sell orders
-        console.log('[Merchant] Showing wallet connect prompt after registration');
-        setTimeout(() => setShowWalletPrompt(true), 500);
+        // Prompt to connect wallet after registration (skip in mock mode)
+        if (!isMockMode) {
+          console.log('[Merchant] Showing wallet connect prompt after registration');
+          setTimeout(() => setShowWalletPrompt(true), 500);
+        }
       } else {
         console.log('[Merchant] Registration failed:', data);
         setLoginError(data.error || 'Registration failed');
@@ -922,8 +922,8 @@ export default function MerchantDashboard() {
               setIsLoading(false);
               // Update localStorage with fresh data
               localStorage.setItem('blip_merchant', JSON.stringify(freshMerchant));
-              // Prompt to connect wallet if not linked
-              if (!freshMerchant.wallet_address && !solanaWallet.connected) {
+              // Prompt to connect wallet if not linked (skip in mock mode)
+              if (!isMockMode && !freshMerchant.wallet_address && !solanaWallet.connected) {
                 console.log('[Merchant] Session restored but no wallet linked, showing prompt');
                 setTimeout(() => setShowWalletPrompt(true), 1000);
               }
@@ -2017,7 +2017,7 @@ export default function MerchantDashboard() {
   const openCancelModal = async (order: Order) => {
     if (!merchantId) return;
 
-    if (!solanaWallet.connected) {
+    if (!isMockMode && !solanaWallet.connected) {
       addNotification('system', 'Please connect your wallet to cancel escrow.');
       setShowWalletModal(true);
       return;
@@ -2279,7 +2279,7 @@ export default function MerchantDashboard() {
           });
         } else {
           // Can't release without wallet connection or valid user wallet
-          if (!solanaWallet.connected) {
+          if (!isMockMode && !solanaWallet.connected) {
             addNotification('system', 'Please connect your wallet to release escrow.', orderId);
             setShowWalletModal(true);
           } else {
@@ -2814,37 +2814,16 @@ export default function MerchantDashboard() {
 
             <motion.button
               whileTap={{ scale: 0.95 }}
-              onClick={() => {
-                if (!solanaWallet.connected) {
-                  setShowWalletModal(true);
-                } else {
-                  setShowCreateModal(true);
-                }
-              }}
+              onClick={() => setShowCreateModal(true)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all bg-white/10 text-white hover:bg-white/20 border border-white/10 hover:border-white/20"
             >
-              {solanaWallet.connected ? (
-                <>
-                  <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  <span className="hidden sm:inline">Corridor</span>
-                </>
-              ) : (
-                <>
-                  <Wallet className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  <span className="hidden sm:inline">Connect</span>
-                </>
-              )}
+              <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+              <span className="hidden sm:inline">Corridor</span>
             </motion.button>
 
             <motion.button
               whileTap={{ scale: 0.95 }}
-              onClick={() => {
-                if (!solanaWallet.connected) {
-                  setShowWalletModal(true);
-                } else {
-                  setShowOpenTradeModal(true);
-                }
-              }}
+              onClick={() => setShowOpenTradeModal(true)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-white/5 text-white hover:bg-white/10 border border-white/6 hover:border-white/12 transition-all"
             >
               <ArrowLeftRight className="w-3.5 h-3.5" strokeWidth={2.5} />
@@ -5359,7 +5338,7 @@ export default function MerchantDashboard() {
                 <p className="text-xl font-bold text-[#26A17B]">
                   {effectiveBalance !== null
                     ? `${effectiveBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
-                    : (isMockMode ? "Loading..." : "Connect Wallet")}
+                    : "Loading..."}
                 </p>
               </button>
 
