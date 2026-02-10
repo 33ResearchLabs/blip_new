@@ -28,18 +28,25 @@ export async function GET(request: NextRequest) {
       [userId]
     );
 
-    if (row && (row.balance === null || row.balance === undefined || parseFloat(String(row.balance)) === 0)) {
-      // Auto-initialize balance to default
+    if (!row) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const currentBalance = parseFloat(String(row.balance || 0));
+
+    // Auto-initialize balance to default if 0 or null
+    if (currentBalance === 0 || row.balance === null || row.balance === undefined) {
       await query(
         `UPDATE ${table} SET balance = $1 WHERE id = $2`,
         [DEFAULT_BALANCE, userId]
       );
+      console.log(`[Mock Balance] Auto-initialized ${type} ${userId} balance to ${DEFAULT_BALANCE}`);
       return NextResponse.json({ success: true, balance: DEFAULT_BALANCE });
     }
 
     return NextResponse.json({
       success: true,
-      balance: row ? parseFloat(String(row.balance)) : DEFAULT_BALANCE,
+      balance: currentBalance,
     });
   } catch (error) {
     console.error('[Mock Balance] GET error:', error);

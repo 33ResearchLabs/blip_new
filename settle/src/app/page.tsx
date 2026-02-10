@@ -1365,13 +1365,29 @@ export default function Home() {
       return;
     }
 
-    // Step 2: Check balance
+    // Step 2: Check balance (only if loaded)
     const amountNum = parseFloat(amount);
     console.log('[Escrow] Balance check:', { usdtBalance: solanaWallet.usdtBalance, amountNeeded: amountNum });
+
+    // Only block if balance is loaded AND insufficient
+    // If balance is null (still loading), allow to proceed - backend will validate
     if (solanaWallet.usdtBalance !== null && solanaWallet.usdtBalance < amountNum) {
       setEscrowError(`Insufficient USDT balance. You have ${solanaWallet.usdtBalance.toFixed(2)} USDT but need ${amountNum} USDT.`);
       setEscrowTxStatus('error');
       return;
+    }
+
+    // If balance is still null after connection, wait for it to load
+    if (solanaWallet.usdtBalance === null) {
+      console.log('[Escrow] Balance still loading, refreshing...');
+      await solanaWallet.refreshBalances();
+      // Give it a moment to update
+      await new Promise(r => setTimeout(r, 500));
+      if (solanaWallet.usdtBalance !== null && solanaWallet.usdtBalance < amountNum) {
+        setEscrowError(`Insufficient USDT balance. You have ${solanaWallet.usdtBalance.toFixed(2)} USDT but need ${amountNum} USDT.`);
+        setEscrowTxStatus('error');
+        return;
+      }
     }
 
     setIsLoading(true);

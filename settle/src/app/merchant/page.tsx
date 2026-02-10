@@ -1687,10 +1687,24 @@ export default function MerchantDashboard() {
   const executeLockEscrow = async () => {
     if (!merchantId || !escrowOrder) return;
 
-    // Check balance
+    // Check balance (only if loaded)
+    // If balance is null (still loading), allow to proceed - backend will validate
     if (effectiveBalance !== null && effectiveBalance < escrowOrder.amount) {
-      setEscrowError(`Insufficient USDC balance. You need ${escrowOrder.amount} USDC.`);
+      setEscrowError(`Insufficient USDC balance. You need ${escrowOrder.amount} USDC but have ${effectiveBalance.toFixed(2)} USDC.`);
       return;
+    }
+
+    // If balance is still null, refresh it first
+    if (effectiveBalance === null) {
+      console.log('[Merchant Escrow] Balance still loading, refreshing...');
+      await refreshBalance();
+      // Give it a moment to update
+      await new Promise(r => setTimeout(r, 500));
+      const newBalance = isMockMode ? inAppBalance : solanaWallet.usdtBalance;
+      if (newBalance !== null && newBalance < escrowOrder.amount) {
+        setEscrowError(`Insufficient USDC balance. You need ${escrowOrder.amount} USDC but have ${newBalance.toFixed(2)} USDC.`);
+        return;
+      }
     }
 
     // Determine recipient wallet for escrow
