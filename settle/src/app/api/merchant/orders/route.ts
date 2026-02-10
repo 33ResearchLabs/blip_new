@@ -268,6 +268,7 @@ export async function POST(request: NextRequest) {
     const buyerMerchantId = isM2MTrade ? merchant_id : undefined;
 
     // Create the order (with optional escrow details for escrow-first sell orders)
+    // Note: Must explicitly pass undefined as null for PostgreSQL
     const order = await createOrder({
       user_id: user.id,
       merchant_id: orderMerchantId,
@@ -278,12 +279,12 @@ export async function POST(request: NextRequest) {
       fiat_amount: fiatAmount,
       rate: offer.rate,
       payment_details: paymentDetails,
-      buyer_merchant_id: buyerMerchantId,
-      escrow_tx_hash,
-      escrow_trade_id,
-      escrow_trade_pda,
-      escrow_pda,
-      escrow_creator_wallet,
+      buyer_merchant_id: buyerMerchantId ?? undefined,
+      escrow_tx_hash: escrow_tx_hash ?? undefined,
+      escrow_trade_id: escrow_trade_id ?? undefined,
+      escrow_trade_pda: escrow_trade_pda ?? undefined,
+      escrow_pda: escrow_pda ?? undefined,
+      escrow_creator_wallet: escrow_creator_wallet ?? undefined,
     });
 
     // In mock mode: if escrow already locked, deduct balance from merchant
