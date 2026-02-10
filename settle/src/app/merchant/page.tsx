@@ -2955,7 +2955,7 @@ export default function MerchantDashboard() {
           )}
 
           {/* Desktop: Grid layout, Mobile: Single view based on mobileView state */}
-          <div className="hidden md:grid gap-4" style={{ gridTemplateColumns: 'minmax(220px, 1fr) 2.2fr 1.8fr' }}>
+          <div className="hidden md:grid gap-4" style={{ gridTemplateColumns: 'minmax(220px, 3fr) 3.85fr 3.15fr' }}>
             {/* Column 1: Balance (top) + Leaderboard (bottom) */}
             <div className="flex flex-col h-[calc(100vh-92px)] gap-3">
               {/* Balance & Transaction History */}
