@@ -348,13 +348,13 @@ export async function createOrder(data: {
         JSON.stringify(data.payment_details || {}),
         initialStatus,
         expiresMinutes.toString(),
-        data.buyer_wallet_address || null,
-        data.buyer_merchant_id || null,
-        data.escrow_tx_hash || null,
-        data.escrow_trade_id || null,
-        data.escrow_trade_pda || null,
-        data.escrow_pda || null,
-        data.escrow_creator_wallet || null,
+        data.buyer_wallet_address ?? null,
+        data.buyer_merchant_id ?? null,
+        data.escrow_tx_hash ?? null,
+        data.escrow_trade_id ?? null,
+        data.escrow_trade_pda ?? null,
+        data.escrow_pda ?? null,
+        data.escrow_creator_wallet ?? null,
       ]
     );
 
