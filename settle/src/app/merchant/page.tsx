@@ -461,6 +461,8 @@ export default function MerchantDashboard() {
   const [cancelError, setCancelError] = useState<string | null>(null);
   const solanaWallet = useSolanaWalletHook();
   const isMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+  // In-app balance for mock mode (fetched from DB instead of on-chain)
+  const [inAppBalance, setInAppBalance] = useState<number | null>(null);
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
   const [registerForm, setRegisterForm] = useState({ email: "", password: "", confirmPassword: "", businessName: "" });
   const [authTab, setAuthTab] = useState<'signin' | 'create'>('signin');
@@ -995,6 +997,40 @@ export default function MerchantDashboard() {
     updateMerchantWallet();
   }, [merchantId, solanaWallet.walletAddress, merchantInfo?.wallet_address]);
 
+  // Fetch in-app balance from DB (mock mode)
+  const fetchInAppBalance = useCallback(async () => {
+    if (!merchantId || !isMockMode) return;
+    try {
+      const res = await fetch(`/api/mock/balance?userId=${merchantId}&type=merchant`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setInAppBalance(typeof data.balance === 'string' ? parseFloat(data.balance) : data.balance);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch in-app balance:', err);
+    }
+  }, [merchantId, isMockMode]);
+
+  useEffect(() => {
+    if (isMockMode && merchantId) {
+      fetchInAppBalance();
+      const interval = setInterval(fetchInAppBalance, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [isMockMode, merchantId, fetchInAppBalance]);
+
+  // Effective balance: in-app for mock mode, on-chain for production
+  const effectiveBalance = isMockMode ? inAppBalance : solanaWallet.usdtBalance;
+  const refreshBalance = useCallback(() => {
+    if (isMockMode) {
+      fetchInAppBalance();
+    } else {
+      solanaWallet.refreshBalances();
+    }
+  }, [isMockMode, fetchInAppBalance, solanaWallet]);
+
   // Fetch orders from API
   const fetchOrders = useCallback(async () => {
     if (!merchantId) {
@@ -1214,9 +1250,7 @@ export default function MerchantDashboard() {
         addNotification('complete', 'Trade completed!', orderId);
         playSound('trade_complete');
         toast.showTradeComplete();
-        if (solanaWallet.connected) {
-          solanaWallet.refreshBalances();
-        }
+        refreshBalance();
       } else if (newStatus === 'disputed') {
         addNotification('dispute', 'Dispute opened on order', orderId);
         playSound('error');
@@ -1643,7 +1677,7 @@ export default function MerchantDashboard() {
     if (!merchantId || !escrowOrder) return;
 
     // Check balance
-    if (solanaWallet.usdtBalance !== null && solanaWallet.usdtBalance < escrowOrder.amount) {
+    if (effectiveBalance !== null && effectiveBalance < escrowOrder.amount) {
       setEscrowError(`Insufficient USDC balance. You need ${escrowOrder.amount} USDC.`);
       return;
     }
@@ -1953,10 +1987,8 @@ export default function MerchantDashboard() {
         // Update local state
         setOrders(prev => prev.map(o => o.id === releaseOrder.id ? { ...o, status: "completed" as const } : o));
         fetchOrders();
-        // Refresh wallet balance
-        if (solanaWallet.connected) {
-          solanaWallet.refreshBalances();
-        }
+        // Refresh balance (in-app or on-chain)
+        refreshBalance();
         playSound('trade_complete');
         addNotification('escrow', `Escrow released! ${releaseOrder.amount} USDC sent to buyer.`, releaseOrder.id);
       } else {
@@ -2184,10 +2216,8 @@ export default function MerchantDashboard() {
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: "completed" as const } : o));
         // Refresh orders from server
         fetchOrders();
-        // Refresh on-chain wallet balance to sync with platform balance
-        if (solanaWallet.connected) {
-          solanaWallet.refreshBalances();
-        }
+        // Refresh balance
+        refreshBalance();
         playSound('trade_complete');
       }
     } catch (error) {
@@ -2354,11 +2384,16 @@ export default function MerchantDashboard() {
           setDisputeReason("");
           setDisputeDescription("");
           playSound('click');
+          toast.showDisputeOpened(disputeOrderId);
+          addNotification('dispute', 'Dispute submitted. Our team will review it.', disputeOrderId);
         }
+      } else {
+        toast.showWarning('Failed to submit dispute. Please try again.');
       }
     } catch (err) {
       console.error('Failed to submit dispute:', err);
       playSound('error');
+      toast.showWarning('Failed to submit dispute');
     } finally {
       setIsSubmittingDispute(false);
     }
@@ -2887,8 +2922,8 @@ export default function MerchantDashboard() {
             >
               <div className="w-1.5 h-1.5 rounded-full bg-[#26A17B] animate-pulse" />
               <span className="text-[11px] font-bold text-[#26A17B]">
-                {solanaWallet.usdtBalance !== null
-                  ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+                {effectiveBalance !== null
+                  ? `${effectiveBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
                   : '—'}
                 <span className="text-[9px] ml-0.5">USDT</span>
               </span>
@@ -2932,8 +2967,8 @@ export default function MerchantDashboard() {
           className="flex items-center gap-1 px-2 py-1 bg-[#26A17B]/10 rounded-md border border-[#26A17B]/20 shrink-0"
         >
           <span className="text-[11px] font-mono text-[#26A17B]">
-            {solanaWallet.usdtBalance !== null
-              ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+            {effectiveBalance !== null
+              ? `${effectiveBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
               : "—"}
           </span>
         </button>
@@ -3004,13 +3039,13 @@ export default function MerchantDashboard() {
                   <div className="p-4 border-b border-white/[0.06]">
                     <div className="flex items-center gap-2">
                       <span className="text-2xl font-bold text-white">
-                        {solanaWallet.usdtBalance !== null
-                          ? solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        {effectiveBalance !== null
+                          ? effectiveBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                           : '0.00'}
                       </span>
                       <span className="text-xs text-gray-500 font-mono">USDT</span>
                       <button
-                        onClick={() => solanaWallet.refreshBalances()}
+                        onClick={() => refreshBalance()}
                         className="ml-auto p-1 hover:bg-white/5 rounded transition-colors"
                         title="Refresh balance"
                       >
@@ -5322,8 +5357,8 @@ export default function MerchantDashboard() {
               >
                 <p className="text-xs text-[#26A17B] mb-1">USDT Balance</p>
                 <p className="text-xl font-bold text-[#26A17B]">
-                  {solanaWallet.usdtBalance !== null
-                    ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
+                  {effectiveBalance !== null
+                    ? `${effectiveBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
                     : (isMockMode ? "Loading..." : "Connect Wallet")}
                 </p>
               </button>
@@ -5807,14 +5842,14 @@ export default function MerchantDashboard() {
                         <div>
                           <p className="text-[10px] text-[#26A17B] uppercase tracking-wide">Available Balance</p>
                           <p className="text-sm font-bold text-[#26A17B]">
-                            {solanaWallet.usdtBalance !== null
-                              ? `${solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
+                            {effectiveBalance !== null
+                              ? `${effectiveBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
                               : 'Loading...'}
                           </p>
                         </div>
                       </div>
                       <button
-                        onClick={() => solanaWallet.refreshBalances()}
+                        onClick={() => refreshBalance()}
                         className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
                         title="Refresh balance"
                       >
@@ -5861,15 +5896,15 @@ export default function MerchantDashboard() {
                           setCorridorForm(prev => ({ ...prev, availableAmount: value }));
                         }}
                         className={`w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 ${
-                          parseFloat(corridorForm.availableAmount || '0') > (solanaWallet.usdtBalance || 0)
+                          parseFloat(corridorForm.availableAmount || '0') > (effectiveBalance || 0)
                             ? 'focus:ring-red-500/50 border border-red-500/30'
                             : 'focus:ring-white/20'
                         }`}
                       />
                       <button
                         onClick={() => {
-                          if (solanaWallet.usdtBalance !== null) {
-                            setCorridorForm(prev => ({ ...prev, availableAmount: solanaWallet.usdtBalance!.toString() }));
+                          if (effectiveBalance !== null) {
+                            setCorridorForm(prev => ({ ...prev, availableAmount: effectiveBalance!.toString() }));
                           }
                         }}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[#26A17B] font-medium hover:text-[#26A17B]/80"
@@ -5877,7 +5912,7 @@ export default function MerchantDashboard() {
                         MAX
                       </button>
                     </div>
-                    {parseFloat(corridorForm.availableAmount || '0') > (solanaWallet.usdtBalance || 0) && (
+                    {parseFloat(corridorForm.availableAmount || '0') > (effectiveBalance || 0) && (
                       <p className="text-[10px] text-red-400 mt-1 ml-1 flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
                         Exceeds your wallet balance
@@ -5983,13 +6018,13 @@ export default function MerchantDashboard() {
                     disabled={
                       !corridorForm.availableAmount ||
                       parseFloat(corridorForm.availableAmount) <= 0 ||
-                      parseFloat(corridorForm.availableAmount) > (solanaWallet.usdtBalance || 0)
+                      parseFloat(corridorForm.availableAmount) > (effectiveBalance || 0)
                     }
                     onClick={async () => {
                       if (!merchantId) return;
                       // Validate against wallet balance
                       const availableAmount = parseFloat(corridorForm.availableAmount || "0");
-                      if (availableAmount > (solanaWallet.usdtBalance || 0)) {
+                      if (availableAmount > (effectiveBalance || 0)) {
                         alert("Amount exceeds your wallet balance");
                         return;
                       }
@@ -6047,7 +6082,7 @@ export default function MerchantDashboard() {
                     className={`flex-[2] py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 ${
                       !corridorForm.availableAmount ||
                       parseFloat(corridorForm.availableAmount) <= 0 ||
-                      parseFloat(corridorForm.availableAmount) > (solanaWallet.usdtBalance || 0)
+                      parseFloat(corridorForm.availableAmount) > (effectiveBalance || 0)
                         ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                         : 'bg-white text-black hover:bg-white/90'
                     }`}
@@ -6157,10 +6192,10 @@ export default function MerchantDashboard() {
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">USDC</span>
                     </div>
-                    {openTradeForm.tradeType === "sell" && solanaWallet.usdtBalance !== null && parseFloat(openTradeForm.cryptoAmount || "0") > solanaWallet.usdtBalance && (
+                    {openTradeForm.tradeType === "sell" && effectiveBalance !== null && parseFloat(openTradeForm.cryptoAmount || "0") > effectiveBalance && (
                       <p className="text-[10px] text-red-400 mt-1 ml-1 flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
-                        Exceeds your wallet balance ({solanaWallet.usdtBalance.toLocaleString()} USDC)
+                        Exceeds your wallet balance ({effectiveBalance.toLocaleString()} USDC)
                       </p>
                     )}
                   </div>
@@ -6246,7 +6281,7 @@ export default function MerchantDashboard() {
                       isCreatingTrade ||
                       !openTradeForm.cryptoAmount ||
                       parseFloat(openTradeForm.cryptoAmount) <= 0 ||
-                      (openTradeForm.tradeType === "sell" && solanaWallet.usdtBalance !== null && parseFloat(openTradeForm.cryptoAmount) > solanaWallet.usdtBalance)
+                      (openTradeForm.tradeType === "sell" && effectiveBalance !== null && parseFloat(openTradeForm.cryptoAmount) > effectiveBalance)
                     }
                     onClick={async () => {
                       if (!merchantId) return;
@@ -6346,7 +6381,7 @@ export default function MerchantDashboard() {
                       isCreatingTrade ||
                       !openTradeForm.cryptoAmount ||
                       parseFloat(openTradeForm.cryptoAmount) <= 0 ||
-                      (openTradeForm.tradeType === "sell" && solanaWallet.usdtBalance !== null && parseFloat(openTradeForm.cryptoAmount) > solanaWallet.usdtBalance)
+                      (openTradeForm.tradeType === "sell" && effectiveBalance !== null && parseFloat(openTradeForm.cryptoAmount) > effectiveBalance)
                         ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                         : 'bg-white/10 text-black hover:bg-white/10'
                     }`}
@@ -6536,8 +6571,8 @@ export default function MerchantDashboard() {
                   {/* Wallet Balance */}
                   <div className="flex items-center justify-between bg-[#1a1a1a] rounded-xl p-3 border border-white/[0.06]">
                     <span className="text-xs text-gray-500">Your USDC Balance</span>
-                    <span className={`text-sm font-bold ${(solanaWallet.usdtBalance || 0) >= escrowOrder.amount ? 'text-white' : 'text-red-400'}`}>
-                      {solanaWallet.usdtBalance?.toFixed(2) || '0.00'} USDC
+                    <span className={`text-sm font-bold ${(effectiveBalance || 0) >= escrowOrder.amount ? 'text-white' : 'text-red-400'}`}>
+                      {effectiveBalance?.toFixed(2) || '0.00'} USDC
                     </span>
                   </div>
 
@@ -6661,7 +6696,7 @@ export default function MerchantDashboard() {
                         onClick={executeLockEscrow}
                         disabled={
                           isLockingEscrow ||
-                          (solanaWallet.usdtBalance || 0) < escrowOrder.amount
+                          (effectiveBalance || 0) < escrowOrder.amount
                         }
                         className="flex-[2] py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >

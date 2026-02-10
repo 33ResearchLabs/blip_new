@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
 import { useSounds } from "@/hooks/useSounds";
+import { NotificationToastContainer, useToast, ConnectionIndicator } from "@/components/NotificationToast";
 import dynamic from "next/dynamic";
 
 // Dynamically import wallet components (client-side only)
@@ -234,14 +235,21 @@ function mapDbStatusToUI(dbStatus: string): { status: OrderStatus; step: OrderSt
 
 // Map DB order to UI order
 function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
-  // Guard against incomplete data from Pusher events
-  if (!dbOrder || !dbOrder.merchant) {
+  // Guard against completely missing data
+  if (!dbOrder) {
     return null;
   }
 
   const { status, step } = mapDbStatusToUI(dbOrder.status);
   const offer = dbOrder.offer;
-  const merchant = dbOrder.merchant;
+  // Use merchant data if available, or create a minimal fallback to prevent order disappearing
+  const merchant = dbOrder.merchant || {
+    id: dbOrder.merchant_id || 'unknown',
+    display_name: 'Merchant',
+    rating: 5.0,
+    total_trades: 0,
+    wallet_address: undefined,
+  } as Merchant;
 
   return {
     id: dbOrder.id,
@@ -298,6 +306,7 @@ const FEE_CONFIG = {
 export default function Home() {
   const { theme, toggleTheme } = useTheme();
   const { playSound } = useSounds();
+  const toast = useToast();
   const [screen, setScreen] = useState<Screen>("home");
   const [tradeType, setTradeType] = useState<TradeType>("buy");
   const [tradePreference, setTradePreference] = useState<TradePreference>("fast");
@@ -456,10 +465,11 @@ export default function Home() {
         return o;
       }));
 
-      // Show browser notification if not on the chat screen or if it's a different order
+      // Show toast + browser notification if not on the chat screen or if it's a different order
       if (message.from === 'them' && (screen !== 'order' || activeOrderId !== chatId)) {
         const order = orders.find(o => o.id === chatId);
         const merchantName = order?.merchant?.name || 'Merchant';
+        toast.showNewMessage(merchantName, message.text?.substring(0, 80));
         showBrowserNotification(
           `New message from ${merchantName}`,
           message.text.substring(0, 100),
@@ -470,7 +480,7 @@ export default function Home() {
   });
 
   // Real-time order updates for active order
-  const { order: realtimeOrder } = useRealtimeOrder(activeOrderId, {
+  const { order: realtimeOrder, refetch: refetchActiveOrder } = useRealtimeOrder(activeOrderId, {
     onStatusChange: (newStatus, previousStatus, orderData) => {
       // Auto-transition from matching screen when merchant accepts
       if (screen === "matching" && previousStatus === 'pending' && newStatus !== 'pending') {
@@ -480,15 +490,16 @@ export default function Home() {
 
         // Show acceptance popup when merchant accepts the order
         if (newStatus === 'accepted' || newStatus === 'escrowed') {
+          const merchantName = orderData?.merchant?.display_name || orderData?.merchant?.business_name || 'Merchant';
           setAcceptedOrderInfo({
-            merchantName: orderData?.merchant?.display_name || orderData?.merchant?.business_name || 'Merchant',
+            merchantName,
             cryptoAmount: orderData?.crypto_amount || 0,
             fiatAmount: orderData?.fiat_amount || 0,
             orderType: orderData?.type || 'buy',
           });
           setShowAcceptancePopup(true);
-          // Auto-hide after 5 seconds
           setTimeout(() => setShowAcceptancePopup(false), 5000);
+          toast.showMerchantAccepted(merchantName);
         }
       }
 
@@ -499,6 +510,7 @@ export default function Home() {
         setAmount("");
         setSelectedOffer(null);
         playSound('notification');
+        toast.showEscrowLocked();
       }
 
       // Auto-transition when merchant sends payment (user needs to confirm)
@@ -507,15 +519,47 @@ export default function Home() {
           setScreen("order");
         }
         playSound('notification');
+        toast.showPaymentSent();
+        showBrowserNotification('Payment Sent', 'The merchant has sent the fiat payment. Please verify.', activeOrderId || undefined);
+      }
+
+      // Payment confirmed
+      if (newStatus === 'payment_confirmed') {
+        playSound('notification');
+        toast.show({ type: 'payment', title: 'Payment Confirmed', message: 'Payment has been confirmed!' });
+      }
+
+      // Escrow released
+      if (newStatus === 'releasing') {
+        toast.showEscrowReleased();
       }
 
       // Play trade complete sound
       if (newStatus === 'completed') {
         playSound('trade_complete');
-        // Refresh on-chain wallet balance to sync with platform balance
+        toast.showTradeComplete();
+        showBrowserNotification('Trade Complete!', 'Your trade has been completed successfully.', activeOrderId || undefined);
         if (solanaWallet.connected) {
           solanaWallet.refreshBalances();
         }
+      }
+
+      // Dispute opened
+      if (newStatus === 'disputed') {
+        playSound('error');
+        toast.showDisputeOpened();
+        showBrowserNotification('Dispute Opened', 'A dispute has been raised on your order.', activeOrderId || undefined);
+      }
+
+      // Cancelled
+      if (newStatus === 'cancelled') {
+        playSound('error');
+        toast.showOrderCancelled();
+      }
+
+      // Expired
+      if (newStatus === 'expired') {
+        toast.showOrderExpired();
       }
 
       // Update the orders list with new status
@@ -530,7 +574,6 @@ export default function Home() {
       }
     },
     onExtensionRequested: (data) => {
-      // Merchant requested an extension
       if (data.requestedBy === 'merchant') {
         setExtensionRequest({
           orderId: data.orderId,
@@ -540,18 +583,28 @@ export default function Home() {
           maxExtensions: data.maxExtensions,
         });
         playSound('notification');
+        toast.showExtensionRequest('Merchant', data.extensionMinutes);
+        showBrowserNotification('Extension Requested', `Merchant requested ${data.extensionMinutes} more minutes`);
       }
     },
     onExtensionResponse: (data) => {
-      // Clear extension request state
       setExtensionRequest(null);
       if (data.accepted) {
         playSound('click');
+        toast.show({ type: 'system', title: 'Extension Accepted', message: 'Time has been extended' });
       } else {
         playSound('error');
+        toast.showWarning('Extension request was declined');
       }
     },
   });
+
+  // Recovery: if on order screen but activeOrder is missing, refetch
+  useEffect(() => {
+    if (screen === 'order' && !activeOrder && activeOrderId) {
+      refetchActiveOrder();
+    }
+  }, [screen, activeOrder, activeOrderId, refetchActiveOrder]);
 
   // Countdown timer for matching screen - use actual order expiration time
   useEffect(() => {
@@ -596,6 +649,8 @@ export default function Home() {
         setPendingTradeData(null);
         setScreen("home");
         playSound('error');
+        toast.showOrderExpired();
+        showBrowserNotification('Order Expired', 'No merchant accepted your order in time. Please try again.');
       }
     }, 1000);
 
@@ -1444,6 +1499,7 @@ export default function Home() {
 
       // Step 6: Success - stay on escrow screen showing "waiting for merchant"
       setEscrowTxStatus('success');
+      toast.showEscrowLocked(amount);
 
       // Get the updated order data (with escrowed status) from the escrow response
       let finalOrderData = orderData.data;
@@ -1737,10 +1793,15 @@ export default function Home() {
           setShowDisputeModal(false);
           setDisputeReason("");
           setDisputeDescription("");
+          toast.showDisputeOpened(activeOrder.id);
+          showBrowserNotification('Dispute Submitted', 'Your dispute has been submitted. Our team will review it.');
         }
+      } else {
+        toast.showWarning('Failed to submit dispute. Please try again.');
       }
     } catch (err) {
       console.error('Failed to submit dispute:', err);
+      toast.showWarning('Failed to submit dispute');
     } finally {
       setIsSubmittingDispute(false);
     }
@@ -1947,6 +2008,8 @@ export default function Home() {
 
   return (
     <div className="min-h-dvh bg-black flex flex-col items-center overflow-y-auto">
+      {/* Toast Notifications */}
+      <NotificationToastContainer position="top-right" />
       <AnimatePresence mode="wait">
         {/* WELCOME / LOGIN */}
         {screen === "welcome" && (
@@ -2094,11 +2157,14 @@ export default function Home() {
                 </button>
                 <div>
                   <p className="text-[15px] font-semibold text-white">{userName}</p>
-                  <p className="text-[13px] text-neutral-500 font-medium font-mono">
-                    {solanaWallet.connected && solanaWallet.walletAddress
-                      ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
-                      : 'Connect wallet'}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[13px] text-neutral-500 font-medium font-mono">
+                      {solanaWallet.connected && solanaWallet.walletAddress
+                        ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
+                        : 'Connect wallet'}
+                    </p>
+                    <ConnectionIndicator isConnected={!!userId} />
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -3520,7 +3586,10 @@ export default function Home() {
                         <div className="w-8 h-8 rounded-full bg-white/10 border border-white/10" />
                         <div>
                           <p className="text-[15px] font-medium text-white">{activeOrder.merchant.name}</p>
-                          <p className="text-[11px] text-white">Online</p>
+                          <div className="flex items-center gap-1.5">
+                            <ConnectionIndicator isConnected={true} />
+                            <p className="text-[11px] text-emerald-400/80">Online</p>
+                          </div>
                         </div>
                       </div>
                       <button onClick={() => setShowChat(false)} className="p-2">
@@ -3748,6 +3817,30 @@ export default function Home() {
                 </>
               )}
             </AnimatePresence>
+          </motion.div>
+        )}
+
+        {/* ORDER - Loading fallback when order data is being fetched */}
+        {screen === "order" && !activeOrder && activeOrderId && (
+          <motion.div
+            key="order-loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className={`flex-1 w-full ${maxW} flex flex-col bg-black items-center justify-center`}
+          >
+            <div className="h-12" />
+            <div className="px-5 py-4 flex items-center w-full">
+              <button onClick={() => setScreen("home")} className="p-2 -ml-2">
+                <ChevronLeft className="w-6 h-6 text-white" />
+              </button>
+              <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">Order Details</h1>
+            </div>
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <Loader2 className="w-6 h-6 text-white/40 animate-spin mx-auto mb-3" />
+                <p className="text-[15px] text-neutral-400">Loading order...</p>
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -4118,8 +4211,8 @@ export default function Home() {
 
               {/* Stats */}
               <div>
-                <p className="text-[13px] text-neutral-500 mb-3 uppercase tracking-wide">Stats</p>
-                <div className="grid grid-cols-2 gap-3">
+                <p className="text-[13px] text-neutral-500 mb-3 uppercase tracking-wide">Stats & Reputation</p>
+                <div className="grid grid-cols-3 gap-3">
                   <div className="bg-neutral-900 rounded-2xl p-4">
                     <p className="text-[28px] font-semibold text-white">{completedOrders.length}</p>
                     <p className="text-[13px] text-neutral-500">Trades</p>
@@ -4128,9 +4221,41 @@ export default function Home() {
                     <p className="text-[28px] font-semibold text-white">
                       {completedOrders.reduce((s, o) => s + parseFloat(o.cryptoAmount), 0).toFixed(0)}
                     </p>
-                    <p className="text-[13px] text-neutral-500">Volume (USDC)</p>
+                    <p className="text-[13px] text-neutral-500">Volume</p>
+                  </div>
+                  <div className="bg-neutral-900 rounded-2xl p-4">
+                    <p className="text-[28px] font-semibold text-white">
+                      {completedOrders.length > 0 ? (completedOrders.length / (completedOrders.length + timedOutOrders.length) * 100).toFixed(0) : '—'}
+                    </p>
+                    <p className="text-[13px] text-neutral-500">Score %</p>
                   </div>
                 </div>
+                {/* Reputation tier */}
+                {completedOrders.length > 0 && (
+                  <div className="mt-3 bg-neutral-900 rounded-2xl p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-[13px] font-medium text-white">Reputation Level</p>
+                      <p className="text-[11px] text-neutral-500 mt-0.5">
+                        {completedOrders.length >= 50 ? 'Elite Trader' :
+                         completedOrders.length >= 20 ? 'Trusted' :
+                         completedOrders.length >= 10 ? 'Established' :
+                         completedOrders.length >= 3 ? 'Emerging' : 'New Trader'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {[...Array(5)].map((_, i) => (
+                        <div
+                          key={i}
+                          className={`w-2 h-6 rounded-full ${
+                            i < (completedOrders.length >= 50 ? 5 : completedOrders.length >= 20 ? 4 : completedOrders.length >= 10 ? 3 : completedOrders.length >= 3 ? 2 : 1)
+                              ? 'bg-orange-400/80'
+                              : 'bg-neutral-800'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Console & Analytics */}
@@ -4529,7 +4654,10 @@ export default function Home() {
                 </div>
                 <div className="flex-1">
                   <p className="text-[15px] font-semibold text-white">{activeOrder.merchant.name}</p>
-                  <p className="text-[12px] text-white">Online</p>
+                  <div className="flex items-center gap-1.5">
+                    <ConnectionIndicator isConnected={true} />
+                    <p className="text-[12px] text-emerald-400/80">Online</p>
+                  </div>
                 </div>
                 <button
                   onClick={() => setScreen("order")}
@@ -5105,11 +5233,12 @@ export default function Home() {
                         });
                         const data = await res.json();
                         if (data.success) {
-                          // Remove from local state
                           setOrders(prev => prev.filter(o => o.id !== activeOrderId));
+                          toast.showOrderCancelled('You cancelled the order');
                         }
                       } catch (err) {
                         console.error('Failed to cancel order:', err);
+                        toast.showWarning('Failed to cancel order');
                       }
                     }
                     setPendingTradeData(null);
