@@ -23,6 +23,7 @@ import type {
   WSNewMessageEvent,
   WSTypingEvent,
   WSMessagesReadEvent,
+  WSOrderEvent,
 } from '@/lib/websocket/types';
 
 // Connection states
@@ -32,6 +33,7 @@ type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecti
 type MessageCallback = (event: WSNewMessageEvent) => void;
 type TypingCallback = (event: WSTypingEvent) => void;
 type ReadCallback = (event: WSMessagesReadEvent) => void;
+type OrderEventCallback = (event: WSOrderEvent) => void;
 
 interface WebSocketChatContextType {
   // Connection state
@@ -61,6 +63,7 @@ interface WebSocketChatContextType {
   onMessage: (callback: MessageCallback) => () => void;
   onTyping: (callback: TypingCallback) => () => void;
   onRead: (callback: ReadCallback) => () => void;
+  onOrderEvent: (callback: OrderEventCallback) => () => void;
 
   // Manual reconnect
   reconnect: () => void;
@@ -97,6 +100,7 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
   const messageCallbacksRef = useRef<Set<MessageCallback>>(new Set());
   const typingCallbacksRef = useRef<Set<TypingCallback>>(new Set());
   const readCallbacksRef = useRef<Set<ReadCallback>>(new Set());
+  const orderEventCallbacksRef = useRef<Set<OrderEventCallback>>(new Set());
 
   // Calculate retry delay with exponential backoff
   const getRetryDelay = useCallback(() => {
@@ -193,6 +197,13 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
 
         case 'chat:messages-read':
           readCallbacksRef.current.forEach((cb) => cb(message as WSMessagesReadEvent));
+          break;
+
+        case 'order:status-updated':
+        case 'order:created':
+        case 'order:cancelled':
+          console.log('[WebSocket] Order event:', message.type, message);
+          orderEventCallbacksRef.current.forEach((cb) => cb(message as WSOrderEvent));
           break;
 
         case 'error':
@@ -403,6 +414,14 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
     };
   }, []);
 
+  // Register order event callback
+  const onOrderEvent = useCallback((callback: OrderEventCallback) => {
+    orderEventCallbacksRef.current.add(callback);
+    return () => {
+      orderEventCallbacksRef.current.delete(callback);
+    };
+  }, []);
+
   const value: WebSocketChatContextType = {
     isConnected,
     connectionState,
@@ -420,6 +439,7 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
     onMessage,
     onTyping,
     onRead,
+    onOrderEvent,
     reconnect,
   };
 

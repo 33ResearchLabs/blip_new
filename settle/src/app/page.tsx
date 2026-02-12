@@ -482,24 +482,29 @@ export default function Home() {
   // Real-time order updates for active order
   const { order: realtimeOrder, refetch: refetchActiveOrder } = useRealtimeOrder(activeOrderId, {
     onStatusChange: (newStatus, previousStatus, orderData) => {
-      // Auto-transition from matching screen when merchant accepts
-      if (screen === "matching" && previousStatus === 'pending' && newStatus !== 'pending') {
-        setPendingTradeData(null);
-        setScreen("order");
+      // Show acceptance notification on ANY screen when merchant accepts the order
+      if (previousStatus === 'pending' && (newStatus === 'accepted' || newStatus === 'escrowed')) {
+        const merchantName = orderData?.merchant?.display_name || orderData?.merchant?.business_name || 'Merchant';
         playSound('notification');
 
-        // Show acceptance popup when merchant accepts the order
-        if (newStatus === 'accepted' || newStatus === 'escrowed') {
-          const merchantName = orderData?.merchant?.display_name || orderData?.merchant?.business_name || 'Merchant';
-          setAcceptedOrderInfo({
-            merchantName,
-            cryptoAmount: orderData?.crypto_amount || 0,
-            fiatAmount: orderData?.fiat_amount || 0,
-            orderType: orderData?.type || 'buy',
-          });
-          setShowAcceptancePopup(true);
-          setTimeout(() => setShowAcceptancePopup(false), 5000);
-          toast.showMerchantAccepted(merchantName);
+        // Show acceptance popup overlay
+        setAcceptedOrderInfo({
+          merchantName,
+          cryptoAmount: orderData?.crypto_amount || 0,
+          fiatAmount: orderData?.fiat_amount || 0,
+          orderType: orderData?.type || 'buy',
+        });
+        setShowAcceptancePopup(true);
+        setTimeout(() => setShowAcceptancePopup(false), 5000);
+        toast.showMerchantAccepted(merchantName);
+        showBrowserNotification('Order Accepted!', `${merchantName} accepted your ${orderData?.type || 'buy'} order`, activeOrderId || undefined);
+
+        // Auto-transition to order screen from matching or home
+        if (screen === "matching") {
+          setPendingTradeData(null);
+        }
+        if (screen !== "order") {
+          setScreen("order");
         }
       }
 
@@ -571,6 +576,12 @@ export default function Home() {
           }
           return o;
         }));
+      }
+
+      // Force refetch when status changes to escrowed to ensure UI updates
+      if (newStatus === 'escrowed') {
+        console.log('[User] Escrow locked - refetching order data');
+        refetchActiveOrder();
       }
     },
     onExtensionRequested: (data) => {
@@ -3745,16 +3756,21 @@ export default function Home() {
                               key={msg.id}
                               className={`flex ${msg.from === "me" ? "justify-end" : msg.from === "system" ? "justify-center" : "justify-start"}`}
                             >
-                              <div
-                                className={`max-w-[80%] px-4 py-2 rounded-2xl text-[15px] ${
-                                  msg.from === "me"
-                                    ? "bg-white text-black"
-                                    : msg.from === "system"
-                                    ? "bg-neutral-700/50 text-neutral-300 text-[13px]"
-                                    : "bg-neutral-800 text-white"
-                                }`}
-                              >
-                                {msg.text}
+                              <div className={`max-w-[80%] flex flex-col ${msg.from === "me" ? "items-end" : "items-start"}`}>
+                                {msg.from !== "me" && msg.from !== "system" && msg.senderName && (
+                                  <span className="text-[11px] text-neutral-500 mb-0.5 px-1">{msg.senderName}</span>
+                                )}
+                                <div
+                                  className={`px-4 py-2 rounded-2xl text-[15px] ${
+                                    msg.from === "me"
+                                      ? "bg-white text-black"
+                                      : msg.from === "system"
+                                      ? "bg-neutral-700/50 text-neutral-300 text-[13px]"
+                                      : "bg-neutral-800 text-white"
+                                  }`}
+                                >
+                                  {msg.text}
+                                </div>
                               </div>
                             </div>
                           );

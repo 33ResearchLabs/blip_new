@@ -3,7 +3,7 @@ const { parse } = require('url');
 const next = require('next');
 const fs = require('fs');
 const { WebSocketServer } = require('ws');
-const { handleConnection, startHeartbeat } = require('./websocket-server');
+const { handleConnection, startHeartbeat, broadcastToOrder } = require('./websocket-server');
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
@@ -42,6 +42,9 @@ app.prepare().then(() => {
 
   // Start heartbeat to clean up stale connections
   startHeartbeat(wss, 30000);
+
+  // Expose WS broadcast globally so API routes can push order events
+  global.__wsBroadcastToOrder = broadcastToOrder;
 
   console.log('> WebSocket server initialized at /ws/chat');
 

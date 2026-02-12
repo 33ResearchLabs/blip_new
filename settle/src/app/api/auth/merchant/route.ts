@@ -388,7 +388,7 @@ export async function POST(request: NextRequest) {
             wallet_address: merchant.wallet_address,
             rating: parseFloat(String(merchant.rating)) || 5,
             total_trades: merchant.total_trades || 0,
-            balance: 0,
+            balance: merchantBalance,
           },
         },
       });
@@ -759,7 +759,7 @@ export async function POST(request: NextRequest) {
             email: merchant.email,
             rating: parseFloat(String(merchant.rating)) || 5,
             total_trades: merchant.total_trades || 0,
-            balance: 0,
+            balance: regBalance,
           },
         },
       });

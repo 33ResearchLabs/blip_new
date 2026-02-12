@@ -5,7 +5,6 @@ import {
   getOrderWithRelations,
   updateOrderStatus,
   cancelOrder,
-  sendMessage,
 } from '@/lib/db/repositories/orders';
 import { query } from '@/lib/db';
 import { MOCK_MODE } from '@/lib/config/mockMode';
@@ -24,7 +23,11 @@ import {
   errorResponse,
 } from '@/lib/middleware/auth';
 import { logger } from '@/lib/logger';
-import { notifyOrderStatusUpdated, notifyOrderCancelled, notifyNewMessage } from '@/lib/pusher/server';
+import { notifyOrderStatusUpdated, notifyOrderCancelled } from '@/lib/pusher/server';
+import { wsBroadcastOrderUpdate, wsBroadcastOrderCancelled } from '@/lib/websocket/broadcast';
+
+// Prevent Next.js from caching this route
+export const dynamic = 'force-dynamic';
 
 // Validate order ID parameter
 async function validateOrderId(id: string): Promise<{ valid: boolean; error?: string }> {
@@ -126,7 +129,7 @@ export async function PATCH(
     // Additional permission check based on actor type
     // - Users: can mark payment_sent (for buy orders), complete (for sell orders after releasing escrow), cancelled, disputed
     // - Merchants: can accept, escrow, mark payment_sent (for sell orders), confirm payment, complete, cancel, dispute
-    const userAllowedStatuses: OrderStatus[] = ['payment_sent', 'completed', 'cancelled', 'disputed'];
+    const userAllowedStatuses: OrderStatus[] = ['payment_sent', 'payment_confirmed', 'completed', 'cancelled', 'disputed'];
     const merchantAllowedStatuses: OrderStatus[] = ['accepted', 'escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'completed', 'cancelled', 'disputed'];
 
     if (actor_type === 'user' && !userAllowedStatuses.includes(status)) {
@@ -135,6 +138,15 @@ export async function PATCH(
 
     if (actor_type === 'merchant' && !merchantAllowedStatuses.includes(status)) {
       return forbiddenResponse(`Merchants cannot set status to '${status}'`);
+    }
+
+    // Guard: prevent completing M2M trades without escrow
+    // In a payment app, funds must be escrowed before completion
+    if (status === 'completed' && !order.escrow_tx_hash && order.buyer_merchant_id) {
+      return NextResponse.json(
+        { success: false, error: 'Cannot complete M2M trade without escrow. Lock escrow first.' },
+        { status: 400 }
+      );
     }
 
     // Build metadata for status update
@@ -153,27 +165,34 @@ export async function PATCH(
 
     if (!result.success) {
       // State machine rejected the transition
+      console.error(`[PATCH /api/orders/${id}] Status update REJECTED:`, result.error, { from: order.status, to: status, actor: actor_type, actorId: actor_id });
       return NextResponse.json(
         { success: false, error: result.error },
         { status: 400 }
       );
     }
 
-    // Mock mode balance handling for status transitions
-    if (MOCK_MODE) {
-      const amount = parseFloat(String(order.crypto_amount));
-      const hadEscrow = !!order.escrow_tx_hash;
+    console.log(`[PATCH /api/orders/${id}] Status update SUCCESS: ${order.status} → ${status} by ${actor_type}:${actor_id}`);
+    console.log(`[PATCH /api/orders/${id}] Updated order:`, { id: result.order?.id, status: result.order?.status, merchant_id: result.order?.merchant_id });
 
-      if (status === 'completed' && hadEscrow && !order.release_tx_hash) {
+    // Mock mode balance handling for status transitions
+    // CRITICAL: Use result.order (from inside FOR UPDATE transaction) for checks,
+    // NOT the pre-fetched 'order' which can have stale data from before concurrent updates.
+    if (MOCK_MODE) {
+      const latestOrder = result.order!;
+      const amount = parseFloat(String(latestOrder.crypto_amount));
+      const hadEscrow = !!latestOrder.escrow_tx_hash;
+
+      if (status === 'completed' && hadEscrow && !latestOrder.release_tx_hash) {
         // Order completed (not via escrow release endpoint) - credit the buyer
-        // For BUY orders: user buys USDC → credit user (or buyer_merchant for M2M)
-        // For SELL orders: merchant buys USDC → credit merchant
-        const isBuyOrder = order.type === 'buy';
+        // SAFETY: This only runs if release_tx_hash is null, meaning the escrow endpoint
+        // hasn't already credited the buyer. Uses latestOrder from FOR UPDATE to prevent race.
+        const isBuyOrder = latestOrder.type === 'buy';
         const recipientId = isBuyOrder
-          ? (order.buyer_merchant_id || order.user_id)
-          : order.merchant_id;
+          ? (latestOrder.buyer_merchant_id || latestOrder.user_id)
+          : (latestOrder.buyer_merchant_id || latestOrder.merchant_id);
         const recipientTable = isBuyOrder
-          ? (order.buyer_merchant_id ? 'merchants' : 'users')
+          ? (latestOrder.buyer_merchant_id ? 'merchants' : 'users')
           : 'merchants';
 
         try {
@@ -188,16 +207,24 @@ export async function PATCH(
       }
 
       if (status === 'cancelled' && hadEscrow) {
-        // Order cancelled after escrow was locked - refund the seller
-        // The escrow creator (seller) gets their funds back
-        // For BUY orders: merchant locked escrow → refund merchant
-        // For SELL orders: user locked escrow → refund user
-        const isBuyOrder = order.type === 'buy';
-        const refundId = isBuyOrder ? order.merchant_id : order.user_id;
-        const refundTable = isBuyOrder ? 'merchants' : 'users';
+        // Order cancelled after escrow was locked - refund the escrow creator
+        // In M2M trades, merchant_id is always the seller who locked escrow
+        // In user trades: BUY = merchant locked, SELL = user locked
+        const isBuyOrder = latestOrder.type === 'buy';
+        const isM2M = !!latestOrder.buyer_merchant_id;
+        let refundId: string;
+        let refundTable: string;
 
-        // If escrow_creator_wallet hints at a merchant, use that
-        // But for M2M, the seller is always the order's merchant
+        if (isM2M) {
+          // M2M: merchant_id is always the seller who locked escrow
+          refundId = latestOrder.merchant_id;
+          refundTable = 'merchants';
+        } else {
+          // User trade: BUY = merchant locked, SELL = user locked
+          refundId = isBuyOrder ? latestOrder.merchant_id : latestOrder.user_id;
+          refundTable = isBuyOrder ? 'merchants' : 'users';
+        }
+
         try {
           await query(
             `UPDATE ${refundTable} SET balance = balance + $1 WHERE id = $2`,
@@ -213,60 +240,39 @@ export async function PATCH(
     // Fetch full order with relations for notification (includes merchant info for popup)
     const fullOrder = await getOrderWithRelations(id);
 
-    // Send system message for status change
-    const systemMessages: Record<OrderStatus, string> = {
-      pending: '',
-      accepted: `✅ Order accepted by merchant`,
-      escrow_pending: `⏳ Waiting for escrow deposit...`,
-      escrowed: `🔒 Escrow locked - funds secured on-chain`,
-      payment_pending: `⏳ Waiting for payment...`,
-      payment_sent: actor_type === 'merchant'
-        ? `💸 Merchant sent payment - waiting for confirmation`
-        : `💸 Payment sent - waiting for merchant confirmation`,
-      payment_confirmed: `✅ Payment confirmed`,
-      releasing: `⏳ Releasing escrow...`,
-      completed: `🎉 Trade completed successfully!`,
-      cancelled: reason ? `❌ Order cancelled: ${reason}` : `❌ Order cancelled`,
-      disputed: `⚠️ Dispute opened`,
-      expired: `⏰ Order expired`,
-    };
-
-    const messageContent = systemMessages[status];
-    if (messageContent) {
-      try {
-        const savedMessage = await sendMessage({
-          order_id: id,
-          sender_type: 'system',
-          sender_id: id,
-          content: messageContent,
-          message_type: 'system',
-        });
-
-        // Trigger real-time notification for the system message
-        notifyNewMessage({
-          orderId: id,
-          messageId: savedMessage.id,
-          senderType: 'system',
-          senderId: id,
-          content: messageContent,
-          messageType: 'system',
-          createdAt: savedMessage.created_at.toISOString(),
-        });
-      } catch (msgError) {
-        // Log but don't fail the request
-        logger.api.error('PATCH', `/api/orders/${id}/system-message`, msgError as Error);
-      }
-    }
+    // Auto system messages for status changes removed - keeping only real user messages
 
     // Trigger real-time notification with full order data including merchant
+    // Use actual DB status (may differ from requested status, e.g. escrowed→accepted stays escrowed)
     if (fullOrder) {
-      notifyOrderStatusUpdated({
+      const actualStatus = fullOrder.status || status;
+      const updatePayload = {
         orderId: id,
         userId: fullOrder.user_id,
         merchantId: fullOrder.merchant_id,
-        status,
+        status: actualStatus,
         previousStatus: order.status,
         updatedAt: new Date().toISOString(),
+        data: fullOrder,
+      };
+
+      // Pusher notification
+      notifyOrderStatusUpdated(updatePayload);
+
+      // Also notify buyer_merchant if this is an M2M trade
+      if (fullOrder.buyer_merchant_id && fullOrder.buyer_merchant_id !== fullOrder.merchant_id) {
+        notifyOrderStatusUpdated({
+          ...updatePayload,
+          merchantId: fullOrder.buyer_merchant_id,
+        });
+      }
+
+      // WebSocket broadcast to all clients subscribed to this order
+      wsBroadcastOrderUpdate({
+        orderId: id,
+        status: actualStatus,
+        previousStatus: order.status,
+        updatedAt: updatePayload.updatedAt,
         data: fullOrder,
       });
     }
@@ -348,8 +354,19 @@ export async function DELETE(
       const amount = parseFloat(String(order.crypto_amount));
       // Refund the escrow creator (seller)
       const isBuyOrder = order.type === 'buy';
-      const refundId = isBuyOrder ? order.merchant_id : order.user_id;
-      const refundTable = isBuyOrder ? 'merchants' : 'users';
+      const isM2M = !!order.buyer_merchant_id;
+      let refundId: string;
+      let refundTable: string;
+
+      if (isM2M) {
+        // M2M: merchant_id is always the seller who locked escrow
+        refundId = order.merchant_id;
+        refundTable = 'merchants';
+      } else {
+        // User trade: BUY = merchant locked, SELL = user locked
+        refundId = isBuyOrder ? order.merchant_id : order.user_id;
+        refundTable = isBuyOrder ? 'merchants' : 'users';
+      }
 
       try {
         await query(
@@ -362,33 +379,10 @@ export async function DELETE(
       }
     }
 
-    // Send system message for cancellation
-    const cancelledBy = actorType === 'user' ? 'user' : 'merchant';
-    const cancelMessage = reason
-      ? `❌ Order cancelled by ${cancelledBy}: ${reason}`
-      : `❌ Order cancelled by ${cancelledBy}`;
+    // Auto system messages for cancellation removed - keeping only real user messages
 
+    // Notify order cancellation via Pusher + WebSocket
     try {
-      const savedMessage = await sendMessage({
-        order_id: id,
-        sender_type: 'system',
-        sender_id: id,
-        content: cancelMessage,
-        message_type: 'system',
-      });
-
-      // Trigger real-time notification for the system message
-      notifyNewMessage({
-        orderId: id,
-        messageId: savedMessage.id,
-        senderType: 'system',
-        senderId: id,
-        content: cancelMessage,
-        messageType: 'system',
-        createdAt: savedMessage.created_at.toISOString(),
-      });
-
-      // Notify order cancellation via Pusher
       notifyOrderCancelled({
         orderId: id,
         userId: order.user_id,
@@ -398,8 +392,15 @@ export async function DELETE(
         updatedAt: new Date().toISOString(),
         data: { cancelledBy: actorType, reason: reason || undefined },
       });
+
+      wsBroadcastOrderCancelled({
+        orderId: id,
+        cancelledBy: actorType,
+        reason: reason || undefined,
+        data: result.order,
+      });
     } catch (msgError) {
-      logger.api.error('DELETE', `/api/orders/${id}/system-message`, msgError as Error);
+      logger.api.error('DELETE', `/api/orders/${id}/cancellation-notification`, msgError as Error);
     }
 
     logger.api.request('DELETE', `/api/orders/${id}`, actorId);

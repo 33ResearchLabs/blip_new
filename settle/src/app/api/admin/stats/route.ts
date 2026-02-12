@@ -75,10 +75,14 @@ export async function GET() {
       AND completed_at > NOW() - INTERVAL '7 days'
     `);
 
-    // Get platform revenue (sum of fees from completed orders)
-    // Assuming 0.5% platform fee
+    // Get platform revenue (sum of actual protocol fees from completed orders)
     const revenue = await queryOne<{ total: string }>(`
-      SELECT COALESCE(SUM(crypto_amount * 0.005), 0)::numeric(10,2)::text as total
+      SELECT COALESCE(SUM(
+        CASE WHEN protocol_fee_amount IS NOT NULL AND protocol_fee_amount > 0
+          THEN protocol_fee_amount
+          ELSE crypto_amount * COALESCE(protocol_fee_percentage, 2.50) / 100
+        END
+      ), 0)::numeric(10,2)::text as total
       FROM orders
       WHERE status = 'completed'
     `);
@@ -112,10 +116,24 @@ export async function GET() {
 
     // Get today's revenue
     const todayRevenue = await queryOne<{ total: string }>(`
-      SELECT COALESCE(SUM(crypto_amount * 0.005), 0)::numeric(10,2)::text as total
+      SELECT COALESCE(SUM(
+        CASE WHEN protocol_fee_amount IS NOT NULL AND protocol_fee_amount > 0
+          THEN protocol_fee_amount
+          ELSE crypto_amount * COALESCE(protocol_fee_percentage, 2.50) / 100
+        END
+      ), 0)::numeric(10,2)::text as total
       FROM orders
       WHERE status = 'completed'
       AND created_at > DATE_TRUNC('day', NOW())
+    `);
+
+    // Get actual platform balance (collected fees)
+    const platformBalance = await queryOne<{ balance: string; total_collected: string }>(`
+      SELECT
+        balance::numeric(10,2)::text,
+        total_fees_collected::numeric(10,2)::text as total_collected
+      FROM platform_balance
+      WHERE key = 'main'
     `);
 
     // Get peak hour stats
@@ -166,6 +184,9 @@ export async function GET() {
         count: parseInt(h.count),
         volume: parseFloat(h.volume),
       })),
+      // Platform fee balance
+      platformBalance: parseFloat(platformBalance?.balance || '0'),
+      totalFeesCollected: parseFloat(platformBalance?.total_collected || '0'),
     };
 
     return NextResponse.json({ success: true, data: response });

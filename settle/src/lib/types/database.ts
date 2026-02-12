@@ -146,6 +146,10 @@ export interface Order {
   has_manual_message: boolean;
   // Compliance assignment
   assigned_compliance_id: string | null;
+  // Protocol fee (from migration 017)
+  spread_preference: string | null;
+  protocol_fee_percentage: number | null;
+  protocol_fee_amount: number | null;
 }
 
 export interface OrderEvent {
@@ -266,7 +270,9 @@ export interface ApiResponse<T> {
 export interface MerchantContact {
   id: string;
   merchant_id: string;
-  user_id: string;
+  user_id: string | null;
+  contact_merchant_id: string | null;
+  contact_type: 'user' | 'merchant';
   nickname: string | null;
   notes: string | null;
   is_favorite: boolean;
@@ -277,14 +283,18 @@ export interface MerchantContact {
   updated_at: Date;
 }
 
-export interface MerchantContactWithUser extends MerchantContact {
-  user: {
+export interface MerchantContactWithInfo extends MerchantContact {
+  contact: {
     id: string;
     username: string;
     rating: number;
     total_trades: number;
+    type: 'user' | 'merchant';
   };
 }
+
+// Keep for backward compat
+export type MerchantContactWithUser = MerchantContactWithInfo;
 
 export interface DirectMessage {
   id: string;
@@ -302,7 +312,8 @@ export interface DirectMessage {
 
 export interface DirectConversation {
   contact_id: string;
-  user_id: string;
+  contact_type: 'user' | 'merchant';
+  contact_target_id: string;
   username: string;
   nickname: string | null;
   is_favorite: boolean;
@@ -315,4 +326,13 @@ export interface DirectConversation {
   } | null;
   unread_count: number;
   last_activity: string | null;
+}
+
+export interface ContactSearchResult {
+  id: string;
+  username: string;
+  type: 'user' | 'merchant';
+  total_trades: number;
+  rating: number;
+  is_contact: boolean;
 }

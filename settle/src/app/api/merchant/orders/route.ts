@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMerchantOrders, createOrder, getOrderWithRelations, getAllPendingOrdersForMerchant, sendMessage } from '@/lib/db/repositories/orders';
+import { getMerchantOrders, createOrder, getOrderWithRelations, getAllPendingOrdersForMerchant } from '@/lib/db/repositories/orders';
 import { getMerchantOffers, getOfferWithMerchant } from '@/lib/db/repositories/merchants';
 import { createUser } from '@/lib/db/repositories/users';
 import { query } from '@/lib/db';
@@ -19,6 +19,9 @@ import {
 } from '@/lib/middleware/auth';
 import { logger } from '@/lib/logger';
 import { notifyOrderCreated } from '@/lib/pusher/server';
+
+// Prevent Next.js from caching this route - orders must always be fresh
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
@@ -101,6 +104,7 @@ export async function POST(request: NextRequest) {
       type,
       crypto_amount,
       payment_method,
+      spread_preference,
       offer_id,
       target_merchant_id,
       escrow_tx_hash,
@@ -202,16 +206,28 @@ export async function POST(request: NextRequest) {
       );
 
       if (!offer) {
-        console.error('[API] No matching offer found for merchant:', offerMerchantId);
-        return NextResponse.json(
-          { success: false, error: `No active ${offerTypeToFind} offer found with ${payment_method} payment method${isM2MTrade ? ' from target merchant' : ''}. ${isM2MTrade ? 'The target merchant needs to create a corridor first.' : 'Please create a corridor first.'}` },
-          { status: 404 }
-        );
-      }
+        // For merchant-initiated orders with escrow already locked (SELL orders from balance widget),
+        // try to find ANY active offer from this merchant as a fallback
+        if (escrow_tx_hash && merchantOffers.length > 0) {
+          console.log('[API] No exact match, using first active offer as fallback for escrowed order');
+          offer = merchantOffers.find(o => o.is_active) || merchantOffers[0];
+          if (offer) {
+            offer = await getOfferWithMerchant(offer.id);
+          }
+        }
 
-      console.log('[API] Found matching offer:', offer.id);
-      // Get full offer with merchant data
-      offer = await getOfferWithMerchant(offer.id);
+        if (!offer) {
+          console.error('[API] No matching offer found for merchant:', offerMerchantId);
+          return NextResponse.json(
+            { success: false, error: `No active ${offerTypeToFind} offer found with ${payment_method} payment method${isM2MTrade ? ' from target merchant' : ''}. ${isM2MTrade ? 'The target merchant needs to create a corridor first.' : 'Please create a corridor first.'}` },
+            { status: 404 }
+          );
+        }
+      } else {
+        console.log('[API] Found matching offer:', offer.id);
+        // Get full offer with merchant data
+        offer = await getOfferWithMerchant(offer.id);
+      }
     }
 
     if (!offer) {
@@ -237,6 +253,20 @@ export async function POST(request: NextRequest) {
 
     // Calculate fiat amount
     const fiatAmount = crypto_amount * offer.rate;
+
+    // Calculate protocol fee based on spread preference
+    const protocolFeePercentage = spread_preference === 'best' ? 2.00
+      : spread_preference === 'fastest' ? 2.50
+      : 1.50; // cheap
+    const protocolFeeAmount = crypto_amount * (protocolFeePercentage / 100);
+
+    logger.info('Order pricing calculated', {
+      crypto_amount,
+      fiat_amount: fiatAmount,
+      spread_preference,
+      protocol_fee_percentage: protocolFeePercentage,
+      protocol_fee_amount: protocolFeeAmount,
+    });
 
     // Build payment details snapshot
     const paymentDetails =
@@ -264,12 +294,14 @@ export async function POST(request: NextRequest) {
     // For M2M trades:
     // - merchant_id = target merchant (the one fulfilling the order)
     // - buyer_merchant_id = creating merchant (the one placing the order)
+    // For merchant-initiated BUY orders:
+    // - buyer_merchant_id = creating merchant (the buyer)
     const orderMerchantId = isM2MTrade ? target_merchant_id : merchant_id;
-    const buyerMerchantId = isM2MTrade ? merchant_id : undefined;
+    const buyerMerchantId = (isM2MTrade || type === 'buy') ? merchant_id : undefined;
 
     // Create the order (with optional escrow details for escrow-first sell orders)
-    // Note: Explicitly set all optional fields to avoid undefined
-    const order = await createOrder({
+    // Only include optional fields if they're actually provided to avoid PostgreSQL type inference issues
+    const orderData: any = {
       user_id: user.id,
       merchant_id: orderMerchantId,
       offer_id: offer.id,
@@ -279,13 +311,20 @@ export async function POST(request: NextRequest) {
       fiat_amount: fiatAmount,
       rate: offer.rate,
       payment_details: paymentDetails,
-      buyer_merchant_id: buyerMerchantId,
-      escrow_tx_hash: escrow_tx_hash,
-      escrow_trade_id: escrow_trade_id,
-      escrow_trade_pda: escrow_trade_pda,
-      escrow_pda: escrow_pda,
-      escrow_creator_wallet: escrow_creator_wallet,
-    });
+      spread_preference,
+      protocol_fee_percentage: protocolFeePercentage,
+      protocol_fee_amount: protocolFeeAmount,
+    };
+
+    // Only add optional fields if they're defined
+    if (buyerMerchantId !== undefined) orderData.buyer_merchant_id = buyerMerchantId;
+    if (escrow_tx_hash !== undefined) orderData.escrow_tx_hash = escrow_tx_hash;
+    if (escrow_trade_id !== undefined) orderData.escrow_trade_id = escrow_trade_id;
+    if (escrow_trade_pda !== undefined) orderData.escrow_trade_pda = escrow_trade_pda;
+    if (escrow_pda !== undefined) orderData.escrow_pda = escrow_pda;
+    if (escrow_creator_wallet !== undefined) orderData.escrow_creator_wallet = escrow_creator_wallet;
+
+    const order = await createOrder(orderData);
 
     // In mock mode: if escrow already locked, deduct balance from merchant
     if (escrow_tx_hash && MOCK_MODE) {
@@ -314,42 +353,7 @@ export async function POST(request: NextRequest) {
       hasEscrow: !!escrow_tx_hash,
     });
 
-    // Send auto welcome messages for the chat
-    try {
-      await sendMessage({
-        order_id: order.id,
-        sender_type: 'system',
-        sender_id: order.id,
-        content: `Order #${order.order_number} created for ${crypto_amount} USDC`,
-        message_type: 'system',
-      });
-      await sendMessage({
-        order_id: order.id,
-        sender_type: 'system',
-        sender_id: order.id,
-        content: `Rate: ${offer.rate} AED/USDC • Total: ${fiatAmount.toFixed(2)} AED`,
-        message_type: 'system',
-      });
-      await sendMessage({
-        order_id: order.id,
-        sender_type: 'system',
-        sender_id: order.id,
-        content: `⏱ This order expires in ${escrow_tx_hash ? '120' : '15'} minutes`,
-        message_type: 'system',
-      });
-      // If escrow is already locked, add escrow locked message
-      if (escrow_tx_hash) {
-        await sendMessage({
-          order_id: order.id,
-          sender_type: 'system',
-          sender_id: order.id,
-          content: `🔒 Escrow locked - ${crypto_amount} USDC secured on-chain`,
-          message_type: 'system',
-        });
-      }
-    } catch (msgError) {
-      console.error('[API] Failed to send auto messages:', msgError);
-    }
+    // Auto welcome messages removed - keeping only real user messages
 
     // Get full order with relations for response
     const orderWithRelations = await getOrderWithRelations(order.id);

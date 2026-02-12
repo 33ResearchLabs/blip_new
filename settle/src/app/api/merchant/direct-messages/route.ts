@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const merchantId = searchParams.get('merchant_id');
-    const userId = searchParams.get('user_id'); // If provided, get messages with this user
+    const userId = searchParams.get('target_id') || searchParams.get('user_id'); // Get messages with this person
 
     if (!merchantId) {
       return validationErrorResponse(['merchant_id is required']);
@@ -74,10 +74,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { merchant_id, user_id, content, message_type, image_url } = body;
+    const { merchant_id, user_id, recipient_id, recipient_type, content, message_type, image_url } = body;
 
-    if (!merchant_id || !user_id || !content) {
-      return validationErrorResponse(['merchant_id, user_id, and content are required']);
+    // Support both old (user_id) and new (recipient_id + recipient_type) params
+    const targetId = recipient_id || user_id;
+    const targetType: 'merchant' | 'user' = recipient_type || 'user';
+
+    if (!merchant_id || !targetId || !content) {
+      return validationErrorResponse(['merchant_id, recipient_id (or user_id), and content are required']);
     }
 
     // Authorization check
@@ -98,14 +102,12 @@ export async function POST(request: NextRequest) {
     const message = await sendDirectMessage({
       sender_type: 'merchant',
       sender_id: merchant_id,
-      recipient_type: 'user',
-      recipient_id: user_id,
+      recipient_type: targetType,
+      recipient_id: targetId,
       content,
       message_type: message_type || 'text',
       image_url,
     });
-
-    // TODO: Send Pusher notification to user
 
     return successResponse(message, 201);
   } catch (error) {

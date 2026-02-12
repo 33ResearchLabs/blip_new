@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createOrder, getUserOrders, sendMessage } from '@/lib/db/repositories/orders';
+import { createOrder, getUserOrders } from '@/lib/db/repositories/orders';
 import { findBestOffer, getOfferWithMerchant } from '@/lib/db/repositories/merchants';
 import { OfferType, PaymentMethod } from '@/lib/types/database';
 import {
@@ -17,6 +17,9 @@ import {
 import { checkRateLimit, STANDARD_LIMIT, ORDER_LIMIT } from '@/lib/middleware/rateLimit';
 import { logger } from '@/lib/logger';
 import { notifyOrderCreated } from '@/lib/pusher/server';
+
+// Prevent Next.js from caching this route
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   // Rate limit: 100 requests per minute
@@ -195,32 +198,7 @@ export async function POST(request: NextRequest) {
 
     logger.order.created(order.id, user_id, offer.merchant_id, crypto_amount);
 
-    // Send auto welcome messages for the chat
-    try {
-      await sendMessage({
-        order_id: order.id,
-        sender_type: 'system',
-        sender_id: order.id,
-        content: `Order #${order.order_number} created for ${crypto_amount} USDC`,
-        message_type: 'system',
-      });
-      await sendMessage({
-        order_id: order.id,
-        sender_type: 'system',
-        sender_id: order.id,
-        content: `Rate: ${offer.rate} AED/USDC • Total: ${fiatAmount.toFixed(2)} AED`,
-        message_type: 'system',
-      });
-      await sendMessage({
-        order_id: order.id,
-        sender_type: 'system',
-        sender_id: order.id,
-        content: `⏱ This order expires in 15 minutes`,
-        message_type: 'system',
-      });
-    } catch (msgError) {
-      console.error('[API] Failed to send auto messages:', msgError);
-    }
+    // Auto welcome messages removed - keeping only real user messages
 
     // Notify merchant of new order via Pusher
     try {

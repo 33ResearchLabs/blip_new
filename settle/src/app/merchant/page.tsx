@@ -51,6 +51,9 @@ import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
 import { usePusher } from "@/context/PusherContext";
 import { useSounds } from "@/hooks/useSounds";
 import { useWebSocketChat } from "@/hooks/useWebSocketChat";
+import { useWebSocketChatContextOptional } from "@/context/WebSocketChatContext";
+import { useDirectChat } from "@/hooks/useDirectChat";
+import { DirectChatView } from "@/components/merchant/DirectChatView";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
 import { NotificationToastContainer, useToast, ConnectionIndicator, ActionPulse } from "@/components/NotificationToast";
 import { MessageHistory } from "@/components/merchant/MessageHistory";
@@ -62,6 +65,7 @@ import { FileUpload } from "@/components/chat/FileUpload";
 import { Marketplace } from "@/components/merchant/Marketplace";
 import { MyOffers } from "@/components/merchant/MyOffers";
 import { Package } from "lucide-react";
+import { getNextStep, type NextStepResult } from "@/lib/orders/getNextStep";
 
 // Dynamically import wallet components (client-side only)
 const MerchantWalletModal = dynamic(() => import("@/components/MerchantWalletModal"), { ssr: false });
@@ -160,6 +164,8 @@ interface DbOrder {
   message_count?: number;
   last_human_message?: string;
   last_human_message_sender?: string;
+  // Spread preference
+  spread_preference?: string;
 }
 
 // UI Order type
@@ -202,6 +208,8 @@ interface Order {
   hasMessages?: boolean;
   lastHumanMessage?: string;
   lastHumanMessageSender?: string;
+  // Spread preference
+  spreadPreference?: 'best' | 'fastest' | 'cheap';
 }
 
 // Leaderboard data
@@ -236,7 +244,10 @@ const mapDbStatusToUI = (dbStatus: string, hasEscrow?: boolean, orderType?: stri
       // For other merchants' escrowed orders (they locked funds, I can accept)
       return "pending"; // New Orders - available for me to accept
     case "accepted":
-      // Merchant approved (clicked "Go") - now in Active section, needs to sign tx or send payment
+      // If escrow is already locked, this order is in progress (Ongoing)
+      // e.g. SELL order where seller locked escrow, then buyer accepted
+      if (hasEscrow) return "escrow";
+      // Otherwise: needs to sign tx or lock escrow (Active section)
       return "active";
     case "escrow_pending":
       return "active"; // Transaction pending, escrow not yet confirmed
@@ -382,6 +393,8 @@ const mapDbOrderToUI = (dbOrder: DbOrder): Order => {
     hasMessages: (dbOrder.message_count || 0) > 0 || dbOrder.has_manual_message || false,
     lastHumanMessage: dbOrder.last_human_message,
     lastHumanMessageSender: dbOrder.last_human_message_sender,
+    // Spread preference
+    spreadPreference: dbOrder.spread_preference as Order['spreadPreference'],
   };
 };
 
@@ -480,7 +493,7 @@ export default function MerchantDashboard() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [bigOrders, setBigOrders] = useState<BigOrderRequest[]>(initialBigOrders);
-  const [showBigOrderWidget, setShowBigOrderWidget] = useState(true);
+  const [showBigOrderWidget, setShowBigOrderWidget] = useState(false);
   // New dashboard panels
   const [showMessageHistory, setShowMessageHistory] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -491,6 +504,7 @@ export default function MerchantDashboard() {
     tradeType: "sell" as "buy" | "sell", // From merchant perspective: sell = merchant sells USDC to user
     cryptoAmount: "",
     paymentMethod: "bank" as "bank" | "cash",
+    spreadPreference: "fastest" as "best" | "fastest" | "cheap",
   });
   const [isCreatingTrade, setIsCreatingTrade] = useState(false);
   const [createTradeError, setCreateTradeError] = useState<string | null>(null);
@@ -710,6 +724,12 @@ export default function MerchantDashboard() {
       }
     },
   });
+
+  // Direct chat hook (people-based messaging)
+  const directChat = useDirectChat({ merchantId: merchantId || undefined });
+
+  // WebSocket context for order events (effect is below, after fetchOrders is defined)
+  const wsContext = useWebSocketChatContextOptional();
 
   // Handle setting username for new merchant wallet users
   const handleMerchantUsername = async (username: string) => {
@@ -1056,7 +1076,7 @@ export default function MerchantDashboard() {
 
     try {
       // Fetch ALL pending orders (broadcast model) + merchant's own orders
-      const res = await fetch(`/api/merchant/orders?merchant_id=${merchantId}&include_all_pending=true`);
+      const res = await fetch(`/api/merchant/orders?merchant_id=${merchantId}&include_all_pending=true&_t=${Date.now()}`, { cache: 'no-store' });
       if (!res.ok) {
         const errorBody = await res.json().catch(() => null);
         console.error('[Merchant] Failed to fetch orders:', res.status, res.statusText, errorBody);
@@ -1068,13 +1088,12 @@ export default function MerchantDashboard() {
         console.log('[Merchant] Raw orders from API:', data.data);
         const mappedOrders = data.data.map(mapDbOrderToUI);
 
-        // Fix status for my escrowed orders (isMyOrder is false for pending/escrowed in SQL)
-        // If I'm the merchant who created/escrowed this order, it should show in Ongoing
+        // Fix status for my escrowed orders
+        // The SQL query should set is_my_order correctly, but this is a fallback
         const fixedOrders = mappedOrders.map((order: Order) => {
-          const iAmCreator = order.orderMerchantId === merchantId;
-          const isEscrowedByMe = order.dbOrder?.status === 'escrowed' && iAmCreator;
-          if (isEscrowedByMe && order.status === 'pending') {
-            console.log('[Merchant] Fixing status for my escrowed order:', order.id);
+          // If database says it's my order and it's escrowed, show it in Ongoing
+          if (order.isMyOrder && order.dbOrder?.status === 'escrowed' && order.status === 'pending') {
+            console.log('[Merchant] Fixing status for my escrowed order (from is_my_order):', order.id);
             return { ...order, status: 'escrow' as const };
           }
           return order;
@@ -1192,22 +1211,58 @@ export default function MerchantDashboard() {
     fetchLeaderboard();
   }, [merchantId, fetchOrders, fetchResolvedDisputes, fetchBigOrders, fetchActiveOffers, fetchLeaderboard]);
 
-  // WebSocket-first approach with minimal polling fallback
+  // 3-tier real-time fallback:
+  // Tier 1: Pusher WebSocket (primary - handled by useRealtimeOrders)
+  // Tier 2: Smart polling (safety net when connected, primary when disconnected)
+  // Tier 3: Tab visibility + reconnect refresh
   const { isConnected: isPusherConnected } = usePusher();
+  const prevPusherConnected = useRef(isPusherConnected);
+  const lastSyncRef = useRef<number>(Date.now());
+
+  // Tier 2: Smart polling - always poll, just adjust frequency
   useEffect(() => {
     if (!merchantId) return;
 
-    // Only poll as fallback if WebSocket is disconnected (30s interval)
-    // Primary updates come via WebSocket (Pusher)
-    if (!isPusherConnected) {
-      console.log('[Merchant] WebSocket not connected, using polling fallback');
-      const interval = setInterval(() => {
-        fetchOrders();
-      }, 30000); // 30 seconds fallback
+    const pollInterval = isPusherConnected ? 30000 : 5000; // 30s safety net vs 5s primary
+    console.log(`[Merchant] Polling at ${pollInterval / 1000}s (Pusher ${isPusherConnected ? 'connected' : 'disconnected'})`);
 
-      return () => clearInterval(interval);
-    }
+    const interval = setInterval(() => {
+      fetchOrders();
+      lastSyncRef.current = Date.now();
+    }, pollInterval);
+
+    return () => clearInterval(interval);
   }, [merchantId, isPusherConnected, fetchOrders]);
+
+  // Tier 3a: Force refresh when Pusher reconnects (false→true)
+  useEffect(() => {
+    if (isPusherConnected && !prevPusherConnected.current) {
+      console.log('[Merchant] Pusher reconnected — fetching orders to catch up');
+      fetchOrders();
+      lastSyncRef.current = Date.now();
+    }
+    prevPusherConnected.current = isPusherConnected;
+  }, [isPusherConnected, fetchOrders]);
+
+  // Tier 3b: Page Visibility API — refresh when tab becomes visible
+  useEffect(() => {
+    if (!merchantId) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const timeSinceSync = Date.now() - lastSyncRef.current;
+        // Only refresh if it's been more than 3s since last sync (avoid duplicate fetches)
+        if (timeSinceSync > 3000) {
+          console.log(`[Merchant] Tab visible — refreshing (last sync ${Math.round(timeSinceSync / 1000)}s ago)`);
+          fetchOrders();
+          lastSyncRef.current = Date.now();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [merchantId, fetchOrders]);
 
   // Auto-expire orders every 30 seconds
   useEffect(() => {
@@ -1236,15 +1291,60 @@ export default function MerchantDashboard() {
       console.log('[Merchant] Real-time: New order created!', order);
       fetchOrders();
       fetchOrderConversations();
-      playSound('notification');
-      addNotification('order', 'New order received');
-      toast.showOrderCreated(
-        order ? `${order.type === 'buy' ? 'Buy' : 'Sell'} ${order.crypto_amount} USDC for ${order.fiat_amount} AED` : undefined
-      );
+      // Only show notification/sound/toast for orders relevant to this merchant
+      // (assigned to me or I'm the buyer). Other merchants' orders still appear
+      // in the order list via fetchOrders but don't trigger disruptive alerts.
+      const isRelevant = order?.merchant_id === merchantId || order?.buyer_merchant_id === merchantId;
+      if (isRelevant) {
+        playSound('new_order');
+        addNotification('order', 'New order received');
+        toast.showOrderCreated(
+          order ? `${order.type === 'buy' ? 'Buy' : 'Sell'} ${order.crypto_amount} USDC for ${order.fiat_amount} AED` : undefined
+        );
+      }
     },
     onOrderStatusUpdated: (orderId, newStatus) => {
+      // Immediately update local state so the UI moves the order card instantly
+      // (fetchOrders runs in parallel but may take a moment)
+      setOrders(prev => {
+        const order = prev.find(o => o.id === orderId);
+        if (!order) return prev;
+
+        let uiStatus: Order['status'] | null = null;
+        switch (newStatus) {
+          case 'cancelled':
+          case 'expired':
+            uiStatus = 'cancelled';
+            break;
+          case 'accepted':
+            uiStatus = order.escrowTxHash ? 'escrow' : 'active';
+            break;
+          case 'escrowed':
+          case 'payment_pending':
+          case 'payment_sent':
+          case 'payment_confirmed':
+          case 'releasing':
+            uiStatus = 'escrow';
+            break;
+          case 'completed':
+            uiStatus = 'completed';
+            break;
+          case 'disputed':
+            uiStatus = 'disputed';
+            break;
+        }
+        if (!uiStatus) return prev;
+        return prev.map(o => o.id === orderId ? { ...o, status: uiStatus as Order['status'] } : o);
+      });
       fetchOrders();
       fetchOrderConversations();
+      // Helper: check if this order is relevant to us (our offer or we're buyer)
+      // Used to suppress noisy notifications from global broadcast statuses
+      const isRelevantOrder = () => {
+        const order = orders.find(o => o.id === orderId);
+        return order && (order.orderMerchantId === merchantId || order.buyerMerchantId === merchantId);
+      };
+
       if (newStatus === 'payment_sent') {
         addNotification('payment', 'Payment sent for order', orderId);
         playSound('notification');
@@ -1255,7 +1355,7 @@ export default function MerchantDashboard() {
         toast.showEscrowLocked();
       } else if (newStatus === 'completed') {
         addNotification('complete', 'Trade completed!', orderId);
-        playSound('trade_complete');
+        playSound('order_complete');
         toast.showTradeComplete();
         refreshBalance();
       } else if (newStatus === 'disputed') {
@@ -1263,16 +1363,25 @@ export default function MerchantDashboard() {
         playSound('error');
         toast.showDisputeOpened(orderId);
       } else if (newStatus === 'cancelled') {
-        addNotification('system', 'Order cancelled', orderId);
-        playSound('error');
-        toast.showOrderCancelled();
+        // 'cancelled' is broadcast to all merchants - only notify involved ones
+        if (isRelevantOrder()) {
+          addNotification('system', 'Order cancelled', orderId);
+          playSound('error');
+          toast.showOrderCancelled();
+        }
       } else if (newStatus === 'expired') {
-        addNotification('system', 'Order expired', orderId);
-        toast.showOrderExpired();
+        // 'expired' is broadcast to all merchants - only notify involved ones
+        if (isRelevantOrder()) {
+          addNotification('system', 'Order expired', orderId);
+          toast.showOrderExpired();
+        }
       } else if (newStatus === 'accepted') {
-        addNotification('order', 'Order accepted', orderId);
-        playSound('notification');
-        toast.show({ type: 'order', title: 'Order Accepted', message: 'An order has been accepted' });
+        // 'accepted' is broadcast to all merchants - only notify involved ones
+        if (isRelevantOrder()) {
+          addNotification('order', 'Order accepted', orderId);
+          playSound('notification');
+          toast.show({ type: 'order', title: 'Order Accepted', message: 'An order has been accepted' });
+        }
       } else if (newStatus === 'payment_confirmed') {
         addNotification('payment', 'Payment confirmed!', orderId);
         playSound('notification');
@@ -1313,6 +1422,73 @@ export default function MerchantDashboard() {
       }
     },
   });
+
+  // WebSocket order event handler - real-time order updates via WS
+  useEffect(() => {
+    if (!wsContext) return;
+
+    const unsubscribe = wsContext.onOrderEvent((event) => {
+      console.log('[Merchant] WS Order event:', event.type, event.data);
+      const data = event.data as { orderId?: string; status?: string; previousStatus?: string; data?: Record<string, unknown> };
+
+      if (event.type === 'order:status-updated') {
+        const orderId = data.orderId;
+        const newStatus = data.status;
+        if (!orderId || !newStatus) return;
+
+        // Update local order state immediately
+        setOrders(prev => {
+          const order = prev.find(o => o.id === orderId);
+          if (!order) return prev;
+
+          let uiStatus: Order['status'] | null = null;
+          switch (newStatus) {
+            case 'cancelled':
+            case 'expired':
+              uiStatus = 'cancelled'; break;
+            case 'accepted':
+              uiStatus = order.escrowTxHash ? 'escrow' : 'active'; break;
+            case 'escrowed':
+            case 'payment_pending':
+            case 'payment_sent':
+            case 'payment_confirmed':
+            case 'releasing':
+              uiStatus = 'escrow'; break;
+            case 'completed':
+              uiStatus = 'completed'; break;
+            case 'disputed':
+              uiStatus = 'disputed'; break;
+          }
+          if (!uiStatus) return prev;
+          return prev.map(o => o.id === orderId ? { ...o, status: uiStatus as Order['status'] } : o);
+        });
+
+        fetchOrders();
+        fetchOrderConversations();
+
+        if (newStatus === 'payment_sent') {
+          playSound('notification');
+          toast.showPaymentSent(orderId);
+        } else if (newStatus === 'escrowed') {
+          playSound('notification');
+          toast.showEscrowLocked();
+        } else if (newStatus === 'completed') {
+          playSound('order_complete');
+          toast.showTradeComplete();
+          refreshBalance();
+        } else if (newStatus === 'payment_confirmed') {
+          playSound('notification');
+          toast.show({ type: 'payment', title: 'Payment Confirmed', message: 'Payment confirmed. Ready to release.' });
+        }
+      } else if (event.type === 'order:cancelled') {
+        fetchOrders();
+        playSound('error');
+        toast.showOrderCancelled();
+      }
+    });
+
+    return unsubscribe;
+  }, [wsContext, fetchOrders, fetchOrderConversations, playSound, toast, refreshBalance]);
 
   // Update timers and handle expired orders (pending and escrowed)
   useEffect(() => {
@@ -1805,6 +1981,10 @@ export default function MerchantDashboard() {
       setEscrowTxHash(escrowResult.txHash);
       console.log('[Merchant] Escrow locked on-chain:', escrowResult.txHash);
 
+      // IMMEDIATELY close the escrow modal after on-chain success
+      // This prevents the user from clicking "Lock Escrow" again while backend syncs
+      setShowEscrowModal(false);
+
       // Update local state IMMEDIATELY after on-chain success
       // This ensures the Lock button disappears even if the backend recording fails
       setOrders(prev => prev.map(o => o.id === escrowOrder.id ? {
@@ -1816,96 +1996,124 @@ export default function MerchantDashboard() {
         escrowCreatorWallet: solanaWallet.walletAddress,
       } : o));
 
-      // Record escrow on backend with retry (devnet verification can be slow)
-      const escrowPayload = {
-        tx_hash: escrowResult.txHash,
-        actor_type: "merchant",
-        actor_id: merchantId,
-        escrow_address: escrowResult.escrowPda,
-        escrow_trade_id: escrowResult.tradeId,
-        escrow_trade_pda: escrowResult.tradePda,
-        escrow_pda: escrowResult.escrowPda,
-        escrow_creator_wallet: solanaWallet.walletAddress,
-      };
+      // Check if this is a new sell order (escrow-first flow)
+      const pendingSellOrder = (window as any).__pendingSellOrder;
+      const isTempOrder = escrowOrder.id.startsWith('temp-');
 
-      let recorded = false;
-      for (let attempt = 0; attempt < 3 && !recorded; attempt++) {
-        if (attempt > 0) {
-          console.log(`[Merchant] Retrying escrow recording (attempt ${attempt + 1})...`);
-          await new Promise(r => setTimeout(r, 2000 * attempt));
-        }
-        try {
-          const res = await fetch(`/api/orders/${escrowOrder.id}/escrow`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(escrowPayload),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success) recorded = true;
-          }
-        } catch (err) {
-          console.error(`[Merchant] Escrow record attempt ${attempt + 1} failed:`, err);
-        }
-      }
-
-      if (recorded) {
+      if (pendingSellOrder && isTempOrder) {
+        // For temp orders, skip escrow recording and create order directly with escrow details
+        console.log('[Merchant] Creating sell order after escrow lock:', pendingSellOrder);
         playSound('trade_complete');
 
-        // Check if this is a new sell order (escrow-first flow)
-        const pendingSellOrder = (window as any).__pendingSellOrder;
-        if (pendingSellOrder && escrowOrder.id.startsWith('temp-')) {
-          console.log('[Merchant] Creating sell order after escrow lock:', pendingSellOrder);
+        try {
+          // Now create the order in DB with escrow already locked
+          const res = await fetch("/api/merchant/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              merchant_id: pendingSellOrder.merchantId,
+              type: pendingSellOrder.tradeType,
+              crypto_amount: pendingSellOrder.cryptoAmount,
+              payment_method: pendingSellOrder.paymentMethod,
+              spread_preference: pendingSellOrder.spreadPreference,
+              matched_offer_id: pendingSellOrder.matchedOfferId,
+              escrow_tx_hash: escrowResult.txHash,
+              escrow_trade_id: escrowResult.tradeId,
+              escrow_trade_pda: escrowResult.tradePda,
+              escrow_pda: escrowResult.escrowPda,
+              escrow_creator_wallet: solanaWallet.walletAddress,
+            }),
+          });
 
-          try {
-            // Now create the order in DB with escrow already locked
-            const res = await fetch("/api/merchant/orders", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                merchant_id: pendingSellOrder.merchantId,
-                type: pendingSellOrder.tradeType,
-                crypto_amount: pendingSellOrder.cryptoAmount,
-                payment_method: pendingSellOrder.paymentMethod,
-                matched_offer_id: pendingSellOrder.matchedOfferId,
-                escrow_tx_hash: escrowResult.txHash,
-                escrow_trade_id: escrowResult.tradeId,
-                escrow_trade_pda: escrowResult.tradePda,
-                escrow_pda: escrowResult.escrowPda,
-                escrow_creator_wallet: solanaWallet.walletAddress,
-              }),
+          const data = await res.json();
+
+          if (res.ok && data.success && data.data) {
+            console.log('[Merchant] Sell order created with escrow:', data.data);
+
+            // Add to orders list
+            const newOrder = mapDbOrderToUI(data.data);
+            setOrders(prev => [newOrder, ...prev]);
+
+            addNotification('escrow', `Sell order created! ${escrowOrder.amount} USDC locked in escrow`, data.data.id);
+
+            // Clear the pending order
+            delete (window as any).__pendingSellOrder;
+
+            // Close the escrow modal
+            setShowEscrowModal(false);
+            setEscrowOrder(null);
+            setEscrowTxHash(null);
+            setEscrowError(null);
+          } else {
+            console.error('[Merchant] Failed to create order after escrow:', {
+              status: res.status,
+              statusText: res.statusText,
+              response: data,
+              error: data.error,
+              validation: data.validation_errors,
             });
-
-            const data = await res.json();
-
-            if (res.ok && data.success && data.data) {
-              console.log('[Merchant] Sell order created with escrow:', data.data);
-
-              // Add to orders list
-              const newOrder = mapDbOrderToUI(data.data);
-              setOrders(prev => [newOrder, ...prev]);
-
-              addNotification('escrow', `Sell order created! ${escrowOrder.amount} USDC locked in escrow`, data.data.id);
-
-              // Clear the pending order
-              delete (window as any).__pendingSellOrder;
-            } else {
-              console.error('[Merchant] Failed to create order after escrow:', data);
-              addNotification('system', 'Escrow locked but order creation failed. Contact support.', escrowOrder.id);
-            }
-          } catch (createError) {
-            console.error('[Merchant] Error creating order after escrow:', createError);
-            addNotification('system', 'Escrow locked but order creation failed. Contact support.', escrowOrder.id);
+            const errorMsg = data.error || data.validation_errors?.[0] || 'Unknown error';
+            addNotification('system', `Escrow locked but order creation failed: ${errorMsg}`, escrowOrder.id);
           }
-        } else {
-          // Regular escrow flow (order already exists)
-          addNotification('escrow', `${escrowOrder.amount} USDC locked in escrow - waiting for user payment`, escrowOrder.id);
+        } catch (createError) {
+          console.error('[Merchant] Error creating order after escrow:', createError);
+          const errorMsg = createError instanceof Error ? createError.message : 'Network error';
+          addNotification('system', `Escrow locked but order creation failed: ${errorMsg}`, escrowOrder.id);
         }
 
-        refreshBalance(); // Update balance after server deduction
+        refreshBalance();
       } else {
-        console.error('[Merchant] Failed to record escrow on backend after retries');
-        addNotification('system', 'Escrow locked on-chain but server sync failed. It will sync automatically.', escrowOrder.id);
+        // Regular escrow flow (order already exists) - record escrow on backend
+        const escrowPayload = {
+          tx_hash: escrowResult.txHash,
+          actor_type: "merchant",
+          actor_id: merchantId,
+          escrow_address: escrowResult.escrowPda,
+          escrow_trade_id: escrowResult.tradeId,
+          escrow_trade_pda: escrowResult.tradePda,
+          escrow_pda: escrowResult.escrowPda,
+          escrow_creator_wallet: solanaWallet.walletAddress,
+        };
+
+        let recorded = false;
+        for (let attempt = 0; attempt < 3 && !recorded; attempt++) {
+          if (attempt > 0) {
+            console.log(`[Merchant] Retrying escrow recording (attempt ${attempt + 1})...`);
+            await new Promise(r => setTimeout(r, 2000 * attempt));
+          }
+          try {
+            const res = await fetch(`/api/orders/${escrowOrder.id}/escrow`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(escrowPayload),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.success) recorded = true;
+            }
+          } catch (err) {
+            console.error(`[Merchant] Escrow record attempt ${attempt + 1} failed:`, err);
+          }
+        }
+
+        if (recorded) {
+          playSound('trade_complete');
+          addNotification('escrow', `${escrowOrder.amount} USDC locked in escrow - waiting for payment`, escrowOrder.id);
+
+          // Fetch updated order data from backend
+          await fetchOrders();
+
+          // Close the escrow modal
+          setShowEscrowModal(false);
+          setEscrowOrder(null);
+          setEscrowTxHash(null);
+          setEscrowError(null);
+        } else {
+          console.error('[Merchant] Failed to record escrow on backend after retries');
+          addNotification('system', 'Escrow locked on-chain but server sync failed. It will sync automatically.', escrowOrder.id);
+        }
+
+        refreshBalance();
       }
 
       setIsLockingEscrow(false);
@@ -1953,10 +2161,19 @@ export default function MerchantDashboard() {
         if (data.success && data.data) {
           const freshOrder = mapDbOrderToUI(data.data);
           console.log('[Release] Fetched fresh order data:', {
+            status: freshOrder.status,
             escrowTradeId: freshOrder.escrowTradeId,
             escrowCreatorWallet: freshOrder.escrowCreatorWallet,
             userWallet: freshOrder.userWallet,
           });
+
+          // Guard: if order was already completed or released, don't show release modal
+          if (freshOrder.status === 'completed' || freshOrder.status === 'cancelled' || freshOrder.status === 'expired') {
+            addNotification('system', `Order already ${freshOrder.status}. Refreshing...`, order.id);
+            setOrders(prev => prev.map(o => o.id === order.id ? freshOrder : o));
+            fetchOrders();
+            return;
+          }
 
           setReleaseOrder(freshOrder);
           setReleaseTxHash(null);
@@ -1970,7 +2187,13 @@ export default function MerchantDashboard() {
       console.error('[Release] Error fetching fresh order:', err);
     }
 
-    // Fallback to cached order
+    // Fallback to cached order — also guard against stale completed state
+    if (order.status === 'completed' || order.status === 'cancelled' || order.status === 'expired') {
+      addNotification('system', `Order already ${order.status}.`, order.id);
+      fetchOrders();
+      return;
+    }
+
     setReleaseOrder(order);
     setReleaseTxHash(null);
     setReleaseError(null);
@@ -2169,6 +2392,42 @@ export default function MerchantDashboard() {
     setCancelTxHash(null);
     setCancelError(null);
     setIsCancellingEscrow(false);
+  };
+
+  // Simple cancel for orders without escrow (pending/accepted)
+  const cancelOrderWithoutEscrow = async (orderId: string) => {
+    if (!merchantId) return;
+
+    const confirmed = confirm('Cancel this order? This action cannot be undone.');
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&reason=Cancelled by merchant`, {
+        method: 'DELETE',
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          // Update local state
+          setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: "cancelled" as const } : o));
+          fetchOrders();
+          playSound('click');
+          addNotification('system', 'Order cancelled successfully.', orderId);
+        } else {
+          addNotification('system', data.error || 'Failed to cancel order', orderId);
+          playSound('error');
+        }
+      } else {
+        const data = await res.json();
+        addNotification('system', data.error || 'Failed to cancel order', orderId);
+        playSound('error');
+      }
+    } catch (error) {
+      console.error('[Cancel] Error cancelling order:', error);
+      addNotification('system', 'Failed to cancel order. Please try again.', orderId);
+      playSound('error');
+    }
   };
 
   // Merchant marks that they've sent fiat payment (for M2M buy side)
@@ -2625,13 +2884,16 @@ export default function MerchantDashboard() {
 
   // Global 15-minute timeout check - orders older than 15 mins should not show in active views
   const isOrderExpired = (order: Order) => {
-    const fifteenMinsAgo = Date.now() - (15 * 60 * 1000);
-    return order.timestamp.getTime() < fifteenMinsAgo;
+    // Use the database expires_at (via expiresIn) which is properly extended:
+    // - Pending orders: 15 minutes from creation
+    // - Accepted/escrowed orders: 120 minutes from acceptance/escrow
+    return order.expiresIn <= 0;
   };
 
   // Filter orders by status - Flow: New Orders → Active → Ongoing → Completed
   // "pending" = New Orders (including escrowed sell orders waiting for merchant to click "Go")
-  const pendingOrders = orders.filter(o => o.status === "pending" && o.expiresIn > 0 && !o.isMyOrder && !isOrderExpired(o));
+  // Include own pending orders so merchant can see/manage orders created via bot or API
+  const pendingOrders = orders.filter(o => o.status === "pending");
   // "active" = Active (merchant clicked "Go", now needs to sign tx or send payment)
   // Filter out orders older than 15 minutes - they should be cancelled
   const activeOrders = orders.filter(o => o.status === "active" && !isOrderExpired(o));
@@ -2666,7 +2928,7 @@ export default function MerchantDashboard() {
   const pendingEarnings = ongoingOrders.reduce((sum, o) => sum + o.amount * TRADER_CUT_CONFIG.best, 0);
 
   const activeChat = chatWindows.find(c => c.id === activeChatId || c.orderId === activeChatId);
-  const totalUnread = chatWindows.reduce((sum, c) => sum + c.unread, 0);
+  const totalUnread = directChat.totalUnread;
 
   // Loading screen - show while checking session
   if (isLoading) {
@@ -3059,7 +3321,7 @@ export default function MerchantDashboard() {
             {/* Column 1: Balance (top) + Leaderboard (bottom) */}
             <div className="flex flex-col h-[calc(100vh-92px)] gap-3">
               {/* Balance & Transaction History */}
-              <div className="flex flex-col h-[45%]">
+              <div className="flex flex-col h-[50%]">
                 <div className="flex items-center gap-2 mb-2">
                   <Wallet className="w-4 h-4 text-white/70" />
                   <span className="text-sm font-semibold">Balance</span>
@@ -3095,72 +3357,323 @@ export default function MerchantDashboard() {
                     </div>
                   </div>
 
-                  {/* Transaction History */}
-                  <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06]">
-                    <History className="w-3 h-3 text-gray-500" />
-                    <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Recent Transactions</span>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                    {[...completedOrders, ...cancelledOrders]
-                      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-                      .slice(0, 20)
-                      .map((order) => {
-                        const isCompleted = order.status === 'completed';
-                        const isIncoming = order.dbOrder?.type === 'sell'; // user sells USDC to me = I receive
-                        return (
-                          <div
-                            key={`tx-${order.id}`}
-                            className="flex items-center gap-2 p-2 rounded-md hover:bg-white/[0.03] transition-colors cursor-pointer"
-                            onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
-                          >
-                            <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${
-                              isCompleted
-                                ? (isIncoming ? 'bg-emerald-500/10' : 'bg-blue-500/10')
-                                : 'bg-red-500/10'
-                            }`}>
-                              {isCompleted ? (
-                                isIncoming
-                                  ? <ArrowDownRight className="w-3 h-3 text-emerald-400" />
-                                  : <ArrowUpRight className="w-3 h-3 text-blue-400" />
-                              ) : (
-                                <X className="w-3 h-3 text-red-400" />
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[11px] font-medium text-white truncate">{order.user}</p>
-                              <p className="text-[9px] text-gray-500 font-mono">
-                                {order.timestamp.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                {' · '}
-                                {order.timestamp.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className={`text-[11px] font-mono font-medium ${
-                                isCompleted
-                                  ? (isIncoming ? 'text-emerald-400' : 'text-blue-400')
-                                  : 'text-red-400 line-through'
-                              }`}>
-                                {isCompleted && isIncoming ? '+' : isCompleted ? '-' : ''}{order.amount.toLocaleString()} USDC
-                              </p>
-                              <p className="text-[9px] text-gray-500 font-mono">
-                                {isCompleted ? 'Completed' : order.status === 'disputed' ? 'Disputed' : 'Cancelled'}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    {completedOrders.length === 0 && cancelledOrders.length === 0 && (
-                      <div className="flex flex-col items-center justify-center h-full py-6 text-gray-600">
-                        <History className="w-5 h-5 mb-1 opacity-20" />
-                        <p className="text-[10px] font-mono text-gray-500">No transactions yet</p>
+                  {/* Quick Trade Widget */}
+                  <div className="flex-1 overflow-y-auto p-2.5">
+                    <div className="space-y-2">
+                      {/* Buy/Sell Toggle */}
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => setOpenTradeForm(prev => ({ ...prev, tradeType: 'buy' }))}
+                          className={`flex-1 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${
+                            openTradeForm.tradeType === 'buy'
+                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                              : 'bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          Buy
+                        </button>
+                        <button
+                          onClick={() => setOpenTradeForm(prev => ({ ...prev, tradeType: 'sell' }))}
+                          className={`flex-1 px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${
+                            openTradeForm.tradeType === 'sell'
+                              ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20'
+                              : 'bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10'
+                          }`}
+                        >
+                          Sell
+                        </button>
                       </div>
-                    )}
+
+                      {/* Amount Input */}
+                      <div>
+                        <label className="text-[9px] text-gray-500 uppercase tracking-wide mb-0.5 block">Amount</label>
+                        <input
+                          type="number"
+                          placeholder="Enter amount"
+                          value={openTradeForm.cryptoAmount}
+                          onChange={(e) => setOpenTradeForm(prev => ({ ...prev, cryptoAmount: e.target.value }))}
+                          className="w-full bg-white/5 border border-white/10 rounded-md px-2.5 py-1.5 text-xs text-white placeholder:text-gray-600 focus:border-white/20 focus:outline-none"
+                        />
+                        {openTradeForm.cryptoAmount && parseFloat(openTradeForm.cryptoAmount) > 0 && (
+                          <p className="text-[8px] text-gray-500 mt-0.5">
+                            ≈ {(parseFloat(openTradeForm.cryptoAmount) * 3.67).toFixed(2)} AED
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Payment Method */}
+                      <div>
+                        <label className="text-[9px] text-gray-500 uppercase tracking-wide mb-0.5 block">Payment</label>
+                        <div className="grid grid-cols-2 gap-1">
+                          <button
+                            onClick={() => setOpenTradeForm(prev => ({ ...prev, paymentMethod: 'bank' }))}
+                            className={`px-2 py-1 rounded-md text-[10px] font-medium transition-all ${
+                              openTradeForm.paymentMethod === 'bank'
+                                ? 'bg-white/10 text-white border border-white/20'
+                                : 'bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10'
+                            }`}
+                          >
+                            Bank
+                          </button>
+                          <button
+                            onClick={() => setOpenTradeForm(prev => ({ ...prev, paymentMethod: 'cash' }))}
+                            className={`px-2 py-1 rounded-md text-[10px] font-medium transition-all ${
+                              openTradeForm.paymentMethod === 'cash'
+                                ? 'bg-white/10 text-white border border-white/20'
+                                : 'bg-white/5 text-gray-500 border border-white/10 hover:bg-white/10'
+                            }`}
+                          >
+                            Cash
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Spread Preference - Horizontal Minimal */}
+                      <div>
+                        <label className="text-[9px] text-gray-500 uppercase tracking-wide mb-0.5 block">Fee</label>
+                        <div className="grid grid-cols-3 gap-0.5 bg-white/5 p-0.5 rounded-md">
+                          <button
+                            onClick={() => setOpenTradeForm(prev => ({ ...prev, spreadPreference: 'best' }))}
+                            className={`px-1 py-0.5 rounded text-center transition-all ${
+                              openTradeForm.spreadPreference === 'best'
+                                ? 'bg-white/10 text-white'
+                                : 'text-gray-500 hover:text-white'
+                            }`}
+                          >
+                            <p className="text-[9px] font-bold">Best</p>
+                            <p className="text-[7px] text-gray-500">2.0%</p>
+                          </button>
+                          <button
+                            onClick={() => setOpenTradeForm(prev => ({ ...prev, spreadPreference: 'fastest' }))}
+                            className={`px-1 py-0.5 rounded text-center transition-all ${
+                              openTradeForm.spreadPreference === 'fastest'
+                                ? 'bg-white/10 text-white'
+                                : 'text-gray-500 hover:text-white'
+                            }`}
+                          >
+                            <p className="text-[9px] font-bold">Fast</p>
+                            <p className="text-[7px] text-gray-500">2.5%</p>
+                          </button>
+                          <button
+                            onClick={() => setOpenTradeForm(prev => ({ ...prev, spreadPreference: 'cheap' }))}
+                            className={`px-1 py-0.5 rounded text-center transition-all ${
+                              openTradeForm.spreadPreference === 'cheap'
+                                ? 'bg-white/10 text-white'
+                                : 'text-gray-500 hover:text-white'
+                            }`}
+                          >
+                            <p className="text-[9px] font-bold">Cheap</p>
+                            <p className="text-[7px] text-gray-500">1.5%</p>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Error Display */}
+                      {createTradeError && (
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-md px-2 py-1">
+                          <p className="text-[9px] text-red-400">{createTradeError}</p>
+                        </div>
+                      )}
+
+                      {/* Create Order Button - Subtle Orange */}
+                      <button
+                        onClick={async () => {
+                          if (!merchantId) return;
+
+                          // Check max 10 active orders limit (per merchant, not global)
+                          const activeOrderCount = orders.filter(o =>
+                            (o.orderMerchantId === merchantId || o.buyerMerchantId === merchantId) &&
+                            o.status !== 'completed' &&
+                            o.status !== 'cancelled' &&
+                            o.dbOrder?.status !== 'completed' &&
+                            o.dbOrder?.status !== 'cancelled'
+                          ).length;
+
+                          if (activeOrderCount >= 10) {
+                            setCreateTradeError('Max 10 active orders. Complete or cancel existing orders first.');
+                            setTimeout(() => setCreateTradeError(null), 5000);
+                            return;
+                          }
+
+                          if (openTradeForm.tradeType === "sell") {
+                            // SELL: Lock escrow first, then create order
+                            setIsCreatingTrade(true);
+                            setCreateTradeError(null);
+
+                            try {
+                              // Find matching merchant BUY offer
+                              const offerParams = new URLSearchParams({
+                                amount: openTradeForm.cryptoAmount,
+                                type: 'buy',
+                                payment_method: openTradeForm.paymentMethod,
+                                exclude_merchant: merchantId,
+                              });
+                              const offerRes = await fetch(`/api/offers?${offerParams}`);
+                              const offerData = await offerRes.json();
+
+                              let matchedOffer: { id: string; merchant?: { wallet_address?: string; display_name?: string } } | null = null;
+                              if (offerRes.ok && offerData.success && offerData.data) {
+                                matchedOffer = offerData.data;
+                              }
+
+                              // Validate counterparty wallet (skip in mock mode)
+                              if (!isMockMode) {
+                                const counterpartyWallet = matchedOffer?.merchant?.wallet_address;
+                                const isValidWallet = counterpartyWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(counterpartyWallet);
+
+                                if (!isValidWallet) {
+                                  setCreateTradeError('No matching merchant with wallet found. Try different amount.');
+                                  setIsCreatingTrade(false);
+                                  setTimeout(() => setCreateTradeError(null), 5000);
+                                  return;
+                                }
+                              }
+
+                              // Store trade params and open escrow modal
+                              (window as any).__pendingSellOrder = {
+                                merchantId,
+                                tradeType: openTradeForm.tradeType,
+                                cryptoAmount: parseFloat(openTradeForm.cryptoAmount),
+                                paymentMethod: openTradeForm.paymentMethod,
+                                spreadPreference: openTradeForm.spreadPreference,
+                                matchedOfferId: matchedOffer?.id,
+                                counterpartyWallet: matchedOffer?.merchant?.wallet_address,
+                              };
+
+                              // Create temp order for escrow modal
+                              const tempOrder: Order = {
+                                id: 'temp-' + Date.now(),
+                                user: matchedOffer?.merchant?.display_name || 'Merchant',
+                                emoji: '🏪',
+                                amount: parseFloat(openTradeForm.cryptoAmount),
+                                fromCurrency: 'USDC',
+                                toCurrency: 'AED',
+                                rate: 3.67,
+                                total: parseFloat(openTradeForm.cryptoAmount) * 3.67,
+                                timestamp: new Date(),
+                                status: 'pending',
+                                expiresIn: 900,
+                                orderType: 'sell',
+                                userWallet: matchedOffer?.merchant?.wallet_address,
+                              };
+
+                              setEscrowOrder(tempOrder);
+                              setEscrowTxHash(null);
+                              setEscrowError(null);
+                              setIsLockingEscrow(false);
+                              setShowEscrowModal(true);
+                              setIsCreatingTrade(false);
+
+                            } catch (error) {
+                              console.error("Error preparing sell order:", error);
+                              setCreateTradeError("Network error. Please try again.");
+                              setIsCreatingTrade(false);
+                              setTimeout(() => setCreateTradeError(null), 5000);
+                            }
+                            return;
+                          }
+
+                          // BUY: Create order immediately
+                          setIsCreatingTrade(true);
+                          setCreateTradeError(null);
+
+                          try {
+                            const res = await fetch("/api/merchant/orders", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                merchant_id: merchantId,
+                                type: openTradeForm.tradeType,
+                                crypto_amount: parseFloat(openTradeForm.cryptoAmount),
+                                payment_method: openTradeForm.paymentMethod,
+                                spread_preference: openTradeForm.spreadPreference,
+                              }),
+                            });
+
+                            const data = await res.json();
+
+                            if (!res.ok || !data.success) {
+                              setCreateTradeError(data.error || "Failed to create order");
+                              setTimeout(() => setCreateTradeError(null), 5000);
+                              return;
+                            }
+
+                            // Add to orders list
+                            if (data.data) {
+                              const newOrder = mapDbOrderToUI(data.data);
+                              setOrders(prev => [newOrder, ...prev]);
+                              addNotification('order', `Buy order created for ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC`, data.data?.id);
+                            }
+
+                            // Reset form
+                            setOpenTradeForm({
+                              tradeType: "sell",
+                              cryptoAmount: "",
+                              paymentMethod: "bank",
+                              spreadPreference: "fastest",
+                            });
+                          } catch (error) {
+                            console.error("Error creating buy order:", error);
+                            setCreateTradeError("Network error. Please try again.");
+                            setTimeout(() => setCreateTradeError(null), 5000);
+                          } finally {
+                            setIsCreatingTrade(false);
+                          }
+                        }}
+                        disabled={
+                          isCreatingTrade ||
+                          !openTradeForm.cryptoAmount ||
+                          parseFloat(openTradeForm.cryptoAmount) <= 0 ||
+                          (openTradeForm.tradeType === "sell" && effectiveBalance !== null && parseFloat(openTradeForm.cryptoAmount) > effectiveBalance)
+                        }
+                        className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                          isCreatingTrade ||
+                          !openTradeForm.cryptoAmount ||
+                          parseFloat(openTradeForm.cryptoAmount) <= 0 ||
+                          (openTradeForm.tradeType === "sell" && effectiveBalance !== null && parseFloat(openTradeForm.cryptoAmount) > effectiveBalance)
+                            ? 'bg-gray-600/30 text-gray-500 cursor-not-allowed'
+                            : 'bg-white/10 hover:bg-white/15 text-white border border-white/20'
+                        }`}
+                      >
+                        {isCreatingTrade ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <ArrowLeftRight className="w-3.5 h-3.5" />
+                            Create Order
+                          </>
+                        )}
+                      </button>
+
+                      {/* Progress Bar - Subtle */}
+                      {isCreatingTrade && (
+                        <div className="w-full h-0.5 bg-white/5 rounded-full overflow-hidden">
+                          <motion.div
+                            className="h-full bg-gradient-to-r from-white/30 to-white/60"
+                            initial={{ width: '0%' }}
+                            animate={{ width: '100%' }}
+                            transition={{ duration: 2, ease: 'easeInOut' }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Active Orders Count */}
+                      <div className="flex items-center justify-between text-[9px] pt-0.5">
+                        <span className="text-gray-500">Active</span>
+                        <span className="text-white font-mono">
+                          {orders.filter(o => o.status !== 'completed' && o.status !== 'cancelled').length}/10
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Top Traders Leaderboard */}
-              <div className="flex flex-col h-[55%] min-h-0">
+              <div className="flex flex-col h-[50%] min-h-0">
                 <div className="flex items-center gap-2 mb-3">
                   <Trophy className="w-4 h-4 text-[#c9a962]" />
                   <span className="text-sm font-semibold">Top Traders</span>
@@ -3449,7 +3962,27 @@ export default function MerchantDashboard() {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-1.5 mb-1">
                                     <span className="text-sm font-medium text-gray-300 truncate">{order.user}</span>
-                                    {order.isNew && (
+                                    {order.orderType && (
+                                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
+                                        order.orderType === 'buy'
+                                          ? 'bg-emerald-500/15 text-emerald-400'
+                                          : 'bg-red-500/15 text-red-400'
+                                      }`}>
+                                        {order.orderType.toUpperCase()}
+                                      </span>
+                                    )}
+                                    {order.spreadPreference && (
+                                      <span className={`w-1.5 h-1.5 rounded-full ${
+                                        order.spreadPreference === 'fastest' ? 'bg-red-400' :
+                                        order.spreadPreference === 'cheap' ? 'bg-emerald-400' : 'bg-[#c9a962]'
+                                      }`} title={order.spreadPreference} />
+                                    )}
+                                    {order.isMyOrder && (
+                                      <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-[#c9a962]/20 text-[#c9a962] rounded font-medium">
+                                        YOURS
+                                      </span>
+                                    )}
+                                    {order.isNew && !order.isMyOrder && (
                                       <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-white/10 text-white rounded font-medium">
                                         <Sparkles className="w-2.5 h-2.5" />
                                         NEW
@@ -3476,7 +4009,11 @@ export default function MerchantDashboard() {
                                   </div>
                                 </div>
                                 <div className="text-right shrink-0">
-                                  {order.status === 'pending' ? (
+                                  {order.status === 'pending' && order.isMyOrder ? (
+                                    <span className="text-[10px] px-2 py-0.5 bg-[#c9a962]/10 text-[#c9a962]/70 rounded-full font-medium">
+                                      Waiting...
+                                    </span>
+                                  ) : order.status === 'pending' ? (
                                     <>
                                       <div className="text-xs font-semibold text-white">+${Math.round(profit)}</div>
                                       <div className={`text-[11px] font-mono ${order.expiresIn < 30 ? "text-red-400" : "text-gray-500"}`}>
@@ -3646,21 +4183,30 @@ export default function MerchantDashboard() {
                             className="p-2.5 bg-[#141414] rounded-lg border border-blue-500/10 hover:border-white/6 transition-all"
                           >
                             {(() => {
-                              const iAmEscrowCreator = order.escrowCreatorWallet && order.escrowCreatorWallet === solanaWallet.walletAddress;
-                              const escrowExistsFromOther = order.escrowTxHash && !iAmEscrowCreator;
+                              const dbStatus = order.dbOrder?.status || 'accepted';
                               const iAmOrderCreator = order.orderMerchantId === merchantId;
-                              const buyerAcceptedWithWallet = order.dbOrder?.status === 'accepted' && (order.acceptorWallet || isMockMode);
-                              const isM2MSellNeedingEscrow = iAmOrderCreator && !order.escrowTxHash && buyerAcceptedWithWallet;
-                              const needsMyAction = isM2MSellNeedingEscrow || (order.orderType === 'buy' && !order.escrowTxHash) || escrowExistsFromOther || order.orderType === 'sell';
+
+                              // Single source of truth for what this merchant should do next
+                              const step = getNextStep(dbStatus, merchantId, solanaWallet.walletAddress, {
+                                escrowTxHash: order.escrowTxHash,
+                                escrowCreatorWallet: order.escrowCreatorWallet,
+                                orderMerchantId: order.orderMerchantId,
+                                buyerMerchantId: order.buyerMerchantId,
+                                acceptorWallet: order.acceptorWallet,
+                                isMyOrder: order.isMyOrder,
+                                expiresIn: order.expiresIn,
+                                escrowTradeId: order.escrowTradeId,
+                                orderType: order.orderType,
+                              });
 
                               return (
                                 <>
                                   {/* Action required banner */}
-                                  {needsMyAction && !order.escrowTxHash && (
+                                  {step.actionRequired && (
                                     <div className="flex items-center gap-1.5 mb-2 px-2 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-lg">
                                       <ActionPulse size="sm" />
                                       <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wide">
-                                        {isM2MSellNeedingEscrow ? 'Lock Escrow Required' : escrowExistsFromOther ? 'Sign to Claim' : order.orderType === 'buy' ? 'Lock Escrow' : 'Sign Required'}
+                                        {step.sublabel}
                                       </span>
                                     </div>
                                   )}
@@ -3674,12 +4220,30 @@ export default function MerchantDashboard() {
                                     <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
                                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
                                       order.orderType === 'buy'
-                                        ? 'bg-white/5 text-white'
-                                        : 'bg-white/5 text-white/70'
+                                        ? 'bg-emerald-500/15 text-emerald-400'
+                                        : 'bg-red-500/15 text-red-400'
                                     }`}>
                                       {order.orderType?.toUpperCase()}
                                     </span>
+                                    {order.spreadPreference && (
+                                      <span className={`w-1.5 h-1.5 rounded-full ${
+                                        order.spreadPreference === 'fastest' ? 'bg-red-400' :
+                                        order.spreadPreference === 'cheap' ? 'bg-emerald-400' : 'bg-[#c9a962]'
+                                      }`} title={order.spreadPreference} />
+                                    )}
+                                    {order.expiresIn > 0 && (
+                                      <span className={`text-[10px] font-mono ${order.expiresIn < 30 ? 'text-red-400' : 'text-gray-500'}`}>
+                                        {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, '0')}
+                                      </span>
+                                    )}
                                   </div>
+
+                                  {/* Context sublabel when not action required */}
+                                  {!step.actionRequired && (
+                                    <div className="pl-9 mb-1.5">
+                                      <span className="text-[10px] text-gray-500 font-mono">{step.sublabel}</span>
+                                    </div>
+                                  )}
 
                                   {/* Last human message preview */}
                                   {order.lastHumanMessage && (
@@ -3689,7 +4253,7 @@ export default function MerchantDashboard() {
                                         {order.lastHumanMessageSender === 'merchant' ? 'You: ' : ''}{order.lastHumanMessage.length > 50 ? order.lastHumanMessage.slice(0, 50) + '...' : order.lastHumanMessage}
                                       </span>
                                       {(order.unreadCount || 0) > 0 && (
-                                        <span className="w-4 h-4 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black shrink-0">
+                                        <span className="w-4 h-4 bg-[#c9a962] rounded-full text-[8px] font-bold flex items-center justify-center text-black shrink-0">
                                           {order.unreadCount! > 9 ? '9+' : order.unreadCount}
                                         </span>
                                       )}
@@ -3710,50 +4274,48 @@ export default function MerchantDashboard() {
                                     >
                                       <MessageCircle className="w-3.5 h-3.5 text-gray-500 hover:text-white/70" />
                                       {(order.unreadCount || 0) > 0 && !order.lastHumanMessage && (
-                                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black">
+                                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#c9a962] rounded-full text-[8px] font-bold flex items-center justify-center text-black">
                                           {order.unreadCount! > 9 ? '9+' : order.unreadCount}
                                         </span>
                                       )}
                                     </button>
-                                    {isM2MSellNeedingEscrow ? (
+                                    {iAmOrderCreator && !order.escrowTxHash && (order.dbOrder?.status === 'pending' || order.dbOrder?.status === 'accepted') && (
+                                      <button
+                                        onClick={() => cancelOrderWithoutEscrow(order.id)}
+                                        className="p-1.5 hover:bg-red-500/10 rounded transition-colors"
+                                        title="Cancel Order"
+                                      >
+                                        <X className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
+                                      </button>
+                                    )}
+                                    {/* Action button — driven by getNextStep() */}
+                                    {step.actionType === 'lock_escrow' ? (
                                       <motion.button
                                         whileTap={{ scale: 0.95 }}
                                         onClick={() => openEscrowModal(order)}
                                         className="px-2.5 py-1.5 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 hover:border-orange-500/40 rounded text-[11px] font-bold text-orange-400 transition-all"
                                       >
-                                        Lock Escrow
+                                        {step.label}
                                       </motion.button>
-                                    ) : (order.orderType === 'buy' && !order.escrowTxHash) ? (
-                                      <motion.button
-                                        whileTap={{ scale: 0.95 }}
-                                        onClick={() => openEscrowModal(order)}
-                                        className="px-2.5 py-1.5 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 hover:border-orange-500/40 rounded text-[11px] font-bold text-orange-400 transition-all"
-                                      >
-                                        Lock Escrow
-                                      </motion.button>
-                                    ) : escrowExistsFromOther ? (
+                                    ) : step.actionType === 'sign_claim' ? (
                                       <motion.button
                                         whileTap={{ scale: 0.95 }}
                                         onClick={() => signToClaimOrder(order)}
                                         className="px-2.5 py-1.5 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 hover:border-orange-500/40 rounded text-[11px] font-bold text-orange-400 transition-all"
                                       >
-                                        Sign
+                                        {step.label}
                                       </motion.button>
-                                    ) : order.orderType === 'sell' ? (
+                                    ) : step.actionType === 'sign_proceed' ? (
                                       <motion.button
                                         whileTap={{ scale: 0.95 }}
                                         onClick={() => signAndProceed(order)}
                                         className="px-2.5 py-1.5 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 hover:border-orange-500/40 rounded text-[11px] font-bold text-orange-400 transition-all"
                                       >
-                                        Sign
+                                        {step.label}
                                       </motion.button>
-                                    ) : order.escrowTxHash ? (
-                                      <span className="px-2.5 py-1.5 bg-white/5 text-white rounded text-[11px] font-mono">
-                                        Signed
-                                      </span>
                                     ) : (
                                       <span className="px-2.5 py-1.5 bg-white/[0.04] rounded text-[11px] font-mono text-gray-500">
-                                        Waiting
+                                        {step.label}
                                       </span>
                                     )}
                                   </div>
@@ -3793,18 +4355,31 @@ export default function MerchantDashboard() {
                       {ongoingOrders.length > 0 ? (
                         ongoingOrders.map((order, i) => {
                           const timePercent = (order.expiresIn / 900) * 100;
-                          const dbStatus = order.dbOrder?.status;
-                          const canComplete = dbStatus === "payment_confirmed";
-                          const iAmEscrowCreator = order.escrowCreatorWallet && order.escrowCreatorWallet === solanaWallet.walletAddress;
-                          const iAmBuyer = order.escrowTxHash && !iAmEscrowCreator;
-                          const canConfirmPayment = dbStatus === "payment_sent" && iAmEscrowCreator;
-                          const waitingForBuyerToPay = dbStatus === "payment_pending" && iAmEscrowCreator;
-                          const waitingForRelease = dbStatus === "payment_sent" && iAmBuyer;
-                          const waitingForUser = dbStatus === "payment_sent" && order.orderType === "sell" && !iAmBuyer && !iAmEscrowCreator;
-                          const canMarkPaid = dbStatus === "payment_pending" && iAmBuyer;
-                          const isFundedOnly = dbStatus === "escrowed" && iAmEscrowCreator;
-                          const isExpired = order.expiresIn <= 0;
-                          const canClaimRefund = isExpired && iAmEscrowCreator && order.escrowTradeId !== undefined;
+                          const dbStatus = order.dbOrder?.status || 'pending';
+                          const iAmOrderCreatorOngoing = order.orderMerchantId === merchantId;
+
+                          // Single source of truth for what this merchant should do next
+                          const step = getNextStep(dbStatus, merchantId, solanaWallet.walletAddress, {
+                            escrowTxHash: order.escrowTxHash,
+                            escrowCreatorWallet: order.escrowCreatorWallet,
+                            orderMerchantId: order.orderMerchantId,
+                            buyerMerchantId: order.buyerMerchantId,
+                            acceptorWallet: order.acceptorWallet,
+                            isMyOrder: order.isMyOrder,
+                            expiresIn: order.expiresIn,
+                            escrowTradeId: order.escrowTradeId,
+                            orderType: order.orderType,
+                          });
+
+                          // Badge styling based on variant
+                          const badgeClass = step.badgeVariant === 'action'
+                            ? 'flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded font-mono'
+                            : step.badgeVariant === 'error'
+                            ? 'text-[10px] px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded font-mono'
+                            : step.badgeVariant === 'done'
+                            ? 'text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded font-mono'
+                            : 'text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono';
+
                           return (
                             <motion.div
                               key={order.id}
@@ -3815,7 +4390,7 @@ export default function MerchantDashboard() {
                               transition={{ delay: i * 0.03 }}
                               className="p-2.5 bg-[#141414] rounded-lg border border-white/6 hover:border-white/12 transition-all"
                             >
-                              {/* Row 1: User + Timer + Status */}
+                              {/* Row 1: User + Timer + Status Badge */}
                               <div className="flex items-center gap-2 mb-2">
                                 <div className="w-7 h-7 rounded-md bg-white/5 border border-white/6 flex items-center justify-center shrink-0">
                                   <span className="text-[10px] font-bold text-white/70">
@@ -3826,25 +4401,15 @@ export default function MerchantDashboard() {
                                 <div className={`text-[11px] font-mono ${timePercent < 20 ? "text-red-400" : "text-white/70/70"}`}>
                                   {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
                                 </div>
-                                {isExpired ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded font-mono">EXPIRED</span>
-                                ) : waitingForBuyerToPay ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">AWAIT PAY</span>
-                                ) : waitingForRelease ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">RELEASING</span>
-                                ) : waitingForUser ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">RELEASING</span>
-                                ) : canConfirmPayment ? (
-                                  <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded font-mono"><ActionPulse size="sm" />PAID</span>
-                                ) : canComplete ? (
-                                  <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded font-mono"><ActionPulse size="sm" />READY</span>
-                                ) : canMarkPaid ? (
-                                  <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded font-mono"><ActionPulse size="sm" />SEND</span>
-                                ) : isFundedOnly ? (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">FUNDED</span>
-                                ) : (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/5 text-white/70 rounded font-mono">LOCKED</span>
-                                )}
+                                <span className={badgeClass}>
+                                  {step.badgeVariant === 'action' && <ActionPulse size="sm" />}
+                                  {step.badgeText}
+                                </span>
+                              </div>
+
+                              {/* Context sublabel — what's happening right now */}
+                              <div className="pl-9 mb-1">
+                                <span className="text-[10px] text-gray-500 font-mono">{step.sublabel}</span>
                               </div>
 
                               {/* Last human message preview */}
@@ -3855,7 +4420,7 @@ export default function MerchantDashboard() {
                                     {order.lastHumanMessageSender === 'merchant' ? 'You: ' : ''}{order.lastHumanMessage.length > 50 ? order.lastHumanMessage.slice(0, 50) + '...' : order.lastHumanMessage}
                                   </span>
                                   {(order.unreadCount || 0) > 0 && (
-                                    <span className="w-4 h-4 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black shrink-0">
+                                    <span className="w-4 h-4 bg-[#c9a962] rounded-full text-[8px] font-bold flex items-center justify-center text-black shrink-0">
                                       {order.unreadCount! > 9 ? '9+' : order.unreadCount}
                                     </span>
                                   )}
@@ -3871,9 +4436,9 @@ export default function MerchantDashboard() {
                                     <span className="text-sm font-bold text-white">{Math.round(order.total).toLocaleString()}</span>
                                     <span className="text-[10px] text-gray-500">AED</span>
                                   </div>
-                                  {canMarkPaid && order.userBankAccount && (
-                                    <div className="mt-1 text-[10px] text-white/70/80 font-mono truncate" title={order.userBankAccount}>
-                                      → {order.userBankAccount}
+                                  {step.actionType === 'mark_paid' && (order.userBankAccount || order.dbOrder?.payment_details?.bank_iban) && (
+                                    <div className="mt-1 text-[10px] text-white/70 font-mono truncate" title={order.userBankAccount || order.dbOrder?.payment_details?.bank_iban}>
+                                      → {order.userBankAccount || `${order.dbOrder?.payment_details?.bank_name || 'Bank'}: ${order.dbOrder?.payment_details?.bank_iban}`}
                                     </div>
                                   )}
                                 </div>
@@ -3915,7 +4480,7 @@ export default function MerchantDashboard() {
                                   >
                                     <MessageCircle className="w-3.5 h-3.5 text-gray-500 hover:text-white/70" />
                                     {(order.unreadCount || 0) > 0 && !order.lastHumanMessage && (
-                                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black">
+                                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#c9a962] rounded-full text-[8px] font-bold flex items-center justify-center text-black">
                                         {order.unreadCount! > 9 ? '9+' : order.unreadCount}
                                       </span>
                                     )}
@@ -3927,6 +4492,15 @@ export default function MerchantDashboard() {
                                   >
                                     <AlertTriangle className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
                                   </button>
+                                  {iAmOrderCreatorOngoing && !order.escrowTxHash && (dbStatus === 'pending' || dbStatus === 'accepted') && (
+                                    <button
+                                      onClick={() => cancelOrderWithoutEscrow(order.id)}
+                                      className="p-1.5 hover:bg-red-500/10 rounded transition-colors"
+                                      title="Cancel Order"
+                                    >
+                                      <X className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
+                                    </button>
+                                  )}
                                   {dbStatus === "escrowed" && order.orderType === "buy" && order.escrowCreatorWallet && (
                                     <button
                                       onClick={() => openCancelModal(order)}
@@ -3938,59 +4512,51 @@ export default function MerchantDashboard() {
                                   )}
                                 </div>
 
-                                {/* Action button */}
-                                {canClaimRefund ? (
+                                {/* Action button — driven by getNextStep() */}
+                                {step.actionType === 'lock_escrow' ? (
+                                  <motion.button
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => openEscrowModal(order)}
+                                    className="px-2.5 py-1.5 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 hover:border-orange-500/40 rounded text-[11px] font-bold text-orange-400 transition-all"
+                                  >
+                                    {step.label}
+                                  </motion.button>
+                                ) : step.actionType === 'refund' ? (
                                   <motion.button
                                     whileTap={{ scale: 0.95 }}
                                     onClick={() => openCancelModal(order)}
                                     className="px-2.5 py-1.5 bg-red-500 hover:bg-red-400 rounded text-[11px] font-bold text-white"
                                   >
-                                    Refund
+                                    {step.label}
                                   </motion.button>
-                                ) : canMarkPaid ? (
+                                ) : step.actionType === 'mark_paid' ? (
                                   <motion.button
                                     whileTap={{ scale: 0.95 }}
                                     onClick={() => markFiatPaymentSent(order)}
                                     disabled={markingDone}
                                     className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 rounded text-[11px] font-bold text-white disabled:opacity-50 transition-all"
                                   >
-                                    {markingDone ? '...' : "I've Paid"}
+                                    {markingDone ? '...' : step.label}
                                   </motion.button>
-                                ) : waitingForBuyerToPay ? (
-                                  <span className="px-2.5 py-1.5 bg-white/5 rounded text-[11px] font-mono text-white/70">
-                                    Awaiting
-                                  </span>
-                                ) : waitingForRelease ? (
-                                  <span className="px-2.5 py-1.5 bg-white/5 rounded text-[11px] font-mono text-white/70">
-                                    Waiting
-                                  </span>
-                                ) : waitingForUser ? (
-                                  <span className="px-2.5 py-1.5 bg-white/5 rounded text-[11px] font-mono text-white/70">
-                                    Waiting
-                                  </span>
-                                ) : canConfirmPayment ? (
+                                ) : step.actionType === 'confirm_payment' ? (
                                   <motion.button
                                     whileTap={{ scale: 0.95 }}
                                     onClick={() => openReleaseModal(order)}
                                     className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 rounded text-[11px] font-bold text-white transition-all"
                                   >
-                                    Release
+                                    {step.label}
                                   </motion.button>
-                                ) : canComplete ? (
+                                ) : step.actionType === 'release_escrow' ? (
                                   <motion.button
                                     whileTap={{ scale: 0.95 }}
-                                    onClick={() => completeOrder(order.id)}
-                                    className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 rounded text-[11px] font-bold text-white transition-all"
+                                    onClick={() => openReleaseModal(order)}
+                                    className="px-2.5 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 hover:border-emerald-500/40 rounded text-[11px] font-bold text-emerald-400 transition-all"
                                   >
-                                    Release
+                                    {step.label}
                                   </motion.button>
-                                ) : dbStatus === "escrowed" && order.orderType === "buy" ? (
-                                  <span className="px-2.5 py-1.5 bg-white/5 rounded text-[11px] font-mono text-white/70">
-                                    Awaiting
-                                  </span>
                                 ) : (
                                   <span className="px-2.5 py-1.5 bg-white/[0.04] rounded text-[11px] font-mono text-gray-500">
-                                    Waiting
+                                    {step.label}
                                   </span>
                                 )}
                               </div>
@@ -4008,22 +4574,31 @@ export default function MerchantDashboard() {
                 </div>
               </div>
 
-              {/* Completed/Cancelled History */}
+              {/* Transaction Log */}
               <div className="flex flex-col h-[45%]">
+              {/* Header */}
+              <div className="flex items-center gap-2 mb-2">
+                <History className="w-4 h-4 text-white/70" />
+                <span className="text-sm font-semibold">Transaction Log</span>
+                <span className="ml-auto text-xs bg-white/10 text-white/70 px-2 py-0.5 rounded-full font-medium">
+                  {completedOrders.length + cancelledOrders.length}
+                </span>
+              </div>
+
               {/* Toggle Tabs */}
               <div className="flex items-center gap-1 mb-2 bg-[#111111] rounded-xl p-1 border border-white/[0.06]">
                 <button
                   onClick={() => setHistoryTab('completed')}
                   className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-semibold transition-all ${
                     historyTab === 'completed'
-                      ? 'bg-white/10 text-white border border-white/10'
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                       : 'text-gray-500 hover:text-gray-300 border border-transparent'
                   }`}
                 >
-                  <Check className="w-3.5 h-3.5" />
+                  <CheckCircle2 className="w-3.5 h-3.5" />
                   Completed
                   <span className={`ml-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
-                    historyTab === 'completed' ? 'bg-white/15 text-white' : 'bg-white/5 text-gray-500'
+                    historyTab === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-gray-500'
                   }`}>
                     {completedOrders.length}
                   </span>
@@ -4036,8 +4611,8 @@ export default function MerchantDashboard() {
                       : 'text-gray-500 hover:text-gray-300 border border-transparent'
                   }`}
                 >
-                  <X className="w-3.5 h-3.5" />
-                  Cancelled
+                  <XCircle className="w-3.5 h-3.5" />
+                  Failed
                   <span className={`ml-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
                     historyTab === 'cancelled' ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-gray-500'
                   }`}>
@@ -4057,6 +4632,12 @@ export default function MerchantDashboard() {
                         completedOrders.map((order, i) => {
                           const profit = order.amount * TRADER_CUT_CONFIG.best;
                           const isM2MTrade = order.isM2M || !!order.buyerMerchantId;
+                          // Determine if I received crypto (+) or sent crypto (-)
+                          // M2M: buyer_merchant_id is the buyer who receives USDC
+                          // User trade: type='sell' means user sold to me (I receive)
+                          const isIncoming = isM2MTrade
+                            ? order.buyerMerchantId === merchantId
+                            : order.dbOrder?.type === 'sell';
                           return (
                             <motion.div
                               key={order.id}
@@ -4065,41 +4646,46 @@ export default function MerchantDashboard() {
                               animate={{ opacity: 1, scale: 1 }}
                               exit={{ opacity: 0 }}
                               transition={{ delay: i * 0.03 }}
-                              className="p-2.5 bg-[#141414] rounded-lg border border-white/6 hover:border-white/12 transition-all cursor-pointer"
+                              className="p-2 bg-[#141414] rounded-lg border border-emerald-500/10 hover:border-emerald-500/20 transition-all cursor-pointer"
                               onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
                             >
                               <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 rounded-md bg-white/5 border border-white/6 flex items-center justify-center shrink-0">
-                                  <span className="text-[10px] font-bold text-white">
-                                    {isM2MTrade ? '🤝' : order.user.slice(0, 2).toUpperCase()}
-                                  </span>
+                                <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${
+                                  isIncoming ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-blue-500/10 border border-blue-500/20'
+                                }`}>
+                                  {isIncoming ? (
+                                    <ArrowDownRight className="w-4 h-4 text-emerald-400" />
+                                  ) : (
+                                    <ArrowUpRight className="w-4 h-4 text-blue-400" />
+                                  )}
                                 </div>
-                                <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
-                                {isM2MTrade && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 text-white/70 rounded">M2M</span>}
-                                <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
-                                <span className="text-xs font-bold text-white">+${Math.round(profit)}</span>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleOpenChat(order.user, order.emoji, order.id); }}
-                                  className="relative p-1 hover:bg-white/5 rounded transition-colors"
-                                  title="Messages"
-                                >
-                                  <MessageCircle className={`w-3.5 h-3.5 ${order.hasMessages ? 'text-white/60' : 'text-gray-600'} hover:text-white`} />
-                                  {(order.unreadCount || 0) > 0 ? (
-                                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black">
-                                      {order.unreadCount! > 9 ? '9+' : order.unreadCount}
-                                    </span>
-                                  ) : order.hasMessages ? (
-                                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-white/40 rounded-full" />
-                                  ) : null}
-                                </button>
-                                <Check className="w-3.5 h-3.5 text-white" />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-medium text-white truncate">{order.user}</span>
+                                    {isM2MTrade && <span className="text-[8px] font-mono px-1 py-0.5 bg-white/5 text-white/50 rounded">M2M</span>}
+                                  </div>
+                                  <p className="text-[9px] text-gray-500 font-mono">
+                                    {order.timestamp.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                    {' · '}
+                                    {order.timestamp.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className={`text-xs font-mono font-bold ${isIncoming ? 'text-emerald-400' : 'text-blue-400'}`}>
+                                    {isIncoming ? '+' : '-'}{order.amount.toLocaleString()} USDC
+                                  </p>
+                                  <p className="text-[9px] text-gray-500 font-mono">
+                                    Profit: ${Math.round(profit)}
+                                  </p>
+                                </div>
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                               </div>
                             </motion.div>
                           );
                         })
                       ) : (
                         <div className="flex flex-col items-center justify-center h-full py-8 text-gray-600">
-                          <Check className="w-5 h-5 mb-1 opacity-20" />
+                          <CheckCircle2 className="w-6 h-6 mb-1 opacity-20" />
                           <p className="text-[10px] font-mono text-gray-500">No completed trades yet</p>
                         </div>
                       )
@@ -4116,42 +4702,50 @@ export default function MerchantDashboard() {
                               animate={{ opacity: 1, scale: 1 }}
                               exit={{ opacity: 0 }}
                               transition={{ delay: i * 0.03 }}
-                              className={`p-2.5 bg-[#141414] rounded-lg border transition-all cursor-pointer ${isDisputed ? 'border-white/6 hover:border-white/12' : 'border-red-500/10 hover:border-red-500/20'}`}
+                              className={`p-2 bg-[#141414] rounded-lg border transition-all cursor-pointer ${isDisputed ? 'border-yellow-500/10 hover:border-yellow-500/20' : 'border-red-500/10 hover:border-red-500/20'}`}
                               onClick={() => handleOpenChat(order.user, order.emoji, order.id)}
                             >
                               <div className="flex items-center gap-2">
-                                <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${isDisputed ? 'bg-white/5 border border-white/6' : 'bg-red-500/10 border border-red-500/20'}`}>
-                                  <span className={`text-[10px] font-bold ${isDisputed ? 'text-white/70' : 'text-red-400'}`}>
-                                    {order.user.slice(0, 2).toUpperCase()}
-                                  </span>
+                                <div className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${isDisputed ? 'bg-yellow-500/10 border border-yellow-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+                                  {isDisputed ? (
+                                    <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                                  ) : (
+                                    <X className="w-4 h-4 text-red-400" />
+                                  )}
                                 </div>
-                                <span className="text-sm font-medium text-white truncate flex-1">{order.user}</span>
-                                {isDisputed && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 text-white/70 rounded">DISPUTE</span>}
-                                {isM2MTrade && <span className="text-[9px] font-mono px-1.5 py-0.5 bg-white/5 text-white/70 rounded">M2M</span>}
-                                <span className="text-xs font-mono text-gray-400">{order.amount.toLocaleString()}</span>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleOpenChat(order.user, order.emoji, order.id); }}
-                                  className="relative p-1 hover:bg-white/5 rounded transition-colors"
-                                  title="Messages"
-                                >
-                                  <MessageCircle className={`w-3.5 h-3.5 ${order.hasMessages ? 'text-white/60' : 'text-gray-600'} hover:text-white`} />
-                                  {(order.unreadCount || 0) > 0 ? (
-                                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black">
-                                      {order.unreadCount! > 9 ? '9+' : order.unreadCount}
-                                    </span>
-                                  ) : order.hasMessages ? (
-                                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-white/40 rounded-full" />
-                                  ) : null}
-                                </button>
-                                <X className={`w-3.5 h-3.5 ${isDisputed ? 'text-white/70' : 'text-red-400'}`} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-medium text-white truncate">{order.user}</span>
+                                    {isM2MTrade && <span className="text-[8px] font-mono px-1 py-0.5 bg-white/5 text-white/50 rounded">M2M</span>}
+                                    {isDisputed && <span className="text-[8px] font-mono px-1 py-0.5 bg-yellow-500/20 text-yellow-400 rounded">DISPUTE</span>}
+                                  </div>
+                                  <p className="text-[9px] text-gray-500 font-mono">
+                                    {order.timestamp.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                    {' · '}
+                                    {order.timestamp.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className={`text-xs font-mono font-medium line-through ${isDisputed ? 'text-yellow-400/70' : 'text-red-400/70'}`}>
+                                    {order.amount.toLocaleString()} USDC
+                                  </p>
+                                  <p className="text-[9px] text-gray-500 font-mono">
+                                    {isDisputed ? 'Disputed' : 'Cancelled'}
+                                  </p>
+                                </div>
+                                {isDisputed ? (
+                                  <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0" />
+                                ) : (
+                                  <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+                                )}
                               </div>
                             </motion.div>
                           );
                         })
                       ) : (
                         <div className="flex flex-col items-center justify-center h-full py-8 text-gray-600">
-                          <X className="w-5 h-5 mb-1 opacity-20" />
-                          <p className="text-[10px] font-mono text-gray-500">No cancelled trades</p>
+                          <XCircle className="w-6 h-6 mb-1 opacity-20" />
+                          <p className="text-[10px] font-mono text-gray-500">No failed transactions</p>
                         </div>
                       )
                     )}
@@ -4254,632 +4848,26 @@ export default function MerchantDashboard() {
 
             {/* Chat List / Active Chat */}
             <div className="flex-1 flex flex-col min-h-0">
-            {activeChat ? (
-              // Active Chat View with Timeline
-              (() => {
-                // Get order info from conversations or orders
-                const orderInfo = orderConversations.find(c => c.order_id === activeChat.orderId);
-                const orderFromList = orders.find(o => o.id === activeChat.orderId);
-                // Use fetched order details if order not in main list
-                const dbOrder = orderFromList?.dbOrder || activeChatOrderDetails;
-                console.log('[Chat View] activeChat:', activeChat);
-                console.log('[Chat View] activeChat.orderId:', activeChat.orderId);
-                console.log('[Chat View] orderFromList:', orderFromList);
-                console.log('[Chat View] activeChatOrderDetails:', activeChatOrderDetails);
-                console.log('[Chat View] dbOrder:', dbOrder);
-                console.log('[Chat View] messages:', activeChat.messages);
-                const statusColors: Record<string, string> = {
-                  pending: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-                  accepted: 'bg-white/10 text-white/70 border-white/6',
-                  escrowed: 'bg-white/10 text-white/70 border-white/6',
-                  payment_pending: 'bg-white/10 text-white/70 border-white/6',
-                  payment_sent: 'bg-white/10 text-white/70 border-white/6',
-                  completed: 'bg-white/10 text-white border-white/6',
-                  cancelled: 'bg-red-500/20 text-red-400 border-red-500/30',
-                  disputed: 'bg-white/10 text-white/70 border-white/6',
-                };
-                const currentStatus = orderInfo?.order_status || orderFromList?.status || 'pending';
-                const getEventIcon = (text: string, type?: string) => {
-                  if (type === 'dispute') return { icon: <AlertTriangle className="w-3 h-3" />, color: 'text-red-400 bg-red-500/20' };
-                  if (type === 'resolution' || type === 'resolution_proposed') return { icon: <Shield className="w-3 h-3" />, color: 'text-white/70 bg-white/10' };
-                  if (text.includes('accepted')) return { icon: <Check className="w-3 h-3" />, color: 'text-white/70 bg-white/10' };
-                  if (text.includes('escrow') || text.includes('locked')) return { icon: <Lock className="w-3 h-3" />, color: 'text-white/70 bg-white/10' };
-                  if (text.includes('Payment') && text.includes('sent')) return { icon: <DollarSign className="w-3 h-3" />, color: 'text-white/70 bg-white/10' };
-                  if (text.includes('completed') || text.includes('released')) return { icon: <CheckCircle2 className="w-3 h-3" />, color: 'text-white bg-white/10' };
-                  if (text.includes('cancelled')) return { icon: <XCircle className="w-3 h-3" />, color: 'text-red-400 bg-red-500/20' };
-                  if (text.includes('expired')) return { icon: <Clock className="w-3 h-3" />, color: 'text-zinc-400 bg-zinc-500/20' };
-                  return { icon: <Bot className="w-3 h-3" />, color: 'text-gray-400 bg-white/[0.08]' };
-                };
-                return (
-              <>
-                {/* Compact Header with Order Info */}
-                <div className="px-3 py-2 border-b border-white/[0.06] shrink-0">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setActiveChatId(null)}
-                      className="p-1 hover:bg-white/[0.04] rounded transition-colors"
-                    >
-                      <ChevronLeft className="w-4 h-4 text-gray-500" />
-                    </button>
-                    <div className="w-8 h-8 rounded-full bg-[#1f1f1f] flex items-center justify-center text-base">
-                      {activeChat.emoji}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{activeChat.user}</p>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`px-1.5 py-0.5 text-[9px] font-medium rounded border ${statusColors[currentStatus] || 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30'}`}>
-                          {currentStatus.replace(/_/g, ' ').toUpperCase()}
-                        </span>
-                        {orderInfo && (
-                          <span className="text-[10px] text-gray-500">
-                            {orderInfo.crypto_amount} USDC
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => { closeChat(activeChat.id); setActiveChatId(null); }}
-                      className="p-1 hover:bg-white/[0.04] rounded transition-colors"
-                    >
-                      <X className="w-4 h-4 text-gray-500" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Timeline Messages */}
-                <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                  {/* Order Timeline Events (from timestamps) - Centered */}
-                  {(() => {
-                    // dbOrder is already defined above - use it directly
-                    const formatDuration = (ms: number) => {
-                      const seconds = Math.floor(ms / 1000);
-                      const minutes = Math.floor(seconds / 60);
-                      const hours = Math.floor(minutes / 60);
-                      const days = Math.floor(hours / 24);
-                      if (days > 0) return `${days}d ${hours % 24}h`;
-                      if (hours > 0) return `${hours}h ${minutes % 60}m`;
-                      if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
-                      return `${seconds}s`;
-                    };
-
-                    const timelineEvents: { icon: React.ReactNode; color: string; label: string; time: Date; duration?: string }[] = [];
-                    let prevTime: Date | null = null;
-
-                    if (dbOrder?.created_at) {
-                      const time = new Date(dbOrder.created_at);
-                      timelineEvents.push({
-                        icon: <Plus className="w-3.5 h-3.5" />,
-                        color: 'text-white/70 bg-white/10 border-white/6',
-                        label: 'Order Created',
-                        time,
-                      });
-                      prevTime = time;
-                    }
-                    if (dbOrder?.accepted_at) {
-                      const time = new Date(dbOrder.accepted_at);
-                      const duration = prevTime ? formatDuration(time.getTime() - prevTime.getTime()) : undefined;
-                      timelineEvents.push({
-                        icon: <Check className="w-3.5 h-3.5" />,
-                        color: 'text-white/70 bg-white/10 border-white/6',
-                        label: 'Order Accepted',
-                        time,
-                        duration,
-                      });
-                      prevTime = time;
-                    }
-                    if (dbOrder?.escrowed_at) {
-                      const time = new Date(dbOrder.escrowed_at);
-                      const duration = prevTime ? formatDuration(time.getTime() - prevTime.getTime()) : undefined;
-                      timelineEvents.push({
-                        icon: <Lock className="w-3.5 h-3.5" />,
-                        color: 'text-white/70 bg-white/10 border-white/6',
-                        label: 'Escrow Locked',
-                        time,
-                        duration,
-                      });
-                      prevTime = time;
-                    }
-                    if (dbOrder?.payment_sent_at) {
-                      const time = new Date(dbOrder.payment_sent_at);
-                      const duration = prevTime ? formatDuration(time.getTime() - prevTime.getTime()) : undefined;
-                      timelineEvents.push({
-                        icon: <DollarSign className="w-3.5 h-3.5" />,
-                        color: 'text-white/70 bg-white/10 border-white/6',
-                        label: 'Payment Sent',
-                        time,
-                        duration,
-                      });
-                      prevTime = time;
-                    }
-                    if (dbOrder?.completed_at) {
-                      const time = new Date(dbOrder.completed_at);
-                      const duration = prevTime ? formatDuration(time.getTime() - prevTime.getTime()) : undefined;
-                      const totalDuration = dbOrder?.created_at ? formatDuration(time.getTime() - new Date(dbOrder.created_at).getTime()) : undefined;
-                      timelineEvents.push({
-                        icon: <CheckCircle2 className="w-3.5 h-3.5" />,
-                        color: 'text-white bg-white/10 border-white/6',
-                        label: 'Trade Completed',
-                        time,
-                        duration: duration ? `+${duration}${totalDuration ? ` (Total: ${totalDuration})` : ''}` : undefined,
-                      });
-                    }
-                    if (dbOrder?.cancelled_at) {
-                      const time = new Date(dbOrder.cancelled_at);
-                      const duration = prevTime ? formatDuration(time.getTime() - prevTime.getTime()) : undefined;
-                      const totalDuration = dbOrder?.created_at ? formatDuration(time.getTime() - new Date(dbOrder.created_at).getTime()) : undefined;
-                      timelineEvents.push({
-                        icon: <XCircle className="w-3.5 h-3.5" />,
-                        color: 'text-red-400 bg-red-500/20 border-red-500/30',
-                        label: 'Order Cancelled',
-                        time,
-                        duration: duration ? `+${duration}${totalDuration ? ` (Total: ${totalDuration})` : ''}` : undefined,
-                      });
-                    }
-
-                    if (timelineEvents.length === 0) return null;
-
-                    return (
-                      <div className="mb-4 pb-4 border-b border-white/[0.06]">
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-3">Order Timeline</p>
-                        <div className="space-y-3">
-                          {timelineEvents.map((event, idx) => (
-                            <div key={idx} className="flex items-start gap-2">
-                              {/* Event icon */}
-                              <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border ${event.color}`}>
-                                {event.icon}
-                              </div>
-                              {/* Event content */}
-                              <div className="flex-1 min-w-0">
-                                <p className="text-[11px] font-medium text-gray-200">{event.label}</p>
-                                <p className="text-[9px] text-gray-500">
-                                  {event.time.toLocaleDateString()} {event.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                  {event.duration && (
-                                    <span className="ml-2 text-gray-600">({event.duration})</span>
-                                  )}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Chat Messages */}
-                  {activeChat.messages.length > 0 && (
-                    <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Messages</p>
-                  )}
-                  {activeChat.messages.map((msg) => {
-                    // Parse dispute/resolution messages from JSON content
-                    if (msg.messageType === 'dispute') {
-                      try {
-                        const data = JSON.parse(msg.text);
-                        return (
-                          <div key={msg.id} className="flex justify-center">
-                            <div className="w-full max-w-[90%] bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <AlertTriangle className="w-4 h-4 text-red-400" />
-                                <span className="text-xs font-semibold text-red-400">Dispute Opened</span>
-                              </div>
-                              <p className="text-xs text-white mb-1">
-                                <span className="text-gray-400">Reason:</span> {data.reason?.replace(/_/g, ' ')}
-                              </p>
-                              {data.description && (
-                                <p className="text-[11px] text-gray-400">{data.description}</p>
-                              )}
-                              <p className="text-[10px] text-gray-500 mt-2">
-                                Compliance team will review this case
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      } catch {
-                        // Fall back to regular message if parsing fails
-                      }
-                    }
-
-                    if (msg.messageType === 'resolution') {
-                      try {
-                        const data = JSON.parse(msg.text);
-                        return (
-                          <div key={msg.id} className="flex justify-center">
-                            <div className="w-full max-w-[90%] bg-white/5 border border-white/6 rounded-xl p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Shield className="w-4 h-4 text-white/70" />
-                                <span className="text-xs font-semibold text-white/70">
-                                  {data.type === 'resolution_proposed' ? 'Resolution Proposed' : 'Resolution Finalized'}
-                                </span>
-                              </div>
-                              <p className="text-xs text-white mb-1">
-                                <span className="text-gray-400">Decision:</span> {data.resolution?.replace(/_/g, ' ')}
-                              </p>
-                              {data.notes && (
-                                <p className="text-[11px] text-gray-400 mb-2">{data.notes}</p>
-                              )}
-                              {data.type === 'resolution_proposed' && activeChat.orderId && !disputeInfo?.merchant_confirmed && (
-                                <div className="flex gap-2 mt-2">
-                                  <button
-                                    onClick={() => activeChat.orderId && respondToResolution('reject', activeChat.orderId)}
-                                    disabled={isRespondingToResolution}
-                                    className="flex-1 py-1.5 rounded-lg text-[11px] font-medium bg-[#1f1f1f] text-white disabled:opacity-50"
-                                  >
-                                    Reject
-                                  </button>
-                                  <button
-                                    onClick={() => activeChat.orderId && respondToResolution('accept', activeChat.orderId)}
-                                    disabled={isRespondingToResolution}
-                                    className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white disabled:opacity-50 transition-all"
-                                  >
-                                    Accept
-                                  </button>
-                                </div>
-                              )}
-                              {disputeInfo?.merchant_confirmed && !disputeInfo?.user_confirmed && (
-                                <p className="text-[10px] text-white mt-2">
-                                  You accepted. Waiting for user confirmation...
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      } catch {
-                        // Fall back to regular message if parsing fails
-                      }
-                    }
-
-                    // Resolution finalized message
-                    if (msg.messageType === 'resolution_finalized') {
-                      try {
-                        const data = JSON.parse(msg.text);
-                        return (
-                          <div key={msg.id} className="flex justify-center">
-                            <div className="w-full max-w-[90%] bg-white/5 border border-white/6 rounded-xl p-3">
-                              <div className="flex items-center gap-2 mb-2">
-                                <Check className="w-4 h-4 text-white" />
-                                <span className="text-xs font-semibold text-white">Resolution Finalized</span>
-                              </div>
-                              <p className="text-xs text-white">
-                                Decision: {data.resolution?.replace(/_/g, ' ')}
-                              </p>
-                              <p className="text-[10px] text-gray-500 mt-2">
-                                Both parties confirmed. Case closed.
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      } catch {
-                        // Fall back to regular message
-                      }
-                    }
-
-                    // Resolution accepted/rejected system messages
-                    if (msg.messageType === 'resolution_accepted' || msg.messageType === 'resolution_rejected') {
-                      try {
-                        const data = JSON.parse(msg.text);
-                        const isAccepted = data.type === 'resolution_accepted';
-                        return (
-                          <div key={msg.id} className="flex justify-center">
-                            <div className={`px-3 py-1.5 rounded-lg text-[11px] ${
-                              isAccepted ? 'bg-white/5 text-white' : 'bg-red-500/10 text-red-400'
-                            }`}>
-                              {data.party === 'merchant' ? 'You' : 'User'} {isAccepted ? 'accepted' : 'rejected'} the resolution
-                            </div>
-                          </div>
-                        );
-                      } catch {
-                        // Fall back to regular message
-                      }
-                    }
-
-                    // System messages - show as timeline events
-                    if (msg.from === "system") {
-                      const eventStyle = getEventIcon(msg.text, msg.messageType);
-                      return (
-                        <div key={msg.id} className="flex items-start gap-2">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${eventStyle.color}`}>
-                            {eventStyle.icon}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[11px] text-gray-300 leading-relaxed">{msg.text}</p>
-                            <p className="text-[9px] text-gray-600 mt-0.5">
-                              {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    // Image messages
-                    if (msg.messageType === 'image' && msg.imageUrl) {
-                      const isDocument = msg.imageUrl.includes('/raw/') ||
-                        msg.imageUrl.match(/\.(pdf|doc|docx)$/i);
-
-                      return (
-                        <div
-                          key={msg.id}
-                          className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}
-                        >
-                          <div
-                            className={`max-w-[85%] rounded-lg overflow-hidden ${
-                              msg.from === "me"
-                                ? "bg-white/[0.08] border border-white/20"
-                                : "bg-[#1a1a1a]"
-                            }`}
-                          >
-                            {isDocument ? (
-                              // Document attachment
-                              <a
-                                href={msg.imageUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 px-3 py-2 hover:bg-white/[0.05] transition-colors"
-                              >
-                                <div className="w-8 h-8 rounded bg-white/[0.1] flex items-center justify-center">
-                                  <FileText className="w-4 h-4 text-gray-400" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-gray-200 truncate">{msg.text || 'Document'}</p>
-                                  <p className="text-[9px] text-gray-500">Click to open</p>
-                                </div>
-                              </a>
-                            ) : (
-                              // Image attachment
-                              <a
-                                href={msg.imageUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                <img
-                                  src={msg.imageUrl}
-                                  alt="Shared image"
-                                  className="max-w-full max-h-48 object-contain"
-                                  loading="lazy"
-                                />
-                              </a>
-                            )}
-                            <div className="px-3 py-1.5">
-                              <span className="text-[9px] text-gray-600">
-                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    // Regular chat messages
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[85%] px-3 py-1.5 rounded-lg text-xs ${
-                            msg.from === "me"
-                              ? "bg-white/[0.08] border border-white/20 text-white/90"
-                              : "bg-[#1a1a1a] text-gray-300"
-                          }`}
-                        >
-                          {msg.text}
-                          <span className="text-[9px] text-gray-600 ml-2">
-                            {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Show pending resolution if dispute exists and has a proposal */}
-                  {activeChat.orderId && disputeInfo?.status === 'pending_confirmation' && disputeInfo.proposed_resolution && !activeChat.messages.some(m => m.messageType === 'resolution') && (
-                    <div className="flex justify-center">
-                      <div className="w-full max-w-[90%] bg-white/5 border border-white/6 rounded-xl p-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Shield className="w-4 h-4 text-white/70" />
-                          <span className="text-xs font-semibold text-white/70">Resolution Proposed</span>
-                        </div>
-                        <p className="text-xs text-white mb-1">
-                          <span className="text-gray-400">Decision:</span> {disputeInfo.proposed_resolution.replace(/_/g, ' ')}
-                        </p>
-                        {disputeInfo.resolution_notes && (
-                          <p className="text-[11px] text-gray-400 mb-2">{disputeInfo.resolution_notes}</p>
-                        )}
-                        {!disputeInfo.merchant_confirmed && (
-                          <div className="flex gap-2 mt-2">
-                            <button
-                              onClick={() => activeChat.orderId && respondToResolution('reject', activeChat.orderId)}
-                              disabled={isRespondingToResolution}
-                              className="flex-1 py-1.5 rounded-lg text-[11px] font-medium bg-[#1f1f1f] text-white disabled:opacity-50"
-                            >
-                              Reject
-                            </button>
-                            <button
-                              onClick={() => activeChat.orderId && respondToResolution('accept', activeChat.orderId)}
-                              disabled={isRespondingToResolution}
-                              className="flex-1 py-1.5 rounded-lg text-[11px] font-semibold bg-white/10 text-white disabled:opacity-50"
-                            >
-                              Accept
-                            </button>
-                          </div>
-                        )}
-                        {disputeInfo.merchant_confirmed && !disputeInfo.user_confirmed && (
-                          <p className="text-[10px] text-white mt-2">
-                            You accepted. Waiting for user confirmation...
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {activeChat.isTyping && (
-                    <div className="flex justify-start">
-                      <div className="bg-[#1f1f1f] px-3 py-2 rounded-xl flex items-center gap-1">
-                        <motion.span className="w-1.5 h-1.5 bg-gray-400 rounded-full" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: 0 }} />
-                        <motion.span className="w-1.5 h-1.5 bg-gray-400 rounded-full" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: 0.2 }} />
-                        <motion.span className="w-1.5 h-1.5 bg-gray-400 rounded-full" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: 0.4 }} />
-                      </div>
-                    </div>
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Input */}
-                <div className="p-3 border-t border-white/[0.04] shrink-0">
-                  <div className="flex gap-2 items-center">
-                    {/* File Upload Button */}
-                    <FileUpload
-                      orderId={activeChat.orderId || ''}
-                      compact
-                      onUploadComplete={(fileUrl, fileType, fileName) => {
-                        // Send file as message
-                        const messageText = fileType === 'image' ? '📷 Photo' : `📎 ${fileName}`;
-                        sendMessage(activeChat.id, messageText, fileUrl);
-                        playSound('send');
-                        addNotification('system', `File sent: ${fileName}`);
-                      }}
-                      onUploadError={(error) => {
-                        addNotification('system', error);
-                      }}
-                      disabled={!activeChat.orderId}
-                    />
-                    <input
-                      ref={(el) => { chatInputRefs.current[activeChat.id] = el; }}
-                      type="text"
-                      placeholder="Type a message..."
-                      className="flex-1 bg-[#1f1f1f] rounded-lg px-4 py-2.5 outline-none text-sm placeholder:text-gray-600"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && e.currentTarget.value.trim()) {
-                          sendMessage(activeChat.id, e.currentTarget.value);
-                          e.currentTarget.value = "";
-                          playSound('send');
-                        }
-                      }}
-                    />
-                    <motion.button
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => {
-                        const input = chatInputRefs.current[activeChat.id];
-                        if (input && input.value.trim()) {
-                          sendMessage(activeChat.id, input.value);
-                          input.value = "";
-                          playSound('send');
-                        }
-                      }}
-                      className="w-9 h-9 rounded-lg bg-white/[0.08] hover:bg-white/[0.12] flex items-center justify-center transition-all"
-                    >
-                      <Send className="w-4 h-4 text-white/80" />
-                    </motion.button>
-                  </div>
-                </div>
-              </>
-                );
-              })()
+            {directChat.activeContactId ? (
+              <DirectChatView
+                contactName={directChat.activeContactName}
+                contactType={directChat.activeContactType}
+                messages={directChat.messages}
+                isLoading={directChat.isLoadingMessages}
+                onSendMessage={(text, imageUrl) => {
+                  directChat.sendMessage(text, imageUrl);
+                  playSound('send');
+                }}
+                onBack={() => directChat.closeChat()}
+              />
             ) : (
-              // Order Conversations List
-              <div className="flex-1 overflow-y-auto">
-                {isLoadingConversations ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="w-5 h-5 border-2 border-[#c9a962] border-t-transparent rounded-full animate-spin" />
-                  </div>
-                ) : orderConversations.length > 0 ? (
-                  <div className="divide-y divide-white/[0.04]">
-                    {orderConversations.map((conv) => {
-                      const emojis = ['🦊', '🐻', '🐼', '🐨', '🦁', '🐯', '🐸', '🐙', '🦋', '🐳', '🦄', '🐲'];
-                      const hash = conv.user.username.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
-                      const emoji = emojis[hash % emojis.length];
-                      const statusColors: Record<string, string> = {
-                        pending: 'bg-yellow-500/20 text-yellow-400',
-                        accepted: 'bg-white/10 text-white/70',
-                        escrowed: 'bg-white/10 text-white/70',
-                        payment_pending: 'bg-white/10 text-white/70',
-                        payment_sent: 'bg-white/10 text-white/70',
-                        payment_confirmed: 'bg-white/10 text-white/70',
-                        completed: 'bg-white/10 text-white',
-                        cancelled: 'bg-red-500/20 text-red-400',
-                        disputed: 'bg-white/10 text-white/70',
-                        expired: 'bg-zinc-500/20 text-zinc-400',
-                      };
-                      const formatTime = (dateStr: string) => {
-                        const date = new Date(dateStr);
-                        const now = new Date();
-                        const diffMs = now.getTime() - date.getTime();
-                        const diffMins = Math.floor(diffMs / 60000);
-                        const diffHours = Math.floor(diffMs / 3600000);
-                        const diffDays = Math.floor(diffMs / 86400000);
-                        if (diffMins < 1) return 'now';
-                        if (diffMins < 60) return `${diffMins}m`;
-                        if (diffHours < 24) return `${diffHours}h`;
-                        if (diffDays < 7) return `${diffDays}d`;
-                        return date.toLocaleDateString();
-                      };
-
-                      return (
-                        <motion.button
-                          key={conv.order_id}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => {
-                            openChat(conv.user.username, emoji, conv.order_id);
-                            // Set activeChatId to orderId to find the chat window
-                            setActiveChatId(conv.order_id);
-                            // Fetch order details for timeline
-                            fetchOrderDetailsForChat(conv.order_id);
-                          }}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02] transition-colors text-left"
-                        >
-                          <div className="relative flex-shrink-0">
-                            <div className="w-10 h-10 rounded-full bg-white/5 border border-white/6 flex items-center justify-center text-lg">
-                              {emoji}
-                            </div>
-                            {conv.unread_count > 0 && (
-                              <span className="absolute -top-1 -right-1 w-4 h-4 bg-white/10 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                                {conv.unread_count > 9 ? '9+' : conv.unread_count}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-sm font-medium text-white truncate">
-                                  {conv.user.username}
-                                </span>
-                                <span className={`px-1.5 py-0.5 text-[9px] font-medium rounded uppercase whitespace-nowrap ${statusColors[conv.order_status] || 'bg-zinc-500/20 text-zinc-400'}`}>
-                                  {conv.order_status.replace(/_/g, ' ')}
-                                </span>
-                              </div>
-                              {conv.last_message && (
-                                <span className="text-[10px] text-white/40 whitespace-nowrap">
-                                  {formatTime(conv.last_message.created_at)}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[10px] text-white/40">{conv.order_number}</span>
-                              <span className="text-[10px] text-white/30">•</span>
-                              <span className={`text-[10px] ${conv.order_type === 'buy' ? 'text-white' : 'text-white/70'}`}>
-                                {conv.order_type === 'buy' ? 'Buy' : 'Sell'}
-                              </span>
-                              <span className="text-[10px] text-white/40">
-                                {conv.fiat_amount.toLocaleString()} {conv.fiat_currency}
-                              </span>
-                            </div>
-                            {conv.last_message && (
-                              <p className={`text-xs truncate mt-1 ${conv.unread_count > 0 ? 'text-white font-medium' : 'text-white/50'}`}>
-                                {conv.last_message.message_type === 'image' ? '📷 Photo' : conv.last_message.content.slice(0, 35)}
-                                {conv.last_message.content.length > 35 ? '...' : ''}
-                              </p>
-                            )}
-                          </div>
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full py-12 text-gray-600">
-                    <ShoppingBag className="w-10 h-10 mb-3 opacity-30" />
-                    <p className="text-sm text-gray-500">No order chats</p>
-                    <p className="text-xs text-gray-600 mt-1">New orders will appear here</p>
-                  </div>
-                )}
-              </div>
+              <MerchantChatTabs
+                merchantId={merchantId}
+                conversations={directChat.conversations}
+                totalUnread={directChat.totalUnread}
+                isLoading={directChat.isLoadingConversations}
+                onOpenChat={(targetId, targetType, username) => directChat.openChat(targetId, targetType, username)}
+              />
             )}
           </div>
           </div>
@@ -5002,15 +4990,24 @@ export default function MerchantDashboard() {
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-white truncate">{order.user}</span>
                             {order.orderType && (
-                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
                                 order.orderType === 'buy'
-                                  ? 'bg-white/5 text-white'
-                                  : 'bg-white/5 text-white/70'
+                                  ? 'bg-emerald-500/15 text-emerald-400'
+                                  : 'bg-red-500/15 text-red-400'
                               }`}>
                                 {order.orderType.toUpperCase()}
                               </span>
                             )}
-                            {order.isNew && (
+                            {order.spreadPreference && (
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                order.spreadPreference === 'fastest' ? 'bg-red-400' :
+                                order.spreadPreference === 'cheap' ? 'bg-emerald-400' : 'bg-[#c9a962]'
+                              }`} title={order.spreadPreference} />
+                            )}
+                            {order.isMyOrder && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 bg-[#c9a962]/20 text-[#c9a962] rounded">YOURS</span>
+                            )}
+                            {order.isNew && !order.isMyOrder && (
                               <span className="text-[10px] font-mono px-1.5 py-0.5 bg-white/5 text-white/70 rounded">NEW</span>
                             )}
                           </div>
@@ -5027,10 +5024,16 @@ export default function MerchantDashboard() {
 
                         {/* Timer & Earnings */}
                         <div className="text-right">
-                          <div className="text-[10px] font-mono text-white">+${Math.round(order.amount * 0.005)}</div>
-                          <div className={`text-xs font-mono ${order.expiresIn < 30 ? "text-red-400" : "text-gray-500"}`}>
-                            {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
-                          </div>
+                          {order.isMyOrder ? (
+                            <span className="text-[10px] font-mono text-[#c9a962]/70">Waiting...</span>
+                          ) : (
+                            <>
+                              <div className="text-[10px] font-mono text-white">+${Math.round(order.amount * 0.005)}</div>
+                              <div className={`text-xs font-mono ${order.expiresIn < 30 ? "text-red-400" : "text-gray-500"}`}>
+                                {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
 
@@ -5115,13 +5118,19 @@ export default function MerchantDashboard() {
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-white truncate">{order.user}</span>
                             {order.orderType && (
-                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
                                 order.orderType === 'buy'
-                                  ? 'bg-white/5 text-white'
-                                  : 'bg-white/5 text-white/70'
+                                  ? 'bg-emerald-500/15 text-emerald-400'
+                                  : 'bg-red-500/15 text-red-400'
                               }`}>
                                 {order.orderType.toUpperCase()}
                               </span>
+                            )}
+                            {order.spreadPreference && (
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                order.spreadPreference === 'fastest' ? 'bg-red-400' :
+                                order.spreadPreference === 'cheap' ? 'bg-emerald-400' : 'bg-[#c9a962]'
+                              }`} title={order.spreadPreference} />
                             )}
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
@@ -5135,20 +5144,27 @@ export default function MerchantDashboard() {
                           </div>
                         </div>
 
-                        {/* Status */}
-                        <div className="flex items-center gap-1.5 text-white/70">
-                          <div className="w-1.5 h-1.5 rounded-full bg-white/10 animate-pulse" />
-                          <span className="text-[10px] font-mono uppercase">Waiting</span>
+                        {/* Status + Timer */}
+                        <div className="text-right shrink-0">
+                          <div className="flex items-center gap-1.5 text-white/70">
+                            <div className="w-1.5 h-1.5 rounded-full bg-white/10 animate-pulse" />
+                            <span className="text-[10px] font-mono uppercase">Waiting</span>
+                          </div>
+                          {order.expiresIn > 0 && (
+                            <div className={`text-[10px] font-mono mt-0.5 ${order.expiresIn < 30 ? 'text-red-400' : 'text-gray-500'}`}>
+                              {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, '0')}
+                            </div>
+                          )}
                         </div>
                       </div>
 
                       {/* Action Row */}
                       <div className="flex items-center gap-2 mt-2.5 pl-11">
-                        {order.orderType === 'buy' && !order.escrowTxHash ? (
+                        {!order.escrowTxHash && order.orderMerchantId === merchantId && order.buyerMerchantId !== merchantId ? (
                           <motion.button
                             whileTap={{ scale: 0.98 }}
                             onClick={() => openEscrowModal(order)}
-                            className="flex-1 h-9 bg-white/5 hover:bg-white/10 border border-white/6 rounded-lg text-xs font-medium text-white/70 flex items-center justify-center gap-1.5 transition-colors"
+                            className="flex-1 h-9 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 rounded-lg text-xs font-medium text-orange-400 flex items-center justify-center gap-1.5 transition-colors"
                           >
                             <Lock className="w-3.5 h-3.5" />
                             Lock Escrow
@@ -5161,7 +5177,7 @@ export default function MerchantDashboard() {
                         ) : (
                           <div className="flex-1 h-9 bg-white/[0.02] border border-white/[0.06] rounded-lg text-xs font-mono text-gray-500 flex items-center justify-center gap-1.5">
                             <Clock className="w-3.5 h-3.5" />
-                            Awaiting user escrow
+                            Awaiting escrow
                           </div>
                         )}
                         <button
@@ -5202,7 +5218,15 @@ export default function MerchantDashboard() {
                     const mobileCanComplete = mobileDbStatus === "payment_confirmed";
                     const mobileCanConfirmPayment = mobileDbStatus === "payment_sent" && order.orderType === "buy";
                     const mobileWaitingForUser = false; // Simplified flow - no waiting state
-                    const mobileCanMarkPaid = mobileDbStatus === "payment_sent" && order.orderType === "sell";
+                    // "I've Paid" for:
+                    // 1. payment_sent + sell type (original)
+                    // 2. accepted/escrowed + I'm the buyer merchant (escrow already locked by seller)
+                    const iAmBuyerMerchantMobile = order.buyerMerchantId === merchantId;
+                    const mobileCanMarkPaid =
+                      (mobileDbStatus === "payment_sent" && order.orderType === "sell") ||
+                      ((mobileDbStatus === "accepted" || mobileDbStatus === "escrowed") && order.escrowTxHash && iAmBuyerMerchantMobile);
+                    // Lock Escrow: accepted, no escrow, I'm the seller
+                    const mobileNeedsLockEscrow = mobileDbStatus === "accepted" && !order.escrowTxHash && order.orderMerchantId === merchantId && !iAmBuyerMerchantMobile;
 
                     return (
                     <motion.div
@@ -5225,13 +5249,19 @@ export default function MerchantDashboard() {
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-white truncate">{order.user}</span>
                             {order.orderType && (
-                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
                                 order.orderType === 'buy'
-                                  ? 'bg-white/5 text-white'
-                                  : 'bg-white/5 text-white/70'
+                                  ? 'bg-emerald-500/15 text-emerald-400'
+                                  : 'bg-red-500/15 text-red-400'
                               }`}>
                                 {order.orderType.toUpperCase()}
                               </span>
+                            )}
+                            {order.spreadPreference && (
+                              <span className={`w-1.5 h-1.5 rounded-full ${
+                                order.spreadPreference === 'fastest' ? 'bg-red-400' :
+                                order.spreadPreference === 'cheap' ? 'bg-emerald-400' : 'bg-[#c9a962]'
+                              }`} title={order.spreadPreference} />
                             )}
                             {/* Status badge */}
                             {mobileCanMarkPaid && (
@@ -5272,7 +5302,7 @@ export default function MerchantDashboard() {
                             {order.lastHumanMessageSender === 'merchant' ? 'You: ' : ''}{order.lastHumanMessage.length > 40 ? order.lastHumanMessage.slice(0, 40) + '...' : order.lastHumanMessage}
                           </span>
                           {(order.unreadCount || 0) > 0 && (
-                            <span className="w-4 h-4 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black shrink-0">
+                            <span className="w-4 h-4 bg-[#c9a962] rounded-full text-[8px] font-bold flex items-center justify-center text-black shrink-0">
                               {order.unreadCount! > 9 ? '9+' : order.unreadCount}
                             </span>
                           )}
@@ -5281,10 +5311,19 @@ export default function MerchantDashboard() {
 
                       {/* Action Row */}
                       <div className="flex items-center gap-2 mt-2.5 pl-11">
-                        {mobileCanMarkPaid ? (
+                        {mobileNeedsLockEscrow ? (
                           <motion.button
                             whileTap={{ scale: 0.98 }}
-                            onClick={() => markPaymentSent(order)}
+                            onClick={() => openEscrowModal(order)}
+                            className="flex-1 h-9 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 rounded-lg text-xs font-medium text-orange-400 flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                            Lock Escrow
+                          </motion.button>
+                        ) : mobileCanMarkPaid ? (
+                          <motion.button
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => markFiatPaymentSent(order)}
                             disabled={markingDone}
                             className="flex-1 h-9 bg-white/5 hover:bg-white/10 border border-white/6 rounded-lg text-xs font-medium text-white/70 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
                           >
@@ -5328,7 +5367,7 @@ export default function MerchantDashboard() {
                         >
                           <MessageCircle className="w-4 h-4 text-gray-400" />
                           {(order.unreadCount || 0) > 0 && (
-                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full text-[8px] font-bold flex items-center justify-center text-black">
+                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#c9a962] rounded-full text-[8px] font-bold flex items-center justify-center text-black">
                               {order.unreadCount! > 9 ? '9+' : order.unreadCount}
                             </span>
                           )}
@@ -5367,61 +5406,25 @@ export default function MerchantDashboard() {
           {/* Mobile: Chat View */}
           {mobileView === 'chat' && (
             <div className="h-full flex flex-col pb-16">
-              {activeChat ? (
-                (() => {
-                  // Get order info for the active chat
-                  const chatOrder = activeChat.orderId
-                    ? orders.find(o => o.id === activeChat.orderId)
-                    : null;
-
-                  // Build trade info from order
-                  const tradeInfo = chatOrder?.dbOrder ? {
-                    orderId: chatOrder.id,
-                    orderNumber: chatOrder.dbOrder.order_number,
-                    orderType: chatOrder.orderType || 'buy',
-                    status: chatOrder.dbOrder.status,
-                    cryptoAmount: chatOrder.amount,
-                    fiatAmount: chatOrder.total,
-                    fiatCurrency: chatOrder.toCurrency,
-                    user: {
-                      id: chatOrder.dbOrder.user_id,
-                      username: chatOrder.user,
-                      rating: chatOrder.dbOrder.user?.rating,
-                      totalTrades: chatOrder.dbOrder.user?.total_trades,
-                    },
-                    merchant: {
-                      id: chatOrder.dbOrder.merchant_id || merchantId || '',
-                      displayName: merchantInfo?.display_name || merchantInfo?.username || 'Merchant',
-                    },
-                    createdAt: chatOrder.timestamp,
-                  } : undefined;
-
-                  return (
-                    <TradeChat
-                      tradeInfo={tradeInfo}
-                      messages={activeChat.messages}
-                      isLoading={activeChat.messages.length === 0}
-                      onSendMessage={(text, imageUrl) => {
-                        sendMessage(activeChat.id, text, imageUrl);
-                        playSound('send');
-                      }}
-                      onBack={() => {
-                        closeChat(activeChat.id);
-                        setActiveChatId(null);
-                      }}
-                      currentUserType="merchant"
-                      userName={activeChat.user}
-                      userEmoji={activeChat.emoji}
-                    />
-                  );
-                })()
+              {directChat.activeContactId ? (
+                <DirectChatView
+                  contactName={directChat.activeContactName}
+                  contactType={directChat.activeContactType}
+                  messages={directChat.messages}
+                  isLoading={directChat.isLoadingMessages}
+                  onSendMessage={(text, imageUrl) => {
+                    directChat.sendMessage(text, imageUrl);
+                    playSound('send');
+                  }}
+                  onBack={() => directChat.closeChat()}
+                />
               ) : merchantId ? (
                 <MerchantChatTabs
                   merchantId={merchantId}
-                  onOpenChat={(orderId, user, emoji) => {
-                    openChat(user, emoji, orderId);
-                    setActiveChatId(`chat_${Date.now()}`);
-                  }}
+                  conversations={directChat.conversations}
+                  totalUnread={directChat.totalUnread}
+                  isLoading={directChat.isLoadingConversations}
+                  onOpenChat={(targetId, targetType, username) => directChat.openChat(targetId, targetType, username)}
                 />
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center py-12">
@@ -5630,7 +5633,11 @@ export default function MerchantDashboard() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {completedOrders.map((order) => (
+                      {completedOrders.map((order) => {
+                        const isM2MHistory = order.isM2M || !!order.buyerMerchantId;
+                        // Did I receive crypto? M2M: I'm buyer_merchant. User trade: type='sell' = user sold to me
+                        const didReceive = isM2MHistory ? order.buyerMerchantId === merchantId : order.dbOrder?.type === 'sell';
+                        return (
                         <motion.div
                           key={order.id}
                           initial={{ opacity: 0, y: 10 }}
@@ -5644,17 +5651,19 @@ export default function MerchantDashboard() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <p className="text-sm font-medium text-white truncate">{order.user}</p>
-                                {order.isM2M && (
+                                {isM2MHistory && (
                                   <span className="px-1.5 py-0.5 bg-white/5 text-white/70 text-[10px] rounded">M2M</span>
                                 )}
                               </div>
                               <p className="text-xs text-gray-500">
-                                {order.orderType === 'buy' ? 'Bought' : 'Sold'} • {order.timestamp.toLocaleDateString()}
+                                {didReceive ? 'Bought' : 'Sold'} • {order.timestamp.toLocaleDateString()}
                               </p>
                             </div>
                             <div className="text-right">
-                              <p className="text-sm font-semibold text-white">${order.amount.toLocaleString()}</p>
-                              <p className="text-xs text-white">+${(order.amount * 0.005).toFixed(2)}</p>
+                              <p className={`text-sm font-semibold ${didReceive ? 'text-emerald-400' : 'text-blue-400'}`}>
+                                {didReceive ? '+' : '-'}{order.amount.toLocaleString()} USDC
+                              </p>
+                              <p className="text-xs text-gray-500">+${(order.amount * 0.005).toFixed(2)}</p>
                             </div>
                             <Check className="w-5 h-5 text-white" />
                           </div>
@@ -5672,7 +5681,8 @@ export default function MerchantDashboard() {
                             </div>
                           )}
                         </motion.div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </>
@@ -5837,7 +5847,7 @@ export default function MerchantDashboard() {
                 </span>
               )}
             </div>
-            <span className={`text-[10px] ${mobileView === 'chat' ? 'text-white' : 'text-gray-500'}`}>Chat</span>
+            <span className={`text-[10px] ${mobileView === 'chat' ? 'text-white' : 'text-gray-500'}`}>Messages</span>
           </button>
 
           <button
@@ -6323,6 +6333,53 @@ export default function MerchantDashboard() {
                     </div>
                   </div>
 
+                  {/* Spread Preference / Speed - Horizontal Minimal */}
+                  <div>
+                    <label className="text-[11px] text-gray-400 mb-1.5 block">Match Speed & Fee</label>
+                    <div className="grid grid-cols-3 gap-1.5 bg-[#1a1a1a] p-1.5 rounded-xl border border-white/[0.06]">
+                      <button
+                        onClick={() => setOpenTradeForm(prev => ({ ...prev, spreadPreference: 'best' }))}
+                        className={`px-3 py-3 rounded-lg text-center transition-all ${
+                          openTradeForm.spreadPreference === 'best'
+                            ? 'bg-white/10 text-white border border-white/10'
+                            : 'text-gray-500 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <p className="text-xs font-bold">Best</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">2.0%</p>
+                      </button>
+                      <button
+                        onClick={() => setOpenTradeForm(prev => ({ ...prev, spreadPreference: 'fastest' }))}
+                        className={`px-3 py-3 rounded-lg text-center transition-all ${
+                          openTradeForm.spreadPreference === 'fastest'
+                            ? 'bg-white/10 text-white border border-white/10'
+                            : 'text-gray-500 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <p className="text-xs font-bold">Fast</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">2.5%</p>
+                      </button>
+                      <button
+                        onClick={() => setOpenTradeForm(prev => ({ ...prev, spreadPreference: 'cheap' }))}
+                        className={`px-3 py-3 rounded-lg text-center transition-all ${
+                          openTradeForm.spreadPreference === 'cheap'
+                            ? 'bg-white/10 text-white border border-white/10'
+                            : 'text-gray-500 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <p className="text-xs font-bold">Cheap</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">1.5%</p>
+                      </button>
+                    </div>
+                    <div className="mt-2 text-center">
+                      <p className="text-[10px] text-gray-500">
+                        {openTradeForm.spreadPreference === 'best' && '⚡ Instant match • Any spread above 2% is your profit'}
+                        {openTradeForm.spreadPreference === 'fastest' && '🚀 <5min match • Any spread above 2.5% is your profit'}
+                        {openTradeForm.spreadPreference === 'cheap' && '💰 Best price • Any spread above 1.5% is your profit'}
+                      </p>
+                    </div>
+                  </div>
+
                   {/* Trade Preview */}
                   {openTradeForm.cryptoAmount && parseFloat(openTradeForm.cryptoAmount) > 0 && (
                     <div className="bg-[#1a1a1a] rounded-xl p-4 border border-white/[0.06]">
@@ -6384,6 +6441,20 @@ export default function MerchantDashboard() {
 
                       // For SELL orders: Lock escrow FIRST, then create order
                       // For BUY orders: Create order immediately (acceptor will lock escrow)
+                      // Check max 10 active orders limit (per merchant, not global)
+                      const activeOrderCount = orders.filter(o =>
+                        (o.orderMerchantId === merchantId || o.buyerMerchantId === merchantId) &&
+                        o.status !== 'completed' &&
+                        o.status !== 'cancelled' &&
+                        o.dbOrder?.status !== 'completed' &&
+                        o.dbOrder?.status !== 'cancelled'
+                      ).length;
+
+                      if (activeOrderCount >= 10) {
+                        setCreateTradeError('You have reached the maximum limit of 10 active orders. Please complete or cancel existing orders first.');
+                        return;
+                      }
+
                       if (openTradeForm.tradeType === "sell") {
                         // Step 1: Find matching merchant and validate
                         setIsCreatingTrade(true);
@@ -6475,6 +6546,7 @@ export default function MerchantDashboard() {
                             type: openTradeForm.tradeType,
                             crypto_amount: parseFloat(openTradeForm.cryptoAmount),
                             payment_method: openTradeForm.paymentMethod,
+                            spread_preference: openTradeForm.spreadPreference,
                           }),
                         });
 
@@ -6501,6 +6573,7 @@ export default function MerchantDashboard() {
                           tradeType: "sell",
                           cryptoAmount: "",
                           paymentMethod: "bank",
+                          spreadPreference: "fastest",
                         });
                       } catch (error) {
                         console.error("Error creating buy order:", error);
@@ -7409,6 +7482,28 @@ export default function MerchantDashboard() {
 
               {/* Actions */}
               <div className="space-y-2">
+                {/* Cancel button for order creator (before escrow lock) */}
+                {(() => {
+                  const iAmOrderCreatorPopup = selectedOrderPopup.orderMerchantId === merchantId;
+                  const canCancelPopup = iAmOrderCreatorPopup &&
+                    !selectedOrderPopup.escrowTxHash &&
+                    (selectedOrderPopup.dbOrder?.status === 'pending' || selectedOrderPopup.dbOrder?.status === 'accepted');
+
+                  return canCancelPopup ? (
+                    <motion.button
+                      whileTap={{ scale: 0.98 }}
+                      onClick={async () => {
+                        await cancelOrderWithoutEscrow(selectedOrderPopup.id);
+                        setSelectedOrderPopup(null);
+                      }}
+                      className="w-full py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/40 text-red-400 font-semibold flex items-center justify-center gap-2 transition-all"
+                    >
+                      <X className="w-4 h-4" />
+                      Cancel Order
+                    </motion.button>
+                  ) : null;
+                })()}
+
                 {/* For escrowed sell orders not yet approved - show Go button */}
                 {/* DB status 'escrowed' means user locked escrow but merchant hasn't clicked Go yet */}
                 {selectedOrderPopup.dbOrder?.status === 'escrowed' && selectedOrderPopup.orderType === 'sell' && !selectedOrderPopup.isMyOrder && (
@@ -7441,12 +7536,26 @@ export default function MerchantDashboard() {
                   </motion.button>
                 )}
 
-                {/* For sell orders after merchant accepted - show I've Paid button */}
-                {/* DB status 'accepted' means merchant has accepted, now needs to mark payment sent */}
-                {selectedOrderPopup.dbOrder?.status === 'accepted' && selectedOrderPopup.orderType === 'sell' && selectedOrderPopup.escrowTxHash && (
+                {/* For accepted orders without escrow — seller needs to Lock Escrow */}
+                {selectedOrderPopup.dbOrder?.status === 'accepted' && !selectedOrderPopup.escrowTxHash && selectedOrderPopup.orderMerchantId === merchantId && selectedOrderPopup.buyerMerchantId !== merchantId && (
                   <motion.button
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => markPaymentSent(selectedOrderPopup)}
+                    onClick={() => {
+                      openEscrowModal(selectedOrderPopup);
+                      setSelectedOrderPopup(null);
+                    }}
+                    className="w-full py-3 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 hover:border-orange-500/40 text-orange-400 font-semibold flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Lock className="w-4 h-4" />
+                    Lock Escrow
+                  </motion.button>
+                )}
+
+                {/* For accepted orders with escrow — buyer needs to mark payment sent */}
+                {selectedOrderPopup.dbOrder?.status === 'accepted' && selectedOrderPopup.escrowTxHash && (
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => markFiatPaymentSent(selectedOrderPopup)}
                     disabled={markingDone}
                     className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
                   >
@@ -7509,14 +7618,28 @@ export default function MerchantDashboard() {
             exit={{ opacity: 0, x: 300 }}
             className="fixed right-0 top-0 h-full w-full max-w-md z-50 shadow-2xl bg-[#0a0a0a] border-l border-white/[0.04]"
           >
-            <MerchantChatTabs
-              merchantId={merchantId}
-              onOpenChat={(orderId, user, emoji) => {
-                openChat(user, emoji, orderId);
-                setShowMessageHistory(false);
-              }}
-              onClose={() => setShowMessageHistory(false)}
-            />
+            {directChat.activeContactId ? (
+              <DirectChatView
+                contactName={directChat.activeContactName}
+                contactType={directChat.activeContactType}
+                messages={directChat.messages}
+                isLoading={directChat.isLoadingMessages}
+                onSendMessage={(text, imageUrl) => {
+                  directChat.sendMessage(text, imageUrl);
+                  playSound('send');
+                }}
+                onBack={() => directChat.closeChat()}
+              />
+            ) : (
+              <MerchantChatTabs
+                merchantId={merchantId}
+                conversations={directChat.conversations}
+                totalUnread={directChat.totalUnread}
+                isLoading={directChat.isLoadingConversations}
+                onOpenChat={(targetId, targetType, username) => directChat.openChat(targetId, targetType, username)}
+                onClose={() => setShowMessageHistory(false)}
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>

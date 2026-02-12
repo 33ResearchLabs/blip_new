@@ -97,7 +97,7 @@ type WidgetType =
   | "top-merchants"
   | "recent-activity"
   | "live-orders"
-  | "big-transactions"
+  | "all-transactions"
   | "system-health"
   | "security-alerts"
   | "revenue-chart"
@@ -109,7 +109,8 @@ type WidgetType =
   | "tx-per-minute"
   | "tx-per-hour"
   | "today-revenue"
-  | "hourly-chart";
+  | "hourly-chart"
+  | "platform-balance";
 
 type WidgetSize = "sm" | "md" | "lg" | "xl";
 
@@ -148,6 +149,9 @@ interface StatsData {
   todayRevenue: number;
   peakHour: { hour: number; count: number } | null;
   hourlyData: { hour: string; count: number; volume: number }[];
+  // Platform fee balance
+  platformBalance: number;
+  totalFeesCollected: number;
 }
 
 interface ApiOrder {
@@ -155,12 +159,17 @@ interface ApiOrder {
   orderNumber: string;
   user: string;
   merchant: string;
+  buyerMerchant: string | null;
   amount: number;
   fiatAmount: number;
   status: string;
   type: string;
+  spreadPreference: string | null;
+  feePercentage: number | null;
+  feeAmount: number | null;
   createdAt: string;
   expiresAt: string;
+  completedAt: string | null;
 }
 
 interface ApiMerchant {
@@ -199,7 +208,7 @@ const widgetConfigs: Record<WidgetType, WidgetConfig> = {
   "top-merchants": { title: "Top Merchants", icon: <Crown className="w-4 h-4" />, color: "amber", description: "Highest volume merchants" },
   "recent-activity": { title: "Recent Activity", icon: <Activity className="w-4 h-4" />, color: "white", description: "Latest platform events" },
   "live-orders": { title: "Live Orders", icon: <Clock className="w-4 h-4" />, color: "blue", description: "Real-time order feed" },
-  "big-transactions": { title: "Big Transactions", icon: <Zap className="w-4 h-4" />, color: "purple", description: "High-value trades ($5k+)" },
+  "all-transactions": { title: "Transactions", icon: <Activity className="w-4 h-4" />, color: "white", description: "All platform transactions" },
   "system-health": { title: "System Health", icon: <Server className="w-4 h-4" />, color: "cyan", description: "Infrastructure status", premium: true },
   "security-alerts": { title: "Security Center", icon: <ShieldAlert className="w-4 h-4" />, color: "red", description: "Threat monitoring", premium: true },
   "revenue-chart": { title: "Revenue Analytics", icon: <AreaChart className="w-4 h-4" />, color: "emerald", description: "Revenue over time", premium: true },
@@ -212,6 +221,7 @@ const widgetConfigs: Record<WidgetType, WidgetConfig> = {
   "tx-per-hour": { title: "TX/Hour", icon: <Activity className="w-4 h-4" />, color: "blue", description: "Hourly transaction count" },
   "today-revenue": { title: "Today's Revenue", icon: <DollarSign className="w-4 h-4" />, color: "emerald", description: "Revenue earned today" },
   "hourly-chart": { title: "Hourly Activity", icon: <BarChart3 className="w-4 h-4" />, color: "purple", description: "24h transaction chart" },
+  "platform-balance": { title: "Platform Balance", icon: <Wallet className="w-4 h-4" />, color: "emerald", description: "Collected protocol fees" },
 };
 
 const initialWidgets: Widget[] = [
@@ -221,11 +231,12 @@ const initialWidgets: Widget[] = [
   { id: "w4", type: "active-merchants", size: "sm", visible: true },
   { id: "w19", type: "tx-per-minute", size: "sm", visible: true },
   { id: "w20", type: "today-revenue", size: "sm", visible: true },
+  { id: "w22", type: "platform-balance", size: "sm", visible: true },
   { id: "w21", type: "hourly-chart", size: "lg", visible: true },
   { id: "w15", type: "system-health", size: "lg", visible: true },
   { id: "w16", type: "revenue-chart", size: "lg", visible: true },
   { id: "w7", type: "live-orders", size: "lg", visible: true },
-  { id: "w8", type: "big-transactions", size: "lg", visible: true },
+  { id: "w8", type: "all-transactions", size: "lg", visible: true },
   { id: "w17", type: "security-alerts", size: "lg", visible: true },
   { id: "w18", type: "global-activity", size: "lg", visible: true },
   { id: "w9", type: "top-merchants", size: "lg", visible: true },
@@ -459,6 +470,7 @@ function StatWidget({ widget, stats, onRemove }: { widget: Widget; stats: StatsD
       case "tx-per-minute": return stats.txPerMinute?.toFixed(2) || "0";
       case "tx-per-hour": return stats.txPerHour || 0;
       case "today-revenue": return `$${(stats.todayRevenue || 0).toFixed(2)}`;
+      case "platform-balance": return `$${(stats.platformBalance || 0).toFixed(2)}`;
       default: return "—";
     }
   };
@@ -1441,20 +1453,66 @@ function LiveOrdersWidget({ orders, onRemove }: { orders: ApiOrder[]; onRemove: 
 // BIG TRANSACTIONS WIDGET
 // ============================================
 
-function BigTransactionsWidget({ orders, onRemove }: { orders: ApiOrder[]; onRemove: () => void }) {
+type TxFilter = "all" | "pending" | "active" | "completed" | "cancelled";
+type TxTypeFilter = "all" | "buy" | "sell";
+type TxSort = "newest" | "oldest" | "amount-high" | "amount-low";
+
+function AllTransactionsWidget({ orders, onRemove }: { orders: ApiOrder[]; onRemove: () => void }) {
   const [showMenu, setShowMenu] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<TxFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<TxTypeFilter>("all");
+  const [sortBy, setSortBy] = useState<TxSort>("newest");
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => { setMounted(true); }, []);
 
-  const bigOrders = orders.filter(o => o.amount >= 5000);
-  const totalVolume = bigOrders.reduce((sum, o) => sum + o.amount, 0);
-  const totalFees = bigOrders.reduce((sum, o) => sum + o.amount * 0.005, 0);
+  // Filter orders
+  const filteredOrders = orders.filter(o => {
+    if (statusFilter === "pending" && o.status !== "pending") return false;
+    if (statusFilter === "active" && !["accepted", "escrowed", "payment_sent", "payment_confirmed", "releasing"].includes(o.status)) return false;
+    if (statusFilter === "completed" && o.status !== "completed") return false;
+    if (statusFilter === "cancelled" && !["cancelled", "expired"].includes(o.status)) return false;
+    if (typeFilter === "buy" && o.type !== "buy") return false;
+    if (typeFilter === "sell" && o.type !== "sell") return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!o.orderNumber.toLowerCase().includes(q) && !o.user.toLowerCase().includes(q) && !o.merchant.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  // Sort orders
+  const sortedOrders = [...filteredOrders].sort((a, b) => {
+    if (sortBy === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    if (sortBy === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (sortBy === "amount-high") return b.amount - a.amount;
+    return a.amount - b.amount;
+  });
+
+  const totalVolume = filteredOrders.reduce((sum, o) => sum + o.amount, 0);
+  const totalFees = filteredOrders.reduce((sum, o) => sum + (o.feeAmount || 0), 0);
+
+  const statusCounts = {
+    all: orders.length,
+    pending: orders.filter(o => o.status === "pending").length,
+    active: orders.filter(o => ["accepted", "escrowed", "payment_sent", "payment_confirmed", "releasing"].includes(o.status)).length,
+    completed: orders.filter(o => o.status === "completed").length,
+    cancelled: orders.filter(o => ["cancelled", "expired"].includes(o.status)).length,
+  };
 
   const getStatusBadge = (status: string) => {
-    if (status === "completed") return <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Completed</span>;
-    if (["accepted", "escrowed", "payment_sent", "payment_confirmed"].includes(status)) return <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">In Progress</span>;
-    return <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/[0.08] text-gray-400 border border-white/[0.12]">Pending</span>;
+    if (status === "completed") return <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/[0.06] text-emerald-400">Completed</span>;
+    if (status === "cancelled" || status === "expired") return <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/[0.06] text-gray-500">Cancelled</span>;
+    if (status === "pending") return <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/[0.06] text-gray-400">Pending</span>;
+    if (status === "disputed") return <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/[0.06] text-red-400">Disputed</span>;
+    return <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/[0.06] text-white/60">In Progress</span>;
+  };
+
+  const getSpreadBadge = (spread: string | null) => {
+    if (!spread) return null;
+    const label = spread === "best" ? "Best" : spread === "fastest" ? "Fast" : "Cheap";
+    return <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/[0.04] text-gray-500">{label}</span>;
   };
 
   const formatTimeAgo = (dateStr: string) => {
@@ -1462,8 +1520,10 @@ function BigTransactionsWidget({ orders, onRemove }: { orders: ApiOrder[]; onRem
     const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
     if (seconds < 60) return "just now";
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    return `${Math.floor(minutes / 60)}h ago`;
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h`;
+    return `${Math.floor(hours / 24)}d`;
   };
 
   return (
@@ -1472,8 +1532,9 @@ function BigTransactionsWidget({ orders, onRemove }: { orders: ApiOrder[]; onRem
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      className="relative group bg-gradient-to-br from-[#0d0d0d] to-[#080808] rounded-xl border border-purple-500/20 p-5 hover:border-purple-500/30 transition-all"
+      className="relative group bg-[#0d0d0d] rounded-2xl border border-white/[0.06] p-5 hover:border-white/[0.1] transition-all"
     >
+      {/* Remove menu */}
       <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
         <button onClick={() => setShowMenu(!showMenu)} className="p-1.5 hover:bg-white/[0.08] rounded-md">
           <MoreHorizontal className="w-3.5 h-3.5 text-gray-500" />
@@ -1489,67 +1550,133 @@ function BigTransactionsWidget({ orders, onRemove }: { orders: ApiOrder[]; onRem
         </AnimatePresence>
       </div>
 
-      <div className="flex items-center justify-between mb-5">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400 ring-1 ring-purple-500/20">
-            <Zap className="w-5 h-5" />
+          <div className="w-9 h-9 rounded-xl bg-white/[0.04] flex items-center justify-center text-gray-400">
+            <Activity className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold">Big Transactions</h3>
-            <p className="text-[10px] text-gray-500">$5,000+ trades</p>
+            <h3 className="text-sm font-semibold text-white">Transactions</h3>
+            <p className="text-[10px] text-gray-500">{filteredOrders.length} of {orders.length} orders</p>
           </div>
         </div>
         <div className="text-right">
-          <p className="text-lg font-bold text-purple-400">${(totalVolume / 1000).toFixed(0)}k</p>
-          <p className="text-[10px] text-emerald-400">+${totalFees.toFixed(0)} fees</p>
+          <p className="text-sm font-semibold text-white">${totalVolume.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+          {totalFees > 0 && <p className="text-[10px] text-gray-500">${totalFees.toFixed(2)} fees</p>}
         </div>
       </div>
 
-      <div className="space-y-2 max-h-[280px] overflow-y-auto">
-        {bigOrders.length > 0 ? bigOrders.map((order, i) => (
-          <motion.div
-            key={order.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-            whileHover={{ x: 4 }}
-            className={`flex items-center gap-3 p-3 bg-[#151515] rounded-lg border transition-all cursor-pointer ${
-              order.status !== "completed" && order.status !== "pending"
-                ? "border-amber-500/20 hover:border-amber-500/30"
-                : "border-white/[0.04] hover:border-purple-500/20"
+      {/* Search + Sort */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="flex-1 relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-600" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search orders..."
+            className="w-full pl-7 pr-3 py-1.5 text-[11px] bg-white/[0.04] rounded-lg border border-white/[0.06] text-white placeholder:text-gray-600 focus:outline-none focus:border-white/[0.15] transition-colors"
+          />
+        </div>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as TxSort)}
+          className="px-2 py-1.5 text-[11px] bg-white/[0.04] rounded-lg border border-white/[0.06] text-gray-400 focus:outline-none focus:border-white/[0.15] appearance-none cursor-pointer"
+        >
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="amount-high">Highest</option>
+          <option value="amount-low">Lowest</option>
+        </select>
+      </div>
+
+      {/* Status filter tabs */}
+      <div className="flex gap-1 mb-2 bg-white/[0.02] rounded-lg p-0.5">
+        {(["all", "pending", "active", "completed", "cancelled"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setStatusFilter(f)}
+            className={`flex-1 px-2 py-1.5 text-[10px] font-medium rounded-md transition-all ${
+              statusFilter === f ? "bg-white/[0.08] text-white" : "text-gray-500 hover:text-gray-300"
             }`}
           >
-            <div className="flex items-center -space-x-2">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#1a1a1a] to-[#252525] flex items-center justify-center text-base border-2 border-[#151515] z-10 ring-1 ring-white/[0.05]">{getUserEmoji(order.user)}</div>
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#1a1a1a] to-[#252525] flex items-center justify-center text-base border-2 border-[#151515] ring-1 ring-white/[0.05]">{getUserEmoji(order.merchant)}</div>
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+            <span className="ml-1 text-gray-600">{statusCounts[f]}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Type filter */}
+      <div className="flex gap-1 mb-4">
+        {(["all", "buy", "sell"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setTypeFilter(f)}
+            className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-all ${
+              typeFilter === f ? "bg-white/[0.08] text-white" : "text-gray-600 hover:text-gray-400"
+            }`}
+          >
+            {f === "all" ? "All Types" : f.toUpperCase()}
+          </button>
+        ))}
+      </div>
+
+      {/* Transaction list */}
+      <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#333 transparent' }}>
+        {sortedOrders.length > 0 ? sortedOrders.map((order, i) => (
+          <motion.div
+            key={order.id}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: Math.min(i * 0.02, 0.3) }}
+            className="flex items-center gap-3 px-3 py-2.5 bg-white/[0.02] rounded-lg border border-white/[0.04] hover:bg-white/[0.04] hover:border-white/[0.08] transition-all cursor-default"
+          >
+            {/* Type indicator */}
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold shrink-0 ${
+              order.type === "buy" ? "bg-white/[0.06] text-white" : "bg-white/[0.04] text-gray-500"
+            }`}>
+              {order.type === "buy" ? "B" : "S"}
             </div>
+
+            {/* Order details */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className="text-xs font-medium">{order.orderNumber}</span>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className="text-[11px] font-medium text-white/90 font-mono">{order.orderNumber}</span>
                 {getStatusBadge(order.status)}
+                {getSpreadBadge(order.spreadPreference)}
               </div>
               <div className="flex items-center gap-1 text-[10px] text-gray-500">
-                <span className="truncate max-w-[60px]">{order.user}</span>
-                <ArrowRight className="w-2.5 h-2.5" />
-                <span className="truncate max-w-[60px]">{order.merchant}</span>
-                <span className="text-gray-600">•</span>
-                <span className="text-gray-600">{formatTimeAgo(order.createdAt)}</span>
+                <span className="truncate max-w-[80px]">{order.buyerMerchant || order.user}</span>
+                <ArrowRight className="w-2.5 h-2.5 text-gray-600 shrink-0" />
+                <span className="truncate max-w-[80px]">{order.merchant}</span>
+                <span className="text-gray-700 shrink-0">·</span>
+                <span className="text-gray-600 shrink-0">{formatTimeAgo(order.createdAt)}</span>
               </div>
             </div>
+
+            {/* Amount */}
             <div className="text-right shrink-0">
-              <p className="text-base font-bold">${order.amount.toLocaleString()}</p>
-              <p className="text-[10px] text-emerald-400">+${(order.amount * 0.005).toFixed(0)} fee</p>
+              <p className="text-[12px] font-semibold text-white/90">${order.amount.toLocaleString()}</p>
+              {order.feeAmount ? (
+                <p className="text-[10px] text-gray-500">{order.feePercentage}% fee</p>
+              ) : order.fiatAmount > 0 ? (
+                <p className="text-[10px] text-gray-600">{order.fiatAmount.toLocaleString()} fiat</p>
+              ) : null}
             </div>
           </motion.div>
         )) : (
-          <div className="text-center py-8 text-gray-500 text-xs">No big transactions found</div>
+          <div className="text-center py-10 text-gray-600 text-xs">
+            {searchQuery ? "No matching transactions" : "No transactions found"}
+          </div>
         )}
       </div>
 
-      {bigOrders.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-white/[0.04] flex items-center justify-between">
-          <span className="text-[10px] text-gray-500">{bigOrders.length} big transactions</span>
-          <span className="text-[10px] text-emerald-400 font-medium">+${totalFees.toFixed(0)} earned</span>
+      {/* Footer */}
+      {sortedOrders.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center justify-between">
+          <span className="text-[10px] text-gray-600">{sortedOrders.length} transactions</span>
+          <span className="text-[10px] text-gray-500">${totalVolume.toLocaleString()} volume</span>
         </div>
       )}
     </motion.div>
@@ -1821,6 +1948,13 @@ export default function AdminConsolePage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [mounted, setMounted] = useState(false);
 
+  // Admin auth
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [adminLoginForm, setAdminLoginForm] = useState({ username: "", password: "" });
+  const [adminLoginError, setAdminLoginError] = useState("");
+  const [isAdminLoggingIn, setIsAdminLoggingIn] = useState(false);
+
   // API data states
   const [stats, setStats] = useState<StatsData | null>(null);
   const [orders, setOrders] = useState<ApiOrder[]>([]);
@@ -1845,12 +1979,64 @@ export default function AdminConsolePage() {
   useEffect(() => { setActor('merchant', 'admin'); }, [setActor]);
   useEffect(() => { setMounted(true); }, []);
 
+  // Admin session check
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const saved = localStorage.getItem('blip_admin');
+        if (saved) {
+          const admin = JSON.parse(saved);
+          const res = await fetch(`/api/auth/admin?username=${admin.username}`);
+          const data = await res.json();
+          if (data.success && data.data?.valid) {
+            setIsAuthenticated(true);
+          } else {
+            localStorage.removeItem('blip_admin');
+          }
+        }
+      } catch {
+        localStorage.removeItem('blip_admin');
+      } finally {
+        setIsCheckingSession(false);
+      }
+    };
+    checkSession();
+  }, []);
+
+  const handleAdminLogin = async () => {
+    setIsAdminLoggingIn(true);
+    setAdminLoginError("");
+    try {
+      const res = await fetch('/api/auth/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(adminLoginForm),
+      });
+      const data = await res.json();
+      if (data.success && data.data?.admin) {
+        localStorage.setItem('blip_admin', JSON.stringify(data.data.admin));
+        setIsAuthenticated(true);
+      } else {
+        setAdminLoginError(data.error || 'Login failed');
+      }
+    } catch {
+      setAdminLoginError('Connection failed');
+    } finally {
+      setIsAdminLoggingIn(false);
+    }
+  };
+
+  const handleAdminLogout = () => {
+    localStorage.removeItem('blip_admin');
+    setIsAuthenticated(false);
+  };
+
   const fetchData = useCallback(async () => {
     setIsRefreshing(true);
     try {
       const [statsRes, ordersRes, merchantsRes, activityRes] = await Promise.all([
         fetch('/api/admin/stats'),
-        fetch('/api/admin/orders?limit=100'),
+        fetch('/api/admin/orders?limit=500'),
         fetch('/api/admin/merchants?sort=volume&limit=10'),
         fetch('/api/admin/activity?limit=15'),
       ]);
@@ -1897,7 +2083,7 @@ export default function AdminConsolePage() {
   }, [fetchData]);
 
   const addWidget = (type: WidgetType) => {
-    const largeWidgetTypes: WidgetType[] = ["top-merchants", "recent-activity", "live-orders", "big-transactions", "system-health", "security-alerts", "revenue-chart", "user-growth", "global-activity", "network-status", "compliance", "ai-insights"];
+    const largeWidgetTypes: WidgetType[] = ["top-merchants", "recent-activity", "live-orders", "all-transactions", "system-health", "security-alerts", "revenue-chart", "user-growth", "global-activity", "network-status", "compliance", "ai-insights"];
     const newWidget: Widget = { id: `w${Date.now()}`, type, size: largeWidgetTypes.includes(type) ? "lg" : "sm", visible: true };
     setWidgets([...widgets, newWidget]);
   };
@@ -1907,6 +2093,67 @@ export default function AdminConsolePage() {
   const existingWidgetTypes = widgets.map((w) => w.type);
   const smallWidgets = widgets.filter((w) => w.size === "sm" && w.visible);
   const largeWidgets = widgets.filter((w) => w.size === "lg" && w.visible);
+
+  // --- AUTH GATE ---
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 rounded-2xl bg-white/[0.08] border border-white/[0.08] flex items-center justify-center mx-auto mb-4">
+              <Shield className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-xl font-bold mb-2">Admin Console</h1>
+            <p className="text-sm text-gray-500">Platform administration</p>
+          </div>
+          <div className="bg-[#0d0d0d] rounded-2xl border border-white/[0.06] p-6 space-y-4">
+            {adminLoginError && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400">
+                {adminLoginError}
+              </div>
+            )}
+            <div>
+              <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Username</label>
+              <input
+                type="text"
+                value={adminLoginForm.username}
+                onChange={(e) => setAdminLoginForm(prev => ({ ...prev, username: e.target.value }))}
+                placeholder="admin"
+                className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 border border-white/[0.06] focus:border-white/[0.15] transition-colors"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Password</label>
+              <input
+                type="password"
+                value={adminLoginForm.password}
+                onChange={(e) => setAdminLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                placeholder="********"
+                className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 border border-white/[0.06] focus:border-white/[0.15] transition-colors"
+                onKeyDown={(e) => e.key === "Enter" && handleAdminLogin()}
+              />
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              onClick={handleAdminLogin}
+              disabled={isAdminLoggingIn || !adminLoginForm.username || !adminLoginForm.password}
+              className="w-full py-3 rounded-xl text-sm font-bold bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-50"
+            >
+              {isAdminLoggingIn ? "Signing in..." : "Sign In"}
+            </motion.button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const sidebarStats = [
     { label: "Platform Uptime", value: "99.97%", icon: <Zap className="w-3.5 h-3.5" />, color: "emerald" },
@@ -1920,7 +2167,7 @@ export default function AdminConsolePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex flex-col">
+    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col">
       {/* Ambient Background Effects */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-1/4 w-[800px] h-[600px] bg-gradient-to-br from-cyan-500/[0.03] to-transparent rounded-full blur-[120px]" />
@@ -1931,7 +2178,7 @@ export default function AdminConsolePage() {
       </div>
 
       {/* Top Navbar */}
-      <header className="sticky top-0 z-50 bg-[#050505]/80 backdrop-blur-2xl border-b border-white/[0.04]">
+      <header className="sticky top-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-2xl border-b border-white/[0.04]">
         <div className="px-4 h-14 flex items-center gap-4">
           {/* Logo */}
           <div className="flex items-center gap-3">
@@ -2017,7 +2264,9 @@ export default function AdminConsolePage() {
             </div>
             <div className="hidden sm:block">
               <p className="text-xs font-medium">Admin</p>
-              <p className="text-[10px] text-gray-500">Super User</p>
+              <button onClick={handleAdminLogout} className="text-[10px] text-gray-500 hover:text-white transition-colors">
+                Sign Out
+              </button>
             </div>
           </div>
         </div>
@@ -2140,7 +2389,7 @@ export default function AdminConsolePage() {
                   if (widget.type === "security-alerts") return <SecurityAlertsWidget key={widget.id} onRemove={() => removeWidget(widget.id)} />;
                   if (widget.type === "global-activity") return <GlobalActivityWidget key={widget.id} onRemove={() => removeWidget(widget.id)} />;
                   if (widget.type === "live-orders") return <LiveOrdersWidget key={widget.id} orders={orders} onRemove={() => removeWidget(widget.id)} />;
-                  if (widget.type === "big-transactions") return <BigTransactionsWidget key={widget.id} orders={orders} onRemove={() => removeWidget(widget.id)} />;
+                  if (widget.type === "all-transactions") return <AllTransactionsWidget key={widget.id} orders={orders} onRemove={() => removeWidget(widget.id)} />;
                   if (widget.type === "top-merchants") return <TopMerchantsWidget key={widget.id} merchants={merchants} onRemove={() => removeWidget(widget.id)} />;
                   if (widget.type === "recent-activity") return <RecentActivityWidget key={widget.id} activities={activities} onRemove={() => removeWidget(widget.id)} />;
                   return null;

@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from 'react';
 
-type SoundType = 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click';
+type SoundType = 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete';
 
 // Web Audio API based sound generator
 export function useSounds() {
@@ -84,6 +84,19 @@ export function useSounds() {
       case 'click':
         // Subtle click
         playTone(1000, 0.03, 'sine', 0.1);
+        break;
+
+      case 'new_order':
+        // Crisp "ka-ching" - bright double ping
+        playTone(1200, 0.06, 'sine', 0.2);
+        setTimeout(() => playTone(1600, 0.12, 'sine', 0.25), 70);
+        break;
+
+      case 'order_complete':
+        // Satisfying success - quick rising 3-note chime
+        playTone(660, 0.08, 'sine', 0.2);
+        setTimeout(() => playTone(880, 0.08, 'sine', 0.22), 80);
+        setTimeout(() => playTone(1320, 0.18, 'sine', 0.18), 160);
         break;
 
       default:

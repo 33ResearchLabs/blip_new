@@ -4,10 +4,10 @@ import {
   getOrderById,
   getOrderWithRelations,
   updateOrderStatus,
-  sendMessage,
 } from '@/lib/db/repositories/orders';
-import { query } from '@/lib/db';
+import { query, transaction as dbTransaction } from '@/lib/db';
 import { MOCK_MODE } from '@/lib/config/mockMode';
+import { createTransaction } from '@/lib/db/repositories/transactions';
 import {
   uuidSchema,
 } from '@/lib/validation/schemas';
@@ -21,7 +21,8 @@ import {
   errorResponse,
 } from '@/lib/middleware/auth';
 import { logger } from '@/lib/logger';
-import { notifyOrderStatusUpdated, notifyNewMessage } from '@/lib/pusher/server';
+import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
+import { wsBroadcastOrderUpdate } from '@/lib/websocket/broadcast';
 import { waitForConfirmation, getConnection } from '@/lib/solana';
 
 // Schema for escrow deposit
@@ -152,7 +153,15 @@ export async function POST(
     }
 
     // Check if this is a demo/off-chain transaction (no real on-chain verification needed)
+    // SECURITY: demo- prefix ONLY allowed in MOCK_MODE to prevent bypass in production
     const isDemoTx = tx_hash.startsWith('demo-');
+
+    if (isDemoTx && !MOCK_MODE) {
+      return NextResponse.json(
+        { success: false, error: 'Demo transactions not allowed in production mode' },
+        { status: 400 }
+      );
+    }
 
     if (!isDemoTx) {
       // Verify transaction on-chain with retries (devnet can be slow to propagate)
@@ -169,85 +178,136 @@ export async function POST(
       logger.info('Demo escrow transaction - skipping on-chain verification', { txHash: tx_hash, orderId: id });
     }
 
-    // In mock mode, deduct the escrowed amount from the seller's balance
-    if (MOCK_MODE) {
-      const amount = parseFloat(String(order.crypto_amount));
-      // Determine who is locking escrow (the seller)
-      const sellerTable = actor_type === 'merchant' ? 'merchants' : 'users';
-      const deductResult = await query(
-        `UPDATE ${sellerTable} SET balance = balance - $1 WHERE id = $2 AND balance >= $1 RETURNING balance`,
-        [amount, actor_id]
-      );
-      if (!deductResult || deductResult.length === 0) {
+    // Wrap balance deduction + order update in a DB transaction
+    // This prevents balance being deducted if the order update fails (e.g. integer overflow)
+    // CRITICAL: Lock the order row INSIDE the transaction to prevent double-lock race condition
+    const amount = parseFloat(String(order.crypto_amount));
+
+    try {
+      await dbTransaction(async (client) => {
+        // Lock the order row and re-check status to prevent double-lock
+        const lockCheck = await client.query(
+          'SELECT status, escrow_tx_hash FROM orders WHERE id = $1 FOR UPDATE',
+          [id]
+        );
+        const lockedOrder = lockCheck.rows[0];
+        if (!lockedOrder || !['pending', 'accepted', 'escrow_pending'].includes(lockedOrder.status)) {
+          throw new Error('ORDER_STATUS_CHANGED');
+        }
+        if (lockedOrder.escrow_tx_hash) {
+          throw new Error('ALREADY_ESCROWED');
+        }
+
+        // In mock mode, deduct the escrowed amount from the seller's balance
+        if (MOCK_MODE) {
+          const sellerTable = actor_type === 'merchant' ? 'merchants' : 'users';
+          const deductResult = await client.query(
+            `UPDATE ${sellerTable} SET balance = balance - $1 WHERE id = $2 AND balance >= $1 RETURNING balance`,
+            [amount, actor_id]
+          );
+          if (!deductResult || deductResult.rows.length === 0) {
+            throw new Error('INSUFFICIENT_BALANCE');
+          }
+          logger.info('[Mock] Deducted escrow from seller', { actorId: actor_id, amount, table: sellerTable });
+        }
+
+        // Update order with escrow details (including on-chain references for release)
+        // Cast escrow_trade_id to BIGINT to handle large timestamp values from Date.now()
+        // Also extend expires_at to 120 minutes from now (escrowed orders get more time)
+        await client.query(
+          `UPDATE orders SET
+            escrow_tx_hash = $1,
+            escrow_address = $2,
+            escrow_trade_id = $3::BIGINT,
+            escrow_trade_pda = $4,
+            escrow_pda = $5,
+            escrow_creator_wallet = $6,
+            escrowed_at = NOW(),
+            expires_at = NOW() + INTERVAL '120 minutes',
+            status = 'escrowed'
+          WHERE id = $7`,
+          [
+            tx_hash,
+            escrow_address || null,
+            escrow_trade_id || null,
+            escrow_trade_pda || null,
+            escrow_pda || null,
+            escrow_creator_wallet || null,
+            id,
+          ]
+        );
+      });
+    } catch (txError) {
+      const errMsg = (txError as Error).message;
+      if (errMsg === 'INSUFFICIENT_BALANCE') {
         return NextResponse.json(
           { success: false, error: 'Insufficient balance to lock escrow' },
           { status: 400 }
         );
       }
-      logger.info('[Mock] Deducted escrow from seller', { actorId: actor_id, amount, table: sellerTable });
+      if (errMsg === 'ALREADY_ESCROWED') {
+        return NextResponse.json(
+          { success: false, error: 'Escrow already locked on this order' },
+          { status: 409 }
+        );
+      }
+      if (errMsg === 'ORDER_STATUS_CHANGED') {
+        return NextResponse.json(
+          { success: false, error: 'Order status changed — cannot lock escrow' },
+          { status: 409 }
+        );
+      }
+      logger.error('Escrow deposit transaction failed (balance rolled back)', {
+        orderId: id, error: errMsg, actorId: actor_id,
+      });
+      return errorResponse(`Failed to record escrow: ${errMsg}`);
     }
 
-    // Update order with escrow details (including on-chain references for release)
-    // Also update status to 'escrowed' since funds are now locked on-chain
-    await query(
-      `UPDATE orders SET
-        escrow_tx_hash = $1,
-        escrow_address = $2,
-        escrow_trade_id = $3,
-        escrow_trade_pda = $4,
-        escrow_pda = $5,
-        escrow_creator_wallet = $6,
-        escrowed_at = NOW(),
-        status = 'escrowed'
-      WHERE id = $7`,
-      [
-        tx_hash,
-        escrow_address || null,
-        escrow_trade_id || null,
-        escrow_trade_pda || null,
-        escrow_pda || null,
-        escrow_creator_wallet || null,
-        id,
-      ]
-    );
+    // Log transaction outside the DB transaction (non-critical, best-effort)
+    if (MOCK_MODE) {
+      try {
+        await createTransaction({
+          merchant_id: actor_type === 'merchant' ? actor_id : undefined,
+          user_id: actor_type === 'user' ? actor_id : undefined,
+          order_id: id,
+          type: 'escrow_lock',
+          amount: -amount,
+          description: `Locked ${amount} USDC in escrow for order #${order.order_number}`,
+        });
+      } catch (logErr) {
+        logger.warn('Failed to log escrow transaction', { orderId: id, error: logErr });
+      }
+    }
 
     // Get updated order
     const updatedOrder = await getOrderWithRelations(id);
 
-    // Send system message about escrow lock
-    try {
-      const escrowMessage = `🔒 Escrow locked - ${order.crypto_amount} ${order.crypto_currency} secured on-chain`;
-      const savedMessage = await sendMessage({
-        order_id: id,
-        sender_type: 'system',
-        sender_id: id,
-        content: escrowMessage,
-        message_type: 'system',
-      });
-
-      // Trigger real-time notification for the system message
-      notifyNewMessage({
-        orderId: id,
-        messageId: savedMessage.id,
-        senderType: 'system',
-        senderId: id,
-        content: escrowMessage,
-        messageType: 'system',
-        createdAt: savedMessage.created_at.toISOString(),
-      });
-    } catch (msgError) {
-      logger.api.error('POST', `/api/orders/${id}/escrow/system-message`, msgError as Error);
-    }
+    // Auto system messages for escrow lock removed - keeping only real user messages
 
     // Send real-time notification about escrow lock
     if (updatedOrder) {
-      notifyOrderStatusUpdated({
+      const escrowPayload = {
         orderId: id,
         userId: updatedOrder.user_id,
         merchantId: updatedOrder.merchant_id,
         status: 'escrowed',
         previousStatus: order.status,
         updatedAt: new Date().toISOString(),
+        data: updatedOrder,
+      };
+
+      notifyOrderStatusUpdated(escrowPayload);
+
+      if (updatedOrder.buyer_merchant_id && updatedOrder.buyer_merchant_id !== updatedOrder.merchant_id) {
+        notifyOrderStatusUpdated({ ...escrowPayload, merchantId: updatedOrder.buyer_merchant_id });
+      }
+
+      // WebSocket broadcast
+      wsBroadcastOrderUpdate({
+        orderId: id,
+        status: 'escrowed',
+        previousStatus: order.status,
+        updatedAt: escrowPayload.updatedAt,
         data: updatedOrder,
       });
     }
@@ -320,7 +380,15 @@ export async function PATCH(
     }
 
     // Check if this is a demo/off-chain transaction (no real on-chain verification needed)
+    // SECURITY: demo- prefix ONLY allowed in MOCK_MODE to prevent bypass in production
     const isDemoTx = tx_hash.startsWith('demo-');
+
+    if (isDemoTx && !MOCK_MODE) {
+      return NextResponse.json(
+        { success: false, error: 'Demo transactions not allowed in production mode' },
+        { status: 400 }
+      );
+    }
 
     if (!isDemoTx) {
       // Verify transaction on-chain with retries (devnet can be slow to propagate)
@@ -337,41 +405,125 @@ export async function PATCH(
       logger.info('Demo escrow release - skipping on-chain verification', { txHash: tx_hash, orderId: id });
     }
 
-    // In mock mode, credit the buyer's balance with the released amount
-    if (MOCK_MODE) {
-      const amount = parseFloat(String(order.crypto_amount));
-      // Determine who receives the funds (the buyer)
-      // For BUY orders: user buys USDC → credit user (or buyer_merchant for M2M)
-      // For SELL orders: merchant buys USDC → credit merchant
-      const isBuyOrder = order.type === 'buy';
-      const recipientId = isBuyOrder
-        ? (order.buyer_merchant_id || order.user_id)
-        : order.merchant_id;
-      const recipientTable = isBuyOrder
-        ? (order.buyer_merchant_id ? 'merchants' : 'users')
-        : 'merchants';
+    // Wrap balance credit + release_tx_hash in a DB transaction
+    // CRITICAL: Lock the order row INSIDE the transaction to prevent double-release race condition
+    // Two concurrent releases without this lock would both credit the buyer (money printer bug)
+    const amount = parseFloat(String(order.crypto_amount));
+    const isBuyOrder = order.type === 'buy';
+    const recipientId = isBuyOrder
+      ? (order.buyer_merchant_id || order.user_id)
+      : (order.buyer_merchant_id || order.merchant_id);
+    const recipientTable = isBuyOrder
+      ? (order.buyer_merchant_id ? 'merchants' : 'users')
+      : 'merchants';
 
-      try {
-        await query(
-          `UPDATE ${recipientTable} SET balance = balance + $1 WHERE id = $2`,
-          [amount, recipientId]
+    // Track fee collected for transaction log (set inside dbTransaction)
+    let collectedFeeAmount = 0;
+
+    try {
+      await dbTransaction(async (client) => {
+        // Lock the order row and re-check to prevent double-release
+        const lockCheck = await client.query(
+          'SELECT status, release_tx_hash FROM orders WHERE id = $1 FOR UPDATE',
+          [id]
         );
-        logger.info('[Mock] Credited buyer on release', { recipientId, amount, table: recipientTable });
-      } catch (creditErr) {
-        logger.api.error('PATCH', `/api/orders/${id}/escrow/mock-credit`, creditErr as Error);
+        const lockedOrder = lockCheck.rows[0];
+        if (!lockedOrder || !['escrowed', 'payment_sent', 'payment_confirmed', 'releasing'].includes(lockedOrder.status)) {
+          throw new Error('ORDER_STATUS_CHANGED');
+        }
+        if (lockedOrder.release_tx_hash) {
+          throw new Error('ALREADY_RELEASED');
+        }
+
+        // Credit the buyer's balance (net of protocol fee)
+        if (MOCK_MODE) {
+          const feeAmount = parseFloat(String(order.protocol_fee_amount)) || 0;
+          const buyerReceives = amount - feeAmount;
+
+          await client.query(
+            `UPDATE ${recipientTable} SET balance = balance + $1 WHERE id = $2`,
+            [buyerReceives, recipientId]
+          );
+          logger.info('[Mock] Credited buyer on release', {
+            recipientId, grossAmount: amount, feeAmount, netAmount: buyerReceives, table: recipientTable,
+          });
+
+          // Collect platform fee
+          if (feeAmount > 0) {
+            const platformResult = await client.query(
+              `UPDATE platform_balance
+               SET balance = balance + $1,
+                   total_fees_collected = total_fees_collected + $1,
+                   updated_at = NOW()
+               WHERE key = 'main'
+               RETURNING balance`,
+              [feeAmount]
+            );
+            const newPlatformBalance = parseFloat(String(platformResult.rows[0]?.balance || 0));
+
+            await client.query(
+              `INSERT INTO platform_fee_transactions
+               (order_id, fee_amount, fee_percentage, spread_preference, platform_balance_after)
+               VALUES ($1, $2, $3, $4, $5)`,
+              [id, feeAmount,
+               parseFloat(String(order.protocol_fee_percentage)) || 0,
+               order.spread_preference || 'fastest',
+               newPlatformBalance]
+            );
+            collectedFeeAmount = feeAmount;
+            logger.info('[Mock] Platform fee collected', { orderId: id, feeAmount, newPlatformBalance });
+          }
+        }
+
+        // Record release_tx_hash and completed_at (status updated separately via state machine)
+        await client.query(
+          `UPDATE orders SET
+            release_tx_hash = $1,
+            completed_at = NOW()
+          WHERE id = $2`,
+          [tx_hash, id]
+        );
+      });
+    } catch (txError) {
+      const errMsg = (txError as Error).message;
+      if (errMsg === 'ALREADY_RELEASED') {
+        return NextResponse.json(
+          { success: false, error: 'Escrow already released on this order' },
+          { status: 409 }
+        );
+      }
+      if (errMsg === 'ORDER_STATUS_CHANGED') {
+        return NextResponse.json(
+          { success: false, error: 'Order status changed — cannot release escrow' },
+          { status: 409 }
+        );
+      }
+      logger.error('Escrow release transaction failed (balance + order update rolled back)', {
+        orderId: id, error: errMsg, recipientId,
+      });
+      return errorResponse(`Failed to release escrow: ${errMsg}`);
+    }
+
+    // Log transaction record (best-effort, outside main transaction)
+    if (MOCK_MODE) {
+      const netAmount = amount - collectedFeeAmount;
+      try {
+        await createTransaction({
+          merchant_id: recipientTable === 'merchants' ? recipientId : undefined,
+          user_id: recipientTable === 'users' ? recipientId : undefined,
+          order_id: id,
+          type: 'escrow_release',
+          amount: netAmount,
+          description: `Received ${netAmount} USDC from escrow release for order #${order.order_number}${collectedFeeAmount > 0 ? ` (${collectedFeeAmount.toFixed(2)} USDC fee)` : ''}`,
+        });
+      } catch (logErr) {
+        logger.warn('Failed to log escrow release transaction', { orderId: id, error: logErr });
       }
     }
 
-    // Update order with release details
-    await query(
-      `UPDATE orders SET
-        release_tx_hash = $1,
-        completed_at = NOW()
-      WHERE id = $2`,
-      [tx_hash, id]
-    );
-
-    // Update order status to completed
+    // Update status via state machine (handles event history, reputation, etc.)
+    // release_tx_hash is already set above, so the PATCH completion handler
+    // won't double-credit (it checks !order.release_tx_hash)
     const result = await updateOrderStatus(
       id,
       'completed',
@@ -381,62 +533,39 @@ export async function PATCH(
     );
 
     if (!result.success) {
-      return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 400 }
-      );
+      // Credit already went through but status update failed.
+      // Log the error but don't return failure — buyer already got their funds.
+      logger.error('Status update to completed failed after release credit', {
+        orderId: id, error: result.error,
+      });
     }
 
-    // Send system messages for escrow release and completion
-    try {
-      const releaseMsg = await sendMessage({
-        order_id: id,
-        sender_type: 'system',
-        sender_id: id,
-        content: `🔓 Escrow released - funds sent to merchant`,
-        message_type: 'system',
-      });
-
-      notifyNewMessage({
-        orderId: id,
-        messageId: releaseMsg.id,
-        senderType: 'system',
-        senderId: id,
-        content: `🔓 Escrow released - funds sent to merchant`,
-        messageType: 'system',
-        createdAt: releaseMsg.created_at.toISOString(),
-      });
-
-      const completeMsg = await sendMessage({
-        order_id: id,
-        sender_type: 'system',
-        sender_id: id,
-        content: `🎉 Trade completed successfully!`,
-        message_type: 'system',
-      });
-
-      notifyNewMessage({
-        orderId: id,
-        messageId: completeMsg.id,
-        senderType: 'system',
-        senderId: id,
-        content: `🎉 Trade completed successfully!`,
-        messageType: 'system',
-        createdAt: completeMsg.created_at.toISOString(),
-      });
-    } catch (msgError) {
-      logger.api.error('PATCH', `/api/orders/${id}/escrow/system-message`, msgError as Error);
-    }
+    // Auto system messages for escrow release removed - keeping only real user messages
 
     // Send real-time notification
     if (result.order) {
-      notifyOrderStatusUpdated({
+      const releasePayload = {
         orderId: id,
         userId: result.order.user_id,
         merchantId: result.order.merchant_id,
         status: 'completed',
         previousStatus: order.status,
         updatedAt: new Date().toISOString(),
+        data: result.order,
+      };
+
+      notifyOrderStatusUpdated(releasePayload);
+
+      if (result.order.buyer_merchant_id && result.order.buyer_merchant_id !== result.order.merchant_id) {
+        notifyOrderStatusUpdated({ ...releasePayload, merchantId: result.order.buyer_merchant_id });
+      }
+
+      // WebSocket broadcast
+      wsBroadcastOrderUpdate({
+        orderId: id,
+        status: 'completed',
+        previousStatus: order.status,
+        updatedAt: releasePayload.updatedAt,
         data: result.order,
       });
     }

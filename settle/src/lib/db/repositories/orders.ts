@@ -19,7 +19,7 @@ import {
   isTerminalStatus,
 } from '../../orders/stateMachine';
 import { logger } from '../../logger';
-import { notifyNewMessage } from '../../pusher/server';
+import { notifyNewMessage, notifyOrderStatusUpdated } from '../../pusher/server';
 import { recordReputationEvent } from '../../reputation';
 import { upsertMerchantContact } from './directMessages';
 
@@ -203,10 +203,14 @@ export async function getAllPendingOrdersForMerchant(
   let sql = `
     SELECT o.*,
            CASE
-             -- Pending/escrowed orders: Check if I created this order
+             -- Pending/escrowed orders: Check if I created this order OR I accepted it
              WHEN o.status IN ('pending', 'escrowed') THEN (
                o.buyer_merchant_id = $1 OR
-               (o.escrow_creator_wallet IS NOT NULL AND o.escrow_creator_wallet = current_m.wallet_address)
+               (o.escrow_creator_wallet IS NOT NULL AND LOWER(o.escrow_creator_wallet) = LOWER(current_m.wallet_address)) OR
+               -- Merchant-initiated orders: merchant_id matches AND user is a placeholder (not a real user)
+               (o.merchant_id = $1 AND (u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%')) OR
+               -- Merchant accepted this order (e.g. via bot) and it progressed to escrowed
+               (o.status = 'escrowed' AND o.merchant_id = $1 AND o.accepted_at IS NOT NULL)
              )
              -- After acceptance: it's my order if I'm assigned merchant OR buyer_merchant (M2M)
              ELSE ((o.merchant_id = $1 AND o.accepted_at IS NOT NULL) OR o.buyer_merchant_id = $1)
@@ -332,9 +336,10 @@ export async function createOrder(data: {
          user_id, merchant_id, offer_id, type, payment_method,
          crypto_amount, fiat_amount, rate, payment_details,
          status, expires_at, buyer_wallet_address, buyer_merchant_id,
-         escrow_tx_hash, escrow_trade_id, escrow_trade_pda, escrow_pda, escrow_creator_wallet, escrowed_at
+         escrow_tx_hash, escrow_trade_id, escrow_trade_pda, escrow_pda, escrow_creator_wallet, escrowed_at,
+         spread_preference, protocol_fee_percentage, protocol_fee_amount
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW() + ($11 || ' minutes')::INTERVAL, $12, $13, $14, $15, $16, $17, $18, CASE WHEN $14 IS NOT NULL THEN NOW() ELSE NULL END)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW() + ($11 || ' minutes')::INTERVAL, $12::TEXT, $13::UUID, $14::TEXT, $15::BIGINT, $16::TEXT, $17::TEXT, $18::TEXT, CASE WHEN $14 IS NOT NULL THEN NOW() ELSE NULL END, $19, $20, $21)
        RETURNING *`,
       [
         data.user_id,
@@ -355,6 +360,9 @@ export async function createOrder(data: {
         data.escrow_trade_pda ?? null,
         data.escrow_pda ?? null,
         data.escrow_creator_wallet ?? null,
+        data.spread_preference ?? 'fastest',
+        data.protocol_fee_percentage ?? 2.50,
+        data.protocol_fee_amount ?? null,
       ]
     );
 
@@ -517,15 +525,30 @@ export async function updateOrderStatus(
               newMerchantId: actorId,
             });
           }
-          // For M2M: set buyer_merchant_id instead of reassigning merchant_id
+          // For M2M: handle acceptance based on whether buyer_merchant_id is already set
           if (isM2MAcceptance) {
-            buyerMerchantUpdate = `, buyer_merchant_id = '${actorId}'`;
-            merchantReassign = ''; // Don't reassign - seller stays as merchant_id
-            logger.info('M2M acceptance: setting buyer_merchant_id', {
-              orderId,
-              sellerMerchantId: currentOrder.merchant_id,
-              buyerMerchantId: actorId,
-            });
+            if (currentOrder.buyer_merchant_id) {
+              // buyer_merchant_id already set (merchant-initiated BUY order)
+              // The acceptor is the SELLER, so reassign merchant_id to them
+              // Keep buyer_merchant_id as-is (the original buyer)
+              merchantReassign = `, merchant_id = '${actorId}'`;
+              buyerMerchantUpdate = ''; // Don't overwrite - buyer is already correct
+              logger.info('M2M acceptance (BUY order): reassigning merchant_id to seller', {
+                orderId,
+                buyerMerchantId: currentOrder.buyer_merchant_id,
+                sellerMerchantId: actorId,
+              });
+            } else {
+              // buyer_merchant_id NOT set (merchant-initiated SELL order or other M2M)
+              // The acceptor is the BUYER
+              buyerMerchantUpdate = `, buyer_merchant_id = '${actorId}'`;
+              merchantReassign = ''; // Don't reassign - seller stays as merchant_id
+              logger.info('M2M acceptance (SELL order): setting buyer_merchant_id', {
+                orderId,
+                sellerMerchantId: currentOrder.merchant_id,
+                buyerMerchantId: actorId,
+              });
+            }
           }
           // Store acceptor's wallet address when accepting (for sell orders with escrow)
           if (metadata?.acceptor_wallet_address) {
@@ -549,12 +572,23 @@ export async function updateOrderStatus(
           // This skips 'accepted' state, so we need to set accepted_at here too
           if (isM2MAcceptance) {
             timestampField = ", accepted_at = NOW(), expires_at = NOW() + INTERVAL '120 minutes'";
-            buyerMerchantUpdate = `, buyer_merchant_id = '${actorId}'`;
-            logger.info('M2M direct acceptance to payment_pending', {
-              orderId,
-              sellerMerchantId: currentOrder.merchant_id,
-              buyerMerchantId: actorId,
-            });
+            if (currentOrder.buyer_merchant_id) {
+              // BUY order: acceptor is seller, reassign merchant_id
+              merchantReassign = `, merchant_id = '${actorId}'`;
+              logger.info('M2M direct acceptance to payment_pending (BUY order)', {
+                orderId,
+                buyerMerchantId: currentOrder.buyer_merchant_id,
+                sellerMerchantId: actorId,
+              });
+            } else {
+              // SELL order: acceptor is buyer
+              buyerMerchantUpdate = `, buyer_merchant_id = '${actorId}'`;
+              logger.info('M2M direct acceptance to payment_pending (SELL order)', {
+                orderId,
+                sellerMerchantId: currentOrder.merchant_id,
+                buyerMerchantId: actorId,
+              });
+            }
             // Store acceptor's wallet address
             if (metadata?.acceptor_wallet_address) {
               const wallet = String(metadata.acceptor_wallet_address);
@@ -575,7 +609,7 @@ export async function updateOrderStatus(
           timestampField = ', completed_at = NOW()';
           break;
         case 'cancelled':
-          timestampField = ', cancelled_at = NOW(), cancelled_by = $4, cancellation_reason = $5';
+          timestampField = ', cancelled_at = NOW(), cancelled_by = $3::actor_type, cancellation_reason = $4::TEXT';
           break;
         case 'expired':
           timestampField = ", cancelled_at = NOW(), cancelled_by = 'system', cancellation_reason = 'Timed out'";
@@ -585,7 +619,17 @@ export async function updateOrderStatus(
           break;
       }
 
-      const updateParams: unknown[] = [newStatus, orderId];
+      // If accepting an already-escrowed order, keep status as 'escrowed' (don't regress)
+      let effectiveStatus = newStatus;
+      if (newStatus === 'accepted' && oldStatus === 'escrowed' && currentOrder.escrow_tx_hash) {
+        effectiveStatus = 'escrowed';
+        logger.info('M2M acceptance of escrowed order: keeping status as escrowed', {
+          orderId,
+          escrowTxHash: currentOrder.escrow_tx_hash,
+        });
+      }
+
+      const updateParams: unknown[] = [effectiveStatus, orderId];
       let sql = `UPDATE orders SET status = $1${timestampField}${merchantReassign}${acceptorWalletUpdate}${buyerMerchantUpdate} WHERE id = $2 RETURNING *`;
 
       if (newStatus === 'cancelled') {
@@ -635,23 +679,10 @@ export async function updateOrderStatus(
           [currentOrder.fiat_amount, currentOrder.merchant_id]
         );
 
-        // Update merchant balance (display-only tracking - actual funds are on-chain)
-        // Sell order: merchant sold crypto, balance decreases
-        // Buy order: merchant bought crypto, balance increases
-        const balanceChange = currentOrder.type === 'sell'
-          ? -currentOrder.crypto_amount  // Merchant sold crypto
-          : currentOrder.crypto_amount;   // Merchant bought crypto
-
-        await client.query(
-          `UPDATE merchants SET balance = balance + $1 WHERE id = $2`,
-          [balanceChange, currentOrder.merchant_id]
-        );
-        logger.info('Merchant balance updated', {
-          orderId,
-          merchantId: currentOrder.merchant_id,
-          orderType: currentOrder.type,
-          balanceChange,
-        });
+        // NOTE: Balance updates happen during escrow lock/release, NOT here
+        // - Escrow lock (POST /api/orders/[id]/escrow): Deducts from seller
+        // - Escrow release (PATCH /api/orders/[id]/escrow): Credits buyer
+        // This ensures balances are only updated once per order lifecycle
 
         logger.order.completed(orderId, currentOrder.crypto_amount, currentOrder.fiat_amount);
 
@@ -715,11 +746,11 @@ export async function updateOrderStatus(
       }
 
       // Log the status change
-      logger.order.statusChanged(orderId, oldStatus, newStatus, actorType, actorId);
+      logger.order.statusChanged(orderId, oldStatus, effectiveStatus, actorType, actorId);
 
       // Send system message to chat for this status change (use client within transaction)
       try {
-        const statusMessage = getStatusChangeMessage(newStatus, updatedOrder, actorType, metadata);
+        const statusMessage = getStatusChangeMessage(effectiveStatus, updatedOrder, actorType, metadata);
         if (statusMessage) {
           await client.query(
             `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
@@ -729,7 +760,7 @@ export async function updateOrderStatus(
         }
 
         // Auto-send bank info message when order is accepted (for bank payment method)
-        if (newStatus === 'accepted' && updatedOrder.payment_method === 'bank') {
+        if (effectiveStatus === 'accepted' && updatedOrder.payment_method === 'bank') {
           const paymentDetails = updatedOrder.payment_details as Record<string, unknown> | null;
           if (paymentDetails) {
             // For buy orders: user needs to send fiat to merchant's bank
@@ -755,7 +786,7 @@ export async function updateOrderStatus(
         }
 
         // Auto-send escrow info message when crypto is locked
-        if (newStatus === 'escrowed' && updatedOrder.escrow_tx_hash) {
+        if (effectiveStatus === 'escrowed' && updatedOrder.escrow_tx_hash) {
           const escrowInfoMessage = JSON.stringify({
             type: 'escrow_locked',
             text: `🔒 ${updatedOrder.crypto_amount} ${updatedOrder.crypto_currency} locked in escrow`,
@@ -774,7 +805,7 @@ export async function updateOrderStatus(
         }
 
         // Auto-send release info message when trade completes
-        if (newStatus === 'completed' && updatedOrder.release_tx_hash) {
+        if (effectiveStatus === 'completed' && updatedOrder.release_tx_hash) {
           const releaseInfoMessage = JSON.stringify({
             type: 'escrow_released',
             text: `✅ ${updatedOrder.crypto_amount} ${updatedOrder.crypto_currency} released`,
@@ -858,6 +889,8 @@ export async function getOrderMessages(orderId: string): Promise<ChatMessage[]> 
     LEFT JOIN merchants m ON cm.sender_type = 'merchant' AND cm.sender_id = m.id::text
     LEFT JOIN compliance_team ct ON cm.sender_type = 'compliance' AND cm.sender_id = ct.id::text
     WHERE cm.order_id = $1
+      AND cm.sender_type != 'system'
+      AND cm.message_type != 'system'
     ORDER BY cm.created_at ASC`,
     [orderId]
   );
@@ -992,10 +1025,21 @@ export async function expireOldOrders(): Promise<number> {
     for (const order of ordersToExpire) {
       if (order.escrow_tx_hash) {
         const amount = parseFloat(String(order.crypto_amount));
-        // Refund the seller (escrow creator)
+        // Refund the escrow creator (seller)
+        // In M2M trades, merchant_id is always the seller
+        // In user trades: BUY = merchant locked, SELL = user locked
         const isBuyOrder = order.type === 'buy';
-        const refundId = isBuyOrder ? order.merchant_id : order.user_id;
-        const refundTable = isBuyOrder ? 'merchants' : 'users';
+        const isM2M = !!order.buyer_merchant_id;
+        let refundId: string;
+        let refundTable: string;
+
+        if (isM2M) {
+          refundId = order.merchant_id;
+          refundTable = 'merchants';
+        } else {
+          refundId = isBuyOrder ? order.merchant_id : order.user_id;
+          refundTable = isBuyOrder ? 'merchants' : 'users';
+        }
 
         try {
           await query(
@@ -1044,6 +1088,29 @@ export async function expireOldOrders(): Promise<number> {
         messageType: 'system',
         createdAt: savedMessage.created_at.toISOString(),
       });
+
+      // Notify parties about the status change via Pusher
+      const newStatus = isEscrowLocked ? 'disputed' : 'cancelled';
+      notifyOrderStatusUpdated({
+        orderId: order.id,
+        userId: order.user_id,
+        merchantId: order.merchant_id,
+        status: newStatus,
+        previousStatus: order.status,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Also notify the buyer merchant if this is an M2M trade
+      if (order.buyer_merchant_id) {
+        notifyOrderStatusUpdated({
+          orderId: order.id,
+          userId: order.user_id,
+          merchantId: order.buyer_merchant_id,
+          status: newStatus,
+          previousStatus: order.status,
+          updatedAt: new Date().toISOString(),
+        });
+      }
 
       // Record event for user
       await recordReputationEvent(

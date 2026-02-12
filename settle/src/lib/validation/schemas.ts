@@ -240,6 +240,7 @@ export const merchantCreateOrderSchema = z.object({
   type: offerTypeSchema, // From merchant perspective: 'sell' = merchant sells USDC to user
   crypto_amount: positiveAmountSchema,
   payment_method: paymentMethodSchema,
+  spread_preference: z.enum(['best', 'fastest', 'cheap']).default('fastest'), // Match speed and protocol fee tier
   offer_id: uuidSchema.optional(), // If not provided, use merchant's active offer
   target_merchant_id: uuidSchema.optional(), // For M2M trading: trade with another merchant
   // Optional escrow details (for escrow-first sell orders)

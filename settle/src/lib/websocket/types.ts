@@ -134,6 +134,43 @@ export interface WSConnectedMessage extends WSMessage {
   connectionId: string;
 }
 
+// ============================================
+// Order Events (Server -> Client)
+// ============================================
+
+export interface WSOrderStatusUpdatedEvent extends WSMessage {
+  type: 'order:status-updated';
+  data: {
+    orderId: string;
+    status: string;
+    previousStatus?: string;
+    updatedAt: string;
+    data?: unknown;
+  };
+}
+
+export interface WSOrderCreatedEvent extends WSMessage {
+  type: 'order:created';
+  data: {
+    orderId: string;
+    status: string;
+    createdAt: string;
+    data?: unknown;
+  };
+}
+
+export interface WSOrderCancelledEvent extends WSMessage {
+  type: 'order:cancelled';
+  data: {
+    orderId: string;
+    cancelledBy: string;
+    reason?: string;
+    data?: unknown;
+  };
+}
+
+export type WSOrderEvent = WSOrderStatusUpdatedEvent | WSOrderCreatedEvent | WSOrderCancelledEvent;
+
 // Union of all server messages
 export type ServerMessage =
   | WSSubscribedMessage
@@ -143,7 +180,10 @@ export type ServerMessage =
   | WSMessagesReadEvent
   | WSPongMessage
   | WSErrorMessage
-  | WSConnectedMessage;
+  | WSConnectedMessage
+  | WSOrderStatusUpdatedEvent
+  | WSOrderCreatedEvent
+  | WSOrderCancelledEvent;
 
 // ============================================
 // Connection State

@@ -194,6 +194,13 @@ export function useRealtimeOrders(
         createdAt: string;
         data?: OrderData;
       };
+
+      // Deduplicate
+      if (isDuplicate(`created:${data.orderId}`)) {
+        console.log('[useRealtimeOrders] Skipping duplicate order created:', data.orderId);
+        return;
+      }
+
       if (data.data) {
         setOrders((prev) => {
           // Check if order already exists
@@ -207,6 +214,22 @@ export function useRealtimeOrders(
       }
     };
 
+    // Dedup: prevent duplicate notifications when same event arrives on multiple channels
+    const recentEvents = new Map<string, number>();
+    const isDuplicate = (key: string) => {
+      const now = Date.now();
+      const lastSeen = recentEvents.get(key);
+      if (lastSeen && now - lastSeen < 3000) return true; // 3s dedup window
+      recentEvents.set(key, now);
+      // Clean old entries
+      if (recentEvents.size > 100) {
+        for (const [k, t] of recentEvents) {
+          if (now - t > 10000) recentEvents.delete(k);
+        }
+      }
+      return false;
+    };
+
     // Handle order status update
     const handleStatusUpdated = (rawData: unknown) => {
       console.log('[useRealtimeOrders] Received STATUS_UPDATED event:', rawData);
@@ -217,6 +240,13 @@ export function useRealtimeOrders(
         updatedAt: string;
         data?: OrderData;
       };
+
+      // Deduplicate events arriving on both global + personal channels
+      if (isDuplicate(`status:${data.orderId}:${data.status}`)) {
+        console.log('[useRealtimeOrders] Skipping duplicate status update:', data.orderId, data.status);
+        return;
+      }
+
       setOrders((prev) =>
         prev.map((order) => {
           if (order.id !== data.orderId) return order;

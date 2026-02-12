@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
 
 // Create a dispute for an order
 export async function POST(
@@ -107,6 +108,16 @@ export async function POST(
       `UPDATE orders SET status = 'disputed'::order_status WHERE id = $1`,
       [orderId]
     );
+
+    // Notify all parties about the dispute via Pusher
+    await notifyOrderStatusUpdated({
+      orderId,
+      userId: order.user_id,
+      merchantId: order.merchant_id,
+      status: 'disputed',
+      previousStatus: order.status,
+      updatedAt: new Date().toISOString(),
+    });
 
     // Insert chat message about the dispute (use chat_messages table)
     try {

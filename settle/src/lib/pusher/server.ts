@@ -147,7 +147,10 @@ export async function notifyOrderCreated(data: OrderEventData): Promise<void> {
 }
 
 /**
- * Notify all parties when an order status is updated
+ * Notify relevant parties when an order status is updated.
+ * Only broadcast to ALL merchants for statuses that affect order availability
+ * (accepted, cancelled, expired) so they can remove claimed orders from their list.
+ * All other status updates (escrowed, payment_sent, etc.) only go to involved parties.
  */
 export async function notifyOrderStatusUpdated(data: OrderEventData): Promise<void> {
   const channels = [
@@ -155,6 +158,12 @@ export async function notifyOrderStatusUpdated(data: OrderEventData): Promise<vo
     getMerchantChannel(data.merchantId),
     getOrderChannel(data.orderId),
   ];
+
+  // Only broadcast to all merchants when an order is claimed/removed from the pool
+  const broadcastStatuses = ['accepted', 'cancelled', 'expired'];
+  if (broadcastStatuses.includes(data.status)) {
+    channels.push(getAllMerchantsChannel());
+  }
 
   await triggerEvent(channels, ORDER_EVENTS.STATUS_UPDATED, {
     orderId: data.orderId,

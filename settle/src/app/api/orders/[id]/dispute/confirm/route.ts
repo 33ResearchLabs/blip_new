@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
 
 // Confirm or reject a proposed dispute resolution
 export async function POST(
@@ -208,6 +209,16 @@ export async function POST(
         `UPDATE orders SET status = $1::order_status WHERE id = $2`,
         [orderStatus, orderId]
       );
+
+      // Notify all parties about the resolution via Pusher
+      await notifyOrderStatusUpdated({
+        orderId,
+        userId: dispute.user_id,
+        merchantId: dispute.merchant_id,
+        status: orderStatus,
+        previousStatus: 'disputed',
+        updatedAt: new Date().toISOString(),
+      });
 
       // Add message about final resolution with money transfer details
       try {

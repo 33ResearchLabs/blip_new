@@ -45,6 +45,7 @@ import {
 } from '@solana/spl-token';
 import * as anchor from '@coral-xyz/anchor';
 import { Program, AnchorProvider, BN, Idl } from '@coral-xyz/anchor';
+import { MOCK_MODE } from '@/lib/config/mockMode';
 
 // Import wallet adapter styles
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -1019,6 +1020,18 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     tradeId: number;
     counterparty: string;
   }): Promise<TradeOperationResult> => {
+    // In mock mode, return instant success
+    if (MOCK_MODE) {
+      console.log('[Mock] releaseEscrow called - returning instant success');
+      return {
+        txHash: `mock_release_${Date.now()}`,
+        success: true,
+        tradePda: 'mock_trade_pda',
+        escrowPda: 'mock_escrow_pda',
+        tradeId: params.tradeId,
+      };
+    }
+
     if (!publicKey || !program || !signTransaction) {
       throw new Error('Wallet not connected');
     }
