@@ -30,27 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_orders_spread_ranking
   ON orders(spread_preference, created_at)
   WHERE status = 'pending';
 
--- Create view for order book with spread priority
-CREATE OR REPLACE VIEW v_order_book AS
-SELECT
-  o.*,
-  m.display_name as merchant_name,
-  m.rating as merchant_rating,
-  m.total_trades as merchant_total_trades,
-  m.avg_response_time_mins as merchant_response_time,
-  m.wallet_address as merchant_wallet,
-  CASE
-    WHEN o.spread_preference = 'best' THEN 100
-    WHEN o.spread_preference = 'fastest' THEN 75
-    WHEN o.spread_preference = 'cheap' THEN 50
-    ELSE 0
-  END +
-  (m.rating * 10) +
-  (CASE WHEN m.avg_response_time_mins < 5 THEN 20 ELSE 0 END) as match_priority_score
-FROM orders o
-JOIN merchants m ON o.merchant_id = m.id
-WHERE o.status IN ('pending', 'escrowed')
-ORDER BY match_priority_score DESC, o.created_at ASC;
+-- Note: View creation moved after escrow_trade_id column type change (see below)
 
 -- Create function to calculate protocol fee
 CREATE OR REPLACE FUNCTION calculate_protocol_fee(
@@ -135,8 +115,33 @@ WHERE spread_preference IS NULL;
 
 -- Migration 018: Fix escrow_trade_id to BIGINT
 -- ============================================================================
+-- Drop view first (it depends on orders table structure)
+DROP VIEW IF EXISTS v_order_book CASCADE;
+
 ALTER TABLE orders
   ALTER COLUMN escrow_trade_id TYPE BIGINT USING escrow_trade_id::BIGINT;
+
+-- Recreate view for order book with spread priority (after column type change)
+CREATE OR REPLACE VIEW v_order_book AS
+SELECT
+  o.*,
+  m.display_name as merchant_name,
+  m.rating as merchant_rating,
+  m.total_trades as merchant_total_trades,
+  m.avg_response_time_mins as merchant_response_time,
+  m.wallet_address as merchant_wallet,
+  CASE
+    WHEN o.spread_preference = 'best' THEN 100
+    WHEN o.spread_preference = 'fastest' THEN 75
+    WHEN o.spread_preference = 'cheap' THEN 50
+    ELSE 0
+  END +
+  (m.rating * 10) +
+  (CASE WHEN m.avg_response_time_mins < 5 THEN 20 ELSE 0 END) as match_priority_score
+FROM orders o
+JOIN merchants m ON o.merchant_id = m.id
+WHERE o.status IN ('pending', 'escrowed')
+ORDER BY match_priority_score DESC, o.created_at ASC;
 
 -- Migration 019: M2M Contacts
 -- ============================================================================
@@ -166,13 +171,25 @@ CREATE TABLE IF NOT EXISTS platform_balance (
 
 CREATE TABLE IF NOT EXISTS platform_fee_transactions (
   id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-  order_id VARCHAR(36) NOT NULL REFERENCES orders(id),
+  order_id VARCHAR(36) NOT NULL,
   fee_amount DECIMAL(20,6) NOT NULL,
   fee_percentage DECIMAL(5,2) NOT NULL,
   spread_preference VARCHAR(20),
   platform_balance_after DECIMAL(20,6) NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add foreign key constraint if it doesn't exist
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'platform_fee_transactions_order_id_fkey'
+  ) THEN
+    ALTER TABLE platform_fee_transactions
+    ADD CONSTRAINT platform_fee_transactions_order_id_fkey
+    FOREIGN KEY (order_id) REFERENCES orders(id);
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_platform_fee_transactions_order ON platform_fee_transactions(order_id);
 CREATE INDEX IF NOT EXISTS idx_platform_fee_transactions_created ON platform_fee_transactions(created_at DESC);
