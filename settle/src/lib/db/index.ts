@@ -4,9 +4,11 @@
 import { Pool, PoolClient } from 'pg';
 
 // Support both DATABASE_URL (Railway) and individual env vars (local dev)
+const isProduction = process.env.NODE_ENV === 'production';
 const poolConfig = process.env.DATABASE_URL
   ? {
       connectionString: process.env.DATABASE_URL,
+      ssl: isProduction ? { rejectUnauthorized: false } : false,
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,

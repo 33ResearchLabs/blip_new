@@ -6,7 +6,7 @@
     "dev": "next dev",
     "dev:https": "node server.js",
     "build": "next build",
-    "start": "next start",
+    "start": "node server.js",
     "lint": "eslint",
     "test": "jest",
     "test:watch": "jest --watch",
