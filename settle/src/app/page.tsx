@@ -610,6 +610,13 @@ export default function Home() {
     },
   });
 
+  // Active order: prefer real-time data if available, fallback to orders list
+  const orderFromList = orders.find(o => o.id === activeOrderId);
+  const mappedRealtimeOrder = realtimeOrder ? mapDbOrderToUI(realtimeOrder as unknown as DbOrder) : null;
+  const activeOrder = mappedRealtimeOrder
+    ? { ...orderFromList, ...mappedRealtimeOrder }
+    : orderFromList;
+
   // Recovery: if on order screen but activeOrder is missing, refetch
   useEffect(() => {
     if (screen === 'order' && !activeOrder && activeOrderId) {
@@ -696,13 +703,6 @@ export default function Home() {
   const platformFee = cryptoFee - traderEarnings;
   const fiatFee = cryptoFee * currentRate;
   const fiatTraderEarnings = traderEarnings * currentRate;
-
-  // Active order: prefer real-time data if available, fallback to orders list
-  const orderFromList = orders.find(o => o.id === activeOrderId);
-  const mappedRealtimeOrder = realtimeOrder ? mapDbOrderToUI(realtimeOrder as unknown as DbOrder) : null;
-  const activeOrder = mappedRealtimeOrder
-    ? { ...orderFromList, ...mappedRealtimeOrder }
-    : orderFromList;
 
   // Get active chat for current order
   const activeChat = activeOrder ? chatWindows.find(w => w.orderId === activeOrder.id) : null;
