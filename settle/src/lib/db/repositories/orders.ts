@@ -18,6 +18,11 @@ import {
   getTransitionEventType,
   isTerminalStatus,
 } from '../../orders/stateMachine';
+import {
+  normalizeStatus,
+  validateStatusWrite,
+  isTransientStatus,
+} from '../../orders/statusNormalizer';
 import { logger } from '../../logger';
 import { notifyNewMessage, notifyOrderStatusUpdated } from '../../pusher/server';
 import { recordReputationEvent } from '../../reputation';
@@ -440,6 +445,25 @@ export async function updateOrderStatus(
   metadata?: Record<string, unknown>
 ): Promise<StatusUpdateResult> {
   try {
+    // CRITICAL: Prevent writing transient micro-statuses
+    // New code should use minimal statuses (8-state system)
+    // Transient statuses (escrow_pending, payment_pending, payment_confirmed, releasing)
+    // are kept in DB for backwards compatibility but should NOT be written by new code
+    if (isTransientStatus(newStatus)) {
+      const normalizedStatus = normalizeStatus(newStatus);
+      logger.warn('Attempted to write transient status - rejecting', {
+        orderId,
+        requestedStatus: newStatus,
+        normalizedStatus,
+        actorType,
+        actorId,
+      });
+      return {
+        success: false,
+        error: `Status '${newStatus}' is a transient status and cannot be written. Use '${normalizedStatus}' instead.`,
+      };
+    }
+
     return await transaction(async (client) => {
       // Get current order with row lock
       const currentResult = await client.query(
@@ -505,20 +529,23 @@ export async function updateOrderStatus(
         (newStatus === 'accepted' || newStatus === 'payment_pending') &&
         currentOrder.merchant_id !== actorId;
 
-      // Build update query with appropriate timestamp
+      // Build update query with PARAMETERIZED values (prevent SQL injection)
       let timestampField = '';
       let merchantReassign = '';
       let acceptorWalletUpdate = '';
       let buyerMerchantUpdate = '';
+      const dynamicParams: unknown[] = []; // Extra params beyond $1 (status)
+      let nextParam = 2; // $1 = status, dynamic params start at $2
+
       switch (newStatus) {
         case 'accepted':
           // Extend timer to 120 minutes from acceptance
           timestampField = ", accepted_at = NOW(), expires_at = NOW() + INTERVAL '120 minutes'";
           // If a different merchant is claiming, reassign the order to them
-          // Note: We do NOT set buyer_merchant_id here - that field is ONLY for M2M trades
-          // where a merchant is the buyer (set at order creation time)
           if (isMerchantClaiming) {
-            merchantReassign = `, merchant_id = '${actorId}'`;
+            merchantReassign = `, merchant_id = $${nextParam}`;
+            dynamicParams.push(actorId);
+            nextParam++;
             logger.info('Merchant claiming order', {
               orderId,
               previousMerchantId: currentOrder.merchant_id,
@@ -528,21 +555,20 @@ export async function updateOrderStatus(
           // For M2M: handle acceptance based on whether buyer_merchant_id is already set
           if (isM2MAcceptance) {
             if (currentOrder.buyer_merchant_id) {
-              // buyer_merchant_id already set (merchant-initiated BUY order)
-              // The acceptor is the SELLER, so reassign merchant_id to them
-              // Keep buyer_merchant_id as-is (the original buyer)
-              merchantReassign = `, merchant_id = '${actorId}'`;
-              buyerMerchantUpdate = ''; // Don't overwrite - buyer is already correct
+              merchantReassign = `, merchant_id = $${nextParam}`;
+              dynamicParams.push(actorId);
+              nextParam++;
+              buyerMerchantUpdate = '';
               logger.info('M2M acceptance (BUY order): reassigning merchant_id to seller', {
                 orderId,
                 buyerMerchantId: currentOrder.buyer_merchant_id,
                 sellerMerchantId: actorId,
               });
             } else {
-              // buyer_merchant_id NOT set (merchant-initiated SELL order or other M2M)
-              // The acceptor is the BUYER
-              buyerMerchantUpdate = `, buyer_merchant_id = '${actorId}'`;
-              merchantReassign = ''; // Don't reassign - seller stays as merchant_id
+              buyerMerchantUpdate = `, buyer_merchant_id = $${nextParam}`;
+              dynamicParams.push(actorId);
+              nextParam++;
+              merchantReassign = '';
               logger.info('M2M acceptance (SELL order): setting buyer_merchant_id', {
                 orderId,
                 sellerMerchantId: currentOrder.merchant_id,
@@ -553,9 +579,10 @@ export async function updateOrderStatus(
           // Store acceptor's wallet address when accepting (for sell orders with escrow)
           if (metadata?.acceptor_wallet_address) {
             const wallet = String(metadata.acceptor_wallet_address);
-            // Allow valid Solana addresses and mock wallet addresses
             if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet) || (MOCK_MODE && wallet.length > 0)) {
-              acceptorWalletUpdate = `, acceptor_wallet_address = '${wallet}'`;
+              acceptorWalletUpdate = `, acceptor_wallet_address = $${nextParam}`;
+              dynamicParams.push(wallet);
+              nextParam++;
               logger.info('Storing acceptor wallet address', {
                 orderId,
                 acceptorWallet: wallet,
@@ -569,37 +596,38 @@ export async function updateOrderStatus(
           break;
         case 'payment_pending':
           // M2M flow: when merchant accepts escrowed order and goes directly to payment_pending
-          // This skips 'accepted' state, so we need to set accepted_at here too
           if (isM2MAcceptance) {
             timestampField = ", accepted_at = NOW(), expires_at = NOW() + INTERVAL '120 minutes'";
             if (currentOrder.buyer_merchant_id) {
-              // BUY order: acceptor is seller, reassign merchant_id
-              merchantReassign = `, merchant_id = '${actorId}'`;
+              merchantReassign = `, merchant_id = $${nextParam}`;
+              dynamicParams.push(actorId);
+              nextParam++;
               logger.info('M2M direct acceptance to payment_pending (BUY order)', {
                 orderId,
                 buyerMerchantId: currentOrder.buyer_merchant_id,
                 sellerMerchantId: actorId,
               });
             } else {
-              // SELL order: acceptor is buyer
-              buyerMerchantUpdate = `, buyer_merchant_id = '${actorId}'`;
+              buyerMerchantUpdate = `, buyer_merchant_id = $${nextParam}`;
+              dynamicParams.push(actorId);
+              nextParam++;
               logger.info('M2M direct acceptance to payment_pending (SELL order)', {
                 orderId,
                 sellerMerchantId: currentOrder.merchant_id,
                 buyerMerchantId: actorId,
               });
             }
-            // Store acceptor's wallet address
             if (metadata?.acceptor_wallet_address) {
               const wallet = String(metadata.acceptor_wallet_address);
               if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
-                acceptorWalletUpdate = `, acceptor_wallet_address = '${wallet}'`;
+                acceptorWalletUpdate = `, acceptor_wallet_address = $${nextParam}`;
+                dynamicParams.push(wallet);
+                nextParam++;
               }
             }
           }
           break;
         case 'payment_sent':
-          // Note: expires_at stays at original 15 mins from creation (global timeout)
           timestampField = ", payment_sent_at = NOW()";
           break;
         case 'payment_confirmed':
@@ -609,7 +637,9 @@ export async function updateOrderStatus(
           timestampField = ', completed_at = NOW()';
           break;
         case 'cancelled':
-          timestampField = ', cancelled_at = NOW(), cancelled_by = $3::actor_type, cancellation_reason = $4::TEXT';
+          timestampField = `, cancelled_at = NOW(), cancelled_by = $${nextParam}::actor_type, cancellation_reason = $${nextParam + 1}::TEXT`;
+          dynamicParams.push(actorType, metadata?.reason || null);
+          nextParam += 2;
           break;
         case 'expired':
           timestampField = ", cancelled_at = NOW(), cancelled_by = 'system', cancellation_reason = 'Timed out'";
@@ -629,12 +659,10 @@ export async function updateOrderStatus(
         });
       }
 
-      const updateParams: unknown[] = [effectiveStatus, orderId];
-      let sql = `UPDATE orders SET status = $1${timestampField}${merchantReassign}${acceptorWalletUpdate}${buyerMerchantUpdate} WHERE id = $2 RETURNING *`;
-
-      if (newStatus === 'cancelled') {
-        updateParams.push(actorType, metadata?.reason || null);
-      }
+      // Build parameterized query: $1=status, $2..N=dynamic values, $N+1=orderId
+      const updateParams: unknown[] = [effectiveStatus, ...dynamicParams, orderId];
+      const whereParam = nextParam;
+      let sql = `UPDATE orders SET status = $1${timestampField}${merchantReassign}${acceptorWalletUpdate}${buyerMerchantUpdate} WHERE id = $${whereParam} RETURNING *`;
 
       const updateResult = await client.query(sql, updateParams);
       const updatedOrder = updateResult.rows[0] as Order;
@@ -679,10 +707,25 @@ export async function updateOrderStatus(
           [currentOrder.fiat_amount, currentOrder.merchant_id]
         );
 
-        // NOTE: Balance updates happen during escrow lock/release, NOT here
-        // - Escrow lock (POST /api/orders/[id]/escrow): Deducts from seller
-        // - Escrow release (PATCH /api/orders/[id]/escrow): Credits buyer
-        // This ensures balances are only updated once per order lifecycle
+        // NOTE: Escrow lock/release handle the main balance movements.
+        // Platform fee deduction happens here on completion (MOCK_MODE only).
+        if (MOCK_MODE && currentOrder.escrow_tx_hash) {
+          try {
+            const { deductPlatformFee } = await import('@/lib/money/platformFee');
+            await deductPlatformFee(client, {
+              id: orderId,
+              order_number: currentOrder.order_number,
+              crypto_amount: parseFloat(String(currentOrder.crypto_amount)),
+              protocol_fee_percentage: currentOrder.protocol_fee_percentage,
+              spread_preference: currentOrder.spread_preference,
+              escrow_debited_entity_type: currentOrder.escrow_debited_entity_type,
+              escrow_debited_entity_id: currentOrder.escrow_debited_entity_id,
+              merchant_id: currentOrder.merchant_id,
+            });
+          } catch (feeErr) {
+            logger.error('Failed to deduct platform fee on completion', { orderId, error: feeErr });
+          }
+        }
 
         logger.order.completed(orderId, currentOrder.crypto_amount, currentOrder.fiat_amount);
 
@@ -941,14 +984,16 @@ export async function markOrderHasManualMessage(orderId: string): Promise<void> 
   );
 }
 
-// Expired orders cleanup - Global 15-minute timeout from creation
+// Expired orders cleanup - Minimal status timeout logic
 export async function expireOldOrders(): Promise<number> {
   // First, get the orders that will be expired (we need user_id and merchant_id for reputation)
-  // Two timeout tiers:
-  // 1. Pending orders (no one accepted): 15 minutes from creation
-  // 2. Accepted/in-progress orders: 120 minutes from acceptance to complete
+  // MINIMAL STATUS TIMEOUT RULES:
+  // 1. "open" (pending): 15 minutes from creation → expired
+  // 2. "accepted" without escrow: 120 minutes from acceptance → cancelled
+  // 3. "escrowed"+ (escrow locked): 120 minutes from acceptance → disputed (never auto-cancel)
   const ordersToExpire = await query<{
     id: string;
+    order_number: string;
     user_id: string;
     merchant_id: string;
     buyer_merchant_id: string | null;
@@ -959,14 +1004,19 @@ export async function expireOldOrders(): Promise<number> {
     fiat_currency: string;
     escrow_tx_hash: string | null;
     accepted_at: string | null;
+    escrow_debited_entity_type: 'merchant' | 'user' | null;
+    escrow_debited_entity_id: string | null;
+    escrow_debited_amount: number | null;
   }>(
-    `SELECT id, user_id, merchant_id, buyer_merchant_id, status, type, crypto_amount, fiat_amount, fiat_currency, escrow_tx_hash, accepted_at
+    `SELECT id, order_number, user_id, merchant_id, buyer_merchant_id, status, type,
+            crypto_amount, fiat_amount, fiat_currency, escrow_tx_hash, accepted_at,
+            escrow_debited_entity_type, escrow_debited_entity_id, escrow_debited_amount
      FROM orders
      WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed')
        AND (
-         -- Pending orders: 15 min from creation
+         -- "open" orders (pending): 15 min from creation → expired
          (status = 'pending' AND created_at < NOW() - INTERVAL '15 minutes')
-         -- Accepted/in-progress orders: 120 min from acceptance (or creation if accepted_at is null)
+         -- "accepted"+ orders: 120 min from acceptance → cancelled or disputed based on escrow
          OR (status NOT IN ('pending') AND COALESCE(accepted_at, created_at) < NOW() - INTERVAL '120 minutes')
        )`
   );
@@ -975,29 +1025,30 @@ export async function expireOldOrders(): Promise<number> {
     return 0;
   }
 
-  // Separate into pending (cancel) vs accepted (return to pool or dispute)
+  // Separate into pending (expire) vs accepted (cancel or dispute based on escrow)
   const pendingExpired = ordersToExpire.filter(o => o.status === 'pending');
   const acceptedExpired = ordersToExpire.filter(o => o.status !== 'pending');
 
   let totalExpired = 0;
 
-  // Cancel pending orders (no one accepted them)
+  // Expire pending orders (no one accepted them) - use 'expired' status (not 'cancelled')
   if (pendingExpired.length > 0) {
     const pendingIds = pendingExpired.map(o => o.id);
-    const cancelResult = await query(
+    const expireResult = await query(
       `UPDATE orders
-       SET status = 'cancelled'::order_status,
+       SET status = 'expired'::order_status,
            cancelled_at = NOW(),
            cancelled_by = 'system',
-           cancellation_reason = 'Order timeout - no one accepted within 15 minutes'
+           cancellation_reason = 'Order expired - no one accepted within 15 minutes'
        WHERE id = ANY($1)
        RETURNING id`,
       [pendingIds]
     );
-    totalExpired += cancelResult?.length || 0;
+    totalExpired += expireResult?.length || 0;
   }
 
   // Handle accepted/in-progress orders that timed out (120 min)
+  // CRITICAL INVARIANT: After escrow locked, timeout → disputed (NEVER auto-cancel)
   if (acceptedExpired.length > 0) {
     const acceptedIds = acceptedExpired.map(o => o.id);
 
@@ -1007,12 +1058,15 @@ export async function expireOldOrders(): Promise<number> {
       `UPDATE orders
        SET
          status = CASE
-           WHEN status IN ('escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'releasing') THEN 'disputed'::order_status
+           WHEN escrow_tx_hash IS NOT NULL THEN 'disputed'::order_status
            ELSE 'cancelled'::order_status
          END,
          cancelled_at = NOW(),
          cancelled_by = 'system',
-         cancellation_reason = 'Order timeout - not completed within 120 minutes after acceptance'
+         cancellation_reason = CASE
+           WHEN escrow_tx_hash IS NOT NULL THEN 'Order timeout - moved to dispute (escrow locked)'
+           ELSE 'Order timeout - cancelled (no escrow)'
+         END
        WHERE id = ANY($1)
        RETURNING id`,
       [acceptedIds]
@@ -1020,35 +1074,94 @@ export async function expireOldOrders(): Promise<number> {
     totalExpired += updateResult?.length || 0;
   }
 
-  // Mock mode: refund escrowed amounts back to sellers for expired/disputed orders
+  // Mock mode: refund escrowed amounts back to the recorded escrow payer
   if (MOCK_MODE) {
     for (const order of ordersToExpire) {
       if (order.escrow_tx_hash) {
-        const amount = parseFloat(String(order.crypto_amount));
-        // Refund the escrow creator (seller)
-        // In M2M trades, merchant_id is always the seller
-        // In user trades: BUY = merchant locked, SELL = user locked
-        const isBuyOrder = order.type === 'buy';
-        const isM2M = !!order.buyer_merchant_id;
-        let refundId: string;
-        let refundTable: string;
+        // Use recorded debit fields (deterministic); fallback to inference for pre-migration orders
+        const debitType = order.escrow_debited_entity_type;
+        const debitId = order.escrow_debited_entity_id;
+        const debitAmount = order.escrow_debited_amount != null
+          ? parseFloat(String(order.escrow_debited_amount))
+          : parseFloat(String(order.crypto_amount));
 
-        if (isM2M) {
-          refundId = order.merchant_id;
-          refundTable = 'merchants';
+        let refundId: string;
+        let refundTable: 'merchants' | 'users';
+        let refundEntityType: 'merchant' | 'user';
+
+        if (debitType && debitId) {
+          refundId = debitId;
+          refundTable = debitType === 'merchant' ? 'merchants' : 'users';
+          refundEntityType = debitType;
         } else {
-          refundId = isBuyOrder ? order.merchant_id : order.user_id;
-          refundTable = isBuyOrder ? 'merchants' : 'users';
+          // Legacy fallback
+          const isBuyOrder = order.type === 'buy';
+          const isM2M = !!order.buyer_merchant_id;
+          if (isM2M) {
+            refundId = order.merchant_id;
+            refundTable = 'merchants';
+            refundEntityType = 'merchant';
+          } else {
+            refundId = isBuyOrder ? order.merchant_id : order.user_id;
+            refundTable = isBuyOrder ? 'merchants' : 'users';
+            refundEntityType = isBuyOrder ? 'merchant' : 'user';
+          }
+          logger.warn('[Expiry] Used legacy inference for refund — order missing escrow_debited fields', { orderId: order.id });
         }
 
         try {
           await query(
             `UPDATE ${refundTable} SET balance = balance + $1 WHERE id = $2`,
-            [amount, refundId]
+            [debitAmount, refundId]
           );
-          console.log(`[Mock] Refunded ${amount} to ${refundTable} ${refundId} on order expiry/dispute`);
+
+          // Ledger entry for refund
+          await query(
+            `INSERT INTO ledger_entries
+             (account_type, account_id, entry_type, amount, asset,
+              related_order_id, description, metadata, balance_before, balance_after)
+             SELECT $1, $2, 'ESCROW_REFUND', $3, 'USDT', $4,
+                    'Escrow refunded on expiry for order #' || $5,
+                    $6::jsonb,
+                    balance - $3, balance
+             FROM ${refundTable} WHERE id = $2`,
+            [
+              refundEntityType,
+              refundId,
+              debitAmount,
+              order.id,
+              order.order_number,
+              JSON.stringify({ reason: 'Order timeout/expiry' }),
+            ]
+          );
+
+          // Transaction log entry for refund
+          await query(
+            `INSERT INTO merchant_transactions
+             (merchant_id, user_id, order_id, type, amount, balance_before, balance_after, description)
+             SELECT $1, $2, $3, 'escrow_refund', $4,
+                    balance - $4, balance,
+                    'Escrow refund on expiry for order #' || $5
+             FROM ${refundTable} WHERE id = $6`,
+            [
+              refundEntityType === 'merchant' ? refundId : null,
+              refundEntityType === 'user' ? refundId : null,
+              order.id,
+              debitAmount,
+              order.order_number,
+              refundId,
+            ]
+          );
+
+          logger.info('[Mock] Refunded escrow on expiry', {
+            orderId: order.id,
+            refundId,
+            refundEntityType,
+            debitAmount,
+            usedRecordedFields: !!(debitType && debitId),
+          });
         } catch (refundErr) {
-          console.error(`[Mock] Failed to refund on expiry:`, refundErr);
+          logger.error('[Mock] Failed to refund on expiry', { orderId: order.id, error: refundErr });
         }
       }
     }
