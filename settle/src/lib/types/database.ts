@@ -19,6 +19,19 @@ export type OrderStatus =
   | 'cancelled'
   | 'disputed'
   | 'expired';
+
+// Minimal 8-state API status (public-facing, simplified)
+// Maps from 12-status DB layer via statusNormalizer
+export type MinimalOrderStatus =
+  | 'open'          // pending
+  | 'accepted'      // accepted, escrow_pending
+  | 'escrowed'      // escrowed, payment_pending
+  | 'payment_sent'  // payment_sent, payment_confirmed
+  | 'completed'     // completed, releasing
+  | 'cancelled'     // cancelled
+  | 'expired'       // expired
+  | 'disputed';     // disputed
+
 export type ActorType = 'user' | 'merchant' | 'system' | 'compliance';
 export type MessageType = 'text' | 'image' | 'system';
 export type DisputeReason =
@@ -150,6 +163,15 @@ export interface Order {
   spread_preference: string | null;
   protocol_fee_percentage: number | null;
   protocol_fee_amount: number | null;
+  // Escrow debit tracking (migration 026) — deterministic refund target
+  escrow_debited_entity_type: 'merchant' | 'user' | null;
+  escrow_debited_entity_id: string | null;
+  escrow_debited_amount: number | null;
+  escrow_debited_at: Date | null;
+  // Optimistic locking / versioning
+  order_version: number;
+  // API minimal status (derived)
+  minimal_status?: MinimalOrderStatus;
 }
 
 export interface OrderEvent {
