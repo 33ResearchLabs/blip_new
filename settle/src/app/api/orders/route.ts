@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createOrder, getUserOrders } from '@/lib/db/repositories/orders';
+import { getUserOrders } from '@/lib/db/repositories/orders';
 import { findBestOffer, getOfferWithMerchant } from '@/lib/db/repositories/merchants';
-import { OfferType, PaymentMethod } from '@/lib/types/database';
+import { OfferType, PaymentMethod, logger, normalizeStatus } from 'settlement-core';
 import {
   createOrderSchema,
   userOrdersQuerySchema,
@@ -15,8 +15,7 @@ import {
   errorResponse,
 } from '@/lib/middleware/auth';
 import { checkRateLimit, STANDARD_LIMIT, ORDER_LIMIT } from '@/lib/middleware/rateLimit';
-import { logger } from '@/lib/logger';
-import { notifyOrderCreated } from '@/lib/pusher/server';
+import { proxyCoreApi } from '@/lib/proxy/coreApi';
 
 // Prevent Next.js from caching this route
 export const dynamic = 'force-dynamic';
@@ -53,8 +52,15 @@ export async function GET(request: NextRequest) {
     }
 
     const orders = await getUserOrders(user_id);
+
+    // Add minimal_status to each order
+    const ordersWithMinimalStatus = (orders || []).map(order => ({
+      ...order,
+      minimal_status: normalizeStatus(order.status),
+    }));
+
     logger.api.request('GET', '/api/orders', user_id);
-    return successResponse(orders || []);
+    return successResponse(ordersWithMinimalStatus);
   } catch (error) {
     logger.api.error('GET', '/api/orders', error as Error);
     return errorResponse('Internal server error');
@@ -85,6 +91,7 @@ export async function POST(request: NextRequest) {
       preference,
       user_bank_account,
       buyer_wallet_address,
+      buyer_merchant_id,
     } = parseResult.data;
 
     // Authorization: verify the user exists and is making a request for themselves
@@ -170,55 +177,23 @@ export async function POST(request: NextRequest) {
             user_bank_account: type === 'sell' ? user_bank_account : undefined,
           };
 
-    // Create the order
-    const order = await createOrder({
-      user_id,
-      merchant_id: offer.merchant_id,
-      offer_id: offer.id,
-      type: type as OfferType,
-      payment_method: offer.payment_method,
-      crypto_amount,
-      fiat_amount: fiatAmount,
-      rate: offer.rate,
-      payment_details: paymentDetails,
-      buyer_wallet_address: type === 'buy' ? buyer_wallet_address : undefined, // Store buyer's wallet for buy orders
+    // Forward to core-api (single writer for all mutations)
+    return proxyCoreApi('/v1/orders', {
+      method: 'POST',
+      body: {
+        user_id,
+        merchant_id: offer.merchant_id,
+        offer_id: offer.id,
+        type: type as OfferType,
+        payment_method: offer.payment_method,
+        crypto_amount,
+        fiat_amount: fiatAmount,
+        rate: offer.rate,
+        payment_details: paymentDetails,
+        buyer_wallet_address: type === 'buy' ? buyer_wallet_address : undefined,
+        buyer_merchant_id,
+      },
     });
-
-    console.log('[API] Order created - orderId:', order.id, 'merchantId:', offer.merchant_id, 'merchantName:', offer.merchant?.display_name, 'offerId:', offer.id);
-
-    logger.info('Order created successfully', {
-      orderId: order.id,
-      orderStatus: order.status,
-      userId: user_id,
-      merchantId: offer.merchant_id,
-      merchantName: offer.merchant?.display_name,
-      offerId: offer.id,
-      cryptoAmount: crypto_amount,
-    });
-
-    logger.order.created(order.id, user_id, offer.merchant_id, crypto_amount);
-
-    // Auto welcome messages removed - keeping only real user messages
-
-    // Notify merchant of new order via Pusher
-    try {
-      await notifyOrderCreated({
-        orderId: order.id,
-        userId: user_id,
-        merchantId: offer.merchant_id,
-        status: order.status,
-        updatedAt: new Date().toISOString(),
-        data: { ...order, offer, merchant: offer.merchant },
-      });
-      console.log('[API] Pusher notification sent successfully for order:', order.id);
-    } catch (pusherError) {
-      console.error('[API] Failed to send Pusher notification:', pusherError);
-    }
-
-    return NextResponse.json(
-      { success: true, data: { ...order, offer, merchant: offer.merchant } },
-      { status: 201 }
-    );
   } catch (error) {
     const err = error as Error;
     console.error('[API] POST /api/orders error:', {

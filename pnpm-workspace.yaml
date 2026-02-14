@@ -1,0 +1,4 @@
+packages:
+  - 'settle'
+  - 'apps/*'
+  - 'packages/*'

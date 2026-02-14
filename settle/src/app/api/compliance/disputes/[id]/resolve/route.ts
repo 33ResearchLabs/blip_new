@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { getAuthContext } from '@/lib/middleware/auth';
 
 // Propose a resolution (requires 2 confirmations from user and merchant)
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Require compliance auth
+  const auth = getAuthContext(request);
+  if (!auth || (auth.actorType !== 'compliance' && auth.actorType !== 'system')) {
+    return NextResponse.json(
+      { success: false, error: 'Compliance authentication required' },
+      { status: 401 }
+    );
+  }
+
   try {
     const { id: orderId } = await params;
     const body = await request.json();

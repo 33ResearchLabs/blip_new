@@ -115,6 +115,8 @@ interface OrderEventData {
   userId: string;
   merchantId: string;
   status: string;
+  minimal_status?: string;
+  order_version?: number;
   previousStatus?: string;
   updatedAt: string;
   data?: unknown;
@@ -139,6 +141,8 @@ export async function notifyOrderCreated(data: OrderEventData): Promise<void> {
   await triggerEvent(channels, ORDER_EVENTS.CREATED, {
     orderId: data.orderId,
     status: data.status,
+    minimal_status: data.minimal_status,
+    order_version: data.order_version,
     createdAt: data.updatedAt,
     data: data.data,
   });
@@ -168,6 +172,8 @@ export async function notifyOrderStatusUpdated(data: OrderEventData): Promise<vo
   await triggerEvent(channels, ORDER_EVENTS.STATUS_UPDATED, {
     orderId: data.orderId,
     status: data.status,
+    minimal_status: data.minimal_status,
+    order_version: data.order_version,
     previousStatus: data.previousStatus,
     updatedAt: data.updatedAt,
     data: data.data,
@@ -186,6 +192,8 @@ export async function notifyOrderCancelled(data: OrderEventData): Promise<void> 
 
   await triggerEvent(channels, ORDER_EVENTS.CANCELLED, {
     orderId: data.orderId,
+    minimal_status: data.minimal_status || 'cancelled',
+    order_version: data.order_version,
     cancelledAt: data.updatedAt,
     data: data.data,
   });

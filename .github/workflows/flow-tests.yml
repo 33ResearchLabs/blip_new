@@ -1,0 +1,87 @@
+name: Flow Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'settle/**'
+      - 'apps/core-api/**'
+      - 'packages/settlement-core/**'
+      - '.github/workflows/flow-tests.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'settle/**'
+      - 'apps/core-api/**'
+      - 'packages/settlement-core/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: blip_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/blip_test
+      NEXT_PUBLIC_MOCK_MODE: true
+      NODE_ENV: development
+      PORT: 3000
+      CORE_API_PORT: 4010
+      CORE_API_URL: http://localhost:4010
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup database schema
+        working-directory: ./settle
+        run: |
+          echo "Setting up database schema..."
+          psql $DATABASE_URL -f database/schema.sql
+          echo "Schema setup complete"
+
+      - name: Build Next.js app
+        working-directory: ./settle
+        run: pnpm build
+
+      - name: Run all tests
+        working-directory: ./settle
+        run: pnpm test:unit && bash scripts/test-harness.sh both
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-failure-logs
+          path: |
+            /tmp/core-api-test.log
+            /tmp/settle-test.log
+          retention-days: 7

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { requireAdminAuth } from '@/lib/middleware/auth';
 
 interface ActivityRow {
   id: string;
@@ -11,6 +12,9 @@ interface ActivityRow {
 
 // GET /api/admin/activity - Get recent platform activity
 export async function GET(request: NextRequest) {
+  const authError = requireAdminAuth(request);
+  if (authError) return authError;
+
   try {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '20');

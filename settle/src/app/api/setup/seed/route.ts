@@ -3,6 +3,14 @@ import { query } from '@/lib/db';
 
 // Seed test accounts for development
 export async function GET() {
+  // Block in production - this creates test data with known credentials
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { success: false, error: 'This endpoint is disabled in production' },
+      { status: 403 }
+    );
+  }
+
   const results: string[] = [];
 
   try {

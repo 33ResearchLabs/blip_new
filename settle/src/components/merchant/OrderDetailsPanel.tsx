@@ -5,8 +5,9 @@ import {
   X, ExternalLink, Clock, User, Wallet, Building2, MapPin,
   Copy, Check, AlertTriangle, CheckCircle, XCircle, Shield,
   ArrowRight, ChevronDown, ChevronUp, MessageCircle, Store,
-  Hash, Link as LinkIcon
+  Hash, Link as LinkIcon, Zap
 } from 'lucide-react';
+import { getAuthoritativeStatus, getNextAction, deriveOrderUI } from '@/lib/orders/statusResolver';
 
 interface OrderDetails {
   id: string;
@@ -91,6 +92,14 @@ interface OrderDetailsPanelProps {
   orderId: string;
   onClose: () => void;
   onOpenChat?: (orderId: string, username: string, emoji: string) => void;
+  onConfirmPayment?: (orderId: string) => void;
+  onMarkPaymentSent?: (orderId: string) => void;
+  onAcceptOrder?: (orderId: string) => void;
+  onCancelOrder?: (orderId: string) => void;
+  onOpenDispute?: (orderId: string) => void;
+  onLockEscrow?: (orderId: string) => void;
+  onReleaseEscrow?: (orderId: string) => void;
+  merchantId?: string;
 }
 
 // Status configuration
@@ -151,7 +160,19 @@ function getSolscanUrl(hash: string): string {
   return `https://solscan.io/tx/${hash}${cluster}`;
 }
 
-export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetailsPanelProps) {
+export function OrderDetailsPanel({
+  orderId,
+  onClose,
+  onOpenChat,
+  onConfirmPayment,
+  onMarkPaymentSent,
+  onAcceptOrder,
+  onCancelOrder,
+  onOpenDispute,
+  onLockEscrow,
+  onReleaseEscrow,
+  merchantId,
+}: OrderDetailsPanelProps) {
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -248,7 +269,7 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
           <div>
             <div className="flex items-center gap-3">
               <h2 className="text-lg font-semibold text-white">{order.order_number}</h2>
-              <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium
+              <span data-testid="order-status" className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium
                 ${statusConfig.color} ${statusConfig.bgColor}`}>
                 <StatusIcon className="w-3 h-3" />
                 {statusConfig.label}
@@ -666,6 +687,98 @@ export function OrderDetailsPanel({ orderId, onClose, onOpenChat }: OrderDetails
               </p>
             </div>
           )}
+
+          {/* Action Buttons - uses deriveOrderUI for consistent status/actions */}
+          {(() => {
+            // Don't render action buttons until merchantId is available
+            // (avoids showing wrong buttons during initial load)
+            if (!merchantId) return null;
+
+            const ui = deriveOrderUI(order, merchantId);
+
+            // Don't show action buttons for terminal states
+            if (ui.isTerminal) return null;
+
+            // Map handler names to actual callbacks
+            const handleAction = (handler: string) => {
+              switch (handler) {
+                case 'acceptOrder':
+                  onAcceptOrder?.(order.id);
+                  onClose();
+                  break;
+                case 'lockEscrow':
+                  onLockEscrow?.(order.id);
+                  onClose();
+                  break;
+                case 'signAndProceed':
+                case 'signToClaimOrder':
+                  onAcceptOrder?.(order.id);
+                  onClose();
+                  break;
+                case 'markFiatPaymentSent':
+                  onMarkPaymentSent?.(order.id);
+                  onClose();
+                  break;
+                case 'confirmPayment':
+                case 'openReleaseModal':
+                  onConfirmPayment?.(order.id);
+                  onClose();
+                  break;
+                case 'openDisputeModal':
+                  onOpenDispute?.(order.id);
+                  onClose();
+                  break;
+                case 'cancelOrderWithoutEscrow':
+                case 'openCancelModal':
+                  onCancelOrder?.(order.id);
+                  onClose();
+                  break;
+                case 'none':
+                default:
+                  break;
+              }
+            };
+
+            const variantClasses = {
+              green: 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border-emerald-500/30',
+              blue: 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border-blue-500/30',
+              red: 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/30',
+              gold: 'bg-[#c9a962]/20 text-[#c9a962] hover:bg-[#c9a962]/30 border-[#c9a962]/30',
+            };
+
+            return (
+              <div className="space-y-2">
+                {ui.primaryAction && (
+                  <button
+                    data-testid="order-primary-action"
+                    onClick={() => handleAction(ui.primaryAction!.handler)}
+                    disabled={ui.primaryAction.disabled}
+                    className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2
+                               transition-colors border ${variantClasses[ui.primaryAction.variant]}
+                               ${ui.primaryAction.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={ui.primaryAction.disabledReason}
+                  >
+                    <Zap className="w-5 h-5" />
+                    {ui.primaryAction.label}
+                  </button>
+                )}
+                {ui.nextStepText && (
+                  <p className="text-xs text-white/40 text-center">{ui.nextStepText}</p>
+                )}
+                {ui.secondaryAction && (
+                  <button
+                    data-testid="order-secondary-action"
+                    onClick={() => handleAction(ui.secondaryAction!.handler)}
+                    className="w-full py-2 rounded-xl bg-red-500/10 text-red-400 font-medium flex items-center justify-center gap-2
+                               hover:bg-red-500/20 transition-colors border border-red-500/20 text-sm"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    {ui.secondaryAction.label}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Chat Button (Bottom) */}
           {onOpenChat && (

@@ -405,7 +405,7 @@ export function TradeChat({
   });
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0a0a]">
+    <div data-testid="chat-panel" className="h-full flex flex-col bg-[#0a0a0a]">
       {/* Header with trade info */}
       <div className="border-b border-white/[0.04] bg-[#0d0d0d]">
         {/* Navigation bar */}
@@ -743,6 +743,7 @@ export function TradeChat({
                       return (
                         <motion.div
                           key={msg.id}
+                          data-testid={`chat-msg-${msg.id}`}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: msgIndex * 0.02 }}
@@ -828,6 +829,7 @@ export function TradeChat({
             <div className="flex gap-2">
               <input
                 ref={inputRef}
+                data-testid="chat-input"
                 type="text"
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
@@ -837,6 +839,7 @@ export function TradeChat({
                            text-white placeholder:text-gray-500 focus:ring-1 focus:ring-[#c9a962]/50"
               />
               <motion.button
+                data-testid="chat-send"
                 whileTap={{ scale: 0.95 }}
                 onClick={handleSend}
                 disabled={!messageText.trim()}

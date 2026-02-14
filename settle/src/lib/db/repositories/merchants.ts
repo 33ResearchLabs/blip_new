@@ -54,6 +54,41 @@ export async function updateMerchantRating(id: string): Promise<void> {
   );
 }
 
+export async function updateMerchant(
+  id: string,
+  data: Partial<Pick<Merchant, 'avatar_url' | 'display_name' | 'phone' | 'business_name'>>
+): Promise<Merchant | null> {
+  const fields: string[] = [];
+  const values: unknown[] = [];
+  let paramIndex = 1;
+
+  if (data.avatar_url !== undefined) {
+    fields.push(`avatar_url = $${paramIndex++}`);
+    values.push(data.avatar_url);
+  }
+  if (data.display_name !== undefined) {
+    fields.push(`display_name = $${paramIndex++}`);
+    values.push(data.display_name);
+  }
+  if (data.phone !== undefined) {
+    fields.push(`phone = $${paramIndex++}`);
+    values.push(data.phone);
+  }
+  if (data.business_name !== undefined) {
+    fields.push(`business_name = $${paramIndex++}`);
+    values.push(data.business_name);
+  }
+
+  if (fields.length === 0) return getMerchantById(id);
+
+  fields.push(`updated_at = NOW()`);
+  values.push(id);
+  return queryOne<Merchant>(
+    `UPDATE merchants SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+    values
+  );
+}
+
 // Offers
 export async function getOfferById(id: string): Promise<MerchantOffer | null> {
   return queryOne<MerchantOffer>('SELECT * FROM merchant_offers WHERE id = $1', [id]);

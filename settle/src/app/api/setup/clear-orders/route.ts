@@ -3,6 +3,14 @@ import { query } from '@/lib/db';
 
 // Clear all orders from the database (development only)
 export async function POST() {
+  // Block in production - this is a destructive endpoint
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { success: false, error: 'This endpoint is disabled in production' },
+      { status: 403 }
+    );
+  }
+
   try {
     // Delete related records first (foreign key constraints)
     await query(`DELETE FROM chat_messages`);

@@ -1,8 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
+import { requireAdminAuth } from '@/lib/middleware/auth';
 
 // GET /api/admin/balance - Get platform fee balance and breakdown
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = requireAdminAuth(request);
+  if (authError) return authError;
+
   try {
     const balance = await queryOne<{ balance: string; total_fees_collected: string }>(
       `SELECT balance::text, total_fees_collected::text FROM platform_balance WHERE key = 'main'`

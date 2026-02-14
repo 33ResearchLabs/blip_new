@@ -80,6 +80,16 @@ export const updateUserSchema = z.object({
   push_token: z.string().optional(),
 });
 
+// Merchant schemas
+export const updateMerchantSchema = z.object({
+  avatar_url: z.string().url().optional(),
+  display_name: z.string().min(1).max(50).optional(),
+  phone: z.string().max(20).optional(),
+  business_name: z.string().min(1).max(100).optional(),
+});
+
+export type UpdateMerchantInput = z.infer<typeof updateMerchantSchema>;
+
 export const addBankAccountSchema = z.object({
   bank_name: z.string().min(1, 'Bank name required').max(100),
   account_name: z.string().min(1, 'Account name required').max(100),
@@ -160,14 +170,16 @@ export const createOrderSchema = z.object({
   preference: tradePreferenceSchema.optional(),
   user_bank_account: z.string().max(50).optional(), // User's bank IBAN for receiving fiat (sell orders)
   buyer_wallet_address: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'Invalid Solana wallet address').optional(), // Buyer's Solana wallet for receiving crypto (buy orders)
+  buyer_merchant_id: uuidSchema.optional(), // For M2M trades: merchant acting as buyer
 });
 
 export const updateOrderStatusSchema = z.object({
   status: orderStatusSchema,
   actor_type: actorTypeSchema,
   actor_id: uuidSchema,
-  reason: z.string().max(500).optional(), // For cancellation
-  acceptor_wallet_address: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'Invalid Solana wallet address').optional(), // Merchant wallet for sell order acceptance
+  reason: z.string().max(500).nullish(), // For cancellation
+  acceptor_wallet_address: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'Invalid Solana wallet address').nullish(), // Merchant wallet for sell order acceptance
+  acceptor_wallet_signature: z.string().nullish(), // Wallet signature for claim flow
 });
 
 export const orderIdParamSchema = z.object({
@@ -243,13 +255,13 @@ export const merchantCreateOrderSchema = z.object({
   spread_preference: z.enum(['best', 'fastest', 'cheap']).default('fastest'), // Match speed and protocol fee tier
   offer_id: uuidSchema.optional(), // If not provided, use merchant's active offer
   target_merchant_id: uuidSchema.optional(), // For M2M trading: trade with another merchant
-  // Optional escrow details (for escrow-first sell orders)
-  escrow_tx_hash: z.string().optional(),
-  escrow_trade_id: z.number().optional(),
-  escrow_trade_pda: z.string().optional(),
-  escrow_pda: z.string().optional(),
-  escrow_creator_wallet: z.string().optional(),
-  matched_offer_id: uuidSchema.optional(), // Matched offer for M2M
+  // Optional escrow details (for escrow-first sell orders) — nullish to accept null from mock mode
+  escrow_tx_hash: z.string().nullish(),
+  escrow_trade_id: z.number().nullish(),
+  escrow_trade_pda: z.string().nullish(),
+  escrow_pda: z.string().nullish(),
+  escrow_creator_wallet: z.string().nullish(),
+  matched_offer_id: uuidSchema.nullish(), // Matched offer for M2M
 });
 
 // Helper function to sanitize messages (basic XSS prevention)

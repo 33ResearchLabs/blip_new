@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { requireAdminAuth } from '@/lib/middleware/auth';
 
 interface MerchantRow {
   id: string;
@@ -13,6 +14,9 @@ interface MerchantRow {
 
 // GET /api/admin/merchants - Get all merchants with stats
 export async function GET(request: NextRequest) {
+  const authError = requireAdminAuth(request);
+  if (authError) return authError;
+
   try {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '20');

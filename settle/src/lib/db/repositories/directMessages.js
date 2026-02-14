@@ -1,0 +1,239 @@
+import { query, queryOne } from '../index';
+// ============ CONTACTS ============
+// Get all contacts for a merchant (both user and merchant contacts)
+export async function getMerchantContacts(merchantId) {
+    return query(`SELECT
+      mc.*,
+      CASE
+        WHEN mc.contact_type = 'user' THEN
+          json_build_object(
+            'id', u.id,
+            'username', u.username,
+            'rating', u.rating,
+            'total_trades', u.total_trades,
+            'type', 'user'
+          )
+        WHEN mc.contact_type = 'merchant' THEN
+          json_build_object(
+            'id', m.id,
+            'username', COALESCE(m.display_name, m.username),
+            'rating', m.rating,
+            'total_trades', m.total_trades,
+            'type', 'merchant'
+          )
+      END as contact
+    FROM merchant_contacts mc
+    LEFT JOIN users u ON mc.user_id = u.id AND mc.contact_type = 'user'
+    LEFT JOIN merchants m ON mc.contact_merchant_id = m.id AND mc.contact_type = 'merchant'
+    WHERE mc.merchant_id = $1
+    ORDER BY mc.is_favorite DESC, mc.last_trade_at DESC NULLS LAST`, [merchantId]);
+}
+// Add or update a user contact (called when order completes)
+export async function upsertMerchantContact(data) {
+    const result = await queryOne(`INSERT INTO merchant_contacts (merchant_id, user_id, contact_type, trades_count, total_volume, last_trade_at)
+     VALUES ($1, $2, 'user', 1, $3, NOW())
+     ON CONFLICT (merchant_id, user_id)
+     DO UPDATE SET
+       trades_count = merchant_contacts.trades_count + 1,
+       total_volume = merchant_contacts.total_volume + $3,
+       last_trade_at = NOW(),
+       updated_at = NOW()
+     RETURNING *`, [data.merchant_id, data.user_id, data.trade_volume]);
+    return result;
+}
+// Add or update a merchant-to-merchant contact (called when M2M order completes)
+export async function upsertMerchantToMerchantContact(data) {
+    const result = await queryOne(`INSERT INTO merchant_contacts (merchant_id, contact_merchant_id, contact_type, trades_count, total_volume, last_trade_at)
+     VALUES ($1, $2, 'merchant', 1, $3, NOW())
+     ON CONFLICT (merchant_id, contact_merchant_id) WHERE contact_merchant_id IS NOT NULL
+     DO UPDATE SET
+       trades_count = merchant_contacts.trades_count + 1,
+       total_volume = merchant_contacts.total_volume + $3,
+       last_trade_at = NOW(),
+       updated_at = NOW()
+     RETURNING *`, [data.merchant_id, data.contact_merchant_id, data.trade_volume]);
+    return result;
+}
+// Add contact manually (add friend)
+export async function addContact(data) {
+    if (data.target_type === 'merchant') {
+        const result = await queryOne(`INSERT INTO merchant_contacts (merchant_id, contact_merchant_id, contact_type, trades_count, total_volume)
+       VALUES ($1, $2, 'merchant', 0, 0)
+       ON CONFLICT (merchant_id, contact_merchant_id) WHERE contact_merchant_id IS NOT NULL
+       DO NOTHING
+       RETURNING *`, [data.merchant_id, data.target_id]);
+        // If already exists, fetch it
+        if (!result) {
+            const existing = await queryOne(`SELECT * FROM merchant_contacts WHERE merchant_id = $1 AND contact_merchant_id = $2`, [data.merchant_id, data.target_id]);
+            return existing;
+        }
+        return result;
+    }
+    else {
+        const result = await queryOne(`INSERT INTO merchant_contacts (merchant_id, user_id, contact_type, trades_count, total_volume)
+       VALUES ($1, $2, 'user', 0, 0)
+       ON CONFLICT (merchant_id, user_id)
+       DO NOTHING
+       RETURNING *`, [data.merchant_id, data.target_id]);
+        if (!result) {
+            const existing = await queryOne(`SELECT * FROM merchant_contacts WHERE merchant_id = $1 AND user_id = $2`, [data.merchant_id, data.target_id]);
+            return existing;
+        }
+        return result;
+    }
+}
+// Remove a contact
+export async function removeContact(contactId, merchantId) {
+    const result = await queryOne(`DELETE FROM merchant_contacts WHERE id = $1 AND merchant_id = $2 RETURNING id`, [contactId, merchantId]);
+    return !!result;
+}
+// Update contact nickname, notes, or favorite
+export async function updateMerchantContact(contactId, merchantId, data) {
+    const updates = [];
+    const params = [];
+    let paramIndex = 1;
+    if (data.nickname !== undefined) {
+        updates.push(`nickname = $${paramIndex++}`);
+        params.push(data.nickname);
+    }
+    if (data.notes !== undefined) {
+        updates.push(`notes = $${paramIndex++}`);
+        params.push(data.notes);
+    }
+    if (data.is_favorite !== undefined) {
+        updates.push(`is_favorite = $${paramIndex++}`);
+        params.push(data.is_favorite);
+    }
+    if (updates.length === 0)
+        return null;
+    updates.push('updated_at = NOW()');
+    params.push(contactId, merchantId);
+    return queryOne(`UPDATE merchant_contacts
+     SET ${updates.join(', ')}
+     WHERE id = $${paramIndex++} AND merchant_id = $${paramIndex}
+     RETURNING *`, params);
+}
+// Search users and merchants by username (for "add friend")
+export async function searchUsersAndMerchants(searchQuery, excludeMerchantId, limit = 20) {
+    return query(`SELECT * FROM (
+      SELECT
+        u.id,
+        u.username,
+        'user'::text as type,
+        u.total_trades,
+        COALESCE(u.rating, 0) as rating,
+        EXISTS(
+          SELECT 1 FROM merchant_contacts mc
+          WHERE mc.merchant_id = $2 AND mc.user_id = u.id
+        ) as is_contact
+      FROM users u
+      WHERE u.username ILIKE $1
+      UNION ALL
+      SELECT
+        m.id,
+        COALESCE(m.display_name, m.username) as username,
+        'merchant'::text as type,
+        m.total_trades,
+        COALESCE(m.rating, 0) as rating,
+        EXISTS(
+          SELECT 1 FROM merchant_contacts mc
+          WHERE mc.merchant_id = $2 AND mc.contact_merchant_id = m.id
+        ) as is_contact
+      FROM merchants m
+      WHERE (m.display_name ILIKE $1 OR m.username ILIKE $1)
+        AND m.id != $2
+        AND m.status = 'active'
+    ) results
+    ORDER BY is_contact ASC, username ASC
+    LIMIT $3`, [`%${searchQuery}%`, excludeMerchantId, limit]);
+}
+// ============ DIRECT MESSAGES ============
+// Get conversations list for merchant (supports both user and merchant contacts)
+export async function getMerchantDirectConversations(merchantId) {
+    return query(`SELECT
+      mc.id as contact_id,
+      mc.contact_type,
+      CASE
+        WHEN mc.contact_type = 'user' THEN mc.user_id::text
+        ELSE mc.contact_merchant_id::text
+      END as contact_target_id,
+      CASE
+        WHEN mc.contact_type = 'user' THEN u.username
+        ELSE COALESCE(m.display_name, m.username)
+      END as username,
+      mc.nickname,
+      mc.is_favorite,
+      mc.trades_count,
+      (
+        SELECT json_build_object(
+          'content', dm.content,
+          'sender_type', dm.sender_type,
+          'created_at', dm.created_at,
+          'is_read', dm.is_read
+        )
+        FROM direct_messages dm
+        WHERE (dm.sender_id = $1 AND dm.recipient_id = CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END)
+           OR (dm.sender_id = CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END AND dm.recipient_id = $1)
+        ORDER BY dm.created_at DESC
+        LIMIT 1
+      ) as last_message,
+      (
+        SELECT COUNT(*)::int
+        FROM direct_messages dm
+        WHERE dm.sender_id = CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END
+          AND dm.recipient_id = $1
+          AND dm.is_read = false
+      ) as unread_count,
+      (
+        SELECT MAX(dm.created_at)
+        FROM direct_messages dm
+        WHERE (dm.sender_id = $1 AND dm.recipient_id = CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END)
+           OR (dm.sender_id = CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END AND dm.recipient_id = $1)
+      ) as last_activity
+    FROM merchant_contacts mc
+    LEFT JOIN users u ON mc.user_id = u.id AND mc.contact_type = 'user'
+    LEFT JOIN merchants m ON mc.contact_merchant_id = m.id AND mc.contact_type = 'merchant'
+    WHERE mc.merchant_id = $1
+    ORDER BY last_activity DESC NULLS LAST, mc.is_favorite DESC`, [merchantId]);
+}
+// Get messages between merchant and another person
+export async function getDirectMessages(merchantId, targetId, limit = 50, offset = 0) {
+    return query(`SELECT * FROM direct_messages
+     WHERE (sender_id = $1 AND recipient_id = $2)
+        OR (sender_id = $2 AND recipient_id = $1)
+     ORDER BY created_at DESC
+     LIMIT $3 OFFSET $4`, [merchantId, targetId, limit, offset]);
+}
+// Send a direct message
+export async function sendDirectMessage(data) {
+    const result = await queryOne(`INSERT INTO direct_messages (sender_type, sender_id, recipient_type, recipient_id, content, message_type, image_url)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING *`, [
+        data.sender_type,
+        data.sender_id,
+        data.recipient_type,
+        data.recipient_id,
+        data.content,
+        data.message_type || 'text',
+        data.image_url || null,
+    ]);
+    return result;
+}
+// Mark messages as read
+export async function markDirectMessagesAsRead(recipientId, recipientType, senderId) {
+    await query(`UPDATE direct_messages
+     SET is_read = true, read_at = NOW()
+     WHERE recipient_id = $1
+       AND recipient_type = $2
+       AND sender_id = $3
+       AND is_read = false`, [recipientId, recipientType, senderId]);
+}
+// Get total unread direct messages count for merchant
+export async function getMerchantUnreadDirectCount(merchantId) {
+    const result = await queryOne(`SELECT COUNT(*)::int as count
+     FROM direct_messages
+     WHERE recipient_id = $1
+       AND recipient_type = 'merchant'
+       AND is_read = false`, [merchantId]);
+    return result?.count || 0;
+}

@@ -84,7 +84,6 @@ html, body {
   min-height: 100vh;
   min-height: 100dvh;
   transition: background-color 0.2s ease;
-  /* Allow scrolling - removed overflow: hidden */
 }
 
 body {
@@ -93,6 +92,13 @@ body {
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Non-scrollable dashboard layout */
+body.dashboard-layout {
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
 }
 
 /* ==========================================

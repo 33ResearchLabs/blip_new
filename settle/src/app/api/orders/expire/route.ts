@@ -1,16 +1,9 @@
 import { NextResponse } from 'next/server';
-import { expireOldOrders } from '@/lib/db/repositories/orders';
+import { proxyCoreApi } from '@/lib/proxy/coreApi';
 
 export async function POST() {
   try {
-    // Use repository function for global 15-minute timeout
-    const expiredCount = await expireOldOrders();
-
-    return NextResponse.json({
-      success: true,
-      message: `Orders expiration check completed. Expired ${expiredCount} orders.`,
-      expiredCount,
-    });
+    return proxyCoreApi('/v1/orders/expire', { method: 'POST' });
   } catch (error) {
     console.error('Error expiring orders:', error);
     return NextResponse.json(

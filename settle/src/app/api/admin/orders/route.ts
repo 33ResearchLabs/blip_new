@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { serializeOrders } from '@/lib/api/orderSerializer';
+import { requireAdminAuth } from '@/lib/middleware/auth';
 
 interface OrderRow {
   id: string;
@@ -24,6 +26,9 @@ interface OrderRow {
 
 // GET /api/admin/orders - Get all orders for admin monitoring
 export async function GET(request: NextRequest) {
+  const authError = requireAdminAuth(request);
+  if (authError) return authError;
+
   try {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status'); // Optional: filter by status
@@ -77,24 +82,26 @@ export async function GET(request: NextRequest) {
       LIMIT $${paramIndex}
     `, params);
 
-    // Transform to frontend format
-    const formattedOrders = orders.map(order => ({
-      id: order.id,
-      orderNumber: order.order_number,
-      user: order.user_name,
-      merchant: order.merchant_name,
-      buyerMerchant: order.buyer_merchant_name || null,
-      amount: parseFloat(order.crypto_amount),
-      fiatAmount: parseFloat(order.fiat_amount || '0'),
-      status: order.status,
-      type: order.type,
-      spreadPreference: order.spread_preference,
-      feePercentage: order.protocol_fee_percentage ? parseFloat(order.protocol_fee_percentage) : null,
-      feeAmount: order.protocol_fee_amount ? parseFloat(order.protocol_fee_amount) : null,
-      createdAt: order.created_at,
-      expiresAt: order.expires_at,
-      completedAt: order.completed_at,
-    }));
+    // Transform to frontend format with minimal_status
+    const formattedOrders = serializeOrders(
+      orders.map(order => ({
+        id: order.id,
+        orderNumber: order.order_number,
+        user: order.user_name,
+        merchant: order.merchant_name,
+        buyerMerchant: order.buyer_merchant_name || null,
+        amount: parseFloat(order.crypto_amount),
+        fiatAmount: parseFloat(order.fiat_amount || '0'),
+        status: order.status,
+        type: order.type,
+        spreadPreference: order.spread_preference,
+        feePercentage: order.protocol_fee_percentage ? parseFloat(order.protocol_fee_percentage) : null,
+        feeAmount: order.protocol_fee_amount ? parseFloat(order.protocol_fee_amount) : null,
+        createdAt: order.created_at,
+        expiresAt: order.expires_at,
+        completedAt: order.completed_at,
+      }))
+    );
 
     return NextResponse.json({ success: true, data: formattedOrders });
   } catch (error) {

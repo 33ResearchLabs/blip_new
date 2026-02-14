@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
+import { requireAdminAuth } from '@/lib/middleware/auth';
 
 interface StatsRow {
   total_trades: string;
@@ -24,7 +25,10 @@ interface ChangeRow {
 }
 
 // GET /api/admin/stats - Get platform statistics
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = requireAdminAuth(request);
+  if (authError) return authError;
+
   try {
     // Get core stats
     const stats = await queryOne<StatsRow>(`

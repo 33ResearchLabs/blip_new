@@ -1,6 +1,5 @@
 const { createServer: createHttpsServer } = require('https');
 const { createServer: createHttpServer } = require('http');
-const { parse } = require('url');
 const next = require('next');
 const fs = require('fs');
 const { WebSocketServer } = require('ws');
@@ -15,51 +14,32 @@ const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
   let server;
+  let useHttps = false;
 
-  if (dev) {
-    // Development: HTTPS with local certificates
+  const requestHandler = async (req, res) => {
     try {
-      const httpsOptions = {
-        key: fs.readFileSync('./localhost+3-key.pem'),
-        cert: fs.readFileSync('./localhost+3.pem'),
-      };
-      server = createHttpsServer(httpsOptions, async (req, res) => {
-        try {
-          const parsedUrl = parse(req.url, true);
-          await handle(req, res, parsedUrl);
-        } catch (err) {
-          console.error('Error occurred handling', req.url, err);
-          res.statusCode = 500;
-          res.end('internal server error');
-        }
-      });
-      console.log('> Using HTTPS (development mode with local certificates)');
+      const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+      await handle(req, res, parsedUrl);
     } catch (err) {
-      console.warn('> Local HTTPS certs not found, falling back to HTTP');
-      server = createHttpServer(async (req, res) => {
-        try {
-          const parsedUrl = parse(req.url, true);
-          await handle(req, res, parsedUrl);
-        } catch (err) {
-          console.error('Error occurred handling', req.url, err);
-          res.statusCode = 500;
-          res.end('internal server error');
-        }
-      });
+      console.error('Error occurred handling', req.url, err);
+      res.statusCode = 500;
+      res.end('internal server error');
     }
-  } else {
-    // Production: HTTP (Railway/Vercel handles SSL termination)
-    server = createHttpServer(async (req, res) => {
-      try {
-        const parsedUrl = parse(req.url, true);
-        await handle(req, res, parsedUrl);
-      } catch (err) {
-        console.error('Error occurred handling', req.url, err);
-        res.statusCode = 500;
-        res.end('internal server error');
-      }
-    });
-    console.log('> Using HTTP (production - SSL handled by proxy)');
+  };
+
+  // Try HTTPS with local certificates (works in both dev and production)
+  try {
+    const httpsOptions = {
+      key: fs.readFileSync('./localhost+3-key.pem'),
+      cert: fs.readFileSync('./localhost+3.pem'),
+    };
+    server = createHttpsServer(httpsOptions, requestHandler);
+    useHttps = true;
+    console.log('> Using HTTPS (local certificates found)');
+  } catch (err) {
+    // No local certs - use HTTP (production/Railway with SSL termination)
+    server = createHttpServer(requestHandler);
+    console.log('> Using HTTP (no local certs - SSL handled by proxy)');
   }
 
   // Create WebSocket server attached to HTTP/HTTPS server
@@ -81,8 +61,29 @@ app.prepare().then(() => {
 
   console.log('> WebSocket server initialized at /ws/chat');
 
-  const protocol = dev ? 'https' : 'http';
-  const wsProtocol = dev ? 'wss' : 'ws';
+  // Start notification outbox worker as a child process (TypeScript, needs tsx)
+  // Processes pending notifications from DB with retries (Pusher/WebSocket fallback)
+  try {
+    const { spawn } = require('child_process');
+    const path = require('path');
+    const npxBin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    const workerScript = path.join(__dirname, 'src/workers/notificationOutbox.ts');
+    const outboxWorker = spawn(npxBin, ['tsx', workerScript], {
+      stdio: 'inherit',
+      env: { ...process.env },
+      cwd: __dirname,
+    });
+    outboxWorker.on('exit', (code) => {
+      if (code !== 0) console.error(`> Outbox worker exited with code ${code}`);
+    });
+    console.log('> Notification outbox worker started (pid:', outboxWorker.pid + ')');
+  } catch (outboxErr) {
+    console.warn('> Notification outbox worker not available:', outboxErr.message);
+    console.warn('> Notifications will rely on Pusher/WebSocket only (no retry)');
+  }
+
+  const protocol = useHttps ? 'https' : 'http';
+  const wsProtocol = useHttps ? 'wss' : 'ws';
 
   server
     .once('error', (err) => {

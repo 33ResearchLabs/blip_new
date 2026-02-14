@@ -9,10 +9,22 @@
     "start": "node server.js",
     "lint": "eslint",
     "test": "jest",
+    "test:unit": "jest --config jest.config.js",
     "test:watch": "jest --watch",
     "test:integration": "jest --config jest.integration.config.js",
+    "test:integration:ci": "bash scripts/test-harness.sh integration",
+    "test:flow": "tsx tests/flows/runner.ts",
+    "test:flow:ci": "bash scripts/test-harness.sh flow",
+    "test:e2e": "bash scripts/test-harness.sh both",
+    "test:all": "npm run test && npm run test:flow",
+    "test:playwright": "npx playwright test",
+    "test:playwright:ui": "npx playwright test --ui",
     "typecheck": "tsc --noEmit",
-    "db:reset": "psql -U postgres -d blip -f database/schema.sql"
+    "db:reset": "psql -U postgres -d blip -f database/schema.sql",
+    "worker:autobump": "tsx src/workers/auto-bump-worker.ts",
+    "worker:refprice": "tsx src/workers/refprice-updater.ts",
+    "worker:outbox": "tsx src/workers/notificationOutbox.ts",
+    "workers": "npm run worker:autobump & npm run worker:refprice & npm run worker:outbox"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.29.0",
@@ -33,11 +45,13 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "recharts": "^2.15.4",
+    "settlement-core": "workspace:*",
     "tweetnacl": "^1.0.3",
     "ws": "^8.18.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/jest": "^29.5.12",
     "@types/node": "^20",
@@ -50,6 +64,7 @@
     "tailwindcss": "^4",
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

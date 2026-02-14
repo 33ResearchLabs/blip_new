@@ -14,7 +14,9 @@ import {
   TrustWalletAdapter,
   CloverWalletAdapter,
   Coin98WalletAdapter,
-  SlopeWalletAdapter,
+  // TEMPORARILY DISABLED - Deprecated in @solana/wallet-adapter-wallets 0.19.37
+  // Using in-app coins currently. Re-enable when upgrading package or enabling on-chain:
+  // SlopeWalletAdapter,
   BitpieWalletAdapter,
   TokenPocketWalletAdapter,
   MathWalletAdapter,
@@ -28,14 +30,14 @@ import {
   NufiWalletAdapter,
   OntoWalletAdapter,
   ParticleAdapter,
-  SafePalWalletAdapter,
-  SalmonWalletAdapter,
-  SkyWalletAdapter,
-  AvanaWalletAdapter,
-  ExodusWalletAdapter,
-  KeystoneWalletAdapter,
-  KrystalWalletAdapter,
-  XDEFIWalletAdapter,
+  // SafePalWalletAdapter,
+  // SalmonWalletAdapter,
+  // SkyWalletAdapter,
+  // AvanaWalletAdapter,
+  // ExodusWalletAdapter,
+  // KeystoneWalletAdapter,
+  // KrystalWalletAdapter,
+  // XDEFIWalletAdapter,
 } from '@solana/wallet-adapter-wallets';
 import { getPrimaryEndpoint, getHealthyEndpoint } from '@/lib/solana/rpc';
 import { PublicKey, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
@@ -1963,14 +1965,14 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
 
       // Hardware wallets
       new LedgerWalletAdapter(),
-      new KeystoneWalletAdapter(),
+      // new KeystoneWalletAdapter(), // Disabled - deprecated adapter
 
       // Major exchange/app wallets
       new CoinbaseWalletAdapter(),
       new TrustWalletAdapter(),
       new BitgetWalletAdapter(),
-      new ExodusWalletAdapter(),
-      new SafePalWalletAdapter(),
+      // new ExodusWalletAdapter(), // Disabled - deprecated adapter
+      // new SafePalWalletAdapter(), // Disabled - deprecated adapter
 
       // Additional popular wallets
       new Coin98WalletAdapter(),
@@ -1982,19 +1984,19 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
       new NightlyWalletAdapter(),
       new NufiWalletAdapter(),
       new OntoWalletAdapter(),
-      new SalmonWalletAdapter(),
-      new AvanaWalletAdapter(),
-      new XDEFIWalletAdapter(),
-      new KrystalWalletAdapter(),
+      // new SalmonWalletAdapter(), // Disabled - deprecated adapter
+      // new AvanaWalletAdapter(), // Disabled - deprecated adapter
+      // new XDEFIWalletAdapter(), // Disabled - deprecated adapter
+      // new KrystalWalletAdapter(), // Disabled - deprecated adapter
 
       // Web-based wallets
       new TorusWalletAdapter(),
-      new SlopeWalletAdapter(),
+      // new SlopeWalletAdapter(), // Disabled - deprecated adapter
       new HuobiWalletAdapter(),
       new SaifuWalletAdapter(),
       new TokenaryWalletAdapter(),
       new NekoWalletAdapter(),
-      new SkyWalletAdapter(),
+      // new SkyWalletAdapter(), // Disabled - deprecated adapter
     ];
 
     // Add WalletConnect for maximum mobile and cross-platform support

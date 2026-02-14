@@ -5,9 +5,79 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { getOrderById } from '../db/repositories/orders';
 import { getUserById } from '../db/repositories/users';
 import { getMerchantById } from '../db/repositories/merchants';
+
+// Admin auth secret - MUST be set in production
+const ADMIN_SECRET = process.env.ADMIN_SECRET || 'dev-only-admin-secret-change-in-production';
+
+/**
+ * Generate a signed admin token (HMAC-based, stateless)
+ * Token format: base64(username:timestamp:hmac_signature)
+ * Valid for 24 hours.
+ */
+export function generateAdminToken(username: string): string {
+  const ts = Math.floor(Date.now() / 1000);
+  const payload = `${username}:${ts}`;
+  const sig = createHmac('sha256', ADMIN_SECRET).update(payload).digest('hex');
+  return Buffer.from(`${payload}:${sig}`).toString('base64');
+}
+
+/**
+ * Verify a signed admin token
+ */
+export function verifyAdminToken(token: string): { valid: boolean; username?: string } {
+  try {
+    const decoded = Buffer.from(token, 'base64').toString();
+    const parts = decoded.split(':');
+    if (parts.length !== 3) return { valid: false };
+
+    const [username, tsStr, sig] = parts;
+    const ts = parseInt(tsStr);
+    if (isNaN(ts)) return { valid: false };
+
+    // Token expires after 24 hours
+    if (Math.floor(Date.now() / 1000) - ts > 86400) return { valid: false };
+
+    const expected = createHmac('sha256', ADMIN_SECRET).update(`${username}:${tsStr}`).digest('hex');
+    if (sig.length !== expected.length) return { valid: false };
+
+    if (timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) {
+      return { valid: true, username };
+    }
+  } catch {
+    // Invalid token format
+  }
+  return { valid: false };
+}
+
+/**
+ * Require admin authentication on a route.
+ * Returns null if auth passes, or a 401 response if it fails.
+ *
+ * Usage: const authErr = requireAdminAuth(request); if (authErr) return authErr;
+ */
+export function requireAdminAuth(request: NextRequest): NextResponse | null {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return NextResponse.json(
+      { success: false, error: 'Admin authentication required' },
+      { status: 401 }
+    );
+  }
+
+  const result = verifyAdminToken(authHeader.slice(7));
+  if (!result.valid) {
+    return NextResponse.json(
+      { success: false, error: 'Invalid or expired admin token' },
+      { status: 401 }
+    );
+  }
+
+  return null;
+}
 
 export interface AuthContext {
   userId?: string;

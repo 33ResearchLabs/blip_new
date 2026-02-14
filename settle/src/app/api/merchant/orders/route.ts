@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getMerchantOrders, createOrder, getOrderWithRelations, getAllPendingOrdersForMerchant } from '@/lib/db/repositories/orders';
+import { getMerchantOrders, getAllPendingOrdersForMerchant } from '@/lib/db/repositories/orders';
 import { getMerchantOffers, getOfferWithMerchant } from '@/lib/db/repositories/merchants';
 import { createUser } from '@/lib/db/repositories/users';
-import { query } from '@/lib/db';
-import { MOCK_MODE } from '@/lib/config/mockMode';
-import { OrderStatus, OfferType, PaymentMethod } from '@/lib/types/database';
+import {
+  OfferType,
+  PaymentMethod,
+  logger,
+  normalizeStatus,
+} from 'settlement-core';
 import {
   merchantOrdersQuerySchema,
   merchantCreateOrderSchema,
@@ -17,8 +20,7 @@ import {
   successResponse,
   errorResponse,
 } from '@/lib/middleware/auth';
-import { logger } from '@/lib/logger';
-import { notifyOrderCreated } from '@/lib/pusher/server';
+import { proxyCoreApi } from '@/lib/proxy/coreApi';
 
 // Prevent Next.js from caching this route - orders must always be fresh
 export const dynamic = 'force-dynamic';
@@ -61,17 +63,17 @@ export async function GET(request: NextRequest) {
       return validationErrorResponse(['Merchant not found or not active']);
     }
 
-    const status = statusParam ? statusParam.split(',') as OrderStatus[] : undefined;
+    const status = statusParam ? statusParam.split(',') as string[] : undefined;
 
     // If include_all_pending is true, fetch ALL pending orders (broadcast model)
     // Otherwise, fetch only orders for this specific merchant
     let orders;
     if (includeAllPending) {
       // Get merchant's own orders + ALL pending orders from any merchant
-      orders = await getAllPendingOrdersForMerchant(merchant_id, status);
+      orders = await getAllPendingOrdersForMerchant(merchant_id, status as any);
       console.log('[API] /api/merchant/orders (broadcast mode) - all pending orders:', orders?.length || 0);
     } else {
-      orders = await getMerchantOrders(merchant_id, status);
+      orders = await getMerchantOrders(merchant_id, status as any);
       console.log('[API] /api/merchant/orders - merchant_id:', merchant_id, 'orders found:', orders?.length || 0);
     }
 
@@ -79,8 +81,14 @@ export async function GET(request: NextRequest) {
       console.log('[API] Orders:', orders.map(o => ({ id: o.id, status: o.status, merchant_id: o.merchant_id })));
     }
 
+    // Add minimal_status to each order
+    const ordersWithMinimalStatus = (orders || []).map(order => ({
+      ...order,
+      minimal_status: normalizeStatus(order.status),
+    }));
+
     logger.api.request('GET', '/api/merchant/orders', merchant_id);
-    return successResponse(orders || []);
+    return successResponse(ordersWithMinimalStatus);
   } catch (error) {
     logger.api.error('GET', '/api/merchant/orders', error as Error);
     return errorResponse('Internal server error');
@@ -112,7 +120,6 @@ export async function POST(request: NextRequest) {
       escrow_trade_pda,
       escrow_pda,
       escrow_creator_wallet,
-      matched_offer_id,
     } = parseResult.data;
 
     // Verify the creating merchant exists
@@ -193,10 +200,7 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // Find merchant's active offer matching the type and payment method
-      // For M2M trades: look for the OPPOSITE type (if buyer wants to buy, seller must have sell offer)
-      const offerTypeToFind = isM2MTrade
-        ? type // For M2M: the type stays as-is (buy = I want to buy from their sell offer)
-        : type;
+      const offerTypeToFind = isM2MTrade ? type : type;
       const merchantOffers = await getMerchantOffers(offerMerchantId);
       console.log('[API] Looking for offer type:', offerTypeToFind, 'payment_method:', payment_method);
       console.log('[API] Merchant offers found:', merchantOffers.map(o => ({ id: o.id, type: o.type, payment_method: o.payment_method, is_active: o.is_active })));
@@ -285,112 +289,41 @@ export async function POST(request: NextRequest) {
           };
 
     // For merchant-initiated orders, the type from merchant's perspective:
-    // - 'sell' = merchant sells USDC to user (user buys USDC) → order type is 'buy' (from user perspective)
-    // - 'buy' = merchant buys USDC from user (user sells USDC) → order type is 'sell' (from user perspective)
-    // For M2M trades, the type is from the creating merchant's perspective
+    // - 'sell' = merchant sells USDC to user (user buys USDC) -> order type is 'buy' (from user perspective)
+    // - 'buy' = merchant buys USDC from user (user sells USDC) -> order type is 'sell' (from user perspective)
     // Orders are stored from user's perspective, so we invert the type
     const orderType = type === 'sell' ? 'buy' : 'sell';
 
     // For M2M trades:
     // - merchant_id = target merchant (the one fulfilling the order)
     // - buyer_merchant_id = creating merchant (the one placing the order)
-    // For merchant-initiated BUY orders:
-    // - buyer_merchant_id = creating merchant (the buyer)
     const orderMerchantId = isM2MTrade ? target_merchant_id : merchant_id;
     const buyerMerchantId = (isM2MTrade || type === 'buy') ? merchant_id : undefined;
 
-    // Create the order (with optional escrow details for escrow-first sell orders)
-    // Only include optional fields if they're actually provided to avoid PostgreSQL type inference issues
-    const orderData: any = {
-      user_id: user.id,
-      merchant_id: orderMerchantId,
-      offer_id: offer.id,
-      type: orderType as OfferType,
-      payment_method: offer.payment_method as PaymentMethod,
-      crypto_amount,
-      fiat_amount: fiatAmount,
-      rate: offer.rate,
-      payment_details: paymentDetails,
-      spread_preference,
-      protocol_fee_percentage: protocolFeePercentage,
-      protocol_fee_amount: protocolFeeAmount,
-    };
-
-    // Only add optional fields if they're defined
-    if (buyerMerchantId !== undefined) orderData.buyer_merchant_id = buyerMerchantId;
-    if (escrow_tx_hash !== undefined) orderData.escrow_tx_hash = escrow_tx_hash;
-    if (escrow_trade_id !== undefined) orderData.escrow_trade_id = escrow_trade_id;
-    if (escrow_trade_pda !== undefined) orderData.escrow_trade_pda = escrow_trade_pda;
-    if (escrow_pda !== undefined) orderData.escrow_pda = escrow_pda;
-    if (escrow_creator_wallet !== undefined) orderData.escrow_creator_wallet = escrow_creator_wallet;
-
-    const order = await createOrder(orderData);
-
-    // In mock mode: if escrow already locked, deduct balance from merchant
-    if (escrow_tx_hash && MOCK_MODE) {
-      const amount = crypto_amount;
-      const merchantIdToDeduct = merchant_id; // The merchant who created the order and locked escrow
-      try {
-        await query(
-          `UPDATE merchants SET balance = balance - $1 WHERE id = $2 AND balance >= $1 RETURNING balance`,
-          [amount, merchantIdToDeduct]
-        );
-        logger.info('[Mock] Deducted escrow from merchant (escrow-first)', { merchantId: merchantIdToDeduct, amount });
-      } catch (deductErr) {
-        logger.error('[Mock] Failed to deduct escrow balance', { error: deductErr });
-        // Don't fail the whole operation, balance will be corrected later
-      }
-    }
-
-    logger.info('Merchant-initiated order created', {
-      orderId: order.id,
-      merchantId: orderMerchantId,
-      buyerMerchantId: buyerMerchantId || null,
-      userId: user.id,
-      cryptoAmount: crypto_amount,
-      orderType,
-      isM2MTrade,
-      hasEscrow: !!escrow_tx_hash,
+    // Forward to core-api (single writer for all mutations)
+    return proxyCoreApi('/v1/merchant/orders', {
+      method: 'POST',
+      body: {
+        merchant_id,
+        user_id: user.id,
+        offer_id: offer.id,
+        type: orderType,
+        payment_method: offer.payment_method,
+        crypto_amount,
+        fiat_amount: fiatAmount,
+        rate: offer.rate,
+        payment_details: paymentDetails,
+        spread_preference,
+        protocol_fee_percentage: protocolFeePercentage,
+        protocol_fee_amount: protocolFeeAmount,
+        buyer_merchant_id: buyerMerchantId,
+        escrow_tx_hash,
+        escrow_trade_id,
+        escrow_trade_pda,
+        escrow_pda,
+        escrow_creator_wallet,
+      },
     });
-
-    // Auto welcome messages removed - keeping only real user messages
-
-    // Get full order with relations for response
-    const orderWithRelations = await getOrderWithRelations(order.id);
-
-    // Notify via Pusher (notify both user and merchant)
-    // For M2M trades, notify both the target merchant and the buyer merchant
-    try {
-      await notifyOrderCreated({
-        orderId: order.id,
-        userId: user.id,
-        merchantId: orderMerchantId,
-        status: order.status,
-        updatedAt: new Date().toISOString(),
-        data: orderWithRelations,
-      });
-      console.log('[API] Pusher notification sent for merchant-initiated order:', order.id);
-
-      // For M2M trades, also notify the buyer merchant
-      if (isM2MTrade && buyerMerchantId) {
-        await notifyOrderCreated({
-          orderId: order.id,
-          userId: user.id,
-          merchantId: buyerMerchantId,
-          status: order.status,
-          updatedAt: new Date().toISOString(),
-          data: orderWithRelations,
-        });
-        console.log('[API] Pusher notification sent to buyer merchant:', buyerMerchantId);
-      }
-    } catch (pusherError) {
-      console.error('[API] Failed to send Pusher notification:', pusherError);
-    }
-
-    return NextResponse.json(
-      { success: true, data: orderWithRelations },
-      { status: 201 }
-    );
   } catch (error) {
     const err = error as Error;
     logger.api.error('POST', '/api/merchant/orders', err);

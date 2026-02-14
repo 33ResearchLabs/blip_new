@@ -1,0 +1,27 @@
+{
+  "name": "bm-workspace",
+  "private": true,
+  "scripts": {
+    "dev:local": "bash scripts/dev-local.sh",
+    "dev:core": "pnpm -C apps/core-api dev",
+    "dev:worker": "pnpm -C apps/core-api workers",
+    "dev:settle": "pnpm -C settle dev",
+    "dev:test": "pnpm -C settle test:unit && bash settle/scripts/test-harness.sh both",
+    "core-api:dev": "pnpm -C apps/core-api dev",
+    "core-api:start": "pnpm -C apps/core-api start",
+    "core-api:workers": "pnpm -C apps/core-api workers",
+    "core-api:worker:outbox": "pnpm -C apps/core-api worker:outbox",
+    "core-api:worker:expiry": "pnpm -C apps/core-api worker:expiry",
+    "settle:dev": "pnpm -C settle dev",
+    "settle:build": "pnpm -C settle build",
+    "settle:test": "pnpm -C settle test",
+    "db:reset:local": "tsx scripts/seed/local.ts --reset-only",
+    "seed:local": "tsx scripts/seed/local.ts",
+    "demo:u2m:buy": "tsx scripts/demo/runner.ts u2m:buy",
+    "demo:u2m:sell": "tsx scripts/demo/runner.ts u2m:sell",
+    "demo:m2m:buy": "tsx scripts/demo/runner.ts m2m:buy",
+    "demo:m2m:sell": "tsx scripts/demo/runner.ts m2m:sell",
+    "qa:robot": "bash scripts/qa-robot.sh",
+    "qa:robot:headless": "bash scripts/qa-robot.sh --headed=false"
+  }
+}

@@ -11,6 +11,7 @@ import {
   errorResponse,
 } from '@/lib/middleware/auth';
 import { logger } from '@/lib/logger';
+import { serializeOrder } from '@/lib/api/orderSerializer';
 
 export async function GET(
   request: NextRequest,
@@ -49,7 +50,7 @@ export async function GET(
     // Include order payment_details and escrow info for rich card rendering
     const enrichedResponse = {
       events,
-      orderContext: {
+      orderContext: serializeOrder({
         payment_details: order.payment_details,
         escrow_tx_hash: order.escrow_tx_hash,
         escrow_pda: order.escrow_pda,
@@ -63,7 +64,7 @@ export async function GET(
         order_number: order.order_number,
         type: order.type,
         status: order.status,
-      },
+      }),
     };
 
     logger.api.request('GET', `/api/orders/${id}/events`, auth?.actorId);

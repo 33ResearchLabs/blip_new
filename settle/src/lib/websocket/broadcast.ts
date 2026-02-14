@@ -24,7 +24,9 @@ function broadcast(orderId: string, message: object) {
 export function wsBroadcastOrderUpdate(data: {
   orderId: string;
   status: string;
+  minimalStatus?: string;
   previousStatus?: string;
+  orderVersion?: number;
   updatedAt: string;
   data?: unknown;
 }) {

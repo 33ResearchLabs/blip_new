@@ -153,9 +153,9 @@ export async function POST(request: NextRequest) {
 
       const member = rows[0] as { id: string; email: string; wallet_address: string | null; name: string; role: string };
 
-      // In production, verify password hash
-      // For demo, simple password check
-      if (password !== 'compliance123') {
+      // Compliance password from env vars (with dev fallback)
+      const compliancePassword = process.env.COMPLIANCE_PASSWORD || 'compliance123';
+      if (password !== compliancePassword) {
         return NextResponse.json(
           { success: false, error: 'Invalid credentials' },
           { status: 401 }

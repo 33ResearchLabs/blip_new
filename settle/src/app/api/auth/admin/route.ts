@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
+import { generateAdminToken, verifyAdminToken } from '@/lib/middleware/auth';
 
-const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD = 'pass123';
+// Admin credentials from env vars (with dev fallbacks)
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'pass123';
 
 // POST - Admin login
 export async function POST(request: NextRequest) {
@@ -26,6 +28,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Generate a signed admin token (valid for 24h)
+    const token = generateAdminToken(username);
+
     return NextResponse.json({
       success: true,
       data: {
@@ -34,6 +39,7 @@ export async function POST(request: NextRequest) {
           role: 'super_admin',
           authenticated_at: new Date().toISOString(),
         },
+        token,
       },
     });
   } catch {
@@ -44,13 +50,23 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET - Validate admin session
+// GET - Validate admin session (supports both old query param and new token-based auth)
 export async function GET(request: NextRequest) {
   const rateLimitResponse = checkRateLimit(request, 'auth:admin:check', { maxRequests: 100, windowSeconds: 60 });
   if (rateLimitResponse) return rateLimitResponse;
 
-  const username = request.nextUrl.searchParams.get('username');
+  // Check for Bearer token first (new secure method)
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const result = verifyAdminToken(authHeader.slice(7));
+    return NextResponse.json({
+      success: true,
+      data: { valid: result.valid, username: result.username },
+    });
+  }
 
+  // Fallback: query param check (legacy, less secure)
+  const username = request.nextUrl.searchParams.get('username');
   return NextResponse.json({
     success: true,
     data: { valid: username === ADMIN_USERNAME },

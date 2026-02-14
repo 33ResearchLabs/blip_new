@@ -1,0 +1,139 @@
+#!/bin/bash
+set -e
+
+# Test Harness - Self-contained integration/flow testing
+# Starts servers, waits for readiness, runs tests, cleans up
+
+# Get absolute paths
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SETTLE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+CORE_API_DIR="$(cd "$SETTLE_DIR/../apps/core-api" && pwd)"
+
+# Default ports
+CORE_API_PORT=${CORE_API_PORT:-4010}
+SETTLE_PORT=${SETTLE_PORT:-3000}
+CORE_API_URL="http://localhost:${CORE_API_PORT}"
+SETTLE_URL="http://localhost:${SETTLE_PORT}"
+
+# Test mode: integration, flow, or both
+TEST_MODE=${1:-both}
+
+# PIDs for cleanup
+CORE_API_PID=""
+SETTLE_PID=""
+
+# Cleanup function
+cleanup() {
+  echo ""
+  echo "🧹 Cleaning up..."
+
+  if [ -n "$CORE_API_PID" ]; then
+    echo "  Stopping core-api (PID: $CORE_API_PID)"
+    kill -TERM "$CORE_API_PID" 2>/dev/null || true
+  fi
+
+  if [ -n "$SETTLE_PID" ]; then
+    echo "  Stopping settle (PID: $SETTLE_PID)"
+    kill -TERM "$SETTLE_PID" 2>/dev/null || true
+  fi
+
+  # Wait briefly for graceful shutdown
+  sleep 1
+
+  # Force kill if still running
+  if [ -n "$CORE_API_PID" ] && kill -0 "$CORE_API_PID" 2>/dev/null; then
+    kill -9 "$CORE_API_PID" 2>/dev/null || true
+  fi
+
+  if [ -n "$SETTLE_PID" ] && kill -0 "$SETTLE_PID" 2>/dev/null; then
+    kill -9 "$SETTLE_PID" 2>/dev/null || true
+  fi
+
+  echo "✓ Cleanup complete"
+}
+
+# Register cleanup on exit
+trap cleanup EXIT INT TERM
+
+# Wait for endpoint to be ready
+wait_for_health() {
+  local url=$1
+  local service=$2
+  local max_attempts=60  # Increased for Next.js compilation time
+  local attempt=0
+
+  echo "⏳ Waiting for $service to be ready at $url..."
+
+  while [ $attempt -lt $max_attempts ]; do
+    # Try HTTP first, then HTTPS (with -k to skip cert verification for local dev)
+    if curl -s -f "$url" > /dev/null 2>&1; then
+      echo "✓ $service is ready"
+      return 0
+    fi
+    # If HTTP fails and URL uses http://, try https:// variant
+    if [[ "$url" == http://* ]]; then
+      local https_url="${url/http:\/\//https:\/\/}"
+      if curl -s -f -k "$https_url" > /dev/null 2>&1; then
+        echo "✓ $service is ready (using HTTPS)"
+        return 0
+      fi
+    fi
+
+    attempt=$((attempt + 1))
+    sleep 1
+  done
+
+  echo "✗ $service failed to start within ${max_attempts}s"
+  return 1
+}
+
+echo ""
+echo "========================================="
+echo "  Test Harness - Mode: $TEST_MODE"
+echo "========================================="
+echo "  Core API: $CORE_API_URL"
+echo "  Settle:   $SETTLE_URL"
+echo "========================================="
+echo ""
+
+# Step 1: Start core-api
+echo "🚀 Starting core-api..."
+cd "$CORE_API_DIR"
+CORE_API_PORT=$CORE_API_PORT pnpm start > /tmp/core-api-test.log 2>&1 &
+CORE_API_PID=$!
+echo "  PID: $CORE_API_PID"
+
+# Step 2: Start settle (Next.js)
+echo "🚀 Starting settle..."
+cd "$SETTLE_DIR"
+PORT=$SETTLE_PORT pnpm start > /tmp/settle-test.log 2>&1 &
+SETTLE_PID=$!
+echo "  PID: $SETTLE_PID"
+
+# Step 3: Wait for readiness
+wait_for_health "${CORE_API_URL}/health" "core-api" || exit 1
+wait_for_health "${SETTLE_URL}/api/health" "settle" || exit 1
+
+echo ""
+echo "✅ Both servers ready"
+echo ""
+
+# Step 4: Run tests
+EXIT_CODE=0
+
+if [ "$TEST_MODE" = "integration" ] || [ "$TEST_MODE" = "both" ]; then
+  echo "🧪 Running integration tests..."
+  cd "$SETTLE_DIR"
+  CORE_API_URL=$CORE_API_URL pnpm test:integration || EXIT_CODE=$?
+  echo ""
+fi
+
+if [ "$TEST_MODE" = "flow" ] || [ "$TEST_MODE" = "both" ]; then
+  echo "🧪 Running flow tests..."
+  cd "$SETTLE_DIR"
+  SETTLE_URL=$SETTLE_URL pnpm test:flow || EXIT_CODE=$?
+  echo ""
+fi
+
+# Cleanup happens automatically via trap
+exit $EXIT_CODE

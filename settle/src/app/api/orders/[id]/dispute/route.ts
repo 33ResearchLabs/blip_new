@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
+import { proxyCoreApi } from '@/lib/proxy/coreApi';
 
 // Create a dispute for an order
 export async function POST(
@@ -26,114 +26,12 @@ export async function POST(
       );
     }
 
-    // Check if order exists
-    const orderResult = await query(
-      `SELECT id, status, user_id, merchant_id FROM orders WHERE id = $1`,
-      [orderId]
-    );
-
-    if (orderResult.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Order not found' },
-        { status: 404 }
-      );
-    }
-
-    const order = orderResult[0] as { id: string; status: string; user_id: string; merchant_id: string };
-
-    // Check if order is already disputed
-    if (order.status === 'disputed') {
-      return NextResponse.json(
-        { success: false, error: 'Order is already disputed' },
-        { status: 400 }
-      );
-    }
-
-    // Check if dispute already exists
-    const existingDispute = await query(
-      `SELECT id FROM disputes WHERE order_id = $1`,
-      [orderId]
-    );
-
-    if (existingDispute.length > 0) {
-      return NextResponse.json(
-        { success: false, error: 'Dispute already exists for this order' },
-        { status: 400 }
-      );
-    }
-
-    // Get the actor ID
     const actorId = initiated_by === 'user'
-      ? (user_id || order.user_id)
-      : (merchant_id || order.merchant_id);
-
-    if (!actorId) {
-      return NextResponse.json(
-        { success: false, error: 'Could not determine actor ID' },
-        { status: 400 }
-      );
-    }
-
-    // Ensure disputes table has the confirmation columns (run migration inline)
-    try {
-      await query(`
-        ALTER TABLE disputes
-        ADD COLUMN IF NOT EXISTS proposed_resolution VARCHAR(50),
-        ADD COLUMN IF NOT EXISTS proposed_by UUID,
-        ADD COLUMN IF NOT EXISTS proposed_at TIMESTAMPTZ,
-        ADD COLUMN IF NOT EXISTS resolution_notes TEXT,
-        ADD COLUMN IF NOT EXISTS user_confirmed BOOLEAN DEFAULT false,
-        ADD COLUMN IF NOT EXISTS merchant_confirmed BOOLEAN DEFAULT false,
-        ADD COLUMN IF NOT EXISTS split_percentage JSONB,
-        ADD COLUMN IF NOT EXISTS assigned_to UUID
-      `);
-    } catch (alterErr) {
-      // Columns might already exist, that's OK
-      console.log('Alter table note:', alterErr);
-    }
-
-    // Insert the dispute
-    const disputeResult = await query(
-      `INSERT INTO disputes (
-        order_id, reason, description, raised_by, raiser_id, status,
-        user_confirmed, merchant_confirmed, created_at
-      )
-       VALUES ($1, $2::dispute_reason, $3, $4::actor_type, $5, 'open'::dispute_status, false, false, NOW())
-       RETURNING *`,
-      [orderId, reason, description || '', initiated_by, actorId]
-    );
-
-    // Update order status to disputed
-    await query(
-      `UPDATE orders SET status = 'disputed'::order_status WHERE id = $1`,
-      [orderId]
-    );
-
-    // Notify all parties about the dispute via Pusher
-    await notifyOrderStatusUpdated({
-      orderId,
-      userId: order.user_id,
-      merchantId: order.merchant_id,
-      status: 'disputed',
-      previousStatus: order.status,
-      updatedAt: new Date().toISOString(),
-    });
-
-    // Insert chat message about the dispute (use chat_messages table)
-    try {
-      await query(
-        `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type, created_at)
-         VALUES ($1, $2::actor_type, $3, $4, 'system'::message_type, NOW())`,
-        [orderId, initiated_by, actorId, JSON.stringify({ reason, description, type: 'dispute_opened' })]
-      );
-    } catch (msgErr) {
-      // Chat message is optional, don't fail the whole request
-      console.log('Chat message insert note:', msgErr);
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: disputeResult[0],
+      ? (user_id || '')
+      : (merchant_id || '');
+    return proxyCoreApi(`/v1/orders/${orderId}/dispute`, {
+      method: 'POST',
+      body: { reason, description, initiated_by, actor_id: actorId },
     });
   } catch (error) {
     console.error('Failed to create dispute:', error);
@@ -144,7 +42,7 @@ export async function POST(
   }
 }
 
-// Get dispute for an order
+// Get dispute for an order (read-only, stays local)
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

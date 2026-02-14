@@ -10,10 +10,13 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePusherOptional } from '@/context/PusherContext';
 import { getUserChannel, getMerchantChannel, getAllMerchantsChannel } from '@/lib/pusher/channels';
 import { ORDER_EVENTS } from '@/lib/pusher/events';
+import { shouldAcceptUpdate } from '@/lib/orders/statusResolver';
 
 interface OrderData {
   id: string;
   status: string;
+  minimal_status?: string;
+  order_version?: number;
   user_id: string;
   merchant_id: string;
   crypto_amount: number;
@@ -191,6 +194,8 @@ export function useRealtimeOrders(
       const data = rawData as {
         orderId: string;
         status: string;
+        minimal_status?: string;
+        order_version?: number;
         createdAt: string;
         data?: OrderData;
       };
@@ -204,8 +209,19 @@ export function useRealtimeOrders(
       if (data.data) {
         setOrders((prev) => {
           // Check if order already exists
-          if (prev.some((o) => o.id === data.orderId)) return prev;
-          return [data.data!, ...prev];
+          const existingOrder = prev.find((o) => o.id === data.orderId);
+          if (existingOrder) {
+            // Order exists - check version before updating
+            const versionCheck = shouldAcceptUpdate(data.data?.order_version, existingOrder.order_version);
+            if (!versionCheck.accept) {
+              console.log('[useRealtimeOrders] ORDER_CREATED:', versionCheck.reason);
+              return prev;
+            }
+          }
+          // Add new order or update with newer version
+          return existingOrder
+            ? prev.map(o => o.id === data.orderId ? data.data! : o)
+            : [data.data!, ...prev];
         });
         onOrderCreatedRef.current?.(data.data);
       } else {
@@ -236,6 +252,8 @@ export function useRealtimeOrders(
       const data = rawData as {
         orderId: string;
         status: string;
+        minimal_status?: string;
+        order_version?: number;
         previousStatus: string;
         updatedAt: string;
         data?: OrderData;
@@ -250,10 +268,32 @@ export function useRealtimeOrders(
       setOrders((prev) =>
         prev.map((order) => {
           if (order.id !== data.orderId) return order;
+
+          // ✅ VERSION GATING: Check if we should accept this update
+          const versionCheck = shouldAcceptUpdate(
+            data.data?.order_version || data.order_version,
+            order.order_version
+          );
+
+          if (!versionCheck.accept) {
+            console.log('[useRealtimeOrders] STATUS_UPDATED rejected:', versionCheck.reason);
+            return order; // Keep current (newer) state
+          }
+
+          console.log('[useRealtimeOrders] STATUS_UPDATED accepted:', versionCheck.reason);
+
+          // Apply update
           if (data.data) {
             return data.data;
           }
-          return { ...order, status: data.status };
+
+          // Partial update (legacy path - shouldn't be used but kept for compatibility)
+          return {
+            ...order,
+            status: data.status,
+            minimal_status: data.minimal_status || order.minimal_status,
+            order_version: data.order_version || order.order_version,
+          };
         })
       );
 
@@ -262,11 +302,29 @@ export function useRealtimeOrders(
 
     // Handle order cancelled
     const handleCancelled = (rawData: unknown) => {
-      const data = rawData as { orderId: string };
+      const data = rawData as {
+        orderId: string;
+        order_version?: number;
+        minimal_status?: string;
+      };
+
       setOrders((prev) =>
         prev.map((order) => {
           if (order.id !== data.orderId) return order;
-          return { ...order, status: 'cancelled' };
+
+          // ✅ VERSION GATING
+          const versionCheck = shouldAcceptUpdate(data.order_version, order.order_version);
+          if (!versionCheck.accept) {
+            console.log('[useRealtimeOrders] CANCELLED rejected:', versionCheck.reason);
+            return order;
+          }
+
+          return {
+            ...order,
+            status: 'cancelled',
+            minimal_status: data.minimal_status || 'cancelled',
+            order_version: data.order_version || order.order_version,
+          };
         })
       );
     };
@@ -323,11 +381,81 @@ export function useRealtimeOrders(
     };
   }, [actorId, actorType, pusher, isConnected, fetchOrders]);
 
+  // ── Core-API WebSocket (runs alongside Pusher, version gating picks newest) ──
+  const wsRef = useRef<WebSocket | null>(null);
+  const wsReconnectRef = useRef(0);
+
+  useEffect(() => {
+    const wsUrl = process.env.NEXT_PUBLIC_CORE_WS_URL;
+    if (!wsUrl || !actorId) return;
+
+    let destroyed = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function connect() {
+      if (destroyed) return;
+      const ws = new WebSocket(wsUrl!);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('[WS] Connected to core-api');
+        wsReconnectRef.current = 0;
+        ws.send(JSON.stringify({ type: 'subscribe', actorType, actorId }));
+      };
+
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data);
+          if (msg.type !== 'order_event') return;
+
+          const { event_type, order_id, status, minimal_status, order_version, previousStatus } = msg;
+
+          if (event_type === 'ORDER_CREATED') {
+            fetchOrders();
+            return;
+          }
+
+          setOrders((prev) =>
+            prev.map((order) => {
+              if (order.id !== order_id) return order;
+              const versionCheck = shouldAcceptUpdate(order_version, order.order_version);
+              if (!versionCheck.accept) return order;
+              return { ...order, status, minimal_status, order_version };
+            })
+          );
+
+          onOrderStatusUpdatedRef.current?.(order_id, status, previousStatus);
+        } catch { /* ignore malformed */ }
+      };
+
+      ws.onclose = () => {
+        wsRef.current = null;
+        if (destroyed) return;
+        const attempt = wsReconnectRef.current;
+        if (attempt >= 5) return;
+        wsReconnectRef.current = attempt + 1;
+        const delay = Math.min(1000 * 2 ** attempt, 16000);
+        reconnectTimer = setTimeout(connect, delay);
+      };
+
+      ws.onerror = () => ws.close();
+    }
+
+    connect();
+
+    return () => {
+      destroyed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      wsRef.current?.close();
+      wsRef.current = null;
+    };
+  }, [actorId, actorType, fetchOrders]);
+
   return {
     orders,
     isLoading,
     error,
-    isConnected: pusher?.isConnected || false,
+    isConnected: pusher?.isConnected || !!wsRef.current,
     refetch: fetchOrders,
   };
 }

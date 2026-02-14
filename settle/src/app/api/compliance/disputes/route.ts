@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { getAuthContext } from '@/lib/middleware/auth';
 
 // Get all disputed orders for compliance dashboard
 export async function GET(request: NextRequest) {
+  // Require compliance or system actor type
+  const auth = getAuthContext(request);
+  if (!auth || (auth.actorType !== 'compliance' && auth.actorType !== 'system')) {
+    return NextResponse.json(
+      { success: false, error: 'Compliance authentication required' },
+      { status: 401 }
+    );
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get('status') || 'all'; // all, disputed, investigating, resolved
