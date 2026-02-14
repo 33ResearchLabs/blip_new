@@ -12,6 +12,7 @@ export type TransactionType =
   | 'escrow_refund'      // Balance credited when escrow refunded
   | 'order_completed'    // Balance credited when order completed (without explicit release)
   | 'order_cancelled'    // Balance refunded when order cancelled
+  | 'fee_deduction'      // Platform fee deducted on completion
   | 'manual_adjustment'; // Manual balance adjustment
 
 export interface Transaction {
@@ -136,4 +137,33 @@ export async function getMerchantBalanceSummary(merchantId: string): Promise<{
     total_debits: parseFloat(summaryRows[0]?.total_debits || '0'),
     total_transactions: parseInt(summaryRows[0]?.total_transactions || '0'),
   };
+}
+
+/**
+ * Create a transaction log entry inside an existing DB transaction.
+ * Reads balance from the already-locked row to avoid stale reads.
+ */
+export async function createTransactionInTx(
+  client: { query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> },
+  data: CreateTransactionInput
+): Promise<void> {
+  const { merchant_id, user_id, order_id, type, amount, description } = data;
+
+  const table = merchant_id ? 'merchants' : 'users';
+  const entityId = merchant_id || user_id;
+  if (!entityId) return;
+
+  const balanceResult = await client.query(
+    `SELECT balance FROM ${table} WHERE id = $1`,
+    [entityId]
+  );
+  const balanceBefore = parseFloat(String(balanceResult.rows[0]?.balance ?? 0));
+  const balanceAfter = balanceBefore + amount;
+
+  await client.query(
+    `INSERT INTO merchant_transactions
+     (merchant_id, user_id, order_id, type, amount, balance_before, balance_after, description)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [merchant_id || null, user_id || null, order_id || null, type, amount, balanceBefore, balanceAfter, description]
+  );
 }
