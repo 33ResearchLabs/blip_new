@@ -2,6 +2,7 @@
 # Multi-stage build with pnpm workspace support
 
 FROM node:22-alpine AS base
+RUN apk add --no-cache python3 make g++ linux-headers eudev-dev
 RUN corepack enable && corepack prepare pnpm@9 --activate
 WORKDIR /app
 
