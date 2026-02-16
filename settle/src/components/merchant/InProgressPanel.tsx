@@ -1,7 +1,8 @@
 'use client';
 
-import { Clock, Shield, Zap, ChevronRight } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { memo, useRef } from 'react';
+import { Shield, Zap, ChevronRight, Target, TrendingDown, Flame, ArrowRight } from 'lucide-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextActionFromStatus } from '@/lib/orders/statusResolver';
 
 interface InProgressPanelProps {
@@ -9,7 +10,224 @@ interface InProgressPanelProps {
   onSelectOrder: (order: any) => void;
 }
 
-export function InProgressPanel({ orders, onSelectOrder }: InProgressPanelProps) {
+const WAITING_ACTIONS = ['Wait for Acceptance', 'Wait for Payment', 'Wait for Escrow', 'Wait for Confirmation', 'Waiting for Acceptor', 'Waiting for Confirmation'];
+
+const IP_ITEM_HEIGHT = 210; // Estimated row height for in-progress orders (includes hero timer + pricing strip)
+
+const InProgressOrderList = memo(function InProgressOrderList({
+  orders,
+  onSelectOrder,
+  formatTimeRemaining,
+  getStatusBadge,
+  getNextAction,
+}: {
+  orders: any[];
+  onSelectOrder: (order: any) => void;
+  formatTimeRemaining: (seconds: number) => string;
+  getStatusBadge: (order: any) => React.ReactNode;
+  getNextAction: (order: any) => string;
+}) {
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: orders.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => IP_ITEM_HEIGHT,
+    overscan: 5,
+  });
+
+  if (orders.length === 0) {
+    return (
+      <div className="flex-1 overflow-y-auto p-1.5">
+        <div className="flex flex-col items-center justify-center h-full gap-3">
+          <div className="w-10 h-10 rounded-full border border-white/[0.06] bg-white/[0.02] flex items-center justify-center">
+            <Shield className="w-5 h-5 text-white/20" />
+          </div>
+          <div className="text-center">
+            <p className="text-[11px] font-medium text-white/30 mb-0.5">No active trades</p>
+            <p className="text-[9px] text-white/15 font-mono">Accepted orders will appear here</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={parentRef} className="flex-1 overflow-y-auto p-1.5">
+      <div style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+        {virtualizer.getVirtualItems().map((virtualRow) => {
+          const order = orders[virtualRow.index];
+          const nextAction = getNextAction(order);
+          const isWaiting = WAITING_ACTIONS.includes(nextAction);
+
+          return (
+            <div
+              key={order.id}
+              ref={virtualizer.measureElement}
+              data-index={virtualRow.index}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+              className="pb-1"
+            >
+              <div
+                data-testid={`order-card-${order.id}`}
+                onClick={() => onSelectOrder(order)}
+                className="p-2.5 glass-card rounded-lg hover:border-white/[0.10] transition-colors cursor-pointer"
+              >
+                {/* Row 1: User + type on left, timer on right */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="text-base">{order.emoji}</div>
+                    <span className="text-xs font-medium text-white/80">{order.user}</span>
+                    <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
+                      order.orderType === 'buy'
+                        ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
+                        : 'bg-white/[0.06] border-white/[0.08] text-white/50'
+                    }`}>
+                      {order.orderType === 'buy' ? 'SELL' : 'BUY'}
+                    </span>
+                  </div>
+                  <span className={`text-xs font-bold font-mono tabular-nums shrink-0 px-1.5 py-0.5 rounded ${
+                    order.expiresIn <= 0
+                      ? 'text-red-400/80 bg-red-500/[0.06]'
+                      : order.expiresIn < 120
+                      ? 'text-red-400/80 bg-red-500/[0.06]'
+                      : order.expiresIn < 300
+                      ? 'text-orange-400/70 bg-orange-500/[0.06]'
+                      : 'text-white/35'
+                  }`}>
+                    {order.expiresIn > 0 ? formatTimeRemaining(order.expiresIn) : '0:00'}
+                  </span>
+                </div>
+
+                {/* Row 2: Amount + rate */}
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-bold text-white tabular-nums">
+                      {Math.round(order.amount).toLocaleString()} {order.fromCurrency}
+                    </span>
+                    <ArrowRight className="w-3 h-3 text-white/20" />
+                    <span className="text-sm font-bold text-orange-400 tabular-nums">
+                      {Math.round(order.amount * (order.rate || 3.67)).toLocaleString()} {order.toCurrency || 'AED'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Row 3: Rate + premium + earnings + status badge */}
+                <div className="flex items-center gap-1.5 mb-2">
+                  <span className="text-[10px] text-white/40 font-mono">@ {(order.rate || 3.67).toFixed(2)}</span>
+                  {(() => {
+                    const premium = ((order.rate - 3.67) / 3.67) * 100;
+                    return (
+                      <>
+                        {premium !== 0 && (
+                          <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                            premium > 0
+                              ? 'bg-orange-500/10 text-orange-400'
+                              : 'bg-white/[0.04] text-white/30'
+                          }`}>
+                            {premium > 0 ? '+' : ''}{premium.toFixed(2)}%
+                          </span>
+                        )}
+                        {order.protocolFeePercent != null && (
+                          <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
+                            +${(order.amount * order.protocolFeePercent / 100).toFixed(2)}
+                          </span>
+                        )}
+                      </>
+                    );
+                  })()}
+                  <div className="flex-1" />
+                  {order.expiresIn > 0 && getStatusBadge(order)}
+                </div>
+
+                {/* Pricing strip */}
+                {(order.spreadPreference || order.protocolFeePercent) && (
+                  <div className="flex items-center gap-2 mb-2 px-2 py-1.5 bg-white/[0.02] border border-white/[0.05] rounded-md">
+                    {order.spreadPreference && (
+                      <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border ${
+                        order.spreadPreference === 'fastest'
+                          ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
+                          : order.spreadPreference === 'cheap'
+                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                          : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                      }`}>
+                        {order.spreadPreference === 'fastest' && <Zap className="w-3 h-3" />}
+                        {order.spreadPreference === 'best' && <Target className="w-3 h-3" />}
+                        {order.spreadPreference === 'cheap' && <TrendingDown className="w-3 h-3" />}
+                        <span className="text-[10px] font-bold">
+                          {order.spreadPreference === 'fastest' ? 'FAST' : order.spreadPreference === 'best' ? 'BEST' : 'CHEAP'}
+                        </span>
+                      </div>
+                    )}
+                    {order.protocolFeePercent != null && order.protocolFeePercent > (order.spreadPreference === 'fastest' ? 2.5 : order.spreadPreference === 'best' ? 2.0 : 1.5) && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] text-white/30 font-mono">PRIORITY</span>
+                        <span className="text-sm font-bold text-white/70 tabular-nums font-mono">
+                          +{(order.protocolFeePercent - (order.spreadPreference === 'fastest' ? 2.5 : order.spreadPreference === 'best' ? 2.0 : 1.5)).toFixed(1)}%
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex-1" />
+                    <div className="flex items-center gap-1">
+                      <Flame className="w-3 h-3 text-orange-500/60 animate-pulse" />
+                      <span className="text-[10px] font-bold text-white/50 font-mono">
+                        {order.spreadPreference === 'fastest'
+                          ? '5m'
+                          : order.spreadPreference === 'best'
+                          ? '15m'
+                          : '60m'}
+                      </span>
+                      <span className="text-[9px] text-white/25 font-mono">decay</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Bottom: Action button or waiting */}
+                {isWaiting ? (
+                  <div className="flex items-center gap-1.5 px-1 py-1">
+                    <div className="w-1 h-1 bg-white/15 rounded-full animate-breathe" />
+                    <span className="text-[9px] text-white/25 font-mono">
+                      Waiting for other merchant
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    data-testid="order-primary-action"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectOrder(order);
+                    }}
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-orange-500/10 border border-orange-500/20 rounded-lg text-[11px] text-orange-400 font-bold hover:bg-orange-500/15 transition-colors"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    {nextAction}
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                {/* Unread Messages */}
+                {order.hasMessages && order.unreadCount > 0 && (
+                  <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-orange-400/80 font-medium">
+                    <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-live-dot" />
+                    {order.unreadCount} new message{order.unreadCount > 1 ? 's' : ''}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
+export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder }: InProgressPanelProps) {
   const formatTimeRemaining = (seconds: number): string => {
     if (seconds <= 0) return 'Expired';
     const hours = Math.floor(seconds / 3600);
@@ -22,14 +240,13 @@ export function InProgressPanel({ orders, onSelectOrder }: InProgressPanelProps)
   };
 
   const getStatusBadge = (order: any) => {
-    // ✅ Use authoritative minimal_status instead of legacy status
     const minimalStatus = getAuthoritativeStatus(order);
     const config = getStatusBadgeConfig(minimalStatus);
 
     return (
       <div
         data-testid="order-status"
-        className={`px-2 py-1 ${config.bg} border ${config.border} rounded text-[10px] ${config.color} font-medium`}
+        className="px-2 py-0.5 bg-white/[0.04] border border-white/[0.06] rounded text-[9px] text-white/50 font-medium font-mono"
       >
         {config.label}
       </div>
@@ -37,98 +254,34 @@ export function InProgressPanel({ orders, onSelectOrder }: InProgressPanelProps)
   };
 
   const getNextAction = (order: any): string => {
-    // ✅ Use status resolver to get next action based on minimal_status
     return getNextActionFromStatus(order, order.orderType || order.type);
   };
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-white/[0.06]">
+      <div className="px-3 py-2 border-b border-white/[0.04]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-[#c9a962]" />
-            <h2 className="text-xs font-bold text-white/90 font-mono tracking-wider">
-              IN PROGRESS
+            <Shield className="w-3.5 h-3.5 text-white/30" />
+            <h2 className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">
+              In Progress
             </h2>
           </div>
-          <span className="text-xs border border-white/20 text-white/70 px-2 py-0.5 rounded-full font-medium">
+          <span className="text-[10px] border border-white/[0.08] text-white/50 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
             {orders.length}
           </span>
         </div>
       </div>
 
-      {/* Orders List - Scrollable */}
-      <div className="flex-1 overflow-y-auto p-2">
-        {orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-gray-500">
-            <Shield className="w-10 h-10 mb-2 opacity-30" />
-            <p className="text-xs">No orders in progress</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {orders.map((order, index) => (
-              <motion.div
-                key={order.id}
-                data-testid={`order-card-${order.id}`}
-                initial={{ opacity: 0, x: -5 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.02 }}
-                onClick={() => onSelectOrder(order)}
-                className="p-3 bg-[#1a1a1a] rounded-lg border border-white/[0.06] hover:border-[#c9a962]/30 hover:bg-[#1d1d1d] transition-all cursor-pointer"
-              >
-                {/* Top Row */}
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div className="text-xl">{order.emoji}</div>
-                    <div>
-                      <div className="text-xs font-medium text-white mb-0.5">
-                        {order.user}
-                      </div>
-                      <div className="text-sm font-bold text-white">
-                        {order.amount.toFixed(2)} {order.fromCurrency}
-                      </div>
-                    </div>
-                  </div>
-                  {getStatusBadge(order)}
-                </div>
-
-                {/* Countdown Timer */}
-                {order.expiresIn > 0 && (
-                  <div data-testid="order-timer" className="flex items-center gap-2 mb-2 px-2 py-1.5 bg-white/[0.02] rounded-lg">
-                    <Clock className="w-3.5 h-3.5 text-gray-500" />
-                    <span className="text-xs text-gray-400 font-mono">
-                      {formatTimeRemaining(order.expiresIn)}
-                    </span>
-                  </div>
-                )}
-
-                {/* Next Action Button */}
-                <button
-                  data-testid="order-primary-action"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectOrder(order);
-                  }}
-                  className="w-full py-2 bg-[#c9a962]/20 border border-[#c9a962]/30 rounded-lg text-xs text-[#c9a962] font-medium hover:bg-[#c9a962]/30 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  {getNextAction(order)}
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-
-                {/* Unread Messages Badge */}
-                {order.hasMessages && order.unreadCount > 0 && (
-                  <div className="mt-2 flex items-center gap-1.5 text-[10px] text-[#c9a962]">
-                    <div className="w-1.5 h-1.5 bg-[#c9a962] rounded-full animate-pulse" />
-                    {order.unreadCount} new message{order.unreadCount > 1 ? 's' : ''}
-                  </div>
-                )}
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Orders List — Virtualized */}
+      <InProgressOrderList
+        orders={orders}
+        onSelectOrder={onSelectOrder}
+        formatTimeRemaining={formatTimeRemaining}
+        getStatusBadge={getStatusBadge}
+        getNextAction={getNextAction}
+      />
     </div>
   );
-}
+});

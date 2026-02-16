@@ -7,13 +7,14 @@ import { query } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
 export type TransactionType =
-  | 'escrow_lock'        // Balance deducted when locking escrow
-  | 'escrow_release'     // Balance credited when escrow released
-  | 'escrow_refund'      // Balance credited when escrow refunded
-  | 'order_completed'    // Balance credited when order completed (without explicit release)
-  | 'order_cancelled'    // Balance refunded when order cancelled
-  | 'fee_deduction'      // Platform fee deducted on completion
-  | 'manual_adjustment'; // Manual balance adjustment
+  | 'escrow_lock'            // Balance deducted when locking escrow
+  | 'escrow_release'         // Balance credited when escrow released
+  | 'escrow_refund'          // Balance credited when escrow refunded
+  | 'order_completed'        // Balance credited when order completed (without explicit release)
+  | 'order_cancelled'        // Balance refunded when order cancelled
+  | 'fee_deduction'          // Platform fee deducted on completion
+  | 'synthetic_conversion'   // USDT ↔ sINR conversion
+  | 'manual_adjustment';     // Manual balance adjustment
 
 export interface Transaction {
   id: string;

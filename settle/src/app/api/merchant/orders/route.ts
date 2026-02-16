@@ -113,6 +113,7 @@ export async function POST(request: NextRequest) {
       crypto_amount,
       payment_method,
       spread_preference,
+      priority_fee,
       offer_id,
       target_merchant_id,
       escrow_tx_hash,
@@ -258,10 +259,11 @@ export async function POST(request: NextRequest) {
     // Calculate fiat amount
     const fiatAmount = crypto_amount * offer.rate;
 
-    // Calculate protocol fee based on spread preference
-    const protocolFeePercentage = spread_preference === 'best' ? 2.00
+    // Calculate protocol fee based on spread preference + priority fee
+    const baseFee = spread_preference === 'best' ? 2.00
       : spread_preference === 'fastest' ? 2.50
       : 1.50; // cheap
+    const protocolFeePercentage = baseFee + (priority_fee || 0);
     const protocolFeeAmount = crypto_amount * (protocolFeePercentage / 100);
 
     logger.info('Order pricing calculated', {

@@ -3,7 +3,8 @@
 /**
  * Real-time Orders List Hook
  *
- * Subscribes to order list updates for users or merchants via Pusher
+ * Subscribes to order list updates for users or merchants via Pusher + WS.
+ * Events are BATCHED into 100ms windows to prevent render storms at high TPS.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -48,13 +49,9 @@ interface ExtensionResponseData {
 interface UseRealtimeOrdersOptions {
   actorType: 'user' | 'merchant';
   actorId: string | null;
-  // Callback when a new order is created
   onOrderCreated?: (order: OrderData) => void;
-  // Callback when an order status changes
   onOrderStatusUpdated?: (orderId: string, newStatus: string, previousStatus: string) => void;
-  // Callback when an extension is requested
   onExtensionRequested?: (data: ExtensionRequestData) => void;
-  // Callback when an extension request is responded to
   onExtensionResponse?: (data: ExtensionResponseData) => void;
 }
 
@@ -66,12 +63,18 @@ interface UseRealtimeOrdersReturn {
   refetch: () => Promise<void>;
 }
 
+// ─── Event batch types ──────────────────────────────────────────────
+type BatchedEvent =
+  | { type: 'created'; orderId: string; data?: OrderData; order_version?: number }
+  | { type: 'status'; orderId: string; status: string; minimal_status?: string; order_version?: number; previousStatus: string; data?: OrderData }
+  | { type: 'cancelled'; orderId: string; order_version?: number; minimal_status?: string };
+
+const BATCH_WINDOW_MS = 100; // Coalesce events within 100ms
+
 export function useRealtimeOrders(
   options: UseRealtimeOrdersOptions
 ): UseRealtimeOrdersReturn {
   const { actorType, actorId, onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse } = options;
-
-  console.log('[useRealtimeOrders] Hook called with:', { actorType, actorId });
 
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -81,15 +84,12 @@ export function useRealtimeOrders(
   const isConnected = pusher?.isConnected ?? false;
   const subscribedRef = useRef(false);
 
-  console.log('[useRealtimeOrders] Pusher state:', { hasPusher: !!pusher, isConnected });
-
-  // Use refs for callbacks to avoid re-subscribing when callbacks change
+  // Callback refs (stable references)
   const onOrderCreatedRef = useRef(onOrderCreated);
   const onOrderStatusUpdatedRef = useRef(onOrderStatusUpdated);
   const onExtensionRequestedRef = useRef(onExtensionRequested);
   const onExtensionResponseRef = useRef(onExtensionResponse);
 
-  // Keep refs updated with latest callbacks
   useEffect(() => {
     onOrderCreatedRef.current = onOrderCreated;
     onOrderStatusUpdatedRef.current = onOrderStatusUpdated;
@@ -97,7 +97,107 @@ export function useRealtimeOrders(
     onExtensionResponseRef.current = onExtensionResponse;
   }, [onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse]);
 
-  // Fetch orders from API
+  // ─── Event batch queue ──────────────────────────────────────────
+  const batchQueueRef = useRef<BatchedEvent[]>([]);
+  const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const needsRefetchRef = useRef(false);
+
+  const flushBatch = useCallback(() => {
+    const events = batchQueueRef.current;
+    batchQueueRef.current = [];
+    batchTimerRef.current = null;
+
+    if (events.length === 0 && !needsRefetchRef.current) return;
+
+    // Deduplicate: keep only the latest event per orderId
+    const latestByOrder = new Map<string, BatchedEvent>();
+    const createdOrders: OrderData[] = [];
+
+    for (const evt of events) {
+      latestByOrder.set(evt.orderId, evt);
+      if (evt.type === 'created' && evt.data) {
+        createdOrders.push(evt.data);
+      }
+    }
+
+    // Apply all state updates in ONE setOrders call
+    if (latestByOrder.size > 0) {
+      setOrders((prev) => {
+        let updated = [...prev];
+
+        for (const [, evt] of latestByOrder) {
+          if (evt.type === 'created') {
+            if (evt.data) {
+              const existIdx = updated.findIndex(o => o.id === evt.orderId);
+              if (existIdx >= 0) {
+                const versionCheck = shouldAcceptUpdate(evt.data.order_version, updated[existIdx].order_version);
+                if (versionCheck.accept) {
+                  updated[existIdx] = evt.data;
+                }
+              } else {
+                updated = [evt.data, ...updated];
+              }
+            }
+          } else if (evt.type === 'status') {
+            updated = updated.map(order => {
+              if (order.id !== evt.orderId) return order;
+              const versionCheck = shouldAcceptUpdate(
+                evt.data?.order_version || evt.order_version,
+                order.order_version
+              );
+              if (!versionCheck.accept) return order;
+              if (evt.data) return evt.data;
+              return {
+                ...order,
+                status: evt.status,
+                minimal_status: evt.minimal_status || order.minimal_status,
+                order_version: evt.order_version || order.order_version,
+              };
+            });
+          } else if (evt.type === 'cancelled') {
+            updated = updated.map(order => {
+              if (order.id !== evt.orderId) return order;
+              const versionCheck = shouldAcceptUpdate(evt.order_version, order.order_version);
+              if (!versionCheck.accept) return order;
+              return {
+                ...order,
+                status: 'cancelled',
+                minimal_status: evt.minimal_status || 'cancelled',
+                order_version: evt.order_version || order.order_version,
+              };
+            });
+          }
+        }
+
+        return updated;
+      });
+    }
+
+    // Fire callbacks AFTER state update (outside setOrders)
+    for (const order of createdOrders) {
+      onOrderCreatedRef.current?.(order);
+    }
+    for (const [, evt] of latestByOrder) {
+      if (evt.type === 'status') {
+        onOrderStatusUpdatedRef.current?.(evt.orderId, evt.status, evt.previousStatus);
+      }
+    }
+
+    // If any event required a full refetch (e.g. ORDER_CREATED without data), do it once
+    if (needsRefetchRef.current) {
+      needsRefetchRef.current = false;
+      fetchOrders();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps — fetchOrders is stable via ref
+
+  const enqueueEvent = useCallback((event: BatchedEvent) => {
+    batchQueueRef.current.push(event);
+    if (!batchTimerRef.current) {
+      batchTimerRef.current = setTimeout(flushBatch, BATCH_WINDOW_MS);
+    }
+  }, [flushBatch]);
+
+  // ─── Fetch orders from API ──────────────────────────────────────
   const fetchOrders = useCallback(async () => {
     if (!actorId) return;
 
@@ -113,8 +213,6 @@ export function useRealtimeOrders(
       const res = await fetch(endpoint);
 
       if (!res.ok) {
-        // API not available (demo mode) - just stop loading
-        console.log('Orders API not available - running in demo mode');
         setIsLoading(false);
         return;
       }
@@ -126,9 +224,8 @@ export function useRealtimeOrders(
       } else {
         setError(data.error || 'Failed to fetch orders');
       }
-    } catch (err) {
+    } catch {
       // Silently handle in demo mode
-      console.log('Orders fetch error - running in demo mode');
     } finally {
       setIsLoading(false);
     }
@@ -141,56 +238,49 @@ export function useRealtimeOrders(
     }
   }, [actorId, fetchOrders]);
 
-  // Subscribe to real-time updates
+  // ─── Subscribe to real-time updates (Pusher) ───────────────────
   useEffect(() => {
-    // Wait for Pusher to be connected before subscribing
-    if (!actorId || !pusher || !isConnected) {
-      console.log('[useRealtimeOrders] Not ready to subscribe:', { actorId: !!actorId, pusher: !!pusher, isConnected });
-      return;
-    }
+    if (!actorId || !pusher || !isConnected) return;
+    if (subscribedRef.current) return;
 
-    if (subscribedRef.current) {
-      console.log('[useRealtimeOrders] Already subscribed, skipping');
-      return;
-    }
-
-    // For merchants:
-    // - Subscribe to GLOBAL channel for new orders (all merchants see all new orders)
-    // - Subscribe to PERSONAL channel for status updates (only their orders)
-    // For users:
-    // - Subscribe to their personal channel only
     const primaryChannelName =
       actorType === 'merchant'
-        ? getAllMerchantsChannel() // All merchants receive all new orders
+        ? getAllMerchantsChannel()
         : getUserChannel(actorId);
 
-    // Merchants also need their personal channel for order status updates
     const personalChannelName =
       actorType === 'merchant'
         ? getMerchantChannel(actorId)
         : null;
 
-    console.log('[useRealtimeOrders] Subscribing to channel:', primaryChannelName);
     const primaryChannel = pusher.subscribe(primaryChannelName);
+    if (!primaryChannel) return;
 
-    if (!primaryChannel) {
-      console.log('[useRealtimeOrders] Failed to subscribe - channel is null');
-      return;
-    }
-
-    // Subscribe to personal channel for merchants (status updates go here)
     let personalChannel: ReturnType<typeof pusher.subscribe> | null = null;
     if (personalChannelName) {
-      console.log('[useRealtimeOrders] Also subscribing to personal channel:', personalChannelName);
       personalChannel = pusher.subscribe(personalChannelName);
     }
 
     subscribedRef.current = true;
-    console.log('[useRealtimeOrders] Successfully subscribed to', primaryChannelName, personalChannelName ? `and ${personalChannelName}` : '');
 
-    // Handle new order created (for merchants)
+    // Dedup: prevent duplicate events from global + personal channels
+    const recentEvents = new Map<string, number>();
+    const isDuplicate = (key: string) => {
+      const now = Date.now();
+      const lastSeen = recentEvents.get(key);
+      if (lastSeen && now - lastSeen < 3000) return true;
+      recentEvents.set(key, now);
+      if (recentEvents.size > 100) {
+        for (const [k, t] of recentEvents) {
+          if (now - t > 10000) recentEvents.delete(k);
+        }
+      }
+      return false;
+    };
+
+    // ── Event handlers (queue into batch, don't touch state directly) ──
+
     const handleOrderCreated = (rawData: unknown) => {
-      console.log('[useRealtimeOrders] Received ORDER_CREATED event:', rawData);
       const data = rawData as {
         orderId: string;
         status: string;
@@ -200,55 +290,20 @@ export function useRealtimeOrders(
         data?: OrderData;
       };
 
-      // Deduplicate
-      if (isDuplicate(`created:${data.orderId}`)) {
-        console.log('[useRealtimeOrders] Skipping duplicate order created:', data.orderId);
-        return;
-      }
+      if (isDuplicate(`created:${data.orderId}`)) return;
 
       if (data.data) {
-        setOrders((prev) => {
-          // Check if order already exists
-          const existingOrder = prev.find((o) => o.id === data.orderId);
-          if (existingOrder) {
-            // Order exists - check version before updating
-            const versionCheck = shouldAcceptUpdate(data.data?.order_version, existingOrder.order_version);
-            if (!versionCheck.accept) {
-              console.log('[useRealtimeOrders] ORDER_CREATED:', versionCheck.reason);
-              return prev;
-            }
-          }
-          // Add new order or update with newer version
-          return existingOrder
-            ? prev.map(o => o.id === data.orderId ? data.data! : o)
-            : [data.data!, ...prev];
-        });
-        onOrderCreatedRef.current?.(data.data);
+        enqueueEvent({ type: 'created', orderId: data.orderId, data: data.data, order_version: data.order_version });
       } else {
-        // Refetch if we don't have full order data
-        fetchOrders();
-      }
-    };
-
-    // Dedup: prevent duplicate notifications when same event arrives on multiple channels
-    const recentEvents = new Map<string, number>();
-    const isDuplicate = (key: string) => {
-      const now = Date.now();
-      const lastSeen = recentEvents.get(key);
-      if (lastSeen && now - lastSeen < 3000) return true; // 3s dedup window
-      recentEvents.set(key, now);
-      // Clean old entries
-      if (recentEvents.size > 100) {
-        for (const [k, t] of recentEvents) {
-          if (now - t > 10000) recentEvents.delete(k);
+        // No full data — schedule a refetch (coalesced in flush)
+        needsRefetchRef.current = true;
+        if (!batchTimerRef.current) {
+          batchTimerRef.current = setTimeout(flushBatch, BATCH_WINDOW_MS);
         }
       }
-      return false;
     };
 
-    // Handle order status update
     const handleStatusUpdated = (rawData: unknown) => {
-      console.log('[useRealtimeOrders] Received STATUS_UPDATED event:', rawData);
       const data = rawData as {
         orderId: string;
         status: string;
@@ -259,48 +314,19 @@ export function useRealtimeOrders(
         data?: OrderData;
       };
 
-      // Deduplicate events arriving on both global + personal channels
-      if (isDuplicate(`status:${data.orderId}:${data.status}`)) {
-        console.log('[useRealtimeOrders] Skipping duplicate status update:', data.orderId, data.status);
-        return;
-      }
+      if (isDuplicate(`status:${data.orderId}:${data.status}`)) return;
 
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== data.orderId) return order;
-
-          // ✅ VERSION GATING: Check if we should accept this update
-          const versionCheck = shouldAcceptUpdate(
-            data.data?.order_version || data.order_version,
-            order.order_version
-          );
-
-          if (!versionCheck.accept) {
-            console.log('[useRealtimeOrders] STATUS_UPDATED rejected:', versionCheck.reason);
-            return order; // Keep current (newer) state
-          }
-
-          console.log('[useRealtimeOrders] STATUS_UPDATED accepted:', versionCheck.reason);
-
-          // Apply update
-          if (data.data) {
-            return data.data;
-          }
-
-          // Partial update (legacy path - shouldn't be used but kept for compatibility)
-          return {
-            ...order,
-            status: data.status,
-            minimal_status: data.minimal_status || order.minimal_status,
-            order_version: data.order_version || order.order_version,
-          };
-        })
-      );
-
-      onOrderStatusUpdatedRef.current?.(data.orderId, data.status, data.previousStatus);
+      enqueueEvent({
+        type: 'status',
+        orderId: data.orderId,
+        status: data.status,
+        minimal_status: data.minimal_status,
+        order_version: data.order_version,
+        previousStatus: data.previousStatus,
+        data: data.data,
+      });
     };
 
-    // Handle order cancelled
     const handleCancelled = (rawData: unknown) => {
       const data = rawData as {
         orderId: string;
@@ -308,51 +334,34 @@ export function useRealtimeOrders(
         minimal_status?: string;
       };
 
-      setOrders((prev) =>
-        prev.map((order) => {
-          if (order.id !== data.orderId) return order;
-
-          // ✅ VERSION GATING
-          const versionCheck = shouldAcceptUpdate(data.order_version, order.order_version);
-          if (!versionCheck.accept) {
-            console.log('[useRealtimeOrders] CANCELLED rejected:', versionCheck.reason);
-            return order;
-          }
-
-          return {
-            ...order,
-            status: 'cancelled',
-            minimal_status: data.minimal_status || 'cancelled',
-            order_version: data.order_version || order.order_version,
-          };
-        })
-      );
+      enqueueEvent({
+        type: 'cancelled',
+        orderId: data.orderId,
+        order_version: data.order_version,
+        minimal_status: data.minimal_status,
+      });
     };
 
-    // Handle extension requested
     const handleExtensionRequested = (rawData: unknown) => {
       const data = rawData as ExtensionRequestData;
       onExtensionRequestedRef.current?.(data);
     };
 
-    // Handle extension response
     const handleExtensionResponse = (rawData: unknown) => {
       const data = rawData as ExtensionResponseData;
       onExtensionResponseRef.current?.(data);
-      // Refetch orders to get updated expires_at
       if (data.accepted) {
         fetchOrders();
       }
     };
 
-    // Bind events to primary channel
+    // Bind events
     primaryChannel.bind(ORDER_EVENTS.CREATED, handleOrderCreated);
     primaryChannel.bind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
     primaryChannel.bind(ORDER_EVENTS.CANCELLED, handleCancelled);
     primaryChannel.bind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
     primaryChannel.bind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
 
-    // Also bind status events to personal channel for merchants
     if (personalChannel) {
       personalChannel.bind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
       personalChannel.bind(ORDER_EVENTS.CANCELLED, handleCancelled);
@@ -361,7 +370,6 @@ export function useRealtimeOrders(
     }
 
     return () => {
-      console.log('[useRealtimeOrders] Cleaning up subscriptions');
       primaryChannel.unbind(ORDER_EVENTS.CREATED, handleOrderCreated);
       primaryChannel.unbind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
       primaryChannel.unbind(ORDER_EVENTS.CANCELLED, handleCancelled);
@@ -378,10 +386,15 @@ export function useRealtimeOrders(
       }
 
       subscribedRef.current = false;
+      // Flush any remaining events
+      if (batchTimerRef.current) {
+        clearTimeout(batchTimerRef.current);
+        batchTimerRef.current = null;
+      }
     };
-  }, [actorId, actorType, pusher, isConnected, fetchOrders]);
+  }, [actorId, actorType, pusher, isConnected, fetchOrders, enqueueEvent, flushBatch]);
 
-  // ── Core-API WebSocket (runs alongside Pusher, version gating picks newest) ──
+  // ── Core-API WebSocket (batched, version gating picks newest) ──
   const wsRef = useRef<WebSocket | null>(null);
   const wsReconnectRef = useRef(0);
 
@@ -398,7 +411,6 @@ export function useRealtimeOrders(
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('[WS] Connected to core-api');
         wsReconnectRef.current = 0;
         ws.send(JSON.stringify({ type: 'subscribe', actorType, actorId }));
       };
@@ -411,20 +423,21 @@ export function useRealtimeOrders(
           const { event_type, order_id, status, minimal_status, order_version, previousStatus } = msg;
 
           if (event_type === 'ORDER_CREATED') {
-            fetchOrders();
+            needsRefetchRef.current = true;
+            if (!batchTimerRef.current) {
+              batchTimerRef.current = setTimeout(flushBatch, BATCH_WINDOW_MS);
+            }
             return;
           }
 
-          setOrders((prev) =>
-            prev.map((order) => {
-              if (order.id !== order_id) return order;
-              const versionCheck = shouldAcceptUpdate(order_version, order.order_version);
-              if (!versionCheck.accept) return order;
-              return { ...order, status, minimal_status, order_version };
-            })
-          );
-
-          onOrderStatusUpdatedRef.current?.(order_id, status, previousStatus);
+          enqueueEvent({
+            type: 'status',
+            orderId: order_id,
+            status,
+            minimal_status,
+            order_version,
+            previousStatus,
+          });
         } catch { /* ignore malformed */ }
       };
 
@@ -449,7 +462,7 @@ export function useRealtimeOrders(
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [actorId, actorType, fetchOrders]);
+  }, [actorId, actorType, fetchOrders, enqueueEvent, flushBatch]);
 
   return {
     orders,

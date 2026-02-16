@@ -209,7 +209,7 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
     FROM (
       SELECT
         activity_date,
-        EXTRACT(DAY FROM activity_date - LAG(activity_date) OVER (ORDER BY activity_date))::int as gap_days
+        (activity_date - LAG(activity_date) OVER (ORDER BY activity_date))::int as gap_days
       FROM daily_activity
     ) gaps`,
     [userId]
@@ -357,7 +357,7 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
     FROM (
       SELECT
         activity_date,
-        EXTRACT(DAY FROM activity_date - LAG(activity_date) OVER (ORDER BY activity_date))::int as gap_days
+        (activity_date - LAG(activity_date) OVER (ORDER BY activity_date))::int as gap_days
       FROM daily_activity
     ) gaps`,
     [merchantId]

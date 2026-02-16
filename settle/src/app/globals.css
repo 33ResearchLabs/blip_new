@@ -1,62 +1,67 @@
 @import "tailwindcss";
 
-/* Dark mode (default) - Apple-Inspired Minimal Black/White/Orange Theme */
+/* ==========================================
+   2026 DARK GLASS — Enterprise Terminal
+   Orange reserved for CTAs + key accents only
+   ========================================== */
+
 :root {
-  /* Background hierarchy - pure blacks */
-  --background: #000000;
-  --color-bg-primary: #000000;
-  --color-bg-secondary: #0a0a0a;
-  --color-bg-tertiary: #141414;
+  /* Background hierarchy — near-black */
+  --background: #060606;
+  --color-bg-primary: #060606;
+  --color-bg-secondary: #0c0c0c;
+  --color-bg-tertiary: #131313;
 
-  /* Text hierarchy - white with varying opacity */
+  /* Text hierarchy — white with opacity layers */
   --foreground: #ffffff;
-  --color-text-primary: rgba(255, 255, 255, 1.0);
-  --color-text-secondary: rgba(255, 255, 255, 0.7);
-  --color-text-tertiary: rgba(255, 255, 255, 0.5);
-  --color-text-quaternary: rgba(255, 255, 255, 0.3);
+  --color-text-primary: rgba(255, 255, 255, 0.92);
+  --color-text-secondary: rgba(255, 255, 255, 0.50);
+  --color-text-tertiary: rgba(255, 255, 255, 0.30);
+  --color-text-quaternary: rgba(255, 255, 255, 0.15);
 
-  /* Borders - subtle, purposeful */
-  --border: rgba(255, 255, 255, 0.06);
-  --color-border-subtle: rgba(255, 255, 255, 0.06);
-  --color-border-medium: rgba(255, 255, 255, 0.12);
+  /* Borders — neutral, NO orange by default */
+  --border: rgba(255, 255, 255, 0.05);
+  --color-border-subtle: rgba(255, 255, 255, 0.04);
+  --color-border-medium: rgba(255, 255, 255, 0.08);
 
-  /* Cards - minimal, no heavy glassmorphism */
-  --card: rgba(255, 255, 255, 0.04);
-  --card-solid: #0a0a0a;
+  /* Glass card base — neutral */
+  --card: rgba(255, 255, 255, 0.025);
+  --card-solid: #0c0c0c;
+  --glass-blur: blur(16px);
 
-  /* Interactive - Ultra-subtle white/gray (NO orange) */
-  --accent: rgba(255, 255, 255, 0.9);
-  --accent-dark: rgba(255, 255, 255, 0.7);
-  --accent-subtle: rgba(255, 255, 255, 0.05);
-  --accent-glow: rgba(255, 255, 255, 0.08);
-  --color-interactive: rgba(255, 255, 255, 0.9);
-  --color-interactive-hover: rgba(255, 255, 255, 1.0);
-  --color-interactive-pressed: rgba(255, 255, 255, 0.8);
+  /* Orange accent — used ONLY for CTAs, key values, active indicators */
+  --accent: #f97316;
+  --accent-bright: #fb923c;
+  --accent-dark: #ea580c;
+  --accent-dim: #c2410c;
+  --accent-subtle: rgba(249, 115, 22, 0.06);
+  --accent-glow: rgba(249, 115, 22, 0.08);
 
-  /* System colors - Apple standard */
-  --color-success: #34c759;
-  --color-warning: #ff9500;
-  --color-error: #ff3b30;
-  --color-info: #0a84ff;
+  /* Functional */
+  --color-success: #f97316;
+  --color-warning: #fb923c;
+  --color-error: #dc2626;
+  --color-info: #f97316;
 
-  /* Legacy support */
-  --muted: #71717a;
-  --muted-bg: #141414;
+  /* Legacy */
+  --muted: #525252;
+  --muted-bg: #131313;
 }
 
-/* Light mode - Black/White/Orange Theme */
+/* Light mode */
 :root.light {
-  --background: #ffffff;
+  --background: #fafafa;
   --foreground: #0a0a0a;
-  --card: rgba(0, 0, 0, 0.03);
-  --card-solid: #fafafa;
+  --card: rgba(0, 0, 0, 0.02);
+  --card-solid: rgba(255, 255, 255, 0.8);
   --border: rgba(0, 0, 0, 0.06);
   --muted: #71717a;
   --muted-bg: #f5f5f5;
   --accent: #ea580c;
+  --accent-bright: #f97316;
   --accent-dark: #c2410c;
-  --accent-subtle: rgba(234, 88, 12, 0.08);
-  --accent-glow: rgba(234, 88, 12, 0.12);
+  --accent-subtle: rgba(234, 88, 12, 0.06);
+  --accent-glow: rgba(234, 88, 12, 0.08);
 }
 
 @theme inline {
@@ -83,7 +88,6 @@ html, body {
   background: var(--background);
   min-height: 100vh;
   min-height: 100dvh;
-  transition: background-color 0.2s ease;
 }
 
 body {
@@ -94,7 +98,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Non-scrollable dashboard layout */
 body.dashboard-layout {
   overflow: hidden;
   height: 100vh;
@@ -102,10 +105,9 @@ body.dashboard-layout {
 }
 
 /* ==========================================
-   APPLE-INSPIRED TYPOGRAPHY SYSTEM
+   TYPOGRAPHY
    ========================================== */
 
-/* Display - Hero sections (64-96px) */
 .text-display {
   font-size: clamp(48px, 8vw, 96px);
   line-height: 1.05;
@@ -113,7 +115,6 @@ body.dashboard-layout {
   font-weight: 700;
 }
 
-/* Large Title - Page headers (34px) */
 .text-large-title {
   font-size: 34px;
   line-height: 1.1;
@@ -121,7 +122,6 @@ body.dashboard-layout {
   font-weight: 700;
 }
 
-/* Title 1 - Section headers (28px) */
 .text-title-1 {
   font-size: 28px;
   line-height: 1.15;
@@ -129,7 +129,6 @@ body.dashboard-layout {
   font-weight: 700;
 }
 
-/* Headline - Card titles (22px) */
 .text-headline {
   font-size: 22px;
   line-height: 1.2;
@@ -137,7 +136,6 @@ body.dashboard-layout {
   font-weight: 600;
 }
 
-/* Body - Standard text (17px) */
 .text-body {
   font-size: 17px;
   line-height: 1.47;
@@ -145,7 +143,6 @@ body.dashboard-layout {
   font-weight: 400;
 }
 
-/* Callout - Emphasized body (16px) */
 .text-callout {
   font-size: 16px;
   line-height: 1.4;
@@ -153,7 +150,6 @@ body.dashboard-layout {
   font-weight: 400;
 }
 
-/* Subhead - Secondary text (15px) */
 .text-subhead {
   font-size: 15px;
   line-height: 1.35;
@@ -161,7 +157,6 @@ body.dashboard-layout {
   font-weight: 400;
 }
 
-/* Footnote - Captions (13px) */
 .text-footnote {
   font-size: 13px;
   line-height: 1.4;
@@ -169,7 +164,6 @@ body.dashboard-layout {
   font-weight: 400;
 }
 
-/* Caption 2 - Smallest text (11px) */
 .text-caption-2 {
   font-size: 11px;
   line-height: 1.3;
@@ -183,284 +177,125 @@ body.dashboard-layout {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  /* Allow scrolling - removed overflow: hidden */
 }
 
-/* Safe area insets for PWA */
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
+/* Safe area insets */
+.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.pt-safe { padding-top: env(safe-area-inset-top, 0px); }
 
-.pt-safe {
-  padding-top: env(safe-area-inset-top, 0px);
-}
-
-/* PWA standalone mode adjustments */
 @media (display-mode: standalone) {
-  html, body {
-    /* Prevent overscroll bounce in PWA */
-    overscroll-behavior: none;
-  }
-
-  /* Extra padding at bottom for home indicator */
-  .pb-safe {
-    padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
-  }
+  html, body { overscroll-behavior: none; }
+  .pb-safe { padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px); }
 }
 
-/* Scrollbar hide utility */
+/* Scrollbar hide */
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* ==========================================
+   LIGHT MODE OVERRIDES
+   ========================================== */
+
+:root.light .bg-black { background-color: #ffffff !important; }
+:root.light .bg-neutral-950 { background-color: #f8fafc !important; }
+:root.light .bg-neutral-900 { background-color: #f1f5f9 !important; }
+:root.light .bg-neutral-800 { background-color: #e2e8f0 !important; }
+:root.light .bg-neutral-700 { background-color: #cbd5e1 !important; }
+:root.light .text-white { color: #0f172a !important; }
+:root.light .text-neutral-300 { color: #475569 !important; }
+:root.light .text-neutral-400 { color: #64748b !important; }
+:root.light .text-neutral-500 { color: #64748b !important; }
+:root.light .text-neutral-600 { color: #475569 !important; }
+:root.light .border-neutral-800 { border-color: #e2e8f0 !important; }
+:root.light .border-neutral-900 { border-color: #e2e8f0 !important; }
+:root.light .border-black { border-color: #e2e8f0 !important; }
+:root.light input::placeholder { color: #94a3b8 !important; }
+
+/* Transitions only on interactive elements — not globally.
+   Global * transitions cause layout jank on every React re-render. */
+button, a, input, select, textarea,
+.hover-lift, .press-effect, .glass-card, .glass-card-active {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* ========================================
-   LIGHT MODE THEME OVERRIDES
-   ======================================== */
+/* ==========================================
+   GLASS CARD SYSTEM — neutral base
+   ========================================== */
 
-/* Background colors */
-:root.light .bg-black {
-  background-color: #ffffff !important;
+/* Default glass card — neutral, no orange */
+.glass-card {
+  background: rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-:root.light .bg-neutral-950 {
-  background-color: #f8fafc !important;
+:root.light .glass-card {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.04);
 }
 
-:root.light .bg-neutral-900 {
-  background-color: #f1f5f9 !important;
+/* Resizable panel separator */
+[data-separator] {
+  background: rgba(255, 255, 255, 0.04);
+  transition: background 150ms ease;
+}
+[data-separator]:hover {
+  background: rgba(249, 115, 22, 0.3);
+}
+[data-separator][data-state="dragging"] {
+  background: rgba(249, 115, 22, 0.6);
 }
 
-:root.light .bg-neutral-800 {
-  background-color: #e2e8f0 !important;
+/* Orange accent card — used only for highlighted/active items */
+.glass-card-active {
+  background: rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-left: 2px solid rgba(249, 115, 22, 0.5);
 }
 
-:root.light .bg-neutral-700 {
-  background-color: #cbd5e1 !important;
-}
-
-/* Text colors */
-:root.light .text-white {
-  color: #0f172a !important;
-}
-
-:root.light .text-neutral-300 {
-  color: #475569 !important;
-}
-
-:root.light .text-neutral-400 {
-  color: #64748b !important;
-}
-
-:root.light .text-neutral-500 {
-  color: #64748b !important;
-}
-
-:root.light .text-neutral-600 {
-  color: #475569 !important;
-}
-
-/* Border colors */
-:root.light .border-neutral-800 {
-  border-color: #e2e8f0 !important;
-}
-
-:root.light .border-neutral-900 {
-  border-color: #e2e8f0 !important;
-}
-
-:root.light .border-black {
-  border-color: #e2e8f0 !important;
-}
-
-/* Ring colors for focus states */
-:root.light .ring-blue-500\/30 {
-  --tw-ring-color: rgba(59, 130, 246, 0.3) !important;
-}
-
-/* Gradient avatars - keep vibrant */
-:root.light .from-violet-500 {
-  --tw-gradient-from: #8b5cf6 !important;
-}
-
-:root.light .to-fuchsia-500 {
-  --tw-gradient-to: #d946ef !important;
-}
-
-/* Input placeholders */
-:root.light input::placeholder {
-  color: #94a3b8 !important;
-}
-
-:root.light .placeholder-neutral-600::placeholder {
-  color: #94a3b8 !important;
-}
-
-/* Specific component fixes */
-:root.light .bg-violet-500 {
-  background-color: #8b5cf6 !important;
-}
-
-:root.light .bg-emerald-500\/10 {
-  background-color: rgba(16, 185, 129, 0.1) !important;
-}
-
-:root.light .bg-amber-500\/10 {
-  background-color: rgba(245, 158, 11, 0.1) !important;
-}
-
-:root.light .bg-red-500\/10 {
-  background-color: rgba(239, 68, 68, 0.1) !important;
-}
-
-:root.light .bg-blue-500\/10 {
-  background-color: rgba(59, 130, 246, 0.1) !important;
-}
-
-:root.light .bg-blue-500\/20 {
-  background-color: rgba(59, 130, 246, 0.15) !important;
-}
-
-/* Orange accent overrides */
-:root.light .bg-orange-500\/10 {
-  background-color: rgba(249, 115, 22, 0.1) !important;
-}
-
-:root.light .bg-orange-500\/20 {
-  background-color: rgba(249, 115, 22, 0.15) !important;
-}
-
-:root.light .bg-orange-500 {
-  background-color: #ea580c !important;
-}
-
-:root.light .bg-orange-500.text-white {
-  color: #ffffff !important;
-}
-
-:root.light .text-orange-400 {
-  color: #ea580c !important;
-}
-
-/* Scrollable areas background */
-:root.light .overflow-y-auto {
-  background-color: inherit;
-}
-
-/* Chat bubbles - user messages stay white background in light mode */
-:root.light .bg-white.text-black {
-  background-color: #3b82f6 !important;
-  color: #ffffff !important;
-}
-
-/* Fix neutral-700 for toggle background */
-:root.light .bg-neutral-700 {
-  background-color: #cbd5e1 !important;
-}
-
-/* Shadows and elevations for light mode */
-:root.light .bg-neutral-900,
-:root.light .bg-neutral-950 {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-/* Keep buttons consistent */
-:root.light .bg-blue-500 {
-  background-color: #3b82f6 !important;
-}
-
-:root.light .bg-blue-500.text-white {
-  color: #ffffff !important;
-}
-
-/* Keep orange buttons consistent */
-:root.light .ring-orange-500\/30 {
-  --tw-ring-color: rgba(249, 115, 22, 0.3) !important;
-}
-
-/* Smooth transitions for theme switching */
-*, *::before, *::after {
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-/* Disable transitions on initial load to prevent flash */
-.no-transitions * {
-  transition: none !important;
-}
-
-/* Map overlay for light mode */
-:root.light .from-neutral-800\/50 {
-  --tw-gradient-from: rgba(241, 245, 249, 0.7) !important;
-}
-
-:root.light .to-neutral-900\/80 {
-  --tw-gradient-to: rgba(248, 250, 252, 0.9) !important;
-}
-
-/* Status indicator colors - keep visible in light mode */
-:root.light .bg-emerald-400 {
-  background-color: #34d399 !important;
-}
-
-:root.light .bg-amber-400 {
-  background-color: #fbbf24 !important;
-}
-
-:root.light .bg-red-400 {
-  background-color: #f87171 !important;
-}
-
-/* Subtle ambient gradient bg */
-.degen-bg {
-  background:
-    radial-gradient(ellipse at 50% -20%, var(--accent-glow) 0%, transparent 60%),
-    var(--background);
-}
-
-:root.light .degen-bg {
-  background:
-    radial-gradient(ellipse at 50% -20%, var(--accent-glow) 0%, transparent 60%),
-    var(--background);
-}
-
-/* Orange glow accent */
-.glow-accent {
-  box-shadow:
-    0 0 30px var(--accent-glow),
-    0 0 80px rgba(249, 115, 22, 0.05);
-}
-
-:root.light .glow-accent {
-  box-shadow:
-    0 0 25px var(--accent-glow),
-    0 0 60px rgba(234, 88, 12, 0.04);
-}
-
-/* Legacy glow class for compatibility */
-.glow-lime {
-  box-shadow:
-    0 0 30px var(--accent-glow),
-    0 0 80px rgba(249, 115, 22, 0.05);
-}
-
-:root.light .glow-lime {
-  box-shadow:
-    0 0 25px var(--accent-glow),
-    0 0 60px rgba(234, 88, 12, 0.04);
-}
-
-/* Card style - minimal Apple aesthetic */
 .card {
   background: var(--card-solid);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--color-border-subtle);
-  backdrop-filter: none;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar { width: 0; }
+/* ==========================================
+   AMBIENT BACKGROUND
+   ========================================== */
+
+.degen-bg {
+  background:
+    radial-gradient(ellipse at 30% -10%, rgba(249, 115, 22, 0.02) 0%, transparent 50%),
+    var(--background);
+}
+
+/* Orange glow — very subtle, CTA only */
+.glow-accent {
+  box-shadow:
+    0 0 15px rgba(249, 115, 22, 0.06),
+    0 0 40px rgba(249, 115, 22, 0.02);
+}
+
+.glow-lime {
+  box-shadow:
+    0 0 15px rgba(249, 115, 22, 0.06),
+    0 0 40px rgba(249, 115, 22, 0.02);
+}
+
+/* Gradient text — reserved for key values */
+.gradient-text-accent {
+  background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 
 /* Number input */
 input[type="number"]::-webkit-inner-spin-button,
@@ -473,54 +308,59 @@ input[type="number"] { -moz-appearance: textfield; }
 .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 16px); }
 .safe-top { padding-top: env(safe-area-inset-top, 0px); }
 
-/* Minimal pulse - purposeful only */
-@keyframes pulse-slow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
-.pulse-slow { animation: pulse-slow 2s ease-in-out infinite; }
+::-webkit-scrollbar { width: 0; }
 
 /* ==========================================
-   2025-2026 MODERN ANIMATIONS & EFFECTS
+   ANIMATIONS — LIVE & ACTIVE
    ========================================== */
 
-/* Parallax scroll container */
-.parallax-container {
-  perspective: 1000px;
-  overflow-y: auto;
-  overflow-x: hidden;
+@keyframes breathe {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 
-/* Parallax layers */
-.parallax-slow {
-  transform: translateZ(-100px) scale(1.1);
+@keyframes breathe-glow {
+  0%, 100% { box-shadow: 0 0 6px rgba(255, 255, 255, 0.02); }
+  50% { box-shadow: 0 0 12px rgba(255, 255, 255, 0.04); }
 }
 
-.parallax-fast {
-  transform: translateZ(50px) scale(0.95);
+@keyframes live-dot {
+  0%, 100% { opacity: 0.3; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.15); }
 }
 
-/* Apple-inspired entrance animations with standard easing */
+@keyframes data-flash {
+  0% { background-color: rgba(255, 255, 255, 0.04); }
+  100% { background-color: transparent; }
+}
+
+@keyframes scanner {
+  0% { transform: translateX(-100%); opacity: 0; }
+  50% { opacity: 0.5; }
+  100% { transform: translateX(100%); opacity: 0; }
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.pulse-slow { animation: pulse-slow 2.5s ease-in-out infinite; }
+
+.animate-breathe { animation: breathe 2s ease-in-out infinite; }
+.animate-breathe-glow { animation: breathe-glow 3s ease-in-out infinite; }
+.animate-live-dot { animation: live-dot 1.5s ease-in-out infinite; }
+.animate-data-flash { animation: data-flash 0.6s ease-out; }
+.animate-scanner { animation: scanner 2.5s ease-in-out infinite; }
+
+/* Entrance animations */
 @keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes fadeIn {
@@ -529,188 +369,109 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 
 @keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 @keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
-/* Animation classes with Apple's standard easing: cubic-bezier(0.4, 0.0, 0.2, 1) */
-.animate-slideUp {
-  animation: slideUp 0.3s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
-}
+.animate-slideUp { animation: slideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.animate-slideDown { animation: slideDown 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.animate-fadeIn { animation: fadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.animate-scaleIn { animation: scaleIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.animate-slideInRight { animation: slideInRight 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+.animate-slideInLeft { animation: slideInLeft 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 
-.animate-slideDown {
-  animation: slideDown 0.3s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
-}
-
-.animate-fadeIn {
-  animation: fadeIn 0.3s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
-}
-
-.animate-scaleIn {
-  animation: scaleIn 0.3s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
-}
-
-.animate-slideInRight {
-  animation: slideInRight 0.3s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
-}
-
-.animate-slideInLeft {
-  animation: slideInLeft 0.3s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
-}
-
-/* Delay utilities for staggered animations */
 .delay-100 { animation-delay: 100ms; }
 .delay-200 { animation-delay: 200ms; }
 .delay-300 { animation-delay: 300ms; }
 .delay-400 { animation-delay: 400ms; }
 .delay-500 { animation-delay: 500ms; }
 
-/* Minimal card - flat design, no heavy blur */
-.glass-card {
-  background: var(--card-solid);
-  border: 1px solid var(--color-border-subtle);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-:root.light .glass-card {
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(0, 0, 0, 0.04);
-}
-
-/* Apple-inspired hover effects - purposeful, subtle */
+/* Hover / press — neutral */
 .hover-lift {
-  transition: transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1),
-              box-shadow 0.2s cubic-bezier(0.4, 0.0, 0.2, 1),
-              border-color 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .hover-lift:hover {
-  transform: translateY(-2px);
-  border-color: var(--color-border-medium);
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .hover-lift:active {
-  transform: translateY(0) scale(0.98);
-  transition-duration: 0.1s;
+  transform: translateY(0) scale(0.99);
+  transition-duration: 0.05s;
 }
 
-/* Press effect for buttons - Apple standard */
 .press-effect {
-  transition: transform 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .press-effect:active {
   transform: scale(0.98);
 }
 
-/* Subtle shimmer loading effect - Apple style */
+/* Shimmer — neutral white, very subtle */
 @keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
 }
 
 .shimmer {
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.02) 0%,
-    rgba(255, 255, 255, 0.08) 50%,
-    rgba(255, 255, 255, 0.02) 100%
+    transparent 0%,
+    rgba(255, 255, 255, 0.03) 50%,
+    transparent 100%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+  animation: shimmer 2.5s ease-in-out infinite;
 }
 
-/* Smooth scroll behavior */
+/* Smooth scroll */
 .smooth-scroll {
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
 }
 
-/* Snap scroll for sections */
-.snap-y {
-  scroll-snap-type: y mandatory;
-}
+.snap-y { scroll-snap-type: y mandatory; }
+.snap-start { scroll-snap-align: start; }
 
-.snap-start {
-  scroll-snap-align: start;
-}
-
-/* Gradient text for accents */
-.gradient-text-accent {
-  background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Apple-style focus ring - ultra-subtle */
+/* Focus ring — subtle orange only on focus */
 *:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.3);
+  outline: 2px solid rgba(249, 115, 22, 0.3);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-*:focus:not(:focus-visible) {
-  outline: none;
-}
+*:focus:not(:focus-visible) { outline: none; }
 
 .focus-glow:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
 }
 
-/* Ring pulse for notifications */
+/* Ring pulse — for notifications */
 @keyframes ring-pulse {
-  0% {
-    box-shadow: 0 0 0 0 var(--accent-glow);
-  }
-  70% {
-    box-shadow: 0 0 0 10px transparent;
-  }
-  100% {
-    box-shadow: 0 0 0 0 transparent;
-  }
+  0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.12); }
+  70% { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
 }
 
-.ring-pulse {
-  animation: ring-pulse 2s infinite;
-}
+.ring-pulse { animation: ring-pulse 2s infinite; }
 
 /* ==========================================
-   APPLE-INSPIRED SPACING SYSTEM
+   SPACING
    ========================================== */
 
 :root {
@@ -729,18 +490,17 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 
 /* ==========================================
-   SOLANA WALLET ADAPTER STYLES
+   SOLANA WALLET ADAPTER
    ========================================== */
 
-/* Override wallet adapter modal styles */
 .wallet-adapter-modal-wrapper {
-  background-color: rgba(0, 0, 0, 0.6) !important;
-  backdrop-filter: blur(8px);
+  background-color: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(12px);
 }
 
 .wallet-adapter-modal {
-  background-color: #1a1a1a !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background-color: #0c0c0c !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
   border-radius: 1rem !important;
 }
 
@@ -749,9 +509,7 @@ input[type="number"] { -moz-appearance: textfield; }
   font-weight: 600 !important;
 }
 
-.wallet-adapter-modal-list {
-  padding: 0 !important;
-}
+.wallet-adapter-modal-list { padding: 0 !important; }
 
 .wallet-adapter-modal-list li {
   border-radius: 0.75rem !important;
@@ -759,14 +517,14 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 
 .wallet-adapter-modal-list-more {
-  color: rgba(255, 255, 255, 0.5) !important;
+  color: rgba(255, 255, 255, 0.4) !important;
 }
 
 .wallet-adapter-button {
-  background: linear-gradient(135deg, #9333ea 0%, #3b82f6 100%) !important;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;
   border-radius: 0.75rem !important;
   font-weight: 500 !important;
-  transition: all 0.2s ease !important;
+  transition: all 0.15s ease !important;
 }
 
 .wallet-adapter-button:hover {
@@ -775,42 +533,35 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 
 .wallet-adapter-button-trigger {
-  background: linear-gradient(135deg, #9333ea 0%, #3b82f6 100%) !important;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;
 }
 
 .wallet-adapter-dropdown-list {
-  background-color: #1a1a1a !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background-color: #0c0c0c !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
   border-radius: 0.75rem !important;
 }
 
-.wallet-adapter-dropdown-list-item {
-  color: white !important;
-}
+.wallet-adapter-dropdown-list-item { color: white !important; }
 
 .wallet-adapter-dropdown-list-item:hover {
-  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-color: rgba(255, 255, 255, 0.04) !important;
 }
 
-/* Light mode overrides */
 :root.light .wallet-adapter-modal {
   background-color: #ffffff !important;
-  border-color: rgba(0, 0, 0, 0.1) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
 }
 
-:root.light .wallet-adapter-modal-title {
-  color: #0f172a !important;
-}
+:root.light .wallet-adapter-modal-title { color: #0f172a !important; }
 
 :root.light .wallet-adapter-dropdown-list {
   background-color: #ffffff !important;
-  border-color: rgba(0, 0, 0, 0.1) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
 }
 
-:root.light .wallet-adapter-dropdown-list-item {
-  color: #0f172a !important;
-}
+:root.light .wallet-adapter-dropdown-list-item { color: #0f172a !important; }
 
 :root.light .wallet-adapter-dropdown-list-item:hover {
-  background-color: rgba(0, 0, 0, 0.05) !important;
+  background-color: rgba(0, 0, 0, 0.04) !important;
 }

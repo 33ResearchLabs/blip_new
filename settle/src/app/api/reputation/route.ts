@@ -165,8 +165,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Reputation GET error:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch reputation' },
+      { success: false, error: errMsg },
       { status: 500 }
     );
   }
@@ -225,8 +226,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Reputation POST error:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { success: false, error: 'Failed to update reputation' },
+      { success: false, error: errMsg },
       { status: 500 }
     );
   }

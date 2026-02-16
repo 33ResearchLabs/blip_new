@@ -58,6 +58,7 @@ export interface User {
   push_token: string | null;
   notification_settings: Record<string, unknown>;
   balance: number;
+  sinr_balance: number; // Synthetic INR balance in paisa (100 paisa = 1 INR)
   created_at: Date;
   updated_at: Date;
 }
@@ -74,6 +75,7 @@ export interface Merchant {
   verification_level: number;
   total_trades: number;
   total_volume: number;
+  bio: string | null;
   rating: number;
   rating_count: number;
   avg_response_time_mins: number;
@@ -82,6 +84,9 @@ export interface Merchant {
   auto_accept_enabled: boolean;
   auto_accept_max_amount: number | null;
   balance: number;
+  sinr_balance: number; // Synthetic INR balance in paisa (100 paisa = 1 INR)
+  max_sinr_exposure: number | null; // Maximum sINR allowed (NULL = unlimited)
+  synthetic_rate: number; // Conversion rate: 1 USDT = X INR
   created_at: Date;
   updated_at: Date;
 }
@@ -163,6 +168,11 @@ export interface Order {
   spread_preference: string | null;
   protocol_fee_percentage: number | null;
   protocol_fee_amount: number | null;
+  // Rating tracking (migration 020)
+  merchant_rated_at: Date | null;
+  user_rated_at: Date | null;
+  merchant_rating: number | null;
+  user_rating: number | null;
   // Escrow debit tracking (migration 026) — deterministic refund target
   escrow_debited_entity_type: 'merchant' | 'user' | null;
   escrow_debited_entity_id: string | null;

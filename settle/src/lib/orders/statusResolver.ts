@@ -175,12 +175,10 @@ export function mapMinimalStatusToUIStatus(
     case 'accepted':
       return 'escrow'; // Accepted orders go to In Progress
     case 'escrowed':
-      // If it's MY order and I locked escrow: show in Ongoing
-      // If it's SOMEONE ELSE's order: show in New Orders (I can accept it)
-      if (isMyOrder) {
-        return 'escrow'; // Ongoing - I locked escrow, waiting for acceptor
-      }
-      return 'pending'; // Available for me to accept
+      // Escrowed orders always go to "In Progress" section.
+      // Whether it's my order (I locked, waiting for acceptor) or
+      // someone else's (escrow locked, I can claim it) — it's active, not pending.
+      return 'escrow';
     case 'payment_sent':
       return 'escrow'; // In Progress - payment sent
     case 'cancelled':
@@ -259,38 +257,79 @@ export function getStatusBadgeConfig(minimalStatus: MinimalStatus): {
 }
 
 /**
- * Get next action for an order based on its minimal status
+ * computeMyRole - Determine the current merchant's role in an order.
+ *
+ * Rules (from FINAL_TRADE_FLOW.md):
+ *   - Seller ALWAYS locks crypto. Buyer ALWAYS sends fiat. No exceptions.
+ *   - buyer_merchant_id is ALWAYS the buyer (when set).
+ *   - merchant_id after acceptance is ALWAYS the seller (for M2M).
+ *   - For non-M2M: order.type is the USER's intention:
+ *       BUY order (user buys) → merchant = seller
+ *       SELL order (user sells) → merchant = buyer
+ */
+export type MyRole = 'buyer' | 'seller' | 'observer';
+
+export function computeMyRole(order: any, myMerchantId: string): MyRole {
+  // Priority 1: Explicit role from SQL (authoritative)
+  const explicitRole = order.my_role || order.myRole;
+  if (explicitRole === 'buyer' || explicitRole === 'seller') return explicitRole;
+
+  const buyerMerchantId = order.buyer_merchant_id || order.buyerMerchantId;
+  const merchantId = order.merchant_id || order.orderMerchantId;
+  const orderType = order.type || order.orderType;
+
+  // Rule 1: buyer_merchant_id is ALWAYS the buyer
+  if (buyerMerchantId === myMerchantId) return 'buyer';
+
+  // Rule 2: merchant_id match
+  if (merchantId === myMerchantId) {
+    // M2M: buyer_merchant exists and it's not me → I'm the seller
+    if (buyerMerchantId && buyerMerchantId !== myMerchantId) return 'seller';
+
+    // Check if I locked escrow (strong signal: I'm the seller)
+    const debitedType = order.escrow_debited_entity_type || order.dbOrder?.escrow_debited_entity_type;
+    const debitedId = order.escrow_debited_entity_id || order.dbOrder?.escrow_debited_entity_id;
+    if (debitedType === 'merchant' && debitedId === myMerchantId) return 'seller';
+
+    // BUY order: merchant fills by selling → seller
+    if (orderType === 'buy') return 'seller';
+
+    // SELL order without buyer_merchant: non-M2M (user sells, merchant buys) → buyer
+    return 'buyer';
+  }
+
+  return 'observer';
+}
+
+/**
+ * Get next action label for an order. Uses myRole from order object.
  */
 export function getNextAction(
   order: any,
   orderType?: 'buy' | 'sell'
 ): string {
   const status = getAuthoritativeStatus(order);
-  const type = orderType || order.orderType || order.type;
+  const myRole: MyRole = order.myRole || order.my_role || 'observer';
   const hasEscrow = !!(order.escrowTxHash || order.escrow_tx_hash || order.dbOrder?.escrow_tx_hash);
 
   switch (status) {
     case 'open':
+      if (myRole !== 'observer') return 'Waiting for Acceptor';
       return 'Accept Order';
 
     case 'accepted':
       if (!hasEscrow) {
-        return 'Lock Escrow';
+        return myRole === 'seller' ? 'Lock Escrow' : 'Wait for Escrow';
       }
-      return 'Wait for Payment';
+      return myRole === 'buyer' ? "I've Paid" : 'Wait for Payment';
 
     case 'escrowed':
-      // If it's my order (I created it), wait for someone to accept
-      if (order.isMyOrder) {
-        return 'Wait for Acceptance';
-      }
-      // If it's someone else's order, I can accept it
-      return 'Accept Order';
+      if (myRole === 'seller') return 'Waiting for Payment';
+      if (myRole === 'buyer') return "Send Fiat Payment";
+      return 'Claim Order';
 
     case 'payment_sent':
-      // Buy order (merchant selling): User paid → Merchant confirms and releases
-      // Sell order (merchant buying): Merchant paid → User confirms and releases (merchant waits)
-      return type === 'buy' ? 'Confirm Receipt' : 'Wait for Confirmation';
+      return myRole === 'seller' ? 'Confirm Receipt' : 'Waiting for Confirmation';
 
     case 'completed':
       return 'View Details';
@@ -332,6 +371,8 @@ export type OrderActionHandler =
  * across page.tsx and OrderDetailsPanel.tsx.
  */
 export interface OrderUIState {
+  /** Current merchant's role in this order */
+  myRole: MyRole;
   /** Authoritative minimal status */
   minimalStatus: MinimalStatus;
   /** Human-readable status label */
@@ -364,6 +405,8 @@ export interface OrderUIState {
  *
  * Given an order and the current merchant's ID, returns all the UI state
  * needed: status label, action buttons, disabled reasons, next step text.
+ *
+ * Uses computeMyRole() to determine buyer/seller/observer — NOT isMyOrder.
  */
 export function deriveOrderUI(
   order: any,
@@ -371,16 +414,15 @@ export function deriveOrderUI(
 ): OrderUIState {
   const status = getAuthoritativeStatus(order);
   const badge = getStatusBadgeConfig(status);
-  const orderType: 'buy' | 'sell' = order.type || order.orderType || 'buy';
-  const isMyOrder = !!(order.is_my_order || order.isMyOrder ||
-    order.merchant_id === myMerchantId || order.orderMerchantId === myMerchantId);
+  const myRole = computeMyRole(order, myMerchantId);
   const hasEscrow = !!(order.escrowTxHash || order.escrow_tx_hash ||
-    order.dbOrder?.escrow_tx_hash || order.escrow_tx_hash);
-  const isM2M = !!(order.isM2M || order.buyer_merchant_id || order.dbOrder?.buyer_merchant_id);
+    order.dbOrder?.escrow_tx_hash);
+  const buyerMerchantId = order.buyer_merchant_id || order.buyerMerchantId;
   const isTerminal = ['completed', 'cancelled', 'expired'].includes(status);
 
   // Base state
   const result: OrderUIState = {
+    myRole,
     minimalStatus: status,
     statusLabel: badge.label,
     badge: { color: badge.color, bg: badge.bg, border: badge.border },
@@ -393,19 +435,35 @@ export function deriveOrderUI(
 
   switch (status) {
     case 'open':
-      result.primaryAction = {
-        label: 'Accept Order',
-        handler: 'acceptOrder',
-        variant: 'green',
-        disabled: false,
-      };
-      result.nextStepText = 'Accept this order to start the trade.';
+      if (myRole === 'observer') {
+        result.primaryAction = {
+          label: 'Accept Order',
+          handler: 'acceptOrder',
+          variant: 'green',
+          disabled: false,
+        };
+        result.nextStepText = 'Accept this order to start the trade.';
+      } else {
+        // I created this order, waiting for counterparty
+        result.primaryAction = {
+          label: 'Waiting for Acceptor',
+          handler: 'none',
+          variant: 'blue',
+          disabled: true,
+          disabledReason: 'Waiting for a counterparty to accept this order.',
+        };
+        result.nextStepText = 'Waiting for a counterparty to accept.';
+        result.secondaryAction = {
+          label: 'Cancel Order',
+          handler: 'cancelOrderWithoutEscrow',
+        };
+      }
       break;
 
-    case 'accepted':
+    case 'accepted': {
       if (!hasEscrow) {
-        // Need to lock escrow
-        if (orderType === 'buy' || (orderType === 'sell' && isMyOrder)) {
+        if (myRole === 'seller') {
+          // I'm the seller — I lock USDC in escrow
           result.primaryAction = {
             label: 'Lock Escrow',
             handler: 'lockEscrow',
@@ -414,24 +472,38 @@ export function deriveOrderUI(
           };
           result.nextStepText = 'Lock USDC in escrow to proceed.';
         } else {
-          // Sell order where I'm the buyer - I need to sign
+          // I'm the buyer — wait for seller to lock escrow
           result.primaryAction = {
-            label: 'Sign & Proceed',
-            handler: 'signAndProceed',
+            label: 'Waiting for Escrow',
+            handler: 'none',
+            variant: 'blue',
+            disabled: true,
+            disabledReason: 'Waiting for the seller to lock USDC in escrow.',
+          };
+          result.nextStepText = 'Waiting for the seller to lock USDC in escrow.';
+        }
+      } else {
+        // Escrow already locked
+        if (myRole === 'buyer') {
+          // I'm the buyer — mark payment sent
+          result.primaryAction = {
+            label: "I've Paid",
+            handler: 'markFiatPaymentSent',
             variant: 'blue',
             disabled: false,
           };
-          result.nextStepText = 'Sign to confirm and proceed with the trade.';
+          result.nextStepText = 'Send the fiat payment, then click "I\'ve Paid".';
+        } else {
+          // I'm the seller — wait for buyer to pay
+          result.primaryAction = {
+            label: 'Wait for Payment',
+            handler: 'none',
+            variant: 'blue',
+            disabled: true,
+            disabledReason: 'Waiting for the buyer to send fiat payment.',
+          };
+          result.nextStepText = 'Escrow locked. Waiting for the buyer to send payment.';
         }
-      } else {
-        // Escrow already locked, waiting for payment
-        result.primaryAction = {
-          label: "I've Paid",
-          handler: 'markFiatPaymentSent',
-          variant: 'blue',
-          disabled: false,
-        };
-        result.nextStepText = 'Send the fiat payment, then click "I\'ve Paid".';
       }
       result.secondaryAction = {
         label: 'Cancel Order',
@@ -439,24 +511,48 @@ export function deriveOrderUI(
       };
       result.showChat = true;
       break;
+    }
 
-    case 'escrowed':
-      if (isMyOrder) {
-        // I locked escrow, waiting for someone to accept
-        result.primaryAction = {
-          label: 'Waiting for Acceptor',
-          handler: 'none',
-          variant: 'blue',
-          disabled: true,
-          disabledReason: 'Waiting for another merchant or user to accept this order.',
-        };
-        result.nextStepText = 'Your USDC is locked. Waiting for a counterparty.';
+    case 'escrowed': {
+      if (myRole === 'seller') {
+        // I locked escrow. Check if there's a buyer already.
+        const hasBuyer = !!(buyerMerchantId && buyerMerchantId !== myMerchantId);
+        if (hasBuyer) {
+          // Buyer exists, waiting for them to send fiat
+          result.primaryAction = {
+            label: 'Waiting for Payment',
+            handler: 'none',
+            variant: 'blue',
+            disabled: true,
+            disabledReason: 'Waiting for the buyer to send fiat payment.',
+          };
+          result.nextStepText = 'Your USDC is locked. Waiting for fiat payment.';
+        } else {
+          // No buyer yet, waiting for someone to accept
+          result.primaryAction = {
+            label: 'Waiting for Acceptor',
+            handler: 'none',
+            variant: 'blue',
+            disabled: true,
+            disabledReason: 'Waiting for another merchant or user to accept this order.',
+          };
+          result.nextStepText = 'Your USDC is locked. Waiting for a counterparty.';
+        }
         result.secondaryAction = {
           label: 'Cancel & Refund',
           handler: 'openCancelModal',
         };
+      } else if (myRole === 'buyer') {
+        // Escrow is locked by seller, I need to send fiat
+        result.primaryAction = {
+          label: "I've Paid",
+          handler: 'markFiatPaymentSent',
+          variant: 'blue',
+          disabled: false,
+        };
+        result.nextStepText = 'Escrow is locked. Send fiat payment, then click "I\'ve Paid".';
       } else {
-        // Someone else's escrowed order - I can claim/accept it
+        // Observer: can claim/accept this order
         result.primaryAction = {
           label: 'Claim Order',
           handler: 'signToClaimOrder',
@@ -465,12 +561,13 @@ export function deriveOrderUI(
         };
         result.nextStepText = 'Claim this order and send fiat payment.';
       }
-      result.showChat = true;
+      result.showChat = myRole !== 'observer';
       break;
+    }
 
     case 'payment_sent':
-      if (orderType === 'buy') {
-        // Buy order: user paid, merchant confirms receipt and releases
+      if (myRole === 'seller') {
+        // Seller: buyer paid fiat, I confirm receipt and release escrow
         result.primaryAction = {
           label: 'Confirm Receipt & Release',
           handler: hasEscrow ? 'openReleaseModal' : 'confirmPayment',
@@ -479,15 +576,15 @@ export function deriveOrderUI(
         };
         result.nextStepText = 'Verify the fiat payment, then release the escrow.';
       } else {
-        // Sell order: merchant paid, waiting for user to confirm
+        // Buyer: I sent payment, waiting for seller to confirm
         result.primaryAction = {
           label: 'Waiting for Confirmation',
           handler: 'none',
           variant: 'blue',
           disabled: true,
-          disabledReason: 'The buyer will confirm receipt of your fiat payment.',
+          disabledReason: 'Waiting for the seller to confirm your fiat payment.',
         };
-        result.nextStepText = 'Waiting for the buyer to confirm payment receipt.';
+        result.nextStepText = 'Waiting for the seller to confirm payment receipt.';
       }
       result.secondaryAction = {
         label: 'Open Dispute',

@@ -14,6 +14,10 @@ import { fileURLToPath } from 'url';
 config({ path: '../../settle/.env.local' });
 config({ path: '../../settle/.env' });
 
+// Telegram Bot API configuration
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const TELEGRAM_API_URL = `https://api.telegram.com/bot${TELEGRAM_BOT_TOKEN}`;
+
 interface OutboxRecord {
   id: string;
   event_type: string;
@@ -37,6 +41,106 @@ let totalProcessed = 0;
 // DB-error backoff state
 let consecutiveErrors = 0;
 const MAX_BACKOFF_MS = 60000;
+
+/**
+ * Send Telegram notification to merchant
+ */
+async function sendTelegramNotification(
+  merchantId: string,
+  eventType: string,
+  payload: any
+): Promise<boolean> {
+  if (!TELEGRAM_BOT_TOKEN) {
+    logger.warn('[Telegram] Bot token not configured, skipping notification');
+    return true; // Don't fail if Telegram is not configured
+  }
+
+  try {
+    // Get merchant's Telegram chat ID
+    const merchantResult = await query<{ telegram_chat_id: string | null }>(
+      `SELECT telegram_chat_id FROM merchants WHERE id = $1`,
+      [merchantId]
+    );
+
+    if (merchantResult.length === 0 || !merchantResult[0].telegram_chat_id) {
+      logger.info('[Telegram] No chat_id for merchant', { merchantId });
+      return true; // Don't fail if merchant hasn't linked Telegram
+    }
+
+    const chatId = merchantResult[0].telegram_chat_id;
+
+    // Format message based on event type
+    let message = formatTelegramMessage(eventType, payload);
+
+    // Send message via Telegram Bot API
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!data.ok) {
+      logger.error('[Telegram] Failed to send message', {
+        merchantId,
+        chatId,
+        error: data.description || 'Unknown error',
+      });
+      return false;
+    }
+
+    logger.info('[Telegram] Notification sent successfully', {
+      merchantId,
+      eventType,
+      orderId: payload.orderId,
+    });
+
+    return true;
+  } catch (error) {
+    logger.error('[Telegram] Error sending notification', {
+      merchantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+/**
+ * Format Telegram message based on event type
+ */
+function formatTelegramMessage(eventType: string, payload: any): string {
+  const status = payload.status || payload.minimal_status || 'updated';
+  const orderId = payload.orderId || 'Unknown';
+
+  switch (eventType) {
+    case 'ORDER_ACCEPTED':
+      return `✅ *Order Accepted*\n\nOrder #${orderId}\nStatus: ${status}\n\nA merchant has accepted your order. Please proceed with payment.`;
+
+    case 'ORDER_PAYMENT_SENT':
+      return `💸 *Payment Sent*\n\nOrder #${orderId}\nStatus: ${status}\n\nThe buyer has marked payment as sent. Please confirm receipt.`;
+
+    case 'ORDER_PAYMENT_CONFIRMED':
+      return `✅ *Payment Confirmed*\n\nOrder #${orderId}\nStatus: ${status}\n\nPayment has been confirmed. Release escrow to complete the order.`;
+
+    case 'ORDER_COMPLETED':
+      return `🎉 *Order Completed*\n\nOrder #${orderId}\nStatus: ${status}\n\nThe order has been successfully completed!`;
+
+    case 'ORDER_CANCELLED':
+      return `❌ *Order Cancelled*\n\nOrder #${orderId}\nStatus: ${status}\n\nThe order has been cancelled.`;
+
+    case 'ORDER_ESCROWED':
+      return `🔒 *Escrow Locked*\n\nOrder #${orderId}\nStatus: ${status}\n\nFunds have been locked in escrow.`;
+
+    default:
+      return `📦 *Order Update*\n\nOrder #${orderId}\nStatus: ${status}\n\nYour order has been updated.`;
+  }
+}
 
 /**
  * Process a single outbox record
@@ -63,18 +167,34 @@ async function processOutboxRecord(record: OutboxRecord): Promise<boolean> {
         : record.payload;
 
     // Primary delivery is inline WS broadcast in route handlers.
-    // Outbox worker marks records as sent (audit trail).
+    // Outbox worker additionally sends Telegram notifications.
     logger.info('[Outbox] Notification delivered (inline WS broadcast)', {
       outboxId: record.id,
       orderId: record.order_id,
       eventType: record.event_type,
     });
 
+    // Send Telegram notification to merchant
+    const telegramSuccess = await sendTelegramNotification(
+      payload.merchantId,
+      record.event_type,
+      payload
+    );
+
+    if (!telegramSuccess) {
+      logger.warn('[Outbox] Telegram notification failed, but continuing', {
+        outboxId: record.id,
+        orderId: record.order_id,
+      });
+      // Don't fail the whole record if Telegram fails - WS notification already sent
+    }
+
     logger.info('[Outbox] Successfully processed notification', {
       outboxId: record.id,
       orderId: record.order_id,
       eventType: record.event_type,
       attempts: record.attempts + 1,
+      telegramSent: telegramSuccess,
     });
 
     return true;

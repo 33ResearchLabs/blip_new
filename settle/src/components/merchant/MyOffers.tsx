@@ -253,7 +253,7 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Package className="w-5 h-5 text-[#c9a962]" />
+          <Package className="w-5 h-5 text-orange-400" />
           <h2 className="text-sm font-semibold">My Offers</h2>
           <span className="text-xs text-gray-500">
             ({activeOffers.length} active, {pausedOffers.length} paused)
@@ -269,7 +269,7 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
           </button>
           <button
             onClick={onCreateOffer}
-            className="flex items-center gap-2 px-3 py-2 bg-[#c9a962] hover:bg-[#d4b06d] text-black rounded-lg text-xs font-medium transition-colors"
+            className="flex items-center gap-2 px-3 py-2 bg-orange-500 hover:bg-orange-400 text-black rounded-lg text-xs font-medium transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New Offer</span>
@@ -289,7 +289,7 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
       {/* Loading State */}
       {isLoading && (
         <div className="flex flex-col items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 text-[#c9a962] animate-spin mb-3" />
+          <Loader2 className="w-8 h-8 text-orange-400 animate-spin mb-3" />
           <p className="text-sm text-gray-500">Loading your offers...</p>
         </div>
       )}
@@ -318,7 +318,7 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
           </p>
           <button
             onClick={onCreateOffer}
-            className="flex items-center gap-2 px-4 py-2 bg-[#c9a962] hover:bg-[#d4b06d] text-black rounded-lg text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-400 text-black rounded-lg text-sm font-medium transition-colors"
           >
             <Plus className="w-4 h-4" />
             <span>Create Offer</span>
@@ -428,7 +428,7 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
                           rate: e.target.value.replace(/[^0-9.]/g, ""),
                         }))
                       }
-                      className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-[#c9a962]/50 transition-colors"
+                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-orange-500/50 transition-colors"
                       placeholder="3.67"
                     />
                   </div>
@@ -449,7 +449,7 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
                             min_amount: e.target.value.replace(/[^0-9.]/g, ""),
                           }))
                         }
-                        className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-[#c9a962]/50 transition-colors"
+                        className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-orange-500/50 transition-colors"
                         placeholder="50"
                       />
                     </div>
@@ -467,7 +467,7 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
                             max_amount: e.target.value.replace(/[^0-9.]/g, ""),
                           }))
                         }
-                        className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-[#c9a962]/50 transition-colors"
+                        className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-orange-500/50 transition-colors"
                         placeholder="10000"
                       />
                     </div>
@@ -488,13 +488,13 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
                           available_amount: e.target.value.replace(/[^0-9.]/g, ""),
                         }))
                       }
-                      className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-[#c9a962]/50 transition-colors"
+                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-orange-500/50 transition-colors"
                       placeholder="5000"
                     />
                   </div>
 
                   {/* Status Toggle */}
-                  <div className="flex items-center justify-between p-3 bg-[#1f1f1f] rounded-xl">
+                  <div className="flex items-center justify-between p-3 bg-white/[0.04] rounded-xl">
                     <div>
                       <p className="text-sm font-medium">Offer Status</p>
                       <p className="text-[11px] text-gray-500">
@@ -537,7 +537,7 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
                   <button
                     onClick={handleUpdate}
                     disabled={isUpdating}
-                    className="flex items-center gap-2 px-4 py-2 bg-[#c9a962] hover:bg-[#d4b06d] disabled:opacity-50 text-black rounded-lg text-sm font-medium transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-black rounded-lg text-sm font-medium transition-colors"
                   >
                     {isUpdating ? (
                       <>

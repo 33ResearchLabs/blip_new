@@ -167,14 +167,14 @@ function TimelineStep({ status, label, time, isFirst, isLast }: TimelineStepProp
       case 'completed':
         return {
           dot: 'bg-white/10',
-          line: 'bg-white/10/50',
+          line: 'bg-white/[0.05]',
           text: 'text-white/70',
         };
       case 'current':
         return {
-          dot: 'bg-[#c9a962] animate-pulse',
+          dot: 'bg-orange-500 animate-pulse',
           line: 'bg-gray-700',
-          text: 'text-[#c9a962]',
+          text: 'text-orange-400',
         };
       case 'failed':
         return {
@@ -322,13 +322,13 @@ export function TradeChat({
         avatar: (
           <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
             {currentUserType === 'merchant' ? (
-              <Store className="w-4 h-4 text-[#c9a962]" />
+              <Store className="w-4 h-4 text-orange-400" />
             ) : (
               <span className="text-sm">{userEmoji || getUserEmoji(userName || 'User')}</span>
             )}
           </div>
         ),
-        color: 'text-[#c9a962]',
+        color: 'text-orange-400',
       };
     }
 
@@ -353,10 +353,10 @@ export function TradeChat({
           name: otherName,
           avatar: (
             <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
-              <Store className="w-4 h-4 text-[#c9a962]" />
+              <Store className="w-4 h-4 text-orange-400" />
             </div>
           ),
-          color: 'text-[#c9a962]',
+          color: 'text-orange-400',
         };
       } else {
         const otherName = msg.senderName || tradeInfo?.user.username || userName || 'User';
@@ -431,7 +431,7 @@ export function TradeChat({
             </div>
             {tradeInfo && (
               <p className="text-xs text-gray-500 truncate">
-                {tradeInfo.orderType === 'buy' ? 'Buying' : 'Selling'} {tradeInfo.cryptoAmount} USDC • {tradeInfo.fiatAmount.toLocaleString()} {tradeInfo.fiatCurrency}
+                {tradeInfo.orderType === 'buy' ? 'Selling' : 'Buying'} {tradeInfo.cryptoAmount} USDC • {tradeInfo.fiatAmount.toLocaleString()} {tradeInfo.fiatCurrency}
               </p>
             )}
           </div>
@@ -458,7 +458,7 @@ export function TradeChat({
             {/* Merchant */}
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
-                <Store className="w-3 h-3 text-[#c9a962]" />
+                <Store className="w-3 h-3 text-orange-400" />
               </div>
               <span className="text-gray-400">
                 {tradeInfo?.merchant.displayName || 'Merchant'}
@@ -674,7 +674,7 @@ export function TradeChat({
                 onClick={() => setActiveChatTab('order')}
                 className={`flex-1 px-4 py-3 flex items-center justify-center gap-2 text-xs font-medium transition-colors relative ${
                   activeChatTab === 'order'
-                    ? 'text-[#c9a962]'
+                    ? 'text-orange-400'
                     : 'text-gray-500 hover:text-gray-400'
                 }`}
               >
@@ -682,13 +682,13 @@ export function TradeChat({
                 <span>Order Chat</span>
                 {chatMessages.length > 0 && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                    activeChatTab === 'order' ? 'bg-[#c9a962]/20 text-[#c9a962]' : 'bg-gray-700 text-gray-400'
+                    activeChatTab === 'order' ? 'bg-orange-500/20 text-orange-400' : 'bg-gray-700 text-gray-400'
                   }`}>
                     {chatMessages.length}
                   </span>
                 )}
                 {activeChatTab === 'order' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#c9a962]" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
                 )}
               </button>
 
@@ -697,14 +697,14 @@ export function TradeChat({
                 onClick={() => setActiveChatTab('direct')}
                 className={`flex-1 px-4 py-3 flex items-center justify-center gap-2 text-xs font-medium transition-colors relative ${
                   activeChatTab === 'direct'
-                    ? 'text-[#c9a962]'
+                    ? 'text-orange-400'
                     : 'text-gray-500 hover:text-gray-400'
                 }`}
               >
                 <Users className="w-4 h-4" />
                 <span>Direct Chat</span>
                 {activeChatTab === 'direct' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#c9a962]" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
                 )}
               </button>
             </div>
@@ -717,7 +717,7 @@ export function TradeChat({
               <>
                 {isLoading ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-[#c9a962] animate-spin" />
+                    <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
                   </div>
                 ) : chatMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-gray-500">
@@ -767,7 +767,7 @@ export function TradeChat({
                                 msg.from === 'compliance' || msg.senderType === 'compliance'
                                   ? 'bg-red-500/20 text-gray-200 border border-red-500/30'
                                   : msg.from === 'me'
-                                    ? 'bg-[#c9a962] text-black'
+                                    ? 'bg-orange-500 text-black'
                                     : 'bg-[#1f1f1f] text-gray-200'
                               }`}
                             >
@@ -836,14 +836,14 @@ export function TradeChat({
                 onKeyDown={handleKeyDown}
                 placeholder="Type a message..."
                 className="flex-1 bg-[#1f1f1f] rounded-xl px-4 py-3 outline-none text-sm
-                           text-white placeholder:text-gray-500 focus:ring-1 focus:ring-[#c9a962]/50"
+                           text-white placeholder:text-gray-500 focus:ring-1 focus:ring-orange-500/50"
               />
               <motion.button
                 data-testid="chat-send"
                 whileTap={{ scale: 0.95 }}
                 onClick={handleSend}
                 disabled={!messageText.trim()}
-                className="w-12 h-12 rounded-xl bg-[#c9a962] flex items-center justify-center
+                className="w-12 h-12 rounded-xl bg-orange-500 flex items-center justify-center
                            disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
               >
                 <Send className="w-5 h-5 text-black" />

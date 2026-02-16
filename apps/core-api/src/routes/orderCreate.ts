@@ -138,17 +138,8 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         [data.crypto_amount, data.offer_id]
       );
 
-      // Mock mode: deduct escrow balance if pre-locked
-      if (data.escrow_tx_hash && MOCK_MODE) {
-        try {
-          await dbQuery(
-            `UPDATE merchants SET balance = balance - $1 WHERE id = $2 AND balance >= $1`,
-            [data.crypto_amount, data.merchant_id]
-          );
-        } catch (deductErr) {
-          logger.warn('[Mock] Failed to deduct escrow balance on create', { error: deductErr });
-        }
-      }
+      // NOTE: Balance deduction for pre-locked escrow is now handled atomically
+      // inside settle/src/lib/db/repositories/orders.ts::createOrder()
 
       // Insert notification outbox
       await dbQuery(
@@ -252,18 +243,8 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         const rows = await dbQuery(sql, values);
         const order = rows[0] as OrderRow;
 
-        // Mock mode: deduct escrow balance if pre-locked
-        if (data.escrow_tx_hash && MOCK_MODE) {
-          const deductMerchantId = data.buyer_merchant_id || data.merchant_id;
-          try {
-            await dbQuery(
-              `UPDATE merchants SET balance = balance - $1 WHERE id = $2 AND balance >= $1`,
-              [data.crypto_amount, deductMerchantId]
-            );
-          } catch (deductErr) {
-            logger.warn('[Mock] Failed to deduct escrow on merchant create', { error: deductErr });
-          }
-        }
+        // NOTE: Balance deduction for pre-locked escrow is now handled atomically
+        // inside settle/src/lib/db/repositories/orders.ts::createOrder()
 
         // Notification outbox
         await dbQuery(

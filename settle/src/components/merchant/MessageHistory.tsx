@@ -245,8 +245,8 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
                         {conv.order_number}
                       </span>
                       <span className="text-xs text-white/30">•</span>
-                      <span className={`text-xs ${conv.order_type === 'buy' ? 'text-white/70' : 'text-white/70'}`}>
-                        {conv.order_type === 'buy' ? 'Buy' : 'Sell'}
+                      <span className={`text-xs ${conv.order_type === 'buy' ? 'text-green-400/70' : 'text-orange-400/70'}`}>
+                        {conv.order_type === 'buy' ? 'Sell' : 'Buy'}
                       </span>
                       <span className="text-xs text-white/50">
                         {conv.fiat_amount.toLocaleString()} {conv.fiat_currency}

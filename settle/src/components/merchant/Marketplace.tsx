@@ -156,7 +156,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Globe className="w-5 h-5 text-[#c9a962]" />
+          <Globe className="w-5 h-5 text-orange-400" />
           <h2 className="text-sm font-semibold">Marketplace</h2>
           <span className="text-xs text-gray-500">({offers.length} offers)</span>
         </div>
@@ -177,7 +177,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
             onClick={() => setShowSortDropdown(!showSortDropdown)}
             className="flex items-center gap-2 px-3 py-2 bg-[#151515] rounded-xl border border-white/[0.04] text-xs hover:border-white/[0.08] transition-colors"
           >
-            <TrendingUp className="w-3.5 h-3.5 text-[#c9a962]" />
+            <TrendingUp className="w-3.5 h-3.5 text-orange-400" />
             <span>{sortOption?.label || "Best Overall"}</span>
             <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
           </button>
@@ -205,7 +205,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                         }}
                         className={`w-full flex flex-col items-start px-3 py-2 rounded-lg text-left transition-colors ${
                           sortBy === option.value
-                            ? "bg-[#c9a962]/10 text-[#c9a962]"
+                            ? "bg-orange-500/10 text-orange-400"
                             : "hover:bg-white/[0.04] text-white"
                         }`}
                       >
@@ -256,17 +256,17 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
       </div>
 
       {/* Ranking Notice */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-[#c9a962]/5 rounded-xl border border-[#c9a962]/10">
-        <TrendingUp className="w-4 h-4 text-[#c9a962]" />
+      <div className="flex items-center gap-2 px-3 py-2 bg-orange-500/5 rounded-xl border border-orange-500/10">
+        <TrendingUp className="w-4 h-4 text-orange-400" />
         <span className="text-[11px] text-gray-400">
-          Offers ranked by <span className="text-[#c9a962] font-medium">BlipScore</span> — a composite of price, reliability, and speed
+          Offers ranked by <span className="text-orange-400 font-medium">BlipScore</span> — a composite of price, reliability, and speed
         </span>
       </div>
 
       {/* Loading State */}
       {isLoading && (
         <div className="flex flex-col items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 text-[#c9a962] animate-spin mb-3" />
+          <Loader2 className="w-8 h-8 text-orange-400 animate-spin mb-3" />
           <p className="text-sm text-gray-500">Loading marketplace...</p>
         </div>
       )}
@@ -308,8 +308,8 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
             >
               <div className="flex items-start gap-3">
                 {/* Merchant Avatar */}
-                <div className="w-10 h-10 rounded-full bg-[#c9a962]/10 border border-[#c9a962]/20 flex items-center justify-center flex-shrink-0">
-                  <span className="text-sm font-bold text-[#c9a962]">
+                <div className="w-10 h-10 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0">
+                  <span className="text-sm font-bold text-orange-400">
                     {offer.merchant.display_name.charAt(0).toUpperCase()}
                   </span>
                 </div>
@@ -343,10 +343,10 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
                       offer.type === "buy"
-                        ? "bg-white/5 text-white"
-                        : "bg-white/5 text-white"
+                        ? "bg-green-500/10 text-green-400"
+                        : "bg-orange-500/10 text-orange-400"
                     }`}>
-                      {offer.type === "buy" ? "BUYING" : "SELLING"}
+                      {offer.type === "buy" ? "BUYING USDC" : "SELLING USDC"}
                     </span>
                     <span className="px-2 py-0.5 bg-white/[0.04] rounded text-[10px] text-gray-400">
                       {offer.payment_method === "bank" ? "Bank" : "Cash"}
@@ -375,7 +375,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                 </div>
                 <button
                   onClick={() => onTakeOffer(offer)}
-                  className="flex items-center gap-2 px-4 py-2 bg-[#c9a962] hover:bg-[#d4b06d] text-black rounded-lg text-xs font-medium transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-400 text-black rounded-lg text-xs font-medium transition-colors"
                 >
                   <span>Take Offer</span>
                   <ArrowRight className="w-3.5 h-3.5" />

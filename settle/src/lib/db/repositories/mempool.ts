@@ -10,6 +10,7 @@ export interface MempoolOrder {
   premium_bps_current: number;
   premium_bps_cap: number;
   bump_step_bps: number;
+  bump_interval_sec: number;
   auto_bump_enabled: boolean;
   next_bump_at: string | null;
   current_offer_price: number;

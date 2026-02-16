@@ -20,7 +20,7 @@ const path = require('path');
 // Initialize
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
-const API_BASE = process.env.API_BASE || 'http://localhost:3000/api';
+const API_BASE = process.env.API_BASE || (process.env.SETTLE_URL ? `${process.env.SETTLE_URL}/api` : 'http://localhost:3000/api');
 const MOCK_MODE = process.env.MOCK_MODE === 'true';
 
 // Pusher config
@@ -315,10 +315,21 @@ function getSession(telegramId) {
   return sessions.get(telegramId) || null;
 }
 
-function setSession(telegramId, session) {
+async function setSession(telegramId, session) {
   sessions.set(telegramId, session);
   merchantToTelegram.set(session.merchantId, telegramId);
   saveSessions();
+
+  // Update telegram_chat_id in database for push notifications
+  try {
+    await axios.patch(`${API_BASE}/merchant/${session.merchantId}/telegram`, {
+      telegram_chat_id: String(telegramId)
+    });
+    console.log(`[Telegram] Updated chat_id for merchant ${session.merchantId}`);
+  } catch (err) {
+    console.error(`[Telegram] Failed to update chat_id:`, err.message);
+    // Don't fail session creation if this fails
+  }
 }
 
 // ============================================================================

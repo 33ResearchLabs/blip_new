@@ -47,7 +47,7 @@ export function TopRatedSellers() {
     if (rankEmoji) {
       return <span className="text-sm">{rankEmoji}</span>;
     }
-    return <span className="text-[11px] font-mono text-gray-500">#{rank}</span>;
+    return <span className="text-[11px] font-mono text-white/30">#{rank}</span>;
   };
 
   return (
@@ -56,12 +56,17 @@ export function TopRatedSellers() {
       <div className="flex-1 overflow-y-auto p-2">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-6 h-6 text-[#c9a962] animate-spin" />
+            <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
           </div>
         ) : sellers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-white/40">
-            <Star className="w-12 h-12 mb-3 opacity-30" />
-            <p className="text-[10px] font-mono text-gray-500">No rated sellers yet</p>
+          <div className="flex flex-col items-center justify-center h-full gap-3">
+            <div className="w-10 h-10 rounded-full border border-white/[0.06] bg-white/[0.02] flex items-center justify-center">
+              <Star className="w-5 h-5 text-white/20" />
+            </div>
+            <div className="text-center">
+              <p className="text-[11px] font-medium text-white/30 mb-0.5">No rated sellers yet</p>
+              <p className="text-[9px] text-white/15 font-mono">Top sellers show here after ratings</p>
+            </div>
           </div>
         ) : (
           <div className="space-y-1">
@@ -73,8 +78,8 @@ export function TopRatedSellers() {
                 transition={{ delay: index * 0.03 }}
                 className={`p-2.5 rounded-lg border transition-all ${
                   seller.rank <= 3
-                    ? 'bg-[#c9a962]/10 border-[#c9a962]/20'
-                    : 'bg-[#141414] border-white/[0.04] hover:border-white/[0.08]'
+                    ? 'bg-orange-500/10 border-orange-500/20'
+                    : 'bg-white/[0.02] border-white/[0.04] hover:border-white/[0.08]'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -97,21 +102,21 @@ export function TopRatedSellers() {
                         {seller.display_name || seller.username}
                       </span>
                       {seller.rank <= 3 && (
-                        <span className="text-[8px] px-1 py-0.5 bg-[#c9a962]/20 text-[#c9a962] rounded font-bold">
+                        <span className="text-[9px] px-1 py-0.5 bg-orange-500/20 text-orange-400 rounded font-bold">
                           TOP {seller.rank}
                         </span>
                       )}
                     </div>
 
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-gray-500">{seller.total_trades} trades</span>
-                      <span className="text-[10px] text-gray-600">·</span>
+                      <span className="text-[10px] text-white/30">{seller.total_trades} trades</span>
+                      <span className="text-[10px] text-white/20">·</span>
                       <div className="flex items-center gap-0.5">
-                        <Star className="w-2.5 h-2.5 text-[#c9a962] fill-[#c9a962]" />
-                        <span className="text-[10px] text-[#c9a962] font-bold">
+                        <Star className="w-2.5 h-2.5 text-orange-400 fill-orange-400" />
+                        <span className="text-[10px] text-orange-400 font-bold">
                           {seller.rating.toFixed(2)}
                         </span>
-                        <span className="text-[10px] text-gray-600">
+                        <span className="text-[10px] text-white/20">
                           ({seller.rating_count})
                         </span>
                       </div>

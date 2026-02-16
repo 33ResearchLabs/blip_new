@@ -110,10 +110,17 @@ export const TERMINAL_STATUSES: readonly OrderStatus[] = [
 ];
 
 // Statuses where liquidity should be restored on exit
+// Includes 'escrowed' because when an escrowed order is cancelled,
+// the offer's available_amount must be restored to prevent negative drift.
 export const RESTORE_LIQUIDITY_ON_EXIT: readonly OrderStatus[] = [
   'pending',
   'accepted',
   'escrow_pending',
+  'escrowed',
+  'payment_pending',
+  'payment_sent',
+  'payment_confirmed',
+  'releasing',
 ];
 
 // Statuses where the order is considered "active" (not terminal)

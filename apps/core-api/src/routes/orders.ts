@@ -239,6 +239,22 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           return { success: false as const, error: 'Cannot complete: escrow not released' };
         }
 
+        // Prevent merchant from accepting their own merchant-initiated orders
+        if (
+          actor_type === 'merchant' &&
+          (newStatus === 'accepted' || newStatus === 'payment_pending') &&
+          currentOrder.merchant_id === actor_id
+        ) {
+          const userResult = await client.query<{ username: string }>(
+            'SELECT username FROM users WHERE id = $1',
+            [currentOrder.user_id]
+          );
+          const username = userResult.rows[0]?.username || '';
+          if (username.startsWith('open_order_') || username.startsWith('m2m_')) {
+            return { success: false as const, error: 'Cannot accept your own order' };
+          }
+        }
+
         // Merchant claiming logic
         const isMerchantClaiming =
           actor_type === 'merchant' &&
@@ -374,6 +390,32 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           );
         }
 
+        // Record reputation events for completed/cancelled/disputed transitions
+        if (['completed', 'cancelled', 'disputed', 'expired'].includes(newStatus)) {
+          const repEventType = newStatus === 'completed' ? 'order_completed'
+            : newStatus === 'disputed' ? 'order_disputed'
+            : newStatus === 'expired' ? 'order_timeout'
+            : 'order_cancelled';
+          const repScoreChange = newStatus === 'completed' ? 5
+            : newStatus === 'disputed' ? -5
+            : newStatus === 'expired' ? -5
+            : -2;
+          // Record for merchant
+          await client.query(
+            `INSERT INTO reputation_events (entity_id, entity_type, event_type, score_change, reason, metadata)
+             VALUES ($1, 'merchant', $2, $3, $4, $5)
+             ON CONFLICT DO NOTHING`,
+            [currentOrder.merchant_id, repEventType, repScoreChange, `Order ${currentOrder.order_number} ${newStatus}`, JSON.stringify({ order_id: id })]
+          );
+          // Record for user
+          await client.query(
+            `INSERT INTO reputation_events (entity_id, entity_type, event_type, score_change, reason, metadata)
+             VALUES ($1, 'user', $2, $3, $4, $5)
+             ON CONFLICT DO NOTHING`,
+            [currentOrder.user_id, repEventType, repScoreChange, `Order ${currentOrder.order_number} ${newStatus}`, JSON.stringify({ order_id: id })]
+          );
+        }
+
         // Mock mode balance handling for completed orders without release_tx_hash
         if (MOCK_MODE && newStatus === 'completed' && currentOrder.escrow_tx_hash && !currentOrder.release_tx_hash) {
           const amount = parseFloat(String(currentOrder.crypto_amount));
@@ -408,6 +450,15 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         merchantId: result.order!.merchant_id,
         previousStatus: order!.status,
       });
+
+      // Fire-and-forget reputation recalculation for terminal statuses
+      if (['completed', 'cancelled', 'disputed', 'expired'].includes(newStatus)) {
+        const settleUrl = process.env.SETTLE_URL || 'http://localhost:3000';
+        Promise.allSettled([
+          fetch(`${settleUrl}/api/reputation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entityId: result.order!.merchant_id, entityType: 'merchant' }) }),
+          fetch(`${settleUrl}/api/reputation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entityId: result.order!.user_id, entityType: 'user' }) }),
+        ]).catch(() => {});
+      }
 
       return reply.send({
         success: true,

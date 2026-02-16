@@ -86,6 +86,7 @@ export const updateMerchantSchema = z.object({
   display_name: z.string().min(1).max(50).optional(),
   phone: z.string().max(20).optional(),
   business_name: z.string().min(1).max(100).optional(),
+  bio: z.string().max(200).optional(),
 });
 
 export type UpdateMerchantInput = z.infer<typeof updateMerchantSchema>;
@@ -253,6 +254,7 @@ export const merchantCreateOrderSchema = z.object({
   crypto_amount: positiveAmountSchema,
   payment_method: paymentMethodSchema,
   spread_preference: z.enum(['best', 'fastest', 'cheap']).default('fastest'), // Match speed and protocol fee tier
+  priority_fee: z.number().min(0).max(50).default(0), // Additional priority fee percentage on top of base tier
   offer_id: uuidSchema.optional(), // If not provided, use merchant's active offer
   target_merchant_id: uuidSchema.optional(), // For M2M trading: trade with another merchant
   // Optional escrow details (for escrow-first sell orders) — nullish to accept null from mock mode

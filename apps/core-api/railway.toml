@@ -1,0 +1,8 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "apps/core-api/Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+restartPolicyType = "on_failure"
+numReplicas = 1

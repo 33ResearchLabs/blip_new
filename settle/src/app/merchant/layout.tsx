@@ -28,7 +28,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#c9a962",
+  themeColor: "#060606",
 };
 
 export default function MerchantLayout({

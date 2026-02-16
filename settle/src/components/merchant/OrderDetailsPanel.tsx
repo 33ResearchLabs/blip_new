@@ -5,7 +5,7 @@ import {
   X, ExternalLink, Clock, User, Wallet, Building2, MapPin,
   Copy, Check, AlertTriangle, CheckCircle, XCircle, Shield,
   ArrowRight, ChevronDown, ChevronUp, MessageCircle, Store,
-  Hash, Link as LinkIcon, Zap
+  Hash, Link as LinkIcon, Zap, Star
 } from 'lucide-react';
 import { getAuthoritativeStatus, getNextAction, deriveOrderUI } from '@/lib/orders/statusResolver';
 
@@ -67,6 +67,15 @@ interface OrderDetails {
     total_trades: number;
     is_online?: boolean;
   };
+  buyer_merchant?: {
+    id: string;
+    display_name?: string;
+    business_name?: string;
+    wallet_address?: string;
+    rating: number;
+    total_trades: number;
+    is_online?: boolean;
+  };
   offer?: {
     id: string;
     type: string;
@@ -102,29 +111,30 @@ interface OrderDetailsPanelProps {
   merchantId?: string;
 }
 
-// Status configuration
+// Status configuration — uses minimal 8-state system
 const STATUS_CONFIG: Record<string, { color: string; bgColor: string; icon: typeof CheckCircle; label: string }> = {
-  pending: { color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', icon: Clock, label: 'Pending' },
-  accepted: { color: 'text-white/70', bgColor: 'bg-white/10', icon: Check, label: 'Accepted' },
-  escrow_pending: { color: 'text-white/70', bgColor: 'bg-white/10', icon: Clock, label: 'Escrow Pending' },
-  escrowed: { color: 'text-white/70', bgColor: 'bg-white/10', icon: Shield, label: 'Escrowed' },
-  payment_pending: { color: 'text-cyan-400', bgColor: 'bg-cyan-400/10', icon: Clock, label: 'Payment Pending' },
+  open: { color: 'text-blue-400', bgColor: 'bg-blue-400/10', icon: Clock, label: 'Open' },
+  pending: { color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', icon: Clock, label: 'Open' },
+  accepted: { color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', icon: Check, label: 'Accepted' },
+  escrowed: { color: 'text-purple-400', bgColor: 'bg-purple-400/10', icon: Shield, label: 'Escrowed' },
   payment_sent: { color: 'text-cyan-400', bgColor: 'bg-cyan-400/10', icon: ArrowRight, label: 'Payment Sent' },
-  payment_confirmed: { color: 'text-teal-400', bgColor: 'bg-teal-400/10', icon: Check, label: 'Payment Confirmed' },
-  releasing: { color: 'text-white/70', bgColor: 'bg-white/10', icon: ArrowRight, label: 'Releasing' },
-  completed: { color: 'text-white/70', bgColor: 'bg-white/10', icon: CheckCircle, label: 'Completed' },
+  completed: { color: 'text-green-400', bgColor: 'bg-green-400/10', icon: CheckCircle, label: 'Completed' },
   cancelled: { color: 'text-red-400', bgColor: 'bg-red-400/10', icon: XCircle, label: 'Cancelled' },
-  disputed: { color: 'text-white/70', bgColor: 'bg-white/10', icon: AlertTriangle, label: 'Disputed' },
+  disputed: { color: 'text-red-400', bgColor: 'bg-red-400/10', icon: AlertTriangle, label: 'Disputed' },
   expired: { color: 'text-zinc-400', bgColor: 'bg-zinc-400/10', icon: Clock, label: 'Expired' },
+  // Legacy fallbacks (map to minimal states)
+  escrow_pending: { color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', icon: Clock, label: 'Accepted' },
+  payment_pending: { color: 'text-purple-400', bgColor: 'bg-purple-400/10', icon: Clock, label: 'Escrowed' },
+  payment_confirmed: { color: 'text-cyan-400', bgColor: 'bg-cyan-400/10', icon: Check, label: 'Payment Sent' },
+  releasing: { color: 'text-green-400', bgColor: 'bg-green-400/10', icon: ArrowRight, label: 'Completing' },
 };
 
-// Timeline steps
+// Timeline steps — matches the actual trade flow
 const TIMELINE_STEPS = [
   { status: 'pending', label: 'Order Created', field: 'created_at' },
   { status: 'accepted', label: 'Accepted', field: 'accepted_at' },
   { status: 'escrowed', label: 'Escrow Locked', field: 'escrowed_at' },
-  { status: 'payment_sent', label: 'Payment Sent', field: 'payment_sent_at' },
-  { status: 'payment_confirmed', label: 'Payment Confirmed', field: 'payment_confirmed_at' },
+  { status: 'payment_sent', label: 'Fiat Payment Sent', field: 'payment_sent_at' },
   { status: 'completed', label: 'Completed', field: 'completed_at' },
 ];
 
@@ -215,8 +225,8 @@ export function OrderDetailsPanel({
   if (isLoading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <div className="bg-zinc-900 rounded-2xl p-8">
-          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+        <div className="bg-[#0a0a0a] border border-white/[0.08] rounded-2xl p-8">
+          <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
     );
@@ -225,7 +235,7 @@ export function OrderDetailsPanel({
   if (!order) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <div className="bg-zinc-900 rounded-2xl p-8 text-center">
+        <div className="bg-[#0a0a0a] border border-white/[0.08] rounded-2xl p-8 text-center">
           <XCircle className="w-12 h-12 text-red-400 mx-auto mb-2" />
           <p className="text-white">Order not found</p>
           <button
@@ -243,20 +253,46 @@ export function OrderDetailsPanel({
   const StatusIcon = statusConfig.icon;
   const username = order.user?.username || order.user?.name || 'User';
 
-  // Determine buyer and seller based on order type
+  // Determine buyer and seller based on order type and M2M status
   const isBuyOrder = order.type === 'buy';
-  const buyerName = isBuyOrder
-    ? (order.user?.username || order.user?.name || 'User')
-    : (order.merchant?.display_name || order.merchant?.business_name || 'Merchant');
-  const sellerName = isBuyOrder
+  const isM2M = !!order.buyer_merchant;
+
+  // For M2M trades: buyer is buyer_merchant, seller is merchant
+  // For regular trades: depends on order type
+  const buyerName = isM2M
+    ? (order.buyer_merchant?.display_name || order.buyer_merchant?.business_name || 'Merchant')
+    : (isBuyOrder
+        ? (order.user?.username || order.user?.name || 'User')
+        : (order.merchant?.display_name || order.merchant?.business_name || 'Merchant'));
+
+  const sellerName = isM2M
     ? (order.merchant?.display_name || order.merchant?.business_name || 'Merchant')
-    : (order.user?.username || order.user?.name || 'User');
-  const buyerWallet = isBuyOrder ? order.user?.wallet_address : order.merchant?.wallet_address;
-  const sellerWallet = isBuyOrder ? order.merchant?.wallet_address : order.user?.wallet_address;
-  const buyerTrades = isBuyOrder ? order.user?.total_trades : order.merchant?.total_trades;
-  const sellerTrades = isBuyOrder ? order.merchant?.total_trades : order.user?.total_trades;
-  const buyerRating = isBuyOrder ? order.user?.rating : order.merchant?.rating;
-  const sellerRating = isBuyOrder ? order.merchant?.rating : order.user?.rating;
+    : (isBuyOrder
+        ? (order.merchant?.display_name || order.merchant?.business_name || 'Merchant')
+        : (order.user?.username || order.user?.name || 'User'));
+
+  const buyerWallet = isM2M
+    ? order.buyer_merchant?.wallet_address
+    : (isBuyOrder ? order.user?.wallet_address : order.merchant?.wallet_address);
+
+  const sellerWallet = isM2M
+    ? order.merchant?.wallet_address
+    : (isBuyOrder ? order.merchant?.wallet_address : order.user?.wallet_address);
+
+  const buyerTrades = isM2M
+    ? order.buyer_merchant?.total_trades
+    : (isBuyOrder ? order.user?.total_trades : order.merchant?.total_trades);
+
+  const sellerTrades = isM2M
+    ? order.merchant?.total_trades
+    : (isBuyOrder ? order.merchant?.total_trades : order.user?.total_trades);
+
+  // Per-order ratings (from the order itself) fall back to aggregate
+  const buyerRating = (order as any).user_rating
+    ?? (isM2M ? order.buyer_merchant?.rating : (isBuyOrder ? order.user?.rating : order.merchant?.rating));
+
+  const sellerRating = (order as any).merchant_rating
+    ?? (isM2M ? order.merchant?.rating : (isBuyOrder ? order.merchant?.rating : order.user?.rating));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
@@ -283,7 +319,7 @@ export function OrderDetailsPanel({
             {onOpenChat && (
               <button
                 onClick={handleOpenChat}
-                className="p-2 rounded-lg bg-[#c9a962]/20 text-[#c9a962] hover:bg-[#c9a962]/30 transition-colors"
+                className="p-2 rounded-lg bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 transition-colors"
                 title="Open Chat"
               >
                 <MessageCircle className="w-5 h-5" />
@@ -318,8 +354,8 @@ export function OrderDetailsPanel({
                   1 {order.crypto_currency} = {Number(order.rate).toFixed(2)} {order.fiat_currency}
                 </p>
                 <span className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-medium
-                  ${order.type === 'buy' ? 'bg-white/10 text-white/70' : 'bg-white/10 text-white/70'}`}>
-                  {order.type === 'buy' ? 'Buy Order' : 'Sell Order'}
+                  ${order.type === 'buy' ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                  {order.type === 'buy' ? 'Sell Order' : 'Buy Order'}
                 </span>
               </div>
             </div>
@@ -338,9 +374,16 @@ export function OrderDetailsPanel({
                 </div>
                 <div>
                   <p className="font-medium text-white">{buyerName}</p>
-                  <p className="text-sm text-white/50">
-                    {buyerTrades || 0} trades • ⭐ {buyerRating?.toFixed(2) || 'N/A'}
-                  </p>
+                  <div className="flex items-center gap-1.5 text-sm text-white/50">
+                    <span>{buyerTrades || 0} trades</span>
+                    <span>•</span>
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star key={s} className={`w-3 h-3 ${s <= Math.round(buyerRating || 0) ? 'fill-orange-400 text-orange-400' : 'text-white/15'}`} />
+                      ))}
+                    </div>
+                    {buyerRating != null && <span className="text-xs font-mono">{buyerRating.toFixed(1)}</span>}
+                  </div>
                 </div>
               </div>
               {buyerWallet && (
@@ -370,12 +413,19 @@ export function OrderDetailsPanel({
                 </div>
                 <div>
                   <p className="font-medium text-white">{sellerName}</p>
-                  <p className="text-sm text-white/50">
-                    {sellerTrades || 0} trades • ⭐ {sellerRating?.toFixed(2) || 'N/A'}
+                  <div className="flex items-center gap-1.5 text-sm text-white/50">
+                    <span>{sellerTrades || 0} trades</span>
+                    <span>•</span>
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star key={s} className={`w-3 h-3 ${s <= Math.round(sellerRating || 0) ? 'fill-orange-400 text-orange-400' : 'text-white/15'}`} />
+                      ))}
+                    </div>
+                    {sellerRating != null && <span className="text-xs font-mono">{sellerRating.toFixed(1)}</span>}
                     {order.merchant?.is_online && isBuyOrder && (
-                      <span className="ml-2 text-white/70">• Online</span>
+                      <span className="text-white/70">• Online</span>
                     )}
-                  </p>
+                  </div>
                 </div>
               </div>
               {sellerWallet && (
@@ -479,7 +529,7 @@ export function OrderDetailsPanel({
                         href={getBlipscanTradeUrl(order.escrow_pda || order.escrow_trade_pda!)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[#c9a962] hover:text-[#d4b978] transition-colors"
+                        className="text-orange-400 hover:text-orange-300 transition-colors"
                         title="View on Blipscan"
                       >
                         <ExternalLink className="w-4 h-4" />
@@ -740,10 +790,10 @@ export function OrderDetailsPanel({
             };
 
             const variantClasses = {
-              green: 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border-emerald-500/30',
-              blue: 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border-blue-500/30',
-              red: 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/30',
-              gold: 'bg-[#c9a962]/20 text-[#c9a962] hover:bg-[#c9a962]/30 border-[#c9a962]/30',
+              green: 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border-orange-500/30',
+              blue: 'bg-white/[0.06] text-white/80 hover:bg-white/[0.10] border-white/[0.10]',
+              red: 'bg-white/[0.04] text-white/50 hover:bg-white/[0.08] border-white/[0.06]',
+              gold: 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border-orange-500/30',
             };
 
             return (
@@ -784,8 +834,8 @@ export function OrderDetailsPanel({
           {onOpenChat && (
             <button
               onClick={handleOpenChat}
-              className="w-full py-3 rounded-xl bg-[#c9a962]/20 text-[#c9a962] font-semibold flex items-center justify-center gap-2
-                         hover:bg-[#c9a962]/30 transition-colors border border-[#c9a962]/30"
+              className="w-full py-3 rounded-xl bg-orange-500/20 text-orange-400 font-semibold flex items-center justify-center gap-2
+                         hover:bg-orange-500/30 transition-colors border border-orange-500/30"
             >
               <MessageCircle className="w-5 h-5" />
               Open Chat with {username}

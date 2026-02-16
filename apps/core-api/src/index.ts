@@ -1,6 +1,9 @@
+// Load env FIRST — before any modules that read process.env at import time
+// (e.g. settlement-core's MOCK_MODE constant)
+import './loadEnv';
+
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { config } from 'dotenv';
 import { healthRoutes } from './routes/health';
 import { orderRoutes } from './routes/orders';
 import { orderCreateRoutes } from './routes/orderCreate';
@@ -9,12 +12,10 @@ import { extensionRoutes } from './routes/extension';
 import { disputeRoutes } from './routes/dispute';
 import { expireRoutes } from './routes/expire';
 import { debugRoutes } from './routes/debug';
+import { conversionRoutes } from './routes/conversion';
 import { authHook } from './hooks/auth';
 import { initWebSocketServer, closeWebSocketServer } from './ws/broadcast';
-
-// Load env from settle directory (shared config)
-config({ path: '../../settle/.env.local' });
-config({ path: '../../settle/.env' });
+import { startOutboxWorker, stopOutboxWorker } from './workers/notificationOutbox';
 
 const PORT = parseInt(process.env.CORE_API_PORT || '4010', 10);
 const HOST = process.env.CORE_API_HOST || '0.0.0.0';
@@ -49,6 +50,7 @@ await fastify.register(escrowRoutes, { prefix: '/v1' });
 await fastify.register(extensionRoutes, { prefix: '/v1' });
 await fastify.register(disputeRoutes, { prefix: '/v1' });
 await fastify.register(expireRoutes, { prefix: '/v1' });
+await fastify.register(conversionRoutes, { prefix: '/v1' });
 await fastify.register(debugRoutes);
 
 // Start server
@@ -58,6 +60,9 @@ try {
 
   // Attach WS server to the same HTTP server
   initWebSocketServer(fastify.server);
+
+  // Start notification outbox worker (polls DB every 5s, sends Pusher/WS events)
+  startOutboxWorker();
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);
@@ -66,6 +71,7 @@ try {
 // Graceful shutdown
 const shutdown = async (signal: string) => {
   console.log(`\n${signal} received, shutting down gracefully...`);
+  stopOutboxWorker();
   closeWebSocketServer();
   await fastify.close();
   process.exit(0);

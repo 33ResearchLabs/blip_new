@@ -84,6 +84,9 @@ importers:
       '@solana/web3.js':
         specifier: ^1.98.4
         version: 1.98.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
+      '@tanstack/react-virtual':
+        specifier: ^3.13.18
+        version: 3.13.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       bs58:
         specifier: ^6.0.0
         version: 6.0.0
@@ -114,6 +117,9 @@ importers:
       react-dom:
         specifier: 19.2.3
         version: 19.2.3(react@19.2.3)
+      react-resizable-panels:
+        specifier: ^4.6.4
+        version: 4.6.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       recharts:
         specifier: ^2.15.4
         version: 2.15.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -129,6 +135,9 @@ importers:
       zod:
         specifier: ^3.23.8
         version: 3.25.76
+      zustand:
+        specifier: ^5.0.11
+        version: 5.0.11(@types/react@19.2.14)(react@19.2.3)(use-sync-external-store@1.2.0(react@19.2.3))
     devDependencies:
       '@playwright/test':
         specifier: ^1.58.2
@@ -2007,6 +2016,15 @@ packages:
 
   '@tailwindcss/postcss@4.1.18':
     resolution: {integrity: sha512-Ce0GFnzAOuPyfV5SxjXGn0CubwGcuDB0zcdaPuCSzAa/2vII24JTkH+I6jcbXLb1ctjZMZZI6OjDaLPJQL1S0g==}
+
+  '@tanstack/react-virtual@3.13.18':
+    resolution: {integrity: sha512-dZkhyfahpvlaV0rIKnvQiVoWPyURppl6w4m9IwMDpuIjcJ1sD9YGWrt0wISvgU7ewACXx2Ct46WPgI6qAD4v6A==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
+  '@tanstack/virtual-core@3.13.18':
+    resolution: {integrity: sha512-Mx86Hqu1k39icq2Zusq+Ey2J6dDWTjDvEv43PJtRCoEYTLyfaPnxIQ6iy7YAOK0NV/qOEmZQ/uCufrppZxTgcg==}
 
   '@toruslabs/base-controllers@5.11.0':
     resolution: {integrity: sha512-5AsGOlpf3DRIsd6PzEemBoRq+o2OhgSFXj5LZD6gXcBlfe0OpF+ydJb7Q8rIt5wwpQLNJCs8psBUbqIv7ukD2w==}
@@ -5347,6 +5365,12 @@ packages:
     resolution: {integrity: sha512-jCvmsr+1IUSMUyzOkRcvnVbX3ZYC6g9TDrDbFuFmRDq7PD4yaGbLKNQL6k2jnArV8hjYxh7hVhAZB6s9HDGpZA==}
     engines: {node: '>=0.10.0'}
 
+  react-resizable-panels@4.6.4:
+    resolution: {integrity: sha512-E7Szs1xyaMZ7xOI2gG4TECNz4r/gmpV1AsXyZRnER6OQnfFf9uclFmrHHZR3h/iF8vQS+nQ1LKyZv9bzwGxPSg==}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+
   react-smooth@4.0.4:
     resolution: {integrity: sha512-gnGKTpYwqL0Iii09gHobNolvX4Kiq4PKx6eWBCYYix+8cdw+cGo3do906l1NBPKkSWx1DghC1dlWG9L2uGd61Q==}
     peerDependencies:
@@ -6395,6 +6419,24 @@ packages:
 
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
+
+  zustand@5.0.11:
+    resolution: {integrity: sha512-fdZY+dk7zn/vbWNCYmzZULHRrss0jx5pPFiOuMZ/5HJN6Yv3u+1Wswy/4MpZEkEGhtNH+pwxZB8OKgUBPzYAGg==}
+    engines: {node: '>=12.20.0'}
+    peerDependencies:
+      '@types/react': '>=18.0.0'
+      immer: '>=9.0.6'
+      react: '>=18.0.0'
+      use-sync-external-store: '>=1.2.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      immer:
+        optional: true
+      react:
+        optional: true
+      use-sync-external-store:
+        optional: true
 
 snapshots:
 
@@ -8928,6 +8970,14 @@ snapshots:
       '@tailwindcss/oxide': 4.1.18
       postcss: 8.5.6
       tailwindcss: 4.1.18
+
+  '@tanstack/react-virtual@3.13.18(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      '@tanstack/virtual-core': 3.13.18
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
+
+  '@tanstack/virtual-core@3.13.18': {}
 
   '@toruslabs/base-controllers@5.11.0(@babel/runtime@7.28.6)(bufferutil@4.1.0)(utf-8-validate@5.0.10)':
     dependencies:
@@ -13570,6 +13620,11 @@ snapshots:
 
   react-refresh@0.14.2: {}
 
+  react-resizable-panels@4.6.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+    dependencies:
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
+
   react-smooth@4.0.4(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
     dependencies:
       fast-equals: 5.4.0
@@ -14750,3 +14805,9 @@ snapshots:
   zod@3.22.4: {}
 
   zod@3.25.76: {}
+
+  zustand@5.0.11(@types/react@19.2.14)(react@19.2.3)(use-sync-external-store@1.2.0(react@19.2.3)):
+    optionalDependencies:
+      '@types/react': 19.2.14
+      react: 19.2.3
+      use-sync-external-store: 1.2.0(react@19.2.3)

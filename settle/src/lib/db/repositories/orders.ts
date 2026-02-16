@@ -49,7 +49,8 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
     `SELECT o.*,
             json_build_object(
               'id', u.id,
-              'name', u.username,
+              'name', CASE WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN m.display_name ELSE COALESCE(u.name, u.username) END,
+              'username', u.username,
               'wallet_address', u.wallet_address,
               'rating', u.rating,
               'total_trades', u.total_trades
@@ -63,6 +64,18 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
               'is_online', m.is_online,
               'wallet_address', m.wallet_address
             ) as merchant,
+            CASE
+              WHEN bm.id IS NOT NULL THEN json_build_object(
+                'id', bm.id,
+                'display_name', bm.display_name,
+                'business_name', bm.business_name,
+                'rating', bm.rating,
+                'total_trades', bm.total_trades,
+                'is_online', bm.is_online,
+                'wallet_address', bm.wallet_address
+              )
+              ELSE NULL
+            END as buyer_merchant,
             json_build_object(
               'id', mo.id,
               'type', mo.type,
@@ -81,6 +94,7 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
      JOIN users u ON o.user_id = u.id
      JOIN merchants m ON o.merchant_id = m.id
      JOIN merchant_offers mo ON o.offer_id = mo.id
+     LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
      WHERE o.id = $1`,
     [id]
   );
@@ -150,9 +164,20 @@ export async function getMerchantOrders(
   // Note: buyer_merchant_id for M2M trades requires migration 007
   let sql = `
     SELECT o.*,
+           -- my_role: authoritative buyer/seller/observer
+           CASE
+             WHEN o.buyer_merchant_id = $1 THEN 'buyer'
+             WHEN o.merchant_id = $1 AND o.buyer_merchant_id IS NOT NULL AND o.buyer_merchant_id != $1 THEN 'seller'
+             WHEN o.merchant_id = $1 AND o.escrow_debited_entity_type = 'merchant' AND o.escrow_debited_entity_id::TEXT = $1::TEXT THEN 'seller'
+             WHEN o.merchant_id = $1 AND o.type = 'buy' THEN 'seller'
+             WHEN o.merchant_id = $1 AND o.type = 'sell' AND (u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%') THEN 'seller'
+             WHEN o.merchant_id = $1 AND o.type = 'sell' THEN 'buyer'
+             ELSE 'observer'
+           END as my_role,
            json_build_object(
              'id', u.id,
-             'name', u.username,
+             'name', CASE WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN m.display_name ELSE COALESCE(u.name, u.username) END,
+             'username', u.username,
              'rating', u.rating,
              'total_trades', u.total_trades
            ) as user,
@@ -162,6 +187,7 @@ export async function getMerchantOrders(
            ) as offer
     FROM orders o
     JOIN users u ON o.user_id = u.id
+    JOIN merchants m ON o.merchant_id = m.id
     JOIN merchant_offers mo ON o.offer_id = mo.id
     WHERE o.merchant_id = $1
       AND o.status NOT IN ('expired', 'cancelled')
@@ -207,22 +233,30 @@ export async function getAllPendingOrdersForMerchant(
   // This ensures merchant-initiated sell orders with escrow show in "Ongoing" for the creator
   let sql = `
     SELECT o.*,
+           -- my_role: authoritative buyer/seller/observer determination
+           -- Rules: buyer_merchant_id=BUYER, merchant_id=SELLER (after acceptance)
+           -- For non-M2M: type='buy' → merchant=seller, type='sell' → merchant=buyer
            CASE
-             -- Pending/escrowed orders: Check if I created this order OR I accepted it
-             WHEN o.status IN ('pending', 'escrowed') THEN (
-               o.buyer_merchant_id = $1 OR
-               (o.escrow_creator_wallet IS NOT NULL AND LOWER(o.escrow_creator_wallet) = LOWER(current_m.wallet_address)) OR
-               -- Merchant-initiated orders: merchant_id matches AND user is a placeholder (not a real user)
-               (o.merchant_id = $1 AND (u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%')) OR
-               -- Merchant accepted this order (e.g. via bot) and it progressed to escrowed
-               (o.status = 'escrowed' AND o.merchant_id = $1 AND o.accepted_at IS NOT NULL)
-             )
-             -- After acceptance: it's my order if I'm assigned merchant OR buyer_merchant (M2M)
-             ELSE ((o.merchant_id = $1 AND o.accepted_at IS NOT NULL) OR o.buyer_merchant_id = $1)
+             WHEN o.buyer_merchant_id = $1 THEN 'buyer'
+             WHEN o.merchant_id = $1 AND o.buyer_merchant_id IS NOT NULL AND o.buyer_merchant_id != $1 THEN 'seller'
+             WHEN o.merchant_id = $1 AND o.escrow_debited_entity_type = 'merchant' AND o.escrow_debited_entity_id::TEXT = $1::TEXT THEN 'seller'
+             WHEN o.merchant_id = $1 AND o.type = 'buy' THEN 'seller'
+             WHEN o.merchant_id = $1 AND o.type = 'sell' AND (u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%') THEN 'seller'
+             WHEN o.merchant_id = $1 AND o.type = 'sell' THEN 'buyer'
+             ELSE 'observer'
+           END as my_role,
+           -- is_my_order: backward compat (true if I'm buyer or seller, not observer)
+           CASE
+             WHEN o.buyer_merchant_id = $1 THEN true
+             WHEN o.merchant_id = $1 AND o.accepted_at IS NOT NULL THEN true
+             WHEN o.merchant_id = $1 AND (u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%') THEN true
+             WHEN o.escrow_creator_wallet IS NOT NULL AND LOWER(o.escrow_creator_wallet) = LOWER(current_m.wallet_address) THEN true
+             ELSE false
            END as is_my_order,
            json_build_object(
              'id', u.id,
-             'name', u.username,
+             'name', CASE WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN m.display_name ELSE COALESCE(u.name, u.username) END,
+             'username', u.username,
              'rating', u.rating,
              'total_trades', u.total_trades,
              'wallet_address', u.wallet_address
@@ -320,6 +354,9 @@ export async function createOrder(data: {
   escrow_trade_pda?: string;
   escrow_pda?: string;
   escrow_creator_wallet?: string;
+  spread_preference?: string;
+  protocol_fee_percentage?: number;
+  protocol_fee_amount?: number;
 }): Promise<Order> {
   return transaction(async (client) => {
     console.log('[DB] createOrder called with:', {
@@ -335,6 +372,50 @@ export async function createOrder(data: {
     const initialStatus = data.escrow_tx_hash ? 'escrowed' : 'pending';
     const expiresMinutes = data.escrow_tx_hash ? 120 : 15;
 
+    // FIX #1+#2: When escrow is pre-locked at creation (sell orders),
+    // record escrow_debited fields AND deduct balance INSIDE this transaction.
+    let escrowDebitedEntityType: 'merchant' | 'user' | null = null;
+    let escrowDebitedEntityId: string | null = null;
+    let escrowDebitedAmount: number | null = null;
+
+    if (data.escrow_tx_hash) {
+      const { determineEscrowPayer } = await import('@/lib/money/escrowLock');
+      const payer = determineEscrowPayer({
+        type: data.type,
+        merchant_id: data.merchant_id,
+        user_id: data.user_id,
+        buyer_merchant_id: data.buyer_merchant_id ?? null,
+      });
+      escrowDebitedEntityType = payer.entityType;
+      escrowDebitedEntityId = payer.entityId;
+      escrowDebitedAmount = data.crypto_amount;
+
+      // Deduct balance atomically inside this transaction (prevents race conditions)
+      const balanceResult = await client.query(
+        `SELECT balance FROM ${payer.table} WHERE id = $1 FOR UPDATE`,
+        [payer.entityId]
+      );
+      if (balanceResult.rows.length === 0) {
+        throw new Error('Escrow payer entity not found');
+      }
+      const currentBalance = parseFloat(String(balanceResult.rows[0].balance));
+      if (currentBalance < data.crypto_amount) {
+        throw new Error('Insufficient balance to lock escrow');
+      }
+      await client.query(
+        `UPDATE ${payer.table} SET balance = balance - $1 WHERE id = $2`,
+        [data.crypto_amount, payer.entityId]
+      );
+
+      logger.info('[CreateOrder] Pre-locked escrow balance deducted atomically', {
+        payer: payer.entityType,
+        payerId: payer.entityId,
+        amount: data.crypto_amount,
+        balanceBefore: currentBalance,
+        balanceAfter: currentBalance - data.crypto_amount,
+      });
+    }
+
     // Create the order
     const result = await client.query(
       `INSERT INTO orders (
@@ -342,9 +423,13 @@ export async function createOrder(data: {
          crypto_amount, fiat_amount, rate, payment_details,
          status, expires_at, buyer_wallet_address, buyer_merchant_id,
          escrow_tx_hash, escrow_trade_id, escrow_trade_pda, escrow_pda, escrow_creator_wallet, escrowed_at,
+         escrow_debited_entity_type, escrow_debited_entity_id, escrow_debited_amount, escrow_debited_at,
          spread_preference, protocol_fee_percentage, protocol_fee_amount
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW() + ($11 || ' minutes')::INTERVAL, $12::TEXT, $13::UUID, $14::TEXT, $15::BIGINT, $16::TEXT, $17::TEXT, $18::TEXT, CASE WHEN $14 IS NOT NULL THEN NOW() ELSE NULL END, $19, $20, $21)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW() + ($11 || ' minutes')::INTERVAL, $12::TEXT, $13::UUID,
+               $14::TEXT, $15::BIGINT, $16::TEXT, $17::TEXT, $18::TEXT, CASE WHEN $14 IS NOT NULL THEN NOW() ELSE NULL END,
+               $19, $20, $21, CASE WHEN $14 IS NOT NULL THEN NOW() ELSE NULL END,
+               $22, $23, $24)
        RETURNING *`,
       [
         data.user_id,
@@ -365,6 +450,9 @@ export async function createOrder(data: {
         data.escrow_trade_pda ?? null,
         data.escrow_pda ?? null,
         data.escrow_creator_wallet ?? null,
+        escrowDebitedEntityType,
+        escrowDebitedEntityId,
+        escrowDebitedAmount,
         data.spread_preference ?? 'fastest',
         data.protocol_fee_percentage ?? 2.50,
         data.protocol_fee_amount ?? null,

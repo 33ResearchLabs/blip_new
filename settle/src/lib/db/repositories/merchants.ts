@@ -56,7 +56,7 @@ export async function updateMerchantRating(id: string): Promise<void> {
 
 export async function updateMerchant(
   id: string,
-  data: Partial<Pick<Merchant, 'avatar_url' | 'display_name' | 'phone' | 'business_name'>>
+  data: Partial<Pick<Merchant, 'avatar_url' | 'display_name' | 'phone' | 'business_name' | 'bio'>>
 ): Promise<Merchant | null> {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -77,6 +77,10 @@ export async function updateMerchant(
   if (data.business_name !== undefined) {
     fields.push(`business_name = $${paramIndex++}`);
     values.push(data.business_name);
+  }
+  if (data.bio !== undefined) {
+    fields.push(`bio = $${paramIndex++}`);
+    values.push(data.bio);
   }
 
   if (fields.length === 0) return getMerchantById(id);
