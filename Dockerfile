@@ -11,8 +11,8 @@ FROM base AS deps
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY packages/settlement-core/package.json packages/settlement-core/
 COPY settle/package.json settle/
-# Install all workspace deps (production + dev for build)
-RUN pnpm install --frozen-lockfile
+# shamefully-hoist creates flat node_modules (no symlinks) — survives Docker COPY
+RUN pnpm install --frozen-lockfile --shamefully-hoist
 
 # ── Build settlement-core first (shared lib) ────────────────────────
 FROM deps AS builder
@@ -43,11 +43,18 @@ ENV NEXT_PUBLIC_BLIPSCAN_URL=$NEXT_PUBLIC_BLIPSCAN_URL
 RUN pnpm -C settle build
 
 # ── Production image ────────────────────────────────────────────────
-FROM base AS runner
+FROM node:22-alpine AS runner
+WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=builder /app/packages/settlement-core/ packages/settlement-core/
-COPY --from=builder /app/settle/ settle/
 COPY --from=builder /app/node_modules/ node_modules/
+COPY --from=builder /app/packages/settlement-core/ packages/settlement-core/
+COPY --from=builder /app/settle/.next/ settle/.next/
+COPY --from=builder /app/settle/public/ settle/public/
+COPY --from=builder /app/settle/server.js settle/server.js
+COPY --from=builder /app/settle/websocket-server.js settle/websocket-server.js
+COPY --from=builder /app/settle/package.json settle/package.json
+COPY --from=builder /app/settle/next.config.ts settle/next.config.ts
+COPY --from=builder /app/settle/src/ settle/src/
 COPY --from=builder /app/pnpm-workspace.yaml pnpm-workspace.yaml
 COPY --from=builder /app/package.json package.json
 EXPOSE 3000
