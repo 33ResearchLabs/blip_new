@@ -8,23 +8,28 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
     },
     "./db": {
       "types": "./dist/db/client.d.ts",
-      "import": "./dist/db/client.js"
+      "import": "./dist/db/client.js",
+      "require": "./dist/db/client.js"
     },
     "./finalization": {
       "types": "./dist/finalization/index.d.ts",
-      "import": "./dist/finalization/index.js"
+      "import": "./dist/finalization/index.js",
+      "require": "./dist/finalization/index.js"
     },
     "./state-machine": {
       "types": "./dist/state-machine/index.d.ts",
-      "import": "./dist/state-machine/index.js"
+      "import": "./dist/state-machine/index.js",
+      "require": "./dist/state-machine/index.js"
     },
     "./types": {
       "types": "./dist/types/index.d.ts",
-      "import": "./dist/types/index.js"
+      "import": "./dist/types/index.js",
+      "require": "./dist/types/index.js"
     }
   },
   "scripts": {
