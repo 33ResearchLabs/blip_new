@@ -959,11 +959,18 @@ export default function MerchantDashboard() {
           setTimeout(() => setShowWalletPrompt(true), 500);
         }
       } else {
-        setLoginError(data.error || 'Login failed');
+        // Map API errors to user-friendly messages
+        if (res.status === 401) {
+          setLoginError('Incorrect email or password. Please try again.');
+        } else if (res.status === 404) {
+          setLoginError('No account found with this email. Please create an account first.');
+        } else {
+          setLoginError(data.error || 'Login failed');
+        }
       }
     } catch (err) {
       console.error('Login error:', err);
-      setLoginError('Connection failed');
+      setLoginError('Connection failed. Please check your internet and try again.');
     } finally {
       setIsLoggingIn(false);
     }
@@ -1008,11 +1015,16 @@ export default function MerchantDashboard() {
           setTimeout(() => setShowWalletPrompt(true), 500);
         }
       } else {
-        setLoginError(data.error || 'Registration failed');
+        // Map API errors to user-friendly messages
+        if (res.status === 409) {
+          setLoginError('An account with this email already exists. Please sign in instead.');
+        } else {
+          setLoginError(data.error || 'Registration failed');
+        }
       }
     } catch (err) {
       console.error('Registration error:', err);
-      setLoginError('Connection failed');
+      setLoginError('Connection failed. Please check your internet and try again.');
     } finally {
       setIsRegistering(false);
     }
