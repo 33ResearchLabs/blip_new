@@ -815,6 +815,17 @@ export async function updateOrderStatus(
           }
         }
 
+        // Corridor bridge: transfer locked sAED to LP on completion
+        if (currentOrder.payment_via === 'saed_corridor' && currentOrder.corridor_fulfillment_id) {
+          try {
+            const { atomicCorridorSettlement } = await import('@/lib/money/corridorSettlement');
+            await atomicCorridorSettlement(client, orderId, currentOrder.corridor_fulfillment_id);
+            logger.info('[Corridor] Settlement completed within order completion', { orderId });
+          } catch (corridorErr) {
+            logger.error('Failed corridor settlement on completion', { orderId, error: corridorErr });
+          }
+        }
+
         logger.order.completed(orderId, currentOrder.crypto_amount, currentOrder.fiat_amount);
 
         // Record reputation events for order completion

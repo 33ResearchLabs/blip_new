@@ -182,6 +182,9 @@ export interface Order {
   order_version: number;
   // API minimal status (derived)
   minimal_status?: MinimalOrderStatus;
+  // Corridor bridge (migration 031)
+  payment_via: PaymentVia;
+  corridor_fulfillment_id: string | null;
 }
 
 export interface OrderEvent {
@@ -245,6 +248,49 @@ export interface Dispute {
   resolved_in_favor_of: ActorType | null;
   created_at: Date;
   resolved_at: Date | null;
+}
+
+// Corridor Bridge types
+export type PaymentVia = 'bank' | 'saed_corridor';
+export type CorridorProviderStatus = 'pending' | 'payment_sent' | 'completed' | 'failed' | 'cancelled';
+
+export interface CorridorProvider {
+  id: string;
+  merchant_id: string;
+  is_active: boolean;
+  fee_percentage: number;
+  min_amount: number;
+  max_amount: number;
+  auto_accept: boolean;
+  available_hours_start: string | null;
+  available_hours_end: string | null;
+  total_fulfillments: number;
+  total_volume: number;
+  avg_fulfillment_time_sec: number | null;
+  last_fulfillment_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CorridorFulfillment {
+  id: string;
+  order_id: string;
+  provider_merchant_id: string;
+  provider_id: string;
+  saed_amount_locked: number;
+  fiat_amount: number;
+  corridor_fee: number;
+  provider_status: CorridorProviderStatus;
+  bank_details: Record<string, unknown> | null;
+  send_deadline: Date;
+  idempotency_key: string | null;
+  assigned_at: Date;
+  payment_sent_at: Date | null;
+  completed_at: Date | null;
+  failed_at: Date | null;
+  cancelled_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
 }
 
 // Extended types with relations

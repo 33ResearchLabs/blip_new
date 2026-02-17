@@ -16,6 +16,7 @@ import {
   MOCK_MODE,
 } from 'settlement-core';
 import { broadcastOrderEvent } from '../ws/broadcast';
+import { bufferNotification } from '../batchWriter';
 
 interface OrderRow {
   id: string;
@@ -60,103 +61,38 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      // Build optional fields list
-      // Default expiry: 15 minutes from now for pending orders
-      const defaultExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
-
-      const fields = [
-        'user_id', 'merchant_id', 'offer_id', 'type', 'payment_method',
-        'crypto_amount', 'fiat_amount', 'crypto_currency', 'fiat_currency', 'rate',
-        'payment_details', 'status', 'expires_at',
-      ];
-      const values: unknown[] = [
-        data.user_id, data.merchant_id, data.offer_id, data.type, data.payment_method,
-        data.crypto_amount, data.fiat_amount, 'USDC', 'AED', data.rate,
-        data.payment_details ? JSON.stringify(data.payment_details) : null,
-        data.escrow_tx_hash ? 'escrowed' : 'pending',
-        defaultExpiresAt,
-      ];
-
-      let paramIdx = values.length;
-
-      if (data.buyer_wallet_address) {
-        paramIdx++;
-        fields.push('buyer_wallet_address');
-        values.push(data.buyer_wallet_address);
-      }
-      if (data.buyer_merchant_id) {
-        paramIdx++;
-        fields.push('buyer_merchant_id');
-        values.push(data.buyer_merchant_id);
-      }
-      if (data.spread_preference) {
-        paramIdx++;
-        fields.push('spread_preference');
-        values.push(data.spread_preference);
-      }
-      if (data.protocol_fee_percentage !== undefined) {
-        paramIdx++;
-        fields.push('protocol_fee_percentage');
-        values.push(data.protocol_fee_percentage);
-      }
-      if (data.protocol_fee_amount !== undefined) {
-        paramIdx++;
-        fields.push('protocol_fee_amount');
-        values.push(data.protocol_fee_amount);
-      }
-      if (data.escrow_tx_hash) {
-        fields.push('escrow_tx_hash', 'escrowed_at');
-        values.push(data.escrow_tx_hash);
-        values.push(new Date());
-      }
-      if (data.escrow_trade_id !== undefined) {
-        fields.push('escrow_trade_id');
-        values.push(data.escrow_trade_id);
-      }
-      if (data.escrow_trade_pda) {
-        fields.push('escrow_trade_pda');
-        values.push(data.escrow_trade_pda);
-      }
-      if (data.escrow_pda) {
-        fields.push('escrow_pda');
-        values.push(data.escrow_pda);
-      }
-      if (data.escrow_creator_wallet) {
-        fields.push('escrow_creator_wallet');
-        values.push(data.escrow_creator_wallet);
-      }
-
-      const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
-      const sql = `INSERT INTO orders (${fields.join(', ')}) VALUES (${placeholders}) RETURNING *`;
-
-      const rows = await dbQuery(sql, values);
-      const order = rows[0] as OrderRow;
-
-      // Deduct liquidity from offer
-      await dbQuery(
-        'UPDATE merchant_offers SET available_amount = available_amount - $1 WHERE id = $2',
-        [data.crypto_amount, data.offer_id]
-      );
-
-      // NOTE: Balance deduction for pre-locked escrow is now handled atomically
-      // inside settle/src/lib/db/repositories/orders.ts::createOrder()
-
-      // Insert notification outbox
-      await dbQuery(
-        `INSERT INTO notification_outbox (order_id, event_type, payload, status) VALUES ($1, 'ORDER_CREATED', $2, 'pending')`,
+      // Single stored procedure: deduct offer + insert order (1 round-trip instead of 2)
+      const result = await queryOne<{ create_order_v1: any }>(
+        'SELECT create_order_v1($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)',
         [
-          order.id,
-          JSON.stringify({
-            orderId: order.id,
-            userId: data.user_id,
-            merchantId: data.merchant_id,
-            status: order.status,
-            minimal_status: normalizeStatus(order.status as any),
-            order_version: order.order_version || 1,
-            updatedAt: new Date().toISOString(),
-          }),
+          data.user_id, data.merchant_id, data.offer_id, data.type, data.payment_method,
+          data.crypto_amount, data.fiat_amount, data.rate,
+          data.payment_details ? JSON.stringify(data.payment_details) : null,
+          data.buyer_wallet_address || null, data.buyer_merchant_id || null,
+          data.spread_preference || null,
+          data.protocol_fee_percentage !== undefined ? data.protocol_fee_percentage : null,
+          data.protocol_fee_amount !== undefined ? data.protocol_fee_amount : null,
+          data.escrow_tx_hash || null,
+          data.escrow_trade_id !== undefined ? data.escrow_trade_id : null,
+          data.escrow_trade_pda || null, data.escrow_pda || null,
+          data.escrow_creator_wallet || null,
         ]
       );
+      const procResult = result!.create_order_v1;
+      if (!procResult.success) {
+        if (procResult.error === 'INSUFFICIENT_LIQUIDITY') {
+          return reply.status(409).send({ success: false, error: 'Insufficient offer liquidity' });
+        }
+        return reply.status(400).send({ success: false, error: procResult.error });
+      }
+      const order = procResult.order as OrderRow;
+
+      // Batched notification (zero round-trips, flushed every 50ms)
+      bufferNotification({ order_id: order.id, event_type: 'ORDER_CREATED', payload: JSON.stringify({
+        orderId: order.id, userId: data.user_id, merchantId: data.merchant_id,
+        status: order.status, minimal_status: normalizeStatus(order.status as any),
+        order_version: order.order_version || 1, updatedAt: new Date().toISOString(),
+      })});
 
       logger.info('[core-api] Order created', { orderId: order.id, type: data.type });
 
@@ -175,7 +111,10 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         success: true,
         data: { ...order, minimal_status: normalizeStatus(order.status as any) },
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.statusCode) {
+        return reply.status(error.statusCode).send({ success: false, error: error.message });
+      }
       fastify.log.error({ error }, 'Error creating order');
       return reply.status(500).send({ success: false, error: 'Internal server error' });
     }
@@ -243,26 +182,13 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         const rows = await dbQuery(sql, values);
         const order = rows[0] as OrderRow;
 
-        // NOTE: Balance deduction for pre-locked escrow is now handled atomically
-        // inside settle/src/lib/db/repositories/orders.ts::createOrder()
-
-        // Notification outbox
-        await dbQuery(
-          `INSERT INTO notification_outbox (order_id, event_type, payload, status) VALUES ($1, 'ORDER_CREATED', $2, 'pending')`,
-          [
-            order.id,
-            JSON.stringify({
-              orderId: order.id,
-              userId: data.user_id,
-              merchantId: data.merchant_id,
-              buyerMerchantId: data.buyer_merchant_id,
-              status: order.status,
-              minimal_status: normalizeStatus(order.status as any),
-              order_version: order.order_version || 1,
-              updatedAt: new Date().toISOString(),
-            }),
-          ]
-        );
+        // Batched notification (zero round-trips, flushed every 50ms)
+        bufferNotification({ order_id: order.id, event_type: 'ORDER_CREATED', payload: JSON.stringify({
+          orderId: order.id, userId: data.user_id, merchantId: data.merchant_id,
+          buyerMerchantId: data.buyer_merchant_id, status: order.status,
+          minimal_status: normalizeStatus(order.status as any),
+          order_version: order.order_version || 1, updatedAt: new Date().toISOString(),
+        })});
 
         logger.info('[core-api] Merchant order created', {
           orderId: order.id,
@@ -286,7 +212,10 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
           success: true,
           data: { ...order, minimal_status: normalizeStatus(order.status as any) },
         });
-      } catch (error) {
+      } catch (error: any) {
+        if (error?.statusCode) {
+          return reply.status(error.statusCode).send({ success: false, error: error.message });
+        }
         fastify.log.error({ error }, 'Error creating merchant order');
         return reply.status(500).send({ success: false, error: 'Internal server error' });
       }

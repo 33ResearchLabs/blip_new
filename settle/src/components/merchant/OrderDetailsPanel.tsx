@@ -37,6 +37,8 @@ interface OrderDetails {
   release_slot?: number;
   refund_tx_hash?: string;
   buyer_wallet_address?: string;
+  payment_via?: 'bank' | 'saed_corridor';
+  corridor_fulfillment_id?: string;
   created_at: string;
   accepted_at?: string;
   escrowed_at?: string;
@@ -495,6 +497,24 @@ export function OrderDetailsPanel({
               )
             )}
           </div>
+
+          {/* Corridor Bridge Info */}
+          {order.payment_via === 'saed_corridor' && (
+            <div className="bg-blue-500/[0.03] rounded-xl p-4 border border-blue-500/[0.12]">
+              <h3 className="text-sm font-medium text-blue-400/70 mb-2 flex items-center gap-2">
+                <Zap className="w-4 h-4" /> sAED Corridor Bridge
+              </h3>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-white/40">Payment Method</span>
+                  <span className="text-blue-400">sAED Corridor</span>
+                </div>
+                <p className="text-white/30 text-[10px] leading-relaxed">
+                  A Liquidity Provider is sending AED to the seller&apos;s bank on behalf of the buyer, who paid with sAED.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Escrow & Blockchain Details */}
           {(order.escrow_tx_hash || order.escrow_pda || order.escrow_trade_pda || order.release_tx_hash || order.escrow_address) && (

@@ -9,8 +9,8 @@ const poolConfig = process.env.DATABASE_URL
   ? {
       connectionString: process.env.DATABASE_URL,
       ssl: isProduction ? { rejectUnauthorized: false } : false,
-      max: 20,
-      idleTimeoutMillis: 30000,
+      max: parseInt(process.env.DB_POOL_MAX || '50'),
+      idleTimeoutMillis: 10000,
       connectionTimeoutMillis: 5000,
     }
   : {
@@ -19,8 +19,8 @@ const poolConfig = process.env.DATABASE_URL
       database: process.env.DB_NAME || 'settle',
       user: process.env.DB_USER || 'zeus',
       password: process.env.DB_PASSWORD || '',
-      max: 20,
-      idleTimeoutMillis: 30000,
+      max: parseInt(process.env.DB_POOL_MAX || '50'),
+      idleTimeoutMillis: 10000,
       connectionTimeoutMillis: 5000,
     };
 
@@ -44,7 +44,7 @@ export async function query<T = unknown>(
   const result = await pool.query(text, params);
   const duration = Date.now() - start;
 
-  if (process.env.NODE_ENV === 'development') {
+  if (process.env.DB_DEBUG === '1') {
     console.log('Executed query', { text: text.substring(0, 50), duration, rows: result.rowCount });
   }
 

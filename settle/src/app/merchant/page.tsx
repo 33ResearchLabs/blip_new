@@ -60,7 +60,8 @@ import { RatingModal } from "@/components/RatingModal";
 import { MerchantQuoteModal } from "@/components/mempool/MerchantQuoteModal";
 import { OrderInspector } from "@/components/mempool/OrderInspector";
 import { DashboardWidgets } from "@/components/merchant/DashboardWidgets";
-import { Package } from "lucide-react";
+import { Package, Droplets } from "lucide-react";
+import { CorridorLPPanel } from "@/components/merchant/CorridorLPPanel";
 import { getNextStep, type NextStepResult } from "@/lib/orders/getNextStep";
 import { getAuthoritativeStatus, shouldAcceptUpdate, mapMinimalStatusToUIStatus, normalizeLegacyStatus, computeMyRole } from "@/lib/orders/statusResolver";
 // New dashboard components
@@ -1815,6 +1816,57 @@ export default function MerchantDashboard() {
     }
   };
 
+  // Accept order using sAED corridor bridge
+  // Step 1: Auto-match LP, lock buyer sAED
+  // Step 2: Normal accept flow
+  const acceptWithSaed = async (order: Order) => {
+    if (!merchantId) return;
+
+    try {
+      addNotification('system', 'Matching LP and locking sAED...', order.id);
+
+      // Get the seller's bank details from the order
+      const bankDetails = order.dbOrder?.payment_details || {};
+
+      // Step 1: Call corridor match via core-api
+      const coreApiUrl = process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:4010';
+      const matchRes = await fetch(`${coreApiUrl}/v1/corridor/match`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_id: order.id,
+          buyer_merchant_id: merchantId,
+          seller_merchant_id: order.dbOrder?.merchant_id || order.orderMerchantId,
+          fiat_amount: order.total || order.dbOrder?.fiat_amount,
+          bank_details: bankDetails,
+        }),
+      });
+
+      const matchData = await matchRes.json();
+      if (!matchData.success) {
+        addNotification('system', `LP match failed: ${matchData.error}`, order.id);
+        playSound('error');
+        return;
+      }
+
+      const { fee_percentage, corridor_fee_fils, saed_locked, provider_name } = matchData.data;
+      addNotification(
+        'system',
+        `LP matched: ${provider_name || 'Provider'} (${fee_percentage}% fee, ${(corridor_fee_fils / 100).toFixed(2)} AED). ${(saed_locked / 100).toFixed(2)} sAED locked.`,
+        order.id
+      );
+
+      // Step 2: Normal accept
+      await acceptOrder(order);
+
+      playSound('click');
+    } catch (error) {
+      console.error('Error accepting with sAED:', error);
+      addNotification('system', 'Failed to accept with sAED. Try again.', order.id);
+      playSound('error');
+    }
+  };
+
   // Buyer signs to claim order (for M2M where seller already escrowed)
   // This just claims the order without marking payment sent yet
   const signToClaimOrder = async (order: Order) => {
@@ -3294,14 +3346,24 @@ export default function MerchantDashboard() {
   // Login screen
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-[#060606] text-white flex items-center justify-center p-4">
-        <div className="w-full max-w-sm">
+      <div className="min-h-screen bg-[#060606] text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
+        {/* Ambient background */}
+        <div className="fixed inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-orange-500/[0.03] rounded-full blur-[150px]" />
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-white/[0.01] rounded-full blur-[200px]" />
+        </div>
+
+        <div className="w-full max-w-sm relative z-10">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-white/[0.08] border border-white/[0.08] flex items-center justify-center mx-auto mb-4">
-              <Wallet className="w-8 h-8 text-white" />
+            <div className="flex items-center justify-center gap-2.5 mb-4">
+              <Zap className="w-7 h-7 text-white fill-white" />
+              <span className="text-[22px] leading-none">
+                <span className="font-bold text-white">Blip</span>{' '}
+                <span className="italic text-white/90">money</span>
+              </span>
             </div>
             <h1 className="text-xl font-bold mb-2">Merchant Portal</h1>
-            <p className="text-sm text-gray-500">Manage your orders and trades</p>
+            <p className="text-sm text-gray-500">P2P trading, powered by crypto</p>
           </div>
 
           {/* Tabs */}
@@ -3446,6 +3508,16 @@ export default function MerchantDashboard() {
               </div>
             )}
           </div>
+
+          {/* Footer */}
+          <div className="mt-8 text-center space-y-2">
+            <p className="text-[10px] text-white/15 font-mono">Blip Money v1.0</p>
+            <div className="flex items-center justify-center gap-3 text-[10px] text-white/20">
+              <Link href="/" className="hover:text-white/40 transition-colors">Home</Link>
+              <span className="text-white/10">·</span>
+              <Link href="/merchant" className="hover:text-white/40 transition-colors">Merchant</Link>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -3499,6 +3571,12 @@ export default function MerchantDashboard() {
                 <Zap className="w-3.5 h-3.5" />
                 <span className="hidden md:inline">Priority</span>
               </button>
+              <Link
+                href="/merchant/settings"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-white/40 hover:text-white/70 hover:bg-white/[0.04] transition-colors"
+              >
+                Settings
+              </Link>
             </nav>
 
             <div className="relative hidden md:flex items-center">
@@ -3690,13 +3768,17 @@ export default function MerchantDashboard() {
         {/* CENTER-RIGHT: In Progress (50%) + Activity (50%) */}
         <Panel defaultSize="27%" minSize="18%" maxSize="40%" id="center-right">
         <div className="flex flex-col h-full bg-black">
-          <div style={{ height: '50%' }} className="flex flex-col border-b border-white/[0.04]">
+          <div style={{ height: '40%' }} className="flex flex-col border-b border-white/[0.04]">
             <InProgressPanel
               orders={ongoingOrders}
               onSelectOrder={setSelectedOrderPopup}
             />
           </div>
-          <div style={{ height: '50%' }} className="flex flex-col">
+          {/* LP Assignments — only visible for LPs with active fulfillments */}
+          <div style={{ height: '20%' }} className="flex flex-col border-b border-white/[0.04] overflow-y-auto p-2">
+            <CorridorLPPanel merchantId={merchantId} />
+          </div>
+          <div style={{ height: '40%' }} className="flex flex-col">
             <ActivityPanel
               merchantId={merchantId}
               completedOrders={completedOrders}
@@ -4410,6 +4492,32 @@ export default function MerchantDashboard() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Edit Profile */}
+                  <Link
+                    href="/merchant/settings"
+                    className="w-full flex items-center justify-between p-3 bg-white/[0.03] rounded-xl border border-white/[0.04] hover:bg-white/[0.06] transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-white/40" />
+                      <span className="text-sm font-medium text-white/70">Settings & Profile</span>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-white/20" />
+                  </Link>
+
+                  {/* View Public Profile */}
+                  {merchantId && (
+                    <Link
+                      href={`/merchant/profile/${merchantId}`}
+                      className="w-full flex items-center justify-between p-3 bg-white/[0.03] rounded-xl border border-white/[0.04] hover:bg-white/[0.06] transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <ExternalLink className="w-4 h-4 text-white/40" />
+                        <span className="text-sm font-medium text-white/70">View Public Profile</span>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-white/20" />
+                    </Link>
+                  )}
 
                   {/* Logout Button */}
                   <motion.button
@@ -6522,17 +6630,31 @@ export default function MerchantDashboard() {
 
                 {/* For pending orders without escrow (regular flow) */}
                 {selectedOrderPopup.status === 'pending' && !selectedOrderPopup.escrowTxHash && !selectedOrderPopup.isMyOrder && (
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      acceptOrder(selectedOrderPopup);
-                      setSelectedOrderPopup(null);
-                    }}
-                    className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 transition-all"
-                  >
-                    <Zap className="w-4 h-4" />
-                    Go
-                  </motion.button>
+                  <div className="space-y-2">
+                    <motion.button
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        acceptOrder(selectedOrderPopup);
+                        setSelectedOrderPopup(null);
+                      }}
+                      className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 transition-all"
+                    >
+                      <Zap className="w-4 h-4" />
+                      Go
+                    </motion.button>
+                    {/* Accept with sAED corridor bridge */}
+                    <motion.button
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        acceptWithSaed(selectedOrderPopup);
+                        setSelectedOrderPopup(null);
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 hover:border-blue-500/30 text-blue-400 text-sm font-medium flex items-center justify-center gap-2 transition-all"
+                    >
+                      <Droplets className="w-3.5 h-3.5" />
+                      Pay with sAED
+                    </motion.button>
+                  </div>
                 )}
 
                 {/* For accepted orders without escrow — only the SELLER locks escrow */}

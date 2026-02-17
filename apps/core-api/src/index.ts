@@ -13,23 +13,19 @@ import { disputeRoutes } from './routes/dispute';
 import { expireRoutes } from './routes/expire';
 import { debugRoutes } from './routes/debug';
 import { conversionRoutes } from './routes/conversion';
+import { corridorRoutes } from './routes/corridor';
 import { authHook } from './hooks/auth';
 import { initWebSocketServer, closeWebSocketServer } from './ws/broadcast';
 import { startOutboxWorker, stopOutboxWorker } from './workers/notificationOutbox';
+import { startCorridorTimeoutWorker, stopCorridorTimeoutWorker } from './workers/corridorTimeoutWorker';
 
 const PORT = parseInt(process.env.CORE_API_PORT || '4010', 10);
 const HOST = process.env.CORE_API_HOST || '0.0.0.0';
+const IS_WORKER = process.env.WORKER_ID !== undefined;
 
 const fastify = Fastify({
   logger: {
-    level: process.env.LOG_LEVEL || 'info',
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        translateTime: 'HH:MM:ss Z',
-        ignore: 'pid,hostname',
-      },
-    },
+    level: process.env.LOG_LEVEL || 'warn',
   },
 });
 
@@ -51,18 +47,20 @@ await fastify.register(extensionRoutes, { prefix: '/v1' });
 await fastify.register(disputeRoutes, { prefix: '/v1' });
 await fastify.register(expireRoutes, { prefix: '/v1' });
 await fastify.register(conversionRoutes, { prefix: '/v1' });
+await fastify.register(corridorRoutes, { prefix: '/v1' });
 await fastify.register(debugRoutes);
 
 // Start server
 try {
   await fastify.listen({ port: PORT, host: HOST });
-  console.log(`Core API running on http://${HOST}:${PORT}`);
+  console.log(`Core API [${IS_WORKER ? 'worker ' + process.env.WORKER_ID : 'standalone'}] running on http://${HOST}:${PORT}`);
 
-  // Attach WS server to the same HTTP server
-  initWebSocketServer(fastify.server);
-
-  // Start notification outbox worker (polls DB every 5s, sends Pusher/WS events)
-  startOutboxWorker();
+  // Only primary (non-worker) runs WS + background workers
+  if (!IS_WORKER) {
+    initWebSocketServer(fastify.server);
+    startOutboxWorker();
+    startCorridorTimeoutWorker();
+  }
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);
@@ -70,9 +68,11 @@ try {
 
 // Graceful shutdown
 const shutdown = async (signal: string) => {
-  console.log(`\n${signal} received, shutting down gracefully...`);
-  stopOutboxWorker();
-  closeWebSocketServer();
+  if (!IS_WORKER) {
+    stopOutboxWorker();
+    stopCorridorTimeoutWorker();
+    closeWebSocketServer();
+  }
   await fastify.close();
   process.exit(0);
 };

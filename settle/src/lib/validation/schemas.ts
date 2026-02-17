@@ -266,6 +266,30 @@ export const merchantCreateOrderSchema = z.object({
   matched_offer_id: uuidSchema.nullish(), // Matched offer for M2M
 });
 
+// Corridor Bridge schemas
+export const corridorProviderSchema = z.object({
+  merchant_id: uuidSchema,
+  is_active: z.boolean().default(false),
+  fee_percentage: z.number().min(0, 'Fee cannot be negative').max(10, 'Fee cannot exceed 10%').default(0.5),
+  min_amount: z.number().positive('Min amount must be positive').default(100),
+  max_amount: z.number().positive('Max amount must be positive').default(50000),
+  auto_accept: z.boolean().default(true),
+}).refine(
+  (data) => data.max_amount >= data.min_amount,
+  { message: 'max_amount must be >= min_amount' }
+);
+
+export const corridorMatchSchema = z.object({
+  order_id: uuidSchema,
+  buyer_merchant_id: uuidSchema,
+  seller_merchant_id: uuidSchema,
+  fiat_amount: z.number().positive('Fiat amount must be positive'),
+  bank_details: z.record(z.unknown()).optional(),
+});
+
+export type CorridorProviderInput = z.infer<typeof corridorProviderSchema>;
+export type CorridorMatchInput = z.infer<typeof corridorMatchSchema>;
+
 // Helper function to sanitize messages (basic XSS prevention)
 function sanitizeMessage(input: string): string {
   return input

@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { MerchantErrorBoundary } from "./error-boundary";
 
 export const metadata: Metadata = {
   title: "Blip Money Merchant",
@@ -36,5 +37,5 @@ export default function MerchantLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return <MerchantErrorBoundary>{children}</MerchantErrorBoundary>;
 }

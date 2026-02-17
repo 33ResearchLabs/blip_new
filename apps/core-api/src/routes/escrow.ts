@@ -7,13 +7,13 @@
  */
 import type { FastifyPluginAsync } from 'fastify';
 import {
-  transaction,
   queryOne,
   logger,
   MOCK_MODE,
   normalizeStatus,
 } from 'settlement-core';
 import { broadcastOrderEvent } from '../ws/broadcast';
+import { bufferEvent, bufferNotification } from '../batchWriter';
 
 interface EscrowDepositPayload {
   tx_hash: string;
@@ -52,97 +52,42 @@ export const escrowRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      // Get order to check amount
-      const order = await queryOne<{ id: string; crypto_amount: string; order_number: string; status: string; user_id: string; merchant_id: string }>(
-        'SELECT id, crypto_amount, order_number, status, user_id, merchant_id FROM orders WHERE id = $1',
-        [id]
+      // Single stored procedure: FOR UPDATE + validate + deduct + update (1 round-trip)
+      const procResult = await queryOne<{ escrow_order_v1: any }>(
+        'SELECT escrow_order_v1($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+        [
+          id, tx_hash, actor_type, actor_id,
+          escrow_address || null, escrow_trade_id ?? null,
+          escrow_trade_pda || null, escrow_pda || null,
+          escrow_creator_wallet || null, MOCK_MODE,
+        ]
       );
-
-      if (!order) {
-        return reply.status(404).send({ success: false, error: 'Order not found' });
+      const data = procResult!.escrow_order_v1;
+      if (!data.success) {
+        const errMsg = data.error;
+        if (errMsg === 'INSUFFICIENT_BALANCE') {
+          return reply.status(400).send({ success: false, error: 'Insufficient balance to lock escrow' });
+        }
+        if (errMsg === 'ALREADY_ESCROWED') {
+          return reply.status(409).send({ success: false, error: 'Escrow already locked' });
+        }
+        if (errMsg === 'ORDER_STATUS_CHANGED') {
+          return reply.status(409).send({ success: false, error: 'Order status changed' });
+        }
+        if (errMsg === 'ORDER_NOT_FOUND') {
+          return reply.status(404).send({ success: false, error: 'Order not found' });
+        }
+        return reply.status(400).send({ success: false, error: errMsg });
       }
 
-      const amount = parseFloat(String(order.crypto_amount));
+      const updatedOrder = data.order;
+      const oldStatus = data.old_status;
+      const userId = updatedOrder.user_id;
+      const merchantId = updatedOrder.merchant_id;
 
-      // Atomic: lock order + deduct balance + update escrow fields
-      await transaction(async (client) => {
-        // Lock and re-check
-        const lockCheck = await client.query(
-          'SELECT status, escrow_tx_hash FROM orders WHERE id = $1 FOR UPDATE',
-          [id]
-        );
-        const lockedOrder = lockCheck.rows[0];
-        if (!lockedOrder || !['pending', 'accepted', 'escrow_pending'].includes(lockedOrder.status)) {
-          throw new Error('ORDER_STATUS_CHANGED');
-        }
-        if (lockedOrder.escrow_tx_hash) {
-          throw new Error('ALREADY_ESCROWED');
-        }
-
-        // Mock mode: deduct seller balance
-        if (MOCK_MODE) {
-          const sellerTable = actor_type === 'merchant' ? 'merchants' : 'users';
-          const deductResult = await client.query(
-            `UPDATE ${sellerTable} SET balance = balance - $1 WHERE id = $2 AND balance >= $1 RETURNING balance`,
-            [amount, actor_id]
-          );
-          if (!deductResult || deductResult.rows.length === 0) {
-            throw new Error('INSUFFICIENT_BALANCE');
-          }
-        }
-
-        // Update order with escrow details
-        await client.query(
-          `UPDATE orders SET
-            escrow_tx_hash = $1,
-            escrow_address = $2,
-            escrow_trade_id = $3::BIGINT,
-            escrow_trade_pda = $4,
-            escrow_pda = $5,
-            escrow_creator_wallet = $6,
-            escrowed_at = NOW(),
-            expires_at = NOW() + INTERVAL '120 minutes',
-            status = 'escrowed',
-            order_version = order_version + 1
-          WHERE id = $7`,
-          [
-            tx_hash,
-            escrow_address || null,
-            escrow_trade_id || null,
-            escrow_trade_pda || null,
-            escrow_pda || null,
-            escrow_creator_wallet || null,
-            id,
-          ]
-        );
-
-        // Create event
-        await client.query(
-          `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
-           VALUES ($1, 'status_changed_to_escrowed', $2, $3, $4, 'escrowed', $5)`,
-          [id, actor_type, actor_id, order.status, JSON.stringify({ tx_hash })]
-        );
-
-        // Notification outbox
-        await client.query(
-          `INSERT INTO notification_outbox (order_id, event_type, payload, status) VALUES ($1, 'ORDER_ESCROWED', $2, 'pending')`,
-          [
-            id,
-            JSON.stringify({
-              orderId: id,
-              status: 'escrowed',
-              previousStatus: order.status,
-              escrowTxHash: tx_hash,
-              updatedAt: new Date().toISOString(),
-            }),
-          ]
-        );
-      });
-
-      // Fetch updated order
-      const updatedOrder = await queryOne<{ order_version: number; status: string }>('SELECT * FROM orders WHERE id = $1', [id]);
-
-      logger.info('[core-api] Escrow locked', { orderId: id, txHash: tx_hash });
+      // Batched fire-and-forget (zero round-trips, flushed every 50ms)
+      bufferEvent({ order_id: id, event_type: 'status_changed_to_escrowed', actor_type, actor_id, old_status: oldStatus, new_status: 'escrowed', metadata: JSON.stringify({ tx_hash }) });
+      bufferNotification({ order_id: id, event_type: 'ORDER_ESCROWED', payload: JSON.stringify({ orderId: id, status: 'escrowed', previousStatus: oldStatus, escrowTxHash: tx_hash, updatedAt: new Date().toISOString() }) });
 
       broadcastOrderEvent({
         event_type: 'ORDER_ESCROWED',
@@ -150,9 +95,9 @@ export const escrowRoutes: FastifyPluginAsync = async (fastify) => {
         status: 'escrowed',
         minimal_status: normalizeStatus('escrowed' as any),
         order_version: updatedOrder!.order_version,
-        userId: order.user_id,
-        merchantId: order.merchant_id,
-        previousStatus: order.status,
+        userId,
+        merchantId,
+        previousStatus: oldStatus,
       });
 
       return reply.send({
@@ -160,17 +105,6 @@ export const escrowRoutes: FastifyPluginAsync = async (fastify) => {
         data: updatedOrder,
       });
     } catch (error) {
-      const errMsg = (error as Error).message;
-      if (errMsg === 'INSUFFICIENT_BALANCE') {
-        return reply.status(400).send({ success: false, error: 'Insufficient balance to lock escrow' });
-      }
-      if (errMsg === 'ALREADY_ESCROWED') {
-        return reply.status(409).send({ success: false, error: 'Escrow already locked' });
-      }
-      if (errMsg === 'ORDER_STATUS_CHANGED') {
-        return reply.status(409).send({ success: false, error: 'Order status changed' });
-      }
-
       fastify.log.error({ error, id }, 'Error locking escrow');
       return reply.status(500).send({ success: false, error: 'Internal server error' });
     }

@@ -181,6 +181,17 @@ export async function atomicCancelWithRefund(
         });
       }
 
+      // Corridor bridge: refund locked sAED to buyer on cancellation
+      if (lockedOrder.payment_via === 'saed_corridor' && lockedOrder.corridor_fulfillment_id) {
+        try {
+          const { refundBuyerSaed } = await import('@/lib/money/corridorSettlement');
+          await refundBuyerSaed(client, orderId, lockedOrder.corridor_fulfillment_id);
+          logger.info('[Atomic] Corridor sAED refunded on cancellation', { orderId });
+        } catch (corridorErr) {
+          logger.error('[Atomic] Failed corridor sAED refund on cancellation', { orderId, error: corridorErr });
+        }
+      }
+
       // Update order status with version increment
       const updateResult = await client.query(
         `UPDATE orders
