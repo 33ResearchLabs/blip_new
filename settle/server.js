@@ -18,6 +18,12 @@ app.prepare().then(() => {
 
   const requestHandler = async (req, res) => {
     try {
+      // Fast healthcheck bypass — responds instantly without touching Next.js
+      if (req.url === '/api/health' || req.url === '/api/health/') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString() }));
+        return;
+      }
       const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
       await handle(req, res, parsedUrl);
     } catch (err) {
