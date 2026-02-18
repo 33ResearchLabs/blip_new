@@ -31,9 +31,7 @@ const requestHandler = async (req, res) => {
       return;
     }
 
-    const proto = req.headers['x-forwarded-proto'] || 'http';
-    const parsedUrl = new URL(req.url, `${proto}://${req.headers.host || 'localhost'}`);
-    await handle(req, res, parsedUrl);
+    await handle(req, res);
   } catch (err) {
     console.error('Error occurred handling', req.url, err);
     res.statusCode = 500;
