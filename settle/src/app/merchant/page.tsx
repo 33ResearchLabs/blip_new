@@ -3685,7 +3685,7 @@ export default function MerchantDashboard() {
       </header>
 
       {/* Mobile Stats Bar - Shows on mobile only */}
-      <div className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.02] border-b border-white/[0.04]">
+      <div className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.02] border-b border-white/[0.06]">
         {/* USDT Balance */}
         <button
           onClick={() => setShowWalletModal(true)}
@@ -3776,7 +3776,7 @@ export default function MerchantDashboard() {
             />
           ) : (
             <>
-              <div style={{ height: '60%' }} className="flex flex-col border-b border-white/[0.04]">
+              <div style={{ height: '60%' }} className="flex flex-col border-b border-white/[0.06]">
                 <PendingOrdersPanel
                   orders={pendingOrders}
                   mempoolOrders={mempoolOrders}
@@ -3803,14 +3803,14 @@ export default function MerchantDashboard() {
         {/* CENTER-RIGHT: In Progress + LP (+ Activity on narrow screens) */}
         <Panel defaultSize={isWideScreen ? "20%" : "27%"} minSize={isWideScreen ? "14%" : "18%"} maxSize={isWideScreen ? "32%" : "40%"} id="center-right">
         <div className="flex flex-col h-full bg-black">
-          <div style={{ height: isWideScreen ? '55%' : '40%' }} className="flex flex-col border-b border-white/[0.04]">
+          <div style={{ height: isWideScreen ? '55%' : '40%' }} className="flex flex-col border-b border-white/[0.06]">
             <InProgressPanel
               orders={ongoingOrders}
               onSelectOrder={setSelectedOrderPopup}
             />
           </div>
           {/* LP Assignments — only visible for LPs with active fulfillments */}
-          <div style={{ height: isWideScreen ? '45%' : '20%' }} className="flex flex-col border-b border-white/[0.04] overflow-y-auto p-2">
+          <div style={{ height: isWideScreen ? '45%' : '20%' }} className="flex flex-col border-b border-white/[0.06] overflow-y-auto p-2">
             <CorridorLPPanel merchantId={merchantId} />
           </div>
           {!isWideScreen && (
@@ -3841,7 +3841,7 @@ export default function MerchantDashboard() {
             <PanelResizeHandle className="w-[3px]" />
             <Panel defaultSize="18%" minSize="12%" maxSize="30%" id="transactions">
             <div className="flex flex-col h-full bg-black">
-              <div style={{ height: '40%' }} className="flex flex-col border-b border-white/[0.04]">
+              <div style={{ height: '40%' }} className="flex flex-col border-b border-white/[0.06]">
                 <LeaderboardPanel
                   leaderboardData={leaderboardData}
                   leaderboardTab={leaderboardTab}
@@ -3876,19 +3876,19 @@ export default function MerchantDashboard() {
         <Panel defaultSize={isWideScreen ? "18%" : "22%"} minSize={isWideScreen ? "12%" : "15%"} maxSize={isWideScreen ? "30%" : "35%"} id="right">
         <div className="flex flex-col h-full bg-[#060606] overflow-hidden">
           {/* Notifications Panel - Top, max 50% of sidebar */}
-          <div style={{ maxHeight: '50%' }} className="flex flex-col border-b border-white/[0.04] overflow-hidden shrink-0">
+          <div style={{ maxHeight: '50%' }} className="flex flex-col border-b border-white/[0.06] overflow-hidden shrink-0">
             <div className="flex flex-col h-full min-h-0">
               {/* Header */}
-              <div className="px-3 py-2 border-b border-white/[0.04]">
+              <div className="panel-header">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Bell className="w-3.5 h-3.5 text-white/30" />
-                    <h2 className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">
+                    <Bell className="w-3.5 h-3.5 panel-icon" />
+                    <h2 className="text-[11px] font-bold text-white/50 font-mono tracking-wider uppercase">
                       Notifications
                     </h2>
                   </div>
                   {notifications.filter(n => !n.read).length > 0 && (
-                    <span className="text-[10px] border border-orange-500/30 text-orange-400 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
+                    <span className="text-[10px] bg-orange-500/[0.08] border border-orange-500/25 text-orange-400 px-2 py-0.5 rounded-full font-mono tabular-nums shadow-[0_0_6px_rgba(249,115,22,0.1)]">
                       {notifications.filter(n => !n.read).length}
                     </span>
                   )}
@@ -4072,7 +4072,7 @@ export default function MerchantDashboard() {
               )}
 
               {/* Header Row */}
-              <div className="flex items-center justify-between px-2 py-2 border-b border-white/[0.04]">
+              <div className="flex items-center justify-between px-2 py-2 border-b border-white/[0.06]">
                 <div className="flex items-center gap-2">
                   <motion.div
                     className="w-2 h-2 rounded-full bg-white/60"
@@ -4204,7 +4204,7 @@ export default function MerchantDashboard() {
           {mobileView === 'escrow' && (
             <div className="space-y-1">
               {/* Header Row */}
-              <div className="flex items-center justify-between px-2 py-2 border-b border-white/[0.04]">
+              <div className="flex items-center justify-between px-2 py-2 border-b border-white/[0.06]">
                 <div className="flex items-center gap-2">
                   <Lock className="w-3.5 h-3.5 text-white/70" />
                   <span className="text-xs font-mono text-gray-400 uppercase tracking-wide">Escrow</span>
@@ -4928,7 +4928,7 @@ export default function MerchantDashboard() {
             >
               <div className="bg-white/[0.03] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/[0.08] flex items-center justify-center">
                       <ArrowLeftRight className="w-5 h-5 text-white" />
@@ -5234,7 +5234,7 @@ export default function MerchantDashboard() {
             >
               <div className="bg-white/[0.03] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
                       <ArrowLeftRight className="w-5 h-5 text-white" />
@@ -5664,7 +5664,7 @@ export default function MerchantDashboard() {
             >
               <div className="bg-white/[0.03] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
                       <AlertTriangle className="w-5 h-5 text-red-400" />
@@ -5763,7 +5763,7 @@ export default function MerchantDashboard() {
             >
               <div className="bg-white/[0.03] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
                       <Lock className="w-5 h-5 text-white/70" />
@@ -5980,7 +5980,7 @@ export default function MerchantDashboard() {
             >
               <div className="bg-white/[0.03] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
                       <Unlock className="w-5 h-5 text-white" />
@@ -6192,7 +6192,7 @@ export default function MerchantDashboard() {
             >
               <div className="bg-white/[0.03] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
                       <RotateCcw className="w-5 h-5 text-white/70" />
@@ -6547,7 +6547,7 @@ export default function MerchantDashboard() {
               className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[90%] max-w-md bg-white/[0.03] rounded-2xl shadow-2xl border border-white/[0.08] overflow-hidden"
             >
               {/* Header */}
-              <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+              <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-2xl border border-white/[0.04]">
                     {selectedOrderPopup.emoji}
