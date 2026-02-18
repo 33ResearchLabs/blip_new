@@ -31,7 +31,8 @@ const requestHandler = async (req, res) => {
       return;
     }
 
-    const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const proto = req.headers['x-forwarded-proto'] || 'http';
+    const parsedUrl = new URL(req.url, `${proto}://${req.headers.host || 'localhost'}`);
     await handle(req, res, parsedUrl);
   } catch (err) {
     console.error('Error occurred handling', req.url, err);
