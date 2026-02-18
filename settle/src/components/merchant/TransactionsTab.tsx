@@ -143,7 +143,7 @@ export function TransactionsTab({ merchantId }: TransactionsTabProps) {
                     <span className={`text-[11px] font-bold font-mono tabular-nums ${
                       isPositive ? 'text-emerald-400' : 'text-white/50'
                     }`}>
-                      {isPositive ? '+' : ''}{entry.amount.toFixed(2)}
+                      {isPositive ? '+' : ''}{Number(entry.amount).toFixed(2)}
                     </span>
                     <span className="text-[9px] text-white/20 font-mono w-6 text-right">
                       {formatTime(entry.created_at)}

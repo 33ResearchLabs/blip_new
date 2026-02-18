@@ -527,6 +527,16 @@ export default function MerchantDashboard() {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [bigOrders, setBigOrders] = useState<BigOrderRequest[]>(initialBigOrders);
   const [showBigOrderWidget, setShowBigOrderWidget] = useState(false);
+  // Responsive: 5-column on wide screens (16"+), 4-column on smaller
+  const [isWideScreen, setIsWideScreen] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia('(min-width: 1536px)');
+    setIsWideScreen(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setIsWideScreen(e.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
+
   // New dashboard panels
   const [showMessageHistory, setShowMessageHistory] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -3710,12 +3720,12 @@ export default function MerchantDashboard() {
       </div>
 
       {/* Main Layout: Content + Sidebar */}
-      {/* DESKTOP: 5-Column Non-Scrollable Layout */}
+      {/* DESKTOP: Responsive 4-col (13-14") or 5-col (16"+) Layout */}
       <div className="hidden md:flex md:flex-col h-screen overflow-hidden">
         {/* Main Resizable Grid */}
-        <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
+        <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden" key={isWideScreen ? 'wide' : 'narrow'}>
         {/* LEFT: Balance Widget + Create Order Widget */}
-        <Panel defaultSize="20%" minSize="14%" maxSize="30%" id="left">
+        <Panel defaultSize={isWideScreen ? "20%" : "24%"} minSize={isWideScreen ? "14%" : "16%"} maxSize={isWideScreen ? "30%" : "35%"} id="left">
         <div className="flex flex-col h-full bg-[#060606] overflow-y-auto p-2 gap-2">
           {/* Widget 1: Balance */}
           <div className="glass-card rounded-xl overflow-hidden flex-shrink-0 border border-white/[0.06]" style={{ height: '48%', minHeight: '260px' }}>
@@ -3752,74 +3762,118 @@ export default function MerchantDashboard() {
 
         <PanelResizeHandle className="w-[3px]" />
 
-        {/* CENTER-LEFT: Pending Orders (full height) */}
-        <Panel defaultSize="24%" minSize="16%" maxSize="35%" id="center-left">
+        {/* CENTER-LEFT: Pending Orders (+ Leaderboard on narrow screens) */}
+        <Panel defaultSize={isWideScreen ? "24%" : "27%"} minSize="16%" maxSize={isWideScreen ? "35%" : "40%"} id="center-left">
         <div className="flex flex-col h-full bg-black">
-          <PendingOrdersPanel
-            orders={pendingOrders}
-            mempoolOrders={mempoolOrders}
-            merchantInfo={merchantInfo}
-            onSelectOrder={setSelectedOrderPopup}
-            onSelectMempoolOrder={setSelectedMempoolOrder}
-            fetchOrders={fetchOrders}
-          />
+          {isWideScreen ? (
+            <PendingOrdersPanel
+              orders={pendingOrders}
+              mempoolOrders={mempoolOrders}
+              merchantInfo={merchantInfo}
+              onSelectOrder={setSelectedOrderPopup}
+              onSelectMempoolOrder={setSelectedMempoolOrder}
+              fetchOrders={fetchOrders}
+            />
+          ) : (
+            <>
+              <div style={{ height: '60%' }} className="flex flex-col border-b border-white/[0.04]">
+                <PendingOrdersPanel
+                  orders={pendingOrders}
+                  mempoolOrders={mempoolOrders}
+                  merchantInfo={merchantInfo}
+                  onSelectOrder={setSelectedOrderPopup}
+                  onSelectMempoolOrder={setSelectedMempoolOrder}
+                  fetchOrders={fetchOrders}
+                />
+              </div>
+              <div style={{ height: '40%' }} className="flex flex-col">
+                <LeaderboardPanel
+                  leaderboardData={leaderboardData}
+                  leaderboardTab={leaderboardTab}
+                  setLeaderboardTab={setLeaderboardTab}
+                />
+              </div>
+            </>
+          )}
         </div>
         </Panel>
 
         <PanelResizeHandle className="w-[3px]" />
 
-        {/* CENTER-RIGHT: In Progress + LP Assignments */}
-        <Panel defaultSize="20%" minSize="14%" maxSize="32%" id="center-right">
+        {/* CENTER-RIGHT: In Progress + LP (+ Activity on narrow screens) */}
+        <Panel defaultSize={isWideScreen ? "20%" : "27%"} minSize={isWideScreen ? "14%" : "18%"} maxSize={isWideScreen ? "32%" : "40%"} id="center-right">
         <div className="flex flex-col h-full bg-black">
-          <div style={{ height: '55%' }} className="flex flex-col border-b border-white/[0.04]">
+          <div style={{ height: isWideScreen ? '55%' : '40%' }} className="flex flex-col border-b border-white/[0.04]">
             <InProgressPanel
               orders={ongoingOrders}
               onSelectOrder={setSelectedOrderPopup}
             />
           </div>
           {/* LP Assignments — only visible for LPs with active fulfillments */}
-          <div style={{ height: '45%' }} className="flex flex-col overflow-y-auto p-2">
+          <div style={{ height: isWideScreen ? '45%' : '20%' }} className="flex flex-col border-b border-white/[0.04] overflow-y-auto p-2">
             <CorridorLPPanel merchantId={merchantId} />
           </div>
+          {!isWideScreen && (
+            <div style={{ height: '40%' }} className="flex flex-col">
+              <ActivityPanel
+                merchantId={merchantId}
+                completedOrders={completedOrders}
+                cancelledOrders={cancelledOrders}
+                onRateOrder={(order) => {
+                  const userName = order.user || 'User';
+                  const counterpartyType = order.isM2M ? 'merchant' : 'user';
+                  setRatingModalData({
+                    orderId: order.id,
+                    counterpartyName: userName,
+                    counterpartyType,
+                  });
+                }}
+                onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
+              />
+            </div>
+          )}
         </div>
         </Panel>
 
-        <PanelResizeHandle className="w-[3px]" />
-
-        {/* TRANSACTIONS & LEADERBOARD Column */}
-        <Panel defaultSize="18%" minSize="12%" maxSize="30%" id="transactions">
-        <div className="flex flex-col h-full bg-black">
-          <div style={{ height: '40%' }} className="flex flex-col border-b border-white/[0.04]">
-            <LeaderboardPanel
-              leaderboardData={leaderboardData}
-              leaderboardTab={leaderboardTab}
-              setLeaderboardTab={setLeaderboardTab}
-            />
-          </div>
-          <div style={{ height: '60%' }} className="flex flex-col">
-            <ActivityPanel
-              merchantId={merchantId}
-              completedOrders={completedOrders}
-              cancelledOrders={cancelledOrders}
-              onRateOrder={(order) => {
-                const userName = order.user || 'User';
-                const counterpartyType = order.isM2M ? 'merchant' : 'user';
-                setRatingModalData({
-                  orderId: order.id,
-                  counterpartyName: userName,
-                  counterpartyType,
-                });
-              }}
-              onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
-            />
-          </div>
-        </div>
-        </Panel>
+        {/* 5th COLUMN: Leaderboard + Activity (wide screens only) */}
+        {isWideScreen && (
+          <>
+            <PanelResizeHandle className="w-[3px]" />
+            <Panel defaultSize="18%" minSize="12%" maxSize="30%" id="transactions">
+            <div className="flex flex-col h-full bg-black">
+              <div style={{ height: '40%' }} className="flex flex-col border-b border-white/[0.04]">
+                <LeaderboardPanel
+                  leaderboardData={leaderboardData}
+                  leaderboardTab={leaderboardTab}
+                  setLeaderboardTab={setLeaderboardTab}
+                />
+              </div>
+              <div style={{ height: '60%' }} className="flex flex-col">
+                <ActivityPanel
+                  merchantId={merchantId}
+                  completedOrders={completedOrders}
+                  cancelledOrders={cancelledOrders}
+                  onRateOrder={(order) => {
+                    const userName = order.user || 'User';
+                    const counterpartyType = order.isM2M ? 'merchant' : 'user';
+                    setRatingModalData({
+                      orderId: order.id,
+                      counterpartyName: userName,
+                      counterpartyType,
+                    });
+                  }}
+                  onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
+                />
+              </div>
+            </div>
+            </Panel>
+          </>
+        )}
 
         <PanelResizeHandle className="w-[3px]" />
 
         {/* RIGHT SIDEBAR: Notifications (max 50%) + Chat (rest) */}
-        <Panel defaultSize="18%" minSize="12%" maxSize="30%" id="right">
+        <Panel defaultSize={isWideScreen ? "18%" : "22%"} minSize={isWideScreen ? "12%" : "15%"} maxSize={isWideScreen ? "30%" : "35%"} id="right">
         <div className="flex flex-col h-full bg-[#060606] overflow-hidden">
           {/* Notifications Panel - Top, max 50% of sidebar */}
           <div style={{ maxHeight: '50%' }} className="flex flex-col border-b border-white/[0.04] overflow-hidden shrink-0">
