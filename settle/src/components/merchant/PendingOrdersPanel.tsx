@@ -444,25 +444,25 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="panel-header">
+      <div className="px-3 py-2 border-b border-white/[0.04]">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1">
             <button
               onClick={() => setOrderViewFilter('new')}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${
+              className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
                 orderViewFilter === 'new'
-                  ? 'bg-white/[0.10] text-white border border-white/[0.14] shadow-sm'
-                  : 'text-white/35 hover:text-white/60 hover:bg-white/[0.04]'
+                  ? 'bg-white/[0.08] text-white border border-white/[0.12]'
+                  : 'text-white/30 hover:text-white/50'
               }`}
             >
               Pending
             </button>
             <button
               onClick={() => setOrderViewFilter('all')}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-all ${
+              className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
                 orderViewFilter === 'all'
-                  ? 'bg-white/[0.10] text-white border border-white/[0.14] shadow-sm'
-                  : 'text-white/35 hover:text-white/60 hover:bg-white/[0.04]'
+                  ? 'bg-white/[0.08] text-white border border-white/[0.12]'
+                  : 'text-white/30 hover:text-white/50'
               }`}
             >
               All
@@ -470,34 +470,34 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           </div>
 
           <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.02] rounded-md border border-white/[0.06]">
+            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.02] rounded border border-white/[0.06]">
               <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-live-dot" />
-              <span className="text-[9px] text-white/40 font-mono">Live</span>
+              <span className="text-[9px] text-white/35 font-mono">Live</span>
             </div>
             <button
               onClick={() => setSoundEnabled(!soundEnabled)}
-              className="p-1 hover:bg-white/[0.06] rounded-md transition-colors text-[10px] text-white/30"
+              className="p-1 hover:bg-white/[0.04] rounded transition-colors text-[10px] text-white/30"
               title={soundEnabled ? 'Mute' : 'Unmute'}
             >
               {soundEnabled ? '🔊' : '🔇'}
             </button>
             <button
               onClick={fetchOrders}
-              className="p-1 hover:bg-white/[0.06] rounded-md transition-colors"
+              className="p-1 hover:bg-white/[0.04] rounded transition-colors"
             >
               <RotateCcw className="w-3 h-3 text-white/25 hover:text-white/50" />
             </button>
             <button
               onClick={() => setShowOrderFilters(!showOrderFilters)}
-              className={`p-1 rounded-md transition-all ${
+              className={`p-1 rounded transition-all ${
                 showOrderFilters || Object.values(orderFilters).some((v) => v !== 'all')
-                  ? 'bg-white/[0.10] text-white/60'
-                  : 'hover:bg-white/[0.06] text-white/25'
+                  ? 'bg-white/[0.08] text-white/60'
+                  : 'hover:bg-white/[0.04] text-white/25'
               }`}
             >
               <SlidersHorizontal className="w-3 h-3" />
             </button>
-            <span className="text-[10px] bg-white/[0.04] border border-white/[0.10] text-white/50 px-2 py-0.5 rounded-full font-mono tabular-nums">
+            <span className="text-[10px] border border-white/[0.08] text-white/50 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
               {filteredOrders.length}
             </span>
           </div>

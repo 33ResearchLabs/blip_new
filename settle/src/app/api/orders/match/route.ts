@@ -79,9 +79,9 @@ export async function GET(request: NextRequest) {
       ? [oppositeType, paymentMethod, amount, excludeMerchantId]
       : [oppositeType, paymentMethod, amount];
 
-    const results = await query(sql, params);
+    const results = await query<any>(sql, params);
 
-    if (results.rows.length === 0) {
+    if (results.length === 0) {
       logger.warn('No matching orders found', {
         orderType,
         paymentMethod,
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Return best match (first result) or all matches
-    const bestMatch = results.rows[0];
+    const bestMatch = results[0];
 
     logger.info('Order match found', {
       orderId: bestMatch.id,
@@ -107,15 +107,15 @@ export async function GET(request: NextRequest) {
       merchantName: bestMatch.merchant_name,
       spreadPreference: bestMatch.spread_preference,
       priorityScore: bestMatch.match_priority_score,
-      totalMatches: results.rows.length
+      totalMatches: results.length
     });
 
     logger.api.request('GET', '/api/orders/match');
 
     return successResponse({
       bestMatch,
-      allMatches: results.rows,
-      totalMatches: results.rows.length
+      allMatches: results,
+      totalMatches: results.length
     });
   } catch (error) {
     logger.api.error('GET', '/api/orders/match', error as Error);
@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
     logger.api.request('POST', '/api/orders/match (stats)');
 
     return successResponse({
-      statistics: results.rows,
+      statistics: results,
       timestamp: new Date().toISOString()
     });
   } catch (error) {

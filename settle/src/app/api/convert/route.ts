@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const account = result[0];
+    const account = result[0] as any;
     return NextResponse.json({
       success: true,
       balances: {

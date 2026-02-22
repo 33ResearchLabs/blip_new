@@ -260,15 +260,15 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="panel-header">
+      <div className="px-3 py-2 border-b border-white/[0.04]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Shield className="w-3.5 h-3.5 panel-icon" />
-            <h2 className="text-[11px] font-bold text-white/50 font-mono tracking-wider uppercase">
+            <Shield className="w-3.5 h-3.5 text-white/30" />
+            <h2 className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">
               In Progress
             </h2>
           </div>
-          <span className="text-[10px] bg-white/[0.04] border border-white/[0.10] text-white/50 px-2 py-0.5 rounded-full font-mono tabular-nums">
+          <span className="text-[10px] border border-white/[0.08] text-white/50 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
             {orders.length}
           </span>
         </div>

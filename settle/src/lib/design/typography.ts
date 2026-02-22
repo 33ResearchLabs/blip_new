@@ -283,11 +283,14 @@ export const fluidTypography = {
  */
 export function typographyToStyle(style: keyof typeof typography): React.CSSProperties {
   const typo = typography[style];
-  return {
+  const result: React.CSSProperties = {
     fontSize: typo.fontSize,
     lineHeight: typo.lineHeight,
     letterSpacing: typo.letterSpacing,
     fontWeight: typo.fontWeight,
-    ...(typo.textTransform && { textTransform: typo.textTransform }),
-  } as React.CSSProperties;
+  };
+  if ('textTransform' in typo) {
+    result.textTransform = (typo as typeof typography.caption2).textTransform;
+  }
+  return result;
 }

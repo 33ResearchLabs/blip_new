@@ -207,8 +207,8 @@ export function useRealtimeOrders(
     try {
       const endpoint =
         actorType === 'merchant'
-          ? `/api/merchants/${actorId}/orders`
-          : `/api/users/${actorId}/orders`;
+          ? `/api/merchants/${actorId}/orders?merchant_id=${actorId}`
+          : `/api/users/${actorId}/orders?user_id=${actorId}`;
 
       const res = await fetch(endpoint);
 

@@ -226,12 +226,13 @@ export async function cleanupSentNotifications(): Promise<void> {
     const result = await query(
       `DELETE FROM notification_outbox
        WHERE status = 'sent'
-       AND sent_at < NOW() - INTERVAL '7 days'`,
+       AND sent_at < NOW() - INTERVAL '7 days'
+       RETURNING id`,
       []
     );
 
     logger.info('[Outbox] Cleaned up old sent notifications', {
-      deleted: result.rowCount || 0,
+      deleted: result.length,
     });
   } catch (error) {
     logger.error('[Outbox] Error cleaning up notifications', {

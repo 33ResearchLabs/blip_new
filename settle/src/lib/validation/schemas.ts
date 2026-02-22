@@ -181,6 +181,7 @@ export const updateOrderStatusSchema = z.object({
   reason: z.string().max(500).nullish(), // For cancellation
   acceptor_wallet_address: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'Invalid Solana wallet address').nullish(), // Merchant wallet for sell order acceptance
   acceptor_wallet_signature: z.string().nullish(), // Wallet signature for claim flow
+  refund_tx_hash: z.string().max(128).nullish(), // On-chain refund transaction hash
 });
 
 export const orderIdParamSchema = z.object({

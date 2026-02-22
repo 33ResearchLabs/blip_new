@@ -708,11 +708,12 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         })});
 
         // Invariant check — fire-and-forget (don't block response)
+        // result.updated.order_version is already post-increment, so use it directly
         verifyReleaseInvariants({
           orderId: id,
           expectedStatus: 'completed',
           expectedTxHash: tx_hash,
-          expectedMinOrderVersion: result.oldOrder.order_version + 1,
+          expectedMinOrderVersion: result.updated.order_version,
         }).catch((invariantError) => {
           logger.error('[CRITICAL] Release invariant FAILED', { orderId: id, error: invariantError });
         });

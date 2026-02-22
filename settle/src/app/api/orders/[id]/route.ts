@@ -131,7 +131,14 @@ export async function PATCH(
       return validationErrorResponse(errors);
     }
 
-    const { status, actor_type, actor_id, reason, acceptor_wallet_address } = parseResult.data;
+    const { status, actor_type, actor_id, reason, acceptor_wallet_address, refund_tx_hash } = parseResult.data;
+
+    // If refund_tx_hash provided, save it to DB regardless of mode
+    if (refund_tx_hash) {
+      const { query } = await import('@/lib/db');
+      await query(`UPDATE orders SET refund_tx_hash = $1 WHERE id = $2`, [refund_tx_hash, id]);
+      logger.info('[PATCH /orders] Saved refund_tx_hash', { orderId: id, refund_tx_hash });
+    }
 
     // Mock mode (or Core-API absent): handle cancellation locally with escrow refund
     const isMockMode = MOCK_MODE || !process.env.CORE_API_URL;
@@ -148,14 +155,14 @@ export async function PATCH(
         currentOrder.status,
         actor_type,
         actor_id,
-        reason,
+        reason ?? undefined,
         {
           type: currentOrder.type,
           crypto_amount: currentOrder.crypto_amount,
           merchant_id: currentOrder.merchant_id,
           user_id: currentOrder.user_id,
-          buyer_merchant_id: currentOrder.buyer_merchant_id,
-          order_number: currentOrder.order_number,
+          buyer_merchant_id: currentOrder.buyer_merchant_id ?? null,
+          order_number: Number(currentOrder.order_number),
           crypto_currency: currentOrder.crypto_currency,
           fiat_amount: currentOrder.fiat_amount,
           fiat_currency: currentOrder.fiat_currency,

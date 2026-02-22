@@ -24,6 +24,7 @@ interface MempoolOrder {
   expires_at: string;
   seconds_until_expiry: number;
   creator_username: string | null;
+  creator_merchant_id: string | null;
   auto_bump_enabled: boolean;
   created_at: string;
 }
@@ -117,7 +118,7 @@ export default function MempoolPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-[#c9a962] animate-spin" />
+        <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
       </div>
     );
   }
@@ -128,61 +129,84 @@ export default function MempoolPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black">
-      {/* Header */}
-      <div className="border-b border-white/[0.06] bg-[#0d0d0d]">
-        <div className="max-w-[1800px] mx-auto px-6 py-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push('/merchant')}
-              className="p-2 rounded-lg hover:bg-white/5 transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 text-white/60" />
-            </button>
-            <div className="flex items-center gap-3">
-              <Zap className="w-6 h-6 text-[#c9a962]" />
-              <div>
-                <h1 className="text-2xl font-bold text-white font-mono">
-                  AED MEMPOOL
-                </h1>
-                <p className="text-sm text-white/50 font-mono">
-                  USDT→AED Priority Fee Market
-                </p>
-              </div>
+    <div className="h-screen flex flex-col bg-[#060606] overflow-hidden">
+      {/* Navbar — matches main dashboard */}
+      <header className="sticky top-0 z-50 bg-black/60 backdrop-blur-2xl border-b border-white/[0.05]">
+        <div className="h-[50px] flex items-center px-4 gap-3">
+          {/* Left: Back + Logo */}
+          <button
+            onClick={() => router.push('/merchant')}
+            className="p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4 text-white/40" />
+          </button>
+          <div className="flex items-center gap-2">
+            <Zap className="w-5 h-5 text-white fill-white" />
+            <span className="text-[17px] leading-none whitespace-nowrap">
+              <span className="font-bold text-white">Blip</span>{' '}
+              <span className="italic text-white/90">money</span>
+            </span>
+          </div>
+
+          {/* Center: Page title pill */}
+          <div className="flex items-center gap-2 mx-auto">
+            <nav className="flex items-center gap-0.5 bg-white/[0.03] rounded-lg p-[3px]">
+              <span className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-white/[0.08] text-white flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-orange-400" />
+                Priority Mempool
+              </span>
+            </nav>
+            <div className="flex items-center gap-1 px-2 py-1 bg-white/[0.03] rounded-md">
+              <span className="text-[10px] font-mono text-white/40">USDT/AED</span>
             </div>
           </div>
+
+          {/* Right: Merchant info */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.02] rounded border border-white/[0.06]">
+              <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
+              <span className="text-[9px] text-white/35 font-mono">Live</span>
+            </div>
+            <span className="text-[12px] font-medium text-white/60">
+              {merchantInfo?.username || merchantInfo?.display_name || 'Merchant'}
+            </span>
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Main Content */}
-      <div className="max-w-[1800px] mx-auto px-6 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Market Data & Quote Control */}
-          <div className="space-y-6">
-            {/* Market Snapshot */}
+      {/* Main Content — full-height flex panels */}
+      <div className="flex-1 flex overflow-hidden p-2 gap-2">
+        {/* Left Column — stacked widgets */}
+        <div className="w-[320px] flex flex-col gap-2 shrink-0 overflow-y-auto">
+          {/* Market Snapshot Widget */}
+          <div className="glass-card rounded-xl overflow-hidden border border-white/[0.06] flex-shrink-0">
             <MarketSnapshot />
+          </div>
 
-            {/* Merchant Quote Control */}
+          {/* Merchant Quote Control Widget */}
+          <div className="glass-card rounded-xl overflow-hidden border border-white/[0.06] flex-shrink-0">
             <MerchantQuoteControl
               merchantId={merchantId}
               corridorId="USDT_AED"
             />
+          </div>
 
-            {/* Filters */}
+          {/* Filters Widget */}
+          <div className="glass-card rounded-xl overflow-hidden border border-white/[0.06] flex-shrink-0">
             <MempoolFilters
               filters={filters}
               onChange={setFilters}
               onReset={handleResetFilters}
             />
           </div>
+        </div>
 
-          {/* Right Column - Mempool Orders */}
-          <div className="lg:col-span-2 h-[calc(100vh-200px)]">
-            <MempoolWidget
-              onSelectOrder={handleOrderSelect}
-              selectedOrderId={selectedOrder?.id}
-            />
-          </div>
+        {/* Right — Mempool Orders (full-height panel) */}
+        <div className="flex-1 glass-card rounded-xl overflow-hidden border border-white/[0.06] flex flex-col">
+          <MempoolWidget
+            onSelectOrder={handleOrderSelect}
+            selectedOrderId={selectedOrder?.id}
+          />
         </div>
       </div>
 

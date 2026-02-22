@@ -189,7 +189,7 @@ export async function getMerchantOrders(
     JOIN users u ON o.user_id = u.id
     JOIN merchants m ON o.merchant_id = m.id
     JOIN merchant_offers mo ON o.offer_id = mo.id
-    WHERE o.merchant_id = $1
+    WHERE (o.merchant_id = $1 OR o.buyer_merchant_id = $1)
       AND o.status NOT IN ('expired', 'cancelled')
   `;
 

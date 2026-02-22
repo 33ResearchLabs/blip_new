@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Zap, Clock, TrendingUp, ArrowRight, Loader2 } from 'lucide-react';
+import { Zap, Clock, TrendingUp, ArrowRight, Loader2, RotateCcw } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface MempoolOrder {
@@ -13,11 +13,13 @@ interface MempoolOrder {
   ref_price_at_create: number;
   premium_bps_current: number;
   premium_bps_cap: number;
+  bump_step_bps: number;
   current_offer_price: number;
   max_offer_price: number;
   expires_at: string;
   seconds_until_expiry: number;
   creator_username: string | null;
+  creator_merchant_id: string | null;
   auto_bump_enabled: boolean;
   created_at: string;
 }
@@ -65,7 +67,7 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
   };
 
   const getPriorityColor = (premiumBps: number): string => {
-    if (premiumBps >= 200) return 'text-[#c9a962]'; // High priority - gold
+    if (premiumBps >= 200) return 'text-orange-500'; // High priority - gold
     if (premiumBps >= 100) return 'text-orange-400'; // Medium priority
     return 'text-white/60'; // Low priority
   };
@@ -78,11 +80,40 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
 
   return (
     <div className="flex flex-col h-full">
+      {/* Panel Header — matches main dashboard style */}
+      <div className="px-3 py-2 border-b border-white/[0.04]">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5 text-white/30" />
+            <h2 className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">
+              Mempool Orders
+            </h2>
+            {orders.length > 0 && (
+              <span className="text-[10px] border border-orange-500/30 text-orange-400 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
+                {orders.length}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.02] rounded border border-white/[0.06]">
+              <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
+              <span className="text-[9px] text-white/35 font-mono">Live</span>
+            </div>
+            <button
+              onClick={fetchOrders}
+              className="p-1 hover:bg-white/[0.04] rounded transition-colors"
+            >
+              <RotateCcw className="w-3 h-3 text-white/25 hover:text-white/50" />
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Orders List */}
       <div className="flex-1 overflow-y-auto p-2">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-6 h-6 text-[#c9a962] animate-spin" />
+            <Loader2 className="w-6 h-6 text-orange-500 animate-spin" />
           </div>
         ) : orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-white/40">
@@ -104,8 +135,8 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
                   onClick={() => onSelectOrder?.(order)}
                   className={`p-3 rounded-lg border transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-[#c9a962]/10 border-[#c9a962]/40'
-                      : 'bg-[#141414] border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.02]'
+                      ? 'bg-orange-500/10 border-orange-500/40'
+                      : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.02]'
                   }`}
                 >
                   {/* Top Row */}
@@ -117,7 +148,7 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
                       <span
                         className={`text-[8px] px-1.5 py-0.5 rounded font-mono font-bold ${
                           order.premium_bps_current >= 200
-                            ? 'bg-[#c9a962]/20 text-[#c9a962]'
+                            ? 'bg-orange-500/20 text-orange-500'
                             : order.premium_bps_current >= 100
                             ? 'bg-orange-500/20 text-orange-400'
                             : 'bg-white/10 text-white/50'
@@ -126,7 +157,7 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
                         {getPriorityBadge(order.premium_bps_current)}
                       </span>
                       {order.auto_bump_enabled && (
-                        <TrendingUp className="w-3 h-3 text-green-500" title="Auto-bump enabled" />
+                        <TrendingUp className="w-3 h-3 text-green-500" aria-label="Auto-bump enabled" />
                       )}
                     </div>
 

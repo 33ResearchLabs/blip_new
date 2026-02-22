@@ -50,9 +50,8 @@ export async function proxyCoreApi(
   }
 
   const url = `${baseUrl}${path}`;
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+  const headers: Record<string, string> = {};
+  if (options.body) headers['Content-Type'] = 'application/json';
 
   const coreApiSecret = process.env.CORE_API_SECRET;
   if (coreApiSecret) headers['x-core-api-secret'] = coreApiSecret;

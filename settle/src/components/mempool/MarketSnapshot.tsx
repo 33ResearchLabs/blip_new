@@ -48,28 +48,28 @@ export function MarketSnapshot() {
 
   if (isLoading) {
     return (
-      <div className="bg-[#0d0d0d] border border-white/[0.06] rounded-lg p-4 flex items-center justify-center">
-        <Loader2 className="w-5 h-5 text-[#c9a962] animate-spin" />
+      <div className="p-4 flex items-center justify-center">
+        <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
       </div>
     );
   }
 
   if (!corridor) {
     return (
-      <div className="bg-[#0d0d0d] border border-white/[0.06] rounded-lg p-4">
+      <div className="p-4">
         <p className="text-sm text-white/40 text-center">No market data available</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-[#0d0d0d] border border-white/[0.06] rounded-lg">
+    <div>
       {/* Header */}
-      <div className="px-4 py-2.5 border-b border-white/[0.06]">
+      <div className="px-3 py-2 border-b border-white/[0.04]">
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-[#c9a962]" />
-          <span className="text-xs font-bold text-white/90 font-mono tracking-wider">
-            MARKET SNAPSHOT
+          <Activity className="w-3.5 h-3.5 text-white/30" />
+          <span className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">
+            Market Snapshot
           </span>
           <span className="text-[10px] text-white/40 font-mono ml-auto">
             {corridor.corridor_id}
@@ -96,7 +96,7 @@ export function MarketSnapshot() {
               </div>
             )}
           </div>
-          <div className="text-2xl font-bold text-[#c9a962] font-mono">
+          <div className="text-2xl font-bold text-orange-500 font-mono">
             {Number(corridor.ref_price).toFixed(6)}
           </div>
           <div className="text-[10px] text-white/40 font-mono mt-0.5">
@@ -141,7 +141,7 @@ export function MarketSnapshot() {
       </div>
 
       {/* Footer */}
-      <div className="px-4 py-2 border-t border-white/[0.06] bg-white/[0.02]">
+      <div className="px-3 py-1.5 border-t border-white/[0.04]">
         <div className="text-[9px] text-white/30 font-mono text-center">
           Last updated: {new Date(corridor.updated_at).toLocaleTimeString()}
         </div>

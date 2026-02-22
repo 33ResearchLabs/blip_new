@@ -26,19 +26,19 @@ export function MempoolFilters({ filters, onChange, onReset }: MempoolFiltersPro
     filters.maxAmount;
 
   return (
-    <div className="bg-[#0d0d0d] border border-white/[0.06] rounded-lg">
+    <div>
       {/* Header */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+        className="w-full px-3 py-2 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
       >
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-[#c9a962]" />
-          <span className="text-xs font-bold text-white/90 font-mono tracking-wider">
-            FILTERS
+          <Filter className="w-3.5 h-3.5 text-white/30" />
+          <span className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">
+            Filters
           </span>
           {hasActiveFilters && (
-            <span className="text-[8px] px-1.5 py-0.5 bg-[#c9a962]/20 text-[#c9a962] rounded font-mono font-bold">
+            <span className="text-[8px] px-1.5 py-0.5 bg-orange-500/20 text-orange-500 rounded font-mono font-bold">
               ACTIVE
             </span>
           )}
@@ -62,7 +62,7 @@ export function MempoolFilters({ filters, onChange, onReset }: MempoolFiltersPro
 
       {/* Filters */}
       {isExpanded && (
-        <div className="px-4 pb-4 border-t border-white/[0.06] pt-4 space-y-3">
+        <div className="px-3 pb-3 border-t border-white/[0.04] pt-3 space-y-3">
           {/* Premium Range */}
           <div>
             <label className="block text-[10px] text-white/50 font-mono uppercase mb-2">
@@ -77,7 +77,7 @@ export function MempoolFilters({ filters, onChange, onReset }: MempoolFiltersPro
                   onChange({ ...filters, minPremiumBps: e.target.value })
                 }
                 className="px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                           text-white font-mono text-xs focus:outline-none focus:border-[#c9a962]/50
+                           text-white font-mono text-xs focus:outline-none focus:border-orange-500/50
                            placeholder:text-white/20"
               />
               <input
@@ -88,7 +88,7 @@ export function MempoolFilters({ filters, onChange, onReset }: MempoolFiltersPro
                   onChange({ ...filters, maxPremiumBps: e.target.value })
                 }
                 className="px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                           text-white font-mono text-xs focus:outline-none focus:border-[#c9a962]/50
+                           text-white font-mono text-xs focus:outline-none focus:border-orange-500/50
                            placeholder:text-white/20"
               />
             </div>
@@ -106,7 +106,7 @@ export function MempoolFilters({ filters, onChange, onReset }: MempoolFiltersPro
                 value={filters.minAmount}
                 onChange={(e) => onChange({ ...filters, minAmount: e.target.value })}
                 className="px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                           text-white font-mono text-xs focus:outline-none focus:border-[#c9a962]/50
+                           text-white font-mono text-xs focus:outline-none focus:border-orange-500/50
                            placeholder:text-white/20"
               />
               <input
@@ -115,7 +115,7 @@ export function MempoolFilters({ filters, onChange, onReset }: MempoolFiltersPro
                 value={filters.maxAmount}
                 onChange={(e) => onChange({ ...filters, maxAmount: e.target.value })}
                 className="px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                           text-white font-mono text-xs focus:outline-none focus:border-[#c9a962]/50
+                           text-white font-mono text-xs focus:outline-none focus:border-orange-500/50
                            placeholder:text-white/20"
               />
             </div>

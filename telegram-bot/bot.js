@@ -16,6 +16,7 @@ const axios = require('axios');
 const PusherClient = require('pusher-js');
 const fs = require('fs');
 const path = require('path');
+const solanaWallet = require('./solana-wallet');
 
 // Initialize
 const bot = new Telegraf(process.env.BOT_TOKEN);
@@ -149,6 +150,25 @@ async function loginMerchant(email, password) {
 }
 
 async function getMerchantBalance(merchantId) {
+  // Non-mock: use on-chain USDT balance
+  if (!MOCK_MODE) {
+    const pubkey = solanaWallet.getPublicKey(merchantId);
+    if (pubkey) {
+      try {
+        const usdtBalance = await solanaWallet.getUsdtBalance(pubkey);
+        return {
+          current_balance: usdtBalance,
+          total_credits: 0,
+          total_debits: 0,
+          total_transactions: 0,
+          source: 'on-chain',
+        };
+      } catch (e) {
+        console.error(`[Balance] On-chain balance failed for ${merchantId}:`, e.message);
+      }
+    }
+  }
+  // Fallback: API balance
   try {
     const res = await axios.get(`${API_BASE}/merchant/transactions`, {
       params: { merchant_id: merchantId, summary: true }
@@ -167,13 +187,14 @@ async function getMerchantBalance(merchantId) {
   }
 }
 
-async function createOrder(merchantId, type, amount, paymentMethod = 'bank') {
+async function createOrder(merchantId, type, amount, paymentMethod = 'bank', escrowFields = {}) {
   const res = await axios.post(`${API_BASE}/merchant/orders`, {
     merchant_id: merchantId,
     type,
     crypto_amount: amount,
     payment_method: paymentMethod,
     spread_preference: 'fastest',
+    ...escrowFields,
   });
 
   const order = res.data.data;
@@ -227,15 +248,56 @@ async function getOrderDetails(orderId) {
 }
 
 async function acceptOrder(orderId, merchantId) {
+  // If the order is already escrowed (pre-locked SELL), call acceptTrade on-chain first
+  if (!MOCK_MODE && solanaWallet.getKeypair(merchantId)) {
+    try {
+      const order = await getOrderDetails(orderId);
+      if (order.escrow_tx_hash && order.escrow_creator_wallet && order.escrow_trade_id) {
+        console.log(`[Accept] Order ${orderId} has escrow — calling acceptTrade on-chain`);
+        const result = await solanaWallet.acceptTradeOnChain(
+          merchantId,
+          order.escrow_creator_wallet,
+          Number(order.escrow_trade_id)
+        );
+        console.log(`[Accept] acceptTrade tx: ${result.txHash}`);
+      }
+    } catch (e) {
+      console.error(`[Accept] On-chain acceptTrade failed:`, e.message);
+      // Continue with backend accept even if on-chain fails (might already be accepted)
+    }
+  }
+
   const res = await axios.patch(`${API_BASE}/orders/${orderId}`, {
     status: 'accepted',
     actor_type: 'merchant',
     actor_id: merchantId,
+    acceptor_wallet_address: solanaWallet.getPublicKey(merchantId) || undefined,
   });
   return res.data.data;
 }
 
 async function lockEscrow(orderId, merchantId) {
+  // Get order details for amount
+  const order = await getOrderDetails(orderId);
+  const amount = parseFloat(order.crypto_amount);
+
+  // Non-mock: real on-chain escrow
+  if (!MOCK_MODE && solanaWallet.getKeypair(merchantId)) {
+    const result = await solanaWallet.fundEscrow(merchantId, amount);
+    // Record on-chain escrow in backend
+    const res = await axios.post(`${API_BASE}/orders/${orderId}/escrow`, {
+      tx_hash: result.txHash,
+      actor_type: 'merchant',
+      actor_id: merchantId,
+      escrow_trade_id: result.tradeId,
+      escrow_trade_pda: result.tradePda,
+      escrow_pda: result.escrowPda,
+      escrow_creator_wallet: result.creatorWallet,
+    });
+    return res.data.data;
+  }
+
+  // Mock mode fallback
   const txHash = `demo-tg-${Date.now()}`;
   const res = await axios.post(`${API_BASE}/orders/${orderId}/escrow`, {
     tx_hash: txHash,
@@ -246,6 +308,36 @@ async function lockEscrow(orderId, merchantId) {
 }
 
 async function releaseEscrow(orderId, merchantId) {
+  // Non-mock: real on-chain release
+  if (!MOCK_MODE && solanaWallet.getKeypair(merchantId)) {
+    const order = await getOrderDetails(orderId);
+    if (order.escrow_trade_id && order.escrow_creator_wallet) {
+      // Determine counterparty wallet (buyer)
+      const counterparty = order.buyer_wallet_address
+        || order.buyer_merchant?.wallet_address
+        || order.acceptor_wallet_address
+        || order.user?.wallet_address;
+
+      if (!counterparty) throw new Error('Cannot release: buyer wallet address not found on order.');
+
+      const result = await solanaWallet.releaseEscrowOnChain(
+        merchantId,
+        order.escrow_creator_wallet,
+        Number(order.escrow_trade_id),
+        counterparty
+      );
+
+      // Record release in backend
+      const res = await axios.patch(`${API_BASE}/orders/${orderId}/escrow`, {
+        tx_hash: result.txHash,
+        actor_type: 'merchant',
+        actor_id: merchantId,
+      });
+      return res.data.data;
+    }
+  }
+
+  // Mock mode fallback
   const txHash = `demo-tg-release-${Date.now()}`;
   const res = await axios.patch(`${API_BASE}/orders/${orderId}/escrow`, {
     tx_hash: txHash,
@@ -924,12 +1016,16 @@ function formatOrderDetails(order, merchantId) {
 // ============================================================================
 
 async function sendMainMenu(ctx, session) {
-  const text = `*Blip Money*\nWelcome, *${session.username}*!\n\nWhat would you like to do?`;
+  const walletStatus = solanaWallet.hasWallet(session.merchantId)
+    ? (solanaWallet.getKeypair(session.merchantId) ? 'Unlocked' : 'Locked')
+    : 'Not Set Up';
+  const text = `*Blip Money*\nWelcome, *${session.username}*!\nWallet: *${walletStatus}*\n\nWhat would you like to do?`;
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback('Balance', 'balance'),
-     Markup.button.callback('Active Orders', 'my_orders')],
-    [Markup.button.callback('Available Orders', 'available_orders'),
-     Markup.button.callback('Transactions', 'history')],
+     Markup.button.callback('Wallet', 'wallet_menu')],
+    [Markup.button.callback('Active Orders', 'my_orders'),
+     Markup.button.callback('Available Orders', 'available_orders')],
+    [Markup.button.callback('Transactions', 'history')],
     [Markup.button.callback('Buy USDC', 'buy_usdc'),
      Markup.button.callback('Sell USDC', 'sell_usdc')],
   ]);
@@ -981,6 +1077,142 @@ bot.action('main_menu', async (ctx) => {
   if (!session) return ctx.reply('Please /start first.');
   pendingActions.delete(ctx.from.id);
   await sendMainMenu(ctx, session);
+});
+
+// ============================================================================
+// ACTIONS: Wallet Management
+// ============================================================================
+
+bot.action('wallet_menu', async (ctx) => {
+  await ack(ctx);
+  const session = getSession(ctx.from.id);
+  if (!session) return;
+
+  const hasW = solanaWallet.hasWallet(session.merchantId);
+  const isUnlocked = !!solanaWallet.getKeypair(session.merchantId);
+  const pubkey = solanaWallet.getPublicKey(session.merchantId);
+
+  let text, buttons;
+  if (!hasW) {
+    text = `*Wallet Setup*\n\nNo wallet configured yet.\nCreate a new one or import an existing private key.`;
+    buttons = [
+      [Markup.button.callback('Create Wallet', 'wallet_create')],
+      [Markup.button.callback('Import Key', 'wallet_import')],
+      [Markup.button.callback('Back', 'main_menu')],
+    ];
+  } else if (!isUnlocked) {
+    text = `*Wallet (Locked)*\n\nAddress: \`${pubkey}\`\n\nUnlock your wallet to trade on-chain.`;
+    buttons = [
+      [Markup.button.callback('Unlock', 'wallet_unlock')],
+      [Markup.button.callback('Back', 'main_menu')],
+    ];
+  } else {
+    let balText = '';
+    try {
+      const usdt = await solanaWallet.getUsdtBalance(pubkey);
+      const sol = await solanaWallet.getSolBalance(pubkey);
+      balText = `\nUSDT: *${usdt.toFixed(2)}*\nSOL: *${sol.toFixed(4)}*`;
+    } catch { balText = '\n(Balance unavailable)'; }
+
+    text = `*Wallet (Unlocked)*\n\nAddress: \`${pubkey}\`${balText}`;
+    buttons = [
+      [Markup.button.callback('Refresh Balance', 'wallet_menu')],
+      [Markup.button.callback('Export Key', 'wallet_export'),
+       Markup.button.callback('Lock', 'wallet_lock')],
+      [Markup.button.callback('Back', 'main_menu')],
+    ];
+  }
+
+  await editOrReply(ctx, text, { parse_mode: 'Markdown', ...Markup.inlineKeyboard(buttons) });
+});
+
+bot.action('wallet_create', async (ctx) => {
+  await ack(ctx);
+  const session = getSession(ctx.from.id);
+  if (!session) return;
+
+  if (solanaWallet.hasWallet(session.merchantId)) {
+    return editOrReply(ctx, 'Wallet already exists. Use Import to replace it.', {
+      ...Markup.inlineKeyboard([[Markup.button.callback('Back', 'wallet_menu')]]),
+    });
+  }
+
+  pendingActions.set(ctx.from.id, { action: 'wallet_create_password', step: 1 });
+  await editOrReply(ctx, '*Create Wallet*\n\nEnter a password to encrypt your wallet.\nYou will need this password to unlock the wallet for trading.\n\n(Password will be deleted from chat for security)', {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard([[Markup.button.callback('Cancel', 'wallet_menu')]]),
+  });
+});
+
+bot.action('wallet_import', async (ctx) => {
+  await ack(ctx);
+  const session = getSession(ctx.from.id);
+  if (!session) return;
+
+  pendingActions.set(ctx.from.id, { action: 'wallet_import_key', step: 1 });
+  await editOrReply(ctx, '*Import Wallet*\n\nPaste your base58 private key.\n\n(Key will be deleted from chat for security)', {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard([[Markup.button.callback('Cancel', 'wallet_menu')]]),
+  });
+});
+
+bot.action('wallet_unlock', async (ctx) => {
+  await ack(ctx);
+  const session = getSession(ctx.from.id);
+  if (!session) return;
+
+  pendingActions.set(ctx.from.id, { action: 'wallet_unlock_password' });
+  await editOrReply(ctx, '*Unlock Wallet*\n\nEnter your wallet password:', {
+    parse_mode: 'Markdown',
+    ...Markup.inlineKeyboard([[Markup.button.callback('Cancel', 'wallet_menu')]]),
+  });
+});
+
+bot.action('wallet_lock', async (ctx) => {
+  await ack(ctx);
+  const session = getSession(ctx.from.id);
+  if (!session) return;
+
+  solanaWallet.lockWallet(session.merchantId);
+  await editOrReply(ctx, 'Wallet locked.', {
+    ...Markup.inlineKeyboard([[Markup.button.callback('Back', 'wallet_menu')]]),
+  });
+});
+
+bot.action('wallet_export', async (ctx) => {
+  await ack(ctx);
+  const session = getSession(ctx.from.id);
+  if (!session) return;
+
+  try {
+    const key = solanaWallet.exportPrivateKey(session.merchantId);
+    // Send as a self-destructing message (user should save it)
+    const msg = await ctx.reply(`*Your Private Key (SAVE THIS!)*\n\n\`${key}\`\n\nThis message will be deleted in 30 seconds.`, { parse_mode: 'Markdown' });
+    setTimeout(async () => {
+      try { await ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id); } catch {}
+    }, 30000);
+  } catch (e) {
+    await ctx.reply(`Error: ${e.message}`);
+  }
+});
+
+// Wallet slash command
+bot.command('wallet', async (ctx) => {
+  const session = getSession(ctx.from.id);
+  if (!session) return ctx.reply('Please /start first.');
+  // Trigger the wallet menu action
+  ctx.callbackQuery = { data: 'wallet_menu' };
+  await ctx.reply('Opening wallet...', {
+    ...Markup.inlineKeyboard([[Markup.button.callback('Wallet', 'wallet_menu')]]),
+  });
+});
+
+bot.command('unlock', async (ctx) => {
+  const session = getSession(ctx.from.id);
+  if (!session) return ctx.reply('Please /start first.');
+  if (!solanaWallet.hasWallet(session.merchantId)) return ctx.reply('No wallet. Use /wallet to create one.');
+  pendingActions.set(ctx.from.id, { action: 'wallet_unlock_password' });
+  await ctx.reply('Enter your wallet password:');
 });
 
 bot.action('balance', async (ctx) => {
@@ -1104,7 +1336,10 @@ bot.action('available_orders', async (ctx) => {
 
   try {
     let orders = await getAvailableOrders(session.merchantId);
-    orders = orders.filter(o => !o.is_my_order && o.status === 'pending');
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    orders = orders.filter(o => !o.is_my_order
+      && (o.status === 'pending' || (o.status === 'escrowed' && !o.buyer_merchant_id))
+      && new Date(o.created_at).getTime() > oneDayAgo);
 
     if (orders.length === 0) {
       return editOrReply(ctx,
@@ -1248,7 +1483,30 @@ bot.action(/^confirm_sell:(.+)$/, async (ctx) => {
   if (!session) return;
 
   try {
-    const order = await createOrder(session.merchantId, 'sell', amount);
+    // For SELL orders, seller must lock escrow BEFORE the order goes live.
+    // Require unlocked wallet in non-mock mode.
+    let escrowFields = {};
+    if (!MOCK_MODE) {
+      if (!solanaWallet.getKeypair(session.merchantId)) {
+        return editOrReply(ctx, 'Wallet must be unlocked to create sell orders.\nUse /unlock first.', {
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('Unlock Wallet', 'wallet_unlock')],
+            [Markup.button.callback('Menu', 'main_menu')]
+          ])
+        });
+      }
+      await editOrReply(ctx, '*Locking escrow on-chain...*', { parse_mode: 'Markdown' });
+      const result = await solanaWallet.fundEscrow(session.merchantId, amount);
+      escrowFields = {
+        escrow_tx_hash: result.txHash,
+        escrow_trade_id: result.tradeId,
+        escrow_trade_pda: result.tradePda,
+        escrow_pda: result.escrowPda,
+        escrow_creator_wallet: result.creatorWallet,
+      };
+    }
+
+    const order = await createOrder(session.merchantId, 'sell', amount, 'bank', escrowFields);
     subscribeToOrderChat(ctx.from.id, session.merchantId, order.id);
     const text =
       `*Sell Order Created!*\n\n` +
@@ -1257,7 +1515,7 @@ bot.action(/^confirm_sell:(.+)$/, async (ctx) => {
       `Rate: ${order.rate} AED/USDC\n` +
       `Total: ${order.fiat_amount} AED\n` +
       `Status: *${order.status}*\n\n` +
-      `Waiting for a buyer to accept...`;
+      (escrowFields.escrow_tx_hash ? 'Escrow locked. Waiting for a buyer...' : 'Waiting for a buyer to accept...');
 
     await editOrReply(ctx, text, {
       parse_mode: 'Markdown',
@@ -1289,6 +1547,25 @@ bot.action(/^order_actions:(.+)$/, async (ctx) => {
 
   try {
     const order = await getOrderDetails(orderId);
+
+    // Auto-fix: if I'm the buyer and order has escrow but I never called acceptTrade on-chain
+    if (!MOCK_MODE && solanaWallet.getKeypair(session.merchantId)
+        && order.buyer_merchant_id === session.merchantId
+        && order.escrow_tx_hash && order.escrow_creator_wallet && order.escrow_trade_id
+        && !['completed', 'cancelled', 'expired'].includes(order.status)) {
+      try {
+        await solanaWallet.acceptTradeOnChain(
+          session.merchantId,
+          order.escrow_creator_wallet,
+          Number(order.escrow_trade_id)
+        );
+        console.log(`[OrderView] Auto-called acceptTrade for order ${orderId}`);
+      } catch (e) {
+        // Already accepted or other error — ignore
+        console.log(`[OrderView] acceptTrade skipped: ${e.message}`);
+      }
+    }
+
     const text = formatOrderDetails(order, session.merchantId);
     const keyboard = getActionButtons(order, session.merchantId);
     await editOrReply(ctx, text, { parse_mode: 'Markdown', ...keyboard });
@@ -1523,7 +1800,15 @@ bot.action(/^release_escrow:(.+)$/, async (ctx) => {
   try {
     await releaseEscrow(orderId, session.merchantId);
   } catch (err) {
-    const errMsg = err.response?.data?.error || err.message;
+    const errMsg = err.response?.data?.error || err.message || '';
+    // Detect counterparty not set on-chain
+    if (errMsg.includes('ConstraintRaw') || errMsg.includes('counterparty_ata')) {
+      await editOrReply(ctx, `*Cannot release yet*\n\nThe buyer hasn't joined the escrow on-chain.\nThe buyer needs to unlock their wallet and view this order first.`, {
+        parse_mode: 'Markdown',
+        ...Markup.inlineKeyboard([[Markup.button.callback('Retry', `release_escrow:${orderId}`), Markup.button.callback('Back', `order_actions:${orderId}`)]])
+      });
+      return;
+    }
     await editOrReply(ctx, `Failed to release escrow: ${errMsg}`, {
       ...Markup.inlineKeyboard([[Markup.button.callback('Retry', `release_escrow:${orderId}`), Markup.button.callback('Back', `order_actions:${orderId}`)]])
     });
@@ -1935,7 +2220,10 @@ bot.command('available', async (ctx) => {
 
   try {
     let orders = await getAvailableOrders(session.merchantId);
-    orders = orders.filter(o => !o.is_my_order && o.status === 'pending');
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    orders = orders.filter(o => !o.is_my_order
+      && (o.status === 'pending' || (o.status === 'escrowed' && !o.buyer_merchant_id))
+      && new Date(o.created_at).getTime() > oneDayAgo);
 
     if (orders.length === 0) return ctx.reply('No available orders to accept right now.', Markup.inlineKeyboard([
       [Markup.button.callback('Refresh', 'available_orders'), Markup.button.callback('Menu', 'main_menu')]
@@ -2086,6 +2374,147 @@ async function handlePendingAction(ctx, session, pending) {
         Markup.inlineKeyboard([
           [Markup.button.callback('Try Again', `chat:${pending.orderId}`)],
           [Markup.button.callback('Back', `order_actions:${pending.orderId}`)]
+        ])
+      );
+    }
+  }
+
+  // Wallet: create password
+  if (pending.action === 'wallet_create_password') {
+    try { await ctx.deleteMessage(); } catch {} // Delete password from chat
+    pendingActions.delete(telegramId);
+
+    try {
+      const { publicKey } = solanaWallet.generateWallet(session.merchantId, text);
+
+      // Update wallet address in backend
+      try {
+        await axios.patch(`${API_BASE}/auth/merchant`, {
+          merchant_id: session.merchantId,
+          wallet_address: publicKey,
+        });
+      } catch (e) {
+        console.error('[Wallet] Failed to update wallet address in backend:', e.message);
+      }
+
+      // Update session
+      session.walletAddress = publicKey;
+      saveSessions();
+
+      return ctx.reply(
+        `*Wallet Created!*\n\n` +
+        `Address: \`${publicKey}\`\n\n` +
+        `Your wallet is encrypted and unlocked.\n` +
+        `Fund it with SOL (for fees) and USDT to start trading.\n\n` +
+        `Use /wallet to manage your wallet.`,
+        { parse_mode: 'Markdown',
+          ...Markup.inlineKeyboard([
+            [Markup.button.callback('Wallet', 'wallet_menu')],
+            [Markup.button.callback('Menu', 'main_menu')],
+          ])
+        }
+      );
+    } catch (e) {
+      return ctx.reply(`Failed to create wallet: ${e.message}`);
+    }
+  }
+
+  // Wallet: import key
+  if (pending.action === 'wallet_import_key') {
+    try { await ctx.deleteMessage(); } catch {} // Delete key from chat
+
+    if (pending.step === 1) {
+      // Validate it looks like a base58 key
+      if (!/^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(text)) {
+        return ctx.reply('Invalid private key format. Should be a base58-encoded Solana secret key.', {
+          ...Markup.inlineKeyboard([[Markup.button.callback('Cancel', 'wallet_menu')]]),
+        });
+      }
+      pending.data = { privateKey: text };
+      pending.step = 2;
+      return ctx.reply('Now enter a password to encrypt this key:');
+    }
+
+    if (pending.step === 2) {
+      pendingActions.delete(telegramId);
+      try {
+        const { publicKey } = solanaWallet.importWallet(session.merchantId, pending.data.privateKey, text);
+
+        try {
+          await axios.patch(`${API_BASE}/auth/merchant`, {
+            merchant_id: session.merchantId,
+            wallet_address: publicKey,
+          });
+        } catch (e) {
+          console.error('[Wallet] Failed to update wallet address in backend:', e.message);
+        }
+
+        session.walletAddress = publicKey;
+        saveSessions();
+
+        return ctx.reply(
+          `*Wallet Imported!*\n\nAddress: \`${publicKey}\`\nWallet is unlocked and ready.`,
+          { parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([
+              [Markup.button.callback('Wallet', 'wallet_menu')],
+              [Markup.button.callback('Menu', 'main_menu')],
+            ])
+          }
+        );
+      } catch (e) {
+        return ctx.reply(`Import failed: ${e.message}`);
+      }
+    }
+  }
+
+  // Wallet: unlock password
+  if (pending.action === 'wallet_unlock_password') {
+    try { await ctx.deleteMessage(); } catch {} // Delete password from chat
+    pendingActions.delete(telegramId);
+
+    try {
+      solanaWallet.unlockWallet(session.merchantId, text);
+
+      // Auto-fix: call acceptTrade for any active orders where I'm the buyer
+      if (!MOCK_MODE) {
+        (async () => {
+          try {
+            const orders = await getOrders(session.merchantId);
+            for (const o of orders) {
+              if (o.buyer_merchant_id === session.merchantId
+                  && o.escrow_tx_hash && o.escrow_creator_wallet && o.escrow_trade_id
+                  && !['completed', 'cancelled', 'expired'].includes(o.status)) {
+                try {
+                  await solanaWallet.acceptTradeOnChain(
+                    session.merchantId,
+                    o.escrow_creator_wallet,
+                    Number(o.escrow_trade_id)
+                  );
+                  console.log(`[Unlock] Auto-accepted trade for order ${o.order_number}`);
+                } catch (e2) {
+                  console.log(`[Unlock] acceptTrade skipped for ${o.order_number}: ${e2.message}`);
+                }
+              }
+            }
+          } catch (e2) {
+            console.error('[Unlock] Auto-accept scan failed:', e2.message);
+          }
+        })();
+      }
+
+      return ctx.reply(
+        'Wallet unlocked! You can now trade on-chain.',
+        Markup.inlineKeyboard([
+          [Markup.button.callback('Wallet', 'wallet_menu')],
+          [Markup.button.callback('Menu', 'main_menu')],
+        ])
+      );
+    } catch (e) {
+      return ctx.reply(
+        `${e.message}`,
+        Markup.inlineKeyboard([
+          [Markup.button.callback('Try Again', 'wallet_unlock')],
+          [Markup.button.callback('Menu', 'main_menu')],
         ])
       );
     }

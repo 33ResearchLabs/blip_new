@@ -32,8 +32,8 @@ export async function POST(request: NextRequest) {
     console.log(`[Init Balances] Updated ${merchantsResult?.length || 0} merchants`);
 
     // Get summary
-    const userStats = await query('SELECT COUNT(*) as count, SUM(balance) as total FROM users');
-    const merchantStats = await query('SELECT COUNT(*) as count, SUM(balance) as total FROM merchants');
+    const userStats = await query<{ count: string; total: string }>('SELECT COUNT(*) as count, SUM(balance) as total FROM users');
+    const merchantStats = await query<{ count: string; total: string }>('SELECT COUNT(*) as count, SUM(balance) as total FROM merchants');
 
     const summary = {
       usersUpdated: usersResult?.length || 0,

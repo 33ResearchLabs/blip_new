@@ -155,6 +155,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // Self-accept guard: cannot accept your own order
+      const { queryOne } = await import('@/lib/db');
+      const orderRow = await queryOne<{ creator_merchant_id: string | null }>(
+        'SELECT creator_merchant_id FROM orders WHERE id = $1',
+        [order_id]
+      );
+      if (orderRow?.creator_merchant_id === merchant_id) {
+        return validationErrorResponse(['You cannot accept your own order']);
+      }
+
       const result = await acceptOrder(order_id, merchant_id);
 
       if (!result.success) {

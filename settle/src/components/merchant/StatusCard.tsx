@@ -227,8 +227,9 @@ export const StatusCard = memo(function StatusCard({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Live ticker strip */}
-      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-white/[0.06] text-[9px] font-mono relative overflow-hidden" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 100%)' }}>
+      {/* Live ticker strip — taller with more info */}
+      <div className="flex items-center justify-between px-3 py-2.5 bg-white/[0.02] border-b border-white/[0.04] text-[9px] font-mono relative overflow-hidden">
+        <div className="absolute inset-0 shimmer pointer-events-none" />
         <div className="flex items-center gap-4 relative z-10">
           <div className="flex items-center gap-1.5">
             <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-live-dot" />
@@ -236,22 +237,22 @@ export const StatusCard = memo(function StatusCard({
           </div>
           <div className="flex items-center gap-3">
             {reputationTier && (
-              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-orange-500/[0.06] border border-orange-500/10">
+              <span className="flex items-center gap-0.5">
                 <Shield className="w-2.5 h-2.5 text-orange-400/60" />
                 <span className="text-orange-400/70 font-bold uppercase">{reputationTier.name}</span>
               </span>
             )}
-            <span className="text-white/30">RNK <span className="text-white/70 font-bold">{rank > 0 ? `#${rank}` : '—'}</span></span>
-            <span className="text-white/30">WIN <span className="text-white/70 font-bold">{winRate > 0 ? `${winRate.toFixed(0)}%` : '—'}</span></span>
-            <span className="text-white/30">FILL <span className="text-white/70 font-bold">{corridor?.avg_fill_time_sec ? `${corridor.avg_fill_time_sec}s` : '—'}</span></span>
+            <span className="text-white/25">RNK <span className="text-white/70 font-bold">{rank > 0 ? `#${rank}` : '—'}</span></span>
+            <span className="text-white/25">WIN <span className="text-white/70 font-bold">{winRate > 0 ? `${winRate.toFixed(0)}%` : '—'}</span></span>
+            <span className="text-white/25">FILL <span className="text-white/70 font-bold">{corridor?.avg_fill_time_sec ? `${corridor.avg_fill_time_sec}s` : '—'}</span></span>
           </div>
         </div>
         {/* Active toggle */}
         <button
           onClick={onToggleOnline}
-          className={`relative z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold tracking-wide transition-all border ${
+          className={`relative z-10 flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold tracking-wide transition-all border ${
             isOnline
-              ? 'bg-orange-500/10 border-orange-500/30 text-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.15)]'
+              ? 'bg-orange-500/10 border-orange-500/30 text-orange-400'
               : 'bg-white/[0.03] border-white/[0.08] text-white/30'
           }`}
         >
@@ -261,16 +262,16 @@ export const StatusCard = memo(function StatusCard({
       </div>
 
       {/* Main balance hero */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 relative">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-3 relative">
         {/* Ambient glow behind amount */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-56 h-28 bg-orange-500/[0.04] rounded-full blur-[80px]" />
+          <div className="w-48 h-24 bg-orange-500/[0.03] rounded-full blur-[60px]" />
         </div>
 
         {/* USDT Label */}
-        <div className="flex items-center gap-1.5 mb-2 relative z-10">
-          <Wallet className="w-3.5 h-3.5 text-white/25" />
-          <span className="text-[10px] text-white/35 font-mono uppercase tracking-widest">Available Balance</span>
+        <div className="flex items-center gap-1.5 mb-1 relative z-10">
+          <Wallet className="w-3 h-3 text-white/20" />
+          <span className="text-[10px] text-white/30 font-mono uppercase tracking-widest">Available Balance</span>
         </div>
 
         {/* Big USDT Amount */}
@@ -278,16 +279,16 @@ export const StatusCard = memo(function StatusCard({
           <div className="text-4xl font-black text-white font-mono tabular-nums tracking-tight leading-none">
             {balance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </div>
-          <div className="text-[11px] text-white/25 font-mono mt-1.5 tabular-nums">
+          <div className="text-[11px] text-white/20 font-mono mt-1 tabular-nums">
             ≈ {aedEquivalent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} AED
           </div>
         </div>
 
         {/* 24h Earnings badge */}
         {todayEarnings !== 0 && (
-          <div className="mt-3 flex items-center gap-1.5 px-3 py-1 bg-orange-500/[0.06] border border-orange-500/15 rounded-full relative z-10 shadow-[0_0_12px_rgba(249,115,22,0.08)]">
-            <TrendingUp className="w-3 h-3 text-orange-400" />
-            <span className="text-[11px] font-bold text-orange-400 font-mono tabular-nums">
+          <div className="mt-2.5 flex items-center gap-1 px-2 py-0.5 bg-orange-500/[0.06] border border-orange-500/15 rounded-full relative z-10">
+            <TrendingUp className="w-2.5 h-2.5 text-orange-400" />
+            <span className="text-[10px] font-bold text-orange-400 font-mono tabular-nums">
               {todayEarnings > 0 ? '+' : ''}{todayEarnings.toFixed(2)} USDT
             </span>
             <span className="text-[9px] text-orange-400/50 font-mono">24h</span>
@@ -296,17 +297,16 @@ export const StatusCard = memo(function StatusCard({
 
         {/* Locked escrow indicator */}
         {lockedInEscrow > 0 && (
-          <div className="mt-2 text-[9px] text-white/20 font-mono relative z-10 flex items-center gap-1">
-            <Shield className="w-2.5 h-2.5 text-white/15" />
+          <div className="mt-1.5 text-[9px] text-white/15 font-mono relative z-10">
             {lockedInEscrow.toFixed(0)} locked in escrow
           </div>
         )}
       </div>
 
       {/* Bottom section — secondary balances + rate */}
-      <div className="px-3 pb-3 space-y-2">
+      <div className="px-3 pb-2.5 space-y-1.5">
         {/* sAED + INR row */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-1.5">
           {/* sAED */}
           {merchantId && (
             <div className="glass-card rounded-lg p-2">
@@ -467,11 +467,11 @@ export const StatusCard = memo(function StatusCard({
         </button>
 
         {/* Quick stats row */}
-        <div className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-white/[0.02] border border-white/[0.04] text-[9px] font-mono text-white/25">
-          <span className="flex items-center gap-1"><span className="w-1 h-1 rounded-full bg-emerald-500/40" />{completedOrders} done</span>
-          <span className="text-white/8">|</span>
-          <span className="flex items-center gap-1"><span className="w-1 h-1 rounded-full bg-red-500/40" />{cancelledOrders} cancelled</span>
-          <span className="text-white/8">|</span>
+        <div className="flex items-center justify-between px-1 text-[9px] font-mono text-white/20">
+          <span>{completedOrders} done</span>
+          <span className="text-white/10">·</span>
+          <span>{cancelledOrders} cancelled</span>
+          <span className="text-white/10">·</span>
           <span>{totalTrades} total</span>
         </div>
       </div>

@@ -61,31 +61,55 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      // Single stored procedure: deduct offer + insert order (1 round-trip instead of 2)
-      const result = await queryOne<{ create_order_v1: any }>(
-        'SELECT create_order_v1($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)',
-        [
-          data.user_id, data.merchant_id, data.offer_id, data.type, data.payment_method,
-          data.crypto_amount, data.fiat_amount, data.rate,
-          data.payment_details ? JSON.stringify(data.payment_details) : null,
-          data.buyer_wallet_address || null, data.buyer_merchant_id || null,
-          data.spread_preference || null,
-          data.protocol_fee_percentage !== undefined ? data.protocol_fee_percentage : null,
-          data.protocol_fee_amount !== undefined ? data.protocol_fee_amount : null,
-          data.escrow_tx_hash || null,
-          data.escrow_trade_id !== undefined ? data.escrow_trade_id : null,
-          data.escrow_trade_pda || null, data.escrow_pda || null,
-          data.escrow_creator_wallet || null,
-        ]
-      );
-      const procResult = result!.create_order_v1;
-      if (!procResult.success) {
-        if (procResult.error === 'INSUFFICIENT_LIQUIDITY') {
-          return reply.status(409).send({ success: false, error: 'Insufficient offer liquidity' });
+      // Two separate queries (NOT in a TX) to minimize offer row lock duration.
+      // Stored proc held the lock across INSERT which caused contention with 20 merchants.
+      const fields = [
+        'user_id', 'merchant_id', 'offer_id', 'type', 'payment_method',
+        'crypto_amount', 'fiat_amount', 'crypto_currency', 'fiat_currency', 'rate',
+        'payment_details', 'status', 'expires_at',
+      ];
+      const values: unknown[] = [
+        data.user_id, data.merchant_id, data.offer_id, data.type, data.payment_method,
+        data.crypto_amount, data.fiat_amount, 'USDC', 'AED', data.rate,
+        data.payment_details ? JSON.stringify(data.payment_details) : null,
+        data.escrow_tx_hash ? 'escrowed' : 'pending',
+        new Date(Date.now() + 15 * 60 * 1000),
+      ];
+      const optionals: [string, unknown][] = [
+        ['buyer_wallet_address', data.buyer_wallet_address],
+        ['buyer_merchant_id', data.buyer_merchant_id],
+        ['spread_preference', data.spread_preference],
+        ['protocol_fee_percentage', data.protocol_fee_percentage],
+        ['protocol_fee_amount', data.protocol_fee_amount],
+        ['escrow_tx_hash', data.escrow_tx_hash],
+        ['escrow_trade_id', data.escrow_trade_id],
+        ['escrow_trade_pda', data.escrow_trade_pda],
+        ['escrow_pda', data.escrow_pda],
+        ['escrow_creator_wallet', data.escrow_creator_wallet],
+      ];
+      for (const [field, value] of optionals) {
+        if (value !== undefined && value !== null) {
+          fields.push(field);
+          values.push(value);
         }
-        return reply.status(400).send({ success: false, error: procResult.error });
       }
-      const order = procResult.order as OrderRow;
+      if (data.escrow_tx_hash) {
+        fields.push('escrowed_at');
+        values.push(new Date());
+      }
+
+      // Deduct liquidity first (short row lock, auto-commit)
+      const deducted = await dbQuery<{ id: string }>(
+        'UPDATE merchant_offers SET available_amount = available_amount - $1 WHERE id = $2 AND available_amount >= $1 RETURNING id',
+        [data.crypto_amount, data.offer_id]
+      );
+      if (deducted.length === 0) {
+        return reply.status(409).send({ success: false, error: 'Insufficient offer liquidity' });
+      }
+
+      const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
+      const rows = await dbQuery(`INSERT INTO orders (${fields.join(', ')}) VALUES (${placeholders}) RETURNING *`, values);
+      const order = rows[0] as OrderRow;
 
       // Batched notification (zero round-trips, flushed every 50ms)
       bufferNotification({ order_id: order.id, event_type: 'ORDER_CREATED', payload: JSON.stringify({
