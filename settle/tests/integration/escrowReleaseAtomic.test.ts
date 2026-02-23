@@ -429,13 +429,13 @@ describe('Regression: Outbox Retry Reliability', () => {
     );
 
     // Verify outbox record is now sent
-    outboxRecord = await query<{ status: string; sent_at: Date | null }>(
+    const sentRecord = await query<{ status: string; sent_at: Date | null }>(
       'SELECT status, sent_at FROM notification_outbox WHERE id = $1',
       [outboxId]
     );
 
-    expect(outboxRecord[0].status).toBe('sent');
-    expect(outboxRecord[0].sent_at).toBeTruthy();
+    expect(sentRecord[0].status).toBe('sent');
+    expect(sentRecord[0].sent_at).toBeTruthy();
 
     // Verify order state remained stable throughout
     const order = await query<Order>(

@@ -3,6 +3,7 @@
  */
 
 import { OrderStatus, ActorType } from '../../../src/lib/types/database';
+import { ApiClient } from './http';
 
 export interface TestData {
   users: TestUser[];
@@ -86,4 +87,4 @@ export interface ExpectedTransition {
 }
 
 // Re-export ApiClient type
-export type { ApiClient } from './http';
+export { ApiClient } from './http';

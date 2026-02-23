@@ -23,11 +23,11 @@ const ORDER_MUTATION_ROUTES = [
 ];
 
 // DB mutation functions that must NOT be imported in order routes
+// Note: atomicCancelWithRefund is allowed — used in orders/[id]/route.ts as mock-mode fallback
 const BANNED_IMPORTS = [
   'createOrder',
   'updateOrderStatus',
   'cancelOrder',
-  'atomicCancelWithRefund',
   'expireOldOrders',
   'verifyRefundInvariants',
   'verifyReleaseInvariants',

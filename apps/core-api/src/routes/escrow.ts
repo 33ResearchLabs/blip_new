@@ -97,6 +97,7 @@ export const escrowRoutes: FastifyPluginAsync = async (fastify) => {
         order_version: updatedOrder!.order_version,
         userId,
         merchantId,
+        buyerMerchantId: updatedOrder.buyer_merchant_id ?? undefined,
         previousStatus: oldStatus,
       });
 

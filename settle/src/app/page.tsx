@@ -39,9 +39,13 @@ import { useSounds } from "@/hooks/useSounds";
 import { NotificationToastContainer, useToast, ConnectionIndicator } from "@/components/NotificationToast";
 import dynamic from "next/dynamic";
 
+const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
+
 // Dynamically import wallet components (client-side only)
 const WalletConnectModal = dynamic(() => import("@/components/WalletConnectModal"), { ssr: false });
 const UsernameModal = dynamic(() => import("@/components/UsernameModal"), { ssr: false });
+const UnlockWalletPrompt = dynamic(() => import("@/components/wallet/UnlockWalletPrompt").then(mod => ({ default: mod.UnlockWalletPrompt })), { ssr: false });
+const EmbeddedWalletSetup = dynamic(() => import("@/components/wallet/EmbeddedWalletSetup").then(mod => ({ default: mod.EmbeddedWalletSetup })), { ssr: false });
 const useSolanaWalletHook = () => {
   // This will be replaced with actual hook on client side
   try {
@@ -374,6 +378,17 @@ export default function Home() {
   const lastAuthenticatedWalletRef = useRef<string | null>(null); // Track which wallet we already authenticated
   const authAttemptedForWalletRef = useRef<string | null>(null); // Track wallet we've already tried (success or failure)
   const solanaWallet = useSolanaWalletHook();
+
+  // Embedded wallet UI state
+  const embeddedWallet = (solanaWallet as any)?.embeddedWallet as {
+    state: 'none' | 'locked' | 'unlocked';
+    unlockWallet: (password: string) => Promise<boolean>;
+    lockWallet: () => void;
+    deleteWallet: () => void;
+    setKeypairAndUnlock: (kp: any) => void;
+  } | undefined;
+  const [showWalletSetup, setShowWalletSetup] = useState(false);
+  const [showWalletUnlock, setShowWalletUnlock] = useState(false);
 
   // Escrow transaction state
   const [escrowTxStatus, setEscrowTxStatus] = useState<'idle' | 'connecting' | 'signing' | 'confirming' | 'recording' | 'success' | 'error'>('idle');
@@ -2209,11 +2224,22 @@ export default function Home() {
                   )}
                 </button>
                 <button
-                  onClick={() => setShowWalletModal(true)}
+                  onClick={() => {
+                    if (IS_EMBEDDED_WALLET) {
+                      if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
+                      else if (embeddedWallet?.state === 'none') setShowWalletSetup(true);
+                      // If unlocked, could show wallet details — for now just refresh
+                      else solanaWallet.refreshBalances?.();
+                    } else {
+                      setShowWalletModal(true);
+                    }
+                  }}
                   className={`h-10 rounded-full flex items-center justify-center gap-2 px-3 transition-all ${
                     solanaWallet.connected
                       ? 'bg-[#26A17B]/10 border border-[#26A17B]/30'
-                      : 'bg-white/10 border border-white/10 hover:bg-white/20'
+                      : IS_EMBEDDED_WALLET && embeddedWallet?.state === 'locked'
+                        ? 'bg-orange-500/10 border border-orange-500/30'
+                        : 'bg-white/10 border border-white/10 hover:bg-white/20'
                   }`}
                 >
                   {solanaWallet.connected ? (
@@ -2225,10 +2251,15 @@ export default function Home() {
                           : '...'}
                       </span>
                     </>
+                  ) : IS_EMBEDDED_WALLET && embeddedWallet?.state === 'locked' ? (
+                    <>
+                      <Lock className="w-4 h-4 text-orange-400" />
+                      <span className="text-[12px] font-semibold text-orange-400">Unlock</span>
+                    </>
                   ) : (
                     <>
                       <Wallet className="w-4 h-4 text-white" />
-                      <span className="text-[12px] font-semibold text-white">Connect</span>
+                      <span className="text-[12px] font-semibold text-white">{IS_EMBEDDED_WALLET ? 'Setup' : 'Connect'}</span>
                     </>
                   )}
                 </button>
@@ -2236,7 +2267,7 @@ export default function Home() {
             </div>
 
             <div className="px-5 py-4">
-              {/* Wallet Connection Prompt - show if user logged in but no wallet */}
+              {/* Wallet Prompt - Embedded: setup/unlock; External: connect */}
               {userId && !solanaWallet.connected && !solanaWallet.walletAddress && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
@@ -2245,18 +2276,37 @@ export default function Home() {
                 >
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
-                      <Wallet className="w-5 h-5 text-white/70" />
+                      {IS_EMBEDDED_WALLET && embeddedWallet?.state === 'locked'
+                        ? <Lock className="w-5 h-5 text-orange-400" />
+                        : <Wallet className="w-5 h-5 text-white/70" />}
                     </div>
                     <div className="flex-1">
-                      <p className="text-[15px] font-medium text-white mb-1">Connect Your Wallet</p>
+                      <p className="text-[15px] font-medium text-white mb-1">
+                        {IS_EMBEDDED_WALLET
+                          ? embeddedWallet?.state === 'locked' ? 'Unlock Your Wallet' : 'Set Up Your Wallet'
+                          : 'Connect Your Wallet'}
+                      </p>
                       <p className="text-[13px] text-neutral-400 mb-3">
-                        Link your Solana wallet to enable on-chain escrow and secure trading
+                        {IS_EMBEDDED_WALLET
+                          ? embeddedWallet?.state === 'locked'
+                            ? 'Enter your password to unlock your in-app wallet'
+                            : 'Create or import a Solana wallet to start trading'
+                          : 'Link your Solana wallet to enable on-chain escrow and secure trading'}
                       </p>
                       <button
-                        onClick={() => setShowWalletModal(true)}
+                        onClick={() => {
+                          if (IS_EMBEDDED_WALLET) {
+                            if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
+                            else setShowWalletSetup(true);
+                          } else {
+                            setShowWalletModal(true);
+                          }
+                        }}
                         className="px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-white text-[13px] font-semibold hover:bg-white/20 transition-all"
                       >
-                        Connect Wallet
+                        {IS_EMBEDDED_WALLET
+                          ? embeddedWallet?.state === 'locked' ? 'Unlock Wallet' : 'Create Wallet'
+                          : 'Connect Wallet'}
                       </button>
                     </div>
                   </div>
@@ -5286,12 +5336,41 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      {/* Solana Wallet Connect Modal */}
-      <WalletConnectModal
-        isOpen={showWalletModal}
-        onClose={() => setShowWalletModal(false)}
-        onConnected={handleSolanaWalletConnect}
-      />
+      {/* Solana Wallet Connect Modal (external wallets only) */}
+      {!IS_EMBEDDED_WALLET && (
+        <WalletConnectModal
+          isOpen={showWalletModal}
+          onClose={() => setShowWalletModal(false)}
+          onConnected={handleSolanaWalletConnect}
+        />
+      )}
+
+      {/* Embedded Wallet: Unlock Prompt */}
+      {IS_EMBEDDED_WALLET && showWalletUnlock && embeddedWallet && (
+        <UnlockWalletPrompt
+          onUnlock={async (password) => {
+            const ok = await embeddedWallet.unlockWallet(password);
+            if (ok) setShowWalletUnlock(false);
+            return ok;
+          }}
+          onClose={() => setShowWalletUnlock(false)}
+        />
+      )}
+
+      {/* Embedded Wallet: Setup (Create / Import) */}
+      {IS_EMBEDDED_WALLET && showWalletSetup && embeddedWallet && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0d0d0d] rounded-2xl w-full max-w-sm border border-white/[0.08] shadow-2xl overflow-hidden">
+            <EmbeddedWalletSetup
+              onWalletCreated={(kp) => {
+                embeddedWallet.setKeypairAndUnlock(kp);
+                setShowWalletSetup(false);
+              }}
+              onClose={() => setShowWalletSetup(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Username Modal for New Wallet Users */}
       {solanaWallet.walletAddress && (

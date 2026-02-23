@@ -362,7 +362,14 @@ const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Order => 
 
   // USE minimal_status if available (authoritative), otherwise normalize legacy status first
   const minimalStatus = dbOrder.minimal_status || normalizeLegacyStatus(dbOrder.status);
-  const uiStatus = mapMinimalStatusToUIStatus(minimalStatus as any, dbOrder.is_my_order);
+  let uiStatus = mapMinimalStatusToUIStatus(minimalStatus as any, dbOrder.is_my_order);
+
+  // Pre-locked SELL order (escrowed but no buyer yet) should show as "pending"
+  // for observers so they can accept it. Only the creator sees it in "escrow" panel.
+  if (uiStatus === 'escrow' && (minimalStatus === 'escrowed' || dbOrder.status === 'escrowed')
+      && !dbOrder.accepted_at && !dbOrder.is_my_order) {
+    uiStatus = 'pending';
+  }
 
   return {
     id: dbOrder.id,
@@ -1765,13 +1772,17 @@ export default function MerchantDashboard() {
     }
   }, [solanaWallet, merchantId, addNotification, debouncedFetchOrders]);
 
-  // On-load scan: auto-refund any already-expired orders with unreturned escrow
-  const didAutoRefundScanRef = useRef(false);
+  // Continuous scan: auto-refund any expired/cancelled orders with unreturned on-chain escrow
+  // Runs on every order list refresh (not just once) to catch newly cancelled orders
+  const lastRefundScanRef = useRef<number>(0);
   useEffect(() => {
-    if (didAutoRefundScanRef.current || !solanaWallet.connected || !solanaWallet.walletAddress || isMockMode) return;
+    if (!solanaWallet.connected || !solanaWallet.walletAddress || isMockMode) return;
     if (orders.length === 0) return;
+    // Throttle: max once per 30s
+    const now = Date.now();
+    if (now - lastRefundScanRef.current < 30000) return;
+    lastRefundScanRef.current = now;
 
-    didAutoRefundScanRef.current = true;
     const stuckEscrows = orders.filter(o =>
       (o.status === 'expired' || o.status === 'cancelled') &&
       o.escrowTxHash &&
@@ -1781,12 +1792,52 @@ export default function MerchantDashboard() {
     );
 
     if (stuckEscrows.length > 0) {
-      console.log(`[AutoRefund] Found ${stuckEscrows.length} stuck escrow(s) on load, refunding...`);
+      console.log(`[AutoRefund] Found ${stuckEscrows.length} stuck escrow(s), refunding...`);
       for (const order of stuckEscrows) {
         autoRefundEscrow(order);
       }
     }
   }, [orders, solanaWallet.connected, solanaWallet.walletAddress, isMockMode, autoRefundEscrow]);
+
+  // Recovery: retry recording any unrecorded on-chain escrows from localStorage
+  const didRecoveryScanRef = useRef(false);
+  useEffect(() => {
+    if (didRecoveryScanRef.current || !merchantId || isMockMode) return;
+    didRecoveryScanRef.current = true;
+
+    try {
+      const keys = Object.keys(localStorage).filter(k => k.startsWith('blip_unrecorded_escrow_'));
+      for (const key of keys) {
+        const data = JSON.parse(localStorage.getItem(key) || '{}');
+        if (!data.orderId || !data.txHash) { localStorage.removeItem(key); continue; }
+        // Skip if older than 24h
+        if (Date.now() - (data.timestamp || 0) > 86400000) { localStorage.removeItem(key); continue; }
+
+        console.log(`[EscrowRecovery] Retrying escrow recording for order ${data.orderId}`);
+        const payload: Record<string, unknown> = {
+          tx_hash: data.txHash,
+          actor_type: 'merchant',
+          actor_id: merchantId,
+        };
+        if (data.escrowPda) payload.escrow_address = data.escrowPda;
+        if (data.tradeId != null) payload.escrow_trade_id = data.tradeId;
+        if (data.tradePda) payload.escrow_trade_pda = data.tradePda;
+        if (data.escrowPda) payload.escrow_pda = data.escrowPda;
+        if (data.creatorWallet) payload.escrow_creator_wallet = data.creatorWallet;
+
+        fetch(`/api/orders/${data.orderId}/escrow`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).then(res => {
+          if (res.ok) {
+            console.log(`[EscrowRecovery] Successfully recorded escrow for ${data.orderId}`);
+            localStorage.removeItem(key);
+          }
+        }).catch(() => {});
+      }
+    } catch {}
+  }, [merchantId, isMockMode]);
 
   // Handle expired orders: separate effect, batched API calls, runs max once per 5s
   const lastExpiryRunRef = useRef<number>(0);
@@ -2442,11 +2493,27 @@ export default function MerchantDashboard() {
           setEscrowTxHash(null);
           setEscrowError(null);
 
+          // Clear any recovery data since recording succeeded
+          try { localStorage.removeItem(`blip_unrecorded_escrow_${escrowOrder.id}`); } catch {}
+
           // AfterMutationReconcile: refetch all + balance
           await afterMutationReconcile(escrowOrder.id);
         } else {
           console.error('[Merchant] Failed to record escrow on backend after retries');
           addNotification('system', 'Escrow locked on-chain but server sync failed. It will sync automatically.', escrowOrder.id);
+
+          // Save escrow data to localStorage for recovery on next page load
+          try {
+            localStorage.setItem(`blip_unrecorded_escrow_${escrowOrder.id}`, JSON.stringify({
+              orderId: escrowOrder.id,
+              txHash: escrowResult.txHash,
+              tradeId: escrowResult.tradeId,
+              tradePda: escrowResult.tradePda,
+              escrowPda: escrowResult.escrowPda,
+              creatorWallet: solanaWallet.walletAddress,
+              timestamp: Date.now(),
+            }));
+          } catch {}
         }
 
         refreshBalance();
@@ -3861,6 +3928,8 @@ export default function MerchantDashboard() {
                 merchantId={merchantId}
                 completedOrders={completedOrders}
                 cancelledOrders={cancelledOrders}
+                ongoingOrders={ongoingOrders}
+                pendingOrders={pendingOrders}
                 onRateOrder={(order) => {
                   const userName = order.user || 'User';
                   const counterpartyType = order.isM2M ? 'merchant' : 'user';
@@ -3896,6 +3965,8 @@ export default function MerchantDashboard() {
                   merchantId={merchantId}
                   completedOrders={completedOrders}
                   cancelledOrders={cancelledOrders}
+                  ongoingOrders={ongoingOrders}
+                  pendingOrders={pendingOrders}
                   onRateOrder={(order) => {
                     const userName = order.user || 'User';
                     const counterpartyType = order.isM2M ? 'merchant' : 'user';
@@ -6660,9 +6731,9 @@ export default function MerchantDashboard() {
                   ) : null;
                 })()}
 
-                {/* For escrowed sell orders not yet approved - show Go button */}
-                {/* DB status 'escrowed' means user locked escrow but merchant hasn't clicked Go yet */}
-                {selectedOrderPopup.dbOrder?.status === 'escrowed' && selectedOrderPopup.orderType === 'sell' && !selectedOrderPopup.isMyOrder && (
+                {/* For escrowed orders not yet accepted - show Go button */}
+                {/* Covers: user SELL orders (type='sell') AND merchant pre-locked SELL orders (type='buy' due to inversion) */}
+                {selectedOrderPopup.dbOrder?.status === 'escrowed' && !selectedOrderPopup.dbOrder?.accepted_at && !selectedOrderPopup.isMyOrder && (
                   <motion.button
                     whileTap={{ scale: 0.98 }}
                     onClick={async () => {

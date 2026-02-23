@@ -183,7 +183,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           }
           broadcastOrderEvent({
             event_type: 'ORDER_CANCELLED', order_id: id, status: 'cancelled', minimal_status: 'cancelled',
-            order_version: cancelResult.order!.order_version, userId: order.user_id, merchantId: order.merchant_id, previousStatus: order.status,
+            order_version: cancelResult.order!.order_version, userId: order.user_id, merchantId: order.merchant_id, buyerMerchantId: order.buyer_merchant_id ?? undefined, previousStatus: order.status,
           });
           return reply.send({ success: true, data: { ...cancelResult.order, minimal_status: normalizeStatus(cancelResult.order!.status) } });
         }
@@ -211,7 +211,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         broadcastOrderEvent({
           event_type: `ORDER_${newStatus.toUpperCase()}`, order_id: id, status: order.status,
           minimal_status: normalizeStatus(order.status as OrderStatus), order_version: order.order_version,
-          userId: order.user_id, merchantId: order.merchant_id, previousStatus: oldStatus,
+          userId: order.user_id, merchantId: order.merchant_id, buyerMerchantId: order.buyer_merchant_id ?? undefined, previousStatus: oldStatus,
         });
         return reply.send({ success: true, data: { ...order, minimal_status: normalizeStatus(order.status as OrderStatus) } });
       }
@@ -236,7 +236,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         broadcastOrderEvent({
           event_type: 'ORDER_PAYMENT_SENT', order_id: id, status: 'payment_sent',
           minimal_status: 'payment_sent', order_version: updated.order_version,
-          userId: updated.user_id, merchantId: updated.merchant_id, previousStatus: 'escrowed',
+          userId: updated.user_id, merchantId: updated.merchant_id, buyerMerchantId: updated.buyer_merchant_id ?? undefined, previousStatus: 'escrowed',
         });
         return reply.send({ success: true, data: { ...updated, minimal_status: normalizeStatus(updated.status) } });
       }
@@ -476,6 +476,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         order_version: result.order!.order_version,
         userId: result.order!.user_id,
         merchantId: result.order!.merchant_id,
+        buyerMerchantId: result.order!.buyer_merchant_id ?? undefined,
         previousStatus: txOldStatus,
       });
 
@@ -562,6 +563,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           order_version: result.order!.order_version,
           userId: order.user_id,
           merchantId: order.merchant_id,
+          buyerMerchantId: order.buyer_merchant_id ?? undefined,
           previousStatus: order.status,
         });
 
@@ -645,6 +647,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           order_version: result.order!.order_version,
           userId: result.order!.user_id,
           merchantId: result.order!.merchant_id,
+          buyerMerchantId: result.order!.buyer_merchant_id ?? undefined,
           previousStatus: order.status,
         });
 
@@ -726,6 +729,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           order_version: result.updated.order_version,
           userId: result.oldOrder.user_id,
           merchantId: result.oldOrder.merchant_id,
+          buyerMerchantId: result.oldOrder.buyer_merchant_id ?? undefined,
           previousStatus: result.oldOrder.status,
         });
 
@@ -781,6 +785,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           order_version: refundResult.order!.order_version,
           userId: order.user_id,
           merchantId: order.merchant_id,
+          buyerMerchantId: order.buyer_merchant_id ?? undefined,
           previousStatus: order.status,
         });
 

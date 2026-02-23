@@ -16,7 +16,7 @@ config({ path: '../../settle/.env' });
 
 // Telegram Bot API configuration
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
-const TELEGRAM_API_URL = `https://api.telegram.com/bot${TELEGRAM_BOT_TOKEN}`;
+const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 
 interface OutboxRecord {
   id: string;
