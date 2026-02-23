@@ -66,15 +66,17 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
       const fields = [
         'user_id', 'merchant_id', 'offer_id', 'type', 'payment_method',
         'crypto_amount', 'fiat_amount', 'crypto_currency', 'fiat_currency', 'rate',
-        'payment_details', 'status', 'expires_at',
+        'payment_details', 'status',
       ];
       const values: unknown[] = [
         data.user_id, data.merchant_id, data.offer_id, data.type, data.payment_method,
         data.crypto_amount, data.fiat_amount, 'USDC', 'AED', data.rate,
         data.payment_details ? JSON.stringify(data.payment_details) : null,
         data.escrow_tx_hash ? 'escrowed' : 'pending',
-        new Date(Date.now() + 15 * 60 * 1000),
       ];
+      // expires_at uses raw SQL to avoid JS Date / Postgres timezone mismatch
+      // (created_at is `timestamp without time zone` using DB-local now())
+      const expiresAtRaw = "now() + interval '15 minutes'";
       const optionals: [string, unknown][] = [
         ['buyer_wallet_address', data.buyer_wallet_address],
         ['buyer_merchant_id', data.buyer_merchant_id],
@@ -108,7 +110,9 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
-      const rows = await dbQuery(`INSERT INTO orders (${fields.join(', ')}) VALUES (${placeholders}) RETURNING *`, values);
+      const allFields = [...fields, 'expires_at'];
+      const allPlaceholders = [placeholders, expiresAtRaw].join(', ');
+      const rows = await dbQuery(`INSERT INTO orders (${allFields.join(', ')}) VALUES (${allPlaceholders}) RETURNING *`, values);
       const order = rows[0] as OrderRow;
 
       // Batched notification (zero round-trips, flushed every 50ms)
@@ -159,19 +163,19 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
 
       try {
         // Same creation logic - settle has already resolved the offer, created placeholder user, etc.
-        const defaultExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+        // expires_at uses raw SQL to avoid JS Date / Postgres timezone mismatch
+        const expiresAtRaw = "now() + interval '15 minutes'";
 
         const fields = [
           'user_id', 'merchant_id', 'offer_id', 'type', 'payment_method',
           'crypto_amount', 'fiat_amount', 'crypto_currency', 'fiat_currency', 'rate',
-          'payment_details', 'status', 'expires_at',
+          'payment_details', 'status',
         ];
         const values: unknown[] = [
           data.user_id, data.merchant_id, data.offer_id, data.type, data.payment_method,
           data.crypto_amount, data.fiat_amount, 'USDC', 'AED', data.rate,
           data.payment_details ? JSON.stringify(data.payment_details) : null,
           data.escrow_tx_hash ? 'escrowed' : 'pending',
-          defaultExpiresAt,
         ];
 
         // Optional fields
@@ -201,7 +205,9 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
-        const sql = `INSERT INTO orders (${fields.join(', ')}) VALUES (${placeholders}) RETURNING *`;
+        const allFields = [...fields, 'expires_at'];
+        const allPlaceholders = [placeholders, expiresAtRaw].join(', ');
+        const sql = `INSERT INTO orders (${allFields.join(', ')}) VALUES (${allPlaceholders}) RETURNING *`;
 
         const rows = await dbQuery(sql, values);
         const order = rows[0] as OrderRow;
