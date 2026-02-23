@@ -71,6 +71,7 @@ import { PendingOrdersPanel } from "@/components/merchant/PendingOrdersPanel";
 import { LeaderboardPanel } from "@/components/merchant/LeaderboardPanel";
 import { InProgressPanel } from "@/components/merchant/InProgressPanel";
 import { ActivityPanel } from "@/components/merchant/ActivityPanel";
+import { CompletedOrdersPanel } from "@/components/merchant/CompletedOrdersPanel";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useMerchantStore } from "@/stores/merchantStore";
@@ -1940,11 +1941,17 @@ export default function MerchantDashboard() {
           }
 
           addNotification('system', 'Successfully joined escrow on-chain!', order.id);
-        } catch (acceptError) {
-          console.error('[Go] Error accepting trade on-chain:', acceptError);
-          addNotification('system', `Failed to join escrow: ${acceptError instanceof Error ? acceptError.message : 'Unknown error'}`, order.id);
-          playSound('error');
-          return;
+        } catch (acceptError: any) {
+          const errMsg = acceptError?.message || acceptError?.toString() || '';
+          // CannotAccept / 0x177d = trade already accepted (e.g. auto-fix ran first) — continue
+          if (errMsg.includes('CannotAccept') || errMsg.includes('0x177d') || errMsg.includes('6013')) {
+            console.log('[Go] Trade already accepted on-chain, continuing to backend accept');
+          } else {
+            console.error('[Go] Error accepting trade on-chain:', acceptError);
+            addNotification('system', `Failed to join escrow: ${errMsg}`, order.id);
+            playSound('error');
+            return;
+          }
         }
       } else if (isMockMode && isEscrowedByOther) {
       }
@@ -3909,18 +3916,20 @@ export default function MerchantDashboard() {
 
         <PanelResizeHandle className="w-[3px]" />
 
-        {/* CENTER-RIGHT: In Progress + LP (+ Activity on narrow screens) */}
+        {/* CENTER-RIGHT: In Progress + Completed (+ Activity on narrow screens) */}
         <Panel defaultSize={isWideScreen ? "20%" : "27%"} minSize={isWideScreen ? "14%" : "18%"} maxSize={isWideScreen ? "32%" : "40%"} id="center-right">
         <div className="flex flex-col h-full bg-black">
-          <div style={{ height: isWideScreen ? '55%' : '40%' }} className="flex flex-col border-b border-white/[0.04]">
+          <div style={{ height: '50%' }} className="flex flex-col border-b border-white/[0.04]">
             <InProgressPanel
               orders={ongoingOrders}
               onSelectOrder={setSelectedOrderPopup}
             />
           </div>
-          {/* LP Assignments — only visible for LPs with active fulfillments */}
-          <div style={{ height: isWideScreen ? '45%' : '20%' }} className="flex flex-col border-b border-white/[0.04] overflow-y-auto p-2">
-            <CorridorLPPanel merchantId={merchantId} />
+          <div style={{ height: '50%' }} className="flex flex-col border-b border-white/[0.04]">
+            <CompletedOrdersPanel
+              orders={completedOrders}
+              onSelectOrder={setSelectedOrderPopup}
+            />
           </div>
           {!isWideScreen && (
             <div className="flex-1 flex flex-col min-h-0">
