@@ -305,34 +305,8 @@ export const StatusCard = memo(function StatusCard({
 
       {/* Bottom section — secondary balances + rate */}
       <div className="px-3 pb-2.5 space-y-1.5">
-        {/* sAED + INR row */}
-        <div className="grid grid-cols-2 gap-1.5">
-          {/* sAED */}
-          {merchantId && (
-            <div className="glass-card rounded-lg p-2">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[9px] text-white/25 font-mono">sAED</span>
-                <div className="flex gap-0.5">
-                  <button
-                    onClick={() => { setConversionDirection('usdt_to_saed'); setShowConversionModal(true); setConversionError(null); }}
-                    className="px-1 py-0.5 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-orange-500/20 text-[8px] text-orange-400 font-bold transition-all"
-                  >
-                    BUY
-                  </button>
-                  <button
-                    onClick={() => { setConversionDirection('saed_to_usdt'); setShowConversionModal(true); setConversionError(null); }}
-                    className="px-1 py-0.5 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-orange-500/20 text-[8px] text-orange-400 font-bold transition-all"
-                  >
-                    SELL
-                  </button>
-                </div>
-              </div>
-              <span className="text-sm font-bold text-white/80 font-mono tabular-nums">
-                {(saedBalance / 100).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-              </span>
-            </div>
-          )}
-
+        {/* INR row */}
+        <div className="grid grid-cols-1 gap-1.5">
           {/* INR */}
           <div className="glass-card rounded-lg p-2">
             <div className="flex items-center justify-between mb-1">
@@ -476,88 +450,7 @@ export const StatusCard = memo(function StatusCard({
         </div>
       </div>
 
-      {/* Conversion Modal */}
-      {showConversionModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowConversionModal(false)}>
-          <div className="glass-card rounded-xl p-5 w-full max-w-md mx-4 bg-[#0c0c0c]/95 border border-white/[0.08]" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-bold text-white">
-                {conversionDirection === 'usdt_to_saed' ? 'Buy sAED with USDT' : 'Sell sAED for USDT'}
-              </h3>
-              <button
-                onClick={() => { setShowConversionModal(false); setConversionAmount(''); setConversionError(null); }}
-                className="p-1 rounded hover:bg-white/[0.04] transition-colors"
-              >
-                <X className="w-4 h-4 text-white/30" />
-              </button>
-            </div>
-
-            <div className="mb-4">
-              <label className="block text-xs text-white/35 mb-1.5 font-mono">
-                Amount {conversionDirection === 'usdt_to_saed' ? '(USDT)' : '(AED)'}
-              </label>
-              <input
-                type="number"
-                value={conversionAmount}
-                onChange={(e) => setConversionAmount(e.target.value)}
-                placeholder="0.00"
-                step={conversionDirection === 'usdt_to_saed' ? '0.000001' : '0.01'}
-                className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2.5 text-white font-mono text-lg outline-none focus:border-white/20 transition-colors"
-                autoFocus
-              />
-              {conversionDirection === 'usdt_to_saed' && (
-                <div className="mt-1 text-[10px] text-white/25 font-mono">Available: ${balance.toFixed(6)} USDT</div>
-              )}
-              {conversionDirection === 'saed_to_usdt' && (
-                <div className="mt-1 text-[10px] text-white/25 font-mono">Available: {(saedBalance / 100).toFixed(2)} AED</div>
-              )}
-            </div>
-
-            {conversionAmount && parseFloat(conversionAmount) > 0 && (
-              <div className="mb-4 py-2.5 px-3 bg-white/[0.02] border border-white/[0.06] rounded-lg">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-white/35">You will receive</span>
-                  <span className="text-base font-bold text-orange-400 font-mono tabular-nums">
-                    {conversionDirection === 'usdt_to_saed'
-                      ? `${(parseFloat(conversionAmount) * refPrice).toFixed(2)} AED`
-                      : `${(parseFloat(conversionAmount) / refPrice).toFixed(6)} USDT`}
-                  </span>
-                </div>
-                <div className="mt-0.5 text-[10px] text-white/20 font-mono">
-                  Rate: 1 USDT = {refPrice.toFixed(4)} AED
-                </div>
-              </div>
-            )}
-
-            {conversionError && (
-              <div className="mb-4 flex items-center gap-1.5 py-2 px-3 bg-white/[0.03] border border-white/[0.06] rounded-lg">
-                <AlertCircle className="w-3.5 h-3.5 text-white/40" />
-                <span className="text-xs text-white/50">{conversionError}</span>
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setShowConversionModal(false); setConversionAmount(''); setConversionError(null); }}
-                className="flex-1 py-2.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-white/60 text-sm font-medium transition-all border border-white/[0.06]"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConvert}
-                disabled={isConverting || !conversionAmount || parseFloat(conversionAmount) <= 0}
-                className="flex-1 py-2.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-black text-sm font-bold transition-all disabled:opacity-25 disabled:cursor-not-allowed flex items-center justify-center gap-2 border border-orange-500"
-              >
-                {isConverting ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Converting...</>
-                ) : (
-                  'Convert'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* sAED conversion modal removed — not in this version */}
     </div>
   );
 });

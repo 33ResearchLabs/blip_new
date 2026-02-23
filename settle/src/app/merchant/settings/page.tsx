@@ -888,7 +888,7 @@ export default function MerchantSettingsPage() {
             <div className="space-y-6">
               <div>
                 <h2 className="text-lg font-bold mb-1">Liquidity Provider</h2>
-                <p className="text-sm text-white/40">Earn fees by bridging sAED to AED for other traders</p>
+                <p className="text-sm text-white/40">Earn fees by providing liquidity for other traders</p>
               </div>
 
               <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5">

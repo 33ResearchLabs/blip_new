@@ -6771,18 +6771,7 @@ export default function MerchantDashboard() {
                       <Zap className="w-4 h-4" />
                       Go
                     </motion.button>
-                    {/* Accept with sAED corridor bridge */}
-                    <motion.button
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => {
-                        acceptWithSaed(selectedOrderPopup);
-                        setSelectedOrderPopup(null);
-                      }}
-                      className="w-full py-2.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 hover:border-blue-500/30 text-blue-400 text-sm font-medium flex items-center justify-center gap-2 transition-all"
-                    >
-                      <Droplets className="w-3.5 h-3.5" />
-                      Pay with sAED
-                    </motion.button>
+                    {/* sAED corridor button removed — not in this version */}
                   </div>
                 )}
 
