@@ -1977,9 +1977,16 @@ export default function MerchantDashboard() {
         body: JSON.stringify(requestBody),
       });
       if (!acceptRes.ok) {
-        const errorData = await acceptRes.json().catch(() => ({}));
-        console.error("Failed to accept order:", acceptRes.status, errorData);
-        addNotification('system', `Failed to accept order: ${errorData.error || `HTTP ${acceptRes.status}`}`, order.id);
+        const errorText = await acceptRes.text().catch(() => '');
+        let errorMsg = `HTTP ${acceptRes.status}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMsg = errorData.error || JSON.stringify(errorData);
+        } catch {
+          errorMsg = errorText || errorMsg;
+        }
+        console.error("Failed to accept order:", acceptRes.status, errorMsg);
+        addNotification('system', `Failed to accept order: ${errorMsg}`, order.id);
         playSound('error');
         return;
       }
@@ -2781,7 +2788,7 @@ export default function MerchantDashboard() {
       if (refundResult.success) {
         setCancelTxHash(refundResult.txHash);
 
-        // Update order status to cancelled on backend (server handles mock balance refund)
+        // Update order status to cancelled on backend with refund tx hash
         await fetch(`/api/orders/${cancelOrder.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -2789,6 +2796,7 @@ export default function MerchantDashboard() {
             status: 'cancelled',
             actor_type: 'merchant',
             actor_id: merchantId,
+            refund_tx_hash: refundResult.txHash,
           }),
         });
 
@@ -4239,6 +4247,17 @@ export default function MerchantDashboard() {
                                 {order.orderType === 'buy' ? 'SELL' : 'BUY'}
                               </span>
                             )}
+                            {order.myRole && (
+                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
+                                order.myRole === 'buyer'
+                                  ? 'bg-blue-500/20 text-blue-400'
+                                  : order.myRole === 'seller'
+                                  ? 'bg-purple-500/20 text-purple-400'
+                                  : 'bg-gray-500/20 text-gray-400'
+                              }`}>
+                                {order.myRole === 'buyer' ? 'YOU BUY' : order.myRole === 'seller' ? 'YOU SELL' : ''}
+                              </span>
+                            )}
                             {order.spreadPreference && (
                               <span className={`w-1.5 h-1.5 rounded-full ${
                                 order.spreadPreference === 'fastest' ? 'bg-red-400' :
@@ -4381,6 +4400,17 @@ export default function MerchantDashboard() {
                                   : 'bg-orange-500/20 text-orange-400'
                               }`}>
                                 {order.orderType === 'buy' ? 'SELL' : 'BUY'}
+                              </span>
+                            )}
+                            {order.myRole && (
+                              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
+                                order.myRole === 'buyer'
+                                  ? 'bg-blue-500/20 text-blue-400'
+                                  : order.myRole === 'seller'
+                                  ? 'bg-purple-500/20 text-purple-400'
+                                  : 'bg-gray-500/20 text-gray-400'
+                              }`}>
+                                {order.myRole === 'buyer' ? 'YOU BUY' : order.myRole === 'seller' ? 'YOU SELL' : ''}
                               </span>
                             )}
                             {order.spreadPreference && (
@@ -4639,6 +4669,15 @@ export default function MerchantDashboard() {
                                 <p className="text-sm font-medium text-white truncate">{order.user}</p>
                                 {isM2MHistory && (
                                   <span className="px-1.5 py-0.5 bg-white/5 text-white/70 text-[10px] rounded">M2M</span>
+                                )}
+                                {order.myRole && (
+                                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
+                                    order.myRole === 'buyer'
+                                      ? 'bg-blue-500/20 text-blue-400'
+                                      : 'bg-purple-500/20 text-purple-400'
+                                  }`}>
+                                    {order.myRole === 'buyer' ? 'BUYER' : 'SELLER'}
+                                  </span>
                                 )}
                               </div>
                               <p className="text-xs text-gray-500">
@@ -6611,9 +6650,22 @@ export default function MerchantDashboard() {
                   </div>
                   <div>
                     <p className="text-base font-semibold text-white">{selectedOrderPopup.user}</p>
-                    <p className="text-[11px] text-white/40">
-                      {selectedOrderPopup.orderType === 'buy' ? 'Selling' : 'Buying'} USDC
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[11px] text-white/40">
+                        {selectedOrderPopup.orderType === 'buy' ? 'Selling' : 'Buying'} USDC
+                      </p>
+                      {selectedOrderPopup.myRole && (
+                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
+                          selectedOrderPopup.myRole === 'buyer'
+                            ? 'bg-blue-500/20 text-blue-400'
+                            : selectedOrderPopup.myRole === 'seller'
+                            ? 'bg-purple-500/20 text-purple-400'
+                            : 'bg-gray-500/20 text-gray-400'
+                        }`}>
+                          {selectedOrderPopup.myRole === 'buyer' ? 'YOU BUY' : selectedOrderPopup.myRole === 'seller' ? 'YOU SELL' : 'OBSERVER'}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <button
@@ -6747,8 +6799,7 @@ export default function MerchantDashboard() {
                     whileTap={{ scale: 0.98 }}
                     onClick={async () => {
                       await acceptOrder(selectedOrderPopup);
-                      // Update popup to show active status (merchant approved, now in Active section)
-                      setSelectedOrderPopup(prev => prev ? { ...prev, status: 'active' } : null);
+                      setSelectedOrderPopup(null);
                     }}
                     className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 transition-all"
                   >
@@ -6807,7 +6858,10 @@ export default function MerchantDashboard() {
                     return (
                       <motion.button
                         whileTap={{ scale: 0.98 }}
-                        onClick={() => markFiatPaymentSent(selectedOrderPopup)}
+                        onClick={async () => {
+                          await markFiatPaymentSent(selectedOrderPopup);
+                          setSelectedOrderPopup(null);
+                        }}
                         disabled={markingDone}
                         className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
                       >

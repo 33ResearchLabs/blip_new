@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Loader2, Key, Download, Eye, EyeOff, Copy, Check, AlertTriangle } from 'lucide-react';
 import { generateWallet, importWallet, saveEncryptedWallet, exportPrivateKey } from '@/lib/wallet/embeddedWallet';
+import { copyToClipboard } from '@/lib/clipboard';
 import { Keypair } from '@solana/web3.js';
 
 interface EmbeddedWalletSetupProps {
@@ -60,8 +61,8 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
     }
   };
 
-  const handleCopyKey = () => {
-    navigator.clipboard.writeText(backupKey);
+  const handleCopyKey = async () => {
+    await copyToClipboard(backupKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

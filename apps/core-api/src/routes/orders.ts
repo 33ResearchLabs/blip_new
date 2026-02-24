@@ -152,6 +152,22 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
+      // Global guard: reject any transition on self-referencing orders (merchant_id = buyer_merchant_id)
+      // These orders are fundamentally broken — no real counterparty exists
+      if (newStatus !== 'cancelled') {
+        const selfRefCheck = await queryOne<{ id: string }>(
+          `SELECT id FROM orders WHERE id = $1 AND merchant_id = buyer_merchant_id`,
+          [id]
+        );
+        if (selfRefCheck) {
+          logger.error('[GUARD] Blocked transition on self-referencing order', { orderId: id, newStatus, actor_id });
+          return reply.status(400).send({
+            success: false,
+            error: 'Order is in an invalid state (self-referencing). Please cancel and recreate.',
+          });
+        }
+      }
+
       // Special case: Cancellation with escrow needs pre-read for atomicCancelWithRefund
       if (newStatus === 'cancelled') {
         const order = await queryOne<OrderRow>('SELECT * FROM orders WHERE id = $1', [id]);
@@ -192,6 +208,20 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Fast path: accept via stored procedure (4 round-trips → 1)
       if (newStatus === 'accepted' || (newStatus === 'payment_pending' && request.body.metadata?.is_m2m)) {
+        // Belt-and-suspenders: block self-acceptance before stored proc
+        if (actor_type === 'merchant') {
+          const preCheck = await queryOne<{ merchant_id: string; user_id: string }>(
+            'SELECT o.merchant_id, u.username FROM orders o JOIN users u ON u.id = o.user_id WHERE o.id = $1',
+            [id]
+          );
+          if (preCheck && preCheck.merchant_id === actor_id) {
+            const username = (preCheck as any).username || '';
+            if (username.startsWith('open_order_') || username.startsWith('m2m_')) {
+              logger.warn('[GUARD] Blocked self-acceptance', { orderId: id, actor_id });
+              return reply.status(400).send({ success: false, error: 'Cannot accept your own order' });
+            }
+          }
+        }
         const procResult = await queryOne<{ accept_order_v1: any }>(
           'SELECT accept_order_v1($1,$2,$3,$4)',
           [id, actor_type, actor_id, request.body.acceptor_wallet_address || null]

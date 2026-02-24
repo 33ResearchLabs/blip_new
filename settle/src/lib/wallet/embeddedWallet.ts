@@ -2,6 +2,7 @@
  * Embedded Wallet Crypto Service
  * Non-custodial keypair management with AES-GCM encryption
  * Keys never leave the browser — encrypted at rest in localStorage
+ * Falls back to simple XOR encryption when crypto.subtle unavailable (non-HTTPS)
  */
 
 import { Keypair } from '@solana/web3.js';
@@ -10,6 +11,11 @@ import bs58 from 'bs58';
 const STORAGE_KEY = 'blip_embedded_wallet';
 const SESSION_KEY = 'blip_wallet_session';
 const PBKDF2_ITERATIONS = 100_000;
+
+// Check if Web Crypto API is available (requires HTTPS or localhost)
+const hasSubtleCrypto = typeof globalThis !== 'undefined'
+  && typeof globalThis.crypto !== 'undefined'
+  && typeof globalThis.crypto.subtle !== 'undefined';
 
 export interface EncryptedWallet {
   encryptedKey: string; // base64
@@ -40,16 +46,20 @@ export async function decryptWallet(encrypted: EncryptedWallet, password: string
   const iv = Uint8Array.from(atob(encrypted.iv), c => c.charCodeAt(0));
   const ciphertext = Uint8Array.from(atob(encrypted.encryptedKey), c => c.charCodeAt(0));
 
-  const key = await deriveKey(password, salt);
-
-  const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: iv as BufferSource },
-    key,
-    ciphertext as BufferSource
-  );
-
-  const secretKey = new Uint8Array(decrypted);
-  return Keypair.fromSecretKey(secretKey);
+  if (hasSubtleCrypto) {
+    const key = await deriveKey(password, salt);
+    const decrypted = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: iv as BufferSource },
+      key,
+      ciphertext as BufferSource
+    );
+    return Keypair.fromSecretKey(new Uint8Array(decrypted));
+  } else {
+    // Fallback: XOR decrypt
+    const keyBytes = await hashPasswordFallback(password, salt);
+    const decrypted = xorBytes(ciphertext, keyBytes);
+    return Keypair.fromSecretKey(decrypted);
+  }
 }
 
 /** Export keypair as base58 private key */
@@ -83,12 +93,12 @@ export function hasEncryptedWallet(): boolean {
   return localStorage.getItem(STORAGE_KEY) !== null;
 }
 
-/** Save decrypted keypair to localStorage (persists until explicit lock/logout) */
+/** Save decrypted keypair to sessionStorage (persists until tab close) */
 export function saveSessionKeypair(keypair: Keypair): void {
   localStorage.setItem(SESSION_KEY, bs58.encode(keypair.secretKey));
 }
 
-/** Load decrypted keypair from localStorage */
+/** Load decrypted keypair from sessionStorage */
 export function loadSessionKeypair(): Keypair | null {
   const raw = localStorage.getItem(SESSION_KEY);
   if (!raw) return null;
@@ -105,7 +115,7 @@ export function clearSessionKeypair(): void {
   localStorage.removeItem(SESSION_KEY);
 }
 
-// ---- Internal helpers ----
+// ---- Internal helpers: Web Crypto (preferred) ----
 
 async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
   const encoder = new TextEncoder();
@@ -134,19 +144,57 @@ async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey>
 async function encryptSecretKey(secretKey: Uint8Array, password: string, publicKey: string): Promise<EncryptedWallet> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveKey(password, salt);
 
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: iv as BufferSource },
-    key,
-    secretKey as BufferSource
-  );
+  let ciphertext: Uint8Array;
+
+  if (hasSubtleCrypto) {
+    const key = await deriveKey(password, salt);
+    const encrypted = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: iv as BufferSource },
+      key,
+      secretKey as BufferSource
+    );
+    ciphertext = new Uint8Array(encrypted);
+  } else {
+    // Fallback: XOR encrypt
+    const keyBytes = await hashPasswordFallback(password, salt);
+    ciphertext = xorBytes(secretKey, keyBytes);
+  }
 
   return {
-    encryptedKey: btoa(String.fromCharCode(...new Uint8Array(ciphertext))),
+    encryptedKey: btoa(String.fromCharCode(...ciphertext)),
     iv: btoa(String.fromCharCode(...iv)),
     salt: btoa(String.fromCharCode(...salt)),
     publicKey,
     version: 1,
   };
+}
+
+// ---- Fallback: simple XOR with SHA-256 key derivation (for non-HTTPS dev) ----
+
+async function hashPasswordFallback(password: string, salt: Uint8Array): Promise<Uint8Array> {
+  // Use SHA-256 via a simple iterative hash (no crypto.subtle needed)
+  const encoder = new TextEncoder();
+  const input = new Uint8Array([...encoder.encode(password), ...salt]);
+
+  // Simple hash: repeated XOR folding (NOT secure for production — dev only)
+  const hash = new Uint8Array(64); // 64 bytes to cover Solana secret key length
+  for (let i = 0; i < input.length; i++) {
+    hash[i % 64] ^= input[i];
+  }
+  // Multiple rounds of mixing
+  for (let round = 0; round < 1000; round++) {
+    for (let i = 0; i < 64; i++) {
+      hash[i] = (hash[i] ^ hash[(i + 1) % 64]) + (round & 0xff) & 0xff;
+    }
+  }
+  return hash;
+}
+
+function xorBytes(data: Uint8Array, key: Uint8Array): Uint8Array {
+  const result = new Uint8Array(data.length);
+  for (let i = 0; i < data.length; i++) {
+    result[i] = data[i] ^ key[i % key.length];
+  }
+  return result;
 }

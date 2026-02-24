@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { copyToClipboard } from '@/lib/clipboard';
 import {
   ArrowLeft,
   User,
@@ -314,8 +315,8 @@ export default function MerchantSettingsPage() {
     setTimeout(() => setSaveSuccess(false), 2000);
   };
 
-  const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text);
+  const handleCopyField = async (text: string, field: string) => {
+    await copyToClipboard(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
   };
@@ -583,7 +584,7 @@ export default function MerchantSettingsPage() {
                     <p className="text-sm text-white/50 font-mono truncate">{merchant?.id || merchantId || '—'}</p>
                   </div>
                   <button
-                    onClick={() => copyToClipboard(merchant?.id || merchantId || '', 'merchant_id')}
+                    onClick={() => handleCopyField(merchant?.id || merchantId || '', 'merchant_id')}
                     className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors shrink-0 ml-2"
                   >
                     {copiedField === 'merchant_id' ? (
@@ -604,7 +605,7 @@ export default function MerchantSettingsPage() {
                   </div>
                   {merchant?.wallet_address && (
                     <button
-                      onClick={() => copyToClipboard(merchant.wallet_address, 'wallet')}
+                      onClick={() => handleCopyField(merchant.wallet_address, 'wallet')}
                       className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors shrink-0 ml-2"
                     >
                       {copiedField === 'wallet' ? (

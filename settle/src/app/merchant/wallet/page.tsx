@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import {
   Wallet, Lock, Unlock, Copy, Check, Loader2,
   Droplets, Download, Trash2, Key, Eye, EyeOff, ArrowDownToLine,
-  ArrowUpFromLine, Shield, RefreshCw, ExternalLink,
+  ArrowUpFromLine, Shield, RefreshCw, ExternalLink, Send,
 } from 'lucide-react';
 import { MerchantNavbar } from '@/components/merchant/MerchantNavbar';
+import { copyToClipboard } from '@/lib/clipboard';
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { DEVNET_RPC } from '@/lib/solana/v2/config';
 import {
@@ -75,6 +76,15 @@ export default function WalletPage() {
   const [airdropMsg, setAirdropMsg] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Send state
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [sendTo, setSendTo] = useState('');
+  const [sendAmount, setSendAmount] = useState('');
+  const [sendToken, setSendToken] = useState<'USDT' | 'SOL'>('USDT');
+  const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const [sendSuccess, setSendSuccess] = useState('');
 
   // Backup state (after creation)
   const [pendingKeypair, setPendingKeypair] = useState<Keypair | null>(null);
@@ -195,9 +205,10 @@ export default function WalletPage() {
     }
   };
 
-  const handleCopyAddress = () => {
-    if (!solanaWallet.walletAddress) return;
-    navigator.clipboard.writeText(solanaWallet.walletAddress);
+  const handleCopyAddress = async () => {
+    const addr = solanaWallet.walletAddress || address;
+    if (!addr) return;
+    await copyToClipboard(addr);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -224,6 +235,117 @@ export default function WalletPage() {
     setIsRefreshing(true);
     try { await solanaWallet.refreshBalances(); } catch {}
     setIsRefreshing(false);
+  };
+
+  const handleSend = async () => {
+    setSendError('');
+    setSendSuccess('');
+
+    if (!sendTo.trim()) { setSendError('Enter a recipient address'); return; }
+    const amount = parseFloat(sendAmount);
+    if (!amount || amount <= 0) { setSendError('Enter a valid amount'); return; }
+
+    // Validate Solana address
+    let recipientPubkey: PublicKey;
+    try {
+      recipientPubkey = new PublicKey(sendTo.trim());
+    } catch {
+      setSendError('Invalid Solana address'); return;
+    }
+
+    // Check balance
+    if (sendToken === 'SOL') {
+      if (solanaWallet.solBalance !== null && amount > solanaWallet.solBalance - 0.005) {
+        setSendError(`Insufficient SOL (need ~0.005 for fees)`); return;
+      }
+    } else {
+      if (solanaWallet.usdtBalance !== null && amount > solanaWallet.usdtBalance) {
+        setSendError(`Insufficient USDT balance`); return;
+      }
+    }
+
+    setIsSending(true);
+    try {
+      const connection = new Connection(DEVNET_RPC, 'confirmed');
+
+      if (sendToken === 'SOL') {
+        // Send SOL
+        const { Transaction, SystemProgram } = await import('@solana/web3.js');
+        const tx = new Transaction().add(
+          SystemProgram.transfer({
+            fromPubkey: solanaWallet.publicKey,
+            toPubkey: recipientPubkey,
+            lamports: Math.round(amount * LAMPORTS_PER_SOL),
+          })
+        );
+        tx.feePayer = solanaWallet.publicKey;
+        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+        // Sign with embedded wallet keypair
+        const encrypted = loadEncryptedWallet();
+        if (!encrypted) throw new Error('Wallet not found');
+        const pw = prompt('Enter wallet password to sign transaction');
+        if (!pw) { setIsSending(false); return; }
+        const kp = await decryptWallet(encrypted, pw);
+        tx.sign(kp);
+
+        const sig = await connection.sendRawTransaction(tx.serialize());
+        await connection.confirmTransaction(sig, 'confirmed');
+        setSendSuccess(`Sent ${amount} SOL! Tx: ${sig.slice(0, 8)}...`);
+      } else {
+        // Send USDT (SPL token)
+        const { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createTransferInstruction, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } = await import('@solana/spl-token');
+        const { Transaction } = await import('@solana/web3.js');
+
+        const USDT_MINT = new PublicKey('Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr'); // Devnet fake USDT
+
+        const fromAta = await getAssociatedTokenAddress(USDT_MINT, solanaWallet.publicKey);
+        const toAta = await getAssociatedTokenAddress(USDT_MINT, recipientPubkey);
+
+        const tx = new Transaction();
+
+        // Create recipient ATA if needed
+        const toAtaInfo = await connection.getAccountInfo(toAta);
+        if (!toAtaInfo) {
+          tx.add(
+            createAssociatedTokenAccountInstruction(
+              solanaWallet.publicKey, toAta, recipientPubkey, USDT_MINT,
+              TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+            )
+          );
+        }
+
+        tx.add(
+          createTransferInstruction(
+            fromAta, toAta, solanaWallet.publicKey,
+            Math.round(amount * 1_000_000), // 6 decimals
+          )
+        );
+
+        tx.feePayer = solanaWallet.publicKey;
+        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+        const encrypted = loadEncryptedWallet();
+        if (!encrypted) throw new Error('Wallet not found');
+        const pw = prompt('Enter wallet password to sign transaction');
+        if (!pw) { setIsSending(false); return; }
+        const kp = await decryptWallet(encrypted, pw);
+        tx.sign(kp);
+
+        const sig = await connection.sendRawTransaction(tx.serialize());
+        await connection.confirmTransaction(sig, 'confirmed');
+        setSendSuccess(`Sent ${amount} USDT! Tx: ${sig.slice(0, 8)}...`);
+      }
+
+      // Refresh balances
+      await solanaWallet.refreshBalances();
+      setSendTo('');
+      setSendAmount('');
+    } catch (err: any) {
+      setSendError(err.message || 'Transaction failed');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleExportKey = () => {
@@ -607,7 +729,15 @@ export default function WalletPage() {
               </div>
 
               {/* Action buttons */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2">
+                <button
+                  onClick={() => { setSendError(''); setSendSuccess(''); setShowSendModal(true); }}
+                  className="py-3 rounded-xl bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/15 transition-colors
+                             flex flex-col items-center gap-1.5"
+                >
+                  <Send className="w-5 h-5 text-orange-400" />
+                  <span className="text-[10px] text-orange-400/80 font-mono font-medium">Send</span>
+                </button>
                 <button
                   onClick={handleAirdropSol}
                   disabled={isAirdropping}
@@ -615,7 +745,7 @@ export default function WalletPage() {
                              flex flex-col items-center gap-1.5 disabled:opacity-50"
                 >
                   {isAirdropping ? <Loader2 className="w-5 h-5 text-orange-400 animate-spin" /> : <Droplets className="w-5 h-5 text-orange-400" />}
-                  <span className="text-[10px] text-white/50 font-mono">Airdrop SOL</span>
+                  <span className="text-[10px] text-white/50 font-mono">Airdrop</span>
                 </button>
                 <button
                   onClick={handleRefresh}
@@ -723,6 +853,119 @@ export default function WalletPage() {
           )}
         </div>
       </div>
+
+      {/* Send modal */}
+      {showSendModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !isSending && setShowSendModal(false)}>
+          <div className="bg-[#0d0d0d] rounded-2xl w-full max-w-sm border border-white/[0.08] shadow-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2">
+              <Send className="w-5 h-5 text-orange-500" />
+              <h3 className="text-base font-bold text-white font-mono">Send</h3>
+            </div>
+
+            {sendError && (
+              <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400 font-mono">
+                {sendError}
+              </div>
+            )}
+            {sendSuccess && (
+              <div className="p-2.5 bg-green-500/10 border border-green-500/20 rounded-lg text-xs text-green-400 font-mono">
+                {sendSuccess}
+              </div>
+            )}
+
+            {!sendSuccess && (
+              <>
+                {/* Token selector */}
+                <div className="flex bg-white/[0.03] rounded-lg p-[3px]">
+                  <button
+                    onClick={() => setSendToken('USDT')}
+                    className={`flex-1 py-2 rounded-md text-xs font-mono font-medium transition-colors ${
+                      sendToken === 'USDT' ? 'bg-white/[0.08] text-white' : 'text-white/40'
+                    }`}
+                  >
+                    USDT
+                  </button>
+                  <button
+                    onClick={() => setSendToken('SOL')}
+                    className={`flex-1 py-2 rounded-md text-xs font-mono font-medium transition-colors ${
+                      sendToken === 'SOL' ? 'bg-white/[0.08] text-white' : 'text-white/40'
+                    }`}
+                  >
+                    SOL
+                  </button>
+                </div>
+
+                {/* Recipient */}
+                <div>
+                  <label className="text-[10px] text-white/40 font-mono uppercase mb-1.5 block">Recipient Address</label>
+                  <input
+                    type="text"
+                    value={sendTo}
+                    onChange={(e) => setSendTo(e.target.value)}
+                    placeholder="Solana address..."
+                    className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-xl
+                               text-sm text-white font-mono placeholder:text-white/20
+                               focus:outline-none focus:border-orange-500/50 transition-colors"
+                  />
+                </div>
+
+                {/* Amount */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[10px] text-white/40 font-mono uppercase">Amount</label>
+                    <button
+                      onClick={() => {
+                        const bal = sendToken === 'SOL'
+                          ? Math.max(0, (solanaWallet.solBalance || 0) - 0.005)
+                          : (solanaWallet.usdtBalance || 0);
+                        setSendAmount(bal.toString());
+                      }}
+                      className="text-[10px] text-orange-400/70 font-mono hover:text-orange-400"
+                    >
+                      MAX
+                    </button>
+                  </div>
+                  <input
+                    type="number"
+                    value={sendAmount}
+                    onChange={(e) => setSendAmount(e.target.value)}
+                    placeholder="0.00"
+                    step="any"
+                    className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-xl
+                               text-sm text-white font-mono placeholder:text-white/20
+                               focus:outline-none focus:border-orange-500/50 transition-colors"
+                  />
+                  <div className="text-[10px] text-white/30 font-mono mt-1">
+                    Available: {sendToken === 'SOL'
+                      ? `${solanaWallet.solBalance?.toFixed(4) || '0'} SOL`
+                      : `${solanaWallet.usdtBalance?.toFixed(2) || '0'} USDT`}
+                  </div>
+                </div>
+
+                {/* Send button */}
+                <button
+                  onClick={handleSend}
+                  disabled={isSending}
+                  className="w-full py-3 rounded-xl bg-orange-500 text-black font-bold font-mono text-sm
+                             hover:bg-orange-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isSending ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</> : <><Send className="w-4 h-4" /> Send {sendToken}</>}
+                </button>
+              </>
+            )}
+
+            {sendSuccess && (
+              <button
+                onClick={() => { setShowSendModal(false); setSendSuccess(''); }}
+                className="w-full py-3 rounded-xl bg-white/[0.06] text-white/60 font-mono text-sm hover:bg-white/[0.08] transition-colors"
+              >
+                Done
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Delete confirm modal */}
       {showDeleteConfirm && (

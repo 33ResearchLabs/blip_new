@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRealtimeChat } from "@/hooks/useRealtimeChat";
 import { useRealtimeOrder } from "@/hooks/useRealtimeOrder";
 import { usePusher } from "@/context/PusherContext";
+import { copyToClipboard } from "@/lib/clipboard";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowDownUp,
@@ -1133,8 +1134,8 @@ export default function Home() {
   // Note: Order updates now come via Pusher WebSocket (useRealtimeOrder hook above)
   // The onStatusChange callback handles screen transitions automatically
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const handleCopy = async (text: string) => {
+    await copyToClipboard(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -4195,9 +4196,9 @@ export default function Home() {
                       </p>
                     </div>
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         if (solanaWallet.connected && solanaWallet.walletAddress) {
-                          navigator.clipboard.writeText(solanaWallet.walletAddress);
+                          await copyToClipboard(solanaWallet.walletAddress);
                           setCopied(true);
                           setTimeout(() => setCopied(false), 2000);
                         }

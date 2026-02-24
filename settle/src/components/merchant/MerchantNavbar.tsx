@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Zap, Wallet, Lock, LogOut } from 'lucide-react';
 
-export type NavPage = 'dashboard' | 'analytics' | 'wallet' | 'settings';
+export type NavPage = 'dashboard' | 'wallet' | 'settings';
 
 interface MerchantNavbarProps {
   activePage: NavPage;
@@ -62,9 +62,6 @@ export function MerchantNavbar({
           <nav className="flex items-center gap-0.5 bg-white/[0.03] rounded-lg p-[3px]">
             <Link href="/merchant" className={pill(activePage === 'dashboard')}>
               Dashboard
-            </Link>
-            <Link href="/merchant/analytics" className={pill(activePage === 'analytics')}>
-              Analytics
             </Link>
             <Link
               href="/merchant/wallet"

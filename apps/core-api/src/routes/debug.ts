@@ -38,6 +38,7 @@ export const debugRoutes: FastifyPluginAsync = async (fastify) => {
     return {
       outbox: readHeartbeat('outbox'),
       expiry: readHeartbeat('expiry'),
+      autobump: readHeartbeat('autobump'),
     };
   });
 

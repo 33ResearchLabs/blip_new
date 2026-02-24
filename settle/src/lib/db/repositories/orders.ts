@@ -308,11 +308,16 @@ export async function getAllPendingOrdersForMerchant(
     LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
     LEFT JOIN merchants current_m ON current_m.id = $1
     WHERE (
-        -- PENDING or ESCROWED orders: ALL merchants can see (New Orders - broadcast model)
-        -- Exclude expired/cancelled from broadcast pool
-        (o.status IN ('pending', 'escrowed') AND o.status NOT IN ('expired', 'cancelled'))
+        -- OPEN orders: broadcast pending/escrowed that are NOT yet taken by another merchant
+        -- "Taken" = has buyer_merchant_id set to someone else (and merchant_id differs, meaning a seller accepted)
+        (o.status IN ('pending', 'escrowed')
+         AND (o.buyer_merchant_id IS NULL
+              OR o.buyer_merchant_id = $1
+              OR (o.buyer_merchant_id = o.merchant_id AND o.accepted_at IS NULL))
+         AND o.accepted_at IS NULL
+        )
 
-        -- All orders where I'm the merchant (include ALL statuses so merchant sees completed/cancelled/escrowed)
+        -- All orders where I'm the assigned merchant
         OR (o.merchant_id = $1)
 
         -- Orders I created as buyer_merchant (M2M orders I initiated)

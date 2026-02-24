@@ -7,8 +7,8 @@
  * If any invariant fails, we throw an error to trigger monitoring/alerting.
  * The order state is already committed, so this is a DETECTION mechanism, not prevention.
  */
-import { query, queryOne } from '../db/client';
-import { logger } from '../utils/logger';
+import { query, queryOne } from '../db/client.js';
+import { logger } from '../utils/logger.js';
 export class FinalizationInvariantError extends Error {
     code;
     orderId;

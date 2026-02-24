@@ -108,6 +108,8 @@ export interface BroadcastPayload {
   merchantId?: string;
   buyerMerchantId?: string;
   previousStatus?: string;
+  premium_bps_current?: number;
+  max_reached?: boolean;
 }
 
 /**

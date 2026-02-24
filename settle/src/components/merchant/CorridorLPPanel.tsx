@@ -12,6 +12,7 @@ import {
   Copy,
   Check,
 } from 'lucide-react';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface CorridorLPPanelProps {
   merchantId: string | null;
@@ -98,8 +99,8 @@ export function CorridorLPPanel({ merchantId }: CorridorLPPanelProps) {
     }
   };
 
-  const copyToClipboard = (text: string, field: string) => {
-    navigator.clipboard.writeText(text);
+  const handleCopyField = async (text: string, field: string) => {
+    await copyToClipboard(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 1500);
   };
@@ -204,7 +205,7 @@ export function CorridorLPPanel({ merchantId }: CorridorLPPanelProps) {
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-white/70 font-mono">{bank.bank_iban}</span>
                     <button
-                      onClick={() => copyToClipboard(bank.bank_iban, ff.id + '-iban')}
+                      onClick={() => handleCopyField(bank.bank_iban, ff.id + '-iban')}
                       className="p-0.5"
                     >
                       {copiedField === ff.id + '-iban' ? (

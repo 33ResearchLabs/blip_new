@@ -21,6 +21,7 @@ import {
   errorResponse,
 } from '@/lib/middleware/auth';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
+import { notifyOrderCreated } from '@/lib/pusher/server';
 
 // Prevent Next.js from caching this route - orders must always be fresh
 export const dynamic = 'force-dynamic';
@@ -266,6 +267,13 @@ export async function POST(request: NextRequest) {
     const protocolFeePercentage = baseFee + (priority_fee || 0);
     const protocolFeeAmount = crypto_amount * (protocolFeePercentage / 100);
 
+    // Bump/decay fields — priority_fee (%) → premium_bps_cap (basis points)
+    const priorityFeePct = priority_fee || 0;
+    const premiumBpsCap = Math.round(priorityFeePct * 100); // 2% → 200 bps
+    const autoBumpEnabled = premiumBpsCap > 0;
+    const bumpStepBps = 10;  // +0.10% per bump
+    const bumpIntervalSec = 30; // bump every 30s
+
     logger.info('Order pricing calculated', {
       crypto_amount,
       fiat_amount: fiatAmount,
@@ -303,7 +311,7 @@ export async function POST(request: NextRequest) {
     const buyerMerchantId = (isM2MTrade || type === 'buy') ? merchant_id : undefined;
 
     // Forward to core-api (single writer for all mutations)
-    return proxyCoreApi('/v1/merchant/orders', {
+    const response = await proxyCoreApi('/v1/merchant/orders', {
       method: 'POST',
       body: {
         merchant_id,
@@ -324,8 +332,42 @@ export async function POST(request: NextRequest) {
         escrow_trade_pda,
         escrow_pda,
         escrow_creator_wallet,
+        // Bump/decay fields
+        ref_price_at_create: offer.rate,
+        premium_bps_current: 0,
+        premium_bps_cap: premiumBpsCap,
+        bump_step_bps: bumpStepBps,
+        bump_interval_sec: bumpIntervalSec,
+        auto_bump_enabled: autoBumpEnabled,
+        next_bump_at: autoBumpEnabled ? new Date(Date.now() + bumpIntervalSec * 1000).toISOString() : null,
       },
     });
+
+    // Fire Pusher notification so all merchants see the new order in realtime
+    if (response.status >= 200 && response.status < 300) {
+      try {
+        const resBody = await response.json();
+        const order = resBody?.data;
+        if (order?.id) {
+          notifyOrderCreated({
+            orderId: order.id,
+            userId: user.id,
+            merchantId: orderMerchantId || merchant_id,
+            status: order.status || 'pending',
+            minimal_status: normalizeStatus(order.status || 'pending'),
+            order_version: order.order_version || 1,
+            updatedAt: new Date().toISOString(),
+          }).catch(err => logger.error('[Pusher] Failed to notify order created', { error: err }));
+        }
+        // Re-wrap response since we consumed the body
+        return NextResponse.json(resBody, { status: response.status });
+      } catch {
+        // If JSON parse fails, return original response
+        return response;
+      }
+    }
+
+    return response;
   } catch (error) {
     const err = error as Error;
     logger.api.error('POST', '/api/merchant/orders', err);

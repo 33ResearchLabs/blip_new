@@ -3,8 +3,9 @@ import { z } from 'zod';
 import {
   getOrderWithRelations,
 } from '@/lib/db/repositories/orders';
-import { logger } from 'settlement-core';
+import { logger, normalizeStatus } from 'settlement-core';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
+import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
 import {
   uuidSchema,
 } from '@/lib/validation/schemas';
@@ -145,10 +146,34 @@ export async function POST(
     }
 
     // Non-mock mode: forward to core-api (single writer for all mutations)
-    return proxyCoreApi(`/v1/orders/${id}/escrow`, {
+    const depositResponse = await proxyCoreApi(`/v1/orders/${id}/escrow`, {
       method: 'POST',
       body: parseResult.data,
     });
+
+    // Fire Pusher notification for escrow deposit
+    if (depositResponse.status >= 200 && depositResponse.status < 300) {
+      try {
+        const resBody = await depositResponse.json();
+        const order = resBody?.data;
+        if (order?.id) {
+          notifyOrderStatusUpdated({
+            orderId: order.id,
+            userId: order.user_id || '',
+            merchantId: order.merchant_id || '',
+            status: order.status || 'escrowed',
+            minimal_status: normalizeStatus(order.status || 'escrowed'),
+            order_version: order.order_version,
+            updatedAt: new Date().toISOString(),
+          }).catch(err => logger.error('[Pusher] Failed to notify escrow deposit', { error: err }));
+        }
+        return NextResponse.json(resBody, { status: depositResponse.status });
+      } catch {
+        return depositResponse;
+      }
+    }
+
+    return depositResponse;
   } catch (error) {
     logger.api.error('POST', '/api/orders/[id]/escrow', error as Error);
     return errorResponse('Internal server error');
@@ -181,12 +206,36 @@ export async function PATCH(
     const { tx_hash, actor_type, actor_id } = parseResult.data;
 
     // Forward to core-api (single writer for all mutations)
-    return proxyCoreApi(`/v1/orders/${id}/events`, {
+    const releaseResponse = await proxyCoreApi(`/v1/orders/${id}/events`, {
       method: 'POST',
       body: { event_type: 'release', tx_hash },
       actorType: actor_type,
       actorId: actor_id,
     });
+
+    // Fire Pusher notification for escrow release
+    if (releaseResponse.status >= 200 && releaseResponse.status < 300) {
+      try {
+        const resBody = await releaseResponse.json();
+        const order = resBody?.data;
+        if (order?.id) {
+          notifyOrderStatusUpdated({
+            orderId: order.id,
+            userId: order.user_id || '',
+            merchantId: order.merchant_id || '',
+            status: order.status || 'completed',
+            minimal_status: normalizeStatus(order.status || 'completed'),
+            order_version: order.order_version,
+            updatedAt: new Date().toISOString(),
+          }).catch(err => logger.error('[Pusher] Failed to notify escrow release', { error: err }));
+        }
+        return NextResponse.json(resBody, { status: releaseResponse.status });
+      } catch {
+        return releaseResponse;
+      }
+    }
+
+    return releaseResponse;
   } catch (error) {
     logger.api.error('PATCH', '/api/orders/[id]/escrow', error as Error);
     return errorResponse('Internal server error');

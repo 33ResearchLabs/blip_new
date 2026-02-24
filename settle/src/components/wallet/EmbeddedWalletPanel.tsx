@@ -7,6 +7,7 @@ import {
 import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { DEVNET_RPC } from '@/lib/solana/v2/config';
 import { exportPrivateKey } from '@/lib/wallet/embeddedWallet';
+import { copyToClipboard } from '@/lib/clipboard';
 import { Keypair } from '@solana/web3.js';
 
 interface EmbeddedWalletPanelProps {
@@ -39,8 +40,8 @@ export function EmbeddedWalletPanel({
   const address = publicKey?.toBase58() ?? '';
   const truncated = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : '';
 
-  const handleCopyAddress = () => {
-    navigator.clipboard.writeText(address);
+  const handleCopyAddress = async () => {
+    await copyToClipboard(address);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -70,8 +71,8 @@ export function EmbeddedWalletPanel({
     setShowExportKey(true);
   };
 
-  const handleCopyExportedKey = () => {
-    navigator.clipboard.writeText(exportedKey);
+  const handleCopyExportedKey = async () => {
+    await copyToClipboard(exportedKey);
     setCopiedKey(true);
     setTimeout(() => setCopiedKey(false), 2000);
   };

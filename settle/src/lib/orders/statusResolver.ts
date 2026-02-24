@@ -417,8 +417,11 @@ export function deriveOrderUI(
   const myRole = computeMyRole(order, myMerchantId);
   const hasEscrow = !!(order.escrowTxHash || order.escrow_tx_hash ||
     order.dbOrder?.escrow_tx_hash);
+  const hasRefund = !!(order.refundTxHash || order.refund_tx_hash || order.dbOrder?.refund_tx_hash);
   const buyerMerchantId = order.buyer_merchant_id || order.buyerMerchantId;
-  const isTerminal = ['completed', 'cancelled', 'expired'].includes(status);
+  // Not terminal if cancelled/expired with unreturned escrow (seller needs to withdraw)
+  const hasUnreturnedEscrow = hasEscrow && !hasRefund && myRole === 'seller';
+  const isTerminal = ['completed', 'cancelled', 'expired'].includes(status) && !hasUnreturnedEscrow;
 
   // Base state
   const result: OrderUIState = {
@@ -609,15 +612,35 @@ export function deriveOrderUI(
       result.nextStepText = 'This trade has been completed successfully.';
       break;
 
-    case 'cancelled':
+    case 'cancelled': {
       result.statusLabel = 'CANCELLED';
       result.nextStepText = 'This order was cancelled.';
+      if (hasUnreturnedEscrow) {
+        result.primaryAction = {
+          label: 'Withdraw Escrow',
+          handler: 'openCancelModal',
+          variant: 'gold',
+          disabled: false,
+        };
+        result.nextStepText = 'Order cancelled. Withdraw your USDC from escrow.';
+      }
       break;
+    }
 
-    case 'expired':
+    case 'expired': {
       result.statusLabel = 'EXPIRED';
       result.nextStepText = 'This order has expired.';
+      if (hasUnreturnedEscrow) {
+        result.primaryAction = {
+          label: 'Withdraw Escrow',
+          handler: 'openCancelModal',
+          variant: 'gold',
+          disabled: false,
+        };
+        result.nextStepText = 'Order expired. Withdraw your USDC from escrow.';
+      }
       break;
+    }
   }
 
   return result;

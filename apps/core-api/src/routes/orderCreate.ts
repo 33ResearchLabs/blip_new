@@ -46,6 +46,14 @@ interface CreateOrderPayload {
   escrow_trade_pda?: string;
   escrow_pda?: string;
   escrow_creator_wallet?: string;
+  // Bump/decay fields
+  ref_price_at_create?: number;
+  premium_bps_current?: number;
+  premium_bps_cap?: number;
+  bump_step_bps?: number;
+  bump_interval_sec?: number;
+  auto_bump_enabled?: boolean;
+  next_bump_at?: string | null;
 }
 
 export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
@@ -88,6 +96,14 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         ['escrow_trade_pda', data.escrow_trade_pda],
         ['escrow_pda', data.escrow_pda],
         ['escrow_creator_wallet', data.escrow_creator_wallet],
+        // Bump/decay fields
+        ['ref_price_at_create', data.ref_price_at_create],
+        ['premium_bps_current', data.premium_bps_current],
+        ['premium_bps_cap', data.premium_bps_cap],
+        ['bump_step_bps', data.bump_step_bps],
+        ['bump_interval_sec', data.bump_interval_sec],
+        ['auto_bump_enabled', data.auto_bump_enabled],
+        ['next_bump_at', data.next_bump_at],
       ];
       for (const [field, value] of optionals) {
         if (value !== undefined && value !== null) {
@@ -190,6 +206,14 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
           ['escrow_trade_pda', data.escrow_trade_pda],
           ['escrow_pda', data.escrow_pda],
           ['escrow_creator_wallet', data.escrow_creator_wallet],
+          // Bump/decay fields
+          ['ref_price_at_create', data.ref_price_at_create],
+          ['premium_bps_current', data.premium_bps_current],
+          ['premium_bps_cap', data.premium_bps_cap],
+          ['bump_step_bps', data.bump_step_bps],
+          ['bump_interval_sec', data.bump_interval_sec],
+          ['auto_bump_enabled', data.auto_bump_enabled],
+          ['next_bump_at', data.next_bump_at],
         ];
 
         for (const [field, value] of optionalFields) {

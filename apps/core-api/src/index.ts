@@ -18,6 +18,7 @@ import { authHook } from './hooks/auth';
 import { initWebSocketServer, closeWebSocketServer } from './ws/broadcast';
 import { startOutboxWorker, stopOutboxWorker } from './workers/notificationOutbox';
 import { startCorridorTimeoutWorker, stopCorridorTimeoutWorker } from './workers/corridorTimeoutWorker';
+import { startAutoBumpWorker, stopAutoBumpWorker } from './workers/autoBumpWorker';
 
 const PORT = parseInt(process.env.CORE_API_PORT || '4010', 10);
 const HOST = process.env.CORE_API_HOST || '0.0.0.0';
@@ -60,6 +61,7 @@ try {
     initWebSocketServer(fastify.server);
     startOutboxWorker();
     startCorridorTimeoutWorker();
+    startAutoBumpWorker();
   }
 } catch (err) {
   fastify.log.error(err);
@@ -71,6 +73,7 @@ const shutdown = async (signal: string) => {
   if (!IS_WORKER) {
     stopOutboxWorker();
     stopCorridorTimeoutWorker();
+    stopAutoBumpWorker();
     closeWebSocketServer();
   }
   await fastify.close();

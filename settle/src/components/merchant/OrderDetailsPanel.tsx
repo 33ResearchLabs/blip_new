@@ -8,6 +8,7 @@ import {
   Hash, Link as LinkIcon, Zap, Star
 } from 'lucide-react';
 import { getAuthoritativeStatus, getNextAction, deriveOrderUI } from '@/lib/orders/statusResolver';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface OrderDetails {
   id: string;
@@ -212,7 +213,7 @@ export function OrderDetailsPanel({
   }, [orderId]);
 
   const handleCopy = async (text: string, field: string) => {
-    await navigator.clipboard.writeText(text);
+    await copyToClipboard(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
   };

@@ -192,6 +192,7 @@ export async function POST(request: NextRequest) {
         payment_details: paymentDetails,
         buyer_wallet_address: type === 'buy' ? buyer_wallet_address : undefined,
         buyer_merchant_id,
+        ref_price_at_create: offer.rate,
       },
     });
   } catch (error) {
