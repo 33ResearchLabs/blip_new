@@ -63,7 +63,7 @@ import { DashboardWidgets } from "@/components/merchant/DashboardWidgets";
 import { Package, Droplets } from "lucide-react";
 import { CorridorLPPanel } from "@/components/merchant/CorridorLPPanel";
 import { getNextStep, type NextStepResult } from "@/lib/orders/getNextStep";
-import { getAuthoritativeStatus, shouldAcceptUpdate, mapMinimalStatusToUIStatus, normalizeLegacyStatus, computeMyRole } from "@/lib/orders/statusResolver";
+import { getAuthoritativeStatus, shouldAcceptUpdate, computeMyRole } from "@/lib/orders/statusResolver";
 // New dashboard components
 import { ConfigPanel } from "@/components/merchant/ConfigPanel";
 
@@ -75,6 +75,11 @@ import { CompletedOrdersPanel } from "@/components/merchant/CompletedOrdersPanel
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useMerchantStore } from "@/stores/merchantStore";
+import type { DbOrder, Order, LeaderboardEntry, BigOrderRequest, MerchantInfo, Notification, OpenTradeForm, DisputeInfo, ExtensionRequest, ResolvedDispute, RatingModalData, OrderConversation } from "@/types/merchant";
+import { getUserEmoji, getEffectiveStatus, isOrderExpired, mapDbOrderToUI, TRADER_CUT_CONFIG, TOP_1_PERCENT_THRESHOLD } from "@/lib/orders/mappers";
+import { useNotifications } from "@/hooks/useNotifications";
+import { LoginScreen } from "@/components/merchant/LoginScreen";
+import { NotificationsPanel } from "@/components/merchant/NotificationsPanel";
 
 // Dynamically import wallet components (client-side only)
 const MerchantWalletModal = dynamic(() => import("@/components/MerchantWalletModal"), { ssr: false });
@@ -109,375 +114,7 @@ const useSolanaWalletHook = () => {
   }
 };
 
-// Types for API data
-interface DbOrder {
-  id: string;
-  order_number: string;
-  user_id: string;
-  merchant_id: string;
-  offer_id: string;
-  type: "buy" | "sell";
-  payment_method: "bank" | "cash";
-  crypto_amount: number | string; // API returns string from PostgreSQL
-  fiat_amount: number | string;   // API returns string from PostgreSQL
-  rate: number | string;          // API returns string from PostgreSQL
-  status: string;
-  minimal_status?: string; // Authoritative 8-state status from API
-  order_version?: number;  // Version tracking for state updates
-  created_at: string;
-  expires_at: string;
-  // Timeline timestamps
-  accepted_at?: string;
-  escrowed_at?: string;
-  payment_sent_at?: string;
-  completed_at?: string;
-  cancelled_at?: string;
-  // Escrow reference fields
-  escrow_tx_hash?: string;
-  escrow_trade_id?: number;
-  escrow_trade_pda?: string;
-  escrow_pda?: string;
-  escrow_creator_wallet?: string;
-  refund_tx_hash?: string;
-  // Buyer's wallet address captured at order creation (for buy orders)
-  buyer_wallet_address?: string;
-  // Acceptor's wallet address (merchant who accepted the order)
-  acceptor_wallet_address?: string;
-  // M2M trading: buyer merchant ID and info
-  buyer_merchant_id?: string;
-  buyer_merchant?: {
-    id: string;
-    display_name: string;
-    wallet_address?: string;
-  };
-  // Flag: true if this merchant created the order (can't accept own order)
-  is_my_order?: boolean;
-  // Role: buyer/seller/observer (authoritative from SQL)
-  my_role?: 'buyer' | 'seller' | 'observer';
-  // Payment details (includes user_bank_account for sell orders)
-  payment_details?: {
-    user_bank_account?: string;
-    bank_account_name?: string;
-    bank_name?: string;
-    bank_iban?: string;
-  };
-  user?: {
-    id: string;
-    name: string;
-    username?: string;
-    rating: number;
-    total_trades: number;
-    wallet_address?: string;
-  };
-  offer?: {
-    payment_method: string;
-    location_name?: string;
-  };
-  // Cancellation info
-  cancellation_reason?: string;
-  // Message tracking
-  unread_count?: number;
-  has_manual_message?: boolean;
-  message_count?: number;
-  last_human_message?: string;
-  last_human_message_sender?: string;
-  // Spread preference
-  spread_preference?: string;
-  // Protocol fee
-  protocol_fee_percentage?: number | string;
-  protocol_fee_amount?: number | string;
-}
-
-// UI Order type
-interface Order {
-  id: string;
-  user: string;
-  emoji: string;
-  amount: number;
-  fromCurrency: string;
-  toCurrency: string;
-  rate: number;
-  total: number;
-  timestamp: Date;
-  status: "pending" | "active" | "escrow" | "completed" | "disputed" | "cancelled" | "expired";
-  minimalStatus?: string; // Authoritative 8-state status (open, accepted, escrowed, payment_sent, completed, cancelled, disputed, expired)
-  orderVersion?: number;  // Version for preventing stale updates
-  expiresIn: number;
-  isNew?: boolean;
-  tradeVolume?: number;
-  dbOrder?: DbOrder; // Keep reference to original DB order
-  // Escrow fields for on-chain release
-  escrowTradeId?: number;
-  escrowTradePda?: string;
-  escrowCreatorWallet?: string;
-  escrowTxHash?: string;
-  refundTxHash?: string;
-  userWallet?: string;
-  orderType?: "buy" | "sell";
-  // User's bank account for sell orders (where merchant sends fiat)
-  userBankAccount?: string;
-  // M2M trading
-  isM2M?: boolean;
-  buyerMerchantId?: string;
-  buyerMerchantWallet?: string;
-  // Acceptor wallet (for merchant-initiated orders accepted by another merchant)
-  acceptorWallet?: string;
-  // Flag: true if I created this order (can't accept own order)
-  isMyOrder?: boolean;
-  // Role: buyer/seller/observer
-  myRole?: 'buyer' | 'seller' | 'observer';
-  // The merchant ID assigned to this order (creator for pending orders)
-  orderMerchantId?: string;
-  // Message tracking
-  unreadCount?: number;
-  hasMessages?: boolean;
-  lastHumanMessage?: string;
-  lastHumanMessageSender?: string;
-  // Spread preference
-  spreadPreference?: 'best' | 'fastest' | 'cheap';
-  // Protocol fee
-  protocolFeePercent?: number;
-  protocolFeeAmount?: number;
-}
-
-// Leaderboard data
-interface LeaderboardEntry {
-  rank: number;
-  id: string;
-  displayName: string;
-  username: string;
-  totalTrades: number;
-  totalVolume: number;
-  rating: number;
-  ratingCount: number;
-  isOnline: boolean;
-  avgResponseMins: number;
-  completedCount: number;
-}
-
-// Status mapping now uses the single source of truth in statusResolver.ts:
-// - mapMinimalStatusToUIStatus() for minimal 8-state → UI status
-// - normalizeLegacyStatus() to convert legacy 12-state → minimal 8-state
-
-// Helper to get emoji from user name
-const getUserEmoji = (name: string): string => {
-  const emojis = ["🦊", "🦧", "🐋", "🦄", "🔥", "💎", "🐺", "🦁", "🐯", "🐻"];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return emojis[Math.abs(hash) % emojis.length];
-};
-
-// Helper to get the effective status for UI rendering
-// CRITICAL: Always prefer minimalStatus over status field
-const getEffectiveStatus = (order: Order): Order['status'] => {
-  // If minimal_status is completed, ALWAYS return completed
-  if (order.minimalStatus === 'completed') {
-    return 'completed';
-  }
-
-  // Use the status field which has already been mapped from minimal_status
-  // The status field is set by mapDbOrderToUI which uses minimal_status when available
-  return order.status;
-};
-
-// Mini Sparkline Component - Shows activity over time
-const MiniSparkline = ({ data, color = "emerald", height = 24 }: { data: number[]; color?: string; height?: number }) => {
-  const max = Math.max(...data, 1);
-  const colorClass = color === "emerald" ? "bg-white/10" : color === "purple" ? "bg-white/10" : "bg-white/10";
-
-  return (
-    <div className="flex items-end gap-0.5" style={{ height }}>
-      {data.map((value, i) => {
-        const h = (value / max) * 100;
-        return (
-          <motion.div
-            key={i}
-            className={`flex-1 rounded-t-sm ${colorClass} opacity-60`}
-            initial={{ height: 0 }}
-            animate={{ height: `${Math.max(h, 8)}%` }}
-            transition={{ delay: i * 0.03, duration: 0.4, ease: "easeOut" }}
-          />
-        );
-      })}
-    </div>
-  );
-};
-
-// Animated Number Counter
-const AnimatedCounter = ({ value, prefix = "", suffix = "", decimals = 0 }: { value: number; prefix?: string; suffix?: string; decimals?: number }) => {
-  const [displayValue, setDisplayValue] = useState(0);
-
-  useEffect(() => {
-    const duration = 1000;
-    const steps = 30;
-    const increment = value / steps;
-    let current = 0;
-
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= value) {
-        setDisplayValue(value);
-        clearInterval(timer);
-      } else {
-        setDisplayValue(current);
-      }
-    }, duration / steps);
-
-    return () => clearInterval(timer);
-  }, [value]);
-
-  return <span>{prefix}{displayValue.toFixed(decimals)}{suffix}</span>;
-};
-
-// Helper to convert DB order to UI order
-const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Order => {
-  const now = new Date();
-  let expiresIn: number;
-
-  if (dbOrder.expires_at) {
-    const expiresAt = new Date(dbOrder.expires_at);
-    expiresIn = Math.max(0, Math.floor((expiresAt.getTime() - now.getTime()) / 1000));
-  } else {
-    // No expires_at yet (pending orders before acceptance) — calculate from created_at + 15 min global timeout
-    const createdAt = new Date(dbOrder.created_at);
-    const globalTimeoutSec = 15 * 60; // 15 minute global timeout for pending orders
-    expiresIn = Math.max(0, Math.floor((createdAt.getTime() + globalTimeoutSec * 1000 - now.getTime()) / 1000));
-  }
-  const userName = dbOrder.user?.name || "Unknown User";
-
-  // Parse numeric values (API returns them as strings from PostgreSQL)
-  const cryptoAmount = typeof dbOrder.crypto_amount === 'string'
-    ? parseFloat(dbOrder.crypto_amount)
-    : dbOrder.crypto_amount;
-  const fiatAmount = typeof dbOrder.fiat_amount === 'string'
-    ? parseFloat(dbOrder.fiat_amount)
-    : dbOrder.fiat_amount;
-  const rate = typeof dbOrder.rate === 'string'
-    ? parseFloat(dbOrder.rate)
-    : dbOrder.rate;
-
-  // Check if this is an M2M trade
-  const isM2M = !!dbOrder.buyer_merchant_id;
-
-  // USE minimal_status if available (authoritative), otherwise normalize legacy status first
-  const minimalStatus = dbOrder.minimal_status || normalizeLegacyStatus(dbOrder.status);
-  let uiStatus = mapMinimalStatusToUIStatus(minimalStatus as any, dbOrder.is_my_order);
-
-  // Pre-locked SELL order (escrowed but no buyer yet) should show as "pending"
-  // for observers so they can accept it. Only the creator sees it in "escrow" panel.
-  if (uiStatus === 'escrow' && (minimalStatus === 'escrowed' || dbOrder.status === 'escrowed')
-      && !dbOrder.accepted_at && !dbOrder.is_my_order) {
-    uiStatus = 'pending';
-  }
-
-  return {
-    id: dbOrder.id,
-    user: isM2M ? (dbOrder.buyer_merchant?.display_name || 'Merchant') : userName,
-    emoji: getUserEmoji(isM2M ? (dbOrder.buyer_merchant?.display_name || 'M') : userName),
-    amount: cryptoAmount,
-    fromCurrency: "USDC",
-    toCurrency: "AED",
-    rate: rate,
-    total: fiatAmount,
-    timestamp: new Date(dbOrder.created_at),
-    status: uiStatus,
-    minimalStatus: dbOrder.minimal_status, // Store authoritative status
-    orderVersion: dbOrder.order_version,   // Store version for update checks
-    expiresIn,
-    isNew: (dbOrder.user?.total_trades || 0) < 3,
-    tradeVolume: (dbOrder.user?.total_trades || 0) * 500, // Estimated volume
-    dbOrder,
-    // Escrow fields for on-chain release
-    escrowTradeId: dbOrder.escrow_trade_id,
-    escrowTradePda: dbOrder.escrow_trade_pda,
-    escrowCreatorWallet: dbOrder.escrow_creator_wallet,
-    escrowTxHash: dbOrder.escrow_tx_hash,
-    refundTxHash: dbOrder.refund_tx_hash,
-    // Determine the recipient wallet for escrow release:
-    // 1. M2M: use buyer merchant's wallet OR acceptor_wallet_address (fallback)
-    // 2. Buy order (merchant selling to user): buyer is the user, use buyer_wallet_address or user's wallet
-    // 3. Sell order (user selling to merchant): buyer is the merchant, use acceptor_wallet_address or merchant's wallet
-    userWallet: isM2M
-      ? (dbOrder.buyer_merchant?.wallet_address || dbOrder.acceptor_wallet_address)
-      : (dbOrder.type === 'buy'
-          ? (dbOrder.buyer_wallet_address || dbOrder.user?.wallet_address)
-          : (dbOrder.acceptor_wallet_address || dbOrder.buyer_wallet_address || dbOrder.user?.wallet_address)),
-    orderType: dbOrder.type,
-    // User's bank account (from payment_details) - construct from bank details
-    userBankAccount: dbOrder.payment_details
-      ? `${dbOrder.payment_details.user_bank_account || dbOrder.payment_details.bank_account_name || 'Unknown'} - ${dbOrder.payment_details.bank_name || 'Unknown Bank'} (${dbOrder.payment_details.bank_iban || 'No IBAN'})`
-      : undefined,
-    // M2M fields
-    isM2M,
-    buyerMerchantId: dbOrder.buyer_merchant_id,
-    buyerMerchantWallet: dbOrder.buyer_merchant?.wallet_address,
-    // Acceptor wallet (for merchant-initiated orders)
-    acceptorWallet: dbOrder.acceptor_wallet_address,
-    // Flag: true if I created this order (from API is_my_order field)
-    isMyOrder: dbOrder.is_my_order,
-    // Role: 'buyer' | 'seller' | 'observer'
-    // Priority: SQL computed my_role > runtime computeMyRole fallback
-    myRole: dbOrder.my_role || (merchantId ? computeMyRole(dbOrder, merchantId) : undefined),
-    // The merchant ID assigned to this order (creator for pending orders)
-    orderMerchantId: dbOrder.merchant_id,
-    // Message tracking
-    unreadCount: dbOrder.unread_count || 0,
-    hasMessages: (dbOrder.message_count || 0) > 0 || dbOrder.has_manual_message || false,
-    lastHumanMessage: dbOrder.last_human_message,
-    lastHumanMessageSender: dbOrder.last_human_message_sender,
-    // Spread preference
-    spreadPreference: dbOrder.spread_preference as Order['spreadPreference'],
-    // Protocol fee
-    protocolFeePercent: dbOrder.protocol_fee_percentage ? parseFloat(String(dbOrder.protocol_fee_percentage)) : undefined,
-    protocolFeeAmount: dbOrder.protocol_fee_amount ? parseFloat(String(dbOrder.protocol_fee_amount)) : undefined,
-  };
-};
-
-// Top volume threshold for Top 1% badge (100k+ volume)
-const TOP_1_PERCENT_THRESHOLD = 100000;
-
-// Fee structure - trader earnings based on trade preference
-// fast: 3% total, 1% to trader | best: 2.5% total, 0.5% to trader | cheap: 1.5% total, 0.25% to trader
-const TRADER_CUT_CONFIG = {
-  fast: 0.01,    // 1% to trader
-  best: 0.005,   // 0.5% to trader
-  cheap: 0.0025, // 0.25% to trader
-  average: 0.00583, // Average across all preferences for display
-} as const;
-
-// Leaderboard data loaded from API
-
-// Notifications are managed via useState inside the component
-
-// Big order requests - special orders above threshold
-interface BigOrderRequest {
-  id: string;
-  user: string;
-  emoji: string;
-  amount: number;
-  currency: string;
-  message: string;
-  timestamp: Date;
-  premium: number; // extra % they're willing to pay
-}
-
 const initialBigOrders: BigOrderRequest[] = [];
-
-// Merchant info type
-interface MerchantInfo {
-  id: string;
-  email: string;
-  display_name: string;
-  business_name: string;
-  balance: number;
-  wallet_address?: string;
-  username?: string;
-  rating?: number;
-  total_trades?: number;
-  avatar_url?: string | null;
-}
 
 export default function MerchantDashboard() {
   const { playSound } = useSounds();
@@ -649,45 +286,8 @@ export default function MerchantDashboard() {
   const chatInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Notifications state
-  const [notifications, setNotifications] = useState<{
-    id: string;
-    type: 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system';
-    message: string;
-    timestamp: number;
-    read: boolean;
-    orderId?: string;
-  }[]>([]);
-
-  // Mark notification as read
-  const markNotificationRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  };
-
-  // Batched notification helper — coalesces rapid-fire events into one state update
-  const notifQueueRef = useRef<typeof notifications>([]);
-  const notifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const addNotification = useCallback((type: 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system', message: string, orderId?: string) => {
-    notifQueueRef.current.push({
-      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      type,
-      message,
-      timestamp: Date.now(),
-      read: false,
-      orderId,
-    });
-    if (!notifTimerRef.current) {
-      notifTimerRef.current = setTimeout(() => {
-        const batch = notifQueueRef.current;
-        notifQueueRef.current = [];
-        notifTimerRef.current = null;
-        if (batch.length > 0) {
-          setNotifications(prev => [...batch.reverse(), ...prev].slice(0, 50));
-        }
-      }, 200);
-    }
-  }, []);
+  // Notifications (extracted hook)
+  const { notifications, setNotifications, addNotification, markNotificationRead } = useNotifications(merchantId, isLoggedIn);
 
   // Order conversations state (for sidebar Messages section)
   const [orderConversations, setOrderConversations] = useState<{
@@ -772,62 +372,6 @@ export default function MerchantDashboard() {
       fetchOrderConversations();
     }
   }, [merchantId, isLoggedIn, fetchOrderConversations]);
-
-  // Add welcome notification + load history when merchant logs in
-  const hasShownWelcome = useRef(false);
-  useEffect(() => {
-    if (merchantId && isLoggedIn && !hasShownWelcome.current) {
-      hasShownWelcome.current = true;
-      addNotification('system', 'Welcome back! You are now online.');
-
-      // Load notification history from DB
-      fetch(`/api/merchant/notifications?merchantId=${merchantId}&limit=50`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.notifications?.length) {
-            const eventTypeMap: Record<string, 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system'> = {
-              ORDER_CREATED: 'order',
-              ORDER_ACCEPTED: 'order',
-              ORDER_ESCROWED: 'escrow',
-              ORDER_PAYMENT_SENT: 'payment',
-              ORDER_PAYMENT_CONFIRMED: 'payment',
-              ORDER_COMPLETED: 'complete',
-              ORDER_CANCELLED: 'system',
-              ORDER_EXPIRED: 'system',
-              ORDER_DISPUTED: 'dispute',
-            };
-            const buildHistoryMsg = (n: any): string => {
-              const amt = n.crypto_amount ? `${parseFloat(n.crypto_amount).toLocaleString()} USDC` : '';
-              const fiat = n.fiat_amount ? `${parseFloat(n.fiat_amount).toLocaleString()} AED` : '';
-              const user = n.user_name || '';
-              const typeLabel = n.order_type === 'buy' ? 'Sell' : 'Buy';
-              switch (n.event_type) {
-                case 'ORDER_CREATED': return `New ${typeLabel} order · ${amt}${fiat ? ` → ${fiat}` : ''}`;
-                case 'ORDER_ACCEPTED': return `Order accepted · ${amt}${user ? ` · ${user}` : ''}`;
-                case 'ORDER_ESCROWED': return `Escrow locked · ${amt} secured`;
-                case 'ORDER_PAYMENT_SENT': return `Payment marked sent · ${amt}${user ? ` · ${user}` : ''}`;
-                case 'ORDER_PAYMENT_CONFIRMED': return `Payment confirmed · ${amt} · Ready to release`;
-                case 'ORDER_COMPLETED': return `Trade completed! ${amt}${fiat ? ` → ${fiat}` : ''}`;
-                case 'ORDER_CANCELLED': return `Order cancelled · ${amt}${user ? ` · ${user}` : ''}`;
-                case 'ORDER_EXPIRED': return `Order expired · ${amt} timed out`;
-                case 'ORDER_DISPUTED': return `Dispute opened · ${amt}${user ? ` · ${user}` : ''}`;
-                default: return n.event_type;
-              }
-            };
-            const history = data.notifications.map((n: any) => ({
-              id: `db-${n.id}`,
-              type: eventTypeMap[n.event_type] || 'system',
-              message: buildHistoryMsg(n),
-              timestamp: new Date(n.created_at).getTime(),
-              read: true, // historical = already read
-              orderId: n.order_id,
-            }));
-            setNotifications(prev => [...prev, ...history]);
-          }
-        })
-        .catch(() => {}); // silent fail — not critical
-    }
-  }, [merchantId, isLoggedIn, addNotification]);
 
   // Real-time Pusher context
   const { setActor } = usePusher();
@@ -3539,30 +3083,27 @@ export default function MerchantDashboard() {
     }
   };
 
-  // Global 15-minute timeout check - orders older than 15 mins should not show in active views
-  const isOrderExpired = (order: Order) => {
-    // Use the database expires_at (via expiresIn) which is properly extended:
-    // - Pending orders: 15 minutes from creation
-    // - Accepted/escrowed orders: 120 minutes from acceptance/escrow
-    return order.expiresIn <= 0;
-  };
-
   // Filter orders by status - Flow: New Orders → Active → Ongoing → Completed
-  // CRITICAL: Use getEffectiveStatus() which respects minimal_status
-  // "pending" = New Orders (including escrowed sell orders waiting for merchant to click "Go")
-  // Include own pending orders so merchant can see/manage orders created via bot or API
+  // CRITICAL: Orders with MY escrow must ALWAYS be visible (never silently dropped)
+  const hasMyEscrow = (o: Order) => o.isMyOrder || o.myRole === 'seller' || o.orderMerchantId === merchantId;
+
+  // "pending" = New Orders
   const pendingOrders = useMemo(() => orders.filter(o => getEffectiveStatus(o) === "pending" && !isOrderExpired(o)), [orders]);
-  // "escrow" = In Progress (tx signed, trade in progress)
-  // Filter out orders older than 15 minutes - they should go to disputed
-  const ongoingOrders = useMemo(() => orders.filter(o => getEffectiveStatus(o) === "escrow" && !isOrderExpired(o)), [orders]);
+  // "escrow" = In Progress — my escrowed orders are NEVER filtered by expiry (my funds are locked)
+  const ongoingOrders = useMemo(() => orders.filter(o => {
+    const status = getEffectiveStatus(o);
+    if (status !== "escrow") return false;
+    if (hasMyEscrow(o)) return true;
+    return !isOrderExpired(o);
+  }), [orders]);
   const completedOrders = useMemo(() => orders.filter(o => getEffectiveStatus(o) === "completed"), [orders]);
-  // Include expired orders in cancelled view (client-side check)
+  // Cancelled/expired — but never steal my escrowed orders into this bucket
   const cancelledOrders = useMemo(() => orders.filter(o => {
     const status = getEffectiveStatus(o);
     return status === "cancelled" ||
       status === "disputed" ||
-      // Also include active/escrow orders that are expired (15+ mins old)
-      ((status === "active" || status === "escrow" || status === "pending") && isOrderExpired(o));
+      ((status === "active" || status === "pending") && isOrderExpired(o)) ||
+      (status === "escrow" && isOrderExpired(o) && !hasMyEscrow(o));
   }), [orders]);
 
   // Calculate trader earnings using "best" rate (most common preference)
@@ -3591,180 +3132,21 @@ export default function MerchantDashboard() {
   // Login screen
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-[#060606] text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
-        {/* Ambient background */}
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-orange-500/[0.03] rounded-full blur-[150px]" />
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-white/[0.01] rounded-full blur-[200px]" />
-        </div>
-
-        <div className="w-full max-w-sm relative z-10">
-          <div className="text-center mb-8">
-            <div className="flex items-center justify-center gap-2.5 mb-4">
-              <Zap className="w-7 h-7 text-white fill-white" />
-              <span className="text-[22px] leading-none">
-                <span className="font-bold text-white">Blip</span>{' '}
-                <span className="italic text-white/90">money</span>
-              </span>
-            </div>
-            <h1 className="text-xl font-bold mb-2">Merchant Portal</h1>
-            <p className="text-sm text-gray-500">P2P trading, powered by crypto</p>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex mb-4 bg-white/[0.03] rounded-xl p-1">
-            <button
-              onClick={() => { setAuthTab('signin'); setLoginError(''); }}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                authTab === 'signin'
-                  ? 'bg-white text-black'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => { setAuthTab('create'); setLoginError(''); }}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                authTab === 'create'
-                  ? 'bg-white text-black'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
-
-          <div className="bg-white/[0.02] rounded-2xl border border-white/[0.04] p-6 space-y-4">
-            {loginError && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400">
-                {loginError}
-              </div>
-            )}
-
-            {isAuthenticating && (
-              <div className="bg-white/5 border border-white/6 rounded-xl p-3 text-sm text-white/70 flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Authenticating with wallet...
-              </div>
-            )}
-
-            {/* Sign In Tab */}
-            {authTab === 'signin' && (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Email</label>
-                  <input
-                    type="email"
-                    value={loginForm.email}
-                    onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                    placeholder="merchant@email.com"
-                    className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Password</label>
-                  <input
-                    type="password"
-                    value={loginForm.password}
-                    onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                    placeholder="••••••••"
-                    className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-                    onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                  />
-                </div>
-
-                <motion.button
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleLogin}
-                  disabled={isLoggingIn || !loginForm.email || !loginForm.password}
-                  className="w-full py-3 rounded-xl text-sm font-bold bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-50"
-                >
-                  {isLoggingIn ? "Signing in..." : "Sign In"}
-                </motion.button>
-
-                <p className="text-[11px] text-gray-500 text-center">
-                  You can connect your wallet after signing in to enable on-chain transactions
-                </p>
-              </div>
-            )}
-
-            {/* Create Account Tab */}
-            {authTab === 'create' && (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Email</label>
-                  <input
-                    type="email"
-                    value={registerForm.email}
-                    onChange={(e) => setRegisterForm(prev => ({ ...prev, email: e.target.value }))}
-                    placeholder="your@email.com"
-                    className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Business Name (Optional)</label>
-                  <input
-                    type="text"
-                    value={registerForm.businessName}
-                    onChange={(e) => setRegisterForm(prev => ({ ...prev, businessName: e.target.value }))}
-                    placeholder="Your Business"
-                    className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Password</label>
-                  <input
-                    type="password"
-                    value={registerForm.password}
-                    onChange={(e) => setRegisterForm(prev => ({ ...prev, password: e.target.value }))}
-                    placeholder="Min. 6 characters"
-                    className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Confirm Password</label>
-                  <input
-                    type="password"
-                    value={registerForm.confirmPassword}
-                    onChange={(e) => setRegisterForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                    placeholder="••••••••"
-                    className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-                    onKeyDown={(e) => e.key === "Enter" && handleRegister()}
-                  />
-                </div>
-
-                <motion.button
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleRegister}
-                  disabled={isRegistering || !registerForm.email || !registerForm.password || !registerForm.confirmPassword}
-                  className="w-full py-3.5 rounded-xl text-sm font-bold bg-white/10 border border-white/10 text-white hover:bg-white/20 transition-all disabled:opacity-50"
-                >
-                  {isRegistering ? "Creating Account..." : "Create Account"}
-                </motion.button>
-
-                <p className="text-[11px] text-gray-500 text-center">
-                  After creating your account, you can connect your wallet to enable on-chain transactions
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="mt-8 text-center space-y-2">
-            <p className="text-[10px] text-white/15 font-mono">Blip Money v1.0</p>
-            <div className="flex items-center justify-center gap-3 text-[10px] text-white/20">
-              <Link href="/" className="hover:text-white/40 transition-colors">Home</Link>
-              <span className="text-white/10">·</span>
-              <Link href="/merchant" className="hover:text-white/40 transition-colors">Merchant</Link>
-            </div>
-          </div>
-        </div>
-      </div>
+      <LoginScreen
+        authTab={authTab}
+        setAuthTab={setAuthTab}
+        loginForm={loginForm}
+        setLoginForm={setLoginForm}
+        registerForm={registerForm}
+        setRegisterForm={setRegisterForm}
+        loginError={loginError}
+        setLoginError={setLoginError}
+        isLoggingIn={isLoggingIn}
+        isRegistering={isRegistering}
+        isAuthenticating={isAuthenticating}
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+      />
     );
   }
 
@@ -4008,88 +3390,11 @@ export default function MerchantDashboard() {
         <Panel defaultSize={isWideScreen ? "18%" : "22%"} minSize={isWideScreen ? "12%" : "15%"} maxSize={isWideScreen ? "30%" : "35%"} id="right">
         <div className="flex flex-col h-full bg-[#060606] overflow-hidden">
           {/* Notifications Panel - Top, max 50% of sidebar */}
-          <div style={{ maxHeight: '50%' }} className="flex flex-col border-b border-white/[0.04] overflow-hidden shrink-0">
-            <div className="flex flex-col h-full min-h-0">
-              {/* Header */}
-              <div className="px-3 py-2 border-b border-white/[0.04]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Bell className="w-3.5 h-3.5 text-white/30" />
-                    <h2 className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">
-                      Notifications
-                    </h2>
-                  </div>
-                  {notifications.filter(n => !n.read).length > 0 && (
-                    <span className="text-[10px] border border-orange-500/30 text-orange-400 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
-                      {notifications.filter(n => !n.read).length}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Notifications List */}
-              <div className="flex-1 min-h-0 overflow-y-auto p-1.5">
-                {notifications.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-white/15">
-                    <Bell className="w-8 h-8 mb-2 opacity-30" />
-                    <p className="text-[10px] font-mono">No notifications</p>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    {notifications.map((notif) => {
-                      // Live relative time
-                      const secAgo = Math.floor((Date.now() - notif.timestamp) / 1000);
-                      const relTime = secAgo < 60 ? 'Just now'
-                        : secAgo < 3600 ? `${Math.floor(secAgo / 60)}m ago`
-                        : secAgo < 86400 ? `${Math.floor(secAgo / 3600)}h ago`
-                        : `${Math.floor(secAgo / 86400)}d ago`;
-
-                      return (
-                        <div
-                          key={notif.id}
-                          onClick={() => {
-                            markNotificationRead(notif.id);
-                            if (notif.orderId) setSelectedOrderId(notif.orderId);
-                          }}
-                          className={`p-2 rounded-lg border transition-colors cursor-pointer ${
-                            !notif.read
-                              ? 'bg-white/[0.03] border-white/[0.08] hover:border-white/[0.12]'
-                              : 'bg-transparent border-white/[0.04] hover:border-white/[0.08]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${
-                              notif.type === 'escrow' ? 'bg-orange-500/10' :
-                              notif.type === 'dispute' ? 'bg-red-500/10' :
-                              notif.type === 'complete' ? 'bg-emerald-500/10' :
-                              notif.type === 'payment' ? 'bg-blue-500/10' :
-                              'bg-white/[0.04]'
-                            }`}>
-                              {notif.type === 'order' && <ShoppingBag className="w-3 h-3 text-white/40" />}
-                              {notif.type === 'escrow' && <Shield className="w-3 h-3 text-orange-400/60" />}
-                              {notif.type === 'payment' && <DollarSign className="w-3 h-3 text-blue-400/60" />}
-                              {notif.type === 'dispute' && <AlertTriangle className="w-3 h-3 text-red-400" />}
-                              {notif.type === 'complete' && <CheckCircle2 className="w-3 h-3 text-emerald-400/60" />}
-                              {notif.type === 'system' && <Bell className="w-3 h-3 text-white/40" />}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-[11px] leading-tight ${!notif.read ? 'text-white/80 font-medium' : 'text-white/50'}`}>
-                                {notif.message}
-                              </p>
-                              <span className="text-[9px] text-white/25 font-mono">{relTime}</span>
-                            </div>
-                            {!notif.read && (
-                              <div className="w-1.5 h-1.5 rounded-full bg-orange-400 flex-shrink-0" />
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <NotificationsPanel
+            notifications={notifications}
+            onMarkRead={markNotificationRead}
+            onSelectOrder={setSelectedOrderId}
+          />
 
           {/* Chat Messages Panel - Bottom (takes remaining space) */}
           <div className="flex-1 flex flex-col min-h-0">

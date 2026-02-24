@@ -245,12 +245,14 @@ export async function getAllPendingOrdersForMerchant(
              WHEN o.merchant_id = $1 AND o.type = 'sell' THEN 'buyer'
              ELSE 'observer'
            END as my_role,
-           -- is_my_order: backward compat (true if I'm buyer or seller, not observer)
+           -- is_my_order: true if I'm buyer or seller (not observer)
+           -- Fallback chain ensures no order assigned to me is ever missed
            CASE
              WHEN o.buyer_merchant_id = $1 THEN true
              WHEN o.merchant_id = $1 AND o.accepted_at IS NOT NULL THEN true
              WHEN o.merchant_id = $1 AND (u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%') THEN true
              WHEN o.escrow_creator_wallet IS NOT NULL AND LOWER(o.escrow_creator_wallet) = LOWER(current_m.wallet_address) THEN true
+             WHEN o.merchant_id = $1 THEN true
              ELSE false
            END as is_my_order,
            json_build_object(
