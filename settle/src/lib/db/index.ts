@@ -1,5 +1,6 @@
 // Database client for PostgreSQL
 // Uses pg library for localhost development
+// Singleton pool — survives HMR in dev mode
 
 import { Pool, PoolClient } from 'pg';
 
@@ -9,7 +10,7 @@ const poolConfig = process.env.DATABASE_URL
   ? {
       connectionString: process.env.DATABASE_URL,
       ssl: isProduction ? { rejectUnauthorized: false } : false,
-      max: 20,
+      max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
     }
@@ -19,21 +20,22 @@ const poolConfig = process.env.DATABASE_URL
       database: process.env.DB_NAME || 'settle',
       user: process.env.DB_USER || 'zeus',
       password: process.env.DB_PASSWORD || '',
-      max: 20,
+      max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 5000,
     };
 
-const pool = new Pool(poolConfig);
+// Prevent pool duplication on HMR reloads in dev
+const globalForDb = globalThis as unknown as { __dbPool?: Pool };
+const pool = globalForDb.__dbPool ?? new Pool(poolConfig);
+if (!isProduction) globalForDb.__dbPool = pool;
 
-// Test connection on startup
-pool.on('connect', () => {
-  console.log('Connected to PostgreSQL');
-});
-
-pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err);
-});
+// Only attach listeners once (avoid accumulation on HMR)
+if (!globalForDb.__dbPool || globalForDb.__dbPool === pool) {
+  pool.on('error', (err) => {
+    console.error('Unexpected error on idle client', err);
+  });
+}
 
 // Query helper with automatic client release
 export async function query<T = unknown>(

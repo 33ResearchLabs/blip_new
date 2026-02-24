@@ -49,6 +49,7 @@ export function getRpcEndpoints(network: 'devnet' | 'mainnet-beta' = 'devnet'): 
 }
 
 // Health check cache (in-memory, client-side only)
+const MAX_HEALTH_CACHE = 50;
 const healthCache = new Map<string, EndpointHealth>();
 const HEALTH_CACHE_TTL = 60 * 1000; // 1 minute cache
 
@@ -92,6 +93,13 @@ export async function checkEndpointHealth(url: string): Promise<EndpointHealth> 
     };
 
     healthCache.set(url, result);
+    // Evict expired entries to prevent unbounded growth
+    if (healthCache.size > MAX_HEALTH_CACHE) {
+      const now = Date.now();
+      for (const [k, v] of healthCache) {
+        if (now - v.lastChecked > HEALTH_CACHE_TTL) healthCache.delete(k);
+      }
+    }
     return result;
   } catch (error) {
     const result: EndpointHealth = {

@@ -270,9 +270,18 @@ export function useRealtimeOrders(
       const lastSeen = recentEvents.get(key);
       if (lastSeen && now - lastSeen < 3000) return true;
       recentEvents.set(key, now);
-      if (recentEvents.size > 100) {
+      // Evict expired entries every 50 insertions to stay bounded
+      if (recentEvents.size > 50) {
         for (const [k, t] of recentEvents) {
-          if (now - t > 10000) recentEvents.delete(k);
+          if (now - t > 5000) recentEvents.delete(k);
+        }
+        // Hard cap — drop oldest if still over limit
+        if (recentEvents.size > 100) {
+          const iter = recentEvents.keys();
+          while (recentEvents.size > 50) {
+            const oldest = iter.next().value;
+            if (oldest) recentEvents.delete(oldest); else break;
+          }
         }
       }
       return false;

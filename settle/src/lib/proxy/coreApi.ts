@@ -69,11 +69,15 @@ export async function proxyCoreApi(
     headers['x-actor-signature'] = signActorHeaders(coreApiSecret, actorType, actorId);
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
   try {
     const response = await fetch(url, {
       method: options.method,
       headers,
       body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
     });
 
     const data = await response.json();
@@ -88,5 +92,7 @@ export async function proxyCoreApi(
       { success: false, error: 'Core API unavailable — retry later' },
       { status: 503 }
     );
+  } finally {
+    clearTimeout(timeout);
   }
 }

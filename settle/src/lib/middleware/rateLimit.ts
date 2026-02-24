@@ -26,10 +26,11 @@ interface RateLimitConfig {
 
 // In-memory store for rate limit tracking
 // Key format: `${identifier}:${endpoint}`
+const MAX_STORE_SIZE = 5000;
 const rateLimitStore = new Map<string, RateLimitEntry>();
 
-// Cleanup interval (every 5 minutes)
-const CLEANUP_INTERVAL = 5 * 60 * 1000;
+// Cleanup interval (every 1 minute — was 5 min, too slow)
+const CLEANUP_INTERVAL = 60 * 1000;
 let cleanupTimer: NodeJS.Timeout | null = null;
 
 /**
@@ -43,6 +44,15 @@ function startCleanupTimer() {
     for (const [key, entry] of rateLimitStore.entries()) {
       if (entry.resetAt < now) {
         rateLimitStore.delete(key);
+      }
+    }
+    // Hard cap — evict oldest if over limit
+    if (rateLimitStore.size > MAX_STORE_SIZE) {
+      const excess = rateLimitStore.size - MAX_STORE_SIZE;
+      const iter = rateLimitStore.keys();
+      for (let i = 0; i < excess; i++) {
+        const key = iter.next().value;
+        if (key) rateLimitStore.delete(key);
       }
     }
   }, CLEANUP_INTERVAL);

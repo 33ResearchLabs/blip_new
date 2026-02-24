@@ -45,11 +45,17 @@ import { WebSocketServer, WebSocket } from "ws";
 import { logger } from "settlement-core";
 var clients = /* @__PURE__ */ new Map();
 var actorIndex = /* @__PURE__ */ new Map();
+var MAX_CONNECTIONS = 500;
 var wss = null;
 var heartbeatInterval = null;
 function initWebSocketServer(server) {
   wss = new WebSocketServer({ server, path: "/ws/orders" });
   wss.on("connection", (ws) => {
+    if (clients.size >= MAX_CONNECTIONS) {
+      logger.warn("[WS] Max connections reached, rejecting");
+      ws.close(1013, "Max connections");
+      return;
+    }
     logger.info("[WS] New connection");
     ws.on("message", (raw) => {
       try {
@@ -89,16 +95,35 @@ function initWebSocketServer(server) {
     });
     ws.on("error", (err) => {
       logger.error("[WS] Client error", { error: err.message });
+      const meta = clients.get(ws);
+      if (meta) {
+        const key = `${meta.actorType}:${meta.actorId}`;
+        actorIndex.get(key)?.delete(ws);
+        if (actorIndex.get(key)?.size === 0) actorIndex.delete(key);
+      }
+      clients.delete(ws);
+      try {
+        ws.terminate();
+      } catch {
+      }
     });
   });
   heartbeatInterval = setInterval(() => {
     clients.forEach((meta, ws) => {
+      if (ws.readyState === WebSocket.CLOSING || ws.readyState === WebSocket.CLOSED) {
+        clients.delete(ws);
+        return;
+      }
       if (!meta.alive) {
         ws.terminate();
         return;
       }
       meta.alive = false;
-      ws.send(JSON.stringify({ type: "ping" }));
+      try {
+        ws.send(JSON.stringify({ type: "ping" }));
+      } catch {
+        ws.terminate();
+      }
     });
   }, 3e4);
   logger.info("[WS] WebSocket server initialized on /ws/orders");
@@ -135,8 +160,11 @@ function broadcastOrderEvent(payload) {
   let sent = 0;
   targets.forEach((ws) => {
     if (ws.readyState === WebSocket.OPEN) {
-      ws.send(message);
-      sent++;
+      try {
+        ws.send(message);
+        sent++;
+      } catch {
+      }
     }
   });
   if (sent > 0) {
@@ -2791,17 +2819,15 @@ async function cleanupSentNotifications() {
 var __filename = fileURLToPath(import.meta.url);
 if (process.argv[1] === __filename) {
   startOutboxWorker();
-  setInterval(cleanupSentNotifications, 60 * 60 * 1e3);
-  process.on("SIGINT", () => {
-    logger10.info("[Outbox] Received SIGINT, shutting down...");
+  const cleanupInterval = setInterval(cleanupSentNotifications, 60 * 60 * 1e3);
+  const shutdownStandalone = () => {
+    logger10.info("[Outbox] Shutting down...");
+    clearInterval(cleanupInterval);
     stopOutboxWorker();
     process.exit(0);
-  });
-  process.on("SIGTERM", () => {
-    logger10.info("[Outbox] Received SIGTERM, shutting down...");
-    stopOutboxWorker();
-    process.exit(0);
-  });
+  };
+  process.on("SIGINT", shutdownStandalone);
+  process.on("SIGTERM", shutdownStandalone);
 }
 
 // src/workers/corridorTimeoutWorker.ts
@@ -3015,6 +3041,7 @@ function stopAutoBumpWorker() {
 }
 
 // src/index.ts
+import { closePool } from "settlement-core";
 var PORT = parseInt(process.env.CORE_API_PORT || "4010", 10);
 var HOST = process.env.CORE_API_HOST || "0.0.0.0";
 var IS_WORKER = process.env.WORKER_ID !== void 0;
@@ -3059,6 +3086,7 @@ var shutdown = async (signal) => {
     closeWebSocketServer();
   }
   await fastify.close();
+  await closePool();
   process.exit(0);
 };
 process.on("SIGINT", () => shutdown("SIGINT"));

@@ -23,6 +23,7 @@ const clients = new Map<WebSocket, ClientMeta>();
 // actorKey = `${actorType}:${actorId}` e.g. "merchant:abc-123"
 const actorIndex = new Map<string, Set<WebSocket>>();
 
+const MAX_CONNECTIONS = 500;
 let wss: WebSocketServer | null = null;
 let heartbeatInterval: NodeJS.Timeout | null = null;
 
@@ -33,6 +34,12 @@ export function initWebSocketServer(server: HTTPServer): void {
   wss = new WebSocketServer({ server, path: '/ws/orders' });
 
   wss.on('connection', (ws) => {
+    // Reject if at capacity
+    if (clients.size >= MAX_CONNECTIONS) {
+      logger.warn('[WS] Max connections reached, rejecting');
+      ws.close(1013, 'Max connections');
+      return;
+    }
     logger.info('[WS] New connection');
 
     ws.on('message', (raw) => {
@@ -80,18 +87,31 @@ export function initWebSocketServer(server: HTTPServer): void {
 
     ws.on('error', (err) => {
       logger.error('[WS] Client error', { error: err.message });
+      // Clean up on error — client is dead
+      const meta = clients.get(ws);
+      if (meta) {
+        const key = `${meta.actorType}:${meta.actorId}`;
+        actorIndex.get(key)?.delete(ws);
+        if (actorIndex.get(key)?.size === 0) actorIndex.delete(key);
+      }
+      clients.delete(ws);
+      try { ws.terminate(); } catch { /* already dead */ }
     });
   });
 
-  // Heartbeat every 30s
+  // Heartbeat every 30s — kill stale connections
   heartbeatInterval = setInterval(() => {
     clients.forEach((meta, ws) => {
+      if (ws.readyState === WebSocket.CLOSING || ws.readyState === WebSocket.CLOSED) {
+        clients.delete(ws);
+        return;
+      }
       if (!meta.alive) {
         ws.terminate();
         return;
       }
       meta.alive = false;
-      ws.send(JSON.stringify({ type: 'ping' }));
+      try { ws.send(JSON.stringify({ type: 'ping' })); } catch { ws.terminate(); }
     });
   }, 30000);
 
@@ -159,8 +179,7 @@ export function broadcastOrderEvent(payload: BroadcastPayload): void {
   let sent = 0;
   targets.forEach((ws) => {
     if (ws.readyState === WebSocket.OPEN) {
-      ws.send(message);
-      sent++;
+      try { ws.send(message); sent++; } catch { /* dead socket, heartbeat will clean */ }
     }
   });
 

@@ -391,17 +391,15 @@ const __filename = fileURLToPath(import.meta.url);
 if (process.argv[1] === __filename) {
   startOutboxWorker();
 
-  setInterval(cleanupSentNotifications, 60 * 60 * 1000);
+  const cleanupInterval = setInterval(cleanupSentNotifications, 60 * 60 * 1000);
 
-  process.on('SIGINT', () => {
-    logger.info('[Outbox] Received SIGINT, shutting down...');
+  const shutdownStandalone = () => {
+    logger.info('[Outbox] Shutting down...');
+    clearInterval(cleanupInterval);
     stopOutboxWorker();
     process.exit(0);
-  });
+  };
 
-  process.on('SIGTERM', () => {
-    logger.info('[Outbox] Received SIGTERM, shutting down...');
-    stopOutboxWorker();
-    process.exit(0);
-  });
+  process.on('SIGINT', shutdownStandalone);
+  process.on('SIGTERM', shutdownStandalone);
 }

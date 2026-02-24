@@ -9,7 +9,7 @@ const poolConfig = process.env.DATABASE_URL
   ? {
       connectionString: process.env.DATABASE_URL,
       ssl: isProduction ? { rejectUnauthorized: false } : false,
-      max: parseInt(process.env.DB_POOL_MAX || '50'),
+      max: parseInt(process.env.DB_POOL_MAX || '10'),
       idleTimeoutMillis: 10000,
       connectionTimeoutMillis: 5000,
     }
@@ -19,7 +19,7 @@ const poolConfig = process.env.DATABASE_URL
       database: process.env.DB_NAME || 'settle',
       user: process.env.DB_USER || 'zeus',
       password: process.env.DB_PASSWORD || '',
-      max: parseInt(process.env.DB_POOL_MAX || '50'),
+      max: parseInt(process.env.DB_POOL_MAX || '10'),
       idleTimeoutMillis: 10000,
       connectionTimeoutMillis: 5000,
     };
@@ -78,6 +78,11 @@ export async function transaction<T>(
   }
 }
 
+// Graceful shutdown — close all pool connections
+export async function closePool(): Promise<void> {
+  await pool.end();
+}
+
 // Export pool for direct access if needed
 export { pool };
-export default { query, queryOne, transaction, pool };
+export default { query, queryOne, transaction, pool, closePool };
