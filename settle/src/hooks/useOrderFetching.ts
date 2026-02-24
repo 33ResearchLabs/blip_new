@@ -384,7 +384,7 @@ export function useOrderFetching({
     return () => clearInterval(interval);
   }, [merchantId]);
 
-  // Expiry countdown timer (decrements expiresIn every second)
+  // Expiry countdown timer — tick every 10s (UI shows "X min", not seconds)
   useEffect(() => {
     const interval = setInterval(() => {
       setOrders((prev: Order[]) => {
@@ -393,11 +393,11 @@ export function useOrderFetching({
           if (order.status === "completed" || order.status === "cancelled") return order;
           if (order.expiresIn <= 0) return order;
           hasChanges = true;
-          return { ...order, expiresIn: Math.max(0, order.expiresIn - 1) };
+          return { ...order, expiresIn: Math.max(0, order.expiresIn - 10) };
         });
         return hasChanges ? updated : prev;
       });
-    }, 1000);
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 

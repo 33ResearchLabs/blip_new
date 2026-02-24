@@ -89,7 +89,9 @@ export async function GET(request: NextRequest) {
     }));
 
     logger.api.request('GET', '/api/merchant/orders', merchant_id);
-    return successResponse(ordersWithMinimalStatus);
+    const res = NextResponse.json({ success: true, data: ordersWithMinimalStatus });
+    res.headers.set('Cache-Control', 'private, max-age=1, stale-while-revalidate=3');
+    return res;
   } catch (error) {
     logger.api.error('GET', '/api/merchant/orders', error as Error);
     return errorResponse('Internal server error');

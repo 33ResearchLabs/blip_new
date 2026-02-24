@@ -53,7 +53,9 @@ export async function GET(request: NextRequest) {
       });
 
       logger.api.request('GET', '/api/offers (best match)');
-      return successResponse(offer);
+      const res = NextResponse.json({ success: true, data: offer });
+      res.headers.set('Cache-Control', 'private, max-age=5, stale-while-revalidate=10');
+      return res;
     }
 
     // Otherwise return all matching offers
@@ -64,7 +66,9 @@ export async function GET(request: NextRequest) {
     });
 
     logger.api.request('GET', '/api/offers');
-    return successResponse(offers);
+    const res = NextResponse.json({ success: true, data: offers });
+    res.headers.set('Cache-Control', 'private, max-age=5, stale-while-revalidate=10');
+    return res;
   } catch (error) {
     logger.api.error('GET', '/api/offers', error as Error);
     return errorResponse('Internal server error');
