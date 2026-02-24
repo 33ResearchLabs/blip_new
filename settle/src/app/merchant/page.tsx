@@ -29,9 +29,6 @@ import {
   ExternalLink,
   RotateCcw,
   History,
-  ShoppingBag,
-  CheckCircle2,
-  Search,
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -60,7 +57,7 @@ import { RatingModal } from "@/components/RatingModal";
 import { MerchantQuoteModal } from "@/components/mempool/MerchantQuoteModal";
 import { OrderInspector } from "@/components/mempool/OrderInspector";
 import { DashboardWidgets } from "@/components/merchant/DashboardWidgets";
-import { Package, Droplets } from "lucide-react";
+import { Package } from "lucide-react";
 import { CorridorLPPanel } from "@/components/merchant/CorridorLPPanel";
 import { getNextStep, type NextStepResult } from "@/lib/orders/getNextStep";
 import { getAuthoritativeStatus, shouldAcceptUpdate, computeMyRole } from "@/lib/orders/statusResolver";
@@ -75,9 +72,14 @@ import { CompletedOrdersPanel } from "@/components/merchant/CompletedOrdersPanel
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useMerchantStore } from "@/stores/merchantStore";
-import type { DbOrder, Order, LeaderboardEntry, BigOrderRequest, MerchantInfo, Notification, OpenTradeForm, DisputeInfo, ExtensionRequest, ResolvedDispute, RatingModalData, OrderConversation } from "@/types/merchant";
+import type { DbOrder, Order } from "@/types/merchant";
 import { getUserEmoji, getEffectiveStatus, isOrderExpired, mapDbOrderToUI, TRADER_CUT_CONFIG, TOP_1_PERCENT_THRESHOLD } from "@/lib/orders/mappers";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useOrderFetching } from "@/hooks/useOrderFetching";
+import { useDashboardAuth } from "@/hooks/useDashboardAuth";
+import { useEscrowOperations } from "@/hooks/useEscrowOperations";
+import { useDisputeHandlers } from "@/hooks/useDisputeHandlers";
+import { useOrderActions } from "@/hooks/useOrderActions";
 import { LoginScreen } from "@/components/merchant/LoginScreen";
 import { NotificationsPanel } from "@/components/merchant/NotificationsPanel";
 
@@ -114,7 +116,7 @@ const useSolanaWalletHook = () => {
   }
 };
 
-const initialBigOrders: BigOrderRequest[] = [];
+// (initialBigOrders moved to useOrderFetching hook)
 
 export default function MerchantDashboard() {
   const { playSound } = useSounds();
@@ -123,17 +125,12 @@ export default function MerchantDashboard() {
   const orders = useMerchantStore(s => s.orders);
   const setOrders = useMerchantStore(s => s.setOrders);
   const merchantId = useMerchantStore(s => s.merchantId);
-  const setMerchantId = useMerchantStore(s => s.setMerchantId);
   const merchantInfo = useMerchantStore(s => s.merchantInfo);
   const setMerchantInfo = useMerchantStore(s => s.setMerchantInfo);
   const isLoggedIn = useMerchantStore(s => s.isLoggedIn);
-  const setIsLoggedIn = useMerchantStore(s => s.setIsLoggedIn);
   // ─── Filter/sort state from store (shared with PendingOrdersPanel) ───
   const searchQuery = useMerchantStore(s => s.searchQuery);
   const setSearchQuery = useMerchantStore(s => s.setSearchQuery);
-  // ─── Local UI state (component-scoped, doesn't cascade) ───
-  const [activeOffers, setActiveOffers] = useState<{ id: string; type: string; available_amount: number; is_active: boolean }[]>([]);
-  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
 
   // Solana wallet state
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -143,26 +140,25 @@ export default function MerchantDashboard() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isNewMerchant, setIsNewMerchant] = useState(false);
 
-  // Escrow locking state
-  const [showEscrowModal, setShowEscrowModal] = useState(false);
-  const [escrowOrder, setEscrowOrder] = useState<Order | null>(null);
-  const [isLockingEscrow, setIsLockingEscrow] = useState(false);
-  const [escrowTxHash, setEscrowTxHash] = useState<string | null>(null);
-  const [escrowError, setEscrowError] = useState<string | null>(null);
-
-  // Escrow release state
-  const [showReleaseModal, setShowReleaseModal] = useState(false);
-  const [releaseOrder, setReleaseOrder] = useState<Order | null>(null);
-  const [isReleasingEscrow, setIsReleasingEscrow] = useState(false);
-  const [releaseTxHash, setReleaseTxHash] = useState<string | null>(null);
-  const [releaseError, setReleaseError] = useState<string | null>(null);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
-  const [isCancellingEscrow, setIsCancellingEscrow] = useState(false);
-  const [cancelTxHash, setCancelTxHash] = useState<string | null>(null);
-  const [cancelError, setCancelError] = useState<string | null>(null);
+  // (Escrow state moved to useEscrowOperations hook — initialized after fetching hook)
   const solanaWallet = useSolanaWalletHook();
   const isMockMode = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+
+  // Pusher context (needed before useOrderFetching for isPusherConnected)
+  const { isConnected: isPusherConnected, setActor } = usePusher();
+
+  // ─── Order fetching hook (manages all data fetching, polling, expiry) ───
+  const {
+    activeOffers, leaderboardData, inAppBalance, bigOrders, mempoolOrders, resolvedDisputes,
+    effectiveBalance, setActiveOffers, setBigOrders, setMempoolOrders, setResolvedDisputes,
+    fetchOrders, debouncedFetchOrders, fetchMempoolOrders, fetchActiveOffers,
+    refreshBalance, refetchSingleOrder, afterMutationReconcile, dismissBigOrder,
+  } = useOrderFetching({
+    isMockMode,
+    isPusherConnected,
+    solanaUsdtBalance: solanaWallet.usdtBalance,
+    solanaRefreshBalances: solanaWallet.refreshBalances,
+  });
 
   // Embedded wallet UI state
   const embeddedWallet = (solanaWallet as any)?.embeddedWallet as {
@@ -172,22 +168,23 @@ export default function MerchantDashboard() {
     deleteWallet: () => void;
     setKeypairAndUnlock: (kp: any) => void;
   } | undefined;
-  // No popup state needed — wallet lives on /merchant/wallet
 
-  // In-app balance for mock mode (fetched from DB instead of on-chain)
-  // Default to 10000 (MOCK_INITIAL_BALANCE) so balance shows immediately while DB fetch loads
-  const [inAppBalance, setInAppBalance] = useState<number | null>(isMockMode ? 10000 : null);
-  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
-  const [registerForm, setRegisterForm] = useState({ email: "", password: "", confirmPassword: "", businessName: "" });
-  const [authTab, setAuthTab] = useState<'signin' | 'create'>('signin');
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [loginError, setLoginError] = useState("");
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  // ─── Auth hook (login, register, logout, session restore) ───
+  const {
+    loginForm, setLoginForm, registerForm, setRegisterForm,
+    authTab, setAuthTab, loginError, setLoginError,
+    isLoggingIn, isRegistering,
+    handleLogin, handleRegister, handleLogout,
+    handleMerchantUsername, handleProfileUpdated,
+  } = useDashboardAuth({
+    isMockMode,
+    solanaWallet,
+    setShowWalletPrompt,
+    setShowUsernameModal,
+  });
   const isLoading = useMerchantStore(s => s.isLoading);
-  const setIsLoading = useMerchantStore(s => s.setIsLoading);
   const [showNotifications, setShowNotifications] = useState(false);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [bigOrders, setBigOrders] = useState<BigOrderRequest[]>(initialBigOrders);
   const [showBigOrderWidget, setShowBigOrderWidget] = useState(false);
   // Responsive: 5-column on wide screens (16"+), 4-column on smaller
   const [isWideScreen, setIsWideScreen] = useState(false);
@@ -212,56 +209,34 @@ export default function MerchantDashboard() {
   const [showOpenTradeModal, setShowOpenTradeModal] = useState(false);
   const [showMerchantQuoteModal, setShowMerchantQuoteModal] = useState(false);
   const [selectedMempoolOrder, setSelectedMempoolOrder] = useState<any | null>(null);
-  const [mempoolOrders, setMempoolOrders] = useState<any[]>([]);
   const [ratingModalData, setRatingModalData] = useState<{
     orderId: string;
     counterpartyName: string;
     counterpartyType: 'user' | 'merchant';
   } | null>(null);
+
+  // ─── Escrow operations hook (lock, release, cancel) ───
+  const escrow = useEscrowOperations({
+    isMockMode,
+    solanaWallet,
+    effectiveBalance,
+    inAppBalance,
+    addNotification,
+    playSound,
+    afterMutationReconcile,
+    fetchOrders,
+    refreshBalance,
+    setShowWalletModal,
+    setRatingModalData,
+  });
+
   const [openTradeForm, setOpenTradeForm] = useState({
     tradeType: "sell" as "buy" | "sell", // From merchant perspective: sell = merchant sells USDC to user
     cryptoAmount: "",
     paymentMethod: "bank" as "bank" | "cash",
     spreadPreference: "fastest" as "best" | "fastest" | "cheap",
   });
-  const [isCreatingTrade, setIsCreatingTrade] = useState(false);
-  const [createTradeError, setCreateTradeError] = useState<string | null>(null);
   const [isMerchantOnline, setIsMerchantOnline] = useState(true);
-  const [showDisputeModal, setShowDisputeModal] = useState(false);
-  const [disputeOrderId, setDisputeOrderId] = useState<string | null>(null);
-  const [disputeReason, setDisputeReason] = useState("");
-  const [disputeDescription, setDisputeDescription] = useState("");
-  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
-  const [disputeInfo, setDisputeInfo] = useState<{
-    id: string;
-    status: string;
-    reason: string;
-    proposed_resolution?: string;
-    resolution_notes?: string;
-    user_confirmed?: boolean;
-    merchant_confirmed?: boolean;
-  } | null>(null);
-  const [isRespondingToResolution, setIsRespondingToResolution] = useState(false);
-  const [extensionRequests, setExtensionRequests] = useState<Map<string, {
-    requestedBy: 'user' | 'merchant';
-    extensionMinutes: number;
-    extensionCount: number;
-    maxExtensions: number;
-  }>>(new Map());
-  const [requestingExtension, setRequestingExtension] = useState<string | null>(null);
-  // Resolved disputes state
-  const [resolvedDisputes, setResolvedDisputes] = useState<{
-    id: string;
-    orderId: string;
-    orderNumber: string;
-    cryptoAmount: number;
-    fiatAmount: number;
-    otherPartyName: string;
-    reason: string;
-    resolution: string;
-    resolvedInFavorOf: string;
-    resolvedAt: string;
-  }[]>([]);
   const [corridorForm, setCorridorForm] = useState({
     fromCurrency: "USDT",
     toCurrency: "AED",
@@ -282,7 +257,6 @@ export default function MerchantDashboard() {
   const [completedTimeFilter, setCompletedTimeFilter] = useState<'today' | '7days' | 'all'>('all');
   // Order detail popup state
   const [selectedOrderPopup, setSelectedOrderPopup] = useState<Order | null>(null);
-  const [markingDone, setMarkingDone] = useState(false);
   const chatInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -373,10 +347,7 @@ export default function MerchantDashboard() {
     }
   }, [merchantId, isLoggedIn, fetchOrderConversations]);
 
-  // Real-time Pusher context
-  const { setActor } = usePusher();
-
-  // Set actor when merchant ID is available
+  // Set Pusher actor when merchant ID is available
   useEffect(() => {
     if (merchantId) {
       setActor('merchant', merchantId);
@@ -410,385 +381,6 @@ export default function MerchantDashboard() {
 
   // WebSocket context for order events (effect is below, after fetchOrders is defined)
   const wsContext = useWebSocketChatContextOptional();
-
-  // Handle setting username for new merchant wallet users
-  const handleMerchantUsername = async (username: string) => {
-    if (!solanaWallet.connected || !solanaWallet.walletAddress) {
-      throw new Error("Wallet not connected");
-    }
-
-    if (!username.trim()) {
-      throw new Error("Username is required");
-    }
-
-    try {
-      // If we have merchantId, it means merchant exists and just needs username (no signature needed)
-      if (merchantId && merchantInfo) {
-        const res = await fetch('/api/auth/merchant', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'update_username',
-            merchant_id: merchantId,
-            username: username.trim(),
-          }),
-        });
-
-        const data = await res.json();
-
-        if (data.success) {
-          const updatedMerchant = { ...merchantInfo, username: username.trim() };
-          setMerchantInfo(updatedMerchant);
-          setIsLoggedIn(true);
-          setShowUsernameModal(false);
-          localStorage.setItem('blip_merchant', JSON.stringify(updatedMerchant));
-        } else {
-          throw new Error(data.error || 'Failed to update username');
-        }
-        return;
-      }
-
-      // Otherwise, need signature for new merchant creation
-      if (!solanaWallet.signMessage) {
-        throw new Error("Wallet signature method not available");
-      }
-
-      // Generate message to sign
-      const timestamp = Date.now();
-      const nonce = Math.random().toString(36).substring(7);
-      const message = `Sign this message to authenticate with Blip Money\n\nWallet: ${solanaWallet.walletAddress}\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
-
-      // Request signature
-      const encodedMessage = new TextEncoder().encode(message);
-      const signatureUint8 = await solanaWallet.signMessage(encodedMessage);
-
-      // Convert to base58
-      const bs58 = await import('bs58');
-      const signature = bs58.default.encode(signatureUint8);
-
-      // Create merchant account via API
-      const res = await fetch('/api/auth/merchant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'create_merchant',
-          wallet_address: solanaWallet.walletAddress,
-          signature,
-          message,
-          username: username.trim(),
-        }),
-      });
-
-      const data = await res.json();
-
-      if (data.success && data.data.merchant) {
-        // Merchant created successfully
-        const merchant = data.data.merchant;
-        setMerchantId(merchant.id);
-        setMerchantInfo(merchant);
-        setIsLoggedIn(true);
-        setShowUsernameModal(false);
-        localStorage.setItem('blip_merchant', JSON.stringify(merchant));
-      } else {
-        throw new Error(data.error || 'Failed to create merchant');
-      }
-    } catch (error) {
-      console.error('Set merchant username error:', error);
-      throw error;
-    }
-  };
-
-  // Handle profile picture update
-  const handleProfileUpdated = (avatarUrl: string, displayName?: string, bio?: string) => {
-    if (merchantInfo) {
-      const updatedInfo = {
-        ...merchantInfo,
-        avatar_url: avatarUrl || merchantInfo.avatar_url,
-        ...(displayName !== undefined && { display_name: displayName }),
-        ...(bio !== undefined && { bio }),
-      };
-      setMerchantInfo(updatedInfo);
-      localStorage.setItem('blip_merchant', JSON.stringify(updatedInfo));
-    }
-  };
-
-  // Handle merchant login
-  const handleLogin = async () => {
-    setIsLoggingIn(true);
-    setLoginError("");
-
-    try {
-      const res = await fetch('/api/auth/merchant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: loginForm.email,
-          password: loginForm.password,
-          action: 'login',
-        }),
-      });
-
-      const data = await res.json();
-
-      if (data.success && data.data.merchant) {
-        setMerchantId(data.data.merchant.id);
-        setMerchantInfo(data.data.merchant);
-        setIsLoggedIn(true);
-        localStorage.setItem('blip_merchant', JSON.stringify(data.data.merchant));
-        // Prompt to connect wallet if merchant doesn't have one linked (skip in mock mode)
-        if (!isMockMode && !data.data.merchant.wallet_address) {
-          setTimeout(() => setShowWalletPrompt(true), 500);
-        }
-      } else {
-        // Map API errors to user-friendly messages
-        if (res.status === 401) {
-          setLoginError('Incorrect email or password. Please try again.');
-        } else if (res.status === 404) {
-          setLoginError('No account found with this email. Please create an account first.');
-        } else {
-          setLoginError(data.error || 'Login failed');
-        }
-      }
-    } catch (err) {
-      console.error('Login error:', err);
-      setLoginError('Connection failed. Please check your internet and try again.');
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
-  // Handle merchant registration
-  const handleRegister = async () => {
-    if (registerForm.password !== registerForm.confirmPassword) {
-      setLoginError('Passwords do not match');
-      return;
-    }
-
-    if (registerForm.password.length < 6) {
-      setLoginError('Password must be at least 6 characters');
-      return;
-    }
-
-    setIsRegistering(true);
-    setLoginError("");
-
-    try {
-      const res = await fetch('/api/auth/merchant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'register',
-          email: registerForm.email,
-          password: registerForm.password,
-          business_name: registerForm.businessName || undefined,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (data.success && data.data.merchant) {
-        setMerchantId(data.data.merchant.id);
-        setMerchantInfo(data.data.merchant);
-        setIsLoggedIn(true);
-        localStorage.setItem('blip_merchant', JSON.stringify(data.data.merchant));
-        // Prompt to connect wallet after registration (skip in mock mode)
-        if (!isMockMode) {
-          setTimeout(() => setShowWalletPrompt(true), 500);
-        }
-      } else {
-        // Map API errors to user-friendly messages
-        if (res.status === 409) {
-          setLoginError('An account with this email already exists. Please sign in instead.');
-        } else {
-          setLoginError(data.error || 'Registration failed');
-        }
-      }
-    } catch (err) {
-      console.error('Registration error:', err);
-      setLoginError('Connection failed. Please check your internet and try again.');
-    } finally {
-      setIsRegistering(false);
-    }
-  };
-
-  // Handle logout and disconnect wallet
-  const handleLogout = () => {
-    localStorage.removeItem('blip_merchant');
-    localStorage.removeItem('merchant_info');
-    // Disconnect wallet first
-    if (solanaWallet.disconnect) {
-      solanaWallet.disconnect();
-    }
-    // Force page reload to fully reset state
-    window.location.href = '/merchant';
-  };
-
-  // Initialize - restore session if available
-  useEffect(() => {
-    const restoreSession = async () => {
-      try {
-        const savedMerchant = localStorage.getItem('blip_merchant');
-
-        if (savedMerchant) {
-          const merchant = JSON.parse(savedMerchant);
-
-          // Validate merchant still exists in database
-          const checkRes = await fetch(`/api/auth/merchant?action=check_session&merchant_id=${merchant.id}`);
-          if (checkRes.ok) {
-            const checkData = await checkRes.json();
-            if (checkData.success && checkData.data?.valid) {
-              // Session is valid, restore state with fresh data from API
-              const freshMerchant = checkData.data.merchant || merchant;
-              setMerchantId(freshMerchant.id);
-              setMerchantInfo(freshMerchant);
-              setIsLoggedIn(true);
-              setIsLoading(false);
-              // Update localStorage with fresh data
-              localStorage.setItem('blip_merchant', JSON.stringify(freshMerchant));
-              // Prompt to connect wallet if not linked (skip in mock mode)
-              if (!isMockMode && !freshMerchant.wallet_address && !solanaWallet.connected) {
-                setTimeout(() => setShowWalletPrompt(true), 1000);
-              }
-              return;
-            }
-          }
-          // Session invalid, clear it
-          localStorage.removeItem('blip_merchant');
-          localStorage.removeItem('merchant_info');
-        }
-      } catch (err) {
-        console.error('[Merchant] Failed to restore session:', err);
-        localStorage.removeItem('blip_merchant');
-        localStorage.removeItem('merchant_info');
-      }
-
-      // No valid session, show login screen
-      setIsLoading(false);
-    };
-
-    restoreSession();
-  }, []); // Only run once on mount
-
-  // Add dashboard-layout class to body when logged in (for non-scrollable layout)
-  useEffect(() => {
-    if (isLoggedIn && merchantId) {
-      document.body.classList.add('dashboard-layout');
-    } else {
-      document.body.classList.remove('dashboard-layout');
-    }
-
-    return () => {
-      document.body.classList.remove('dashboard-layout');
-    };
-  }, [isLoggedIn, merchantId]);
-
-  // AbortController: cancel stale fetchOrders when a newer one starts
-  const fetchAbortRef = useRef<AbortController | null>(null);
-
-  // Fetch orders from API
-  const fetchOrders = useCallback(async () => {
-    if (!merchantId) {
-      return;
-    }
-
-    // Validate merchantId is a valid UUID before making API call
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(merchantId)) {
-      console.error('[Merchant] fetchOrders: Invalid merchantId format:', merchantId);
-      return;
-    }
-
-    // Abort any in-flight fetch — stale responses must never overwrite newer data
-    fetchAbortRef.current?.abort();
-    const controller = new AbortController();
-    fetchAbortRef.current = controller;
-
-    try {
-      // Fetch ALL pending orders (broadcast model) + merchant's own orders
-      const res = await fetch(`/api/merchant/orders?merchant_id=${merchantId}&include_all_pending=true&_t=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
-      if (!res.ok) {
-        const errorBody = await res.json().catch(() => null);
-        console.error('[Merchant] Failed to fetch orders:', res.status, res.statusText, errorBody);
-        return;
-      }
-      const data = await res.json();
-      if (data.success && data.data) {
-        const mappedOrders = data.data.map((o: DbOrder) => mapDbOrderToUI(o, merchantId));
-
-        // Fix status for my escrowed orders
-        // The SQL query should set is_my_order correctly, but this is a fallback
-        const fixedOrders = mappedOrders.map((order: Order) => {
-          // CRITICAL SAFEGUARD: If minimal_status is completed, ALWAYS show as completed
-          if (order.minimalStatus === 'completed') {
-            return { ...order, status: 'completed' as const };
-          }
-
-          // If database says it's my order and it's escrowed, show it in Ongoing
-          if (order.isMyOrder && order.dbOrder?.status === 'escrowed' && getEffectiveStatus(order) === 'pending') {
-            return { ...order, status: 'escrow' as const };
-          }
-          return order;
-        });
-
-        // Filter out pending orders that have already expired
-        const validOrders = fixedOrders.filter((order: Order) => {
-          const effectiveStatus = getEffectiveStatus(order);
-          if (effectiveStatus === "pending" && order.expiresIn <= 0) {
-            return false;
-          }
-          return true;
-        });
-
-
-        // VERSION-AWARE MERGE: Only update orders if incoming is newer
-        setOrders(prev => {
-          return validOrders.map((incomingOrder: Order) => {
-            const existing = prev.find(o => o.id === incomingOrder.id);
-
-            // If no existing order, use incoming
-            if (!existing) return incomingOrder;
-
-            // Version check: only update if incoming is newer
-            if (existing.orderVersion && incomingOrder.orderVersion) {
-              if (incomingOrder.orderVersion < existing.orderVersion) {
-                return existing;
-              }
-            }
-
-            // CRITICAL SAFEGUARD: If incoming is completed, ALWAYS use it
-            if (incomingOrder.minimalStatus === 'completed') {
-              return incomingOrder;
-            }
-
-            // Otherwise use incoming as it's newer or same version
-            return incomingOrder;
-          });
-        });
-      }
-    } catch (error) {
-      if ((error as Error).name === 'AbortError') return; // Superseded by newer fetch
-      console.error("[Merchant] Error fetching orders:", error);
-    } finally {
-      if (!controller.signal.aborted) {
-        setIsLoading(false);
-      }
-    }
-  }, [merchantId]);
-
-  // ── Debounced fetch: coalesces multiple fetchOrders() calls into one ──
-  const fetchPendingRef = useRef(false);
-  const fetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debouncedFetchOrders = useCallback(() => {
-    if (fetchPendingRef.current) return; // Already scheduled
-    fetchPendingRef.current = true;
-    if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
-    fetchTimerRef.current = setTimeout(() => {
-      fetchOrders().finally(() => {
-        fetchPendingRef.current = false;
-        fetchTimerRef.current = null;
-      });
-    }, 150); // 150ms coalescing window
-  }, [fetchOrders]);
 
   const convFetchPendingRef = useRef(false);
   const convFetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -904,231 +496,6 @@ export default function MerchantDashboard() {
 
     fixOrders();
   }, [orders, solanaWallet.connected, merchantId, isMockMode, solanaWallet]);
-
-  // Fetch in-app balance from DB (mock mode)
-  const balanceAbortRef = useRef<AbortController | null>(null);
-  const fetchInAppBalance = useCallback(async () => {
-    if (!merchantId || !isMockMode) return;
-    balanceAbortRef.current?.abort();
-    const controller = new AbortController();
-    balanceAbortRef.current = controller;
-    try {
-      const res = await fetch(`/api/mock/balance?userId=${merchantId}&type=merchant`, { signal: controller.signal });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setInAppBalance(typeof data.balance === 'string' ? parseFloat(data.balance) : data.balance);
-        }
-      }
-    } catch (err) {
-      if ((err as Error).name === 'AbortError') return;
-      console.error('Failed to fetch in-app balance:', err);
-    }
-  }, [merchantId, isMockMode]);
-
-  useEffect(() => {
-    if (isMockMode && merchantId) {
-      fetchInAppBalance();
-      const interval = setInterval(fetchInAppBalance, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [isMockMode, merchantId, fetchInAppBalance]);
-
-  // Effective balance: in-app for mock mode, on-chain for production
-  const effectiveBalance = isMockMode ? inAppBalance : solanaWallet.usdtBalance;
-  const refreshBalance = useCallback(() => {
-    if (isMockMode) {
-      fetchInAppBalance();
-    } else {
-      solanaWallet.refreshBalances();
-    }
-  }, [isMockMode, fetchInAppBalance, solanaWallet]);
-
-  // Fetch mempool orders
-  const mempoolAbortRef = useRef<AbortController | null>(null);
-  const fetchMempoolOrders = useCallback(async () => {
-    if (!merchantId) return;
-    mempoolAbortRef.current?.abort();
-    const controller = new AbortController();
-    mempoolAbortRef.current = controller;
-    try {
-      const res = await fetch('/api/mempool?type=orders&corridor_id=USDT_AED&limit=50', { signal: controller.signal });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data?.orders) {
-          const stamped = data.data.orders.map((o: any) => ({ ...o, _receivedAt: Date.now() }));
-          setMempoolOrders(stamped);
-        }
-      }
-    } catch (error) {
-      if ((error as Error).name === 'AbortError') return;
-      console.error('Failed to fetch mempool orders:', error);
-    }
-  }, [merchantId]);
-
-  // Fetch resolved disputes
-  const fetchResolvedDisputes = useCallback(async () => {
-    if (!merchantId) return;
-    try {
-      const res = await fetch(`/api/disputes/resolved?actor_type=merchant&actor_id=${merchantId}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.success && data.data) {
-        setResolvedDisputes(data.data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch resolved disputes:', err);
-    }
-  }, [merchantId]);
-
-  // Fetch big orders from API
-  const fetchBigOrders = useCallback(async () => {
-    if (!merchantId) return;
-    try {
-      const res = await fetch(`/api/merchant/big-orders?merchant_id=${merchantId}&limit=10`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.success && data.data?.orders) {
-        // Map API response to BigOrderRequest format
-        const mappedOrders: BigOrderRequest[] = data.data.orders.map((order: {
-          id: string;
-          user: { username: string };
-          fiat_amount: number;
-          fiat_currency: string;
-          custom_notes?: string;
-          premium_percent?: number;
-          created_at: string;
-        }) => ({
-          id: order.id,
-          user: order.user?.username || 'Unknown',
-          emoji: '🐳',
-          amount: order.fiat_amount,
-          currency: order.fiat_currency || 'AED',
-          message: order.custom_notes || 'Large order available',
-          timestamp: new Date(order.created_at),
-          premium: order.premium_percent || 0,
-        }));
-        if (mappedOrders.length > 0) {
-          setBigOrders(mappedOrders);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch big orders:', err);
-    }
-  }, [merchantId]);
-
-  // Fetch merchant's active offers
-  const fetchActiveOffers = useCallback(async () => {
-    if (!merchantId) return;
-    try {
-      const res = await fetch(`/api/merchant/offers?merchant_id=${merchantId}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.success && data.data) {
-        setActiveOffers(data.data.filter((o: { is_active: boolean }) => o.is_active));
-      }
-    } catch (err) {
-      console.error('Failed to fetch active offers:', err);
-    }
-  }, [merchantId]);
-
-  // Fetch leaderboard data
-  const fetchLeaderboard = useCallback(async () => {
-    try {
-      const res = await fetch('/api/merchants/leaderboard');
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.success && data.data) {
-        setLeaderboardData(data.data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch leaderboard:', err);
-    }
-  }, []);
-
-  // Fetch orders when merchant ID is available
-  // Real-time updates come via Pusher WebSocket (useRealtimeOrders hook)
-  useEffect(() => {
-    if (!merchantId) return;
-    fetchOrders();
-    fetchMempoolOrders();
-    fetchResolvedDisputes();
-    fetchBigOrders();
-    fetchActiveOffers();
-    fetchLeaderboard();
-  }, [merchantId, fetchOrders, fetchMempoolOrders, fetchResolvedDisputes, fetchBigOrders, fetchActiveOffers, fetchLeaderboard]);
-
-  // 3-tier real-time fallback:
-  // Tier 1: Pusher WebSocket (primary - handled by useRealtimeOrders)
-  // Tier 2: Smart polling (safety net when connected, primary when disconnected)
-  // Tier 3: Tab visibility + reconnect refresh
-  const { isConnected: isPusherConnected } = usePusher();
-  const prevPusherConnected = useRef(isPusherConnected);
-  const lastSyncRef = useRef<number>(Date.now());
-
-  // Tier 2: Smart polling - always poll, just adjust frequency
-  // Uses debounced fetch to prevent thundering herd when multiple events arrive
-  useEffect(() => {
-    if (!merchantId) return;
-
-    const pollInterval = isPusherConnected ? 30000 : 5000; // 30s safety net vs 5s primary
-
-    const interval = setInterval(() => {
-      debouncedFetchOrders();
-      fetchMempoolOrders();
-      lastSyncRef.current = Date.now();
-    }, pollInterval);
-
-    return () => clearInterval(interval);
-  }, [merchantId, isPusherConnected, debouncedFetchOrders, fetchMempoolOrders]);
-
-  // Tier 3a: Force refresh when Pusher reconnects (false→true)
-  useEffect(() => {
-    if (isPusherConnected && !prevPusherConnected.current) {
-      debouncedFetchOrders();
-      fetchMempoolOrders();
-      lastSyncRef.current = Date.now();
-    }
-    prevPusherConnected.current = isPusherConnected;
-  }, [isPusherConnected, debouncedFetchOrders, fetchMempoolOrders]);
-
-  // Tier 3b: Page Visibility API — refresh when tab becomes visible
-  useEffect(() => {
-    if (!merchantId) return;
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        const timeSinceSync = Date.now() - lastSyncRef.current;
-        // Only refresh if it's been more than 3s since last sync (avoid duplicate fetches)
-        if (timeSinceSync > 3000) {
-          debouncedFetchOrders();
-          lastSyncRef.current = Date.now();
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [merchantId, debouncedFetchOrders]);
-
-  // Auto-expire orders every 30 seconds
-  useEffect(() => {
-    if (!merchantId) return;
-
-    const expireOrders = async () => {
-      try {
-        await fetch('/api/orders/expire', { method: 'POST' });
-      } catch (error) {
-        console.error('[Merchant] Failed to expire orders:', error);
-      }
-    };
-
-    // Run immediately and then every 30 seconds
-    expireOrders();
-    const interval = setInterval(expireOrders, 30000);
-
-    return () => clearInterval(interval);
-  }, [merchantId]);
 
   // Real-time orders subscription - triggers refetch on updates
   useRealtimeOrders({
@@ -1251,25 +618,7 @@ export default function MerchantDashboard() {
   });
 
   // WS order events handled by useRealtimeOrders (unified Pusher+WS stream).
-
-  // Expiry timer: only decrement counters, NO API calls inside setOrders.
-  const expiryBatchRef = useRef<string[]>([]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setOrders(prev => {
-        let hasChanges = false;
-        const updated = prev.map(order => {
-          if (order.status === "completed" || order.status === "cancelled") return order;
-          if (order.expiresIn <= 0) return order; // Already at 0, no clone needed
-          hasChanges = true;
-          return { ...order, expiresIn: Math.max(0, order.expiresIn - 1) };
-        });
-        return hasChanges ? updated : prev; // Skip re-render if nothing changed
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // Expiry timer moved to useOrderFetching hook.
 
   // Auto-refund: refund on-chain escrow for expired orders using connected wallet
   const autoRefundInFlightRef = useRef<Set<string>>(new Set());
@@ -1448,1376 +797,36 @@ export default function MerchantDashboard() {
     }
   }, [activeChatId, chatWindows]);
 
-  const acceptOrder = async (order: Order) => {
-    if (!merchantId) return;
 
-    const isBuyOrder = order.orderType === 'buy';
-    const isSellOrder = order.orderType === 'sell';
-
-    // Check if order is already escrowed by someone else (M2M flow)
-    const isEscrowedByOther = order.escrowTxHash && order.dbOrder?.status === 'escrowed';
-
-    // Debug logging
-
-    // For M2M where seller already escrowed: require wallet to receive funds (skip in mock mode)
-    if (!isMockMode && isEscrowedByOther && !solanaWallet.walletAddress) {
-      addNotification('system', 'Please connect your wallet first to receive the USDC.', order.id);
-      setShowWalletModal(true);
-      return;
-    }
-
-    try {
-      // If escrow is already funded by seller, call acceptTrade on-chain first (skip in mock mode)
-      if (!isMockMode && isEscrowedByOther && order.escrowCreatorWallet && order.escrowTradeId != null) {
-        addNotification('system', 'Joining escrow on-chain... Please approve the transaction.', order.id);
-
-        try {
-          const acceptResult = await solanaWallet.acceptTrade({
-            creatorPubkey: order.escrowCreatorWallet,
-            tradeId: order.escrowTradeId,
-          });
-
-          if (!acceptResult.success) {
-            console.error('[Go] Failed to accept trade on-chain:', acceptResult.error);
-            addNotification('system', `Failed to join escrow: ${acceptResult.error}`, order.id);
-            playSound('error');
-            return;
-          }
-
-          addNotification('system', 'Successfully joined escrow on-chain!', order.id);
-        } catch (acceptError: any) {
-          const errMsg = acceptError?.message || acceptError?.toString() || '';
-          // CannotAccept / 0x177d = trade already accepted (e.g. auto-fix ran first) — continue
-          if (errMsg.includes('CannotAccept') || errMsg.includes('0x177d') || errMsg.includes('6013')) {
-            console.log('[Go] Trade already accepted on-chain, continuing to backend accept');
-          } else {
-            console.error('[Go] Error accepting trade on-chain:', acceptError);
-            addNotification('system', `Failed to join escrow: ${errMsg}`, order.id);
-            playSound('error');
-            return;
-          }
-        }
-      } else if (isMockMode && isEscrowedByOther) {
-      }
-
-      // Build the request body
-      // Always go to 'accepted' first - buyer will then Sign to move to payment_pending
-      const targetStatus = "accepted";
-      const requestBody: Record<string, unknown> = {
-        status: targetStatus,
-        actor_type: "merchant",
-        actor_id: merchantId,
-      };
-
-      // Include wallet address if connected (skip mock addresses that fail Solana validation)
-      if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
-        requestBody.acceptor_wallet_address = solanaWallet.walletAddress;
-      }
-
-
-      const acceptRes = await fetch(`/api/orders/${order.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
-      if (!acceptRes.ok) {
-        const errorText = await acceptRes.text().catch(() => '');
-        let errorMsg = `HTTP ${acceptRes.status}`;
-        try {
-          const errorData = JSON.parse(errorText);
-          errorMsg = errorData.error || JSON.stringify(errorData);
-        } catch {
-          errorMsg = errorText || errorMsg;
-        }
-        console.error("Failed to accept order:", acceptRes.status, errorMsg);
-        addNotification('system', `Failed to accept order: ${errorMsg}`, order.id);
-        playSound('error');
-        return;
-      }
-      const acceptData = await acceptRes.json();
-
-      if (!acceptData.success) {
-        console.error("Failed to accept order:", acceptData.error);
-        addNotification('system', `Failed to accept order: ${acceptData.error}`, order.id);
-        playSound('error');
-        return;
-      }
-
-      // Show appropriate message based on buyer/seller role
-      // After accepting, I become the counterparty. Use myRole to determine message.
-      // Note: after accepting a BUY order, I become the seller (merchant_id reassigned).
-      // After accepting a SELL order, I become the buyer (buyer_merchant_id set).
-      const acceptRole = isBuyOrder ? 'seller' : 'buyer'; // Acceptor's role after accepting
-      const nextStepMsg = isEscrowedByOther
-        ? 'Order claimed! Send the fiat payment and click "I\'ve Paid".'
-        : acceptRole === 'seller'
-          ? 'Now lock your USDC in escrow to proceed.'
-          : 'Waiting for the seller to lock escrow.';
-
-      // Use AfterMutationReconcile: optimistic update + refetch all + balance
-      const uiStatus = isEscrowedByOther ? "escrow" : "active";
-      playSound('click');
-      addNotification('system', `Order accepted! ${nextStepMsg}`, order.id);
-      handleOpenChat(order);
-      await afterMutationReconcile(order.id, { status: uiStatus as "escrow" | "active", expiresIn: 1800 });
-    } catch (error) {
-      console.error("Error accepting order:", error);
-      playSound('error');
-    }
-  };
-
-  // Accept order using sAED corridor bridge
-  // Step 1: Auto-match LP, lock buyer sAED
-  // Step 2: Normal accept flow
-  const acceptWithSaed = async (order: Order) => {
-    if (!merchantId) return;
-
-    try {
-      addNotification('system', 'Matching LP and locking sAED...', order.id);
-
-      // Get the seller's bank details from the order
-      const bankDetails = order.dbOrder?.payment_details || {};
-
-      // Step 1: Call corridor match via core-api
-      const coreApiUrl = process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:4010';
-      const matchRes = await fetch(`${coreApiUrl}/v1/corridor/match`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          order_id: order.id,
-          buyer_merchant_id: merchantId,
-          seller_merchant_id: order.dbOrder?.merchant_id || order.orderMerchantId,
-          fiat_amount: order.total || order.dbOrder?.fiat_amount,
-          bank_details: bankDetails,
-        }),
-      });
-
-      const matchData = await matchRes.json();
-      if (!matchData.success) {
-        addNotification('system', `LP match failed: ${matchData.error}`, order.id);
-        playSound('error');
-        return;
-      }
-
-      const { fee_percentage, corridor_fee_fils, saed_locked, provider_name } = matchData.data;
-      addNotification(
-        'system',
-        `LP matched: ${provider_name || 'Provider'} (${fee_percentage}% fee, ${(corridor_fee_fils / 100).toFixed(2)} AED). ${(saed_locked / 100).toFixed(2)} sAED locked.`,
-        order.id
-      );
-
-      // Step 2: Normal accept
-      await acceptOrder(order);
-
-      playSound('click');
-    } catch (error) {
-      console.error('Error accepting with sAED:', error);
-      addNotification('system', 'Failed to accept with sAED. Try again.', order.id);
-      playSound('error');
-    }
-  };
-
-  // Buyer signs to claim order (for M2M where seller already escrowed)
-  // This just claims the order without marking payment sent yet
-  const signToClaimOrder = async (order: Order) => {
-    if (!merchantId) return;
-
-    // Require wallet connection for signing (skip in mock mode)
-    if (!isMockMode && !solanaWallet.connected) {
-      addNotification('system', 'Please connect your wallet to sign.');
-      setShowWalletModal(true);
-      return;
-    }
-
-    if (!isMockMode && (!solanaWallet.walletAddress || !solanaWallet.signMessage)) {
-      addNotification('system', 'Wallet not ready. Please reconnect.');
-      playSound('error');
-      return;
-    }
-
-    try {
-      // Sign message to prove wallet ownership and claim the order
-      const walletAddr = solanaWallet.walletAddress || 'mock-wallet';
-      const message = `Claim order ${order.id} - I will send fiat payment. Wallet: ${walletAddr}`;
-      const messageBytes = new TextEncoder().encode(message);
-
-      addNotification('system', isMockMode ? 'Processing...' : 'Please sign in your wallet to claim this order...', order.id);
-      let signature = 'mock-signature';
-      if (!isMockMode) {
-        const signatureBytes = await solanaWallet.signMessage(messageBytes);
-        signature = Buffer.from(signatureBytes).toString('base64');
-      }
-
-      // Update order to payment_pending (claimed, now needs to pay)
-
-      const claimBody: Record<string, string> = {
-          status: "payment_pending",
-          actor_type: "merchant",
-          actor_id: merchantId,
-      };
-      if (!isMockMode && solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
-        claimBody.acceptor_wallet_address = solanaWallet.walletAddress;
-        claimBody.acceptor_wallet_signature = signature;
-      }
-
-      const res = await fetch(`/api/orders/${order.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(claimBody),
-      });
-
-      const responseData = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        addNotification('system', `Failed to claim order: ${responseData.error || 'Unknown error'}`, order.id);
-        playSound('error');
-        return;
-      }
-
-      // AfterMutationReconcile: optimistic update + refetch all + balance
-      playSound('click');
-      addNotification('system', 'Order claimed! Now send the fiat payment and click "I\'ve Paid".', order.id);
-      await afterMutationReconcile(order.id, { status: "escrow" as const });
-    } catch (error: any) {
-      if (error?.message?.includes('User rejected')) {
-        addNotification('system', 'Signature rejected. Please sign to claim.');
-      } else {
-        console.error("Error signing:", error);
-        addNotification('system', 'Failed to sign. Please try again.');
-      }
-      playSound('error');
-    }
-  };
-
-  // Sign and proceed for sell orders (Active -> Ongoing)
-  // Merchant signs to confirm they will send fiat payment
-  const signAndProceed = async (order: Order) => {
-    if (!merchantId) return;
-
-    // Require wallet connection for signing (skip in mock mode)
-    if (!isMockMode && !solanaWallet.connected) {
-      addNotification('system', 'Please connect your wallet to sign.');
-      setShowWalletModal(true);
-      return;
-    }
-
-    if (!isMockMode && (!solanaWallet.walletAddress || !solanaWallet.signMessage)) {
-      addNotification('system', 'Wallet not ready. Please reconnect.');
-      playSound('error');
-      return;
-    }
-
-    try {
-      // Sign message to prove wallet ownership
-      const walletAddr = solanaWallet.walletAddress || 'mock-wallet';
-      const message = `Confirm order ${order.id} - I will send fiat payment. Wallet: ${walletAddr}`;
-      const messageBytes = new TextEncoder().encode(message);
-
-      addNotification('system', isMockMode ? 'Processing...' : 'Please sign in your wallet to proceed...', order.id);
-      let signature = 'mock-signature';
-      if (!isMockMode) {
-        const signatureBytes = await solanaWallet.signMessage(messageBytes);
-        signature = Buffer.from(signatureBytes).toString('base64');
-      }
-
-      // Update order to payment_sent (moves to Ongoing)
-      const proceedBody: Record<string, string> = {
-        status: "payment_sent",
-        actor_type: "merchant",
-        actor_id: merchantId,
-      };
-      if (!isMockMode && solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
-        proceedBody.acceptor_wallet_address = solanaWallet.walletAddress;
-        proceedBody.acceptor_wallet_signature = signature;
-      }
-
-      const res = await fetch(`/api/orders/${order.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(proceedBody),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        addNotification('system', `Failed to update order: ${errorData.error || 'Unknown error'}`, order.id);
-        playSound('error');
-        return;
-      }
-
-      // AfterMutationReconcile: optimistic update + refetch all + balance
-      playSound('click');
-      addNotification('system', 'Signed! Order moved to Ongoing. Click "I\'ve Paid" when you send the fiat.', order.id);
-      await afterMutationReconcile(order.id, { status: "escrow" as const });
-    } catch (error: any) {
-      if (error?.message?.includes('User rejected')) {
-        addNotification('system', 'Signature rejected. Please sign to proceed.');
-      } else {
-        console.error("Error signing:", error);
-        addNotification('system', 'Failed to sign. Please try again.');
-      }
-      playSound('error');
-    }
-  };
-
-  // Open escrow modal for buy orders
-  const openEscrowModal = async (order: Order) => {
-    if (!merchantId) return;
-
-    // Only the SELLER locks escrow. Period.
-    const role = order.myRole || computeMyRole(order, merchantId);
-    if (role !== 'seller') {
-      addNotification('system', 'Only the seller locks escrow in this trade.');
-      return;
-    }
-
-    // Check wallet connection (skip in mock mode - uses in-app coins)
-    if (!isMockMode && !solanaWallet.connected) {
-      addNotification('system', 'Please connect your wallet to lock escrow.');
-      setShowWalletModal(true);
-      return;
-    }
-
-    // Fetch latest order data to get user's current wallet address
-    let orderToUse = order;
-    try {
-      const res = await fetch(`/api/orders/${order.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data) {
-          orderToUse = mapDbOrderToUI(data.data, merchantId);
-        }
-      }
-    } catch (err) {
-      console.error('[Escrow] Error fetching fresh order:', err);
-    }
-
-    // Reset state and open modal
-    setEscrowOrder(orderToUse);
-    setEscrowTxHash(null);
-    setEscrowError(null);
-    setIsLockingEscrow(false);
-    setShowEscrowModal(true);
-  };
-
-  // Execute the actual escrow lock transaction
-  const executeLockEscrow = async () => {
-    if (!merchantId || !escrowOrder) return;
-
-    // Check balance (only if loaded)
-    // If balance is null (still loading), allow to proceed - backend will validate
-    if (effectiveBalance !== null && effectiveBalance < escrowOrder.amount) {
-      setEscrowError(`Insufficient USDC balance. You need ${escrowOrder.amount} USDC but have ${effectiveBalance.toFixed(2)} USDC.`);
-      return;
-    }
-
-    // If balance is still null, refresh it first
-    if (effectiveBalance === null) {
-      await refreshBalance();
-      // Give it a moment to update
-      await new Promise(r => setTimeout(r, 500));
-      const newBalance = isMockMode ? inAppBalance : solanaWallet.usdtBalance;
-      if (newBalance !== null && newBalance < escrowOrder.amount) {
-        setEscrowError(`Insufficient USDC balance. You need ${escrowOrder.amount} USDC but have ${newBalance.toFixed(2)} USDC.`);
-        return;
-      }
-    }
-
-    // Determine recipient wallet for escrow
-    // The recipient is the OTHER party (not the one locking escrow)
-    // For SELL orders before anyone accepts: no recipient yet, escrow goes to treasury placeholder
-    const validWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-    // In mock mode, accept any non-empty string as a valid wallet (DB-backed, not Solana addresses)
-    const isValidWallet = (addr: string | undefined | null): boolean => {
-      if (!addr) return false;
-      return isMockMode ? addr.length > 0 : validWalletRegex.test(addr);
-    };
-    const myWallet = solanaWallet.walletAddress;
-
-    // Check wallet validity
-    const hasAcceptorWallet = isValidWallet(escrowOrder.acceptorWallet);
-    const hasUserWallet = isValidWallet(escrowOrder.userWallet);
-
-    // For pending orders, isMyOrder is always false (so all merchants see new orders)
-    // Check if I'm the actual creator by comparing merchant IDs
-    const iAmOrderCreator = escrowOrder.orderMerchantId === merchantId;
-    const isPendingOrEscrowed = escrowOrder.dbOrder?.status === 'pending' || escrowOrder.dbOrder?.status === 'escrowed';
-
-    // I created this order if: isMyOrder flag OR (pending/escrowed AND my merchant ID matches)
-    const isMyOrder = escrowOrder.isMyOrder || (isPendingOrEscrowed && iAmOrderCreator);
-
-    // Check if this is my SELL order before anyone accepted (no recipient yet)
-    const isMyPendingSellOrder = isMyOrder && escrowOrder.dbOrder?.status === 'pending';
-
-    // For M2M: if it's my order and acceptor hasn't connected wallet, allow escrow to treasury
-    const isMyOrderNoAcceptorWallet = isMyOrder && !hasAcceptorWallet && !hasUserWallet;
-
-    // M2M detection: isM2M flag, buyerMerchantWallet, acceptorWallet, OR my order with no user wallet (placeholder)
-    const isMerchantInitiated = isMyOrder && !hasUserWallet;
-    const isMerchantTrade = escrowOrder.isM2M || !!escrowOrder.buyerMerchantWallet || hasAcceptorWallet || isMerchantInitiated;
-    // For open SELL orders, the creator is determined by isMyOrder flag (buyerMerchantWallet may not be set)
-    const iAmCreator = isMyOrder || (myWallet && escrowOrder.buyerMerchantWallet === myWallet);
-
-    let recipientWallet: string | undefined = undefined;
-    // Allow escrow to treasury if: pending order OR my order where acceptor hasn't connected wallet
-    const canEscrowToTreasury = isMyPendingSellOrder || isMyOrderNoAcceptorWallet;
-
-    if (canEscrowToTreasury) {
-      // My order, no acceptor wallet yet - escrow will use treasury placeholder
-      // Recipient will be set when acceptor provides wallet
-      recipientWallet = undefined;
-    } else if (isMerchantTrade) {
-      if (iAmCreator) {
-        // I created the order, I'm locking, recipient is the acceptor
-        recipientWallet = isValidWallet(escrowOrder.acceptorWallet)
-          ? escrowOrder.acceptorWallet!
-          : undefined;
-      } else {
-        // I accepted the order, I'm locking, recipient is the creator
-        recipientWallet = isValidWallet(escrowOrder.buyerMerchantWallet)
-          ? escrowOrder.buyerMerchantWallet!
-          : undefined;
-      }
-    } else {
-      // Regular trade - recipient is the user
-      recipientWallet = isValidWallet(escrowOrder.userWallet)
-        ? escrowOrder.userWallet!
-        : undefined;
-    }
-
-    // Only require recipient if we can't escrow to treasury
-    // In mock mode or embedded wallet mode, skip recipient wallet check (no counterparty wallet needed upfront)
-    if (!recipientWallet && !canEscrowToTreasury && !isMockMode && !IS_EMBEDDED_WALLET) {
-      setEscrowError(isMerchantTrade
-        ? 'The other merchant has not connected their Solana wallet yet.'
-        : 'User has not connected their Solana wallet yet. Ask them to connect their wallet in the app first.');
-      return;
-    }
-
-    setIsLockingEscrow(true);
-    setEscrowError(null);
-
-    try {
-      let escrowResult: { success: boolean; txHash: string; tradeId?: number; tradePda?: string; escrowPda?: string; error?: string };
-
-      if (isMockMode) {
-        // MOCK MODE: Skip on-chain call, generate demo tx hash
-        // The backend core-api will handle balance deduction in mock mode
-        const mockTxHash = `mock-escrow-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        escrowResult = {
-          success: true,
-          txHash: mockTxHash,
-          tradeId: undefined,
-          tradePda: undefined,
-          escrowPda: undefined,
-        };
-      } else {
-
-        // Use unified flow: fund escrow WITHOUT counterparty
-        // Buyer (user or merchant B) will call acceptTrade() to join later
-        escrowResult = await solanaWallet.depositToEscrowOpen({
-          amount: escrowOrder.amount,
-          side: 'sell', // Seller is funding the escrow
-        });
-      }
-
-      if (!escrowResult.success || !escrowResult.txHash) {
-        throw new Error(escrowResult.error || 'Transaction failed');
-      }
-
-      // Transaction successful - show tx hash
-      setEscrowTxHash(escrowResult.txHash);
-
-      // IMMEDIATELY close the escrow modal after on-chain success
-      // This prevents the user from clicking "Lock Escrow" again while backend syncs
-      setShowEscrowModal(false);
-
-      // Update local state IMMEDIATELY after on-chain success
-      // This ensures the Lock button disappears even if the backend recording fails
-      setOrders(prev => prev.map(o => o.id === escrowOrder.id ? {
-        ...o,
-        status: "escrow" as const,
-        escrowTxHash: escrowResult.txHash,
-        escrowTradeId: escrowResult.tradeId,
-        escrowTradePda: escrowResult.tradePda,
-        escrowCreatorWallet: solanaWallet.walletAddress,
-      } : o));
-
-      // Check if this is a new sell order (escrow-first flow)
-      const pendingSellOrder = (window as any).__pendingSellOrder;
-      const isTempOrder = escrowOrder.id.startsWith('temp-');
-
-      if (pendingSellOrder && isTempOrder) {
-        // For temp orders, skip escrow recording and create order directly with escrow details
-        playSound('trade_complete');
-
-        try {
-          // Now create the order in DB with escrow already locked
-          const res = await fetch("/api/merchant/orders", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              merchant_id: pendingSellOrder.merchantId,
-              type: pendingSellOrder.tradeType,
-              crypto_amount: pendingSellOrder.cryptoAmount,
-              payment_method: pendingSellOrder.paymentMethod,
-              spread_preference: pendingSellOrder.spreadPreference,
-              priority_fee: pendingSellOrder.priorityFee || 0,
-              matched_offer_id: pendingSellOrder.matchedOfferId,
-              escrow_tx_hash: escrowResult.txHash,
-              escrow_trade_id: escrowResult.tradeId,
-              escrow_trade_pda: escrowResult.tradePda,
-              escrow_pda: escrowResult.escrowPda,
-              escrow_creator_wallet: solanaWallet.walletAddress,
-            }),
-          });
-
-          const data = await res.json();
-
-          if (res.ok && data.success && data.data) {
-
-            // Add to orders list
-            const newOrder = mapDbOrderToUI(data.data, merchantId);
-            setOrders(prev => [newOrder, ...prev]);
-
-            addNotification('escrow', `Sell order created! ${escrowOrder.amount} USDC locked in escrow`, data.data.id);
-
-            // Clear the pending order
-            delete (window as any).__pendingSellOrder;
-
-            // Close the escrow modal
-            setShowEscrowModal(false);
-            setEscrowOrder(null);
-            setEscrowTxHash(null);
-            setEscrowError(null);
-          } else {
-            console.error('[Merchant] Failed to create order after escrow:', {
-              status: res.status,
-              statusText: res.statusText,
-              response: data,
-              error: data.error,
-              validation: data.validation_errors,
-            });
-            const errorMsg = data.error || data.validation_errors?.[0] || 'Unknown error';
-            addNotification('system', `Escrow locked but order creation failed: ${errorMsg}`, escrowOrder.id);
-          }
-        } catch (createError) {
-          console.error('[Merchant] Error creating order after escrow:', createError);
-          const errorMsg = createError instanceof Error ? createError.message : 'Network error';
-          addNotification('system', `Escrow locked but order creation failed: ${errorMsg}`, escrowOrder.id);
-        }
-
-        refreshBalance();
-      } else {
-        // Regular escrow flow (order already exists) - record escrow on backend
-        const escrowPayload: Record<string, unknown> = {
-          tx_hash: escrowResult.txHash,
-          actor_type: "merchant",
-          actor_id: merchantId,
-        };
-        // Only include optional fields if they have values (null fails zod .optional())
-        if (escrowResult.escrowPda) escrowPayload.escrow_address = escrowResult.escrowPda;
-        if (escrowResult.tradeId != null) escrowPayload.escrow_trade_id = escrowResult.tradeId;
-        if (escrowResult.tradePda) escrowPayload.escrow_trade_pda = escrowResult.tradePda;
-        if (escrowResult.escrowPda) escrowPayload.escrow_pda = escrowResult.escrowPda;
-        if (solanaWallet.walletAddress) escrowPayload.escrow_creator_wallet = solanaWallet.walletAddress;
-
-        let recorded = false;
-        for (let attempt = 0; attempt < 3 && !recorded; attempt++) {
-          if (attempt > 0) {
-            await new Promise(r => setTimeout(r, 2000 * attempt));
-          }
-          try {
-            const res = await fetch(`/api/orders/${escrowOrder.id}/escrow`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(escrowPayload),
-            });
-            if (res.ok) {
-              const data = await res.json();
-              if (data.success) recorded = true;
-            }
-          } catch (err) {
-            console.error(`[Merchant] Escrow record attempt ${attempt + 1} failed:`, err);
-          }
-        }
-
-        if (recorded) {
-          playSound('trade_complete');
-          addNotification('escrow', `${escrowOrder.amount} USDC locked in escrow - waiting for payment`, escrowOrder.id);
-
-          // Close the escrow modal
-          setShowEscrowModal(false);
-          setEscrowOrder(null);
-          setEscrowTxHash(null);
-          setEscrowError(null);
-
-          // Clear any recovery data since recording succeeded
-          try { localStorage.removeItem(`blip_unrecorded_escrow_${escrowOrder.id}`); } catch {}
-
-          // AfterMutationReconcile: refetch all + balance
-          await afterMutationReconcile(escrowOrder.id);
-        } else {
-          console.error('[Merchant] Failed to record escrow on backend after retries');
-          addNotification('system', 'Escrow locked on-chain but server sync failed. It will sync automatically.', escrowOrder.id);
-
-          // Save escrow data to localStorage for recovery on next page load
-          try {
-            localStorage.setItem(`blip_unrecorded_escrow_${escrowOrder.id}`, JSON.stringify({
-              orderId: escrowOrder.id,
-              txHash: escrowResult.txHash,
-              tradeId: escrowResult.tradeId,
-              tradePda: escrowResult.tradePda,
-              escrowPda: escrowResult.escrowPda,
-              creatorWallet: solanaWallet.walletAddress,
-              timestamp: Date.now(),
-            }));
-          } catch {}
-        }
-
-        refreshBalance();
-      }
-
-      setIsLockingEscrow(false);
-    } catch (error) {
-      console.error("Error locking escrow:", error);
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      // Check for blockhash expiration (user took too long to approve)
-      if (errorMsg.includes('block height exceeded') || errorMsg.includes('has expired')) {
-        setEscrowError('Transaction expired. Please approve the wallet popup faster (within 60 seconds). Try again.');
-      } else {
-        setEscrowError(errorMsg || 'Failed to lock escrow. Please try again.');
-      }
-      setIsLockingEscrow(false);
-      playSound('error');
-    }
-  };
-
-  // Close escrow modal
-  const closeEscrowModal = () => {
-    setShowEscrowModal(false);
-    setEscrowOrder(null);
-    setEscrowTxHash(null);
-    setEscrowError(null);
-    setIsLockingEscrow(false);
-    // Refresh orders to ensure we have latest status
-    fetchOrders();
-  };
-
-  // Open release modal for confirming payment and releasing escrow
-  const openReleaseModal = async (order: Order) => {
-    if (!merchantId) return;
-
-    // Check wallet connection (skip in mock mode)
-    if (!isMockMode && !solanaWallet.connected) {
-      addNotification('system', 'Please connect your wallet to release escrow.');
-      setShowWalletModal(true);
-      return;
-    }
-
-    // Fetch latest order data to ensure we have escrow details
-    try {
-      const res = await fetch(`/api/orders/${order.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data) {
-          const freshOrder = mapDbOrderToUI(data.data, merchantId);
-
-          // Guard: if order was already completed or released, don't show release modal
-          if (freshOrder.status === 'completed' || freshOrder.status === 'cancelled' || freshOrder.status === 'expired') {
-            addNotification('system', `Order already ${freshOrder.status}. Refreshing...`, order.id);
-            setOrders(prev => prev.map(o => o.id === order.id ? freshOrder : o));
-            fetchOrders();
-            return;
-          }
-
-          setReleaseOrder(freshOrder);
-          setReleaseTxHash(null);
-          setReleaseError(null);
-          setIsReleasingEscrow(false);
-          setShowReleaseModal(true);
-          return;
-        }
-      }
-    } catch (err) {
-      console.error('[Release] Error fetching fresh order:', err);
-    }
-
-    // Fallback to cached order — also guard against stale completed state
-    if (order.status === 'completed' || order.status === 'cancelled' || order.status === 'expired') {
-      addNotification('system', `Order already ${order.status}.`, order.id);
-      fetchOrders();
-      return;
-    }
-
-    setReleaseOrder(order);
-    setReleaseTxHash(null);
-    setReleaseError(null);
-    setIsReleasingEscrow(false);
-    setShowReleaseModal(true);
-  };
-
-  // Execute the escrow release transaction
-  const executeRelease = async () => {
-    if (!merchantId || !releaseOrder) return;
-
-    setIsReleasingEscrow(true);
-    setReleaseError(null);
-
-    try {
-      const { escrowTradeId, escrowCreatorWallet, userWallet } = releaseOrder;
-
-      // In mock mode, skip on-chain validation
-      if (!isMockMode) {
-        const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-
-        if (!escrowTradeId || !escrowCreatorWallet || !userWallet) {
-          setReleaseError('Missing escrow details. The escrow may not have been locked on-chain.');
-          setIsReleasingEscrow(false);
-          return;
-        }
-
-        if (!base58Regex.test(userWallet)) {
-          setReleaseError('Invalid user wallet address format.');
-          setIsReleasingEscrow(false);
-          return;
-        }
-      }
-
-
-      // Call the release function (mock mode: skip chain, generate demo tx)
-      let releaseResult: { success: boolean; txHash: string; error?: string };
-      if (isMockMode) {
-        releaseResult = { success: true, txHash: `mock-release-${Date.now()}` };
-      } else {
-        try {
-          releaseResult = await solanaWallet.releaseEscrow({
-            creatorPubkey: escrowCreatorWallet || 'mock',
-            tradeId: escrowTradeId || 0,
-            counterparty: userWallet || 'mock',
-          });
-        } catch (releaseErr: unknown) {
-          const msg = releaseErr instanceof Error ? releaseErr.message : String(releaseErr);
-          // Detect counterparty_ata constraint error
-          if (msg.includes('ConstraintRaw') && msg.includes('counterparty_ata')) {
-            setReleaseError('Buyer has not joined the escrow on-chain yet. Ask the buyer to connect their wallet and view this order first.');
-            setIsReleasingEscrow(false);
-            return;
-          }
-          throw releaseErr;
-        }
-      }
-
-      if (releaseResult.success) {
-        setReleaseTxHash(releaseResult.txHash);
-
-        // Record the release on backend (server handles mock balance credit)
-        const releaseBackendRes = await fetch(`/api/orders/${releaseOrder.id}/escrow`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tx_hash: releaseResult.txHash,
-            actor_type: 'merchant',
-            actor_id: merchantId,
-          }),
-        });
-        if (!releaseBackendRes.ok) {
-          console.error('[Release] Backend sync failed:', releaseBackendRes.status);
-          addNotification('system', 'Escrow released but backend sync failed. Refreshing...', releaseOrder.id);
-        }
-
-        // AfterMutationReconcile: optimistic completed + refetch all + balance
-        playSound('trade_complete');
-        addNotification('escrow', `Escrow released! ${releaseOrder.amount} USDC sent to buyer.`, releaseOrder.id);
-        await afterMutationReconcile(releaseOrder.id, { status: "completed" as const });
-
-        // Show rating modal after a short delay
-        setTimeout(() => {
-          const isM2M = !!releaseOrder.dbOrder?.buyer_merchant_id;
-          const counterpartyName = isM2M
-            ? (releaseOrder.dbOrder?.buyer_merchant?.display_name || 'Merchant')
-            : releaseOrder.user;
-          setRatingModalData({
-            orderId: releaseOrder.id,
-            counterpartyName,
-            counterpartyType: isM2M ? 'merchant' : 'user',
-          });
-        }, 1500);
-      } else {
-        setReleaseError(releaseResult.error || 'Failed to release escrow');
-        playSound('error');
-      }
-    } catch (error) {
-      console.error('[Release] Error releasing escrow:', error);
-      setReleaseError(error instanceof Error ? error.message : 'Failed to release escrow. Please try again.');
-      playSound('error');
-    } finally {
-      setIsReleasingEscrow(false);
-    }
-  };
-
-  // Close release modal
-  const closeReleaseModal = () => {
-    setShowReleaseModal(false);
-    setReleaseOrder(null);
-    setReleaseTxHash(null);
-    setReleaseError(null);
-    setIsReleasingEscrow(false);
-  };
-
-  // Open cancel/withdraw escrow modal
-  const openCancelModal = async (order: Order) => {
-    if (!merchantId) return;
-
-    if (!isMockMode && !solanaWallet.connected) {
-      addNotification('system', 'Please connect your wallet to cancel escrow.');
-      setShowWalletModal(true);
-      return;
-    }
-
-    // Fetch latest order data
-    try {
-      const res = await fetch(`/api/orders/${order.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data) {
-          const freshOrder = mapDbOrderToUI(data.data, merchantId);
-          setCancelOrder(freshOrder);
-          setCancelTxHash(null);
-          setCancelError(null);
-          setIsCancellingEscrow(false);
-          setShowCancelModal(true);
-          return;
-        }
-      }
-    } catch (err) {
-      console.error('[Cancel] Error fetching fresh order:', err);
-    }
-
-    // Fallback to cached order
-    setCancelOrder(order);
-    setCancelTxHash(null);
-    setCancelError(null);
-    setIsCancellingEscrow(false);
-    setShowCancelModal(true);
-  };
-
-  // Execute the escrow cancel/refund transaction
-  const executeCancelEscrow = async () => {
-    if (!merchantId || !cancelOrder) return;
-
-    setIsCancellingEscrow(true);
-    setCancelError(null);
-
-    try {
-      const { escrowTradeId, escrowCreatorWallet } = cancelOrder;
-
-      if (!isMockMode && (!escrowTradeId || !escrowCreatorWallet)) {
-        setCancelError('Missing escrow details. The escrow may not have been locked on-chain.');
-        setIsCancellingEscrow(false);
-        return;
-      }
-
-
-      // Call the on-chain refund function (mock mode: skip chain, generate demo tx)
-      let refundResult: { success: boolean; txHash: string; error?: string };
-      if (isMockMode) {
-        refundResult = { success: true, txHash: `mock-refund-${Date.now()}` };
-      } else {
-        refundResult = await solanaWallet.refundEscrow({
-          creatorPubkey: escrowCreatorWallet || 'mock',
-          tradeId: escrowTradeId || 0,
-        });
-      }
-
-      if (refundResult.success) {
-        setCancelTxHash(refundResult.txHash);
-
-        // Update order status to cancelled on backend with refund tx hash
-        await fetch(`/api/orders/${cancelOrder.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            status: 'cancelled',
-            actor_type: 'merchant',
-            actor_id: merchantId,
-            refund_tx_hash: refundResult.txHash,
-          }),
-        });
-
-        // AfterMutationReconcile: optimistic cancelled + refetch all + balance
-        playSound('click');
-        addNotification('system', `Escrow cancelled. ${cancelOrder.amount} USDC returned to your balance.`, cancelOrder.id);
-        await afterMutationReconcile(cancelOrder.id, { status: "cancelled" as const });
-      } else {
-        setCancelError(refundResult.error || 'Failed to refund escrow');
-        playSound('error');
-      }
-    } catch (error) {
-      console.error('[Cancel] Error cancelling escrow:', error);
-      setCancelError(error instanceof Error ? error.message : 'Failed to cancel escrow. Please try again.');
-      playSound('error');
-    } finally {
-      setIsCancellingEscrow(false);
-    }
-  };
-
-  // Close cancel modal
-  const closeCancelModal = () => {
-    setShowCancelModal(false);
-    setCancelOrder(null);
-    setCancelTxHash(null);
-    setCancelError(null);
-    setIsCancellingEscrow(false);
-  };
-
-  // Simple cancel for orders without escrow (pending/accepted)
-  const cancelOrderWithoutEscrow = async (orderId: string) => {
-    if (!merchantId) return;
-
-    const confirmed = confirm('Cancel this order? This action cannot be undone.');
-    if (!confirmed) return;
-
-    try {
-      const res = await fetch(`/api/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&reason=Cancelled by merchant`, {
-        method: 'DELETE',
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          // AfterMutationReconcile: optimistic cancelled + refetch all + balance
-          playSound('click');
-          addNotification('system', 'Order cancelled successfully.', orderId);
-          await afterMutationReconcile(orderId, { status: "cancelled" as const });
-        } else {
-          addNotification('system', data.error || 'Failed to cancel order', orderId);
-          playSound('error');
-        }
-      } else {
-        const data = await res.json();
-        addNotification('system', data.error || 'Failed to cancel order', orderId);
-        playSound('error');
-      }
-    } catch (error) {
-      console.error('[Cancel] Error cancelling order:', error);
-      addNotification('system', 'Failed to cancel order. Please try again.', orderId);
-      playSound('error');
-    }
-  };
-
-  // Merchant marks that they've sent fiat payment (for M2M buy side)
-  const markFiatPaymentSent = async (order: Order) => {
-    if (!merchantId) return;
-    setMarkingDone(true);
-
-    try {
-      const res = await fetch(`/api/orders/${order.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "payment_sent",
-          actor_type: "merchant",
-          actor_id: merchantId,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          // AfterMutationReconcile: optimistic escrow + refetch all + balance
-          playSound('click');
-          addNotification('system', `Payment marked as sent. Waiting for seller to release escrow.`, order.id);
-          await afterMutationReconcile(order.id, { status: "escrow" as const });
-        }
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        addNotification('system', `Failed: ${errorData.error || 'Unknown error'}`, order.id);
-        playSound('error');
-      }
-    } catch (error) {
-      console.error("Error marking payment sent:", error);
-      playSound('error');
-    } finally {
-      setMarkingDone(false);
-    }
-  };
-
-  // Merchant marks payment as sent -> moves to Completed
-  const markPaymentSent = async (order: Order) => {
-    if (!merchantId) return;
-    setMarkingDone(true);
-
-    try {
-      // Update order status to completed
-      const res = await fetch(`/api/orders/${order.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "completed",
-          actor_type: "merchant",
-          actor_id: merchantId,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          // Close popup
-          setSelectedOrderPopup(null);
-
-          // AfterMutationReconcile: optimistic completed + refetch all + balance
-          playSound('trade_complete');
-          addNotification('complete', `Trade completed with ${order.user}!`, order.id);
-          await afterMutationReconcile(order.id, { status: "completed" as const });
-        }
-      }
-    } catch (error) {
-      console.error("Error completing order:", error);
-      playSound('error');
-    } finally {
-      setMarkingDone(false);
-    }
-  };
-
-  const completeOrder = async (orderId: string) => {
-    if (!merchantId) return;
-
-    try {
-      // Update order status to completed via API
-      const res = await fetch(`/api/orders/${orderId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "completed",
-          actor_type: "merchant",
-          actor_id: merchantId,
-        }),
-      });
-      if (!res.ok) {
-        console.error("Failed to complete order:", res.status);
-        return;
-      }
-      const data = await res.json();
-      if (data.success) {
-        // AfterMutationReconcile: optimistic completed + refetch all + balance
-        playSound('trade_complete');
-        await afterMutationReconcile(orderId, { status: "completed" as const });
-      }
-    } catch (error) {
-      console.error("Error completing order:", error);
-      playSound('error');
-    }
-  };
-
-  const confirmPayment = async (orderId: string) => {
-    if (!merchantId) return;
-
-    // Find the order to get escrow details
-    const order = orders.find(o => o.id === orderId);
-    if (!order) {
-      console.error("Order not found:", orderId);
-      return;
-    }
-
-    try {
-      let releaseTxHash: string;
-
-      // For BUY and SELL orders where merchant locked escrow, release the escrow
-      // BUY order = user buying crypto, merchant selling = merchant locked the escrow
-      // SELL order = merchant selling to another merchant = seller locked the escrow
-      if (order.orderType === 'buy' || order.orderType === 'sell') {
-        if (isMockMode) {
-          // MOCK MODE: Generate demo tx_hash for escrow release
-          releaseTxHash = `demo-release-${Date.now()}`;
-        } else if (order.escrowTradeId && order.escrowCreatorWallet && order.userWallet) {
-          // REAL MODE: Release escrow on-chain
-          const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-          const isValidUserWallet = order.userWallet && base58Regex.test(order.userWallet);
-
-          if (!solanaWallet.connected) {
-            addNotification('system', 'Please connect your wallet to release escrow.', orderId);
-            setShowWalletModal(true);
-            playSound('error');
-            return;
-          }
-
-          if (!isValidUserWallet) {
-            addNotification('system', 'Invalid buyer wallet address. Cannot release escrow.', orderId);
-            playSound('error');
-            return;
-          }
-
-
-          let releaseResult;
-          try {
-            releaseResult = await solanaWallet.releaseEscrow({
-              creatorPubkey: order.escrowCreatorWallet,
-              tradeId: order.escrowTradeId,
-              counterparty: order.userWallet,
-            });
-          } catch (releaseErr: unknown) {
-            const errMsg = releaseErr instanceof Error ? releaseErr.message : String(releaseErr);
-            if (errMsg.includes('ConstraintRaw') && errMsg.includes('counterparty_ata')) {
-              addNotification('system', 'Buyer has not joined the escrow on-chain yet. Ask the buyer to connect their wallet and view this order.', orderId);
-              playSound('error');
-              return;
-            }
-            throw releaseErr;
-          }
-
-          if (!releaseResult.success) {
-            console.error('[Merchant] Failed to release escrow:', releaseResult.error);
-            addNotification('system', `Failed to release escrow: ${releaseResult.error || 'Unknown error'}`, orderId);
-            playSound('error');
-            return;
-          }
-
-          releaseTxHash = releaseResult.txHash;
-        } else {
-          // Missing escrow details in real mode
-          addNotification('system', 'Missing escrow details. Cannot release.', orderId);
-          playSound('error');
-          return;
-        }
-
-        // Call atomic escrow release endpoint (works in both mock and real mode)
-        const response = await fetch(`/api/orders/${orderId}/escrow`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tx_hash: releaseTxHash,
-            actor_type: 'merchant',
-            actor_id: merchantId,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error('[Merchant] Escrow release API failed:', errorData);
-          addNotification('system', `Failed to complete order: ${errorData.error || 'Unknown error'}`, orderId);
-          playSound('error');
-          return;
-        }
-
-      }
-
-      // AfterMutationReconcile: refetch all + balance
-      playSound('trade_complete');
-      addNotification('complete', `Order completed - ${order.amount} USDC released to buyer`, orderId);
-      await afterMutationReconcile(orderId, { status: "completed" as const });
-    } catch (error) {
-      console.error("Error confirming payment:", error);
-      addNotification('system', 'Failed to complete order. Please try again.', orderId);
-      playSound('error');
-    }
-  };
-
-  const openDisputeModal = (orderId: string) => {
-    setDisputeOrderId(orderId);
-    setShowDisputeModal(true);
-  };
-
-  const submitDispute = async () => {
-    if (!disputeOrderId || !merchantId || !disputeReason) return;
-
-    // Find the order to get escrow details
-    const order = orders.find(o => o.id === disputeOrderId);
-
-    setIsSubmittingDispute(true);
-    try {
-      // V2.3: If wallet connected and order has escrow, open dispute on-chain first
-      if (solanaWallet.connected && order?.escrowTradeId && order?.escrowCreatorWallet) {
-
-        try {
-          const disputeResult = await solanaWallet.openDispute({
-            creatorPubkey: order.escrowCreatorWallet,
-            tradeId: order.escrowTradeId,
-          });
-
-          if (disputeResult.success) {
-            addNotification('system', `Dispute opened on-chain: ${disputeResult.txHash?.slice(0, 8)}...`, disputeOrderId);
-          }
-        } catch (chainError) {
-          // Log but continue - the API dispute will still be recorded
-        }
-      }
-
-      // Submit dispute to API (always, regardless of on-chain result)
-      const res = await fetch(`/api/orders/${disputeOrderId}/dispute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reason: disputeReason,
-          description: disputeDescription,
-          initiated_by: 'merchant',
-          merchant_id: merchantId,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setShowDisputeModal(false);
-          const dOrderId = disputeOrderId;
-          setDisputeOrderId(null);
-          setDisputeReason("");
-          setDisputeDescription("");
-          playSound('click');
-          toast.showDisputeOpened(dOrderId);
-          addNotification('dispute', 'Dispute submitted. Our team will review it.', dOrderId);
-          await afterMutationReconcile(dOrderId, { status: "disputed" as const });
-        }
-      } else {
-        toast.showWarning('Failed to submit dispute. Please try again.');
-      }
-    } catch (err) {
-      console.error('Failed to submit dispute:', err);
-      playSound('error');
-      toast.showWarning('Failed to submit dispute');
-    } finally {
-      setIsSubmittingDispute(false);
-    }
-  };
-
-  // Fetch dispute info for an order
-  const fetchDisputeInfo = useCallback(async (orderId: string) => {
-    try {
-      const res = await fetch(`/api/orders/${orderId}/dispute`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data) {
-          setDisputeInfo(data.data);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch dispute info:', err);
-    }
-  }, []);
-
-  // Request extension for an order
-  const requestExtension = async (orderId: string) => {
-    if (!merchantId) return;
-
-    setRequestingExtension(orderId);
-    try {
-      const res = await fetch(`/api/orders/${orderId}/extension`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          actor_type: 'merchant',
-          actor_id: merchantId,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        addNotification('system', 'Extension request sent to user', orderId);
-        playSound('click');
-        // Add to local extension requests tracking
-        setExtensionRequests(prev => {
-          const newMap = new Map(prev);
-          newMap.set(orderId, {
-            requestedBy: 'merchant',
-            extensionMinutes: data.data?.extension_minutes || 30,
-            extensionCount: data.data?.extension_count || 0,
-            maxExtensions: data.data?.max_extensions || 3,
-          });
-          return newMap;
-        });
-      } else {
-        addNotification('system', data.error || 'Failed to request extension', orderId);
-        playSound('error');
-      }
-    } catch (err) {
-      console.error('Failed to request extension:', err);
-      addNotification('system', 'Failed to request extension', orderId);
-      playSound('error');
-    } finally {
-      setRequestingExtension(null);
-    }
-  };
-
-  // Respond to extension request (accept/decline)
-  const respondToExtension = async (orderId: string, accept: boolean) => {
-    if (!merchantId) return;
-
-    setRequestingExtension(orderId);
-    try {
-      const res = await fetch(`/api/orders/${orderId}/extension`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          actor_type: 'merchant',
-          actor_id: merchantId,
-          accept,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        // Remove from local extension requests
-        setExtensionRequests(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(orderId);
-          return newMap;
-        });
-
-        if (accept) {
-          addNotification('system', 'Extension accepted - time extended', orderId);
-          playSound('click');
-          fetchOrders(); // Refresh to get new expires_at
-        } else {
-          addNotification('system', `Extension declined - order ${data.data?.status || 'updated'}`, orderId);
-          playSound('error');
-          fetchOrders(); // Refresh orders
-        }
-      } else {
-        addNotification('system', data.error || 'Failed to respond to extension', orderId);
-        playSound('error');
-      }
-    } catch (err) {
-      console.error('Failed to respond to extension:', err);
-      playSound('error');
-    } finally {
-      setRequestingExtension(null);
-    }
-  };
-
-  // Respond to resolution proposal (accept/reject)
-  const respondToResolution = async (action: 'accept' | 'reject', orderId: string) => {
-    if (!merchantId || !disputeInfo) return;
-
-    setIsRespondingToResolution(true);
-    try {
-      const res = await fetch(`/api/orders/${orderId}/dispute/confirm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          party: 'merchant',
-          action,
-          partyId: merchantId,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          // Refresh dispute info
-          fetchDisputeInfo(orderId);
-          // Refresh orders if resolution was finalized
-          if (data.data?.finalized) {
-            fetchOrders();
-          }
-          playSound('click');
-        }
-      }
-    } catch (err) {
-      console.error('Failed to respond to resolution:', err);
-      playSound('error');
-    } finally {
-      setIsRespondingToResolution(false);
-    }
-  };
+  // Destructure escrow hook (all escrow state + actions)
+  const {
+    showEscrowModal, escrowOrder, isLockingEscrow, escrowTxHash, escrowError,
+    openEscrowModal, openEscrowModalForSell, executeLockEscrow, closeEscrowModal,
+    showReleaseModal, releaseOrder, isReleasingEscrow, releaseTxHash, releaseError,
+    openReleaseModal, executeRelease, closeReleaseModal,
+    showCancelModal, cancelOrder, isCancellingEscrow, cancelTxHash, cancelError,
+    openCancelModal, executeCancelEscrow, closeCancelModal,
+    cancelOrderWithoutEscrow,
+  } = escrow;
+
+  // Destructure dispute hook (all dispute state + actions)
+  const dispute = useDisputeHandlers({
+    solanaWallet,
+    addNotification,
+    playSound,
+    toast,
+    afterMutationReconcile,
+    fetchOrders,
+  });
+  const {
+    showDisputeModal, disputeOrderId,
+    disputeReason, setDisputeReason,
+    disputeDescription, setDisputeDescription,
+    isSubmittingDispute, disputeInfo, setDisputeInfo,
+    isRespondingToResolution, extensionRequests, requestingExtension,
+    openDisputeModal, submitDispute, fetchDisputeInfo,
+    requestExtension, respondToExtension, respondToResolution,
+  } = dispute;
 
   // Fetch dispute info when viewing a chat for a disputed order
   useEffect(() => {
@@ -2840,48 +849,32 @@ export default function MerchantDashboard() {
     let targetType: 'user' | 'merchant';
     let targetName: string;
 
-    if (dbOrder) {
-      const isM2M = !!dbOrder.buyer_merchant_id;
-      if (isM2M) {
-        // M2M trade - determine which merchant to chat with
-        if (dbOrder.buyer_merchant_id === merchantId) {
-          targetId = dbOrder.merchant_id;
-          targetType = 'merchant';
-          targetName = 'Seller Merchant';
-        } else {
-          targetId = dbOrder.buyer_merchant_id!;
-          targetType = 'merchant';
-          targetName = dbOrder.buyer_merchant?.display_name || 'Buyer Merchant';
-        }
+    if (order.myRole === 'buyer') {
+      // I'm the buyer — chat with the seller
+      if (dbOrder?.merchant_id && dbOrder.merchant_id !== merchantId) {
+        targetId = dbOrder.merchant_id;
+        targetType = 'merchant';
+        targetName = dbOrder.merchant_username || dbOrder.merchant_display_name || order.user || 'Seller';
       } else {
-        targetId = dbOrder.user_id;
+        targetId = dbOrder?.user_id || order.userId || '';
         targetType = 'user';
-        targetName = dbOrder.user?.name || order.user;
+        targetName = order.user || 'User';
       }
     } else {
-      // Fallback: use order's direct properties when dbOrder is missing
-      if (order.isM2M && order.buyerMerchantId) {
-        if (order.buyerMerchantId === merchantId) {
-          targetId = order.orderMerchantId || '';
-          targetType = 'merchant';
-          targetName = 'Seller Merchant';
-        } else {
-          targetId = order.buyerMerchantId;
-          targetType = 'merchant';
-          targetName = 'Buyer Merchant';
-        }
+      // I'm the seller — chat with the buyer
+      if (dbOrder?.buyer_merchant_id && dbOrder.buyer_merchant_id !== merchantId) {
+        targetId = dbOrder.buyer_merchant_id;
+        targetType = 'merchant';
+        targetName = dbOrder.buyer_merchant_username || dbOrder.buyer_merchant_display_name || order.user || 'Buyer';
       } else {
-        // For non-M2M, try to find user info from order
-        targetId = order.orderMerchantId === merchantId
-          ? (order.id) // Use order ID as fallback - will open general thread
-          : (order.orderMerchantId || '');
+        targetId = dbOrder?.user_id || order.userId || '';
         targetType = 'user';
         targetName = order.user || 'User';
       }
     }
 
     if (!targetId) {
-      console.error('[Chat] No target ID found for order:', order.id);
+      console.warn('[Chat] No target ID found for order', order.id);
       return;
     }
 
@@ -2890,198 +883,30 @@ export default function MerchantDashboard() {
     directChat.openChat(targetId, targetType, targetName);
   };
 
-  const dismissBigOrder = (id: string) => {
-    setBigOrders(prev => prev.filter(o => o.id !== id));
-  };
+  // Order actions hook
+  const orderActions = useOrderActions({
+    isMockMode,
+    solanaWallet,
+    effectiveBalance,
+    addNotification,
+    playSound,
+    afterMutationReconcile,
+    setShowWalletModal,
+    handleOpenChat,
+    setSelectedOrderPopup,
+    openEscrowModalForSell,
+  });
+  const {
+    markingDone, isCreatingTrade, setIsCreatingTrade, createTradeError, setCreateTradeError,
+    acceptOrder, acceptWithSaed, signToClaimOrder, signAndProceed,
+    markFiatPaymentSent, markPaymentSent, completeOrder, confirmPayment,
+    handleDirectOrderCreation: rawHandleDirectOrderCreation,
+  } = orderActions;
 
-  // Helper to force refetch a single order (for critical updates like completion)
-  const refetchSingleOrder = useCallback(async (orderId: string) => {
-    try {
-      const res = await fetch(`/api/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&_t=${Date.now()}`, {
-        cache: 'no-store'
-      });
-
-      if (!res.ok) {
-        console.error('[Merchant] Failed to refetch order:', res.status);
-        return;
-      }
-
-      const data = await res.json();
-      if (data.success && data.data) {
-        const freshOrder = mapDbOrderToUI(data.data, merchantId);
-
-        // Replace order in local state (no version check - this is authoritative)
-        setOrders(prev => prev.map(o => o.id === orderId ? freshOrder : o));
-      }
-    } catch (error) {
-      console.error('[Merchant] Error refetching single order:', error);
-    }
-  }, [merchantId]);
-
-  // AfterMutationReconcile: Single helper for all order action handlers.
-  // Ensures consistent post-mutation behavior: refetch order + list + balance.
-  // Enforces monotonic order_version via refetchSingleOrder's authoritative fetch.
-  const afterMutationReconcile = useCallback(async (
-    orderId: string,
-    optimisticUpdate?: Partial<Order>,
-  ) => {
-    // 1. Apply optimistic update immediately (instant UI feedback)
-    if (optimisticUpdate) {
-      setOrders(prev => prev.map(o =>
-        o.id === orderId ? { ...o, ...optimisticUpdate } : o
-      ));
-    }
-
-    // 2. Refetch the specific order for authoritative status (small delay for backend)
-    setTimeout(() => refetchSingleOrder(orderId), 300);
-
-    // 3. Refetch all order lists (open/active/history)
-    await fetchOrders();
-
-    // 4. Always refresh balance after any mutation
-    refreshBalance();
-  }, [refetchSingleOrder, fetchOrders, refreshBalance]);
-
-  // Direct order creation handler for ConfigPanel
-  // Accepts tradeType directly to avoid stale closure from React state batching
-  const handleDirectOrderCreation = async (tradeType?: 'buy' | 'sell', priorityFee?: number) => {
-    if (!merchantId || isCreatingTrade) return;
-
-    // Use passed tradeType (from ConfigPanel button click) or fall back to form state
-    const effectiveTradeType = tradeType || openTradeForm.tradeType;
-
-    setIsCreatingTrade(true);
-    setCreateTradeError(null);
-
-    try {
-      if (effectiveTradeType === "sell") {
-        // SELL order flow: Lock escrow first, then create order
-
-        // Check balance
-        if (effectiveBalance !== null && effectiveBalance < parseFloat(openTradeForm.cryptoAmount)) {
-          addNotification('system', `Insufficient balance. You have ${effectiveBalance.toFixed(2)} USDC.`);
-          setIsCreatingTrade(false);
-          return;
-        }
-
-        // Find matching merchant
-        const offerParams = new URLSearchParams({
-          amount: openTradeForm.cryptoAmount,
-          type: 'buy',
-          payment_method: openTradeForm.paymentMethod,
-          exclude_merchant: merchantId,
-        });
-        const offerRes = await fetch(`/api/offers?${offerParams}`);
-        const offerData = await offerRes.json();
-
-        let matchedOffer: { id: string; merchant?: { wallet_address?: string; display_name?: string } } | null = null;
-        if (offerRes.ok && offerData.success && offerData.data) {
-          matchedOffer = offerData.data;
-        }
-
-        // Validate counterparty wallet (skip in mock mode and embedded wallet mode)
-        if (!isMockMode && !IS_EMBEDDED_WALLET) {
-          const counterpartyWallet = matchedOffer?.merchant?.wallet_address;
-          const isValidWallet = counterpartyWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(counterpartyWallet);
-
-          if (!isValidWallet) {
-            addNotification('system', 'No matching merchant with wallet found. Try a different amount.');
-            setIsCreatingTrade(false);
-            return;
-          }
-        }
-
-        // Store trade params for manual escrow locking
-        (window as any).__pendingSellOrder = {
-          merchantId,
-          tradeType: effectiveTradeType,
-          cryptoAmount: parseFloat(openTradeForm.cryptoAmount),
-          paymentMethod: openTradeForm.paymentMethod,
-          spreadPreference: openTradeForm.spreadPreference,
-          priorityFee: priorityFee || 0,
-          matchedOfferId: matchedOffer?.id,
-          counterpartyWallet: matchedOffer?.merchant?.wallet_address,
-        };
-
-        // Create temporary order for escrow modal
-        const tempOrder: Order = {
-          id: 'temp-' + Date.now(),
-          user: matchedOffer?.merchant?.display_name || 'Merchant',
-          emoji: '🏪',
-          amount: parseFloat(openTradeForm.cryptoAmount),
-          fromCurrency: 'USDC',
-          toCurrency: 'AED',
-          rate: 3.67,
-          total: parseFloat(openTradeForm.cryptoAmount) * 3.67,
-          timestamp: new Date(),
-          status: 'pending',
-          expiresIn: 900,
-          orderType: 'sell',
-          userWallet: matchedOffer?.merchant?.wallet_address,
-        };
-
-        // Show escrow modal for manual locking
-        setEscrowOrder(tempOrder);
-        setEscrowTxHash(null);
-        setEscrowError(null);
-        setIsLockingEscrow(false);
-        setShowEscrowModal(true);
-
-        // Reset form
-        setOpenTradeForm({
-          tradeType: "sell",
-          cryptoAmount: "",
-          paymentMethod: "bank",
-          spreadPreference: "fastest",
-        });
-
-      } else {
-        // BUY order flow: Create directly
-        const res = await fetch("/api/merchant/orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            merchant_id: merchantId,
-            type: effectiveTradeType,
-            crypto_amount: parseFloat(openTradeForm.cryptoAmount),
-            payment_method: openTradeForm.paymentMethod,
-            spread_preference: openTradeForm.spreadPreference,
-            priority_fee: priorityFee || 0,
-          }),
-        });
-
-        const data = await res.json();
-
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || "Failed to create order");
-        }
-
-        // Success
-        if (data.data) {
-          const newOrder = mapDbOrderToUI(data.data, merchantId);
-          setOrders(prev => [newOrder, ...prev]);
-          playSound('trade_complete');
-          addNotification('order', `Buy order created for ${parseFloat(openTradeForm.cryptoAmount)} USDC`, data.data?.id);
-        }
-
-        // Reset form
-        setOpenTradeForm({
-          tradeType: "sell",
-          cryptoAmount: "",
-          paymentMethod: "bank",
-          spreadPreference: "fastest",
-        });
-      }
-
-    } catch (error) {
-      console.error("Error creating order:", error);
-      const errorMsg = error instanceof Error ? error.message : 'Failed to create order';
-      addNotification('system', errorMsg);
-      playSound('error');
-    } finally {
-      setIsCreatingTrade(false);
-    }
-  };
+  // Wrap handleDirectOrderCreation to bind form state
+  const handleDirectOrderCreation = useCallback((tradeType?: 'buy' | 'sell', priorityFee?: number) => {
+    rawHandleDirectOrderCreation(openTradeForm, setOpenTradeForm, tradeType, priorityFee);
+  }, [rawHandleDirectOrderCreation, openTradeForm, setOpenTradeForm]);
 
   // Filter orders by status - Flow: New Orders → Active → Ongoing → Completed
   // CRITICAL: Orders with MY escrow must ALWAYS be visible (never silently dropped)
