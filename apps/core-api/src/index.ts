@@ -19,6 +19,7 @@ import { initWebSocketServer, closeWebSocketServer } from './ws/broadcast';
 import { startOutboxWorker, stopOutboxWorker } from './workers/notificationOutbox';
 import { startCorridorTimeoutWorker, stopCorridorTimeoutWorker } from './workers/corridorTimeoutWorker';
 import { startAutoBumpWorker, stopAutoBumpWorker } from './workers/autoBumpWorker';
+import { startPriceFeedWorker, stopPriceFeedWorker } from './workers/priceFeedWorker';
 import { closePool } from 'settlement-core';
 
 const PORT = parseInt(process.env.CORE_API_PORT || '4010', 10);
@@ -63,6 +64,7 @@ try {
     startOutboxWorker();
     startCorridorTimeoutWorker();
     startAutoBumpWorker();
+    startPriceFeedWorker();
   }
 } catch (err) {
   fastify.log.error(err);
@@ -75,6 +77,7 @@ const shutdown = async (signal: string) => {
     stopOutboxWorker();
     stopCorridorTimeoutWorker();
     stopAutoBumpWorker();
+    stopPriceFeedWorker();
     closeWebSocketServer();
   }
   await fastify.close();

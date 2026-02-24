@@ -46,13 +46,22 @@ interface ExtensionResponseData {
   newStatus?: string;
 }
 
+export interface CorridorPriceData {
+  corridor_id: string;
+  ref_price: number;
+  volume_5m: number;
+  confidence: string;
+  updated_at: string;
+}
+
 interface UseRealtimeOrdersOptions {
   actorType: 'user' | 'merchant';
   actorId: string | null;
   onOrderCreated?: (order: OrderData) => void;
-  onOrderStatusUpdated?: (orderId: string, newStatus: string, previousStatus: string) => void;
+  onOrderStatusUpdated?: (orderId: string, newStatus: string, previousStatus: string, extra?: { buyerMerchantId?: string; merchantId?: string }) => void;
   onExtensionRequested?: (data: ExtensionRequestData) => void;
   onExtensionResponse?: (data: ExtensionResponseData) => void;
+  onPriceUpdate?: (data: CorridorPriceData) => void;
 }
 
 interface UseRealtimeOrdersReturn {
@@ -66,7 +75,7 @@ interface UseRealtimeOrdersReturn {
 // ─── Event batch types ──────────────────────────────────────────────
 type BatchedEvent =
   | { type: 'created'; orderId: string; data?: OrderData; order_version?: number }
-  | { type: 'status'; orderId: string; status: string; minimal_status?: string; order_version?: number; previousStatus: string; data?: OrderData }
+  | { type: 'status'; orderId: string; status: string; minimal_status?: string; order_version?: number; previousStatus: string; data?: OrderData; buyer_merchant_id?: string; merchant_id?: string }
   | { type: 'cancelled'; orderId: string; order_version?: number; minimal_status?: string };
 
 const BATCH_WINDOW_MS = 100; // Coalesce events within 100ms
@@ -74,7 +83,7 @@ const BATCH_WINDOW_MS = 100; // Coalesce events within 100ms
 export function useRealtimeOrders(
   options: UseRealtimeOrdersOptions
 ): UseRealtimeOrdersReturn {
-  const { actorType, actorId, onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse } = options;
+  const { actorType, actorId, onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse, onPriceUpdate } = options;
 
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -89,13 +98,15 @@ export function useRealtimeOrders(
   const onOrderStatusUpdatedRef = useRef(onOrderStatusUpdated);
   const onExtensionRequestedRef = useRef(onExtensionRequested);
   const onExtensionResponseRef = useRef(onExtensionResponse);
+  const onPriceUpdateRef = useRef(onPriceUpdate);
 
   useEffect(() => {
     onOrderCreatedRef.current = onOrderCreated;
     onOrderStatusUpdatedRef.current = onOrderStatusUpdated;
     onExtensionRequestedRef.current = onExtensionRequested;
     onExtensionResponseRef.current = onExtensionResponse;
-  }, [onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse]);
+    onPriceUpdateRef.current = onPriceUpdate;
+  }, [onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse, onPriceUpdate]);
 
   // ─── Event batch queue ──────────────────────────────────────────
   const batchQueueRef = useRef<BatchedEvent[]>([]);
@@ -179,7 +190,10 @@ export function useRealtimeOrders(
     }
     for (const [, evt] of latestByOrder) {
       if (evt.type === 'status') {
-        onOrderStatusUpdatedRef.current?.(evt.orderId, evt.status, evt.previousStatus);
+        onOrderStatusUpdatedRef.current?.(evt.orderId, evt.status, evt.previousStatus, {
+          buyerMerchantId: evt.buyer_merchant_id,
+          merchantId: evt.merchant_id,
+        });
       }
     }
 
@@ -427,9 +441,16 @@ export function useRealtimeOrders(
       ws.onmessage = (evt) => {
         try {
           const msg = JSON.parse(evt.data);
+
+          // Handle corridor price updates from price feed worker
+          if (msg.type === 'price_update') {
+            onPriceUpdateRef.current?.(msg as CorridorPriceData);
+            return;
+          }
+
           if (msg.type !== 'order_event') return;
 
-          const { event_type, order_id, status, minimal_status, order_version, previousStatus } = msg;
+          const { event_type, order_id, status, minimal_status, order_version, previousStatus, buyer_merchant_id, merchant_id } = msg;
 
           if (event_type === 'ORDER_CREATED') {
             needsRefetchRef.current = true;
@@ -446,6 +467,8 @@ export function useRealtimeOrders(
             minimal_status,
             order_version,
             previousStatus,
+            buyer_merchant_id,
+            merchant_id,
           });
         } catch { /* ignore malformed */ }
       };

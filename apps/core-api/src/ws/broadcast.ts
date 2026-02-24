@@ -149,6 +149,8 @@ export function broadcastOrderEvent(payload: BroadcastPayload): void {
     minimal_status: payload.minimal_status,
     order_version: payload.order_version,
     previousStatus: payload.previousStatus,
+    buyer_merchant_id: payload.buyerMerchantId,
+    merchant_id: payload.merchantId,
   });
 
   const targets = new Set<WebSocket>();
@@ -187,6 +189,42 @@ export function broadcastOrderEvent(payload: BroadcastPayload): void {
     logger.info('[WS] Broadcast sent', {
       event: payload.event_type,
       orderId: payload.order_id,
+      recipients: sent,
+    });
+  }
+}
+
+/**
+ * Broadcast a price update to ALL connected merchants.
+ */
+export interface PriceBroadcastPayload {
+  corridor_id: string;
+  ref_price: number;
+  volume_5m: number;
+  confidence: string;
+  updated_at: string;
+}
+
+export function broadcastPriceEvent(payload: PriceBroadcastPayload): void {
+  if (!wss) return;
+
+  const message = JSON.stringify({ type: 'price_update', ...payload });
+  let sent = 0;
+
+  for (const [key, wsSet] of actorIndex) {
+    if (key.startsWith('merchant:')) {
+      wsSet.forEach((ws) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          try { ws.send(message); sent++; } catch { /* dead socket, heartbeat will clean */ }
+        }
+      });
+    }
+  }
+
+  if (sent > 0) {
+    logger.info('[WS] Price broadcast sent', {
+      corridor: payload.corridor_id,
+      refPrice: payload.ref_price,
       recipients: sent,
     });
   }

@@ -60,6 +60,7 @@ import { DashboardWidgets } from "@/components/merchant/DashboardWidgets";
 import { Package } from "lucide-react";
 import { CorridorLPPanel } from "@/components/merchant/CorridorLPPanel";
 import { getNextStep, type NextStepResult } from "@/lib/orders/getNextStep";
+import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
 import { getAuthoritativeStatus, shouldAcceptUpdate, computeMyRole } from "@/lib/orders/statusResolver";
 // New dashboard components
 import { ConfigPanel } from "@/components/merchant/ConfigPanel";
@@ -69,6 +70,7 @@ import { LeaderboardPanel } from "@/components/merchant/LeaderboardPanel";
 import { InProgressPanel } from "@/components/merchant/InProgressPanel";
 import { ActivityPanel } from "@/components/merchant/ActivityPanel";
 import { CompletedOrdersPanel } from "@/components/merchant/CompletedOrdersPanel";
+import { UserBadge } from "@/components/merchant/UserBadge";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { useMerchantStore } from "@/stores/merchantStore";
@@ -238,6 +240,7 @@ export default function MerchantDashboard() {
     cryptoAmount: "",
     paymentMethod: "bank" as "bank" | "cash",
     spreadPreference: "fastest" as "best" | "fastest" | "cheap",
+    expiryMinutes: 15 as 15 | 90,
   });
   const [isMerchantOnline, setIsMerchantOnline] = useState(true);
   const [corridorForm, setCorridorForm] = useState({
@@ -396,6 +399,52 @@ export default function MerchantDashboard() {
     }, 150);
   }, [fetchOrderConversations]);
 
+  // WebSocket order event handler — real-time order updates
+  useEffect(() => {
+    if (!wsContext) return;
+
+    const unsubscribe = wsContext.onOrderEvent((event: any) => {
+      const data = event.data as { orderId?: string; status?: string };
+
+      if (event.type === 'order:status-updated') {
+        const orderId = data.orderId;
+        const newStatus = data.status;
+        if (!orderId || !newStatus) return;
+
+        // Optimistic local update
+        setOrders((prev: Order[]) => {
+          const order = prev.find(o => o.id === orderId);
+          if (!order) return prev;
+          let uiStatus: Order['status'] | null = null;
+          switch (newStatus) {
+            case 'cancelled': case 'expired': uiStatus = 'cancelled'; break;
+            case 'accepted': uiStatus = order.escrowTxHash ? 'escrow' : 'active'; break;
+            case 'escrowed': case 'payment_sent': case 'payment_confirmed': case 'releasing': uiStatus = 'escrow'; break;
+            case 'completed': uiStatus = 'completed'; break;
+            case 'disputed': uiStatus = 'disputed'; break;
+          }
+          if (!uiStatus) return prev;
+          return prev.map(o => o.id === orderId ? { ...o, status: uiStatus as Order['status'], minimalStatus: newStatus } : o);
+        });
+
+        // Full refresh to get all fields (buyer info, etc.)
+        fetchOrders();
+        debouncedFetchConversations();
+
+        if (newStatus === 'payment_sent') { playSound('notification'); }
+        else if (newStatus === 'completed') { playSound('order_complete'); refreshBalance(); }
+      } else if (event.type === 'order:cancelled') {
+        fetchOrders();
+        playSound('error');
+      } else if (event.type === 'order:created') {
+        fetchOrders();
+        playSound('new_order');
+      }
+    });
+
+    return unsubscribe;
+  }, [wsContext, fetchOrders, debouncedFetchConversations, playSound, refreshBalance]);
+
   // Keyboard shortcuts for dashboard
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -540,11 +589,15 @@ export default function MerchantDashboard() {
         );
       }
     },
-    onOrderStatusUpdated: (orderId, newStatus, orderData?: any) => {
-      // CRITICAL: Don't do optimistic updates - they can overwrite fresher data
-      // Just refetch orders from server to get authoritative minimal_status
+    onOrderStatusUpdated: (orderId, newStatus, _previousStatus, extra?: { buyerMerchantId?: string; merchantId?: string }) => {
+      // Optimistic update for accepted orders — show acceptor immediately
+      if (newStatus === 'accepted' && extra?.buyerMerchantId) {
+        setOrders(prev => prev.map(o =>
+          o.id === orderId ? { ...o, buyerMerchantId: extra.buyerMerchantId, minimalStatus: 'accepted' } : o
+        ));
+      }
 
-      // Debounced refetch to get latest state with minimal_status
+      // Full refetch to get authoritative data
       debouncedFetchOrders();
       debouncedFetchConversations();
       // Helper: check if this order is relevant to us (our offer or we're buyer)
@@ -589,11 +642,11 @@ export default function MerchantDashboard() {
           toast.showOrderExpired();
         }
       } else if (newStatus === 'accepted') {
-        // 'accepted' is broadcast to all merchants - only notify involved ones
-        if (isRelevantOrder()) {
-          addNotification('order', desc ? `Order accepted · ${desc}` : 'Order accepted', orderId);
+        // Only notify the ORDER CREATOR, not the acceptor (they already know)
+        if (isRelevantOrder() && matchedOrder?.isMyOrder) {
+          addNotification('order', desc ? `Your order accepted · ${desc}` : 'Your order has been accepted!', orderId);
           playSound('notification');
-          toast.show({ type: 'order', title: 'Order Accepted', message: 'An order has been accepted' });
+          toast.show({ type: 'order', title: 'Order Accepted!', message: 'Someone accepted your order!' });
         }
       } else if (newStatus === 'payment_confirmed') {
         addNotification('payment', amt ? `Payment confirmed · ${amt} · Ready to release` : 'Payment confirmed!', orderId);
@@ -633,6 +686,10 @@ export default function MerchantDashboard() {
         debouncedFetchOrders();
         toast.showWarning('Extension request was declined');
       }
+    },
+    onPriceUpdate: (data) => {
+      // Dispatch to Marketplace component via custom event (avoids prop drilling)
+      window.dispatchEvent(new CustomEvent("corridor-price-update", { detail: data }));
     },
   });
 
@@ -828,6 +885,15 @@ export default function MerchantDashboard() {
     cancelOrderWithoutEscrow,
   } = escrow;
 
+  // Smart cancel: refund escrow if locked, otherwise simple cancel
+  const handleCancelOrder = useCallback((order: Order) => {
+    if (order.escrowTxHash) {
+      openCancelModal(order);
+    } else {
+      cancelOrderWithoutEscrow(order.id);
+    }
+  }, [openCancelModal, cancelOrderWithoutEscrow]);
+
   // Fetch dispute info when viewing a chat for a disputed order
   useEffect(() => {
     const activeChat = chatWindows.find(c => c.id === activeChatId || c.orderId === activeChatId);
@@ -912,12 +978,32 @@ export default function MerchantDashboard() {
   // CRITICAL: Orders with MY escrow must ALWAYS be visible (never silently dropped)
   const hasMyEscrow = (o: Order) => o.isMyOrder || o.myRole === 'seller' || o.orderMerchantId === merchantId;
 
-  // "pending" = New Orders
-  const pendingOrders = useMemo(() => orders.filter(o => getEffectiveStatus(o) === "pending" && !isOrderExpired(o)), [orders]);
+  // Self escrowed order not yet accepted by another party → stays in New Orders
+  const isSelfUnaccepted = (o: Order) => {
+    const dbOrder = o.dbOrder;
+    const isSelf = o.isMyOrder || o.orderMerchantId === merchantId;
+    if (!isSelf) return false;
+    // Not accepted if: no accepted_at, or buyer_merchant_id is me or absent
+    const buyerMid = o.buyerMerchantId || dbOrder?.buyer_merchant_id;
+    const hasExternalBuyer = buyerMid && buyerMid !== merchantId;
+    return !dbOrder?.accepted_at && !hasExternalBuyer;
+  };
+
+  // "pending" = New Orders (includes self escrowed orders waiting for acceptance)
+  const pendingOrders = useMemo(() => orders.filter(o => {
+    if (isOrderExpired(o)) return false;
+    const status = getEffectiveStatus(o);
+    if (status === "pending") return true;
+    // Self escrowed but not accepted → show in New Orders column
+    if (status === "escrow" && isSelfUnaccepted(o)) return true;
+    return false;
+  }), [orders]);
   // "escrow" = In Progress — my escrowed orders are NEVER filtered by expiry (my funds are locked)
+  // Exclude self-unaccepted orders (they stay in New Orders)
   const ongoingOrders = useMemo(() => orders.filter(o => {
     const status = getEffectiveStatus(o);
     if (status !== "escrow") return false;
+    if (isSelfUnaccepted(o)) return false; // stays in New Orders
     if (hasMyEscrow(o)) return true;
     return !isOrderExpired(o);
   }), [orders]);
@@ -1103,6 +1189,8 @@ export default function MerchantDashboard() {
               merchantInfo={merchantInfo}
               onSelectOrder={setSelectedOrderPopup}
               onSelectMempoolOrder={setSelectedMempoolOrder}
+              onCancelOrder={handleCancelOrder}
+              onOpenChat={handleOpenChat}
               fetchOrders={fetchOrders}
             />
           ) : (
@@ -1114,6 +1202,8 @@ export default function MerchantDashboard() {
                   merchantInfo={merchantInfo}
                   onSelectOrder={setSelectedOrderPopup}
                   onSelectMempoolOrder={setSelectedMempoolOrder}
+                  onCancelOrder={handleCancelOrder}
+                  onOpenChat={handleOpenChat}
                   fetchOrders={fetchOrders}
                 />
               </div>
@@ -1138,6 +1228,8 @@ export default function MerchantDashboard() {
             <InProgressPanel
               orders={ongoingOrders}
               onSelectOrder={setSelectedOrderPopup}
+              onOpenChat={handleOpenChat}
+              onOpenDispute={(order) => openDisputeModal(order.id)}
             />
           </div>
           <div style={{ height: '50%' }} className="flex flex-col border-b border-white/[0.04]">
@@ -1357,12 +1449,8 @@ export default function MerchantDashboard() {
                     >
                       {/* Main Row */}
                       <div className="flex items-center gap-3">
-                        {/* User Avatar - initials */}
-                        <div className="w-8 h-8 rounded-md bg-white/[0.06] border border-white/[0.08] flex items-center justify-center">
-                          <span className="text-xs font-bold text-gray-400">
-                            {order.user.slice(0, 2).toUpperCase()}
-                          </span>
-                        </div>
+                        {/* User Avatar */}
+                        <UserBadge name={order.user} avatarUrl={order.userAvatarUrl} emoji={order.emoji} merchantId={order.counterpartyMerchantId} size="md" showName={false} />
 
                         {/* User & Amount */}
                         <div className="flex-1 min-w-0">
@@ -1429,17 +1517,31 @@ export default function MerchantDashboard() {
 
                       {/* Escrow TX Link for sell orders */}
                       {order.escrowTxHash && order.orderType === 'sell' && (
-                        <a
-                          href={`https://explorer.solana.com/tx/${order.escrowTxHash}?cluster=devnet`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex items-center justify-center gap-1.5 mt-2 ml-11 py-1.5 bg-white/5 rounded-lg text-[10px] font-mono text-white hover:bg-white/10 transition-colors"
-                        >
-                          <Shield className="w-3 h-3" />
-                          <span>Escrow Secured</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
+                        <div className="flex items-center gap-2 mt-2 ml-11">
+                          <a
+                            href={getSolscanTxUrl(order.escrowTxHash)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1.5 py-1.5 px-2 bg-white/5 rounded-lg text-[10px] font-mono text-white hover:bg-white/10 transition-colors"
+                          >
+                            <Shield className="w-3 h-3" />
+                            <span>View TX</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                          {order.escrowPda && (
+                            <a
+                              href={getBlipscanTradeUrl(order.escrowPda)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1.5 py-1.5 px-2 bg-orange-500/10 border border-orange-500/20 rounded-lg text-[10px] font-mono text-orange-400 hover:bg-orange-500/15 transition-colors"
+                            >
+                              <span>BlipScan</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
                       )}
 
                       {/* Action Row */}
@@ -1512,12 +1614,8 @@ export default function MerchantDashboard() {
                     >
                       {/* Main Row */}
                       <div className="flex items-center gap-3">
-                        {/* User Avatar - initials instead of emoji */}
-                        <div className="w-8 h-8 rounded-md bg-white/5 border border-white/6 flex items-center justify-center">
-                          <span className="text-xs font-bold text-white/70">
-                            {order.user.slice(0, 2).toUpperCase()}
-                          </span>
-                        </div>
+                        {/* User Avatar */}
+                        <UserBadge name={order.user} avatarUrl={order.userAvatarUrl} emoji={order.emoji} merchantId={order.counterpartyMerchantId} size="md" showName={false} />
 
                         {/* User & Amount */}
                         <div className="flex-1 min-w-0">
@@ -1791,9 +1889,7 @@ export default function MerchantDashboard() {
                           className="p-4 bg-white/[0.03] rounded-xl border border-white/[0.04]"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
-                              <span className="text-sm">{order.emoji}</span>
-                            </div>
+                            <UserBadge name={order.user} avatarUrl={order.userAvatarUrl} emoji={order.emoji} merchantId={order.counterpartyMerchantId} size="lg" showName={false} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <p className="text-sm font-medium text-white truncate">{order.user}</p>
@@ -1823,16 +1919,27 @@ export default function MerchantDashboard() {
                             <Check className="w-5 h-5 text-white" />
                           </div>
                           {order.escrowTxHash && (
-                            <div className="mt-3 pt-3 border-t border-white/[0.04]">
+                            <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center gap-3">
                               <a
-                                href={`https://explorer.solana.com/tx/${order.escrowTxHash}?cluster=devnet`}
+                                href={getSolscanTxUrl(order.escrowTxHash)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-white transition-colors"
                               >
                                 <ExternalLink className="w-3 h-3" />
-                                View on Solana Explorer
+                                View TX
                               </a>
+                              {order.escrowPda && (
+                                <a
+                                  href={getBlipscanTradeUrl(order.escrowPda)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-[10px] text-orange-400/70 hover:text-orange-400 transition-colors"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  BlipScan
+                                </a>
+                              )}
                             </div>
                           )}
                         </motion.div>
@@ -1864,9 +1971,7 @@ export default function MerchantDashboard() {
                           className="p-4 bg-white/[0.03] rounded-xl border border-red-500/10"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-                              <span className="text-sm">{order.emoji}</span>
-                            </div>
+                            <UserBadge name={order.user} avatarUrl={order.userAvatarUrl} emoji={order.emoji} merchantId={order.counterpartyMerchantId} size="lg" showName={false} />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <p className="text-sm font-medium text-white truncate">{order.user}</p>
@@ -1954,9 +2059,13 @@ export default function MerchantDashboard() {
                     <div className="space-y-2">
                       <div className="p-3 bg-white/[0.03] rounded-xl border border-white/[0.04]">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center text-lg">
-                            {(merchantInfo?.username || merchantInfo?.display_name)?.charAt(0)?.toUpperCase() || '?'}
-                          </div>
+                          <UserBadge
+                            name={merchantInfo?.username || merchantInfo?.display_name || 'Merchant'}
+                            avatarUrl={merchantInfo?.avatar_url}
+                            merchantId={merchantId || undefined}
+                            size="lg"
+                            showName={false}
+                          />
                           <div className="flex-1">
                             <p className="text-sm font-medium">{merchantInfo?.username || merchantInfo?.display_name || 'Merchant'}</p>
                             <p className="text-xs text-gray-500">{merchantInfo?.rating?.toFixed(2) || '5.00'} · {merchantInfo?.total_trades || 0} trades</p>
@@ -2030,8 +2139,9 @@ export default function MerchantDashboard() {
                     setOpenTradeForm({
                       tradeType: offer.type === 'buy' ? 'sell' : 'buy',
                       cryptoAmount: '',
-                      paymentMethod: offer.payment_method,
+                      paymentMethod: offer.payment_method as 'bank' | 'cash',
                       spreadPreference: 'fastest',
+                      expiryMinutes: 15,
                     });
                     setShowOpenTradeModal(true);
                   }}
@@ -2614,6 +2724,35 @@ export default function MerchantDashboard() {
                     </div>
                   </div>
 
+                  {/* Order Expiry */}
+                  <div>
+                    <label className="text-[11px] text-gray-400 mb-1.5 block">Order Expiry</label>
+                    <div className="flex items-center gap-2 bg-white/[0.03] p-1.5 rounded-xl border border-white/[0.04]">
+                      <button
+                        onClick={() => setOpenTradeForm(prev => ({ ...prev, expiryMinutes: 15 as 15 | 90 }))}
+                        className={`flex-1 px-3 py-2.5 rounded-lg text-center transition-all ${
+                          openTradeForm.expiryMinutes === 15
+                            ? 'bg-white/10 text-white border border-white/10'
+                            : 'text-gray-500 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <p className="text-xs font-bold">15 min</p>
+                        <p className="text-[9px] text-gray-500 mt-0.5">Default</p>
+                      </button>
+                      <button
+                        onClick={() => setOpenTradeForm(prev => ({ ...prev, expiryMinutes: 90 as 15 | 90 }))}
+                        className={`flex-1 px-3 py-2.5 rounded-lg text-center transition-all ${
+                          openTradeForm.expiryMinutes === 90
+                            ? 'bg-white/10 text-white border border-white/10'
+                            : 'text-gray-500 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        <p className="text-xs font-bold">90 min</p>
+                        <p className="text-[9px] text-gray-500 mt-0.5">Extended</p>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Trade Preview */}
                   {openTradeForm.cryptoAmount && parseFloat(openTradeForm.cryptoAmount) > 0 && (
                     <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.04]">
@@ -3066,15 +3205,28 @@ export default function MerchantDashboard() {
                           <p className="text-xs text-white/70">USDC is now secured on-chain</p>
                         </div>
                       </div>
-                      <a
-                        href={`https://solscan.io/tx/${escrowTxHash}?cluster=devnet`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-xs text-white hover:text-white transition-colors"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        View on Solscan
-                      </a>
+                      <div className="flex items-center gap-3">
+                        <a
+                          href={getSolscanTxUrl(escrowTxHash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-xs text-white hover:text-white transition-colors"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          View on Solscan
+                        </a>
+                        {escrowOrder?.escrowPda && (
+                          <a
+                            href={getBlipscanTradeUrl(escrowOrder.escrowPda)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-xs text-orange-400 hover:text-orange-300 transition-colors"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            BlipScan
+                          </a>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -3283,15 +3435,28 @@ export default function MerchantDashboard() {
                           <p className="text-xs text-white/70">{releaseOrder.amount} USDC sent to buyer</p>
                         </div>
                       </div>
-                      <a
-                        href={`https://solscan.io/tx/${releaseTxHash}?cluster=devnet`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-xs text-white hover:text-white transition-colors"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        View on Solscan
-                      </a>
+                      <div className="flex items-center gap-3">
+                        <a
+                          href={getSolscanTxUrl(releaseTxHash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-xs text-white hover:text-white transition-colors"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          View on Solscan
+                        </a>
+                        {releaseOrder?.escrowPda && (
+                          <a
+                            href={getBlipscanTradeUrl(releaseOrder.escrowPda)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-xs text-orange-400 hover:text-orange-300 transition-colors"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            BlipScan
+                          </a>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -3495,15 +3660,28 @@ export default function MerchantDashboard() {
                           <p className="text-xs text-white/70">{cancelOrder.amount} USDC returned to your wallet</p>
                         </div>
                       </div>
-                      <a
-                        href={`https://solscan.io/tx/${cancelTxHash}?cluster=devnet`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-xs text-white hover:text-white transition-colors"
-                      >
-                        <ExternalLink className="w-3 h-3" />
-                        View on Solscan
-                      </a>
+                      <div className="flex items-center gap-3">
+                        <a
+                          href={getSolscanTxUrl(cancelTxHash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-xs text-white hover:text-white transition-colors"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          View on Solscan
+                        </a>
+                        {cancelOrder?.escrowPda && (
+                          <a
+                            href={getBlipscanTradeUrl(cancelOrder.escrowPda)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-xs text-orange-400 hover:text-orange-300 transition-colors"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            BlipScan
+                          </a>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -3817,14 +3995,26 @@ export default function MerchantDashboard() {
                       </div>
                       <span className="text-sm font-medium text-white">Escrow Secured</span>
                     </div>
-                    <a
-                      href={`https://explorer.solana.com/tx/${selectedOrderPopup.escrowTxHash}?cluster=devnet`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs text-white/60 hover:text-white/80 transition-colors"
-                    >
-                      View TX <ExternalLink className="w-3 h-3" />
-                    </a>
+                    <div className="flex items-center gap-3">
+                      <a
+                        href={getSolscanTxUrl(selectedOrderPopup.escrowTxHash)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-xs text-white/60 hover:text-white/80 transition-colors"
+                      >
+                        View TX <ExternalLink className="w-3 h-3" />
+                      </a>
+                      {selectedOrderPopup.escrowPda && (
+                        <a
+                          href={getBlipscanTradeUrl(selectedOrderPopup.escrowPda)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-orange-400/70 hover:text-orange-400 transition-colors"
+                        >
+                          BlipScan <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
                   </div>
                 )}
 

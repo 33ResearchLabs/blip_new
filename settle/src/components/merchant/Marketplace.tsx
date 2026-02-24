@@ -19,6 +19,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { BlipScoreBreakdown, SORT_OPTIONS, SortOption } from "@/lib/scoring/blipScore";
+import { UserBadge } from "./UserBadge";
 
 interface MerchantInfo {
   id: string;
@@ -31,6 +32,7 @@ interface MerchantInfo {
   avg_response_time_mins: number;
   is_online: boolean;
   wallet_address: string | null;
+  avatar_url?: string | null;
 }
 
 interface MarketplaceOffer {
@@ -98,6 +100,39 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
   const [typeFilter, setTypeFilter] = useState<"all" | "buy" | "sell">("all");
   const [paymentFilter, setPaymentFilter] = useState<"all" | "bank" | "cash">("all");
 
+  // Corridor reference price (updated by price feed worker via WS)
+  const [refPrice, setRefPrice] = useState<{ price: number; confidence: string; updated_at: string } | null>(null);
+
+  // Fetch initial ref price on mount
+  useEffect(() => {
+    fetch("/api/corridor/dynamic-rate")
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.data?.ref_price) {
+          setRefPrice({
+            price: data.data.ref_price,
+            confidence: data.data.confidence || "low",
+            updated_at: data.data.updated_at,
+          });
+        }
+      })
+      .catch(() => {}); // non-critical
+  }, []);
+
+  /** Called from parent via WS price_update events */
+  const handlePriceUpdate = useCallback((data: { ref_price: number; confidence: string; updated_at: string }) => {
+    setRefPrice({ price: data.ref_price, confidence: data.confidence, updated_at: data.updated_at });
+  }, []);
+
+  // Expose for parent to wire up
+  // Parent can call: marketplaceRef.current?.handlePriceUpdate(data)
+  // For now, we also expose it via a global event
+  useEffect(() => {
+    const handler = (e: CustomEvent) => handlePriceUpdate(e.detail);
+    window.addEventListener("corridor-price-update" as any, handler);
+    return () => window.removeEventListener("corridor-price-update" as any, handler);
+  }, [handlePriceUpdate]);
+
   // Fetch marketplace offers
   const fetchOffers = useCallback(async () => {
     setIsLoading(true);
@@ -159,6 +194,17 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
           <Globe className="w-5 h-5 text-orange-400" />
           <h2 className="text-sm font-semibold">Marketplace</h2>
           <span className="text-xs text-gray-500">({offers.length} offers)</span>
+          {refPrice && (
+            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+              refPrice.confidence === "high"
+                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                : refPrice.confidence === "medium"
+                ? "bg-orange-500/10 text-orange-400 border-orange-500/20"
+                : "bg-gray-500/10 text-gray-400 border-gray-500/20"
+            }`}>
+              Ref: {refPrice.price.toFixed(4)} AED
+            </span>
+          )}
         </div>
         <button
           onClick={fetchOffers}
@@ -307,19 +353,21 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
               className="p-4 bg-[#151515] rounded-xl border border-white/[0.04] hover:border-white/[0.08] transition-all"
             >
               <div className="flex items-start gap-3">
-                {/* Merchant Avatar */}
-                <div className="w-10 h-10 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0">
-                  <span className="text-sm font-bold text-orange-400">
-                    {offer.merchant.display_name.charAt(0).toUpperCase()}
-                  </span>
-                </div>
+                {/* Merchant Avatar + Name */}
+                <UserBadge
+                  name={offer.merchant.display_name}
+                  avatarUrl={offer.merchant.avatar_url}
+                  merchantId={offer.merchant.id}
+                  size="lg"
+                  showName={false}
+                />
 
                 {/* Offer Details */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-medium text-white truncate">
+                    <a href={`/merchant/profile/${offer.merchant.id}`} className="text-sm font-medium text-white truncate hover:opacity-80 transition-opacity" onClick={(e) => e.stopPropagation()}>
                       {offer.merchant.display_name}
-                    </span>
+                    </a>
                     {offer.blipScore && (
                       <ScoreBadge tier={offer.blipScore.tier} score={offer.blipScore.total} />
                     )}
@@ -361,7 +409,16 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                   <p className="text-lg font-bold text-white">
                     {offer.rate.toFixed(4)}
                   </p>
-                  <p className="text-[10px] text-gray-500 mb-2">AED/USDC</p>
+                  <p className="text-[10px] text-gray-500 mb-2">
+                    AED/USDC
+                    {refPrice && (() => {
+                      const dev = Math.abs(offer.rate - refPrice.price) / refPrice.price;
+                      const devPct = (dev * 100).toFixed(1);
+                      const color = dev < 0.02 ? "text-emerald-400" : dev < 0.05 ? "text-orange-400" : "text-red-400";
+                      const sign = offer.rate >= refPrice.price ? "+" : "-";
+                      return <span className={`ml-1 ${color}`}>({sign}{devPct}%)</span>;
+                    })()}
+                  </p>
                   <p className="text-[10px] text-gray-500">
                     {offer.min_amount.toLocaleString()} - {offer.max_amount.toLocaleString()} USDC
                   </p>

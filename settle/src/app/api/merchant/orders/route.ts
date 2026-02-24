@@ -22,6 +22,8 @@ import {
 } from '@/lib/middleware/auth';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import { notifyOrderCreated } from '@/lib/pusher/server';
+import { query } from '@/lib/db';
+import { signPriceProof } from '@/lib/price/priceProof';
 
 // Prevent Next.js from caching this route - orders must always be fresh
 export const dynamic = 'force-dynamic';
@@ -98,6 +100,31 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// --- Price engine helpers ---
+
+const PRICE_MAX_DEVIATION = parseFloat(process.env.PRICE_MAX_DEVIATION || '0.15');
+const PRICE_GUARDRAILS_ENABLED = process.env.PRICE_GUARDRAILS_ENABLED === 'true';
+const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
+async function fetchCorridorRefPrice(corridorId = 'USDT_AED') {
+  try {
+    const rows = await query<{ ref_price: string; updated_at: Date; confidence: string }>(
+      'SELECT ref_price, updated_at, confidence FROM corridor_prices WHERE corridor_id = $1',
+      [corridorId]
+    );
+    if (!rows[0]) return null;
+    const ageMs = Date.now() - new Date(rows[0].updated_at).getTime();
+    return {
+      ref_price: parseFloat(rows[0].ref_price),
+      confidence: rows[0].confidence || 'low',
+      is_stale: ageMs > STALE_THRESHOLD_MS,
+    };
+  } catch (err) {
+    logger.error('Failed to fetch corridor ref price', { corridorId, error: String(err) });
+    return null;
+  }
+}
+
 // Merchant-initiated order creation
 export async function POST(request: NextRequest) {
   try {
@@ -124,6 +151,7 @@ export async function POST(request: NextRequest) {
       escrow_trade_pda,
       escrow_pda,
       escrow_creator_wallet,
+      expiry_minutes,
     } = parseResult.data;
 
     // Verify the creating merchant exists
@@ -259,8 +287,60 @@ export async function POST(request: NextRequest) {
       ]);
     }
 
-    // Calculate fiat amount
-    const fiatAmount = crypto_amount * offer.rate;
+    // --- Price engine: resolve effective rate ---
+    const corridorData = await fetchCorridorRefPrice('USDT_AED');
+
+    // Market margin mode: rate floats as ref_price + margin%
+    // Fixed mode (default): use offer.rate as-is
+    let effectiveRate = Number(offer.rate);
+    if (
+      offer.rate_type === 'market_margin' &&
+      offer.margin_percent != null &&
+      corridorData &&
+      !corridorData.is_stale
+    ) {
+      effectiveRate = corridorData.ref_price * (1 + Number(offer.margin_percent) / 100);
+      effectiveRate = Math.round(effectiveRate * 10000) / 10000; // 4 decimal places
+    }
+
+    // Guardrail: reject if rate deviates too far from ref_price
+    let deviationBps = 0;
+    if (corridorData) {
+      const deviation = Math.abs(effectiveRate - corridorData.ref_price) / corridorData.ref_price;
+      deviationBps = Math.round(deviation * 10000);
+
+      if (PRICE_GUARDRAILS_ENABLED && !corridorData.is_stale && deviation > PRICE_MAX_DEVIATION) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Rate ${effectiveRate.toFixed(4)} deviates ${(deviation * 100).toFixed(1)}% from corridor ref ${corridorData.ref_price.toFixed(4)}. Max allowed: ${(PRICE_MAX_DEVIATION * 100).toFixed(0)}%.`,
+            deviation_bps: deviationBps,
+            ref_price: corridorData.ref_price,
+          },
+          { status: 422 }
+        );
+      }
+    }
+
+    // Sign price proof (always, even when guardrails disabled — for audit trail)
+    let priceProofSig: string | null = null;
+    let priceProofRefPrice: number | null = corridorData?.ref_price ?? null;
+    let priceProofExpiresAt: string | null = null;
+
+    if (corridorData) {
+      const proof = signPriceProof({
+        corridor_id: 'USDT_AED',
+        ref_price: corridorData.ref_price,
+        order_rate: effectiveRate,
+        deviation_bps: deviationBps,
+        timestamp: Date.now(),
+      });
+      priceProofSig = proof.sig;
+      priceProofExpiresAt = new Date(proof.expires_at).toISOString();
+    }
+
+    // Calculate fiat amount using effective rate
+    const fiatAmount = crypto_amount * effectiveRate;
 
     // Calculate protocol fee based on spread preference + priority fee
     const baseFee = spread_preference === 'best' ? 2.00
@@ -279,6 +359,11 @@ export async function POST(request: NextRequest) {
     logger.info('Order pricing calculated', {
       crypto_amount,
       fiat_amount: fiatAmount,
+      effective_rate: effectiveRate,
+      offer_rate: offer.rate,
+      rate_type: offer.rate_type || 'fixed',
+      ref_price: corridorData?.ref_price,
+      deviation_bps: deviationBps,
       spread_preference,
       protocol_fee_percentage: protocolFeePercentage,
       protocol_fee_amount: protocolFeeAmount,
@@ -323,7 +408,7 @@ export async function POST(request: NextRequest) {
         payment_method: offer.payment_method,
         crypto_amount,
         fiat_amount: fiatAmount,
-        rate: offer.rate,
+        rate: effectiveRate,
         payment_details: paymentDetails,
         spread_preference,
         protocol_fee_percentage: protocolFeePercentage,
@@ -334,14 +419,18 @@ export async function POST(request: NextRequest) {
         escrow_trade_pda,
         escrow_pda,
         escrow_creator_wallet,
-        // Bump/decay fields
-        ref_price_at_create: offer.rate,
+        // Price engine fields
+        ref_price_at_create: priceProofRefPrice ?? effectiveRate,
+        price_proof_sig: priceProofSig,
+        price_proof_ref_price: priceProofRefPrice,
+        price_proof_expires_at: priceProofExpiresAt,
         premium_bps_current: 0,
         premium_bps_cap: premiumBpsCap,
         bump_step_bps: bumpStepBps,
         bump_interval_sec: bumpIntervalSec,
         auto_bump_enabled: autoBumpEnabled,
         next_bump_at: autoBumpEnabled ? new Date(Date.now() + bumpIntervalSec * 1000).toISOString() : null,
+        expiry_minutes: expiry_minutes || 15,
       },
     });
 
@@ -355,6 +444,8 @@ export async function POST(request: NextRequest) {
             orderId: order.id,
             userId: user.id,
             merchantId: orderMerchantId || merchant_id,
+            buyerMerchantId: buyerMerchantId,
+            creatorMerchantId: merchant_id,
             status: order.status || 'pending',
             minimal_status: normalizeStatus(order.status || 'pending'),
             order_version: order.order_version || 1,

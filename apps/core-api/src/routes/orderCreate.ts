@@ -54,6 +54,10 @@ interface CreateOrderPayload {
   bump_interval_sec?: number;
   auto_bump_enabled?: boolean;
   next_bump_at?: string | null;
+  // Price engine proof fields
+  price_proof_sig?: string | null;
+  price_proof_ref_price?: number | null;
+  price_proof_expires_at?: string | null;
 }
 
 export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
@@ -84,7 +88,8 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
       ];
       // expires_at uses raw SQL to avoid JS Date / Postgres timezone mismatch
       // (created_at is `timestamp without time zone` using DB-local now())
-      const expiresAtRaw = "now() + interval '15 minutes'";
+      const expiryMin = Math.max(1, Math.min(1440, data.expiry_minutes || 15));
+      const expiresAtRaw = `now() + interval '${expiryMin} minutes'`;
       const optionals: [string, unknown][] = [
         ['buyer_wallet_address', data.buyer_wallet_address],
         ['buyer_merchant_id', data.buyer_merchant_id],
@@ -104,6 +109,10 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         ['bump_interval_sec', data.bump_interval_sec],
         ['auto_bump_enabled', data.auto_bump_enabled],
         ['next_bump_at', data.next_bump_at],
+        // Price engine proof
+        ['price_proof_sig', data.price_proof_sig],
+        ['price_proof_ref_price', data.price_proof_ref_price],
+        ['price_proof_expires_at', data.price_proof_expires_at],
       ];
       for (const [field, value] of optionals) {
         if (value !== undefined && value !== null) {
@@ -214,6 +223,10 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
           ['bump_interval_sec', data.bump_interval_sec],
           ['auto_bump_enabled', data.auto_bump_enabled],
           ['next_bump_at', data.next_bump_at],
+          // Price engine proof
+          ['price_proof_sig', data.price_proof_sig],
+          ['price_proof_ref_price', data.price_proof_ref_price],
+          ['price_proof_expires_at', data.price_proof_expires_at],
         ];
 
         for (const [field, value] of optionalFields) {
