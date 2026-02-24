@@ -260,7 +260,7 @@ export function useDisputeHandlers({
     isSubmittingDispute,
     disputeInfo, setDisputeInfo,
     isRespondingToResolution,
-    extensionRequests,
+    extensionRequests, setExtensionRequests,
     requestingExtension,
 
     // Actions

@@ -215,6 +215,9 @@ export default function MerchantDashboard() {
     counterpartyType: 'user' | 'merchant';
   } | null>(null);
 
+  // Notifications (must be before escrow hook which depends on addNotification)
+  const { notifications, setNotifications, addNotification, markNotificationRead } = useNotifications(merchantId, isLoggedIn);
+
   // ─── Escrow operations hook (lock, release, cancel) ───
   const escrow = useEscrowOperations({
     isMockMode,
@@ -259,9 +262,6 @@ export default function MerchantDashboard() {
   const [selectedOrderPopup, setSelectedOrderPopup] = useState<Order | null>(null);
   const chatInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-
-  // Notifications (extracted hook)
-  const { notifications, setNotifications, addNotification, markNotificationRead } = useNotifications(merchantId, isLoggedIn);
 
   // Order conversations state (for sidebar Messages section)
   const [orderConversations, setOrderConversations] = useState<{
@@ -496,6 +496,25 @@ export default function MerchantDashboard() {
 
     fixOrders();
   }, [orders, solanaWallet.connected, merchantId, isMockMode, solanaWallet]);
+
+  // Dispute hook — must be before useRealtimeOrders (callbacks reference setExtensionRequests)
+  const dispute = useDisputeHandlers({
+    solanaWallet,
+    addNotification,
+    playSound,
+    toast,
+    afterMutationReconcile,
+    fetchOrders,
+  });
+  const {
+    showDisputeModal, disputeOrderId,
+    disputeReason, setDisputeReason,
+    disputeDescription, setDisputeDescription,
+    isSubmittingDispute, disputeInfo, setDisputeInfo,
+    isRespondingToResolution, extensionRequests, setExtensionRequests, requestingExtension,
+    openDisputeModal, submitDispute, fetchDisputeInfo,
+    requestExtension, respondToExtension, respondToResolution,
+  } = dispute;
 
   // Real-time orders subscription - triggers refetch on updates
   useRealtimeOrders({
@@ -808,25 +827,6 @@ export default function MerchantDashboard() {
     openCancelModal, executeCancelEscrow, closeCancelModal,
     cancelOrderWithoutEscrow,
   } = escrow;
-
-  // Destructure dispute hook (all dispute state + actions)
-  const dispute = useDisputeHandlers({
-    solanaWallet,
-    addNotification,
-    playSound,
-    toast,
-    afterMutationReconcile,
-    fetchOrders,
-  });
-  const {
-    showDisputeModal, disputeOrderId,
-    disputeReason, setDisputeReason,
-    disputeDescription, setDisputeDescription,
-    isSubmittingDispute, disputeInfo, setDisputeInfo,
-    isRespondingToResolution, extensionRequests, requestingExtension,
-    openDisputeModal, submitDispute, fetchDisputeInfo,
-    requestExtension, respondToExtension, respondToResolution,
-  } = dispute;
 
   // Fetch dispute info when viewing a chat for a disputed order
   useEffect(() => {
