@@ -38,6 +38,7 @@ export const ALLOWED_TRANSITIONS = {
         { to: 'expired', allowedActors: ['system'] },
     ],
     accepted: [
+        { to: 'pending', allowedActors: ['merchant'] }, // Merchant cancel before escrow → relist to marketplace
         { to: 'escrow_pending', allowedActors: ['merchant', 'system'] },
         { to: 'escrowed', allowedActors: ['user', 'merchant', 'system'] }, // User can also escrow from accepted
         { to: 'payment_pending', allowedActors: ['merchant'] }, // M2M: buyer signs to claim after accepting
@@ -179,8 +180,8 @@ export function getStatusTimeout(status) {
  * Check if liquidity should be restored when transitioning from a status
  */
 export function shouldRestoreLiquidity(fromStatus, toStatus) {
-    // Restore liquidity when going to cancelled or expired from early stages
-    if (toStatus === 'cancelled' || toStatus === 'expired') {
+    // Restore liquidity when going to cancelled, expired, or relisted (back to pending) from early stages
+    if (toStatus === 'cancelled' || toStatus === 'expired' || toStatus === 'pending') {
         return RESTORE_LIQUIDITY_ON_EXIT.includes(fromStatus);
     }
     return false;

@@ -17,6 +17,7 @@ import {
   hasEncryptedWallet,
 } from '@/lib/wallet/embeddedWallet';
 import { Keypair } from '@solana/web3.js';
+import { showAlert } from '@/stores/confirmationStore';
 
 // Wallet hook — same pattern as merchant page
 const useSolanaWalletHook = () => {
@@ -354,7 +355,7 @@ export default function WalletPage() {
     if (!pw) return;
 
     const encrypted = loadEncryptedWallet();
-    if (!encrypted) { alert('No wallet found'); return; }
+    if (!encrypted) { showAlert({ title: 'Error', message: 'No wallet found', variant: 'danger' }); return; }
 
     decryptWallet(encrypted, pw).then(kp => {
       const key = exportPrivateKey(kp);
@@ -369,7 +370,7 @@ export default function WalletPage() {
       a.click();
       URL.revokeObjectURL(url);
     }).catch(() => {
-      alert('Wrong password');
+      showAlert({ title: 'Error', message: 'Wrong password', variant: 'danger' });
     });
   };
 

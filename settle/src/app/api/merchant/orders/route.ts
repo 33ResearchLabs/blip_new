@@ -395,7 +395,7 @@ export async function POST(request: NextRequest) {
     // - merchant_id = target merchant (the one fulfilling the order)
     // - buyer_merchant_id = creating merchant (the one placing the order)
     const orderMerchantId = isM2MTrade ? target_merchant_id : merchant_id;
-    const buyerMerchantId = (isM2MTrade || type === 'buy') ? merchant_id : undefined;
+    const buyerMerchantId = isM2MTrade ? merchant_id : undefined;
 
     // Forward to core-api (single writer for all mutations)
     const response = await proxyCoreApi('/v1/merchant/orders', {

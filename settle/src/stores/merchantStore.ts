@@ -12,6 +12,10 @@ export interface OrderFilters {
   secured: 'all' | 'yes' | 'no';
 }
 
+// ─── In-progress filter/sort types ──────────────────────────────────
+export type InProgressQuickFilter = 'all' | 'lock_escrow' | 'send_payment' | 'confirm_receipt' | 'waiting';
+export type InProgressSortBy = 'time' | 'amount' | 'premium';
+
 export interface MerchantStoreState {
   // ─── Core data ──────────────────────────────────────
   orders: any[];
@@ -28,6 +32,11 @@ export interface MerchantStoreState {
   orderFilters: OrderFilters;
   showOrderFilters: boolean;
   soundEnabled: boolean;
+
+  // ─── InProgressPanel filter/sort state ─────────────
+  ipSearchQuery: string;
+  ipQuickFilter: InProgressQuickFilter;
+  ipSortBy: InProgressSortBy;
 
   // ─── Actions ────────────────────────────────────────
   /** Accepts direct value OR callback (prev => next) — drop-in replacement for useState setter */
@@ -49,6 +58,11 @@ export interface MerchantStoreState {
   setOrderFilters: (fOrFn: OrderFilters | ((prev: OrderFilters) => OrderFilters)) => void;
   setShowOrderFilters: (v: boolean) => void;
   setSoundEnabled: (v: boolean) => void;
+
+  // ─── InProgress filter/sort setters ───────────────
+  setIpSearchQuery: (q: string) => void;
+  setIpQuickFilter: (f: InProgressQuickFilter) => void;
+  setIpSortBy: (s: InProgressSortBy) => void;
 }
 
 export const useMerchantStore = create<MerchantStoreState>()(
@@ -69,13 +83,26 @@ export const useMerchantStore = create<MerchantStoreState>()(
     showOrderFilters: false,
     soundEnabled: true,
 
+    // ─── InProgress filter/sort initial state ───────────
+    ipSearchQuery: '',
+    ipQuickFilter: 'all',
+    ipSortBy: 'time',
+
     // ─── Actions ────────────────────────────────────────
 
     setOrders: (ordersOrFn) => {
+      const dedupe = (arr: any[]) => {
+        const seen = new Set<string>();
+        return arr.filter((o) => {
+          if (seen.has(o.id)) return false;
+          seen.add(o.id);
+          return true;
+        });
+      };
       if (typeof ordersOrFn === 'function') {
-        set((state) => ({ orders: ordersOrFn(state.orders) }));
+        set((state) => ({ orders: dedupe(ordersOrFn(state.orders)) }));
       } else {
-        set({ orders: ordersOrFn });
+        set({ orders: dedupe(ordersOrFn) });
       }
     },
 
@@ -124,5 +151,10 @@ export const useMerchantStore = create<MerchantStoreState>()(
     },
     setShowOrderFilters: (v) => set({ showOrderFilters: v }),
     setSoundEnabled: (v) => set({ soundEnabled: v }),
+
+    // ─── InProgress filter/sort setters ─────────────────
+    setIpSearchQuery: (q) => set({ ipSearchQuery: q }),
+    setIpQuickFilter: (f) => set({ ipQuickFilter: f }),
+    setIpSortBy: (s) => set({ ipSortBy: s }),
   }))
 );

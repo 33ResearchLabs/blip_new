@@ -2,9 +2,11 @@
 
 import { useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
+import { showConfirmation } from "@/stores/confirmationStore";
 import type { Order, DbOrder } from "@/types/merchant";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
 import { computeMyRole } from "@/lib/orders/statusResolver";
+import { showToast } from "@/components/NotificationToast";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 
@@ -59,6 +61,9 @@ export function useEscrowOperations({
   const [cancelTxHash, setCancelTxHash] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
 
+  // ─── Cancel without escrow state ───
+  const [isCancellingOrder, setIsCancellingOrder] = useState(false);
+
   // ═══════════════════════════════════════════════════════════════════
   // ESCROW LOCK
   // ═══════════════════════════════════════════════════════════════════
@@ -72,8 +77,8 @@ export function useEscrowOperations({
       return;
     }
 
-    if (!isMockMode && !solanaWallet.connected) {
-      addNotification('system', 'Please connect your wallet to lock escrow.');
+    if (!solanaWallet.connected) {
+      showToast({ type: 'warning', title: 'Wallet Not Connected', message: 'Please connect your wallet to continue.' });
       setShowWalletModal(true);
       return;
     }
@@ -219,18 +224,21 @@ export function useEscrowOperations({
             newOrder.isMyOrder = true; // Force self-detection — API response lacks user join
             setOrders((prev: Order[]) => [newOrder, ...prev]);
             addNotification('escrow', `Sell order created! ${escrowOrder.amount} USDC locked in escrow`, data.data.id);
+            showToast({ type: 'success', title: 'Escrow Locked', message: `${escrowOrder.amount} USDC locked — sell order created.` });
             delete (window as any).__pendingSellOrder;
             setShowEscrowModal(false);
             setEscrowOrder(null);
             setEscrowTxHash(null);
             setEscrowError(null);
           } else {
-            const errorMsg = data.error || data.validation_errors?.[0] || 'Unknown error';
+            const errorMsg = data.error || data.validation_errors?.[0] || 'Unexpected server response';
             addNotification('system', `Escrow locked but order creation failed: ${errorMsg}`, escrowOrder.id);
+            showToast({ type: 'warning', title: 'Order Creation Failed', message: `Escrow locked on-chain but order failed: ${errorMsg}` });
           }
         } catch (createError) {
-          const errorMsg = createError instanceof Error ? createError.message : 'Network error';
+          const errorMsg = createError instanceof Error ? createError.message : 'Network error — please check your connection.';
           addNotification('system', `Escrow locked but order creation failed: ${errorMsg}`, escrowOrder.id);
+          showToast({ type: 'warning', title: 'Order Creation Failed', message: `Escrow locked on-chain but order failed: ${errorMsg}` });
         }
         refreshBalance();
       } else {
@@ -266,6 +274,7 @@ export function useEscrowOperations({
         if (recorded) {
           playSound('trade_complete');
           addNotification('escrow', `${escrowOrder.amount} USDC locked in escrow - waiting for payment`, escrowOrder.id);
+          showToast({ type: 'success', title: 'Escrow Locked', message: `${escrowOrder.amount} USDC locked — waiting for payment.` });
           setShowEscrowModal(false);
           setEscrowOrder(null);
           setEscrowTxHash(null);
@@ -274,6 +283,7 @@ export function useEscrowOperations({
           await afterMutationReconcile(escrowOrder.id);
         } else {
           addNotification('system', 'Escrow locked on-chain but server sync failed. It will sync automatically.', escrowOrder.id);
+          showToast({ type: 'warning', title: 'Sync Pending', message: 'Escrow locked on-chain but server sync failed. It will sync automatically.' });
           try {
             localStorage.setItem(`blip_unrecorded_escrow_${escrowOrder.id}`, JSON.stringify({
               orderId: escrowOrder.id,
@@ -291,11 +301,14 @@ export function useEscrowOperations({
       setIsLockingEscrow(false);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
+      let userMsg: string;
       if (errorMsg.includes('block height exceeded') || errorMsg.includes('has expired')) {
-        setEscrowError('Transaction expired. Please approve the wallet popup faster (within 60 seconds). Try again.');
+        userMsg = 'Transaction expired. Please approve the wallet popup faster (within 60 seconds). Try again.';
       } else {
-        setEscrowError(errorMsg || 'Failed to lock escrow. Please try again.');
+        userMsg = errorMsg || 'Failed to lock escrow. Please try again.';
       }
+      setEscrowError(userMsg);
+      showToast({ type: 'error', title: 'Escrow Lock Failed', message: userMsg });
       setIsLockingEscrow(false);
       playSound('error');
     }
@@ -317,8 +330,8 @@ export function useEscrowOperations({
   const openReleaseModal = useCallback(async (order: Order) => {
     if (!merchantId) return;
 
-    if (!isMockMode && !solanaWallet.connected) {
-      addNotification('system', 'Please connect your wallet to release escrow.');
+    if (!solanaWallet.connected) {
+      showToast({ type: 'warning', title: 'Wallet Not Connected', message: 'Please connect your wallet to continue.' });
       setShowWalletModal(true);
       return;
     }
@@ -422,6 +435,7 @@ export function useEscrowOperations({
 
         playSound('trade_complete');
         addNotification('escrow', `Escrow released! ${releaseOrder.amount} USDC sent to buyer.`, releaseOrder.id);
+        showToast({ type: 'success', title: 'Escrow Released', message: `${releaseOrder.amount} USDC sent to buyer. Trade complete.` });
         await afterMutationReconcile(releaseOrder.id, { status: "completed" as const });
 
         setTimeout(() => {
@@ -436,11 +450,15 @@ export function useEscrowOperations({
           });
         }, 1500);
       } else {
-        setReleaseError(releaseResult.error || 'Failed to release escrow');
+        const errDetail = releaseResult.error || 'On-chain release failed';
+        setReleaseError(errDetail);
+        showToast({ type: 'error', title: 'Escrow Release Failed', message: errDetail });
         playSound('error');
       }
     } catch (error) {
-      setReleaseError(error instanceof Error ? error.message : 'Failed to release escrow. Please try again.');
+      const errorMsg = error instanceof Error ? error.message : 'Failed to release escrow. Please try again.';
+      setReleaseError(errorMsg);
+      showToast({ type: 'error', title: 'Escrow Release Failed', message: errorMsg });
       playSound('error');
     } finally {
       setIsReleasingEscrow(false);
@@ -462,8 +480,8 @@ export function useEscrowOperations({
   const openCancelModal = useCallback(async (order: Order) => {
     if (!merchantId) return;
 
-    if (!isMockMode && !solanaWallet.connected) {
-      addNotification('system', 'Please connect your wallet to cancel escrow.');
+    if (!solanaWallet.connected) {
+      showToast({ type: 'warning', title: 'Wallet Not Connected', message: 'Please connect your wallet to continue.' });
       setShowWalletModal(true);
       return;
     }
@@ -534,13 +552,18 @@ export function useEscrowOperations({
 
         playSound('click');
         addNotification('system', `Escrow cancelled. ${cancelOrder.amount} USDC returned to your balance.`, cancelOrder.id);
+        showToast({ type: 'success', title: 'Escrow Cancelled', message: `${cancelOrder.amount} USDC returned to your balance.` });
         await afterMutationReconcile(cancelOrder.id, { status: "cancelled" as const });
       } else {
-        setCancelError(refundResult.error || 'Failed to refund escrow');
+        const errDetail = refundResult.error || 'On-chain refund failed';
+        setCancelError(errDetail);
+        showToast({ type: 'error', title: 'Cancel Failed', message: errDetail });
         playSound('error');
       }
     } catch (error) {
-      setCancelError(error instanceof Error ? error.message : 'Failed to cancel escrow. Please try again.');
+      const errorMsg = error instanceof Error ? error.message : 'Failed to cancel escrow. Please try again.';
+      setCancelError(errorMsg);
+      showToast({ type: 'error', title: 'Cancel Failed', message: errorMsg });
       playSound('error');
     } finally {
       setIsCancellingEscrow(false);
@@ -557,11 +580,17 @@ export function useEscrowOperations({
 
   // Cancel without escrow (pending/accepted orders)
   const cancelOrderWithoutEscrow = useCallback(async (orderId: string) => {
-    if (!merchantId) return;
+    if (!merchantId || isCancellingOrder) return;
 
-    const confirmed = confirm('Cancel this order? This action cannot be undone.');
+    const confirmed = await showConfirmation({
+      title: 'Cancel Order',
+      message: 'Cancel this order? This action cannot be undone.',
+      confirmText: 'Cancel Order',
+      variant: 'danger',
+    });
     if (!confirmed) return;
 
+    setIsCancellingOrder(true);
     try {
       const res = await fetch(`/api/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&reason=Cancelled by merchant`, {
         method: 'DELETE',
@@ -571,36 +600,58 @@ export function useEscrowOperations({
         const data = await res.json();
         if (data.success) {
           playSound('click');
-          addNotification('system', 'Order cancelled successfully.', orderId);
-          await afterMutationReconcile(orderId, { status: "cancelled" as const });
+          // Check if order was relisted to marketplace (merchant cancel before escrow)
+          const wasRelisted = data.data?.relisted || data.data?.status === 'pending';
+          if (wasRelisted) {
+            addNotification('system', 'Order returned to marketplace for other merchants.', orderId);
+            showToast({ type: 'info', title: 'Order Relisted', message: 'Order returned to marketplace for other merchants.' });
+            await afterMutationReconcile(orderId, { status: "pending" as const });
+          } else {
+            addNotification('system', 'Order cancelled successfully.', orderId);
+            showToast({ type: 'success', title: 'Order Cancelled', message: 'Order has been cancelled.' });
+            await afterMutationReconcile(orderId, { status: "cancelled" as const });
+          }
         } else {
           const isTaken = data.error?.includes('accepted') || data.error?.includes('ALREADY_ACCEPTED');
-          addNotification('system', isTaken ? 'Cannot cancel — this order was already accepted by another merchant.' : (data.error || 'Failed to cancel order'), orderId);
+          const errDetail = isTaken ? 'Cannot cancel — this order was already accepted by another merchant.' : (data.error || 'Failed to cancel order');
+          addNotification('system', errDetail, orderId);
+          showToast({ type: 'error', title: 'Cancel Failed', message: errDetail });
           playSound('error');
           if (isTaken) fetchOrders();
         }
       } else {
         const data = await res.json().catch(() => ({ error: '' }));
         const isTaken = res.status === 409 || data.error?.includes('accepted') || data.error?.includes('ALREADY_ACCEPTED');
-        addNotification('system', isTaken ? 'Cannot cancel — this order was already accepted by another merchant.' : (data.error || 'Failed to cancel order'), orderId);
+        const errDetail = isTaken ? 'Cannot cancel — this order was already accepted by another merchant.' : (data.error || `Server error (${res.status})`);
+        addNotification('system', errDetail, orderId);
+        showToast({ type: 'error', title: 'Cancel Failed', message: errDetail });
         playSound('error');
         if (isTaken) fetchOrders();
       }
     } catch (error) {
       console.error('[Cancel] Error cancelling order:', error);
-      addNotification('system', 'Failed to cancel order. Please try again.', orderId);
+      const errorMsg = error instanceof Error ? error.message : 'Network error — please check your connection.';
+      addNotification('system', `Failed to cancel order: ${errorMsg}`, orderId);
+      showToast({ type: 'error', title: 'Cancel Failed', message: errorMsg });
       playSound('error');
+    } finally {
+      setIsCancellingOrder(false);
     }
-  }, [merchantId, addNotification, playSound, afterMutationReconcile]);
+  }, [merchantId, isCancellingOrder, addNotification, playSound, afterMutationReconcile]);
 
   // Open escrow modal for a fresh sell order (used by handleDirectOrderCreation)
   const openEscrowModalForSell = useCallback((tempOrder: Order) => {
+    if (!solanaWallet.connected) {
+      showToast({ type: 'warning', title: 'Wallet Not Connected', message: 'Please connect your wallet to continue.' });
+      setShowWalletModal(true);
+      return;
+    }
     setEscrowOrder(tempOrder);
     setEscrowTxHash(null);
     setEscrowError(null);
     setIsLockingEscrow(false);
     setShowEscrowModal(true);
-  }, []);
+  }, [solanaWallet.connected, setShowWalletModal]);
 
   return {
     // Lock state
@@ -616,6 +667,7 @@ export function useEscrowOperations({
     openCancelModal, executeCancelEscrow, closeCancelModal,
 
     // Simple cancel
+    isCancellingOrder,
     cancelOrderWithoutEscrow,
   };
 }

@@ -287,6 +287,69 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         const currentOrder = currentResult.rows[0];
         const oldStatus = currentOrder.status;
 
+        // Merchant relist: merchant cancelling accepted order (no escrow) → revert to pending
+        const shouldRelist =
+          newStatus === 'cancelled' &&
+          actor_type === 'merchant' &&
+          oldStatus === 'accepted' &&
+          !currentOrder.escrow_tx_hash;
+
+        if (shouldRelist) {
+          const relistValidation = validateTransition(oldStatus, 'pending' as OrderStatus, actor_type);
+          if (!relistValidation.valid) {
+            return { success: false as const, error: relistValidation.error };
+          }
+
+          const updateResult = await client.query<OrderRow>(
+            `UPDATE orders
+             SET status = 'pending',
+                 accepted_at = NULL,
+                 acceptor_wallet_address = NULL,
+                 buyer_merchant_id = NULL,
+                 expires_at = NOW() + INTERVAL '15 minutes',
+                 cancelled_at = NULL,
+                 cancelled_by = NULL,
+                 cancellation_reason = NULL,
+                 order_version = order_version + 1
+             WHERE id = $1
+             RETURNING *`,
+            [id]
+          );
+
+          const updatedOrder = updateResult.rows[0];
+
+          await client.query(
+            `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
+             VALUES ($1, 'merchant_relisted', $2, $3, 'accepted', 'pending', $4)`,
+            [id, actor_type, actor_id, JSON.stringify({ reason: reason || 'Merchant cancelled — relisted to marketplace' })]
+          );
+
+          await client.query(
+            `INSERT INTO notification_outbox (order_id, event_type, payload, status) VALUES ($1, 'ORDER_RELISTED', $2, 'pending')`,
+            [
+              id,
+              JSON.stringify({
+                orderId: id,
+                userId: updatedOrder.user_id,
+                merchantId: updatedOrder.merchant_id,
+                status: 'pending',
+                order_version: updatedOrder.order_version,
+                previousStatus: 'accepted',
+                updatedAt: new Date().toISOString(),
+              }),
+            ]
+          );
+
+          if (shouldRestoreLiquidity('accepted' as OrderStatus, 'pending' as OrderStatus)) {
+            await client.query(
+              'UPDATE merchant_offers SET available_amount = available_amount + $1 WHERE id = $2',
+              [currentOrder.crypto_amount, currentOrder.offer_id]
+            );
+          }
+
+          return { success: true as const, order: updatedOrder, oldStatus, currentOrder, relisted: true };
+        }
+
         // Validate transition
         const validation = validateTransition(oldStatus, newStatus, actor_type);
         if (!validation.valid) {
@@ -464,6 +527,26 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ success: false, error: result.error });
       }
 
+      // Handle relist result — skip cancel side-effects (reputation penalties, etc.)
+      if (result.relisted) {
+        broadcastOrderEvent({
+          event_type: 'ORDER_RELISTED',
+          order_id: id,
+          status: 'pending',
+          minimal_status: 'pending',
+          order_version: result.order!.order_version,
+          userId: result.order!.user_id,
+          merchantId: result.order!.merchant_id,
+          buyerMerchantId: undefined,
+          previousStatus: 'accepted',
+        });
+
+        return reply.send({
+          success: true,
+          data: { ...result.order, minimal_status: normalizeStatus(result.order!.status), relisted: true },
+        });
+      }
+
       // --- Batched fire-and-forget: zero SQL round-trips (flushed every 50ms) ---
       const txOldStatus = result.oldStatus!;
       const txOrder = result.currentOrder!;
@@ -604,6 +687,108 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           data: { ...result.order, minimal_status: normalizeStatus(result.order!.status) },
         });
       } else {
+        // Merchant relist check: merchant cancelling accepted order (no escrow) → revert to pending
+        const shouldRelist =
+          actor_type === 'merchant' &&
+          order.status === 'accepted' &&
+          !order.escrow_tx_hash;
+
+        if (shouldRelist) {
+          const result = await transaction(async (client) => {
+            const current = await client.query<OrderRow>(
+              'SELECT * FROM orders WHERE id = $1 FOR UPDATE',
+              [id]
+            );
+
+            if (current.rows.length === 0) {
+              return { success: false as const, error: 'Order not found' };
+            }
+
+            const currentOrder = current.rows[0];
+
+            // Re-verify conditions inside transaction
+            if (currentOrder.status !== 'accepted' || currentOrder.escrow_tx_hash) {
+              return { success: false as const, error: 'Order state changed, cannot relist' };
+            }
+
+            const validation = validateTransition(currentOrder.status, 'pending' as OrderStatus, actor_type as ActorType);
+            if (!validation.valid) {
+              return { success: false as const, error: validation.error };
+            }
+
+            const updateResult = await client.query<OrderRow>(
+              `UPDATE orders
+               SET status = 'pending',
+                   accepted_at = NULL,
+                   acceptor_wallet_address = NULL,
+                   buyer_merchant_id = NULL,
+                   expires_at = NOW() + INTERVAL '15 minutes',
+                   cancelled_at = NULL,
+                   cancelled_by = NULL,
+                   cancellation_reason = NULL,
+                   order_version = order_version + 1
+               WHERE id = $1
+               RETURNING *`,
+              [id]
+            );
+
+            const updatedOrder = updateResult.rows[0];
+
+            await client.query(
+              `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
+               VALUES ($1, 'merchant_relisted', $2, $3, 'accepted', 'pending', $4)`,
+              [id, actor_type, actor_id, JSON.stringify({ reason: reason || 'Merchant cancelled — relisted to marketplace' })]
+            );
+
+            await client.query(
+              `INSERT INTO notification_outbox (order_id, event_type, payload, status) VALUES ($1, 'ORDER_RELISTED', $2, 'pending')`,
+              [
+                id,
+                JSON.stringify({
+                  orderId: id,
+                  userId: updatedOrder.user_id,
+                  merchantId: updatedOrder.merchant_id,
+                  status: 'pending',
+                  order_version: updatedOrder.order_version,
+                  previousStatus: 'accepted',
+                  updatedAt: new Date().toISOString(),
+                }),
+              ]
+            );
+
+            // Restore liquidity so the offer amount is available again
+            if (shouldRestoreLiquidity('accepted' as OrderStatus, 'pending' as OrderStatus)) {
+              await client.query(
+                'UPDATE merchant_offers SET available_amount = available_amount + $1 WHERE id = $2',
+                [currentOrder.crypto_amount, currentOrder.offer_id]
+              );
+            }
+
+            return { success: true as const, order: updatedOrder };
+          });
+
+          if (!result.success) {
+            return reply.status(400).send({ success: false, error: result.error });
+          }
+
+          broadcastOrderEvent({
+            event_type: 'ORDER_RELISTED',
+            order_id: id,
+            status: 'pending',
+            minimal_status: 'pending',
+            order_version: result.order!.order_version,
+            userId: result.order!.user_id,
+            merchantId: result.order!.merchant_id,
+            buyerMerchantId: undefined,
+            previousStatus: 'accepted',
+          });
+
+          return reply.send({
+            success: true,
+            data: { ...result.order, minimal_status: normalizeStatus(result.order!.status), relisted: true },
+          });
+        }
+
         // Simple cancel via state machine
         const result = await transaction(async (client) => {
           const current = await client.query<OrderRow>(

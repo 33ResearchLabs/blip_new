@@ -391,10 +391,13 @@ export function TradeChat({
   const systemMessages = messages.filter(msg => msg.from === 'system');
   const chatMessages = messages.filter(msg => msg.from !== 'system');
 
-  // Group chat messages by date
+  // All messages (system + human) for the order chat tab — shows receipts inline
+  const allOrderMessages = messages.filter(msg => msg.from !== 'compliance');
+
+  // Group ALL order messages by date (including system receipts)
   const groupedChatMessages: { date: string; messages: ChatMessage[] }[] = [];
   let currentChatDate = '';
-  chatMessages.forEach((msg) => {
+  allOrderMessages.forEach((msg) => {
     const dateStr = formatDate(msg.timestamp);
     if (dateStr !== currentChatDate) {
       currentChatDate = dateStr;
@@ -680,11 +683,11 @@ export function TradeChat({
               >
                 <MessageSquare className="w-4 h-4" />
                 <span>Order Chat</span>
-                {chatMessages.length > 0 && (
+                {allOrderMessages.length > 0 && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
                     activeChatTab === 'order' ? 'bg-orange-500/20 text-orange-400' : 'bg-gray-700 text-gray-400'
                   }`}>
-                    {chatMessages.length}
+                    {allOrderMessages.length}
                   </span>
                 )}
                 {activeChatTab === 'order' && (
@@ -710,6 +713,38 @@ export function TradeChat({
             </div>
           </div>
 
+          {/* Counterparty name bar */}
+          {tradeInfo && (
+            <div className="px-4 py-2 border-b border-white/[0.04] bg-[#0d0d0d]/30 flex items-center gap-2">
+              {currentUserType === 'merchant' ? (
+                <>
+                  <div className="w-6 h-6 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
+                    <span className="text-[10px]">{userEmoji || getUserEmoji(tradeInfo.user.username || 'User')}</span>
+                  </div>
+                  <span className="text-xs font-medium text-white/70">{tradeInfo.user.username || userName || 'User'}</span>
+                  {tradeInfo.user.rating && (
+                    <span className="text-[10px] text-amber-400/70">★ {tradeInfo.user.rating.toFixed(1)}</span>
+                  )}
+                </>
+              ) : currentUserType === 'compliance' ? (
+                <>
+                  <div className="w-6 h-6 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
+                    <Store className="w-3 h-3 text-orange-400" />
+                  </div>
+                  <span className="text-xs font-medium text-white/70">{tradeInfo.merchant.displayName}</span>
+                  <span className="text-[10px] text-white/30">& {tradeInfo.user.username}</span>
+                </>
+              ) : (
+                <>
+                  <div className="w-6 h-6 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
+                    <Store className="w-3 h-3 text-orange-400" />
+                  </div>
+                  <span className="text-xs font-medium text-white/70">{tradeInfo.merchant.displayName}</span>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Chat messages area */}
           <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
             {/* Order Chat Content */}
@@ -719,7 +754,7 @@ export function TradeChat({
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
                   </div>
-                ) : chatMessages.length === 0 ? (
+                ) : allOrderMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-gray-500">
                     <MessageSquare className="w-10 h-10 mb-2 opacity-30" />
                     <p className="text-sm">No order messages yet</p>
@@ -738,6 +773,27 @@ export function TradeChat({
                   {/* Messages for this date */}
                   <div className="space-y-3">
                     {group.messages.map((msg, msgIndex) => {
+                      // System receipt — render as centered inline card
+                      if (msg.from === 'system') {
+                        return (
+                          <motion.div
+                            key={msg.id}
+                            data-testid={`chat-msg-${msg.id}`}
+                            initial={{ opacity: 0, y: 5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: msgIndex * 0.02 }}
+                            className="flex justify-center my-1"
+                          >
+                            <div className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-center max-w-[85%]">
+                              <p className="text-[11px] text-gray-400">{msg.text}</p>
+                              <span className="text-[9px] text-gray-600 mt-0.5 block">
+                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          </motion.div>
+                        );
+                      }
+
                       const senderInfo = getSenderInfo(msg);
 
                       return (

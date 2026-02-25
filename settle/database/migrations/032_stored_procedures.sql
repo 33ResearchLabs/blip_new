@@ -139,14 +139,28 @@ BEGIN
     WHERE id = p_order_id RETURNING * INTO v_updated;
   ELSIF v_is_claiming OR (v_is_m2m AND v_order.buyer_merchant_id IS NOT NULL) THEN
     -- Claiming: acceptor becomes merchant
-    UPDATE orders SET
-      status = v_effective_status,
-      accepted_at = NOW(),
-      expires_at = NOW() + INTERVAL '120 minutes',
-      order_version = order_version + 1,
-      merchant_id = p_actor_id,
-      acceptor_wallet_address = COALESCE(p_acceptor_wallet_address, acceptor_wallet_address)
-    WHERE id = p_order_id RETURNING * INTO v_updated;
+    -- For merchant-created orders (placeholder user), preserve the creating merchant as buyer_merchant_id
+    SELECT username INTO v_username FROM users WHERE id = v_order.user_id;
+    IF (v_username LIKE 'open_order_%' OR v_username LIKE 'm2m_%') AND v_order.buyer_merchant_id IS NULL THEN
+      UPDATE orders SET
+        status = v_effective_status,
+        accepted_at = NOW(),
+        expires_at = NOW() + INTERVAL '120 minutes',
+        order_version = order_version + 1,
+        buyer_merchant_id = v_order.merchant_id,
+        merchant_id = p_actor_id,
+        acceptor_wallet_address = COALESCE(p_acceptor_wallet_address, acceptor_wallet_address)
+      WHERE id = p_order_id RETURNING * INTO v_updated;
+    ELSE
+      UPDATE orders SET
+        status = v_effective_status,
+        accepted_at = NOW(),
+        expires_at = NOW() + INTERVAL '120 minutes',
+        order_version = order_version + 1,
+        merchant_id = p_actor_id,
+        acceptor_wallet_address = COALESCE(p_acceptor_wallet_address, acceptor_wallet_address)
+      WHERE id = p_order_id RETURNING * INTO v_updated;
+    END IF;
   ELSIF v_is_m2m AND v_order.buyer_merchant_id IS NULL THEN
     -- M2M: acceptor becomes buyer
     UPDATE orders SET

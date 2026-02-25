@@ -1047,12 +1047,24 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const onChainTrade = await fetchTrade(program, creatorPk, params.tradeId);
       let counterpartyPk: PublicKey;
 
-      if (onChainTrade?.counterparty) {
+      // Detect if counterparty is the default PublicKey (all zeros = system program)
+      // This means acceptTrade hasn't been called yet — buyer hasn't joined on-chain
+      const hasRealCounterparty = onChainTrade?.counterparty &&
+        !onChainTrade.counterparty.equals(PublicKey.default);
+
+      if (hasRealCounterparty) {
         // Use the counterparty stored on-chain (this is what the program validates)
         counterpartyPk = onChainTrade.counterparty;
         console.log('[releaseEscrow] Using on-chain counterparty:', counterpartyPk.toString());
+      } else if (onChainTrade && !hasRealCounterparty) {
+        // Trade exists but counterparty hasn't joined yet (still in Funded state)
+        console.warn('[releaseEscrow] Trade has no counterparty set on-chain. Status:', onChainTrade.status);
+        throw new Error(
+          'ConstraintRaw: counterparty_ata — The buyer has not joined the escrow on-chain yet. ' +
+          'Ask them to open this order in their dashboard with their wallet connected.'
+        );
       } else {
-        // Fallback to passed counterparty if trade not found
+        // Trade not found on-chain — fallback to passed counterparty
         counterpartyPk = new PublicKey(params.counterparty);
         console.log('[releaseEscrow] Using passed counterparty (trade not found):', counterpartyPk.toString());
       }

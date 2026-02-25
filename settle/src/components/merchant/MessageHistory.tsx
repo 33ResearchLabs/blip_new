@@ -225,7 +225,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-white truncate">
+                        <span className="font-medium text-white truncate capitalize">
                           {conv.user.username}
                         </span>
                         <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded uppercase

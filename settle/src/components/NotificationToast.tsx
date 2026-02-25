@@ -15,7 +15,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 
-export type ToastType = 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system' | 'message' | 'warning' | 'action';
+export type ToastType = 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system' | 'message' | 'warning' | 'action' | 'success' | 'error';
 
 export interface Toast {
   id: string;
@@ -39,6 +39,8 @@ const TOAST_ICONS: Record<ToastType, typeof Bell> = {
   message: MessageCircle,
   warning: AlertTriangle,
   action: Shield,
+  success: CheckCircle2,
+  error: AlertTriangle,
 };
 
 const TOAST_COLORS: Record<ToastType, { bg: string; border: string; icon: string; accent: string }> = {
@@ -51,6 +53,8 @@ const TOAST_COLORS: Record<ToastType, { bg: string; border: string; icon: string
   message: { bg: 'bg-[#1a1a1a]/95', border: 'border-purple-500/30', icon: 'text-purple-400', accent: 'bg-purple-500/10' },
   warning: { bg: 'bg-[#1a1a1a]/95', border: 'border-amber-500/30', icon: 'text-amber-400', accent: 'bg-amber-500/10' },
   action: { bg: 'bg-[#1a1a1a]/95', border: 'border-orange-500/40', icon: 'text-orange-400', accent: 'bg-orange-500/15' },
+  success: { bg: 'bg-[#1a1a1a]/95', border: 'border-emerald-500/30', icon: 'text-emerald-400', accent: 'bg-emerald-500/10' },
+  error: { bg: 'bg-[#1a1a1a]/95', border: 'border-red-500/30', icon: 'text-red-400', accent: 'bg-red-500/10' },
 };
 
 const DEFAULT_DURATION = 5000;
@@ -232,6 +236,12 @@ export function useToast() {
     }, [show]),
     showEscrowReleased: useCallback((amount?: string) => {
       show({ type: 'complete', title: 'Escrow Released', message: amount ? `${amount} USDC released from escrow` : 'Escrow has been released', duration: 6000 });
+    }, [show]),
+    showSuccess: useCallback((title: string, message: string) => {
+      show({ type: 'success', title, message, duration: 5000 });
+    }, [show]),
+    showError: useCallback((title: string, message: string) => {
+      show({ type: 'error', title, message, duration: 7000 });
     }, [show]),
   };
 }

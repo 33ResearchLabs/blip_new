@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Settings, Save, Loader2, Power, DollarSign, Package } from 'lucide-react';
+import { showAlert } from '@/stores/confirmationStore';
 
 interface MerchantQuote {
   id: string;
@@ -90,14 +91,14 @@ export function MerchantQuoteControl({
         const data = await res.json();
         if (data.success) {
           setQuote(data.data);
-          alert('Quote saved successfully!');
+          showAlert({ title: 'Success', message: 'Quote saved successfully!', variant: 'info' });
         } else {
-          alert(data.error || 'Failed to save quote');
+          showAlert({ title: 'Error', message: data.error || 'Failed to save quote', variant: 'danger' });
         }
       }
     } catch (error) {
       console.error('Failed to save quote:', error);
-      alert('Failed to save quote');
+      showAlert({ title: 'Error', message: 'Failed to save quote', variant: 'danger' });
     } finally {
       setIsSaving(false);
     }

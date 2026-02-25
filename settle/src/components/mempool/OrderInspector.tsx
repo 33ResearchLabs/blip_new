@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, ArrowUpCircle, CheckCircle, Clock, TrendingUp, Activity, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { showAlert } from '@/stores/confirmationStore';
 
 interface MempoolOrder {
   id: string;
@@ -97,12 +98,12 @@ export function OrderInspector({
           onBump?.(order.id);
           await fetchEvents();
         } else {
-          alert(data.error || 'Failed to bump order');
+          showAlert({ title: 'Error', message: data.error || 'Failed to bump order', variant: 'danger' });
         }
       }
     } catch (error) {
       console.error('Failed to bump order:', error);
-      alert('Failed to bump order');
+      showAlert({ title: 'Error', message: 'Failed to bump order', variant: 'danger' });
     } finally {
       setIsBumping(false);
     }
@@ -127,15 +128,15 @@ export function OrderInspector({
         const data = await res.json();
         if (data.success) {
           onAccept?.(order.id);
-          alert('Order accepted successfully!');
+          showAlert({ title: 'Success', message: 'Order accepted successfully!', variant: 'info' });
           onClose();
         } else {
-          alert(data.error || 'Failed to accept order');
+          showAlert({ title: 'Error', message: data.error || 'Failed to accept order', variant: 'danger' });
         }
       }
     } catch (error) {
       console.error('Failed to accept order:', error);
-      alert('Failed to accept order');
+      showAlert({ title: 'Error', message: 'Failed to accept order', variant: 'danger' });
     } finally {
       setIsAccepting(false);
     }

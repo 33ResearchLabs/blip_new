@@ -97,10 +97,10 @@ export const ActivityPanel = memo(function ActivityPanel({
 
   if (isCollapsed) {
     return (
-      <div className="flex flex-col h-full justify-end">
+      <div className="flex flex-col h-full justify-start">
         <button
           onClick={() => handleCollapse(false)}
-          className="flex items-center justify-between px-3 py-2 bg-white/[0.02] hover:bg-white/[0.04] border-t border-white/[0.04] transition-all"
+          className="flex items-center justify-between px-3 py-2 bg-white/[0.02] hover:bg-white/[0.04] border-b border-white/[0.04] transition-all"
         >
           <div className="flex items-center gap-2">
             <History className="w-3.5 h-3.5 text-white/30" />
@@ -111,7 +111,7 @@ export const ActivityPanel = memo(function ActivityPanel({
               {completedOrders.length + failedCount + openCount}
             </span>
           </div>
-          <ChevronUp className="w-3.5 h-3.5 text-white/25" />
+          <ChevronDown className="w-3.5 h-3.5 text-white/25" />
         </button>
       </div>
     );

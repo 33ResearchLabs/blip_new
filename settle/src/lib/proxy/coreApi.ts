@@ -4,11 +4,13 @@
  * Forwards all mutation requests from settle to core-api.
  * Settle handles validation, auth, and reads. Core-api handles all DB writes.
  * Actor headers are HMAC-signed to prevent forgery.
+ * Circuit breaker protects against cascading failures.
  */
 
 import { NextResponse } from 'next/server';
 import { createHmac } from 'crypto';
 import { logger } from 'settlement-core';
+import { CircuitBreaker } from '@/lib/events/circuitBreaker';
 
 interface ProxyOptions {
   method: string;
@@ -16,6 +18,13 @@ interface ProxyOptions {
   actorType?: string;
   actorId?: string;
 }
+
+// Circuit breaker: opens after 5 consecutive failures, resets after 30s
+const coreApiCircuit = new CircuitBreaker({
+  name: 'core-api',
+  failureThreshold: 5,
+  resetTimeoutMs: 30_000,
+});
 
 /**
  * Compute HMAC-SHA256 signature for actor identity headers.
@@ -69,6 +78,20 @@ export async function proxyCoreApi(
     headers['x-actor-signature'] = signActorHeaders(coreApiSecret, actorType, actorId);
   }
 
+  // Circuit breaker: fast-fail if core-api has been consistently failing
+  if (!coreApiCircuit.canCall()) {
+    const stats = coreApiCircuit.getStats();
+    logger.warn('[Proxy] Circuit breaker OPEN — fast-failing', {
+      url,
+      method: options.method,
+      failureCount: stats.failureCount,
+    });
+    return NextResponse.json(
+      { success: false, error: 'Service temporarily unavailable — please retry' },
+      { status: 503 }
+    );
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
 
@@ -81,12 +104,26 @@ export async function proxyCoreApi(
     });
 
     const data = await response.json();
+
+    // Record success/failure based on HTTP status
+    if (response.status >= 500) {
+      coreApiCircuit.execute(() => Promise.reject(new Error(`HTTP ${response.status}`)))
+        .catch(() => {}); // side-effect only, we still return the response
+    } else {
+      coreApiCircuit.execute(() => Promise.resolve())
+        .catch(() => {}); // should not fail
+    }
+
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
+    // Record failure in circuit breaker
+    coreApiCircuit.execute(() => Promise.reject(error)).catch(() => {});
+
     logger.error('[Proxy] Failed to reach core-api', {
       url,
       method: options.method,
       error,
+      circuitState: coreApiCircuit.getState(),
     });
     return NextResponse.json(
       { success: false, error: 'Core API unavailable — retry later' },
@@ -95,4 +132,9 @@ export async function proxyCoreApi(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/** Get circuit breaker stats for health checks */
+export function getCoreApiCircuitStats() {
+  return coreApiCircuit.getStats();
 }

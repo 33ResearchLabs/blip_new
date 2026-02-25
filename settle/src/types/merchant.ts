@@ -37,6 +37,13 @@ export interface DbOrder {
     wallet_address?: string;
     avatar_url?: string | null;
   };
+  merchant?: {
+    id: string;
+    display_name: string;
+    username?: string;
+    rating?: number;
+    wallet_address?: string;
+  };
   is_my_order?: boolean;
   my_role?: 'buyer' | 'seller' | 'observer';
   payment_details?: {

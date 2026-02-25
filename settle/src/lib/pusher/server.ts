@@ -6,6 +6,14 @@
 
 import { ORDER_EVENTS, CHAT_EVENTS, type PusherEvent } from './events';
 import { getUserChannel, getMerchantChannel, getOrderChannel, getAllMerchantsChannel } from './channels';
+import { CircuitBreaker, CircuitOpenError } from '@/lib/events/circuitBreaker';
+
+// Circuit breaker: opens after 5 consecutive Pusher failures, resets after 30s
+const pusherCircuit = new CircuitBreaker({
+  name: 'pusher',
+  failureThreshold: 5,
+  resetTimeoutMs: 30_000,
+});
 
 // Mock Pusher interface for when module is not available
 interface PusherLike {
@@ -74,7 +82,9 @@ async function getPusherServer(): Promise<PusherLike> {
 }
 
 /**
- * Trigger an event on a channel
+ * Trigger an event on a channel.
+ * Protected by circuit breaker — when Pusher is consistently failing,
+ * events are silently dropped here but still delivered via notification_outbox worker.
  */
 export async function triggerEvent(
   channel: string | string[],
@@ -82,14 +92,32 @@ export async function triggerEvent(
   data: unknown
 ): Promise<void> {
   console.log('[Pusher Server] triggerEvent called:', { channel, event });
-  try {
-    const pusher = await getPusherServer();
-    const result = await pusher.trigger(channel, event, data);
-    console.log('[Pusher Server] Event triggered successfully:', { channel, event, result });
-  } catch (error) {
-    console.error('[Pusher Server] Failed to trigger event:', error);
-    throw error; // Re-throw so caller knows it failed
+
+  if (!pusherCircuit.canCall()) {
+    console.warn('[Pusher Server] Circuit breaker OPEN — skipping event, outbox will deliver:', { channel, event });
+    return;
   }
+
+  try {
+    await pusherCircuit.execute(async () => {
+      const pusher = await getPusherServer();
+      const result = await pusher.trigger(channel, event, data);
+      console.log('[Pusher Server] Event triggered successfully:', { channel, event, result });
+    });
+  } catch (error) {
+    if (error instanceof CircuitOpenError) {
+      console.warn('[Pusher Server] Circuit breaker tripped — event queued for outbox delivery');
+      return;
+    }
+    console.error('[Pusher Server] Failed to trigger event:', error);
+    // Don't re-throw — caller should not fail because Pusher is down.
+    // The notification_outbox worker will retry delivery.
+  }
+}
+
+/** Get Pusher circuit breaker stats for health checks */
+export function getPusherCircuitStats() {
+  return pusherCircuit.getStats();
 }
 
 /**

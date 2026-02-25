@@ -36,6 +36,7 @@ import {
   Lock,
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
+import { showAlert } from '@/stores/confirmationStore';
 import { useSounds } from "@/hooks/useSounds";
 import { NotificationToastContainer, useToast, ConnectionIndicator } from "@/components/NotificationToast";
 import dynamic from "next/dynamic";
@@ -1142,12 +1143,12 @@ export default function Home() {
 
   const startTrade = async () => {
     if (!amount || parseFloat(amount) <= 0) {
-      alert('Please enter a valid amount');
+      showAlert({ title: 'Validation Error', message: 'Please enter a valid amount', variant: 'warning' });
       return;
     }
 
     if (!userId) {
-      alert('Please connect your wallet first');
+      showAlert({ title: 'Validation Error', message: 'Please connect your wallet first', variant: 'warning' });
       console.error('[Order] No userId - user not authenticated');
       return;
     }
@@ -1156,7 +1157,7 @@ export default function Home() {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(userId)) {
       console.error('[Order] Invalid userId format:', userId);
-      alert('Session error. Please reconnect your wallet.');
+      showAlert({ title: 'Session Error', message: 'Session error. Please reconnect your wallet.', variant: 'warning' });
       localStorage.removeItem('blip_user');
       setUserId(null);
       setScreen('welcome');
@@ -1181,7 +1182,7 @@ export default function Home() {
       if (!offerRes.ok || !offerData.success || !offerData.data) {
         const errorMsg = offerData.error || 'No offers available for this amount and payment method';
         console.error('Failed to fetch offers:', errorMsg);
-        alert(errorMsg);
+        showAlert({ title: 'Error', message: errorMsg, variant: 'danger' });
         setIsLoading(false);
         return;
       }
@@ -1205,7 +1206,7 @@ export default function Home() {
         const isValidSolanaAddress = merchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
         if (!isValidSolanaAddress) {
           console.error('[Trade] Merchant has no wallet address:', offer?.merchant?.display_name);
-          alert('This merchant has not linked their Solana wallet yet. Please try again later or choose a different amount to match with another merchant.');
+          showAlert({ title: 'Error', message: 'This merchant has not linked their Solana wallet yet. Please try again later or choose a different amount to match with another merchant.', variant: 'danger' });
           setIsLoading(false);
           return;
         }
@@ -1238,7 +1239,7 @@ export default function Home() {
 
         // If user not found, clear session and redirect to welcome
         if (orderData.details?.includes('User not found')) {
-          alert('Your session has expired. Please reconnect your wallet.');
+          showAlert({ title: 'Session Error', message: 'Your session has expired. Please reconnect your wallet.', variant: 'warning' });
           localStorage.removeItem('blip_user');
           localStorage.removeItem('blip_wallet');
           setUserId(null);
@@ -1248,7 +1249,7 @@ export default function Home() {
           return;
         }
 
-        alert(errorMsg);
+        showAlert({ title: 'Error', message: errorMsg, variant: 'danger' });
         playSound('error');
         setIsLoading(false);
         return;
@@ -1263,12 +1264,12 @@ export default function Home() {
         setAmount("");
         playSound('trade_start');
       } else {
-        alert('Failed to process order data');
+        showAlert({ title: 'Error', message: 'Failed to process order data', variant: 'danger' });
         playSound('error');
       }
     } catch (err) {
       console.error('Failed to start trade:', err);
-      alert('Failed to create order');
+      showAlert({ title: 'Error', message: 'Failed to create order', variant: 'danger' });
       playSound('error');
     }
 
@@ -1277,12 +1278,12 @@ export default function Home() {
 
   const confirmCashOrder = async () => {
     if (!selectedOffer || !amount) {
-      alert('Missing order details');
+      showAlert({ title: 'Validation Error', message: 'Missing order details', variant: 'warning' });
       return;
     }
 
     if (!userId) {
-      alert('Please connect your wallet first');
+      showAlert({ title: 'Validation Error', message: 'Please connect your wallet first', variant: 'warning' });
       return;
     }
 
@@ -1290,7 +1291,7 @@ export default function Home() {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(userId)) {
       console.error('[Order] Invalid userId format:', userId);
-      alert('Session error. Please reconnect your wallet.');
+      showAlert({ title: 'Session Error', message: 'Session error. Please reconnect your wallet.', variant: 'warning' });
       localStorage.removeItem('blip_user');
       setUserId(null);
       setScreen('welcome');
@@ -1322,7 +1323,7 @@ export default function Home() {
 
         // If user not found, clear session and redirect to welcome
         if (orderData.details?.includes('User not found')) {
-          alert('Your session has expired. Please reconnect your wallet.');
+          showAlert({ title: 'Session Error', message: 'Your session has expired. Please reconnect your wallet.', variant: 'warning' });
           localStorage.removeItem('blip_user');
           localStorage.removeItem('blip_wallet');
           setUserId(null);
@@ -1331,7 +1332,7 @@ export default function Home() {
           return;
         }
 
-        alert(errorMsg);
+        showAlert({ title: 'Error', message: errorMsg, variant: 'danger' });
         setIsLoading(false);
         return;
       }
@@ -1344,11 +1345,11 @@ export default function Home() {
         setSelectedOffer(null);
         setScreen("order");
       } else {
-        alert('Failed to process order data');
+        showAlert({ title: 'Error', message: 'Failed to process order data', variant: 'danger' });
       }
     } catch (err) {
       console.error('Failed to create cash order:', err);
-      alert('Network error. Please try again.');
+      showAlert({ title: 'Error', message: 'Network error. Please try again.', variant: 'danger' });
     }
 
     setIsLoading(false);
@@ -1358,13 +1359,13 @@ export default function Home() {
     console.log('[Escrow] confirmEscrow called', { selectedOffer, amount, userId });
     if (!selectedOffer || !amount) {
       console.log('[Escrow] Missing required data:', { selectedOffer: !!selectedOffer, amount: !!amount });
-      alert('Missing order details');
+      showAlert({ title: 'Validation Error', message: 'Missing order details', variant: 'warning' });
       return;
     }
 
     if (!userId) {
       console.log('[Escrow] No userId - user not authenticated');
-      alert('Please connect your wallet first');
+      showAlert({ title: 'Validation Error', message: 'Please connect your wallet first', variant: 'warning' });
       return;
     }
 
@@ -1372,7 +1373,7 @@ export default function Home() {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(userId)) {
       console.error('[Escrow] Invalid userId format:', userId);
-      alert('Session error. Please reconnect your wallet.');
+      showAlert({ title: 'Session Error', message: 'Session error. Please reconnect your wallet.', variant: 'warning' });
       localStorage.removeItem('blip_user');
       setUserId(null);
       setScreen('welcome');
@@ -1621,7 +1622,7 @@ export default function Home() {
       if (!res.ok || !data.success) {
         const errorMsg = data.error || 'Failed to update order. The order may have expired.';
         console.error('Failed to mark payment sent:', errorMsg);
-        alert(errorMsg);
+        showAlert({ title: 'Error', message: errorMsg, variant: 'danger' });
         setIsLoading(false);
         return;
       }
@@ -1631,7 +1632,7 @@ export default function Home() {
       ));
     } catch (err) {
       console.error('Failed to mark payment sent:', err);
-      alert('Network error. Please try again.');
+      showAlert({ title: 'Error', message: 'Network error. Please try again.', variant: 'danger' });
     } finally {
       setIsLoading(false);
     }
@@ -1651,13 +1652,13 @@ export default function Home() {
 
         if (!userIsMockMode) {
           if (!solanaWallet.connected) {
-            alert('Please connect your wallet to release the escrow.');
+            showAlert({ title: 'Error', message: 'Please connect your wallet to release the escrow.', variant: 'danger' });
             setIsLoading(false);
             return;
           }
 
           if (!isValidSolanaAddress) {
-            alert('Merchant wallet address is invalid. Please contact support.');
+            showAlert({ title: 'Error', message: 'Merchant wallet address is invalid. Please contact support.', variant: 'danger' });
             setIsLoading(false);
             return;
           }
@@ -1680,7 +1681,7 @@ export default function Home() {
 
         if (!releaseResult.success) {
           console.error('[Release] Escrow release failed:', releaseResult.error);
-          alert(`Failed to release escrow: ${releaseResult.error || 'Unknown error'}`);
+          showAlert({ title: 'Error', message: `Failed to release escrow: ${releaseResult.error || 'Unknown error'}`, variant: 'danger' });
           setIsLoading(false);
           return;
         }
@@ -1765,7 +1766,7 @@ export default function Home() {
           return;
         }
         console.error('Failed to confirm payment:', errorMsg);
-        alert(errorMsg);
+        showAlert({ title: 'Error', message: errorMsg, variant: 'danger' });
         setIsLoading(false);
         return;
       }
@@ -1780,7 +1781,7 @@ export default function Home() {
       }
     } catch (err) {
       console.error('Failed to confirm payment:', err);
-      alert('Failed to release escrow. Please try again.');
+      showAlert({ title: 'Error', message: 'Failed to release escrow. Please try again.', variant: 'danger' });
     } finally {
       setIsLoading(false);
     }
@@ -3249,7 +3250,7 @@ export default function Home() {
                                   return;
                                 }
                                 if (!solanaWallet.programReady) {
-                                  alert('Wallet not ready. Please reconnect your wallet.');
+                                  showAlert({ title: 'Session Error', message: 'Wallet not ready. Please reconnect your wallet.', variant: 'warning' });
                                   return;
                                 }
                                 setIsLoading(true);
@@ -3258,7 +3259,7 @@ export default function Home() {
                                   // This is the wallet the merchant proved ownership of via signature
                                   const merchantWallet = activeOrder.acceptorWalletAddress || activeOrder.merchant.walletAddress;
                                   if (!merchantWallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet)) {
-                                    alert('Merchant wallet not available. Please wait for merchant to accept the order with their wallet.');
+                                    showAlert({ title: 'Error', message: 'Merchant wallet not available. Please wait for merchant to accept the order with their wallet.', variant: 'danger' });
                                     setIsLoading(false);
                                     return;
                                   }
@@ -3290,7 +3291,7 @@ export default function Home() {
                                   }
                                 } catch (err: any) {
                                   console.error('Escrow failed:', err);
-                                  alert(err?.message || 'Failed to lock escrow. Please try again.');
+                                  showAlert({ title: 'Error', message: err?.message || 'Failed to lock escrow. Please try again.', variant: 'danger' });
                                   playSound('error');
                                 } finally {
                                   setIsLoading(false);

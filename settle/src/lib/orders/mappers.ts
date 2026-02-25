@@ -72,8 +72,16 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
 
   return {
     id: dbOrder.id,
-    user: isM2M ? (dbOrder.buyer_merchant?.display_name || 'Merchant') : userName,
-    emoji: getUserEmoji(isM2M ? (dbOrder.buyer_merchant?.display_name || 'M') : userName),
+    user: isM2M
+      ? (dbOrder.my_role === 'buyer'
+          ? (dbOrder.merchant?.display_name || 'Seller')
+          : (dbOrder.buyer_merchant?.display_name || 'Buyer'))
+      : userName,
+    emoji: getUserEmoji(isM2M
+      ? (dbOrder.my_role === 'buyer'
+          ? (dbOrder.merchant?.display_name || 'S')
+          : (dbOrder.buyer_merchant?.display_name || 'B'))
+      : userName),
     amount: cryptoAmount,
     fromCurrency: "USDC",
     toCurrency: "AED",

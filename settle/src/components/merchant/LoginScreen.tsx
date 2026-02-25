@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Zap, Loader2 } from "lucide-react";
+import { Zap, Loader2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 
 interface LoginScreenProps {
@@ -28,6 +29,10 @@ export function LoginScreen({
   isLoggingIn, isRegistering, isAuthenticating,
   onLogin, onRegister,
 }: LoginScreenProps) {
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   return (
     <div className="min-h-screen bg-[#060606] text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
       {/* Ambient background */}
@@ -103,14 +108,23 @@ export function LoginScreen({
 
               <div>
                 <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Password</label>
-                <input
-                  type="password"
-                  value={loginForm.password}
-                  onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                  placeholder="••••••••"
-                  className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-                  onKeyDown={(e) => e.key === "Enter" && onLogin()}
-                />
+                <div className="relative">
+                  <input
+                    type={showLoginPassword ? "text" : "password"}
+                    value={loginForm.password}
+                    onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="Enter password"
+                    className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pr-11 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
+                    onKeyDown={(e) => e.key === "Enter" && onLogin()}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                  >
+                    {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               <motion.button
@@ -155,25 +169,43 @@ export function LoginScreen({
 
               <div>
                 <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Password</label>
-                <input
-                  type="password"
-                  value={registerForm.password}
-                  onChange={(e) => setRegisterForm(prev => ({ ...prev, password: e.target.value }))}
-                  placeholder="Min. 6 characters"
-                  className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-                />
+                <div className="relative">
+                  <input
+                    type={showRegisterPassword ? "text" : "password"}
+                    value={registerForm.password}
+                    onChange={(e) => setRegisterForm(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="Min. 6 characters"
+                    className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pr-11 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegisterPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                  >
+                    {showRegisterPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Confirm Password</label>
-                <input
-                  type="password"
-                  value={registerForm.confirmPassword}
-                  onChange={(e) => setRegisterForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                  placeholder="••••••••"
-                  className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-                  onKeyDown={(e) => e.key === "Enter" && onRegister()}
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={registerForm.confirmPassword}
+                    onChange={(e) => setRegisterForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                    placeholder="Confirm password"
+                    className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pr-11 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
+                    onKeyDown={(e) => e.key === "Enter" && onRegister()}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               <motion.button

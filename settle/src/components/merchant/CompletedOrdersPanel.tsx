@@ -96,7 +96,7 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({ orders,
                           {order.orderType === 'buy' ? 'SELL' : 'BUY'}
                         </span>
                         {order.myRole && (
-                          <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
+                          <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border shrink-0 ${
                             order.myRole === 'buyer'
                               ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
                               : 'bg-purple-500/10 border-purple-500/20 text-purple-400'
@@ -105,7 +105,6 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({ orders,
                           </span>
                         )}
                       </div>
-                      <span className="text-[9px] text-white/25 font-mono">{timeAgo}</span>
                     </div>
 
                     {/* Row 2: Amount */}

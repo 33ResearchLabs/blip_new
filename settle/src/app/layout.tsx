@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { PusherProvider } from "@/context/PusherContext";
 import { WebSocketChatProvider } from "@/context/WebSocketChatContext";
 import ClientWalletProvider from "@/components/ClientWalletProvider";
+import { ConfirmationModal } from "@/components/ConfirmationModal";
 
 const inter = Inter({
   variable: "--font-geist-sans",
@@ -74,13 +75,14 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body className={`${inter.variable} antialiased`}>
+      <body className={`${inter.variable} antialiased`} suppressHydrationWarning>
         <ThemeProvider>
           <ClientWalletProvider>
             <PusherProvider>
               <WebSocketChatProvider>
                 <AppProvider>
                   {children}
+                  <ConfirmationModal />
                 </AppProvider>
               </WebSocketChatProvider>
             </PusherProvider>

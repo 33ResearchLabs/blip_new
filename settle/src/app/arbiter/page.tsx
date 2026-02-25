@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { showAlert } from '@/stores/confirmationStore';
 
 // Dynamically import wallet
 const useSolanaWalletHook = () => {
@@ -195,11 +196,11 @@ export default function ArbiterDashboard() {
         setVoteForm({ vote: '', reasoning: '' });
         fetchArbiterData(); // Refresh
       } else {
-        alert(data.error || 'Failed to submit vote');
+        showAlert({ title: 'Error', message: data.error || 'Failed to submit vote', variant: 'danger' });
       }
     } catch (error) {
       console.error('Vote submission error:', error);
-      alert('Failed to submit vote');
+      showAlert({ title: 'Error', message: 'Failed to submit vote', variant: 'danger' });
     } finally {
       setIsSubmitting(false);
     }
