@@ -174,6 +174,19 @@ export default function ComplianceDashboard() {
     splitUser: 50,
     splitMerchant: 50,
   });
+  // Dispute panel voter management
+  const [panelMembers, setPanelMembers] = useState<{
+    arbiter_id: string;
+    wallet_address: string;
+    reputation_score: number;
+    vote: string | null;
+    voted_at: Date | null;
+    reward_earned: number;
+  }[]>([]);
+  const [panelArbitrationId, setPanelArbitrationId] = useState<string | null>(null);
+  const [newArbiterWallet, setNewArbiterWallet] = useState("");
+  const [isAddingArbiter, setIsAddingArbiter] = useState(false);
+
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<{
     type: "user" | "merchant";
@@ -441,6 +454,49 @@ export default function ComplianceDashboard() {
       }
     } catch (error) {
       console.error("Failed to resolve dispute:", error);
+    }
+  };
+
+  // Fetch dispute panel members
+  const fetchPanelMembers = async (disputeId: string) => {
+    try {
+      const res = await fetch(`/api/disputes/${disputeId}/arbitration/members`);
+      const data = await res.json();
+      if (data.success) {
+        setPanelMembers(data.data.members || []);
+        setPanelArbitrationId(data.data.arbitrationId || null);
+      } else {
+        setPanelMembers([]);
+        setPanelArbitrationId(null);
+      }
+    } catch {
+      setPanelMembers([]);
+      setPanelArbitrationId(null);
+    }
+  };
+
+  // Add wallet to dispute panel
+  const addArbiterToPanel = async () => {
+    if (!selectedDispute || !newArbiterWallet.trim()) return;
+    setIsAddingArbiter(true);
+    try {
+      const disputeId = selectedDispute.dispute?.id || selectedDispute.id;
+      const res = await fetch(`/api/disputes/${disputeId}/arbitration/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wallet_address: newArbiterWallet.trim() }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPanelMembers(data.data.members || []);
+        setNewArbiterWallet("");
+      } else {
+        alert(data.error || 'Failed to add arbiter');
+      }
+    } catch {
+      alert('Failed to add arbiter');
+    } finally {
+      setIsAddingArbiter(false);
     }
   };
 
@@ -1114,6 +1170,7 @@ export default function ComplianceDashboard() {
                                 onClick={() => {
                                   setSelectedDispute(dispute);
                                   setShowResolveModal(true);
+                                  fetchPanelMembers(dispute.dispute?.id || dispute.id);
                                 }}
                                 className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-400 rounded-lg text-xs font-bold text-black transition-all"
                               >
@@ -1329,6 +1386,7 @@ export default function ComplianceDashboard() {
                             onClick={() => {
                               setSelectedDispute(dispute);
                               setShowResolveModal(true);
+                              fetchPanelMembers(dispute.dispute?.id || dispute.id);
                             }}
                             className="flex-1 py-2.5 bg-orange-500 rounded-xl text-sm font-bold text-black flex items-center justify-center gap-2"
                           >
@@ -1995,6 +2053,63 @@ export default function ComplianceDashboard() {
                       rows={3}
                       className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 resize-none focus:ring-1 focus:ring-orange-500/30"
                     />
+                  </div>
+                  {/* Dispute Panel — Voter Management */}
+                  <div className="border-t border-white/[0.06] pt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-xs text-gray-500 uppercase tracking-wide font-bold">Dispute Panel</label>
+                      <span className="text-[10px] text-emerald-400 font-mono">
+                        2% fee: {(selectedDispute.cryptoAmount * 0.02).toFixed(4)} USDC
+                      </span>
+                    </div>
+
+                    {/* Current panel members */}
+                    {panelMembers.length > 0 ? (
+                      <div className="space-y-1.5 mb-3">
+                        {panelMembers.map((m) => (
+                          <div key={m.arbiter_id} className="flex items-center justify-between px-3 py-2 bg-[#1a1a1a] rounded-lg">
+                            <span className="text-xs text-white/70 font-mono">
+                              {m.wallet_address.slice(0, 6)}...{m.wallet_address.slice(-4)}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {m.reward_earned > 0 && (
+                                <span className="text-[9px] text-emerald-400 font-mono">
+                                  +{Number(m.reward_earned).toFixed(4)}
+                                </span>
+                              )}
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                m.voted_at
+                                  ? 'bg-emerald-500/10 text-emerald-400'
+                                  : 'bg-white/[0.04] text-white/30'
+                              }`}>
+                                {m.voted_at ? 'VOTED' : 'PENDING'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-white/20 mb-3 font-mono">No arbitration panel yet</p>
+                    )}
+
+                    {/* Add wallet input */}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Wallet address..."
+                        value={newArbiterWallet}
+                        onChange={(e) => setNewArbiterWallet(e.target.value)}
+                        className="flex-1 bg-[#1a1a1a] rounded-lg px-3 py-2 text-xs text-white outline-none border border-white/[0.04] focus:border-orange-500/30 placeholder:text-white/20"
+                      />
+                      <button
+                        onClick={addArbiterToPanel}
+                        disabled={isAddingArbiter || !newArbiterWallet.trim()}
+                        className="px-3 py-2 bg-orange-500/20 text-orange-400 rounded-lg text-xs font-bold hover:bg-orange-500/30 disabled:opacity-40 transition-colors"
+                      >
+                        {isAddingArbiter ? '...' : 'Add'}
+                      </button>
+                    </div>
+                    <p className="text-[9px] text-white/20 mt-1.5">Min. 2 voters required for panel resolution</p>
                   </div>
                 </div>
 

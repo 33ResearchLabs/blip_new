@@ -54,7 +54,9 @@ export async function GET(request: NextRequest) {
         m.total_trades as merchant_total_trades,
         m.avg_response_time_mins as merchant_response_time,
         m.wallet_address as merchant_wallet,
-        -- Calculate priority score for matching
+        COALESCE(rs.tier, 'newcomer') as merchant_tier,
+        COALESCE(rs.total_score, 0) as merchant_reputation_score,
+        -- Calculate priority score for matching (reputation tier gives bonus)
         CASE
           WHEN o.spread_preference = 'best' THEN 100
           WHEN o.spread_preference = 'fastest' THEN 75
@@ -62,9 +64,18 @@ export async function GET(request: NextRequest) {
           ELSE 0
         END +
         (m.rating * 10) +
-        (CASE WHEN m.avg_response_time_mins < 5 THEN 20 ELSE 0 END) as match_priority_score
+        (CASE WHEN m.avg_response_time_mins < 5 THEN 20 ELSE 0 END) +
+        (CASE COALESCE(rs.tier, 'newcomer')
+          WHEN 'diamond' THEN 100
+          WHEN 'platinum' THEN 80
+          WHEN 'gold' THEN 50
+          WHEN 'silver' THEN 25
+          WHEN 'bronze' THEN 10
+          ELSE 0
+        END) as match_priority_score
       FROM orders o
       JOIN merchants m ON o.merchant_id = m.id
+      LEFT JOIN reputation_scores rs ON rs.entity_id = m.id AND rs.entity_type = 'merchant'
       WHERE o.type = $1
         AND o.payment_method = $2
         AND o.crypto_amount >= $3 * 0.9  -- Allow 10% variance

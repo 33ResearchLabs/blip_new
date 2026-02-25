@@ -2,12 +2,14 @@
 
 import { useState, useEffect, memo } from 'react';
 import { Star, Trophy, ChevronUp, ChevronDown, Shield } from 'lucide-react';
+import { UserBadge } from './UserBadge';
 
 interface LeaderboardEntry {
   rank: number;
   id: string;
   displayName: string;
   username: string;
+  avatarUrl?: string | null;
   totalTrades: number;
   totalVolume: number;
   rating: number;
@@ -171,7 +173,7 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
                       {i + 1}
                     </span>
                     <div className="flex items-center flex-1 min-w-0 pl-2">
-                      <span className="text-xs font-medium text-white/70 truncate font-sans">{entry.name}</span>
+                      <UserBadge name={entry.name} merchantId={entry.entity_id} size="sm" nameClassName="text-xs font-medium text-white/70 font-sans" />
                     </div>
                     <span className={`w-9 text-right font-bold shrink-0 ${tierInfo.cls}`}>{tierInfo.label}</span>
                     <span className="w-11 text-right text-white/40 font-bold tabular-nums shrink-0">{entry.total_score}</span>
@@ -201,9 +203,7 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
                   {entry.rank}
                 </span>
                 <div className="flex items-center flex-1 min-w-0 pl-2">
-                  <span className="text-xs font-medium text-white/70 truncate font-sans">
-                    {entry.displayName}
-                  </span>
+                  <UserBadge name={entry.displayName} avatarUrl={entry.avatarUrl} merchantId={entry.id} size="sm" nameClassName="text-xs font-medium text-white/70 font-sans" />
                 </div>
                 <span className="w-7 text-right text-white/25 shrink-0 tabular-nums">{entry.completedCount || entry.totalTrades}t</span>
                 <span className="w-14 text-right text-white/40 font-bold shrink-0 tabular-nums">

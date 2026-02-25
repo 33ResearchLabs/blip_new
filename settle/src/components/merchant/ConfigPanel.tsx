@@ -133,7 +133,7 @@ export const ConfigPanel = memo(function ConfigPanel({
   }, [currentRate, tier, priorityFee, cryptoAmount]);
 
   const handlePriorityChange = (val: number) => {
-    setPriorityFee(Math.min(50, Math.max(0, val)));
+    setPriorityFee(Math.min(10, Math.max(0, val)));
   };
 
   const isDisabled = isCreatingTrade || !openTradeForm.cryptoAmount || parseFloat(openTradeForm.cryptoAmount) <= 0;
@@ -236,7 +236,7 @@ export const ConfigPanel = memo(function ConfigPanel({
             </button>
           </div>
           <div className="flex gap-1.5">
-            {[0, 5, 10, 15].map((val) => (
+            {[0, 1, 2, 5].map((val) => (
               <button
                 key={val}
                 onClick={() => setPriorityFee(val)}
@@ -253,17 +253,17 @@ export const ConfigPanel = memo(function ConfigPanel({
 
           {showPriorityInput && (
             <div className="flex items-center gap-1.5 mt-1.5">
-              <button onClick={() => handlePriorityChange(priorityFee - 0.5)} className="p-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white/30">
+              <button onClick={() => handlePriorityChange(priorityFee - 0.25)} className="p-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white/30">
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>
               <input
                 type="number"
                 value={priorityFee}
                 onChange={(e) => handlePriorityChange(parseFloat(e.target.value) || 0)}
-                min={0} max={50} step={0.5}
+                min={0} max={10} step={0.25}
                 className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded-lg px-2 py-1 text-[11px] text-white font-mono text-center outline-none focus:border-white/15"
               />
-              <button onClick={() => handlePriorityChange(priorityFee + 0.5)} className="p-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white/30">
+              <button onClick={() => handlePriorityChange(priorityFee + 0.25)} className="p-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white/30">
                 <ChevronUp className="w-3.5 h-3.5" />
               </button>
               <span className="text-[10px] text-white/20 font-mono font-bold">%</span>

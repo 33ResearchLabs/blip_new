@@ -1,13 +1,17 @@
 'use client';
 
 import { memo, useRef } from 'react';
-import { Shield, Zap, ChevronRight, Target, TrendingDown, Flame, ArrowRight } from 'lucide-react';
+import { Shield, Zap, ChevronRight, Target, TrendingDown, Flame, ArrowRight, MessageCircle, ExternalLink, AlertTriangle } from 'lucide-react';
+import { getBlipscanTradeUrl } from '@/lib/explorer';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { UserBadge } from './UserBadge';
 import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextActionFromStatus } from '@/lib/orders/statusResolver';
 
 interface InProgressPanelProps {
   orders: any[];
   onSelectOrder: (order: any) => void;
+  onOpenChat?: (order: any) => void;
+  onOpenDispute?: (order: any) => void;
 }
 
 const WAITING_ACTIONS = ['Wait for Acceptance', 'Wait for Payment', 'Wait for Escrow', 'Wait for Confirmation', 'Waiting for Acceptor', 'Waiting for Confirmation'];
@@ -17,12 +21,16 @@ const IP_ITEM_HEIGHT = 210; // Estimated row height for in-progress orders (incl
 const InProgressOrderList = memo(function InProgressOrderList({
   orders,
   onSelectOrder,
+  onOpenChat,
+  onOpenDispute,
   formatTimeRemaining,
   getStatusBadge,
   getNextAction,
 }: {
   orders: any[];
   onSelectOrder: (order: any) => void;
+  onOpenChat?: (order: any) => void;
+  onOpenDispute?: (order: any) => void;
   formatTimeRemaining: (seconds: number) => string;
   getStatusBadge: (order: any) => React.ReactNode;
   getNextAction: (order: any) => string;
@@ -59,6 +67,14 @@ const InProgressOrderList = memo(function InProgressOrderList({
           const order = orders[virtualRow.index];
           const nextAction = getNextAction(order);
           const isWaiting = WAITING_ACTIONS.includes(nextAction);
+          const status = getAuthoritativeStatus(order);
+          const borderMap: Record<string, string> = {
+            accepted: 'border-yellow-500/20 hover:border-yellow-500/30',
+            escrowed: 'border-purple-500/20 hover:border-purple-500/30',
+            payment_sent: 'border-orange-500/20 hover:border-orange-500/30',
+            disputed: 'border-red-500/20 hover:border-red-500/30',
+          };
+          const cardBorder = borderMap[status] || 'hover:border-white/[0.10]';
 
           return (
             <div
@@ -77,13 +93,18 @@ const InProgressOrderList = memo(function InProgressOrderList({
               <div
                 data-testid={`order-card-${order.id}`}
                 onClick={() => onSelectOrder(order)}
-                className="p-2.5 glass-card rounded-lg hover:border-white/[0.10] transition-colors cursor-pointer"
+                className={`p-2.5 glass-card rounded-lg border ${cardBorder} transition-colors cursor-pointer`}
               >
                 {/* Row 1: User + type on left, timer on right */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <div className="text-base">{order.emoji}</div>
-                    <span className="text-xs font-medium text-white/80">{order.user}</span>
+                    <UserBadge
+                      name={order.user}
+                      avatarUrl={order.userAvatarUrl}
+                      emoji={order.emoji}
+                      merchantId={order.counterpartyMerchantId}
+                      size="md"
+                    />
                     <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
                       order.orderType === 'buy'
                         ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
@@ -188,27 +209,60 @@ const InProgressOrderList = memo(function InProgressOrderList({
                   </div>
                 )}
 
-                {/* Bottom: Action button or waiting */}
-                {isWaiting ? (
-                  <div className="flex items-center gap-1.5 px-1 py-1">
-                    <div className="w-1 h-1 bg-white/15 rounded-full animate-breathe" />
-                    <span className="text-[9px] text-white/25 font-mono">
-                      Waiting for other merchant
-                    </span>
-                  </div>
-                ) : (
-                  <button
-                    data-testid="order-primary-action"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectOrder(order);
-                    }}
-                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-orange-500/10 border border-orange-500/20 rounded-lg text-[11px] text-orange-400 font-bold hover:bg-orange-500/15 transition-colors"
+                {/* Bottom: Action + Chat */}
+                <div className="flex items-center gap-1.5">
+                  {isWaiting ? (
+                    <div className="flex-1 flex items-center gap-1.5 px-1 py-1">
+                      <div className="w-1 h-1 bg-white/15 rounded-full animate-breathe" />
+                      <span className="text-[9px] text-white/25 font-mono">
+                        Waiting for other merchant
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      data-testid="order-primary-action"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectOrder(order);
+                      }}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-orange-500/10 border border-orange-500/20 rounded-lg text-[11px] text-orange-400 font-bold hover:bg-orange-500/15 transition-colors"
+                    >
+                      <Zap className="w-3.5 h-3.5" />
+                      {nextAction}
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {onOpenChat && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onOpenChat(order); }}
+                      className="p-2 rounded-lg bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] transition-colors shrink-0"
+                    >
+                      <MessageCircle className="w-4 h-4 text-white/40" />
+                    </button>
+                  )}
+                  {onOpenDispute && order.expiresIn <= 0 && !['completed', 'cancelled', 'expired', 'disputed'].includes(status) && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onOpenDispute(order); }}
+                      className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 hover:bg-red-500/15 transition-colors shrink-0"
+                      title="Open Dispute"
+                    >
+                      <AlertTriangle className="w-4 h-4 text-red-400" />
+                    </button>
+                  )}
+                </div>
+
+                {/* BlipScan Link */}
+                {order.escrowPda && (
+                  <a
+                    href={getBlipscanTradeUrl(order.escrowPda)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-1.5 flex items-center gap-1 text-[9px] text-orange-400/50 hover:text-orange-400 font-mono transition-colors"
                   >
-                    <Zap className="w-3.5 h-3.5" />
-                    {nextAction}
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                    View on BlipScan
+                  </a>
                 )}
 
                 {/* Unread Messages */}
@@ -227,7 +281,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
   );
 });
 
-export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder }: InProgressPanelProps) {
+export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onOpenChat, onOpenDispute }: InProgressPanelProps) {
   const formatTimeRemaining = (seconds: number): string => {
     if (seconds <= 0) return 'Expired';
     const hours = Math.floor(seconds / 3600);
@@ -246,7 +300,7 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
     return (
       <div
         data-testid="order-status"
-        className="px-2 py-0.5 bg-white/[0.04] border border-white/[0.06] rounded text-[9px] text-white/50 font-medium font-mono"
+        className={`px-2 py-0.5 ${config.bg} border ${config.border} rounded text-[9px] ${config.color} font-medium font-mono`}
       >
         {config.label}
       </div>
@@ -278,6 +332,8 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
       <InProgressOrderList
         orders={orders}
         onSelectOrder={onSelectOrder}
+        onOpenChat={onOpenChat}
+        onOpenDispute={onOpenDispute}
         formatTimeRemaining={formatTimeRemaining}
         getStatusBadge={getStatusBadge}
         getNextAction={getNextAction}

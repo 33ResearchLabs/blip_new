@@ -255,7 +255,7 @@ export const merchantCreateOrderSchema = z.object({
   crypto_amount: positiveAmountSchema,
   payment_method: paymentMethodSchema,
   spread_preference: z.enum(['best', 'fastest', 'cheap']).default('fastest'), // Match speed and protocol fee tier
-  priority_fee: z.number().min(0).max(50).default(0), // Additional priority fee percentage on top of base tier
+  priority_fee: z.number().min(0).max(10).default(0), // Priority fee % (bumps from 0 to this cap over time)
   offer_id: uuidSchema.optional(), // If not provided, use merchant's active offer
   target_merchant_id: uuidSchema.optional(), // For M2M trading: trade with another merchant
   // Optional escrow details (for escrow-first sell orders) — nullish to accept null from mock mode
@@ -265,6 +265,7 @@ export const merchantCreateOrderSchema = z.object({
   escrow_pda: z.string().nullish(),
   escrow_creator_wallet: z.string().nullish(),
   matched_offer_id: uuidSchema.nullish(), // Matched offer for M2M
+  expiry_minutes: z.number().min(1).max(1440).default(15), // Order expiry in minutes (default 15, max 24h)
 });
 
 // Corridor Bridge schemas

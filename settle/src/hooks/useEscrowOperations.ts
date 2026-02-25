@@ -216,6 +216,7 @@ export function useEscrowOperations({
           const data = await res.json();
           if (res.ok && data.success && data.data) {
             const newOrder = mapDbOrderToUI(data.data, merchantId);
+            newOrder.isMyOrder = true; // Force self-detection — API response lacks user join
             setOrders((prev: Order[]) => [newOrder, ...prev]);
             addNotification('escrow', `Sell order created! ${escrowOrder.amount} USDC locked in escrow`, data.data.id);
             delete (window as any).__pendingSellOrder;
@@ -573,13 +574,17 @@ export function useEscrowOperations({
           addNotification('system', 'Order cancelled successfully.', orderId);
           await afterMutationReconcile(orderId, { status: "cancelled" as const });
         } else {
-          addNotification('system', data.error || 'Failed to cancel order', orderId);
+          const isTaken = data.error?.includes('accepted') || data.error?.includes('ALREADY_ACCEPTED');
+          addNotification('system', isTaken ? 'Cannot cancel — this order was already accepted by another merchant.' : (data.error || 'Failed to cancel order'), orderId);
           playSound('error');
+          if (isTaken) fetchOrders();
         }
       } else {
-        const data = await res.json();
-        addNotification('system', data.error || 'Failed to cancel order', orderId);
+        const data = await res.json().catch(() => ({ error: '' }));
+        const isTaken = res.status === 409 || data.error?.includes('accepted') || data.error?.includes('ALREADY_ACCEPTED');
+        addNotification('system', isTaken ? 'Cannot cancel — this order was already accepted by another merchant.' : (data.error || 'Failed to cancel order'), orderId);
         playSound('error');
+        if (isTaken) fetchOrders();
       }
     } catch (error) {
       console.error('[Cancel] Error cancelling order:', error);

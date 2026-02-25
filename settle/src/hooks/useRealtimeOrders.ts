@@ -108,6 +108,29 @@ export function useRealtimeOrders(
     onPriceUpdateRef.current = onPriceUpdate;
   }, [onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse, onPriceUpdate]);
 
+  // ─── Cross-source dedup (shared between Pusher + WS) ───────────
+  const recentEventsRef = useRef(new Map<string, number>());
+  const isDuplicate = useCallback((key: string) => {
+    const now = Date.now();
+    const lastSeen = recentEventsRef.current.get(key);
+    if (lastSeen && now - lastSeen < 3000) return true;
+    recentEventsRef.current.set(key, now);
+    // Evict expired entries every 50 insertions
+    if (recentEventsRef.current.size > 50) {
+      for (const [k, t] of recentEventsRef.current) {
+        if (now - t > 5000) recentEventsRef.current.delete(k);
+      }
+      if (recentEventsRef.current.size > 100) {
+        const iter = recentEventsRef.current.keys();
+        while (recentEventsRef.current.size > 50) {
+          const oldest = iter.next().value;
+          if (oldest) recentEventsRef.current.delete(oldest); else break;
+        }
+      }
+    }
+    return false;
+  }, []);
+
   // ─── Event batch queue ──────────────────────────────────────────
   const batchQueueRef = useRef<BatchedEvent[]>([]);
   const batchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -277,30 +300,6 @@ export function useRealtimeOrders(
 
     subscribedRef.current = true;
 
-    // Dedup: prevent duplicate events from global + personal channels
-    const recentEvents = new Map<string, number>();
-    const isDuplicate = (key: string) => {
-      const now = Date.now();
-      const lastSeen = recentEvents.get(key);
-      if (lastSeen && now - lastSeen < 3000) return true;
-      recentEvents.set(key, now);
-      // Evict expired entries every 50 insertions to stay bounded
-      if (recentEvents.size > 50) {
-        for (const [k, t] of recentEvents) {
-          if (now - t > 5000) recentEvents.delete(k);
-        }
-        // Hard cap — drop oldest if still over limit
-        if (recentEvents.size > 100) {
-          const iter = recentEvents.keys();
-          while (recentEvents.size > 50) {
-            const oldest = iter.next().value;
-            if (oldest) recentEvents.delete(oldest); else break;
-          }
-        }
-      }
-      return false;
-    };
-
     // ── Event handlers (queue into batch, don't touch state directly) ──
 
     const handleOrderCreated = (rawData: unknown) => {
@@ -415,7 +414,7 @@ export function useRealtimeOrders(
         batchTimerRef.current = null;
       }
     };
-  }, [actorId, actorType, pusher, isConnected, fetchOrders, enqueueEvent, flushBatch]);
+  }, [actorId, actorType, pusher, isConnected, fetchOrders, enqueueEvent, flushBatch, isDuplicate]);
 
   // ── Core-API WebSocket (batched, version gating picks newest) ──
   const wsRef = useRef<WebSocket | null>(null);
@@ -453,12 +452,15 @@ export function useRealtimeOrders(
           const { event_type, order_id, status, minimal_status, order_version, previousStatus, buyer_merchant_id, merchant_id } = msg;
 
           if (event_type === 'ORDER_CREATED') {
+            if (isDuplicate(`created:${order_id}`)) return;
             needsRefetchRef.current = true;
             if (!batchTimerRef.current) {
               batchTimerRef.current = setTimeout(flushBatch, BATCH_WINDOW_MS);
             }
             return;
           }
+
+          if (isDuplicate(`status:${order_id}:${status}`)) return;
 
           enqueueEvent({
             type: 'status',
@@ -494,7 +496,7 @@ export function useRealtimeOrders(
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [actorId, actorType, fetchOrders, enqueueEvent, flushBatch]);
+  }, [actorId, actorType, fetchOrders, enqueueEvent, flushBatch, isDuplicate]);
 
   return {
     orders,

@@ -114,6 +114,8 @@ interface OrderEventData {
   orderId: string;
   userId: string;
   merchantId: string;
+  buyerMerchantId?: string;
+  creatorMerchantId?: string;
   status: string;
   minimal_status?: string;
   order_version?: number;
@@ -144,6 +146,7 @@ export async function notifyOrderCreated(data: OrderEventData): Promise<void> {
     minimal_status: data.minimal_status,
     order_version: data.order_version,
     createdAt: data.updatedAt,
+    creatorMerchantId: data.creatorMerchantId,
     data: data.data,
   });
 

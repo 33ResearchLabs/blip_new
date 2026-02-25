@@ -8,7 +8,9 @@ import {
   Hash, Link as LinkIcon, Zap, Star
 } from 'lucide-react';
 import { getAuthoritativeStatus, getNextAction, deriveOrderUI } from '@/lib/orders/statusResolver';
+import { UserBadge } from './UserBadge';
 import { copyToClipboard } from '@/lib/clipboard';
+import { getBlipscanTradeUrl, getSolscanTxUrl } from '@/lib/explorer';
 
 interface OrderDetails {
   id: string;
@@ -159,19 +161,6 @@ function truncateHash(hash: string, startChars = 6, endChars = 4): string {
   return `${hash.slice(0, startChars)}...${hash.slice(-endChars)}`;
 }
 
-// Blipscan URL (local explorer)
-const BLIPSCAN_URL = process.env.NEXT_PUBLIC_BLIPSCAN_URL || 'http://localhost:3003';
-
-function getBlipscanTradeUrl(escrowPda: string): string {
-  return `${BLIPSCAN_URL}/trade/${escrowPda}`;
-}
-
-// Solscan fallback for tx hashes
-function getSolscanUrl(hash: string): string {
-  const network = process.env.NEXT_PUBLIC_SOLANA_NETWORK || 'devnet';
-  const cluster = network === 'mainnet-beta' ? '' : `?cluster=${network}`;
-  return `https://solscan.io/tx/${hash}${cluster}`;
-}
 
 export function OrderDetailsPanel({
   orderId,
@@ -297,6 +286,11 @@ export function OrderDetailsPanel({
   const sellerRating = (order as any).merchant_rating
     ?? (isM2M ? order.merchant?.rating : (isBuyOrder ? order.merchant?.rating : order.user?.rating));
 
+  const buyerAvatarUrl = isM2M ? order.buyer_merchant?.avatar_url : (isBuyOrder ? order.user?.avatar_url : order.merchant?.avatar_url);
+  const sellerAvatarUrl = isM2M ? order.merchant?.avatar_url : (isBuyOrder ? order.merchant?.avatar_url : order.user?.avatar_url);
+  const buyerMerchantProfileId = isM2M ? order.buyer_merchant?.id : (isBuyOrder ? undefined : order.merchant?.id);
+  const sellerMerchantProfileId = isM2M ? order.merchant?.id : (isBuyOrder ? order.merchant?.id : undefined);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div
@@ -371,12 +365,13 @@ export function OrderDetailsPanel({
             </h3>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-white/5 border border-white/6
-                                flex items-center justify-center text-lg">
-                  🦊
-                </div>
+                <UserBadge name={buyerName} avatarUrl={buyerAvatarUrl} merchantId={buyerMerchantProfileId} size="lg" showName={false} />
                 <div>
-                  <p className="font-medium text-white">{buyerName}</p>
+                  {buyerMerchantProfileId ? (
+                    <a href={`/merchant/profile/${buyerMerchantProfileId}`} className="font-medium text-white hover:opacity-80 transition-opacity">{buyerName}</a>
+                  ) : (
+                    <p className="font-medium text-white">{buyerName}</p>
+                  )}
                   <div className="flex items-center gap-1.5 text-sm text-white/50">
                     <span>{buyerTrades || 0} trades</span>
                     <span>•</span>
@@ -410,12 +405,13 @@ export function OrderDetailsPanel({
             </h3>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-white/5 border border-white/6
-                                flex items-center justify-center text-lg">
-                  🏪
-                </div>
+                <UserBadge name={sellerName} avatarUrl={sellerAvatarUrl} merchantId={sellerMerchantProfileId} size="lg" showName={false} />
                 <div>
-                  <p className="font-medium text-white">{sellerName}</p>
+                  {sellerMerchantProfileId ? (
+                    <a href={`/merchant/profile/${sellerMerchantProfileId}`} className="font-medium text-white hover:opacity-80 transition-opacity">{sellerName}</a>
+                  ) : (
+                    <p className="font-medium text-white">{sellerName}</p>
+                  )}
                   <div className="flex items-center gap-1.5 text-sm text-white/50">
                     <span>{sellerTrades || 0} trades</span>
                     <span>•</span>
@@ -570,7 +566,7 @@ export function OrderDetailsPanel({
                         {copiedField === 'deposit_tx' ? <Check className="w-3 h-3 text-white/70" /> : <Copy className="w-3 h-3" />}
                       </button>
                       <a
-                        href={getSolscanUrl(order.escrow_tx_hash)}
+                        href={getSolscanTxUrl(order.escrow_tx_hash)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-white/70 hover:text-white/70 transition-colors"
@@ -605,7 +601,7 @@ export function OrderDetailsPanel({
                         {copiedField === 'release_tx' ? <Check className="w-3 h-3 text-white/70" /> : <Copy className="w-3 h-3" />}
                       </button>
                       <a
-                        href={getSolscanUrl(order.release_tx_hash)}
+                        href={getSolscanTxUrl(order.release_tx_hash)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-white/70 hover:text-white/70 transition-colors"

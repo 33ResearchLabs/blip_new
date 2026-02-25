@@ -47,6 +47,13 @@ export function useOrderActions({
   const acceptOrder = async (order: Order) => {
     if (!merchantId) return;
 
+    // Pre-check: verify order is still available (race condition guard)
+    if (order.status === 'accepted' || order.dbOrder?.status === 'accepted') {
+      addNotification('system', 'This order was already taken by another merchant.', order.id);
+      playSound('error');
+      return;
+    }
+
     const isBuyOrder = order.orderType === 'buy';
     const isSellOrder = order.orderType === 'sell';
 
@@ -122,7 +129,8 @@ export function useOrderActions({
           errorMsg = errorText || errorMsg;
         }
         console.error("Failed to accept order:", acceptRes.status, errorMsg);
-        addNotification('system', `Failed to accept order: ${errorMsg}`, order.id);
+        const isTaken = errorMsg.includes('ALREADY_ACCEPTED') || errorMsg.includes('already accepted') || acceptRes.status === 409;
+        addNotification('system', isTaken ? 'This order was already taken by another merchant.' : `Failed to accept order: ${errorMsg}`, order.id);
         playSound('error');
         return;
       }
@@ -489,7 +497,14 @@ export function useOrderActions({
               playSound('error');
               return;
             }
-            throw releaseErr;
+            // Escrow already released on-chain (e.g. previous attempt succeeded but DB update failed)
+            if (errMsg.includes('not found on-chain') || errMsg.includes('AccountNotInitialized')) {
+              console.warn('[Merchant] Escrow already released on-chain, completing order via API');
+              releaseTxHash = 'already-released-on-chain';
+              // Fall through to API call to update DB status
+            } else {
+              throw releaseErr;
+            }
           }
 
           if (!releaseResult.success) {
@@ -540,8 +555,8 @@ export function useOrderActions({
   // DIRECT ORDER CREATION (from ConfigPanel)
   // ═══════════════════════════════════════════════════════════════════
   const handleDirectOrderCreation = async (
-    openTradeForm: { tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: string; spreadPreference: string },
-    setOpenTradeForm: (form: { tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: string; spreadPreference: string }) => void,
+    openTradeForm: { tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: string; spreadPreference: string; expiryMinutes?: number },
+    setOpenTradeForm: (form: any) => void,
     tradeType?: 'buy' | 'sell',
     priorityFee?: number,
   ) => {
@@ -595,6 +610,7 @@ export function useOrderActions({
           paymentMethod: openTradeForm.paymentMethod,
           spreadPreference: openTradeForm.spreadPreference,
           priorityFee: priorityFee || 0,
+          expiryMinutes: openTradeForm.expiryMinutes || 15,
           matchedOfferId: matchedOffer?.id,
           counterpartyWallet: matchedOffer?.merchant?.wallet_address,
         };
@@ -623,6 +639,7 @@ export function useOrderActions({
           cryptoAmount: "",
           paymentMethod: "bank",
           spreadPreference: "fastest",
+          expiryMinutes: 15,
         });
 
       } else {
@@ -637,6 +654,7 @@ export function useOrderActions({
             payment_method: openTradeForm.paymentMethod,
             spread_preference: openTradeForm.spreadPreference,
             priority_fee: priorityFee || 0,
+            expiry_minutes: openTradeForm.expiryMinutes || 15,
           }),
         });
 
@@ -648,6 +666,7 @@ export function useOrderActions({
 
         if (data.data) {
           const newOrder = mapDbOrderToUI(data.data, merchantId);
+          newOrder.isMyOrder = true; // Force self-detection — API response lacks user join
           setOrders((prev: Order[]) => [newOrder, ...prev]);
           playSound('trade_complete');
           addNotification('order', `Buy order created for ${parseFloat(openTradeForm.cryptoAmount)} USDC`, data.data?.id);
@@ -658,6 +677,7 @@ export function useOrderActions({
           cryptoAmount: "",
           paymentMethod: "bank",
           spreadPreference: "fastest",
+          expiryMinutes: 15,
         });
       }
 

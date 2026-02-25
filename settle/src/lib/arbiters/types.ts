@@ -117,20 +117,29 @@ export const ARBITER_PENALTIES = {
   REPUTATION_FLOOR: 0,       // Can't go below 0
 };
 
+// Dispute fee (deducted from trade, distributed to voters)
+export const DISPUTE_FEE_PERCENT = 2.0; // 2% of trade amount
+
 // Rewards
 export const ARBITER_REWARDS = {
-  BASE_REWARD_PERCENT: 0.5,  // 0.5% of disputed amount
+  BASE_REWARD_PERCENT: 2.0,  // 2% of disputed amount (= DISPUTE_FEE_PERCENT)
   MAJORITY_BONUS: 1.2,       // 20% bonus for majority vote
   REPUTATION_BONUS_PER_100: 0.1, // +10% per 100 rep
 };
 
 // Voting configuration
 export const VOTING_CONFIG = {
-  PANEL_SIZE: 5,             // 5 arbiters per dispute
-  MAJORITY_THRESHOLD: 3,     // 3/5 to decide
+  PANEL_SIZE: 5,             // Default arbiters per dispute
+  MIN_PANEL_SIZE: 2,         // Minimum required voters
+  MAJORITY_THRESHOLD: 3,     // Default 3/5 majority (use getMajorityThreshold for dynamic)
   VOTING_PERIOD_HOURS: 48,   // 48 hours to vote
   MIN_REASONING_LENGTH: 50,  // Minimum characters for reasoning
 };
+
+/** Compute majority threshold for a given panel size */
+export function getMajorityThreshold(panelSize: number): number {
+  return Math.floor(panelSize / 2) + 1;
+}
 
 /**
  * Calculate arbiter's voting weight

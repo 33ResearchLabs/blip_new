@@ -353,8 +353,8 @@ export async function POST(request: NextRequest) {
     const priorityFeePct = priority_fee || 0;
     const premiumBpsCap = Math.round(priorityFeePct * 100); // 2% → 200 bps
     const autoBumpEnabled = premiumBpsCap > 0;
-    const bumpStepBps = 10;  // +0.10% per bump
-    const bumpIntervalSec = 30; // bump every 30s
+    const bumpStepBps = 5;   // +0.05% per bump
+    const bumpIntervalSec = 60; // bump every 60s
 
     logger.info('Order pricing calculated', {
       crypto_amount,

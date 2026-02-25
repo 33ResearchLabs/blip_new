@@ -86,7 +86,8 @@ export async function GET(request: NextRequest) {
           'total_volume', m.total_volume,
           'avg_response_time_mins', m.avg_response_time_mins,
           'is_online', m.is_online,
-          'wallet_address', m.wallet_address
+          'wallet_address', m.wallet_address,
+          'avatar_url', m.avatar_url
         ) as merchant
       FROM merchant_offers o
       JOIN merchants m ON o.merchant_id = m.id

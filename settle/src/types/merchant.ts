@@ -35,6 +35,7 @@ export interface DbOrder {
     id: string;
     display_name: string;
     wallet_address?: string;
+    avatar_url?: string | null;
   };
   is_my_order?: boolean;
   my_role?: 'buyer' | 'seller' | 'observer';
@@ -51,6 +52,7 @@ export interface DbOrder {
     rating: number;
     total_trades: number;
     wallet_address?: string;
+    avatar_url?: string | null;
   };
   offer?: {
     payment_method: string;
@@ -86,6 +88,7 @@ export interface Order {
   dbOrder?: DbOrder;
   escrowTradeId?: number;
   escrowTradePda?: string;
+  escrowPda?: string;
   escrowCreatorWallet?: string;
   escrowTxHash?: string;
   refundTxHash?: string;
@@ -106,6 +109,8 @@ export interface Order {
   spreadPreference?: 'best' | 'fastest' | 'cheap';
   protocolFeePercent?: number;
   protocolFeeAmount?: number;
+  userAvatarUrl?: string | null;
+  counterpartyMerchantId?: string;
 }
 
 export interface LeaderboardEntry {
@@ -113,6 +118,7 @@ export interface LeaderboardEntry {
   id: string;
   displayName: string;
   username: string;
+  avatarUrl?: string | null;
   totalTrades: number;
   totalVolume: number;
   rating: number;

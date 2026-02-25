@@ -541,6 +541,24 @@ function unsubscribeFromPusher(telegramId) {
 
 // ---- Pusher Event Handlers ----
 
+// Track own actions so we can suppress Pusher notifications for them
+// Key: `merchantId:orderId:status`, Value: timestamp
+const recentOwnActions = new Map();
+function markOwnAction(merchantId, orderId, status) {
+  recentOwnActions.set(`${merchantId}:${orderId}:${status}`, Date.now());
+  // Evict stale entries
+  if (recentOwnActions.size > 100) {
+    const now = Date.now();
+    for (const [k, t] of recentOwnActions) {
+      if (now - t > 30000) recentOwnActions.delete(k);
+    }
+  }
+}
+function isOwnAction(merchantId, orderId, status) {
+  const t = recentOwnActions.get(`${merchantId}:${orderId}:${status}`);
+  return t && Date.now() - t < 15000;
+}
+
 // Dedup cache: prevents duplicate notifications when the same event arrives on multiple channels
 const recentNotifications = new Map();
 
@@ -567,6 +585,12 @@ async function handleOrderStatusUpdate(telegramId, merchantId, data) {
   const { orderId, status, previousStatus } = data;
 
   if (isDuplicateNotification(telegramId, orderId, status)) return;
+
+  // Skip notifications for actions we just performed ourselves
+  if (isOwnAction(merchantId, orderId, status)) {
+    console.log(`[Pusher] Skipping own-action notification for ${merchantId}:${orderId}:${status}`);
+    return;
+  }
 
   let msg = '';
   let buttons = [];
@@ -595,7 +619,28 @@ async function handleOrderStatusUpdate(telegramId, merchantId, data) {
 
     switch (status) {
       case 'accepted': {
-        msg = `*Order Accepted!*\n\n`;
+        // Only notify the ORDER CREATOR, not the acceptor (they already know)
+        const username = order.user?.username || '';
+        const isMerchantCreated = username.startsWith('open_order_') || username.startsWith('m2m_');
+
+        if (!isMerchantCreated) {
+          // User-created order — merchant is the acceptor, they already know
+          console.log(`[Pusher] Skipping accepted notification for ${merchantId} - they accepted a user order`);
+          return;
+        }
+
+        // M2M / merchant-created: only notify the creator, not the acceptor
+        // type=sell (BUY order): creator = buyer_merchant_id, acceptor = merchant_id
+        // type=buy (SELL order): creator = merchant_id, acceptor = buyer_merchant_id
+        const isCreator = (order.type === 'sell' && order.buyer_merchant_id === merchantId) ||
+                          (order.type === 'buy' && order.merchant_id === merchantId);
+
+        if (!isCreator) {
+          console.log(`[Pusher] Skipping accepted notification for ${merchantId} - they are the acceptor`);
+          return;
+        }
+
+        msg = `*Your Order Was Accepted!*\n\n`;
         msg += `Order: \`${order.order_number || orderId.slice(0, 8)}\`\n`;
         msg += `Type: ${displayType.toUpperCase()} ${order.crypto_amount} USDC\n`;
         msg += `Rate: ${order.rate} AED/USDC\n`;
@@ -712,7 +757,18 @@ async function handleOrderStatusUpdate(telegramId, merchantId, data) {
         msg = `*Trade Completed!*\n\n`;
         msg += `Order: \`${order.order_number || orderId.slice(0, 8)}\`\n`;
         msg += `${order.crypto_amount} USDC transferred.\n`;
-        msg += `${order.fiat_amount} AED exchanged.`;
+        msg += `${order.fiat_amount} AED exchanged.\n`;
+
+        // Fetch and show new balance
+        try {
+          const bal = await getMerchantBalance(merchantId);
+          if (bal && bal.current_balance !== undefined) {
+            msg += `\n*New Balance:* ${Number(bal.current_balance).toLocaleString()} USDC\n`;
+          }
+        } catch (e) {
+          console.error(`[Completed] Failed to fetch balance for ${merchantId}:`, e.message);
+        }
+
         buttons.push([Markup.button.callback('Check Balance', 'balance')]);
         buttons.push([Markup.button.callback('Menu', 'main_menu')]);
         break;
@@ -756,7 +812,9 @@ async function handleNewOrderBroadcast(telegramId, merchantId, data) {
   console.log(`[Pusher Event] order:created broadcast for ${telegramId}:`, JSON.stringify(data));
   const { orderId, data: orderData } = data;
 
-  // Don't notify about own orders
+  // Don't notify the creator about their own order
+  if (data.creatorMerchantId === merchantId) return;
+  // Fallback: check nested order data
   if (orderData && orderData.merchant_id === merchantId) return;
   if (orderData && orderData.buyer_merchant_id === merchantId) return;
 
@@ -1601,10 +1659,23 @@ bot.action(/^accept_order:(.+)$/, async (ctx) => {
   const session = getSession(ctx.from.id);
   if (!session) return;
 
+  // Wallet must be unlocked to accept orders (needed for on-chain escrow operations)
+  if (!MOCK_MODE && !solanaWallet.getKeypair(session.merchantId)) {
+    await editOrReply(ctx, `*Wallet locked!*\n\nUnlock your wallet first before accepting orders.\nUse /wallet → Unlock to enter your PIN.`, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('Unlock Wallet', 'wallet_unlock')],
+        [Markup.button.callback('Menu', 'main_menu')]
+      ])
+    });
+    return;
+  }
+
   // Step 1: Accept the order (the critical action)
   let acceptedOrder;
   try {
     acceptedOrder = await acceptOrder(orderId, session.merchantId);
+    markOwnAction(session.merchantId, orderId, 'accepted');
   } catch (err) {
     const errMsg = err.response?.data?.error || err.message;
     await editOrReply(ctx, `Failed to accept: ${errMsg}`, {
@@ -1656,6 +1727,7 @@ bot.action(/^quick_accept:(.+)$/, async (ctx) => {
   let acceptedOrder;
   try {
     acceptedOrder = await acceptOrder(orderId, session.merchantId);
+    markOwnAction(session.merchantId, orderId, 'accepted');
   } catch (err) {
     const errMsg = err.response?.data?.error || err.message || 'Unknown error';
     return ctx.reply(`Failed to accept order: ${errMsg}`);
@@ -1694,13 +1766,30 @@ bot.action(/^lock_escrow:(.+)$/, async (ctx) => {
   const session = getSession(ctx.from.id);
   if (!session) return;
 
+  // Wallet lock guard
+  if (!MOCK_MODE && !solanaWallet.getKeypair(session.merchantId)) {
+    await editOrReply(ctx, `*Wallet Locked!*\n\nYou need to unlock your wallet before locking escrow.`, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('Unlock Wallet', 'wallet_unlock')],
+        [Markup.button.callback('Cancel Order', `cancel_order:${orderId}`)],
+        [Markup.button.callback('Menu', 'main_menu')]
+      ])
+    });
+    return;
+  }
+
   // Step 1: Lock escrow (the critical action)
   try {
     await lockEscrow(orderId, session.merchantId);
+    markOwnAction(session.merchantId, orderId, 'escrowed');
   } catch (err) {
     const errMsg = err.response?.data?.error || err.message;
     await editOrReply(ctx, `Failed to lock escrow: ${errMsg}`, {
-      ...Markup.inlineKeyboard([[Markup.button.callback('Retry', `lock_escrow:${orderId}`), Markup.button.callback('Back', `order_actions:${orderId}`)]])
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('Retry', `lock_escrow:${orderId}`)],
+        [Markup.button.callback('Cancel Order', `cancel_order:${orderId}`), Markup.button.callback('Back', `order_actions:${orderId}`)]
+      ])
     });
     return;
   }
@@ -1727,6 +1816,7 @@ bot.action(/^payment_sent:(.+)$/, async (ctx) => {
 
   try {
     await updateOrderStatus(orderId, 'payment_sent', session.merchantId);
+    markOwnAction(session.merchantId, orderId, 'payment_sent');
   } catch (err) {
     const errMsg = err.response?.data?.error || err.message;
     await editOrReply(ctx, `Failed to mark payment: ${errMsg}`, {
@@ -1754,13 +1844,30 @@ bot.action(/^confirm_payment:(.+)$/, async (ctx) => {
   const session = getSession(ctx.from.id);
   if (!session) return;
 
+  // Wallet lock guard
+  if (!MOCK_MODE && !solanaWallet.getKeypair(session.merchantId)) {
+    await editOrReply(ctx, `*Wallet Locked!*\n\nYou need to unlock your wallet before confirming payment & releasing escrow.`, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('Unlock Wallet', 'wallet_unlock')],
+        [Markup.button.callback('Cancel Order', `cancel_order:${orderId}`)],
+        [Markup.button.callback('Menu', 'main_menu')]
+      ])
+    });
+    return;
+  }
+
   try {
     // Atomic operation: confirm payment + release escrow + complete order
     await releaseEscrow(orderId, session.merchantId);
+    markOwnAction(session.merchantId, orderId, 'completed');
   } catch (err) {
     const errMsg = err.response?.data?.error || err.message;
     await editOrReply(ctx, `Failed to confirm payment: ${errMsg}`, {
-      ...Markup.inlineKeyboard([[Markup.button.callback('Retry', `confirm_payment:${orderId}`), Markup.button.callback('Back', `order_actions:${orderId}`)]])
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('Retry', `confirm_payment:${orderId}`)],
+        [Markup.button.callback('Cancel Order', `cancel_order:${orderId}`), Markup.button.callback('Back', `order_actions:${orderId}`)]
+      ])
     });
     return;
   }
@@ -1797,20 +1904,40 @@ bot.action(/^release_escrow:(.+)$/, async (ctx) => {
   const session = getSession(ctx.from.id);
   if (!session) return;
 
+  // Wallet lock guard
+  if (!MOCK_MODE && !solanaWallet.getKeypair(session.merchantId)) {
+    await editOrReply(ctx, `*Wallet Locked!*\n\nYou need to unlock your wallet before releasing escrow.`, {
+      parse_mode: 'Markdown',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('Unlock Wallet', 'wallet_unlock')],
+        [Markup.button.callback('Cancel Order', `cancel_order:${orderId}`)],
+        [Markup.button.callback('Menu', 'main_menu')]
+      ])
+    });
+    return;
+  }
+
   try {
     await releaseEscrow(orderId, session.merchantId);
+    markOwnAction(session.merchantId, orderId, 'completed');
   } catch (err) {
     const errMsg = err.response?.data?.error || err.message || '';
     // Detect counterparty not set on-chain
     if (errMsg.includes('ConstraintRaw') || errMsg.includes('counterparty_ata')) {
       await editOrReply(ctx, `*Cannot release yet*\n\nThe buyer hasn't joined the escrow on-chain.\nThe buyer needs to unlock their wallet and view this order first.`, {
         parse_mode: 'Markdown',
-        ...Markup.inlineKeyboard([[Markup.button.callback('Retry', `release_escrow:${orderId}`), Markup.button.callback('Back', `order_actions:${orderId}`)]])
+        ...Markup.inlineKeyboard([
+          [Markup.button.callback('Retry', `release_escrow:${orderId}`)],
+          [Markup.button.callback('Cancel Order', `cancel_order:${orderId}`), Markup.button.callback('Back', `order_actions:${orderId}`)]
+        ])
       });
       return;
     }
     await editOrReply(ctx, `Failed to release escrow: ${errMsg}`, {
-      ...Markup.inlineKeyboard([[Markup.button.callback('Retry', `release_escrow:${orderId}`), Markup.button.callback('Back', `order_actions:${orderId}`)]])
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('Retry', `release_escrow:${orderId}`)],
+        [Markup.button.callback('Cancel Order', `cancel_order:${orderId}`), Markup.button.callback('Back', `order_actions:${orderId}`)]
+      ])
     });
     return;
   }

@@ -7,6 +7,7 @@ export async function GET() {
       id: string;
       display_name: string;
       username: string;
+      avatar_url: string | null;
       total_trades: number;
       total_volume: string;
       rating: string;
@@ -19,6 +20,7 @@ export async function GET() {
         m.id,
         m.display_name,
         m.username,
+        m.avatar_url,
         m.total_trades,
         m.total_volume,
         m.rating,
@@ -39,6 +41,7 @@ export async function GET() {
         id: m.id,
         displayName: m.display_name,
         username: m.username,
+        avatarUrl: m.avatar_url,
         totalTrades: m.total_trades,
         totalVolume: parseFloat(m.total_volume) || 0,
         rating: parseFloat(m.rating) || 5.0,

@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useRef, useState, useEffect } from 'react';
+import { UserBadge } from './UserBadge';
 import {
   Search,
   SlidersHorizontal,
@@ -12,6 +13,8 @@ import {
   Clock,
   ArrowRight,
   Flame,
+  X,
+  MessageCircle,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -23,6 +26,8 @@ interface PendingOrdersPanelProps {
   merchantInfo: any;
   onSelectOrder: (order: any) => void;
   onSelectMempoolOrder: (order: any) => void;
+  onCancelOrder?: (order: any) => void;
+  onOpenChat?: (order: any) => void;
   fetchOrders: () => void;
 }
 
@@ -34,11 +39,15 @@ const OrderList = memo(function OrderList({
   merchantInfo,
   onSelectOrder,
   onSelectMempoolOrder,
+  onCancelOrder,
+  onOpenChat,
 }: {
   filteredOrders: any[];
   merchantInfo: any;
   onSelectOrder: (order: any) => void;
   onSelectMempoolOrder: (order: any) => void;
+  onCancelOrder?: (order: any) => void;
+  onOpenChat?: (order: any) => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -92,7 +101,7 @@ const OrderList = memo(function OrderList({
 
             // Premium decays between bumps (resets on next data fetch)
             const bumpInterval = mOrder.bump_interval_sec || 60;
-            const bumpStep = mOrder.bump_step_bps || 10;
+            const bumpStep = mOrder.bump_step_bps || 5;
             const decayPerSec = bumpStep / bumpInterval;
             const decayedBps = Math.max(
               mOrder.premium_bps_current - bumpStep,
@@ -134,7 +143,7 @@ const OrderList = memo(function OrderList({
                       <Zap className="w-3.5 h-3.5 text-orange-400" />
                       <span className="text-[10px] font-medium text-white/50 font-mono">#{mOrder.order_number}</span>
                       {isMyMempoolOrder && (
-                        <span className="text-[9px] px-1 py-0.5 bg-white/[0.04] text-white/40 rounded font-medium">YOURS</span>
+                        <span className="text-[9px] px-1 py-0.5 bg-orange-500/15 border border-orange-500/25 text-orange-400/70 rounded font-bold">SELF</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
@@ -218,6 +227,8 @@ const OrderList = memo(function OrderList({
           const dbUsername = order.dbOrder?.user?.username || '';
           const isPlaceholderUser = dbUsername.startsWith('open_order_') || dbUsername.startsWith('m2m_');
           const isMyOwnOrder = !!order.isMyOrder || (isPlaceholderUser && order.orderMerchantId === merchantInfo?.id);
+          const hasExternalBuyer = order.buyerMerchantId && order.buyerMerchantId !== merchantInfo?.id;
+          const isSelfAccepted = isMyOwnOrder && hasExternalBuyer;
 
           return (
             <div
@@ -237,7 +248,9 @@ const OrderList = memo(function OrderList({
                 data-testid={`order-card-${order.id}`}
                 onClick={() => onSelectOrder(order)}
                 className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
-                  isMyOwnOrder
+                  isSelfAccepted
+                    ? 'glass-card border-yellow-500/20 hover:border-yellow-500/30'
+                    : isMyOwnOrder
                     ? 'bg-white/[0.01] border-white/[0.04] opacity-50'
                     : isMineable
                     ? 'glass-card border-white/[0.10] hover:border-orange-500/30 ring-1 ring-white/[0.04]'
@@ -246,20 +259,30 @@ const OrderList = memo(function OrderList({
                     : 'glass-card hover:border-white/[0.08]'
                 }`}
               >
-                {/* Waiting banner — top of card for own orders */}
+                {/* Status banner — top of card for own orders */}
                 {isMyOwnOrder && (
-                  <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-white/[0.02] border border-white/[0.04]">
-                    <div className="w-1 h-1 bg-white/20 rounded-full animate-breathe" />
-                    <span className="text-[9px] text-white/30 font-mono font-bold tracking-wider uppercase">Waiting for acceptance</span>
+                  <div className={`flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded border ${
+                    isSelfAccepted
+                      ? 'bg-yellow-500/[0.06] border-yellow-500/20'
+                      : 'bg-white/[0.02] border-white/[0.04]'
+                  }`}>
+                    <div className={`w-1 h-1 rounded-full animate-breathe ${isSelfAccepted ? 'bg-yellow-400' : 'bg-white/20'}`} />
+                    <span className={`text-[9px] font-mono font-bold tracking-wider uppercase ${isSelfAccepted ? 'text-yellow-400/70' : 'text-white/30'}`}>
+                      {isSelfAccepted ? `Accepted by ${order.user}` : 'Waiting for acceptance'}
+                    </span>
                   </div>
                 )}
                 {/* Row 1: User + tags on left, timer on right */}
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <div className="w-7 h-7 rounded-lg bg-white/[0.02] flex items-center justify-center shrink-0 text-sm border border-white/[0.04]">
-                      {order.emoji}
-                    </div>
-                    <span className="text-xs font-medium text-white truncate">{order.user}</span>
+                    <UserBadge
+                      name={order.user}
+                      avatarUrl={order.userAvatarUrl}
+                      emoji={order.emoji}
+                      merchantId={order.counterpartyMerchantId}
+                      size="md"
+                      nameClassName="text-xs font-medium text-white"
+                    />
                     <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
                       order.orderType === 'buy'
                         ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
@@ -283,7 +306,7 @@ const OrderList = memo(function OrderList({
                       </span>
                     )}
                     {isMyOwnOrder && (
-                      <span className="px-1 py-0.5 bg-white/[0.04] border border-white/[0.06] rounded text-[9px] font-bold text-white/40">YOURS</span>
+                      <span className="px-1 py-0.5 bg-orange-500/15 border border-orange-500/25 rounded text-[9px] font-bold text-orange-400/70">SELF</span>
                     )}
                     {order.hasMessages && order.unreadCount > 0 && (
                       <span className="px-1 py-0.5 bg-orange-500 text-black text-[9px] font-bold rounded">
@@ -330,7 +353,28 @@ const OrderList = memo(function OrderList({
                     </span>
                   )}
                   <div className="flex-1" />
-                  {!isMyOwnOrder && (
+                  {isMyOwnOrder ? (
+                    <div className="flex items-center gap-1.5">
+                      {order.buyerMerchantId && order.buyerMerchantId !== merchantInfo?.id && onOpenChat && (
+                        <button
+                          data-testid="order-chat-action"
+                          onClick={(e) => { e.stopPropagation(); onOpenChat(order); }}
+                          className="p-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] transition-colors"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 text-white/40" />
+                        </button>
+                      )}
+                      {onCancelOrder && (
+                        <button
+                          data-testid="order-cancel-action"
+                          onClick={(e) => { e.stopPropagation(); onCancelOrder(order); }}
+                          className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20"
+                        >
+                          CANCEL
+                        </button>
+                      )}
+                    </div>
+                  ) : (
                     <button data-testid="order-primary-action" className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 ${
                       isMineable
                         ? 'bg-orange-500 text-black hover:bg-orange-400'
@@ -355,6 +399,8 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   merchantInfo,
   onSelectOrder,
   onSelectMempoolOrder,
+  onCancelOrder,
+  onOpenChat,
   fetchOrders,
 }: PendingOrdersPanelProps) {
   // ─── Filter/sort state from Zustand (no prop drilling) ───────────
@@ -380,7 +426,9 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       isMempoolOrder: true,
       isMyMempoolOrder: mo.creator_username === merchantInfo?.username,
     }));
-    displayOrders = [...mempoolAsOrders, ...displayOrders];
+    // Dedup: remove regular orders that also exist in mempool (mempool version takes precedence)
+    const mempoolIds = new Set(mempoolAsOrders.map((mo: any) => mo.id));
+    displayOrders = [...mempoolAsOrders, ...displayOrders.filter(o => !mempoolIds.has(o.id))];
   }
 
   if (pendingFilter !== 'all') {
@@ -634,6 +682,8 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
         merchantInfo={merchantInfo}
         onSelectOrder={onSelectOrder}
         onSelectMempoolOrder={onSelectMempoolOrder}
+        onCancelOrder={onCancelOrder}
+        onOpenChat={onOpenChat}
       />
     </div>
   );

@@ -643,5 +643,19 @@ export function deriveOrderUI(
     }
   }
 
+  // Post-processing: show dispute button on ANY stuck active order (both parties)
+  const expiresIn = order.expiresIn ?? order.expires_in ?? (
+    order.expires_at
+      ? Math.max(0, Math.floor((new Date(order.expires_at).getTime() - Date.now()) / 1000))
+      : Infinity
+  );
+  const stuckStatuses: MinimalStatus[] = ['accepted', 'escrowed', 'payment_sent'];
+  if (expiresIn <= 0 && stuckStatuses.includes(status) && result.secondaryAction?.handler !== 'openDisputeModal') {
+    result.secondaryAction = {
+      label: 'Open Dispute',
+      handler: 'openDisputeModal',
+    };
+  }
+
   return result;
 }

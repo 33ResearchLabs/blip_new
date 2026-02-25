@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Lock, Unlock, Copy, Check, ExternalLink, Shield } from 'lucide-react';
+import { getSolscanTxUrl, getBlipscanTradeUrl } from '@/lib/explorer';
 
 interface EscrowData {
   amount?: number;
@@ -22,13 +23,6 @@ function truncateHash(hash: string, startChars = 6, endChars = 4): string {
   return `${hash.slice(0, startChars)}...${hash.slice(-endChars)}`;
 }
 
-// Get Blipscan URL for transaction or account
-function getBlipscanUrl(value: string, type: 'tx' | 'account' = 'account'): string {
-  const baseUrl = process.env.NEXT_PUBLIC_BLIPSCAN_URL || 'https://blipscan.xyz';
-  return type === 'tx'
-    ? `${baseUrl}/tx/${value}`
-    : `${baseUrl}/account/${value}`;
-}
 
 export function EscrowCard({ data, status = 'locked' }: EscrowCardProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -107,11 +101,11 @@ export function EscrowCard({ data, status = 'locked' }: EscrowCardProps) {
                 )}
               </button>
               <a
-                href={getBlipscanUrl(data.txHash, 'tx')}
+                href={getSolscanTxUrl(data.txHash)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-1 rounded hover:bg-white/10 transition-colors"
-                title="View on Blipscan"
+                title="View on Solscan"
               >
                 <ExternalLink className="w-3 h-3 text-white/50 hover:text-white" />
               </a>
@@ -135,11 +129,11 @@ export function EscrowCard({ data, status = 'locked' }: EscrowCardProps) {
                 )}
               </button>
               <a
-                href={getBlipscanUrl(data.escrowPda, 'account')}
+                href={getBlipscanTradeUrl(data.escrowPda)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-1 rounded hover:bg-white/10 transition-colors"
-                title="View on Blipscan"
+                title="View on BlipScan"
               >
                 <ExternalLink className="w-3 h-3 text-white/50 hover:text-white" />
               </a>

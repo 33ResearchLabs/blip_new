@@ -532,7 +532,7 @@ export async function buildReleaseEscrowTx(
   const treasury = getFeeTreasury();
   const treasuryAta = await getAssociatedTokenAddress(mint, treasury);
 
-  // Fetch trade to get creator
+  // Fetch trade to get creator — if trade doesn't exist, escrow was never locked on-chain
   let creator = releaser;
   try {
     const tradeAccount = await (program.account as any).trade.fetch(tradePda);
@@ -540,7 +540,10 @@ export async function buildReleaseEscrowTx(
       creator = tradeAccount.creator as PublicKey;
     }
   } catch (e) {
-    console.error('Failed to fetch trade account:', e);
+    throw new Error(
+      `Escrow not found on-chain. The trade account (${tradePda.toBase58()}) does not exist. ` +
+      `This may mean the escrow was never locked on-chain or was already released/refunded.`
+    );
   }
 
   const transaction = new Transaction();

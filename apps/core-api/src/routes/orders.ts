@@ -154,7 +154,9 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Global guard: reject any transition on self-referencing orders (merchant_id = buyer_merchant_id)
       // These orders are fundamentally broken — no real counterparty exists
-      if (newStatus !== 'cancelled') {
+      // Skip for 'accepted' — accept_order_v1 proc reassigns merchant_id to fix the self-reference
+      // Skip for 'cancelled' — we always allow cancel
+      if (newStatus !== 'cancelled' && newStatus !== 'accepted') {
         const selfRefCheck = await queryOne<{ id: string }>(
           `SELECT id FROM orders WHERE id = $1 AND merchant_id = buyer_merchant_id`,
           [id]

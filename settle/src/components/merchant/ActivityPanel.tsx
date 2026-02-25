@@ -4,6 +4,7 @@ import { useState, memo } from 'react';
 import { CheckCircle2, History, Star, XCircle, AlertTriangle, ChevronUp, ChevronDown, Clock, ArrowRight, Loader2, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { TransactionsTab } from './TransactionsTab';
+import { UserBadge } from './UserBadge';
 
 interface ActivityPanelProps {
   merchantId: string | null;
@@ -226,7 +227,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                       className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/[0.03] transition-colors cursor-pointer"
                       onClick={() => onSelectOrder?.(order.id)}
                     >
-                      <div className="text-sm shrink-0">{order.emoji}</div>
+                      <UserBadge name={order.user} avatarUrl={order.userAvatarUrl} emoji={order.emoji} merchantId={order.counterpartyMerchantId} size="sm" showName={false} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[11px] font-medium text-white/70 truncate">{order.user}</span>
@@ -313,8 +314,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                     >
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
-                          <div className="text-sm">{order.emoji}</div>
-                          <span className="text-xs font-medium text-white/70">{order.user}</span>
+                          <UserBadge name={order.user} avatarUrl={order.userAvatarUrl} emoji={order.emoji} merchantId={order.counterpartyMerchantId} size="sm" nameClassName="text-xs font-medium text-white/70" />
                         </div>
                         <span className={`flex items-center gap-1 text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border ${
                           isDisputed
@@ -380,8 +380,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                       {/* Header: user + status */}
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
-                          <div className="text-sm">{order.emoji}</div>
-                          <span className="text-xs font-medium text-white/70 truncate">{order.user}</span>
+                          <UserBadge name={order.user} avatarUrl={order.userAvatarUrl} emoji={order.emoji} merchantId={order.counterpartyMerchantId} size="sm" nameClassName="text-xs font-medium text-white/70" />
                           {order.orderType && (
                             <span className={`text-[9px] font-bold font-mono uppercase ${
                               order.orderType === 'buy' ? 'text-green-400/60' : 'text-orange-400/60'

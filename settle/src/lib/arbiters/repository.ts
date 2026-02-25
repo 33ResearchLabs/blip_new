@@ -13,7 +13,9 @@ import {
   REPUTATION_WEIGHTS,
   ARBITER_PENALTIES,
   VOTING_CONFIG,
+  DISPUTE_FEE_PERCENT,
   calculateVoteWeight,
+  getMajorityThreshold,
 } from './types';
 
 /**
@@ -116,6 +118,13 @@ export async function initializeArbiterTables(): Promise<void> {
       UNIQUE(arbitration_id, arbiter_id)
     )
   `);
+
+  // Add fee columns to dispute_arbitrations
+  await query(`
+    ALTER TABLE dispute_arbitrations
+    ADD COLUMN IF NOT EXISTS dispute_fee_total DECIMAL(18,6) DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS dispute_fee_per_voter DECIMAL(18,6) DEFAULT 0
+  `).catch(() => {});
 
   // Add reputation_score column to users if not exists
   await query(`
@@ -244,17 +253,21 @@ export async function getEligibleArbiters(
 export async function selectArbitersForDispute(
   disputeId: string,
   orderId: string,
-  excludeUserIds: string[]
+  excludeUserIds: string[],
+  panelSize?: number
 ): Promise<{ arbitration: DisputeArbitration; selectedArbiters: Arbiter[] }> {
+  const actualPanelSize = Math.max(panelSize ?? VOTING_CONFIG.PANEL_SIZE, VOTING_CONFIG.MIN_PANEL_SIZE);
+  const threshold = getMajorityThreshold(actualPanelSize);
+
   // Get eligible arbiters
   const eligibleArbiters = await getEligibleArbiters(excludeUserIds, 50);
 
-  if (eligibleArbiters.length < VOTING_CONFIG.PANEL_SIZE) {
-    throw new Error(`Not enough eligible arbiters. Need ${VOTING_CONFIG.PANEL_SIZE}, have ${eligibleArbiters.length}`);
+  if (eligibleArbiters.length < actualPanelSize) {
+    throw new Error(`Not enough eligible arbiters. Need ${actualPanelSize}, have ${eligibleArbiters.length}`);
   }
 
   // Weighted random selection
-  const selected = weightedRandomSelect(eligibleArbiters, VOTING_CONFIG.PANEL_SIZE);
+  const selected = weightedRandomSelect(eligibleArbiters, actualPanelSize);
 
   // Create arbitration record
   const votingDeadline = new Date(Date.now() + VOTING_CONFIG.VOTING_PERIOD_HOURS * 60 * 60 * 1000);
@@ -264,7 +277,7 @@ export async function selectArbitersForDispute(
      (dispute_id, order_id, required_votes, threshold, status, voting_deadline)
      VALUES ($1, $2, $3, $4, 'voting', $5)
      RETURNING *`,
-    [disputeId, orderId, VOTING_CONFIG.PANEL_SIZE, VOTING_CONFIG.MAJORITY_THRESHOLD, votingDeadline]
+    [disputeId, orderId, actualPanelSize, threshold, votingDeadline]
   );
 
   const arbitration = arbitrationResult[0] as DisputeArbitration;
@@ -526,15 +539,41 @@ async function concludeArbitration(
     }
   }
 
-  // Get arbitration details to update dispute
+  // Get arbitration details to update dispute + distribute fees
   const arbDetails = await query(
-    `SELECT order_id FROM dispute_arbitrations WHERE id = $1`,
+    `SELECT da.order_id, o.crypto_amount
+     FROM dispute_arbitrations da
+     JOIN orders o ON da.order_id = o.id
+     WHERE da.id = $1`,
     [arbitrationId]
   );
 
   if (arbDetails.length > 0) {
-    const arbDetailData = arbDetails[0] as { order_id: string };
+    const arbDetailData = arbDetails[0] as { order_id: string; crypto_amount: string };
     const orderId = arbDetailData.order_id;
+
+    // Distribute 2% dispute fee among voters who actually voted
+    const cryptoAmount = parseFloat(arbDetailData.crypto_amount) || 0;
+    const totalFee = cryptoAmount * (DISPUTE_FEE_PERCENT / 100);
+    const activeVoters = (votes as ArbiterVote[]).filter(v => v.voted_at);
+
+    if (totalFee > 0 && activeVoters.length > 0) {
+      const perVoterReward = totalFee / activeVoters.length;
+
+      for (const vote of activeVoters) {
+        await query(
+          `UPDATE arbiter_votes SET reward_earned = $1 WHERE id = $2`,
+          [perVoterReward, vote.id]
+        );
+      }
+
+      await query(
+        `UPDATE dispute_arbitrations
+         SET dispute_fee_total = $1, dispute_fee_per_voter = $2
+         WHERE id = $3`,
+        [totalFee, perVoterReward, arbitrationId]
+      );
+    }
 
     // Update dispute with resolution
     await query(
@@ -609,4 +648,101 @@ export async function getArbiterLeaderboard(limit: number = 20): Promise<Arbiter
   );
 
   return result as Arbiter[];
+}
+
+/**
+ * Manually add an arbiter to a dispute panel (compliance override — skips eligibility)
+ */
+export async function addManualArbiter(
+  arbitrationId: string,
+  walletAddress: string
+): Promise<{ success: boolean; error?: string }> {
+  // Check arbitration exists and is still active
+  const arbResult = await query(
+    `SELECT * FROM dispute_arbitrations WHERE id = $1`,
+    [arbitrationId]
+  );
+  if (arbResult.length === 0) {
+    return { success: false, error: 'Arbitration not found' };
+  }
+  const arb = arbResult[0] as DisputeArbitration;
+  if (arb.status === 'concluded' || arb.status === 'expired') {
+    return { success: false, error: 'Arbitration already concluded' };
+  }
+
+  // Find or create arbiter by wallet address
+  let arbiter: Arbiter | null = null;
+  const existing = await query(
+    `SELECT * FROM arbiters WHERE wallet_address = $1`,
+    [walletAddress]
+  );
+
+  if (existing.length > 0) {
+    arbiter = existing[0] as Arbiter;
+  } else {
+    // Create a new arbiter entry (compliance override — no user_id required)
+    const created = await query(
+      `INSERT INTO arbiters (wallet_address, reputation_score, is_active, is_eligible)
+       VALUES ($1, 0, true, true)
+       ON CONFLICT (wallet_address) DO UPDATE SET is_active = true
+       RETURNING *`,
+      [walletAddress]
+    );
+    if (created.length === 0) {
+      return { success: false, error: 'Failed to create arbiter' };
+    }
+    arbiter = created[0] as Arbiter;
+  }
+
+  // Check if already assigned
+  const alreadyAssigned = await query(
+    `SELECT id FROM arbiter_votes WHERE arbitration_id = $1 AND arbiter_id = $2`,
+    [arbitrationId, arbiter.id]
+  );
+  if (alreadyAssigned.length > 0) {
+    return { success: false, error: 'Arbiter already on this panel' };
+  }
+
+  // Add to panel
+  const weight = calculateVoteWeight(arbiter);
+  await query(
+    `INSERT INTO arbiter_votes (arbitration_id, arbiter_id, vote_weight, deadline)
+     VALUES ($1, $2, $3, $4)`,
+    [arbitrationId, arbiter.id, weight, arb.voting_deadline]
+  );
+
+  // Update required_votes and threshold
+  const newRequiredVotes = arb.required_votes + 1;
+  const newThreshold = getMajorityThreshold(newRequiredVotes);
+  await query(
+    `UPDATE dispute_arbitrations
+     SET required_votes = $1, threshold = $2
+     WHERE id = $3`,
+    [newRequiredVotes, newThreshold, arbitrationId]
+  );
+
+  return { success: true };
+}
+
+/**
+ * Get panel members for an arbitration
+ */
+export async function getArbitrationPanelMembers(arbitrationId: string): Promise<{
+  arbiter_id: string;
+  wallet_address: string;
+  reputation_score: number;
+  vote: string | null;
+  voted_at: Date | null;
+  reward_earned: number;
+}[]> {
+  const result = await query(
+    `SELECT av.arbiter_id, a.wallet_address, a.reputation_score,
+            av.vote, av.voted_at, av.reward_earned
+     FROM arbiter_votes av
+     JOIN arbiters a ON av.arbiter_id = a.id
+     WHERE av.arbitration_id = $1
+     ORDER BY av.assigned_at ASC`,
+    [arbitrationId]
+  );
+  return result as any[];
 }

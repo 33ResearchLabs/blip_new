@@ -138,6 +138,8 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
     orders_last_30_days: number;
     volume_last_30_days: number;
     volume_last_7_days: number;
+    unique_counterparties: number;
+    repeat_trade_partners: number;
   }>(
     `SELECT
       COUNT(*)::int as total_orders,
@@ -148,7 +150,12 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
         FILTER (WHERE status = 'completed'), 30)::int as avg_completion_mins,
       COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days')::int as orders_last_30_days,
       COALESCE(SUM(fiat_amount) FILTER (WHERE created_at > NOW() - INTERVAL '30 days'), 0)::numeric as volume_last_30_days,
-      COALESCE(SUM(fiat_amount) FILTER (WHERE created_at > NOW() - INTERVAL '7 days'), 0)::numeric as volume_last_7_days
+      COALESCE(SUM(fiat_amount) FILTER (WHERE created_at > NOW() - INTERVAL '7 days'), 0)::numeric as volume_last_7_days,
+      COUNT(DISTINCT CASE WHEN status = 'completed' THEN merchant_id END)::int as unique_counterparties,
+      COALESCE((SELECT COUNT(*)::int FROM (
+        SELECT merchant_id FROM orders WHERE user_id = $1 AND status = 'completed'
+        GROUP BY merchant_id HAVING COUNT(*) > 3
+      ) rp), 0) as repeat_trade_partners
     FROM orders WHERE user_id = $1`,
     [userId]
   );
@@ -256,6 +263,8 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
     longest_inactive_streak: activityStats?.longest_inactive || 0,
     volume_percentile: volumePercentile?.percentile || 0,
     user_number: userNumber?.row_num,
+    unique_counterparties: orderStats?.unique_counterparties || 0,
+    repeat_trade_partners: orderStats?.repeat_trade_partners || 0,
   };
 }
 
@@ -286,6 +295,8 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
     orders_last_30_days: number;
     volume_last_30_days: number;
     volume_last_7_days: number;
+    unique_counterparties: number;
+    repeat_trade_partners: number;
   }>(
     `SELECT
       COUNT(*)::int as total_orders,
@@ -296,7 +307,12 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
         FILTER (WHERE status = 'completed'), 30)::int as avg_completion_mins,
       COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days')::int as orders_last_30_days,
       COALESCE(SUM(fiat_amount) FILTER (WHERE created_at > NOW() - INTERVAL '30 days'), 0)::numeric as volume_last_30_days,
-      COALESCE(SUM(fiat_amount) FILTER (WHERE created_at > NOW() - INTERVAL '7 days'), 0)::numeric as volume_last_7_days
+      COALESCE(SUM(fiat_amount) FILTER (WHERE created_at > NOW() - INTERVAL '7 days'), 0)::numeric as volume_last_7_days,
+      COUNT(DISTINCT CASE WHEN status = 'completed' THEN COALESCE(buyer_merchant_id, user_id) END)::int as unique_counterparties,
+      COALESCE((SELECT COUNT(*)::int FROM (
+        SELECT COALESCE(buyer_merchant_id, user_id) as cp FROM orders WHERE merchant_id = $1 AND status = 'completed'
+        GROUP BY COALESCE(buyer_merchant_id, user_id) HAVING COUNT(*) > 3
+      ) rp), 0) as repeat_trade_partners
     FROM orders WHERE merchant_id = $1`,
     [merchantId]
   );
@@ -396,6 +412,8 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
     orders_last_30_days: orderStats?.orders_last_30_days || 0,
     longest_inactive_streak: activityStats?.longest_inactive || 0,
     volume_percentile: volumePercentile?.percentile || 0,
+    unique_counterparties: orderStats?.unique_counterparties || 0,
+    repeat_trade_partners: orderStats?.repeat_trade_partners || 0,
   };
 }
 

@@ -65,6 +65,10 @@ export interface EntityStats {
   // Percentiles (for comparing to other users)
   volume_percentile: number;
   user_number?: number; // For early adopter badge
+
+  // Anti-gaming: counterparty diversity
+  unique_counterparties: number;
+  repeat_trade_partners: number; // Counterparties traded with >3 times
 }
 
 // ============================================================================
@@ -411,6 +415,14 @@ export function calculateBadges(stats: EntityStats): ReputationBadge[] {
     stats.average_rating >= BADGE_REQUIREMENTS.arbiter_approved.min_rating
   ) {
     badges.push('arbiter_approved');
+  }
+
+  // Diverse trader — trades with many unique counterparties
+  if (
+    stats.unique_counterparties >= BADGE_REQUIREMENTS.diverse_trader.min_unique_counterparties &&
+    stats.completed_orders >= BADGE_REQUIREMENTS.diverse_trader.min_completed_orders
+  ) {
+    badges.push('diverse_trader');
   }
 
   return badges;

@@ -9,7 +9,7 @@ import {
   getPendingRatingsForMerchant,
   getPendingRatingsForUser,
 } from '@/lib/db/repositories/ratings';
-import { queryOne } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
 import {
   getAuthContext,
   validationErrorResponse,
@@ -154,6 +154,15 @@ export async function POST(request: NextRequest) {
       return forbiddenResponse('You are not part of this order');
     }
 
+    // Check repeat-pair frequency (metadata only — never blocks)
+    const pairHistory = await queryOne<{ cnt: number }>(
+      `SELECT COUNT(*)::int as cnt FROM ratings
+       WHERE rater_type = $1 AND rater_id = $2
+         AND rated_type = $3 AND rated_id = $4`,
+      [rater_type, rater_id, rated_type, rated_id]
+    );
+    const is_repeat_pair = (pairHistory?.cnt || 0) >= 3;
+
     // Create the rating
     const newRating = await createRating({
       order_id,
@@ -165,7 +174,7 @@ export async function POST(request: NextRequest) {
       review_text,
     });
 
-    return successResponse(newRating, 201);
+    return successResponse({ ...newRating, is_repeat_pair }, 201);
   } catch (error) {
     console.error('Error creating rating:', error);
     if (error instanceof Error && error.message.includes('duplicate key')) {

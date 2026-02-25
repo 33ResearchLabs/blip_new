@@ -57,7 +57,8 @@ export type ReputationBadge =
   | 'consistent'            // 95%+ completion rate over 30 days
   | 'whale'                 // $100k+ total volume
   | 'early_adopter'         // First 1000 users
-  | 'arbiter_approved';     // Qualified as arbiter
+  | 'arbiter_approved'      // Qualified as arbiter
+  | 'diverse_trader';       // 10+ unique counterparties
 
 export interface ReputationBreakdown {
   // Review component details
@@ -255,6 +256,10 @@ export const BADGE_REQUIREMENTS = {
     min_rating: 4.0,
     min_reputation: 100,
   },
+  diverse_trader: {
+    min_unique_counterparties: 10,
+    min_completed_orders: 15,
+  },
 } as const;
 
 /**
@@ -415,5 +420,10 @@ export const BADGE_INFO: Record<ReputationBadge, { name: string; icon: string; d
     name: 'Arbiter Approved',
     icon: '⚖️',
     description: 'Qualified to serve as dispute arbiter',
+  },
+  diverse_trader: {
+    name: 'Diverse Trader',
+    icon: '🌐',
+    description: 'Trades with 10+ unique counterparties',
   },
 };

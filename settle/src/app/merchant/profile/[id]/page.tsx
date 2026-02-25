@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Shield, Star, ArrowLeft, Loader2, CheckCircle2, Clock, TrendingUp, Award } from 'lucide-react';
+import { Shield, Star, ArrowLeft, Loader2, CheckCircle2, TrendingUp, Award, Tag, History, MessageSquare } from 'lucide-react';
 
 const TIER_COLORS: Record<string, { text: string; bg: string; border: string }> = {
   newcomer: { text: 'text-white/50', bg: 'bg-white/[0.04]', border: 'border-white/[0.08]' },
@@ -18,6 +18,52 @@ const BADGE_ICONS: Record<string, string> = {
   perfect_rating: '⭐', dispute_free: '✅', consistent: '📊',
   whale: '🐋', early_adopter: '🚀', arbiter_approved: '⚖️',
 };
+
+function formatAmount(n: number): string {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(Math.round(n));
+}
+
+function formatRelativeDate(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return 'today';
+  if (days === 1) return '1d ago';
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(months / 12)}y ago`;
+}
+
+interface PublicOrder {
+  id: string;
+  type: 'buy' | 'sell';
+  payment_method: string;
+  fiat_amount: number;
+  fiat_currency: string;
+  created_at: string;
+  completed_at: string;
+}
+
+interface PublicReview {
+  id: string;
+  rating: number;
+  review_text: string;
+  rater_type: 'merchant' | 'user';
+  created_at: string;
+}
+
+interface PublicOffer {
+  id: string;
+  type: 'buy' | 'sell';
+  payment_method: string;
+  rate: number;
+  min_amount: number;
+  max_amount: number;
+  available_amount: number;
+  bank_name: string | null;
+}
 
 interface ProfileData {
   merchant: {
@@ -53,6 +99,11 @@ interface ProfileData {
     progress: { currentTier: string; nextTier: string | null; progress: number };
     rank: number | null;
   } | null;
+  publicStats: {
+    recentOrders: PublicOrder[];
+    reviews: PublicReview[];
+    activeOffers: PublicOffer[];
+  } | null;
 }
 
 export default function MerchantProfilePage() {
@@ -69,8 +120,9 @@ export default function MerchantProfilePage() {
     Promise.all([
       fetch(`/api/merchant/${merchantId}`).then(r => r.json()),
       fetch(`/api/reputation?entityId=${merchantId}&entityType=merchant`).then(r => r.json()),
+      fetch(`/api/merchant/${merchantId}/public-stats`).then(r => r.json()),
     ])
-      .then(([merchantRes, repRes]) => {
+      .then(([merchantRes, repRes, statsRes]) => {
         if (!merchantRes.success) {
           setError('Merchant not found');
           return;
@@ -78,6 +130,7 @@ export default function MerchantProfilePage() {
         setData({
           merchant: merchantRes.data,
           reputation: repRes.success ? repRes.data : null,
+          publicStats: statsRes.success ? statsRes.data : null,
         });
       })
       .catch(() => setError('Failed to load profile'))
@@ -101,7 +154,7 @@ export default function MerchantProfilePage() {
     );
   }
 
-  const { merchant, reputation } = data;
+  const { merchant, reputation, publicStats } = data;
   const tier = reputation?.score.tier || 'newcomer';
   const tierStyle = TIER_COLORS[tier] || TIER_COLORS.newcomer;
   const accountAge = Math.floor((Date.now() - new Date(merchant.created_at).getTime()) / 86400000);
@@ -192,6 +245,44 @@ export default function MerchantProfilePage() {
           </div>
         </div>
 
+        {/* Active Offers */}
+        {publicStats && publicStats.activeOffers.length > 0 && (
+          <div className="glass-card rounded-2xl border border-white/[0.06] p-5 mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Tag className="w-4 h-4 text-white/30" />
+              <h2 className="text-xs font-bold text-white/50 font-mono uppercase tracking-wider">Active Offers</h2>
+              <span className="text-[10px] text-white/20 font-mono ml-auto">{publicStats.activeOffers.length}</span>
+            </div>
+            <div className="space-y-2">
+              {publicStats.activeOffers.map((offer) => (
+                <div key={offer.id} className="flex items-center justify-between p-3 bg-white/[0.02] rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                      offer.type === 'buy'
+                        ? 'bg-orange-500/10 text-orange-400'
+                        : 'bg-emerald-500/10 text-emerald-400'
+                    }`}>
+                      {offer.type.toUpperCase()}
+                    </span>
+                    <span className="text-xs text-white/50 capitalize">
+                      {offer.payment_method.replace(/_/g, ' ')}
+                    </span>
+                    {offer.bank_name && (
+                      <span className="text-[10px] text-white/25">{offer.bank_name}</span>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-bold text-white font-mono">{Number(offer.rate).toFixed(2)} AED</div>
+                    <div className="text-[9px] text-white/25 font-mono">
+                      {formatAmount(Number(offer.min_amount))}–{formatAmount(Number(offer.max_amount))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Reputation breakdown */}
         {reputation && (
           <div className="glass-card rounded-2xl border border-white/[0.06] p-5 mb-4">
@@ -269,7 +360,7 @@ export default function MerchantProfilePage() {
 
         {/* Performance stats */}
         {reputation?.breakdown && (
-          <div className="glass-card rounded-2xl border border-white/[0.06] p-5">
+          <div className="glass-card rounded-2xl border border-white/[0.06] p-5 mb-4">
             <div className="flex items-center gap-2 mb-3">
               <CheckCircle2 className="w-4 h-4 text-white/30" />
               <h2 className="text-xs font-bold text-white/50 font-mono uppercase tracking-wider">Performance</h2>
@@ -302,6 +393,94 @@ export default function MerchantProfilePage() {
             </div>
           </div>
         )}
+
+        {/* Recent Trades */}
+        {publicStats && publicStats.recentOrders.length > 0 && (
+          <div className="glass-card rounded-2xl border border-white/[0.06] p-5 mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <History className="w-4 h-4 text-white/30" />
+              <h2 className="text-xs font-bold text-white/50 font-mono uppercase tracking-wider">Recent Trades</h2>
+              <span className="text-[10px] text-white/20 font-mono ml-auto">{publicStats.recentOrders.length}</span>
+            </div>
+            <div>
+              {publicStats.recentOrders.map((order) => (
+                <div key={order.id} className="flex items-center justify-between py-2.5 border-b border-white/[0.03] last:border-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      order.type === 'buy' ? 'bg-orange-400' : 'bg-emerald-400'
+                    }`} />
+                    <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                      order.type === 'buy'
+                        ? 'bg-orange-500/10 text-orange-400'
+                        : 'bg-emerald-500/10 text-emerald-400'
+                    }`}>
+                      {order.type.toUpperCase()}
+                    </span>
+                    <span className="text-xs text-white/40 capitalize">
+                      {order.payment_method.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-white font-mono">
+                      {order.fiat_currency} {formatAmount(Number(order.fiat_amount))}
+                    </span>
+                    <span className="text-[10px] text-white/20 font-mono">
+                      {formatRelativeDate(order.completed_at)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Reviews */}
+        <div className="glass-card rounded-2xl border border-white/[0.06] p-5 mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <MessageSquare className="w-4 h-4 text-white/30" />
+            <h2 className="text-xs font-bold text-white/50 font-mono uppercase tracking-wider">Reviews</h2>
+            {publicStats && publicStats.reviews.length > 0 && (
+              <span className="text-[10px] text-white/20 font-mono ml-auto">{publicStats.reviews.length}</span>
+            )}
+          </div>
+
+          {(!publicStats || publicStats.reviews.length === 0) ? (
+            <div className="py-6 text-center">
+              <MessageSquare className="w-8 h-8 text-white/[0.06] mx-auto mb-2" />
+              <p className="text-xs text-white/25">No written reviews yet</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {publicStats.reviews.map((review) => (
+                <div key={review.id} className="p-3 bg-white/[0.02] rounded-xl">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star
+                          key={s}
+                          className={`w-3 h-3 ${
+                            s <= review.rating
+                              ? 'fill-orange-400 text-orange-400'
+                              : 'text-white/10'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] text-white/25 font-mono">
+                        {review.rater_type === 'merchant' ? 'Merchant' : 'Customer'}
+                      </span>
+                      <span className="text-[9px] text-white/20 font-mono">
+                        {formatRelativeDate(review.created_at)}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-white/50 leading-relaxed">{review.review_text}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

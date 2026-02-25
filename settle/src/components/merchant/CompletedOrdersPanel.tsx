@@ -3,6 +3,7 @@
 import { memo, useRef } from 'react';
 import { CheckCircle2, ArrowRight } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { UserBadge } from './UserBadge';
 
 interface CompletedOrdersPanelProps {
   orders: any[];
@@ -80,7 +81,13 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({ orders,
                     {/* Row 1: User + type + time */}
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-white/80">{order.user || 'Unknown'}</span>
+                        <UserBadge
+                          name={order.user || 'Unknown'}
+                          avatarUrl={order.userAvatarUrl}
+                          emoji={order.emoji}
+                          merchantId={order.counterpartyMerchantId}
+                          size="md"
+                        />
                         <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
                           order.orderType === 'buy'
                             ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'

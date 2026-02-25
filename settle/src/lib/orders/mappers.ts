@@ -41,7 +41,10 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
     const globalTimeoutSec = 15 * 60;
     expiresIn = Math.max(0, Math.floor((createdAt.getTime() + globalTimeoutSec * 1000 - now.getTime()) / 1000));
   }
-  const userName = dbOrder.user?.name || "Unknown User";
+  const rawUserName = dbOrder.user?.name || "Unknown User";
+  const rawUsername = dbOrder.user?.username || '';
+  const isPlaceholder = rawUsername.startsWith('open_order_') || rawUsername.startsWith('m2m_');
+  const userName = isPlaceholder ? 'Open Order' : rawUserName;
 
   const cryptoAmount = typeof dbOrder.crypto_amount === 'string'
     ? parseFloat(dbOrder.crypto_amount)
@@ -86,6 +89,7 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
     dbOrder,
     escrowTradeId: dbOrder.escrow_trade_id,
     escrowTradePda: dbOrder.escrow_trade_pda,
+    escrowPda: dbOrder.escrow_pda || dbOrder.escrow_trade_pda || undefined,
     escrowCreatorWallet: dbOrder.escrow_creator_wallet,
     escrowTxHash: dbOrder.escrow_tx_hash,
     refundTxHash: dbOrder.refund_tx_hash,
@@ -112,6 +116,10 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
     spreadPreference: dbOrder.spread_preference as Order['spreadPreference'],
     protocolFeePercent: dbOrder.protocol_fee_percentage ? parseFloat(String(dbOrder.protocol_fee_percentage)) : undefined,
     protocolFeeAmount: dbOrder.protocol_fee_amount ? parseFloat(String(dbOrder.protocol_fee_amount)) : undefined,
+    userAvatarUrl: isM2M
+      ? (dbOrder.buyer_merchant?.avatar_url || null)
+      : (dbOrder.user?.avatar_url || null),
+    counterpartyMerchantId: isM2M ? dbOrder.buyer_merchant_id : undefined,
   };
 };
 

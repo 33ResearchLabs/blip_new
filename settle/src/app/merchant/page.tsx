@@ -590,10 +590,10 @@ export default function MerchantDashboard() {
       }
     },
     onOrderStatusUpdated: (orderId, newStatus, _previousStatus, extra?: { buyerMerchantId?: string; merchantId?: string }) => {
-      // Optimistic update for accepted orders — show acceptor immediately
-      if (newStatus === 'accepted' && extra?.buyerMerchantId) {
+      // Optimistic status update — immediately move orders between columns
+      if (['accepted', 'cancelled', 'completed', 'expired', 'escrowed', 'payment_sent', 'payment_confirmed', 'disputed'].includes(newStatus)) {
         setOrders(prev => prev.map(o =>
-          o.id === orderId ? { ...o, buyerMerchantId: extra.buyerMerchantId, minimalStatus: 'accepted' } : o
+          o.id === orderId ? { ...o, status: newStatus as any, minimalStatus: newStatus === 'escrowed' ? 'escrow' : newStatus, ...(newStatus === 'accepted' && extra?.buyerMerchantId ? { buyerMerchantId: extra.buyerMerchantId } : {}) } : o
         ));
       }
 
@@ -1022,6 +1022,15 @@ export default function MerchantDashboard() {
   const todayEarnings = useMemo(() => completedOrders.reduce((sum, o) => sum + o.amount * TRADER_CUT_CONFIG.best, 0), [completedOrders]);
   const totalTradedVolume = useMemo(() => completedOrders.reduce((sum, o) => sum + o.amount, 0), [completedOrders]);
   const pendingEarnings = useMemo(() => ongoingOrders.reduce((sum, o) => sum + o.amount * TRADER_CUT_CONFIG.best, 0), [ongoingOrders]);
+
+  // Keep popup synced with live order data (e.g., status changes while popup is open)
+  useEffect(() => {
+    if (!selectedOrderPopup) return;
+    const live = orders.find(o => o.id === selectedOrderPopup.id);
+    if (live && live.status !== selectedOrderPopup.status) {
+      setSelectedOrderPopup(live);
+    }
+  }, [orders, selectedOrderPopup]);
 
   const activeChat = chatWindows.find(c => c.id === activeChatId || c.orderId === activeChatId);
   const totalUnread = directChat.totalUnread;
@@ -4090,6 +4099,13 @@ export default function MerchantDashboard() {
 
               {/* Actions */}
               <div className="px-5 pb-5 space-y-2">
+                {/* Already taken banner — show when order was accepted by someone else */}
+                {selectedOrderPopup.status === 'accepted' && selectedOrderPopup.buyerMerchantId !== merchantId && selectedOrderPopup.orderMerchantId !== merchantId && (
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
+                    <span className="text-sm">⚡</span>
+                    <p className="text-xs text-yellow-400 font-medium">This order was already taken by another merchant</p>
+                  </div>
+                )}
                 {/* Cancel button for order creator (before escrow lock) */}
                 {(() => {
                   const iAmOrderCreatorPopup = selectedOrderPopup.orderMerchantId === merchantId;

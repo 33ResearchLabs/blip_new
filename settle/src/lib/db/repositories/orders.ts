@@ -53,7 +53,8 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
               'username', u.username,
               'wallet_address', u.wallet_address,
               'rating', u.rating,
-              'total_trades', u.total_trades
+              'total_trades', u.total_trades,
+              'avatar_url', u.avatar_url
             ) as user,
             json_build_object(
               'id', m.id,
@@ -62,7 +63,8 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
               'rating', m.rating,
               'total_trades', m.total_trades,
               'is_online', m.is_online,
-              'wallet_address', m.wallet_address
+              'wallet_address', m.wallet_address,
+              'avatar_url', m.avatar_url
             ) as merchant,
             CASE
               WHEN bm.id IS NOT NULL THEN json_build_object(
@@ -72,7 +74,8 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
                 'rating', bm.rating,
                 'total_trades', bm.total_trades,
                 'is_online', bm.is_online,
-                'wallet_address', bm.wallet_address
+                'wallet_address', bm.wallet_address,
+                'avatar_url', bm.avatar_url
               )
               ELSE NULL
             END as buyer_merchant,
@@ -261,14 +264,16 @@ export async function getAllPendingOrdersForMerchant(
              'username', u.username,
              'rating', u.rating,
              'total_trades', u.total_trades,
-             'wallet_address', u.wallet_address
+             'wallet_address', u.wallet_address,
+             'avatar_url', u.avatar_url
            ) as user,
            json_build_object(
              'id', m.id,
              'display_name', m.display_name,
              'username', m.username,
              'rating', m.rating,
-             'wallet_address', m.wallet_address
+             'wallet_address', m.wallet_address,
+             'avatar_url', m.avatar_url
            ) as merchant,
            json_build_object(
              'payment_method', mo.payment_method,
@@ -279,7 +284,8 @@ export async function getAllPendingOrdersForMerchant(
              json_build_object(
                'id', bm.id,
                'display_name', bm.display_name,
-               'wallet_address', bm.wallet_address
+               'wallet_address', bm.wallet_address,
+               'avatar_url', bm.avatar_url
              )
            ELSE NULL END as buyer_merchant,
            COALESCE((

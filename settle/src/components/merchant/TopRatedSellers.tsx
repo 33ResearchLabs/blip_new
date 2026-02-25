@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Star, Trophy, TrendingUp, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { UserBadge } from './UserBadge';
 
 interface TopRatedSeller {
   id: string;
@@ -88,19 +89,15 @@ export function TopRatedSellers() {
                     {getRankIcon(seller.rank)}
                   </div>
 
-                  {/* Avatar */}
-                  <div className="w-7 h-7 rounded-full bg-white/5 border border-white/[0.06] flex items-center justify-center shrink-0">
-                    <span className="text-[10px] font-bold text-white/70">
-                      {(seller.display_name || seller.username).slice(0, 2).toUpperCase()}
-                    </span>
-                  </div>
-
-                  {/* Info */}
+                  {/* Avatar + Name */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-medium text-white truncate">
-                        {seller.display_name || seller.username}
-                      </span>
+                      <UserBadge
+                        name={seller.display_name || seller.username}
+                        merchantId={seller.id}
+                        size="md"
+                        nameClassName="text-sm font-medium text-white"
+                      />
                       {seller.rank <= 3 && (
                         <span className="text-[9px] px-1 py-0.5 bg-orange-500/20 text-orange-400 rounded font-bold">
                           TOP {seller.rank}
