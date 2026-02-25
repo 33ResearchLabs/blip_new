@@ -31,6 +31,7 @@ import {
   History,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
 import { usePusher } from "@/context/PusherContext";
@@ -82,9 +83,9 @@ import { useDisputeHandlers } from "@/hooks/useDisputeHandlers";
 import { useOrderActions } from "@/hooks/useOrderActions";
 import { LoginScreen } from "@/components/merchant/LoginScreen";
 import { NotificationsPanel } from "@/components/merchant/NotificationsPanel";
+import { showAlert } from '@/stores/confirmationStore';
 
 // Dynamically import wallet components (client-side only)
-const MerchantWalletModal = dynamic(() => import("@/components/MerchantWalletModal"), { ssr: false });
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 const UsernameModal = dynamic(() => import("@/components/UsernameModal"), { ssr: false });
 const useSolanaWalletHook = () => {
@@ -131,6 +132,8 @@ export default function MerchantDashboard() {
   // ─── Filter/sort state from store (shared with PendingOrdersPanel) ───
   const searchQuery = useMerchantStore(s => s.searchQuery);
   const setSearchQuery = useMerchantStore(s => s.setSearchQuery);
+
+  const router = useRouter();
 
   // Solana wallet state
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -255,6 +258,7 @@ export default function MerchantDashboard() {
   const [marketSubTab, setMarketSubTab] = useState<'browse' | 'offers'>('browse');
   const [leaderboardTab, setLeaderboardTab] = useState<'traders' | 'rated' | 'reputation'>('traders');
   const [activityCollapsed, setActivityCollapsed] = useState(false);
+  const [leaderboardCollapsed, setLeaderboardCollapsed] = useState(false);
   // History tab filter: 'completed' | 'cancelled' | 'stats'
   const [historyTab, setHistoryTab] = useState<'completed' | 'cancelled' | 'stats'>('completed');
   const [completedTimeFilter, setCompletedTimeFilter] = useState<'today' | '7days' | 'all'>('all');
@@ -469,33 +473,51 @@ export default function MerchantDashboard() {
   }, [merchantId, solanaWallet.walletAddress, merchantInfo?.wallet_address]);
 
   // Auto-fix: call acceptTrade on-chain for orders where I'm buyer but haven't joined escrow
-  const acceptTradeFixRef = useRef(new Set<string>());
+  // Tracks success (never retry) and failure counts (retry up to 3 times)
+  const acceptTradeSuccessRef = useRef(new Set<string>());
+  const acceptTradeFailRef = useRef<Record<string, number>>({});
   useEffect(() => {
     if (isMockMode || !solanaWallet.connected || !merchantId || orders.length === 0) return;
 
     const fixOrders = async () => {
       for (const order of orders) {
-        if (acceptTradeFixRef.current.has(order.id)) continue;
+        // Skip already-succeeded orders
+        if (acceptTradeSuccessRef.current.has(order.id)) continue;
+        // Skip orders that failed 3+ times
+        if ((acceptTradeFailRef.current[order.id] || 0) >= 3) continue;
         // Only for orders where I'm the buyer, escrow exists, and order is active
         if (order.myRole !== 'buyer') continue;
         if (!order.escrowCreatorWallet || order.escrowTradeId == null) continue;
         if (['completed', 'cancelled', 'expired', 'pending'].includes(order.status)) continue;
 
-        acceptTradeFixRef.current.add(order.id);
         try {
+          console.log(`[AutoFix] Calling acceptTrade for order ${order.id} (wallet popup expected)`);
           await solanaWallet.acceptTrade({
             creatorPubkey: order.escrowCreatorWallet,
-            tradeId: order.escrowTradeId,
+            tradeId: Number(order.escrowTradeId),
           });
-          console.log(`[AutoFix] Called acceptTrade for order ${order.id}`);
-        } catch {
-          // Already accepted or other error — fine
+          acceptTradeSuccessRef.current.add(order.id);
+          console.log(`[AutoFix] acceptTrade succeeded for order ${order.id}`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          acceptTradeFailRef.current[order.id] = (acceptTradeFailRef.current[order.id] || 0) + 1;
+          // "Already accepted" or "Cannot accept own trade" or "already locked" = treat as success
+          if (msg.includes('already') || msg.includes('CannotAccept') || msg.includes('6011') || msg.includes('6012')) {
+            acceptTradeSuccessRef.current.add(order.id);
+            console.log(`[AutoFix] acceptTrade already done for order ${order.id}:`, msg);
+          } else if (msg.includes('User rejected') || msg.includes('cancelled')) {
+            // User dismissed the wallet popup — don't count as failure, they may approve next time
+            acceptTradeFailRef.current[order.id] = Math.max((acceptTradeFailRef.current[order.id] || 0) - 1, 0);
+            console.log(`[AutoFix] User dismissed wallet popup for order ${order.id}`);
+          } else {
+            console.warn(`[AutoFix] acceptTrade failed for order ${order.id} (attempt ${acceptTradeFailRef.current[order.id]}):`, msg);
+          }
         }
       }
     };
 
     fixOrders();
-  }, [orders, solanaWallet.connected, merchantId, isMockMode, solanaWallet]);
+  }, [orders, solanaWallet.connected, merchantId, isMockMode, solanaWallet.acceptTrade]);
 
   // Dispute hook — must be before useRealtimeOrders (callbacks reference setExtensionRequests)
   const dispute = useDisputeHandlers({
@@ -825,7 +847,7 @@ export default function MerchantDashboard() {
     openReleaseModal, executeRelease, closeReleaseModal,
     showCancelModal, cancelOrder, isCancellingEscrow, cancelTxHash, cancelError,
     openCancelModal, executeCancelEscrow, closeCancelModal,
-    cancelOrderWithoutEscrow,
+    isCancellingOrder, cancelOrderWithoutEscrow,
   } = escrow;
 
   // Fetch dispute info when viewing a chat for a disputed order
@@ -854,9 +876,9 @@ export default function MerchantDashboard() {
       if (dbOrder?.merchant_id && dbOrder.merchant_id !== merchantId) {
         targetId = dbOrder.merchant_id;
         targetType = 'merchant';
-        targetName = dbOrder.merchant_username || dbOrder.merchant_display_name || order.user || 'Seller';
+        targetName = dbOrder.merchant?.display_name || 'Seller';
       } else {
-        targetId = dbOrder?.user_id || order.userId || '';
+        targetId = dbOrder?.user_id || '';
         targetType = 'user';
         targetName = order.user || 'User';
       }
@@ -865,9 +887,9 @@ export default function MerchantDashboard() {
       if (dbOrder?.buyer_merchant_id && dbOrder.buyer_merchant_id !== merchantId) {
         targetId = dbOrder.buyer_merchant_id;
         targetType = 'merchant';
-        targetName = dbOrder.buyer_merchant_username || dbOrder.buyer_merchant_display_name || order.user || 'Buyer';
+        targetName = dbOrder.buyer_merchant?.display_name || 'Buyer';
       } else {
-        targetId = dbOrder?.user_id || order.userId || '';
+        targetId = dbOrder?.user_id || '';
         targetType = 'user';
         targetName = order.user || 'User';
       }
@@ -897,7 +919,8 @@ export default function MerchantDashboard() {
     openEscrowModalForSell,
   });
   const {
-    markingDone, isCreatingTrade, setIsCreatingTrade, createTradeError, setCreateTradeError,
+    markingDone, isAccepting, isSigning, isCompleting, isConfirmingPayment,
+    isCreatingTrade, setIsCreatingTrade, createTradeError, setCreateTradeError,
     acceptOrder, acceptWithSaed, signToClaimOrder, signAndProceed,
     markFiatPaymentSent, markPaymentSent, completeOrder, confirmPayment,
     handleDirectOrderCreation: rawHandleDirectOrderCreation,
@@ -1176,15 +1199,16 @@ export default function MerchantDashboard() {
           <>
             <PanelResizeHandle className="w-[3px]" />
             <Panel defaultSize="18%" minSize="12%" maxSize="30%" id="transactions">
-            <div className="flex flex-col h-full bg-black">
-              <div style={{ height: activityCollapsed ? '100%' : '50%' }} className="flex flex-col min-h-0 border-b border-white/[0.04] transition-all duration-200">
+            <div className="flex flex-col h-full bg-black overflow-hidden">
+              <div className={`flex flex-col min-h-0 border-b border-white/[0.04] transition-all duration-200 ${leaderboardCollapsed ? 'flex-none' : 'flex-1 basis-0'}`}>
                 <LeaderboardPanel
                   leaderboardData={leaderboardData}
                   leaderboardTab={leaderboardTab}
                   setLeaderboardTab={setLeaderboardTab}
+                  onCollapseChange={setLeaderboardCollapsed}
                 />
               </div>
-              <div style={{ height: activityCollapsed ? 'auto' : '50%' }} className="flex flex-col transition-all duration-200">
+              <div className={`flex flex-col min-h-0 transition-all duration-200 ${activityCollapsed ? 'flex-none' : 'flex-1 basis-0'}`}>
                 <ActivityPanel
                   merchantId={merchantId}
                   completedOrders={completedOrders}
@@ -2366,11 +2390,11 @@ export default function MerchantDashboard() {
                       // Validate against wallet balance
                       const availableAmount = parseFloat(corridorForm.availableAmount || "0");
                       if (availableAmount > (effectiveBalance || 0)) {
-                        alert("Amount exceeds your wallet balance");
+                        showAlert({ title: 'Error', message: "Amount exceeds your wallet balance", variant: 'warning' });
                         return;
                       }
                       if (availableAmount <= 0) {
-                        alert("Please enter a valid amount");
+                        showAlert({ title: 'Validation', message: "Please enter a valid amount", variant: 'warning' });
                         return;
                       }
                       try {
@@ -3018,7 +3042,7 @@ export default function MerchantDashboard() {
                       </div>
                       <div>
                         <p className="text-sm font-medium">{escrowOrder.user}</p>
-                        <p className="text-xs text-gray-500">Buy Order</p>
+                        <p className="text-xs text-gray-500">{escrowOrder.orderType === 'sell' ? 'Sell Order' : 'Buy Order'}</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -3591,16 +3615,67 @@ export default function MerchantDashboard() {
       {/* PWA Install Banner */}
       <PWAInstallBanner appName="Merchant" accentColor="#f97316" />
 
-      {/* Wallet Connect Modal — skip in embedded wallet mode (no Solana adapter context) */}
-      {!IS_EMBEDDED_WALLET && (
-        <MerchantWalletModal
-          isOpen={showWalletModal}
-          onClose={() => setShowWalletModal(false)}
-          onConnected={(address) => {
-            setShowWalletModal(false);
-          }}
-        />
-      )}
+      {/* Wallet Required Modal — redirects to /merchant/wallet */}
+      <AnimatePresence>
+        {showWalletModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md flex items-center justify-center p-4"
+            onClick={() => setShowWalletModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="glass-card rounded-2xl w-full max-w-sm border border-white/[0.08] shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-5 pt-5 pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-orange-500/10">
+                      <Wallet className="w-5 h-5 text-orange-400" />
+                    </div>
+                    <h2 className="text-base font-bold text-white">Connect Wallet</h2>
+                  </div>
+                  <button
+                    onClick={() => setShowWalletModal(false)}
+                    className="p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors -mt-1 -mr-1"
+                  >
+                    <X className="w-4 h-4 text-white/40" />
+                  </button>
+                </div>
+              </div>
+              <div className="px-5 pb-5">
+                <p className="text-[13px] text-white/60 leading-relaxed">
+                  A connected wallet is required for this action. Go to the Wallet tab to connect or set up your wallet.
+                </p>
+              </div>
+              <div className="flex gap-2 px-5 pb-5">
+                <button
+                  onClick={() => setShowWalletModal(false)}
+                  className="flex-1 px-3 py-2.5 rounded-xl border border-white/[0.06] text-[12px] text-white/50 hover:bg-white/[0.04] transition-colors font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowWalletModal(false);
+                    router.push('/merchant/wallet');
+                  }}
+                  className="flex-1 px-3 py-2.5 rounded-xl text-[12px] font-bold transition-all bg-gradient-to-b from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 text-black shadow-[0_2px_12px_rgba(249,115,22,0.15)]"
+                >
+                  Go to Wallet
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Username Modal for New Merchant Wallet Users */}
       {(solanaWallet.walletAddress || (typeof window !== 'undefined' && (window as any).phantom?.solana?.publicKey)) && (
@@ -3914,10 +3989,20 @@ export default function MerchantDashboard() {
                         await cancelOrderWithoutEscrow(selectedOrderPopup.id);
                         setSelectedOrderPopup(null);
                       }}
-                      className="w-full py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/40 text-red-400 font-semibold flex items-center justify-center gap-2 transition-all"
+                      disabled={isCancellingOrder}
+                      className="w-full py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/40 text-red-400 font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <X className="w-4 h-4" />
-                      Cancel Order
+                      {isCancellingOrder ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Cancelling...
+                        </>
+                      ) : (
+                        <>
+                          <X className="w-4 h-4" />
+                          Cancel Order
+                        </>
+                      )}
                     </motion.button>
                   ) : null;
                 })()}
@@ -3931,10 +4016,20 @@ export default function MerchantDashboard() {
                       await acceptOrder(selectedOrderPopup);
                       setSelectedOrderPopup(null);
                     }}
-                    className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 transition-all"
+                    disabled={isAccepting}
+                    className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Zap className="w-4 h-4" />
-                    Go
+                    {isAccepting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Accepting...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4" />
+                        Go
+                      </>
+                    )}
                   </motion.button>
                 )}
 
@@ -3943,14 +4038,24 @@ export default function MerchantDashboard() {
                   <div className="space-y-2">
                     <motion.button
                       whileTap={{ scale: 0.98 }}
-                      onClick={() => {
-                        acceptOrder(selectedOrderPopup);
+                      onClick={async () => {
+                        await acceptOrder(selectedOrderPopup);
                         setSelectedOrderPopup(null);
                       }}
-                      className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 transition-all"
+                      disabled={isAccepting}
+                      className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Zap className="w-4 h-4" />
-                      Go
+                      {isAccepting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Accepting...
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4" />
+                          Go
+                        </>
+                      )}
                     </motion.button>
                     {/* sAED corridor button removed — not in this version */}
                   </div>
@@ -4026,10 +4131,20 @@ export default function MerchantDashboard() {
                           await confirmPayment(selectedOrderPopup.id);
                           setSelectedOrderPopup(null);
                         }}
-                        className="w-full py-3 rounded-xl bg-orange-500/10 hover:bg-orange-500/15 border border-orange-500/20 hover:border-orange-500/30 text-orange-400 font-semibold flex items-center justify-center gap-2 transition-all"
+                        disabled={isConfirmingPayment}
+                        className="w-full py-3 rounded-xl bg-orange-500/10 hover:bg-orange-500/15 border border-orange-500/20 hover:border-orange-500/30 text-orange-400 font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <Check className="w-4 h-4" />
-                        Confirm Receipt & Release Escrow
+                        {isConfirmingPayment ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Confirming...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4" />
+                            Confirm Receipt & Release Escrow
+                          </>
+                        )}
                       </motion.button>
                     );
                   }

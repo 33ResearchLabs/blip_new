@@ -38,14 +38,21 @@ interface LeaderboardPanelProps {
   leaderboardData: LeaderboardEntry[];
   leaderboardTab: 'traders' | 'rated' | 'reputation';
   setLeaderboardTab: (tab: 'traders' | 'rated' | 'reputation') => void;
+  onCollapseChange?: (collapsed: boolean) => void;
 }
 
 export const LeaderboardPanel = memo(function LeaderboardPanel({
   leaderboardData,
   leaderboardTab,
   setLeaderboardTab,
+  onCollapseChange,
 }: LeaderboardPanelProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  const handleCollapse = (collapsed: boolean) => {
+    setIsCollapsed(collapsed);
+    onCollapseChange?.(collapsed);
+  };
   const [repData, setRepData] = useState<RepLeaderboardEntry[]>([]);
 
   useEffect(() => {
@@ -70,10 +77,10 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
 
   if (isCollapsed) {
     return (
-      <div className="flex flex-col h-full justify-end">
+      <div className="flex flex-col h-full justify-start">
         <button
-          onClick={() => setIsCollapsed(false)}
-          className="flex items-center justify-between px-3 py-2 bg-white/[0.02] hover:bg-white/[0.04] border-t border-white/[0.04] transition-all"
+          onClick={() => handleCollapse(false)}
+          className="flex items-center justify-between px-3 py-2 bg-white/[0.02] hover:bg-white/[0.04] border-b border-white/[0.04] transition-all"
         >
           <div className="flex items-center gap-2">
             <Trophy className="w-3.5 h-3.5 text-white/30" />
@@ -84,7 +91,7 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
               {leaderboardData.length}
             </span>
           </div>
-          <ChevronUp className="w-3.5 h-3.5 text-white/25" />
+          <ChevronDown className="w-3.5 h-3.5 text-white/25" />
         </button>
       </div>
     );
@@ -135,7 +142,7 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
               </button>
             </div>
             <button
-              onClick={() => setIsCollapsed(true)}
+              onClick={() => handleCollapse(true)}
               className="p-1 rounded hover:bg-white/[0.06] transition-colors text-white/20 hover:text-white/40"
               title="Minimize"
             >
@@ -192,13 +199,13 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
           </div>
         ) : (
           <div className="space-y-1">
-            {filteredData.slice(0, 10).map((entry) => (
+            {filteredData.slice(0, 10).map((entry, index) => (
               <div
                 key={entry.id}
                 className="flex items-center px-2 py-2.5 rounded-lg hover:bg-white/[0.03] transition-colors text-[11px] font-mono"
               >
                 <span className="w-5 text-right font-bold shrink-0 tabular-nums text-white/25">
-                  {entry.rank}
+                  {index + 1}
                 </span>
                 <div className="flex items-center flex-1 min-w-0 pl-2">
                   <span className="text-xs font-medium text-white/70 truncate font-sans">

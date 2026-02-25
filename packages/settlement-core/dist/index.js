@@ -5,17 +5,17 @@
  * shared between the Next.js app and Fastify core-api.
  */
 // DB
-export * from './db/client.js';
+export * from './db/client';
 // State Machine
-export * from './state-machine/stateMachine.js';
-export * from './state-machine/normalizer.js';
+export * from './state-machine/stateMachine';
+export * from './state-machine/normalizer';
 // Finalization
-export * from './finalization/atomicCancel.js';
-export * from './finalization/guards.js';
+export * from './finalization/atomicCancel';
+export * from './finalization/guards';
 // Types
-export * from './types/index.js';
+export * from './types/index';
 // Config
-export * from './config/mockMode.js';
+export * from './config/mockMode';
 // Utils
-export * from './utils/logger.js';
+export * from './utils/logger';
 //# sourceMappingURL=index.js.map

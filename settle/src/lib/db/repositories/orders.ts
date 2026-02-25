@@ -27,6 +27,8 @@ import { logger } from '../../logger';
 import { notifyNewMessage, notifyOrderStatusUpdated } from '../../pusher/server';
 import { recordReputationEvent } from '../../reputation';
 import { upsertMerchantContact } from './directMessages';
+import { emitOrderEvent, buildEvent, statusToEventType } from '../../events';
+import { FEATURES } from '../../config/featureFlags';
 
 // Result type for status updates
 export interface StatusUpdateResult {
@@ -762,21 +764,49 @@ export async function updateOrderStatus(
       const updateResult = await client.query(sql, updateParams);
       const updatedOrder = updateResult.rows[0] as Order;
 
-      // Create event (always, for audit trail)
-      const eventType = getTransitionEventType(oldStatus, newStatus);
-      await client.query(
-        `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [
+      // Emit unified event (order_events + chat_messages + notification_outbox)
+      // Feature-flagged: when enabled, replaces inline event/chat writes below
+      if (FEATURES.SYSTEM_CHAT_MESSAGES) {
+        await emitOrderEvent(client, buildEvent({
           orderId,
-          eventType,
+          eventType: statusToEventType(effectiveStatus),
+          orderVersion: updatedOrder.order_version,
           actorType,
           actorId,
-          oldStatus,
-          newStatus,
-          JSON.stringify(metadata || {}),
-        ]
-      );
+          previousStatus: oldStatus,
+          newStatus: effectiveStatus,
+          payload: {
+            ...metadata,
+            userId: updatedOrder.user_id,
+            merchantId: updatedOrder.merchant_id,
+            buyerMerchantId: updatedOrder.buyer_merchant_id,
+            cryptoAmount: updatedOrder.crypto_amount,
+            cryptoCurrency: updatedOrder.crypto_currency || 'USDC',
+            fiatAmount: updatedOrder.fiat_amount,
+            fiatCurrency: updatedOrder.fiat_currency || 'AED',
+            releaseTxHash: updatedOrder.release_tx_hash,
+            txHash: updatedOrder.escrow_tx_hash,
+            escrowPda: updatedOrder.escrow_pda,
+            escrowTradePda: updatedOrder.escrow_trade_pda,
+          },
+        }));
+      } else {
+        // Legacy path: inline order_events INSERT only (no unified chat/outbox)
+        const eventType = getTransitionEventType(oldStatus, newStatus);
+        await client.query(
+          `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            orderId,
+            eventType,
+            actorType,
+            actorId,
+            oldStatus,
+            newStatus,
+            JSON.stringify(metadata || {}),
+          ]
+        );
+      }
 
       // Handle side effects: liquidity restoration
       if (shouldRestoreLiquidity(oldStatus, newStatus)) {
@@ -897,82 +927,84 @@ export async function updateOrderStatus(
       // Log the status change
       logger.order.statusChanged(orderId, oldStatus, effectiveStatus, actorType, actorId);
 
-      // Send system message to chat for this status change (use client within transaction)
-      try {
-        const statusMessage = getStatusChangeMessage(effectiveStatus, updatedOrder, actorType, metadata);
-        if (statusMessage) {
-          await client.query(
-            `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
-             VALUES ($1, 'system', $2, $3, 'system')`,
-            [orderId, orderId, statusMessage]
-          );
-        }
+      // Send system message to chat for this status change
+      // When SYSTEM_CHAT_MESSAGES flag is on, emitOrderEvent above already handles this.
+      // Legacy path: inline chat message writes for backward compatibility.
+      if (!FEATURES.SYSTEM_CHAT_MESSAGES) {
+        try {
+          const statusMessage = getStatusChangeMessage(effectiveStatus, updatedOrder, actorType, metadata);
+          if (statusMessage) {
+            await client.query(
+              `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
+               VALUES ($1, 'system', $2, $3, 'system')`,
+              [orderId, orderId, statusMessage]
+            );
+          }
 
-        // Auto-send bank info message when order is accepted (for bank payment method)
-        if (effectiveStatus === 'accepted' && updatedOrder.payment_method === 'bank') {
-          const paymentDetails = updatedOrder.payment_details as Record<string, unknown> | null;
-          if (paymentDetails) {
-            // For buy orders: user needs to send fiat to merchant's bank
-            // For sell orders: merchant needs to send fiat to user's bank
-            const bankInfoMessage = JSON.stringify({
-              type: 'bank_info',
-              text: updatedOrder.type === 'buy'
-                ? '🏦 Payment Details - Send fiat to this account'
-                : '🏦 Payment Details - Merchant will send fiat here',
+          // Auto-send bank info message when order is accepted (for bank payment method)
+          if (effectiveStatus === 'accepted' && updatedOrder.payment_method === 'bank') {
+            const paymentDetails = updatedOrder.payment_details as Record<string, unknown> | null;
+            if (paymentDetails) {
+              const bankInfoMessage = JSON.stringify({
+                type: 'bank_info',
+                text: updatedOrder.type === 'buy'
+                  ? '🏦 Payment Details - Send fiat to this account'
+                  : '🏦 Payment Details - Merchant will send fiat here',
+                data: {
+                  bank_name: paymentDetails.bank_name,
+                  bank_account_name: paymentDetails.bank_account_name,
+                  bank_iban: paymentDetails.bank_iban,
+                  user_bank_account: paymentDetails.user_bank_account,
+                },
+              });
+              await client.query(
+                `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
+                 VALUES ($1, 'system', $2, $3, 'system')`,
+                [orderId, orderId, bankInfoMessage]
+              );
+            }
+          }
+
+          // Auto-send escrow info message when crypto is locked
+          if (effectiveStatus === 'escrowed' && updatedOrder.escrow_tx_hash) {
+            const escrowInfoMessage = JSON.stringify({
+              type: 'escrow_locked',
+              text: `🔒 ${updatedOrder.crypto_amount} ${updatedOrder.crypto_currency} locked in escrow`,
               data: {
-                bank_name: paymentDetails.bank_name,
-                bank_account_name: paymentDetails.bank_account_name,
-                bank_iban: paymentDetails.bank_iban,
-                user_bank_account: paymentDetails.user_bank_account,
+                amount: updatedOrder.crypto_amount,
+                currency: updatedOrder.crypto_currency,
+                txHash: updatedOrder.escrow_tx_hash,
+                escrowPda: updatedOrder.escrow_pda || updatedOrder.escrow_trade_pda,
               },
             });
             await client.query(
               `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
                VALUES ($1, 'system', $2, $3, 'system')`,
-              [orderId, orderId, bankInfoMessage]
+              [orderId, orderId, escrowInfoMessage]
             );
           }
-        }
 
-        // Auto-send escrow info message when crypto is locked
-        if (effectiveStatus === 'escrowed' && updatedOrder.escrow_tx_hash) {
-          const escrowInfoMessage = JSON.stringify({
-            type: 'escrow_locked',
-            text: `🔒 ${updatedOrder.crypto_amount} ${updatedOrder.crypto_currency} locked in escrow`,
-            data: {
-              amount: updatedOrder.crypto_amount,
-              currency: updatedOrder.crypto_currency,
-              txHash: updatedOrder.escrow_tx_hash,
-              escrowPda: updatedOrder.escrow_pda || updatedOrder.escrow_trade_pda,
-            },
-          });
-          await client.query(
-            `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
-             VALUES ($1, 'system', $2, $3, 'system')`,
-            [orderId, orderId, escrowInfoMessage]
-          );
+          // Auto-send release info message when trade completes
+          if (effectiveStatus === 'completed' && updatedOrder.release_tx_hash) {
+            const releaseInfoMessage = JSON.stringify({
+              type: 'escrow_released',
+              text: `✅ ${updatedOrder.crypto_amount} ${updatedOrder.crypto_currency} released`,
+              data: {
+                amount: updatedOrder.crypto_amount,
+                currency: updatedOrder.crypto_currency,
+                txHash: updatedOrder.release_tx_hash,
+                escrowPda: updatedOrder.escrow_pda || updatedOrder.escrow_trade_pda,
+              },
+            });
+            await client.query(
+              `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
+               VALUES ($1, 'system', $2, $3, 'system')`,
+              [orderId, orderId, releaseInfoMessage]
+            );
+          }
+        } catch (msgErr) {
+          logger.warn('Failed to send status change message to chat', { orderId, error: msgErr });
         }
-
-        // Auto-send release info message when trade completes
-        if (effectiveStatus === 'completed' && updatedOrder.release_tx_hash) {
-          const releaseInfoMessage = JSON.stringify({
-            type: 'escrow_released',
-            text: `✅ ${updatedOrder.crypto_amount} ${updatedOrder.crypto_currency} released`,
-            data: {
-              amount: updatedOrder.crypto_amount,
-              currency: updatedOrder.crypto_currency,
-              txHash: updatedOrder.release_tx_hash,
-              escrowPda: updatedOrder.escrow_pda || updatedOrder.escrow_trade_pda,
-            },
-          });
-          await client.query(
-            `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
-             VALUES ($1, 'system', $2, $3, 'system')`,
-            [orderId, orderId, releaseInfoMessage]
-          );
-        }
-      } catch (msgErr) {
-        logger.warn('Failed to send status change message to chat', { orderId, error: msgErr });
       }
 
       return { success: true, order: updatedOrder };
@@ -1034,12 +1066,10 @@ export async function getOrderMessages(orderId: string): Promise<ChatMessage[]> 
         ELSE 'System'
       END as sender_name
     FROM chat_messages cm
-    LEFT JOIN users u ON cm.sender_type = 'user' AND cm.sender_id = u.id::text
-    LEFT JOIN merchants m ON cm.sender_type = 'merchant' AND cm.sender_id = m.id::text
-    LEFT JOIN compliance_team ct ON cm.sender_type = 'compliance' AND cm.sender_id = ct.id::text
+    LEFT JOIN users u ON cm.sender_type = 'user' AND cm.sender_id::text = u.id::text
+    LEFT JOIN merchants m ON cm.sender_type = 'merchant' AND cm.sender_id::text = m.id::text
+    LEFT JOIN compliance_team ct ON cm.sender_type = 'compliance' AND cm.sender_id::text = ct.id::text
     WHERE cm.order_id = $1
-      AND cm.sender_type != 'system'
-      AND cm.message_type != 'system'
     ORDER BY cm.created_at ASC`,
     [orderId]
   );

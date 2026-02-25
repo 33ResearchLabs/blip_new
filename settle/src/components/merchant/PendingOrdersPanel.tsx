@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useRef, useState, useEffect } from 'react';
+import { memo, useState, useEffect } from 'react';
 import {
   Search,
   SlidersHorizontal,
@@ -14,7 +14,7 @@ import {
   Flame,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useVirtualizer } from '@tanstack/react-virtual';
+
 import { useMerchantStore } from '@/stores/merchantStore';
 
 interface PendingOrdersPanelProps {
@@ -26,9 +26,7 @@ interface PendingOrdersPanelProps {
   fetchOrders: () => void;
 }
 
-// ─── Virtualized order list (renders only visible rows) ──────────
-const ITEM_HEIGHT = 170; // Estimated row height in px (mempool cards are taller with earnings hero)
-
+// ─── Order list (simple scroll — no virtualization needed for <50 items) ──────
 const OrderList = memo(function OrderList({
   filteredOrders,
   merchantInfo,
@@ -40,21 +38,12 @@ const OrderList = memo(function OrderList({
   onSelectOrder: (order: any) => void;
   onSelectMempoolOrder: (order: any) => void;
 }) {
-  const parentRef = useRef<HTMLDivElement>(null);
-
   // Live tick — updates every second for countdown + fee decay
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-
-  const virtualizer = useVirtualizer({
-    count: filteredOrders.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => ITEM_HEIGHT,
-    overscan: 5,
-  });
 
   if (filteredOrders.length === 0) {
     return (
@@ -73,278 +62,247 @@ const OrderList = memo(function OrderList({
   }
 
   return (
-    <div ref={parentRef} className="flex-1 overflow-y-auto p-1.5">
-      <div
-        style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}
-      >
-        {virtualizer.getVirtualItems().map((virtualRow) => {
-          const order = filteredOrders[virtualRow.index];
-          const isMempoolOrder = (order as any).isMempoolOrder;
-          const isMyMempoolOrder = (order as any).isMyMempoolOrder;
+    <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5">
+      {filteredOrders.map((order) => {
+        const isMempoolOrder = (order as any).isMempoolOrder;
+        const isMyMempoolOrder = (order as any).isMyMempoolOrder;
 
-          if (isMempoolOrder) {
-            const mOrder = order as any;
-            const amount = Number(mOrder.amount_usdt);
+        if (isMempoolOrder) {
+          const mOrder = order as any;
+          const amount = Number(mOrder.amount_usdt);
 
-            // Live decay: compute elapsed since data was received
-            const elapsed = Math.floor((now - (mOrder._receivedAt || now)) / 1000);
-            const liveExpiry = Math.max(0, mOrder.seconds_until_expiry - elapsed);
+          // Live decay: compute elapsed since data was received
+          const elapsed = Math.floor((now - (mOrder._receivedAt || now)) / 1000);
+          const liveExpiry = Math.max(0, mOrder.seconds_until_expiry - elapsed);
 
-            // Premium decays between bumps (resets on next data fetch)
-            const bumpInterval = mOrder.bump_interval_sec || 60;
-            const bumpStep = mOrder.bump_step_bps || 10;
-            const decayPerSec = bumpStep / bumpInterval;
-            const decayedBps = Math.max(
-              mOrder.premium_bps_current - bumpStep,
-              mOrder.premium_bps_current - elapsed * decayPerSec
-            );
-            const livePremiumPct = decayedBps / 100;
-            const livePrice = (Number(mOrder.ref_price_at_create) * (1 + decayedBps / 10000)).toFixed(2);
+          // Premium decays between bumps (resets on next data fetch)
+          const bumpInterval = mOrder.bump_interval_sec || 60;
+          const bumpStep = mOrder.bump_step_bps || 10;
+          const decayPerSec = bumpStep / bumpInterval;
+          const decayedBps = Math.max(
+            mOrder.premium_bps_current - bumpStep,
+            mOrder.premium_bps_current - elapsed * decayPerSec
+          );
+          const livePremiumPct = decayedBps / 100;
+          const livePrice = (Number(mOrder.ref_price_at_create) * (1 + decayedBps / 10000)).toFixed(2);
 
-            // YOUR CUT — what the merchant earns by accepting
-            const yourCut = amount * (decayedBps / 10000);
+          // YOUR CUT — what the merchant earns by accepting
+          const yourCut = amount * (decayedBps / 10000);
 
-            // Decay progress: 1.0 right after bump, 0.0 at next bump
-            const decayProgress = Math.max(0, Math.min(1, 1 - (elapsed * decayPerSec) / bumpStep));
+          // Decay progress: 1.0 right after bump, 0.0 at next bump
+          const decayProgress = Math.max(0, Math.min(1, 1 - (elapsed * decayPerSec) / bumpStep));
 
-            // Max possible earnings (at premium cap)
-            const maxCut = amount * (mOrder.premium_bps_cap / 10000);
-
-            return (
-              <div
-                key={mOrder.id}
-                ref={virtualizer.measureElement}
-                data-index={virtualRow.index}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-                className="pb-1"
-              >
-                <div
-                  onClick={() => onSelectMempoolOrder(mOrder)}
-                  className="p-2.5 rounded-lg border border-orange-500/20 bg-orange-500/[0.02] hover:border-orange-500/30 transition-all cursor-pointer"
-                >
-                  {/* Row 1: Order info + timer + action */}
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-orange-400" />
-                      <span className="text-[10px] font-medium text-white/50 font-mono">#{mOrder.order_number}</span>
-                      {isMyMempoolOrder && (
-                        <span className="text-[9px] px-1 py-0.5 bg-white/[0.04] text-white/40 rounded font-medium">YOURS</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {/* Compact timer */}
-                      <span className={`text-[10px] font-bold font-mono tabular-nums ${
-                        liveExpiry < 120 ? 'text-red-400' : liveExpiry < 300 ? 'text-orange-400' : 'text-white/30'
-                      }`}>
-                        {Math.floor(liveExpiry / 60)}:{String(liveExpiry % 60).padStart(2, '0')}
-                      </span>
-                      {isMyMempoolOrder ? (
-                        <span className="px-2 py-0.5 rounded text-[9px] font-mono text-white/20">WAITING</span>
-                      ) : (
-                        <button className="px-3 py-1 bg-orange-500 text-black rounded-lg text-[10px] font-bold hover:bg-orange-400 transition-colors press-effect">
-                          ACCEPT
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Row 2: YOUR CUT — hero earnings with decay */}
-                  <div className="mb-2 px-3 py-2 rounded-lg bg-orange-500/[0.06] border border-orange-500/15">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[9px] text-orange-400/50 font-mono font-bold tracking-wider">YOUR CUT</span>
-                      <span className="text-[9px] text-white/20 font-mono">
-                        max ${maxCut.toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className={`text-xl font-black tabular-nums font-mono transition-all ${
-                        decayProgress < 0.3 ? 'text-red-400' : 'text-orange-400'
-                      }`}>
-                        ${yourCut.toFixed(2)}
-                      </span>
-                      <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded transition-all ${
-                        decayProgress < 0.3
-                          ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                          : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
-                      }`}>
-                        +{livePremiumPct.toFixed(2)}%
-                      </span>
-                    </div>
-                    {/* Decay bar */}
-                    <div className="mt-1.5 h-[3px] rounded-full bg-white/[0.06] overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-1000 ease-linear"
-                        style={{
-                          width: `${decayProgress * 100}%`,
-                          background: decayProgress < 0.3
-                            ? 'rgb(248, 113, 113)'
-                            : decayProgress < 0.6
-                            ? 'rgb(251, 146, 60)'
-                            : 'rgb(249, 115, 22)',
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Row 3: Deal details — amount, rate, side */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-white tabular-nums">
-                        {Math.round(amount).toLocaleString()} USDT
-                      </span>
-                      <span className="text-[10px] text-white/15">@</span>
-                      <span className="text-xs font-bold text-white/50 tabular-nums">
-                        {livePrice}
-                      </span>
-                    </div>
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold bg-orange-500/10 text-orange-400 border border-orange-500/20">
-                      PRIORITY
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
-          const premium = ((order.rate - 3.67) / 3.67) * 100;
-          const isHighPremium = premium > 0.5;
-          const isMineable = !!order.escrowTxHash;
-          const dbUsername = order.dbOrder?.user?.username || '';
-          const isPlaceholderUser = dbUsername.startsWith('open_order_') || dbUsername.startsWith('m2m_');
-          const isMyOwnOrder = !!order.isMyOrder || (isPlaceholderUser && order.orderMerchantId === merchantInfo?.id);
+          // Max possible earnings (at premium cap)
+          const maxCut = amount * (mOrder.premium_bps_cap / 10000);
 
           return (
             <div
-              key={order.id}
-              ref={virtualizer.measureElement}
-              data-index={virtualRow.index}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-              className="pb-1"
+              key={mOrder.id}
+              onClick={() => onSelectMempoolOrder(mOrder)}
+              className="p-2.5 rounded-lg border border-orange-500/20 bg-orange-500/[0.02] hover:border-orange-500/30 transition-all cursor-pointer"
             >
-              <div
-                data-testid={`order-card-${order.id}`}
-                onClick={() => onSelectOrder(order)}
-                className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
-                  isMyOwnOrder
-                    ? 'bg-white/[0.01] border-white/[0.04] opacity-50'
-                    : isMineable
-                    ? 'glass-card border-white/[0.10] hover:border-orange-500/30 ring-1 ring-white/[0.04]'
-                    : isHighPremium
-                    ? 'glass-card border-white/[0.08] hover:border-white/[0.12]'
-                    : 'glass-card hover:border-white/[0.08]'
-                }`}
-              >
-                {/* Waiting banner — top of card for own orders */}
-                {isMyOwnOrder && (
-                  <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-white/[0.02] border border-white/[0.04]">
-                    <div className="w-1 h-1 bg-white/20 rounded-full animate-breathe" />
-                    <span className="text-[9px] text-white/30 font-mono font-bold tracking-wider uppercase">Waiting for acceptance</span>
-                  </div>
-                )}
-                {/* Row 1: User + tags on left, timer on right */}
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <div className="w-7 h-7 rounded-lg bg-white/[0.02] flex items-center justify-center shrink-0 text-sm border border-white/[0.04]">
-                      {order.emoji}
-                    </div>
-                    <span className="text-xs font-medium text-white truncate">{order.user}</span>
-                    <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
-                      order.orderType === 'buy'
-                        ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
-                        : 'bg-white/[0.06] border-white/[0.08] text-white/50'
-                    }`}>
-                      {order.orderType === 'buy' ? 'SELL' : 'BUY'}
-                    </span>
-                    {order.spreadPreference && (
-                      <span className={`flex items-center gap-0.5 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
-                        order.spreadPreference === 'fastest'
-                          ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
-                          : order.spreadPreference === 'cheap'
-                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                          : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                      }`}>
-                        {order.spreadPreference === 'fastest' && <Zap className="w-2.5 h-2.5" />}
-                        {order.spreadPreference === 'fastest' ? 'FAST' : order.spreadPreference === 'best' ? 'BEST' : 'CHEAP'}
-                        {order.protocolFeePercent != null && order.protocolFeePercent > (order.spreadPreference === 'fastest' ? 2.5 : order.spreadPreference === 'best' ? 2.0 : 1.5) && (
-                          <span className="opacity-70">+{(order.protocolFeePercent - (order.spreadPreference === 'fastest' ? 2.5 : order.spreadPreference === 'best' ? 2.0 : 1.5)).toFixed(1)}%</span>
-                        )}
-                      </span>
-                    )}
-                    {isMyOwnOrder && (
-                      <span className="px-1 py-0.5 bg-white/[0.04] border border-white/[0.06] rounded text-[9px] font-bold text-white/40">YOURS</span>
-                    )}
-                    {order.hasMessages && order.unreadCount > 0 && (
-                      <span className="px-1 py-0.5 bg-orange-500 text-black text-[9px] font-bold rounded">
-                        {order.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                  {/* Timer */}
-                  <span className={`text-xs font-bold font-mono tabular-nums shrink-0 ml-auto px-1.5 py-0.5 rounded ${
-                    order.expiresIn <= 0
-                      ? 'text-red-400/80 bg-red-500/[0.06]'
-                      : order.expiresIn < 120
-                      ? 'text-red-400/80 bg-red-500/[0.06]'
-                      : order.expiresIn < 300
-                      ? 'text-orange-400/70 bg-orange-500/[0.06]'
-                      : 'text-white/35'
-                  }`}>
-                    {order.expiresIn > 0 ? `${Math.floor(order.expiresIn / 60)}m ${String(order.expiresIn % 60).padStart(2, '0')}s` : '0:00'}
-                  </span>
-                </div>
-
-                {/* Row 2: Amount + profit */}
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="text-sm font-bold text-white tabular-nums">
-                    {Math.round(order.amount).toLocaleString()} {order.fromCurrency}
-                  </span>
-                  <ArrowRight className="w-3 h-3 text-white/20" />
-                  <span className="text-sm font-bold text-orange-400 tabular-nums">
-                    {Math.round(order.total).toLocaleString()} {order.toCurrency}
-                  </span>
-                  {order.protocolFeePercent != null && order.protocolFeePercent > 0 && (
-                    <span className="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
-                      +${(order.amount * order.protocolFeePercent / 100).toFixed(2)}
-                    </span>
-                  )}
-                </div>
-
-                {/* Row 3: Rate + premium ... small action button on right */}
+              {/* Row 1: Order info + timer + action */}
+              <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-white/40 font-mono">@ {order.rate.toFixed(2)}</span>
-                  {order.protocolFeePercent != null && order.protocolFeePercent > (order.spreadPreference === 'fastest' ? 2.5 : order.spreadPreference === 'best' ? 2.0 : 1.5) && (
-                    <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400">
-                      +{(order.protocolFeePercent - (order.spreadPreference === 'fastest' ? 2.5 : order.spreadPreference === 'best' ? 2.0 : 1.5)).toFixed(1)}%
-                    </span>
+                  <Zap className="w-3.5 h-3.5 text-orange-400" />
+                  <span className="text-[10px] font-medium text-white/50 font-mono">#{mOrder.order_number}</span>
+                  {isMyMempoolOrder && (
+                    <span className="text-[9px] px-1 py-0.5 bg-white/[0.04] text-white/40 rounded font-medium">YOURS</span>
                   )}
-                  <div className="flex-1" />
-                  {!isMyOwnOrder && (
-                    <button data-testid="order-primary-action" className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 ${
-                      isMineable
-                        ? 'bg-orange-500 text-black hover:bg-orange-400'
-                        : 'bg-orange-500/80 text-black hover:bg-orange-400'
-                    }`}>
-                      {isMineable ? 'MINE' : 'ACCEPT'}
+                </div>
+                <div className="flex items-center gap-2">
+                  {/* Compact timer */}
+                  <span className={`text-[10px] font-bold font-mono tabular-nums ${
+                    liveExpiry < 120 ? 'text-red-400' : liveExpiry < 300 ? 'text-orange-400' : 'text-white/30'
+                  }`}>
+                    {Math.floor(liveExpiry / 60)}:{String(liveExpiry % 60).padStart(2, '0')}
+                  </span>
+                  {isMyMempoolOrder ? (
+                    <span className="px-2 py-0.5 rounded text-[9px] font-mono text-white/20">WAITING</span>
+                  ) : (
+                    <button className="px-3 py-1 bg-orange-500 text-black rounded-lg text-[10px] font-bold hover:bg-orange-400 transition-colors press-effect">
+                      ACCEPT
                     </button>
                   )}
                 </div>
               </div>
+
+              {/* Row 2: YOUR CUT — hero earnings with decay */}
+              <div className="mb-2 px-3 py-2 rounded-lg bg-orange-500/[0.06] border border-orange-500/15">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[9px] text-orange-400/50 font-mono font-bold tracking-wider">YOUR CUT</span>
+                  <span className="text-[9px] text-white/20 font-mono">
+                    max ${maxCut.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-xl font-black tabular-nums font-mono transition-all ${
+                    decayProgress < 0.3 ? 'text-red-400' : 'text-orange-400'
+                  }`}>
+                    ${yourCut.toFixed(2)}
+                  </span>
+                  <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded transition-all ${
+                    decayProgress < 0.3
+                      ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                      : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
+                  }`}>
+                    +{livePremiumPct.toFixed(2)}%
+                  </span>
+                </div>
+                {/* Decay bar */}
+                <div className="mt-1.5 h-[3px] rounded-full bg-white/[0.06] overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-1000 ease-linear"
+                    style={{
+                      width: `${decayProgress * 100}%`,
+                      background: decayProgress < 0.3
+                        ? 'rgb(248, 113, 113)'
+                        : decayProgress < 0.6
+                        ? 'rgb(251, 146, 60)'
+                        : 'rgb(249, 115, 22)',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: Deal details — amount, rate, side */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-white tabular-nums">
+                    {Math.round(amount).toLocaleString()} USDT
+                  </span>
+                  <span className="text-[10px] text-white/15">@</span>
+                  <span className="text-xs font-bold text-white/50 tabular-nums">
+                    {livePrice}
+                  </span>
+                </div>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                  PRIORITY
+                </span>
+              </div>
             </div>
           );
-        })}
-      </div>
+        }
+
+        const premium = ((order.rate - 3.67) / 3.67) * 100;
+        const isHighPremium = premium > 0.5;
+        const isMineable = !!order.escrowTxHash;
+        const dbUsername = order.dbOrder?.user?.username || '';
+        const isPlaceholderUser = dbUsername.startsWith('open_order_') || dbUsername.startsWith('m2m_');
+        const isMyOwnOrder = !!order.isMyOrder || (isPlaceholderUser && order.orderMerchantId === merchantInfo?.id);
+
+        return (
+          <div
+            key={order.id}
+            data-testid={`order-card-${order.id}`}
+            onClick={() => onSelectOrder(order)}
+            className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
+              isMyOwnOrder
+                ? 'bg-white/[0.01] border-white/[0.04] opacity-50'
+                : isMineable
+                ? 'glass-card border-white/[0.10] hover:border-orange-500/30 ring-1 ring-white/[0.04]'
+                : isHighPremium
+                ? 'glass-card border-white/[0.08] hover:border-white/[0.12]'
+                : 'glass-card hover:border-white/[0.08]'
+            }`}
+          >
+            {/* Waiting banner — top of card for own orders */}
+            {isMyOwnOrder && (
+              <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-white/[0.02] border border-white/[0.04]">
+                <div className="w-1 h-1 bg-white/20 rounded-full animate-breathe" />
+                <span className="text-[9px] text-white/30 font-mono font-bold tracking-wider uppercase">Waiting for acceptance</span>
+              </div>
+            )}
+            {/* Row 1: User + tags on left, timer on right */}
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="w-7 h-7 rounded-lg bg-white/[0.02] flex items-center justify-center shrink-0 text-sm border border-white/[0.04]">
+                  {order.emoji}
+                </div>
+                <span className="text-xs font-medium text-white truncate capitalize">{order.user}</span>
+                <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
+                  order.orderType === 'buy'
+                    ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
+                    : 'bg-white/[0.06] border-white/[0.08] text-white/50'
+                }`}>
+                  {order.orderType === 'buy' ? 'SELL' : 'BUY'}
+                </span>
+                {order.spreadPreference && (
+                  <span className={`flex items-center gap-0.5 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
+                    order.spreadPreference === 'fastest'
+                      ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
+                      : order.spreadPreference === 'cheap'
+                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                      : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                  }`}>
+                    {order.spreadPreference === 'fastest' && <Zap className="w-2.5 h-2.5" />}
+                    {order.spreadPreference === 'fastest' ? 'FAST' : order.spreadPreference === 'best' ? 'BEST' : 'CHEAP'}
+                    {order.protocolFeePercent != null && order.protocolFeePercent > (order.spreadPreference === 'fastest' ? 2.5 : order.spreadPreference === 'best' ? 2.0 : 1.5) && (
+                      <span className="opacity-70">+{(order.protocolFeePercent - (order.spreadPreference === 'fastest' ? 2.5 : order.spreadPreference === 'best' ? 2.0 : 1.5)).toFixed(1)}%</span>
+                    )}
+                  </span>
+                )}
+                {isMyOwnOrder && (
+                  <span className="px-1 py-0.5 bg-white/[0.04] border border-white/[0.06] rounded text-[9px] font-bold text-white/40">YOURS</span>
+                )}
+                {order.hasMessages && order.unreadCount > 0 && (
+                  <span className="px-1 py-0.5 bg-orange-500 text-black text-[9px] font-bold rounded">
+                    {order.unreadCount}
+                  </span>
+                )}
+              </div>
+              {/* Timer */}
+              <span className={`text-xs font-bold font-mono tabular-nums shrink-0 ml-auto px-1.5 py-0.5 rounded ${
+                order.expiresIn <= 0
+                  ? 'text-red-400/80 bg-red-500/[0.06]'
+                  : order.expiresIn < 120
+                  ? 'text-red-400/80 bg-red-500/[0.06]'
+                  : order.expiresIn < 300
+                  ? 'text-orange-400/70 bg-orange-500/[0.06]'
+                  : 'text-white/35'
+              }`}>
+                {order.expiresIn > 0 ? `${Math.floor(order.expiresIn / 60)}m ${String(order.expiresIn % 60).padStart(2, '0')}s` : '0:00'}
+              </span>
+            </div>
+
+            {/* Row 2: Amount + profit */}
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="text-sm font-bold text-white tabular-nums">
+                {Math.round(order.amount).toLocaleString()} {order.fromCurrency}
+              </span>
+              <ArrowRight className="w-3 h-3 text-white/20" />
+              <span className="text-sm font-bold text-orange-400 tabular-nums">
+                {Math.round(order.total).toLocaleString()} {order.toCurrency}
+              </span>
+              {order.protocolFeePercent != null && order.protocolFeePercent > 0 && (
+                <span className="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
+                  +${(order.amount * order.protocolFeePercent / 100).toFixed(2)}
+                </span>
+              )}
+            </div>
+
+            {/* Row 3: Rate + premium ... small action button on right */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-white/40 font-mono">@ {order.rate.toFixed(2)}</span>
+              {order.protocolFeePercent != null && order.protocolFeePercent > (order.spreadPreference === 'fastest' ? 2.5 : order.spreadPreference === 'best' ? 2.0 : 1.5) && (
+                <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400">
+                  +{(order.protocolFeePercent - (order.spreadPreference === 'fastest' ? 2.5 : order.spreadPreference === 'best' ? 2.0 : 1.5)).toFixed(1)}%
+                </span>
+              )}
+              <div className="flex-1" />
+              {!isMyOwnOrder && (
+                <button data-testid="order-primary-action" className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 ${
+                  isMineable
+                    ? 'bg-orange-500 text-black hover:bg-orange-400'
+                    : 'bg-orange-500/80 text-black hover:bg-orange-400'
+                }`}>
+                  {isMineable ? 'MINE' : 'ACCEPT'}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 });
@@ -372,7 +330,13 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   const setShowOrderFilters = useMerchantStore(s => s.setShowOrderFilters);
   const orderFilters = useMerchantStore(s => s.orderFilters);
   const setOrderFilters = useMerchantStore(s => s.setOrderFilters);
-  let displayOrders = [...orders];
+  // Deduplicate orders by ID (realtime updates can cause duplicates)
+  const seen = new Set<string>();
+  let displayOrders = orders.filter(o => {
+    if (seen.has(o.id)) return false;
+    seen.add(o.id);
+    return true;
+  });
 
   if (orderViewFilter === 'new' && mempoolOrders.length > 0) {
     const mempoolAsOrders = mempoolOrders.map((mo) => ({

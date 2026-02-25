@@ -1,9 +1,10 @@
 'use client';
 
-import { memo, useRef } from 'react';
-import { Shield, Zap, ChevronRight, Target, TrendingDown, Flame, ArrowRight } from 'lucide-react';
+import { memo, useRef, useMemo } from 'react';
+import { Shield, Zap, ChevronRight, Target, TrendingDown, Flame, ArrowRight, Search } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextActionFromStatus } from '@/lib/orders/statusResolver';
+import { useMerchantStore, type InProgressQuickFilter } from '@/stores/merchantStore';
 
 interface InProgressPanelProps {
   orders: any[];
@@ -227,7 +228,43 @@ const InProgressOrderList = memo(function InProgressOrderList({
   );
 });
 
+// Actions that mean "I need to do something"
+const ACTION_NEEDED = ['Lock Escrow', "I've Paid", "Send Fiat Payment", 'Confirm Receipt', 'Confirm Receipt & Release', 'Claim Order', 'Accept Order'];
+// Actions that map to the lock_escrow filter
+const LOCK_ESCROW_ACTIONS = ['Lock Escrow', 'Wait for Escrow'];
+// Actions that map to the send_payment filter
+const SEND_PAYMENT_ACTIONS = ["I've Paid", "Send Fiat Payment", 'Wait for Payment', 'Waiting for Payment'];
+// Actions that map to the confirm_receipt filter
+const CONFIRM_RECEIPT_ACTIONS = ['Confirm Receipt', 'Confirm Receipt & Release', 'Wait for Confirmation', 'Waiting for Confirmation'];
+
+const QUICK_FILTERS: { key: InProgressQuickFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'lock_escrow', label: 'Lock Wallet' },
+  { key: 'send_payment', label: 'Payment' },
+  { key: 'confirm_receipt', label: 'Confirm' },
+  { key: 'waiting', label: 'Waiting' },
+];
+
+function matchesQuickFilter(nextAction: string, filter: InProgressQuickFilter): boolean {
+  switch (filter) {
+    case 'all': return true;
+    case 'lock_escrow': return LOCK_ESCROW_ACTIONS.includes(nextAction);
+    case 'send_payment': return SEND_PAYMENT_ACTIONS.includes(nextAction);
+    case 'confirm_receipt': return CONFIRM_RECEIPT_ACTIONS.includes(nextAction);
+    case 'waiting': return WAITING_ACTIONS.includes(nextAction);
+    default: return true;
+  }
+}
+
 export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder }: InProgressPanelProps) {
+  // ─── Filter/sort state from Zustand ───────────────────────
+  const ipSearchQuery = useMerchantStore(s => s.ipSearchQuery);
+  const setIpSearchQuery = useMerchantStore(s => s.setIpSearchQuery);
+  const ipQuickFilter = useMerchantStore(s => s.ipQuickFilter);
+  const setIpQuickFilter = useMerchantStore(s => s.setIpQuickFilter);
+  const ipSortBy = useMerchantStore(s => s.ipSortBy);
+  const setIpSortBy = useMerchantStore(s => s.setIpSortBy);
+
   const formatTimeRemaining = (seconds: number): string => {
     if (seconds <= 0) return 'Expired';
     const hours = Math.floor(seconds / 3600);
@@ -257,11 +294,69 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
     return getNextActionFromStatus(order, order.orderType || order.type);
   };
 
+  // ─── Count per filter category ─────────────────────────────
+  const filterCounts = useMemo(() => {
+    const counts: Record<InProgressQuickFilter, number> = {
+      all: orders.length,
+      lock_escrow: 0,
+      send_payment: 0,
+      confirm_receipt: 0,
+      waiting: 0,
+    };
+    for (const order of orders) {
+      const action = getNextActionFromStatus(order, order.orderType || order.type);
+      if (LOCK_ESCROW_ACTIONS.includes(action)) counts.lock_escrow++;
+      if (SEND_PAYMENT_ACTIONS.includes(action)) counts.send_payment++;
+      if (CONFIRM_RECEIPT_ACTIONS.includes(action)) counts.confirm_receipt++;
+      if (WAITING_ACTIONS.includes(action)) counts.waiting++;
+    }
+    return counts;
+  }, [orders]);
+
+  // ─── Filter + sort logic ──────────────────────────────────
+  const filteredOrders = useMemo(() => {
+    let result = orders;
+
+    // Quick filter by order step
+    if (ipQuickFilter !== 'all') {
+      result = result.filter(order => {
+        const action = getNextActionFromStatus(order, order.orderType || order.type);
+        return matchesQuickFilter(action, ipQuickFilter);
+      });
+    }
+
+    // Search filter
+    if (ipSearchQuery.trim()) {
+      const q = ipSearchQuery.toLowerCase();
+      result = result.filter(order => {
+        const matchesUser = order.user?.toLowerCase().includes(q);
+        const matchesAmount = order.amount?.toString().includes(q);
+        const matchesTotal = Math.round(order.amount * (order.rate || 3.67)).toString().includes(q);
+        const matchesId = order.id?.toLowerCase().includes(q);
+        const matchesOrderNum = order.dbOrder?.order_number?.toLowerCase().includes(q);
+        return matchesUser || matchesAmount || matchesTotal || matchesId || matchesOrderNum;
+      });
+    }
+
+    // Sort
+    if (ipSortBy !== 'time') {
+      result = [...result].sort((a, b) => {
+        if (ipSortBy === 'amount') return b.amount - a.amount;
+        if (ipSortBy === 'premium') return (b.rate || 0) - (a.rate || 0);
+        return 0;
+      });
+    } else {
+      result = [...result].sort((a, b) => a.expiresIn - b.expiresIn);
+    }
+
+    return result;
+  }, [orders, ipQuickFilter, ipSearchQuery, ipSortBy]);
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-3 py-2 border-b border-white/[0.04]">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-1.5">
           <div className="flex items-center gap-2">
             <Shield className="w-3.5 h-3.5 text-white/30" />
             <h2 className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">
@@ -269,14 +364,57 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
             </h2>
           </div>
           <span className="text-[10px] border border-white/[0.08] text-white/50 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
-            {orders.length}
+            {filteredOrders.length}{filteredOrders.length !== orders.length ? `/${orders.length}` : ''}
           </span>
+        </div>
+
+        {/* Quick Filters */}
+        <div className="flex flex-wrap items-center gap-1 mb-1.5">
+          {QUICK_FILTERS.map(({ key, label }) => {
+            const count = filterCounts[key];
+            return (
+              <button
+                key={key}
+                onClick={() => setIpQuickFilter(key)}
+                className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
+                  ipQuickFilter === key
+                    ? 'bg-white/[0.08] text-white/80 border border-white/[0.10]'
+                    : 'text-white/25 hover:text-white/40'
+                }`}
+              >
+                {label}{count > 0 && <span className="ml-0.5 text-orange-400 font-bold">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Search + Sort */}
+        <div className="flex items-center gap-1.5">
+          <div className="flex-1 flex items-center gap-1.5 bg-white/[0.02] border border-white/[0.06] rounded-lg px-2.5 py-1">
+            <Search className="w-3 h-3 text-white/20" />
+            <input
+              type="text"
+              value={ipSearchQuery}
+              onChange={(e) => setIpSearchQuery(e.target.value)}
+              placeholder="Search..."
+              className="flex-1 bg-transparent text-[11px] text-white placeholder:text-white/15 outline-none font-mono"
+            />
+          </div>
+          <select
+            value={ipSortBy}
+            onChange={(e) => setIpSortBy(e.target.value as any)}
+            className="text-[9px] font-mono text-white/35 bg-white/[0.02] border border-white/[0.06] rounded-lg px-1.5 py-1 outline-none cursor-pointer hover:border-white/[0.10]"
+          >
+            <option value="time">Time</option>
+            <option value="amount">Size</option>
+            <option value="premium">Premium</option>
+          </select>
         </div>
       </div>
 
       {/* Orders List — Virtualized */}
       <InProgressOrderList
-        orders={orders}
+        orders={filteredOrders}
         onSelectOrder={onSelectOrder}
         formatTimeRemaining={formatTimeRemaining}
         getStatusBadge={getStatusBadge}

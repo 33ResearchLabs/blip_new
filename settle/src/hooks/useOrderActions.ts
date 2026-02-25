@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, DbOrder } from "@/types/merchant";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
+import { showToast } from "@/components/NotificationToast";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 
@@ -38,6 +39,10 @@ export function useOrderActions({
 
   // ─── Local state ───
   const [markingDone, setMarkingDone] = useState(false);
+  const [isAccepting, setIsAccepting] = useState(false);
+  const [isSigning, setIsSigning] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [isConfirmingPayment, setIsConfirmingPayment] = useState(false);
   const [isCreatingTrade, setIsCreatingTrade] = useState(false);
   const [createTradeError, setCreateTradeError] = useState<string | null>(null);
 
@@ -45,7 +50,7 @@ export function useOrderActions({
   // ACCEPT ORDER
   // ═══════════════════════════════════════════════════════════════════
   const acceptOrder = async (order: Order) => {
-    if (!merchantId) return;
+    if (!merchantId || isAccepting) return;
 
     const isBuyOrder = order.orderType === 'buy';
     const isSellOrder = order.orderType === 'sell';
@@ -53,13 +58,14 @@ export function useOrderActions({
     // Check if order is already escrowed by someone else (M2M flow)
     const isEscrowedByOther = order.escrowTxHash && order.dbOrder?.status === 'escrowed';
 
-    // For M2M where seller already escrowed: require wallet to receive funds (skip in mock mode)
-    if (!isMockMode && isEscrowedByOther && !solanaWallet.walletAddress) {
-      addNotification('system', 'Please connect your wallet first to receive the USDC.', order.id);
+    // For M2M where seller already escrowed: require wallet to receive funds
+    if (isEscrowedByOther && !solanaWallet.walletAddress) {
+      showToast({ type: 'warning', title: 'Wallet Not Connected', message: 'Please connect your wallet to continue.' });
       setShowWalletModal(true);
       return;
     }
 
+    setIsAccepting(true);
     try {
       // If escrow is already funded by seller, call acceptTrade on-chain first (skip in mock mode)
       if (!isMockMode && isEscrowedByOther && order.escrowCreatorWallet && order.escrowTradeId != null) {
@@ -73,7 +79,9 @@ export function useOrderActions({
 
           if (!acceptResult.success) {
             console.error('[Go] Failed to accept trade on-chain:', acceptResult.error);
-            addNotification('system', `Failed to join escrow: ${acceptResult.error}`, order.id);
+            const errDetail = acceptResult.error || 'Unknown on-chain error';
+            addNotification('system', `Failed to join escrow: ${errDetail}`, order.id);
+            showToast({ type: 'error', title: 'Escrow Join Failed', message: errDetail });
             playSound('error');
             return;
           }
@@ -87,6 +95,7 @@ export function useOrderActions({
           } else {
             console.error('[Go] Error accepting trade on-chain:', acceptError);
             addNotification('system', `Failed to join escrow: ${errMsg}`, order.id);
+            showToast({ type: 'error', title: 'Escrow Join Failed', message: errMsg });
             playSound('error');
             return;
           }
@@ -114,30 +123,33 @@ export function useOrderActions({
       });
       if (!acceptRes.ok) {
         const errorText = await acceptRes.text().catch(() => '');
-        let errorMsg = `HTTP ${acceptRes.status}`;
+        let errorMsg: string;
         try {
           const errorData = JSON.parse(errorText);
-          errorMsg = errorData.error || JSON.stringify(errorData);
+          errorMsg = errorData.error || errorData.details?.join(', ') || `Server error (${acceptRes.status})`;
         } catch {
-          errorMsg = errorText || errorMsg;
+          errorMsg = errorText || `Server error (${acceptRes.status})`;
         }
         console.error("Failed to accept order:", acceptRes.status, errorMsg);
         addNotification('system', `Failed to accept order: ${errorMsg}`, order.id);
+        showToast({ type: 'error', title: 'Accept Order Failed', message: errorMsg });
         playSound('error');
         return;
       }
       const acceptData = await acceptRes.json();
 
       if (!acceptData.success) {
-        console.error("Failed to accept order:", acceptData.error);
-        addNotification('system', `Failed to accept order: ${acceptData.error}`, order.id);
+        const errorMsg = acceptData.error || 'Unexpected server response';
+        console.error("Failed to accept order:", errorMsg);
+        addNotification('system', `Failed to accept order: ${errorMsg}`, order.id);
+        showToast({ type: 'error', title: 'Accept Order Failed', message: errorMsg });
         playSound('error');
         return;
       }
 
       const acceptRole = isBuyOrder ? 'seller' : 'buyer';
       const nextStepMsg = isEscrowedByOther
-        ? 'Order claimed! Send the fiat payment and click "I\'ve Paid".'
+        ? 'Send the fiat payment and click "I\'ve Paid".'
         : acceptRole === 'seller'
           ? 'Now lock your USDC in escrow to proceed.'
           : 'Waiting for the seller to lock escrow.';
@@ -145,11 +157,17 @@ export function useOrderActions({
       const uiStatus = isEscrowedByOther ? "escrow" : "active";
       playSound('click');
       addNotification('system', `Order accepted! ${nextStepMsg}`, order.id);
+      showToast({ type: 'success', title: 'Order Accepted', message: nextStepMsg });
       handleOpenChat(order);
       await afterMutationReconcile(order.id, { status: uiStatus as "escrow" | "active", expiresIn: 1800 });
     } catch (error) {
       console.error("Error accepting order:", error);
+      const errorMsg = error instanceof Error ? error.message : 'Network error — please check your connection.';
+      addNotification('system', `Failed to accept order: ${errorMsg}`, order.id);
+      showToast({ type: 'error', title: 'Accept Order Failed', message: errorMsg });
       playSound('error');
+    } finally {
+      setIsAccepting(false);
     }
   };
 
@@ -179,7 +197,9 @@ export function useOrderActions({
 
       const matchData = await matchRes.json();
       if (!matchData.success) {
-        addNotification('system', `LP match failed: ${matchData.error}`, order.id);
+        const errDetail = matchData.error || 'No liquidity provider available';
+        addNotification('system', `LP match failed: ${errDetail}`, order.id);
+        showToast({ type: 'error', title: 'LP Match Failed', message: errDetail });
         playSound('error');
         return;
       }
@@ -196,7 +216,9 @@ export function useOrderActions({
       playSound('click');
     } catch (error) {
       console.error('Error accepting with sAED:', error);
-      addNotification('system', 'Failed to accept with sAED. Try again.', order.id);
+      const errorMsg = error instanceof Error ? error.message : 'Network error — please check your connection.';
+      addNotification('system', `Failed to accept with sAED: ${errorMsg}`, order.id);
+      showToast({ type: 'error', title: 'sAED Accept Failed', message: errorMsg });
       playSound('error');
     }
   };
@@ -205,10 +227,10 @@ export function useOrderActions({
   // SIGN TO CLAIM ORDER (buyer claims M2M escrowed order)
   // ═══════════════════════════════════════════════════════════════════
   const signToClaimOrder = async (order: Order) => {
-    if (!merchantId) return;
+    if (!merchantId || isSigning) return;
 
-    if (!isMockMode && !solanaWallet.connected) {
-      addNotification('system', 'Please connect your wallet to sign.');
+    if (!solanaWallet.connected) {
+      showToast({ type: 'warning', title: 'Wallet Not Connected', message: 'Please connect your wallet to continue.' });
       setShowWalletModal(true);
       return;
     }
@@ -219,6 +241,7 @@ export function useOrderActions({
       return;
     }
 
+    setIsSigning(true);
     try {
       const walletAddr = solanaWallet.walletAddress || 'mock-wallet';
       const message = `Claim order ${order.id} - I will send fiat payment. Wallet: ${walletAddr}`;
@@ -250,22 +273,30 @@ export function useOrderActions({
       const responseData = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        addNotification('system', `Failed to claim order: ${responseData.error || 'Unknown error'}`, order.id);
+        const errDetail = responseData.error || `Server error (${res.status})`;
+        addNotification('system', `Failed to claim order: ${errDetail}`, order.id);
+        showToast({ type: 'error', title: 'Claim Failed', message: errDetail });
         playSound('error');
         return;
       }
 
       playSound('click');
       addNotification('system', 'Order claimed! Now send the fiat payment and click "I\'ve Paid".', order.id);
+      showToast({ type: 'success', title: 'Order Claimed', message: 'Send the fiat payment and click "I\'ve Paid".' });
       await afterMutationReconcile(order.id, { status: "escrow" as const });
     } catch (error: any) {
       if (error?.message?.includes('User rejected')) {
-        addNotification('system', 'Signature rejected. Please sign to claim.');
+        addNotification('system', 'Signature rejected. Please sign to claim.', order.id);
+        showToast({ type: 'warning', title: 'Signature Rejected', message: 'You must sign the transaction to claim this order.' });
       } else {
         console.error("Error signing:", error);
-        addNotification('system', 'Failed to sign. Please try again.');
+        const errorMsg = error?.message || 'Unexpected error during signing.';
+        addNotification('system', `Failed to claim: ${errorMsg}`, order.id);
+        showToast({ type: 'error', title: 'Claim Failed', message: errorMsg });
       }
       playSound('error');
+    } finally {
+      setIsSigning(false);
     }
   };
 
@@ -273,10 +304,10 @@ export function useOrderActions({
   // SIGN AND PROCEED (Active -> Ongoing)
   // ═══════════════════════════════════════════════════════════════════
   const signAndProceed = async (order: Order) => {
-    if (!merchantId) return;
+    if (!merchantId || isSigning) return;
 
-    if (!isMockMode && !solanaWallet.connected) {
-      addNotification('system', 'Please connect your wallet to sign.');
+    if (!solanaWallet.connected) {
+      showToast({ type: 'warning', title: 'Wallet Not Connected', message: 'Please connect your wallet to continue.' });
       setShowWalletModal(true);
       return;
     }
@@ -287,6 +318,7 @@ export function useOrderActions({
       return;
     }
 
+    setIsSigning(true);
     try {
       const walletAddr = solanaWallet.walletAddress || 'mock-wallet';
       const message = `Confirm order ${order.id} - I will send fiat payment. Wallet: ${walletAddr}`;
@@ -317,22 +349,30 @@ export function useOrderActions({
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        addNotification('system', `Failed to update order: ${errorData.error || 'Unknown error'}`, order.id);
+        const errDetail = errorData.error || `Server error (${res.status})`;
+        addNotification('system', `Failed to update order: ${errDetail}`, order.id);
+        showToast({ type: 'error', title: 'Update Failed', message: errDetail });
         playSound('error');
         return;
       }
 
       playSound('click');
       addNotification('system', 'Signed! Order moved to Ongoing. Click "I\'ve Paid" when you send the fiat.', order.id);
+      showToast({ type: 'success', title: 'Order Signed', message: 'Click "I\'ve Paid" when you send the fiat.' });
       await afterMutationReconcile(order.id, { status: "escrow" as const });
     } catch (error: any) {
       if (error?.message?.includes('User rejected')) {
-        addNotification('system', 'Signature rejected. Please sign to proceed.');
+        addNotification('system', 'Signature rejected. Please sign to proceed.', order.id);
+        showToast({ type: 'warning', title: 'Signature Rejected', message: 'You must sign the transaction to proceed.' });
       } else {
         console.error("Error signing:", error);
-        addNotification('system', 'Failed to sign. Please try again.');
+        const errorMsg = error?.message || 'Unexpected error during signing.';
+        addNotification('system', `Failed to sign: ${errorMsg}`, order.id);
+        showToast({ type: 'error', title: 'Sign Failed', message: errorMsg });
       }
       playSound('error');
+    } finally {
+      setIsSigning(false);
     }
   };
 
@@ -359,15 +399,21 @@ export function useOrderActions({
         if (data.success) {
           playSound('click');
           addNotification('system', `Payment marked as sent. Waiting for seller to release escrow.`, order.id);
+          showToast({ type: 'success', title: 'Payment Sent', message: 'Waiting for seller to release escrow.' });
           await afterMutationReconcile(order.id, { status: "escrow" as const });
         }
       } else {
         const errorData = await res.json().catch(() => ({}));
-        addNotification('system', `Failed: ${errorData.error || 'Unknown error'}`, order.id);
+        const errDetail = errorData.error || `Server error (${res.status})`;
+        addNotification('system', `Failed to mark payment: ${errDetail}`, order.id);
+        showToast({ type: 'error', title: 'Payment Update Failed', message: errDetail });
         playSound('error');
       }
     } catch (error) {
       console.error("Error marking payment sent:", error);
+      const errorMsg = error instanceof Error ? error.message : 'Network error — please check your connection.';
+      addNotification('system', `Failed to mark payment: ${errorMsg}`, order.id);
+      showToast({ type: 'error', title: 'Payment Update Failed', message: errorMsg });
       playSound('error');
     } finally {
       setMarkingDone(false);
@@ -398,11 +444,26 @@ export function useOrderActions({
           setSelectedOrderPopup(null);
           playSound('trade_complete');
           addNotification('complete', `Trade completed with ${order.user}!`, order.id);
+          showToast({ type: 'success', title: 'Trade Complete', message: `Trade with ${order.user} completed successfully.` });
           await afterMutationReconcile(order.id, { status: "completed" as const });
+        } else {
+          const errDetail = data.error || 'Unexpected server response';
+          addNotification('system', `Failed to complete trade: ${errDetail}`, order.id);
+          showToast({ type: 'error', title: 'Complete Failed', message: errDetail });
+          playSound('error');
         }
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        const errDetail = errorData.error || `Server error (${res.status})`;
+        addNotification('system', `Failed to complete trade: ${errDetail}`, order.id);
+        showToast({ type: 'error', title: 'Complete Failed', message: errDetail });
+        playSound('error');
       }
     } catch (error) {
       console.error("Error completing order:", error);
+      const errorMsg = error instanceof Error ? error.message : 'Network error — please check your connection.';
+      addNotification('system', `Failed to complete trade: ${errorMsg}`, order.id);
+      showToast({ type: 'error', title: 'Complete Failed', message: errorMsg });
       playSound('error');
     } finally {
       setMarkingDone(false);
@@ -413,8 +474,9 @@ export function useOrderActions({
   // COMPLETE ORDER
   // ═══════════════════════════════════════════════════════════════════
   const completeOrder = async (orderId: string) => {
-    if (!merchantId) return;
+    if (!merchantId || isCompleting) return;
 
+    setIsCompleting(true);
     try {
       const res = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
@@ -426,17 +488,34 @@ export function useOrderActions({
         }),
       });
       if (!res.ok) {
-        console.error("Failed to complete order:", res.status);
+        const errorData = await res.json().catch(() => ({}));
+        const errDetail = errorData.error || `Server error (${res.status})`;
+        console.error("Failed to complete order:", res.status, errDetail);
+        addNotification('system', `Failed to complete order: ${errDetail}`, orderId);
+        showToast({ type: 'error', title: 'Complete Failed', message: errDetail });
+        playSound('error');
         return;
       }
       const data = await res.json();
       if (data.success) {
         playSound('trade_complete');
+        addNotification('complete', 'Order completed successfully.', orderId);
+        showToast({ type: 'success', title: 'Order Complete', message: 'Trade has been completed successfully.' });
         await afterMutationReconcile(orderId, { status: "completed" as const });
+      } else {
+        const errDetail = data.error || 'Unexpected server response';
+        addNotification('system', `Failed to complete order: ${errDetail}`, orderId);
+        showToast({ type: 'error', title: 'Complete Failed', message: errDetail });
+        playSound('error');
       }
     } catch (error) {
       console.error("Error completing order:", error);
+      const errorMsg = error instanceof Error ? error.message : 'Network error — please check your connection.';
+      addNotification('system', `Failed to complete order: ${errorMsg}`, orderId);
+      showToast({ type: 'error', title: 'Complete Failed', message: errorMsg });
       playSound('error');
+    } finally {
+      setIsCompleting(false);
     }
   };
 
@@ -444,7 +523,7 @@ export function useOrderActions({
   // CONFIRM PAYMENT (release escrow + complete)
   // ═══════════════════════════════════════════════════════════════════
   const confirmPayment = async (orderId: string) => {
-    if (!merchantId) return;
+    if (!merchantId || isConfirmingPayment) return;
 
     const order = orders.find(o => o.id === orderId);
     if (!order) {
@@ -452,6 +531,7 @@ export function useOrderActions({
       return;
     }
 
+    setIsConfirmingPayment(true);
     try {
       let releaseTxHash: string;
 
@@ -471,6 +551,7 @@ export function useOrderActions({
 
           if (!isValidUserWallet) {
             addNotification('system', 'Invalid buyer wallet address. Cannot release escrow.', orderId);
+            showToast({ type: 'error', title: 'Release Failed', message: 'Invalid buyer wallet address. Cannot release escrow.' });
             playSound('error');
             return;
           }
@@ -486,6 +567,7 @@ export function useOrderActions({
             const errMsg = releaseErr instanceof Error ? releaseErr.message : String(releaseErr);
             if (errMsg.includes('ConstraintRaw') && errMsg.includes('counterparty_ata')) {
               addNotification('system', 'Buyer has not joined the escrow on-chain yet. Ask the buyer to connect their wallet and view this order.', orderId);
+              showToast({ type: 'error', title: 'Release Failed', message: 'Buyer has not joined escrow on-chain yet.' });
               playSound('error');
               return;
             }
@@ -493,8 +575,10 @@ export function useOrderActions({
           }
 
           if (!releaseResult.success) {
-            console.error('[Merchant] Failed to release escrow:', releaseResult.error);
-            addNotification('system', `Failed to release escrow: ${releaseResult.error || 'Unknown error'}`, orderId);
+            const errDetail = releaseResult.error || 'On-chain release failed';
+            console.error('[Merchant] Failed to release escrow:', errDetail);
+            addNotification('system', `Failed to release escrow: ${errDetail}`, orderId);
+            showToast({ type: 'error', title: 'Escrow Release Failed', message: errDetail });
             playSound('error');
             return;
           }
@@ -517,9 +601,11 @@ export function useOrderActions({
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
-          console.error('[Merchant] Escrow release API failed:', errorData);
-          addNotification('system', `Failed to complete order: ${errorData.error || 'Unknown error'}`, orderId);
+          const errorData = await response.json().catch(() => ({}));
+          const errDetail = errorData.error || `Server error (${response.status})`;
+          console.error('[Merchant] Escrow release API failed:', errDetail);
+          addNotification('system', `Failed to complete order: ${errDetail}`, orderId);
+          showToast({ type: 'error', title: 'Complete Failed', message: errDetail });
           playSound('error');
           return;
         }
@@ -528,11 +614,16 @@ export function useOrderActions({
 
       playSound('trade_complete');
       addNotification('complete', `Order completed - ${order.amount} USDC released to buyer`, orderId);
+      showToast({ type: 'success', title: 'Trade Complete', message: `${order.amount} USDC released to buyer.` });
       await afterMutationReconcile(orderId, { status: "completed" as const });
     } catch (error) {
       console.error("Error confirming payment:", error);
-      addNotification('system', 'Failed to complete order. Please try again.', orderId);
+      const errorMsg = error instanceof Error ? error.message : 'Network error — please check your connection.';
+      addNotification('system', `Failed to complete order: ${errorMsg}`, orderId);
+      showToast({ type: 'error', title: 'Complete Failed', message: errorMsg });
       playSound('error');
+    } finally {
+      setIsConfirmingPayment(false);
     }
   };
 
@@ -602,8 +693,8 @@ export function useOrderActions({
         // Create temporary order for escrow modal
         const tempOrder: Order = {
           id: 'temp-' + Date.now(),
-          user: matchedOffer?.merchant?.display_name || 'Merchant',
-          emoji: '🏪',
+          user: 'Sell Order',
+          emoji: '🔒',
           amount: parseFloat(openTradeForm.cryptoAmount),
           fromCurrency: 'USDC',
           toCurrency: 'AED',
@@ -651,6 +742,7 @@ export function useOrderActions({
           setOrders((prev: Order[]) => [newOrder, ...prev]);
           playSound('trade_complete');
           addNotification('order', `Buy order created for ${parseFloat(openTradeForm.cryptoAmount)} USDC`, data.data?.id);
+          showToast({ type: 'success', title: 'Order Created', message: `Buy order for ${parseFloat(openTradeForm.cryptoAmount)} USDC placed successfully.` });
         }
 
         setOpenTradeForm({
@@ -663,8 +755,9 @@ export function useOrderActions({
 
     } catch (error) {
       console.error("Error creating order:", error);
-      const errorMsg = error instanceof Error ? error.message : 'Failed to create order';
-      addNotification('system', errorMsg);
+      const errorMsg = error instanceof Error ? error.message : 'Network error — please check your connection.';
+      addNotification('system', `Failed to create order: ${errorMsg}`);
+      showToast({ type: 'error', title: 'Order Creation Failed', message: errorMsg });
       playSound('error');
     } finally {
       setIsCreatingTrade(false);
@@ -674,6 +767,10 @@ export function useOrderActions({
   return {
     // State
     markingDone,
+    isAccepting,
+    isSigning,
+    isCompleting,
+    isConfirmingPayment,
     isCreatingTrade, setIsCreatingTrade,
     createTradeError, setCreateTradeError,
 

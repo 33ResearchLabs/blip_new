@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order } from "@/types/merchant";
+import { showToast } from "@/components/NotificationToast";
 
 interface UseDisputeHandlersParams {
   solanaWallet: any;
@@ -104,12 +105,18 @@ export function useDisputeHandlers({
           await afterMutationReconcile(dOrderId, { status: "disputed" as const });
         }
       } else {
-        toast.showWarning('Failed to submit dispute. Please try again.');
+        const errorData = await res.json().catch(() => ({}));
+        const errDetail = errorData.error || `Server error (${res.status})`;
+        showToast({ type: 'error', title: 'Dispute Failed', message: errDetail });
+        addNotification('system', `Failed to submit dispute: ${errDetail}`, disputeOrderId);
+        playSound('error');
       }
     } catch (err) {
       console.error('Failed to submit dispute:', err);
+      const errorMsg = err instanceof Error ? err.message : 'Network error — please check your connection.';
+      showToast({ type: 'error', title: 'Dispute Failed', message: errorMsg });
+      addNotification('system', `Failed to submit dispute: ${errorMsg}`, disputeOrderId || undefined);
       playSound('error');
-      toast.showWarning('Failed to submit dispute');
     } finally {
       setIsSubmittingDispute(false);
     }
@@ -148,6 +155,7 @@ export function useDisputeHandlers({
       const data = await res.json();
       if (data.success) {
         addNotification('system', 'Extension request sent to user', orderId);
+        showToast({ type: 'success', title: 'Extension Requested', message: 'Extension request sent to the other party.' });
         playSound('click');
         setExtensionRequests(prev => {
           const newMap = new Map(prev);
@@ -160,12 +168,16 @@ export function useDisputeHandlers({
           return newMap;
         });
       } else {
-        addNotification('system', data.error || 'Failed to request extension', orderId);
+        const errDetail = data.error || 'Extension request denied by server';
+        addNotification('system', errDetail, orderId);
+        showToast({ type: 'error', title: 'Extension Failed', message: errDetail });
         playSound('error');
       }
     } catch (err) {
       console.error('Failed to request extension:', err);
-      addNotification('system', 'Failed to request extension', orderId);
+      const errorMsg = err instanceof Error ? err.message : 'Network error — please check your connection.';
+      addNotification('system', `Failed to request extension: ${errorMsg}`, orderId);
+      showToast({ type: 'error', title: 'Extension Failed', message: errorMsg });
       playSound('error');
     } finally {
       setRequestingExtension(null);
@@ -198,19 +210,26 @@ export function useDisputeHandlers({
 
         if (accept) {
           addNotification('system', 'Extension accepted - time extended', orderId);
+          showToast({ type: 'success', title: 'Extension Accepted', message: 'Timer has been extended.' });
           playSound('click');
           fetchOrders();
         } else {
           addNotification('system', `Extension declined - order ${data.data?.status || 'updated'}`, orderId);
+          showToast({ type: 'warning', title: 'Extension Declined', message: `Extension declined. Order ${data.data?.status || 'updated'}.` });
           playSound('error');
           fetchOrders();
         }
       } else {
-        addNotification('system', data.error || 'Failed to respond to extension', orderId);
+        const errDetail = data.error || 'Failed to respond to extension';
+        addNotification('system', errDetail, orderId);
+        showToast({ type: 'error', title: 'Extension Response Failed', message: errDetail });
         playSound('error');
       }
     } catch (err) {
       console.error('Failed to respond to extension:', err);
+      const errorMsg = err instanceof Error ? err.message : 'Network error — please check your connection.';
+      addNotification('system', `Failed to respond to extension: ${errorMsg}`, orderId);
+      showToast({ type: 'error', title: 'Extension Response Failed', message: errorMsg });
       playSound('error');
     } finally {
       setRequestingExtension(null);
@@ -238,13 +257,33 @@ export function useDisputeHandlers({
         if (data.success) {
           fetchDisputeInfo(orderId);
           if (data.data?.finalized) {
+            addNotification('system', 'Dispute resolution finalized.', orderId);
+            showToast({ type: 'success', title: 'Resolution Finalized', message: 'The dispute has been resolved.' });
             fetchOrders();
+          } else {
+            const msg = action === 'accept' ? 'You accepted the resolution. Waiting for the other party.' : 'You rejected the proposed resolution.';
+            addNotification('system', msg, orderId);
+            showToast({ type: action === 'accept' ? 'success' : 'warning', title: action === 'accept' ? 'Resolution Accepted' : 'Resolution Rejected', message: msg });
           }
           playSound('click');
+        } else {
+          const errDetail = data.error || 'Unexpected server response';
+          addNotification('system', `Failed to respond: ${errDetail}`, orderId);
+          showToast({ type: 'error', title: 'Response Failed', message: errDetail });
+          playSound('error');
         }
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        const errDetail = errorData.error || `Server error (${res.status})`;
+        addNotification('system', `Failed to respond: ${errDetail}`, orderId);
+        showToast({ type: 'error', title: 'Response Failed', message: errDetail });
+        playSound('error');
       }
     } catch (err) {
       console.error('Failed to respond to resolution:', err);
+      const errorMsg = err instanceof Error ? err.message : 'Network error — please check your connection.';
+      addNotification('system', `Failed to respond to resolution: ${errorMsg}`, orderId);
+      showToast({ type: 'error', title: 'Response Failed', message: errorMsg });
       playSound('error');
     } finally {
       setIsRespondingToResolution(false);

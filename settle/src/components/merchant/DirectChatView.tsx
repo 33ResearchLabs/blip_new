@@ -1,7 +1,100 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Send, Store, User, CheckCheck, Paperclip, Loader2, X, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Send, Store, User, CheckCheck, Paperclip, Loader2, X, Image as ImageIcon, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+
+// ── Order Receipt Card ──────────────────────────────────────────
+interface OrderReceiptData {
+  type: 'order_receipt';
+  orderId: string;
+  orderNumber: string;
+  orderType: 'buy' | 'sell';
+  cryptoAmount: number;
+  cryptoCurrency: string;
+  fiatAmount: number;
+  fiatCurrency: string;
+  rate: number;
+  status: string;
+}
+
+function tryParseReceipt(text: string): OrderReceiptData | null {
+  try {
+    const trimmed = text.trim();
+    if (!trimmed.startsWith('{')) return null;
+    const data = JSON.parse(trimmed);
+    if (data?.type === 'order_receipt') return data as OrderReceiptData;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Detect plain-text order summary messages that duplicate the styled receipt card.
+ * These are auto-generated messages like "Order #BM-260225-76D1 Sell 100 USDC ..."
+ */
+function isPlainTextOrderSummary(text: string): boolean {
+  const t = text.trim();
+  // Matches patterns like "Order #ABC... Sell/Buy 100 USDC" or similar auto-generated summaries
+  if (/^Order\s*#/i.test(t) && /USDC/i.test(t)) return true;
+  // Matches "Sell order" / "Buy order" summaries with amounts
+  if (/^(Sell|Buy)\s+order/i.test(t) && /USDC/i.test(t)) return true;
+  return false;
+}
+
+function OrderReceiptCard({ data, time, isMe, isRead }: { data: OrderReceiptData; time: Date; isMe: boolean; isRead: boolean }) {
+  // Flip perspective: the receipt stores the order creator's type.
+  // When I sent this receipt (isMe), I'm the accepting party — show the opposite side.
+  const isBuy = isMe ? data.orderType !== 'buy' : data.orderType === 'buy';
+  return (
+    <div className={`flex ${isMe ? 'justify-end' : 'items-end gap-1.5'}`}>
+      <div className="w-[260px]">
+        <div className="rounded-xl overflow-hidden border border-white/[0.08] bg-[#111]">
+          {/* Header */}
+          <div className={`px-3 py-2 flex items-center gap-2 ${isBuy ? 'bg-emerald-500/10' : 'bg-orange-500/10'}`}>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center ${isBuy ? 'bg-emerald-500/20' : 'bg-orange-500/20'}`}>
+              {isBuy
+                ? <ArrowDownLeft className="w-3 h-3 text-emerald-400" />
+                : <ArrowUpRight className="w-3 h-3 text-orange-400" />
+              }
+            </div>
+            <div>
+              <span className={`text-[11px] font-semibold ${isBuy ? 'text-emerald-400' : 'text-orange-400'}`}>
+                {isBuy ? 'Buy' : 'Sell'} Order
+              </span>
+              <span className="text-[9px] text-white/30 ml-1.5">#{data.orderNumber}</span>
+            </div>
+          </div>
+          {/* Body */}
+          <div className="px-3 py-2.5 space-y-1.5">
+            <div className="flex justify-between items-baseline">
+              <span className="text-[10px] text-white/40">Amount</span>
+              <span className="text-[12px] text-white font-medium">{data.cryptoAmount} {data.cryptoCurrency}</span>
+            </div>
+            <div className="flex justify-between items-baseline">
+              <span className="text-[10px] text-white/40">Total</span>
+              <span className="text-[12px] text-white font-medium">{data.fiatAmount.toLocaleString()} {data.fiatCurrency}</span>
+            </div>
+            <div className="flex justify-between items-baseline">
+              <span className="text-[10px] text-white/40">Rate</span>
+              <span className="text-[10px] text-white/60">{data.rate.toFixed(2)} {data.fiatCurrency}/{data.cryptoCurrency}</span>
+            </div>
+          </div>
+          {/* Footer */}
+          <div className="px-3 py-1.5 border-t border-white/[0.05] flex items-center justify-between">
+            <span className="text-[9px] text-emerald-400/70 font-medium uppercase tracking-wider">
+              {data.status}
+            </span>
+            <span className="inline-flex items-center gap-0.5">
+              <span className="text-[9px] text-white/20 font-mono">{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              {isMe && <CheckCheck className={`w-2.5 h-2.5 ${isRead ? 'text-orange-400/60' : 'text-white/15'}`} />}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface DirectChatMessage {
   id: string;
@@ -170,6 +263,14 @@ export function DirectChatView({
               const isFirstInGroup = !prevMsg || prevMsg.from !== msg.from ||
                 (msg.timestamp.getTime() - prevMsg.timestamp.getTime() > 120000); // 2 min gap = new group
 
+              // Check for order receipt card
+              const receiptData = tryParseReceipt(msg.text);
+
+              // Skip plain-text order summaries that duplicate the styled receipt card
+              if (!receiptData && isPlainTextOrderSummary(msg.text)) {
+                return null;
+              }
+
               return (
                 <div key={msg.id}>
                   {showDate && (
@@ -180,7 +281,12 @@ export function DirectChatView({
                     </div>
                   )}
 
-                  {msg.from === 'them' ? (
+                  {receiptData ? (
+                    /* Order receipt card */
+                    <div className={isFirstInGroup ? 'mt-2' : 'mt-0.5'}>
+                      <OrderReceiptCard data={receiptData} time={msg.timestamp} isMe={msg.from === 'me'} isRead={msg.isRead} />
+                    </div>
+                  ) : msg.from === 'them' ? (
                     /* Incoming message */
                     <div className={`flex items-end gap-1.5 ${isFirstInGroup ? 'mt-2' : 'mt-0.5'}`}>
                       {isFirstInGroup ? (

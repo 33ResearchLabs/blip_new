@@ -727,12 +727,29 @@ async function handleOrderStatusUpdate(telegramId, merchantId, data) {
         break;
       }
 
+      case 'cancelled': {
+        msg = `*Order Cancelled*\n\n`;
+        msg += `Order: \`${order.order_number || orderId.slice(0, 8)}\`\n`;
+        msg += `${order.crypto_amount || ''} USDC order has been cancelled.`;
+        buttons.push([Markup.button.callback('Menu', 'main_menu')]);
+        break;
+      }
+
+      case 'expired': {
+        msg = `*Order Expired*\n\n`;
+        msg += `Order: \`${order.order_number || orderId.slice(0, 8)}\`\n`;
+        msg += `Order has expired (timeout).`;
+        buttons.push([Markup.button.callback('Menu', 'main_menu')]);
+        break;
+      }
+
       default:
-        msg = `Order \`${orderId.slice(0, 8)}\` status: ${previousStatus} -> *${status}*`;
+        msg = `*Order Update*\n\nOrder: \`${orderId.slice(0, 8)}\`\nStatus: *${status}*`;
         buttons.push([Markup.button.callback('View Order', `order_actions:${orderId}`)]);
     }
   } catch (err) {
-    msg = `Order \`${orderId.slice(0, 8)}\` status changed: ${previousStatus} -> *${status}*`;
+    console.error(`[Telegram] Error fetching order details for ${orderId}:`, err.message);
+    msg = `*Order Update*\n\nOrder: \`${orderId.slice(0, 8)}\`\nStatus: *${status}*`;
     buttons.push([Markup.button.callback('View Order', `order_actions:${orderId}`)]);
   }
 

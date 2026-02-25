@@ -5,6 +5,8 @@ import {
 import {
   logger,
   normalizeStatus,
+  validateTransition,
+  shouldRestoreLiquidity,
 } from 'settlement-core';
 import {
   updateOrderStatusSchema,
@@ -24,6 +26,10 @@ import { MOCK_MODE } from '@/lib/config/mockMode';
 import { atomicCancelWithRefund } from '@/lib/orders/atomicCancel';
 import { serializeOrder } from '@/lib/api/orderSerializer';
 import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
+import { emitOrderEvent, buildEvent } from '@/lib/events';
+import { FEATURES } from '@/lib/config/featureFlags';
+import { transaction } from '@/lib/db';
+import { sendDirectMessage } from '@/lib/db/repositories/directMessages';
 
 // Prevent Next.js from caching this route
 export const dynamic = 'force-dynamic';
@@ -150,6 +156,57 @@ export async function PATCH(
         return notFoundResponse('Order');
       }
 
+      // Merchant relist: merchant cancelling accepted order (no escrow) → revert to pending
+      const shouldRelistMock =
+        actor_type === 'merchant' &&
+        currentOrder.status === 'accepted' &&
+        !currentOrder.escrow_tx_hash;
+
+      if (shouldRelistMock) {
+        const validation = validateTransition(currentOrder.status as any, 'pending' as any, actor_type as any);
+        if (!validation.valid) {
+          return NextResponse.json(
+            { success: false, error: validation.error },
+            { status: 400 }
+          );
+        }
+
+        const relistResult = await transaction(async (client) => {
+          const updateResult = await client.query(
+            `UPDATE orders
+             SET status = 'pending',
+                 accepted_at = NULL,
+                 acceptor_wallet_address = NULL,
+                 buyer_merchant_id = NULL,
+                 expires_at = NOW() + INTERVAL '15 minutes',
+                 cancelled_at = NULL,
+                 cancelled_by = NULL,
+                 cancellation_reason = NULL,
+                 order_version = order_version + 1
+             WHERE id = $1
+             RETURNING *`,
+            [id]
+          );
+
+          const updatedOrder = updateResult.rows[0];
+
+          // Restore liquidity
+          if (shouldRestoreLiquidity(currentOrder.status as any, 'pending' as any)) {
+            await client.query(
+              'UPDATE merchant_offers SET available_amount = available_amount + $1 WHERE id = $2',
+              [currentOrder.crypto_amount, currentOrder.offer_id]
+            );
+          }
+
+          return updatedOrder;
+        });
+
+        return NextResponse.json({
+          success: true,
+          data: { ...serializeOrder(relistResult), relisted: true },
+        });
+      }
+
       // Use atomicCancelWithRefund for deterministic escrow refund
       const result = await atomicCancelWithRefund(
         id,
@@ -183,18 +240,23 @@ export async function PATCH(
       });
     }
 
+    // Fetch current order status BEFORE proxy call (for previousStatus tracking)
+    const currentOrder = await getOrderWithRelations(id);
+    const previousStatus = currentOrder?.status || null;
+
     // Forward to core-api (single writer for all mutations)
     const response = await proxyCoreApi(`/v1/orders/${id}`, {
       method: 'PATCH',
       body: { status, actor_type, actor_id, reason, acceptor_wallet_address },
     });
 
-    // Fire Pusher notification so all parties see the update in realtime
+    // Fire Pusher notification + system chat messages after successful proxy
     if (response.status >= 200 && response.status < 300) {
       try {
         const resBody = await response.json();
         const order = resBody?.data;
         if (order?.id) {
+          // Pusher notification
           notifyOrderStatusUpdated({
             orderId: order.id,
             userId: order.user_id || '',
@@ -202,9 +264,75 @@ export async function PATCH(
             status: order.status || status,
             minimal_status: normalizeStatus(order.status || status),
             order_version: order.order_version,
-            previousStatus: undefined,
+            previousStatus,
             updatedAt: new Date().toISOString(),
           }).catch(err => logger.error('[Pusher] Failed to notify status update', { error: err }));
+
+          // System chat message + notification outbox (core-api doesn't write these)
+          if (FEATURES.SYSTEM_CHAT_MESSAGES) {
+            transaction(async (client) => {
+              await emitOrderEvent(
+                client,
+                buildEvent({
+                  orderId: order.id,
+                  eventType: `order.${status}` as any,
+                  orderVersion: order.order_version || 1,
+                  actorType: actor_type as any,
+                  actorId: actor_id,
+                  previousStatus: previousStatus,
+                  newStatus: order.status || status,
+                  payload: {
+                    userId: order.user_id,
+                    merchantId: order.merchant_id,
+                    buyerMerchantId: order.buyer_merchant_id,
+                    amount: order.crypto_amount,
+                    currency: order.crypto_currency || 'USDC',
+                    fiatAmount: order.fiat_amount,
+                    fiatCurrency: order.fiat_currency || 'AED',
+                    reason: reason || undefined,
+                  },
+                })
+              );
+            }).catch(err => logger.error('[EventEmitter] Failed to emit after proxy', {
+              orderId: order.id, status, error: (err as Error).message,
+            }));
+          }
+
+          // Send order receipt as Direct Message to counterparty
+          if (status === 'accepted') {
+            const receiptJson = JSON.stringify({
+              type: 'order_receipt',
+              orderId: order.id,
+              orderNumber: order.order_number || order.id.slice(0, 8).toUpperCase(),
+              orderType: order.type,
+              cryptoAmount: Number(order.crypto_amount || 0),
+              cryptoCurrency: order.crypto_currency || 'USDC',
+              fiatAmount: Number(order.fiat_amount || 0),
+              fiatCurrency: order.fiat_currency || 'AED',
+              rate: Number(order.rate || 0),
+              status: 'accepted',
+            });
+
+            const isM2M = !!order.buyer_merchant_id;
+            if (isM2M && order.buyer_merchant_id) {
+              const iAmSeller = actor_id === order.merchant_id;
+              sendDirectMessage({
+                sender_type: 'merchant',
+                sender_id: actor_id,
+                recipient_type: 'merchant',
+                recipient_id: iAmSeller ? order.buyer_merchant_id : order.merchant_id,
+                content: receiptJson,
+              }).catch(err => logger.error('[DM] Failed to send order receipt', { orderId: order.id, error: (err as Error).message }));
+            } else if (order.merchant_id && order.user_id) {
+              sendDirectMessage({
+                sender_type: 'merchant',
+                sender_id: order.merchant_id,
+                recipient_type: 'user',
+                recipient_id: order.user_id,
+                content: receiptJson,
+              }).catch(err => logger.error('[DM] Failed to send order receipt', { orderId: order.id, error: (err as Error).message }));
+            }
+          }
         }
         return NextResponse.json(resBody, { status: response.status });
       } catch {
@@ -238,6 +366,125 @@ export async function DELETE(
     const actorId = searchParams.get('actor_id');
     const reason = searchParams.get('reason');
 
+    // Mock mode: handle cancellation locally (mirrors PATCH mock-mode logic)
+    const isMockMode = MOCK_MODE || !process.env.CORE_API_URL;
+    if (isMockMode) {
+      const currentOrder = await getOrderWithRelations(id);
+      if (!currentOrder) {
+        return notFoundResponse('Order');
+      }
+
+      // Merchant relist: merchant cancelling accepted order (no escrow) → revert to pending
+      const shouldRelist =
+        actorType === 'merchant' &&
+        currentOrder.status === 'accepted' &&
+        !currentOrder.escrow_tx_hash;
+
+      if (shouldRelist) {
+        const validation = validateTransition(currentOrder.status as any, 'pending' as any, actorType as any);
+        if (!validation.valid) {
+          // Relist not allowed — fall through to regular cancel
+          const cancelResult = await atomicCancelWithRefund(
+            id,
+            currentOrder.status,
+            actorType as any,
+            actorId || '',
+            reason ?? undefined,
+            {
+              type: currentOrder.type,
+              crypto_amount: currentOrder.crypto_amount,
+              merchant_id: currentOrder.merchant_id,
+              user_id: currentOrder.user_id,
+              buyer_merchant_id: currentOrder.buyer_merchant_id ?? null,
+              order_number: Number(currentOrder.order_number),
+              crypto_currency: currentOrder.crypto_currency,
+              fiat_amount: currentOrder.fiat_amount,
+              fiat_currency: currentOrder.fiat_currency,
+            }
+          );
+
+          if (!cancelResult.success) {
+            return NextResponse.json(
+              { success: false, error: cancelResult.error },
+              { status: 400 }
+            );
+          }
+
+          return NextResponse.json({
+            success: true,
+            data: serializeOrder(cancelResult.order!),
+          });
+        }
+
+        const relistResult = await transaction(async (client) => {
+          const updateResult = await client.query(
+            `UPDATE orders
+             SET status = 'pending',
+                 accepted_at = NULL,
+                 acceptor_wallet_address = NULL,
+                 buyer_merchant_id = NULL,
+                 expires_at = NOW() + INTERVAL '15 minutes',
+                 cancelled_at = NULL,
+                 cancelled_by = NULL,
+                 cancellation_reason = NULL,
+                 order_version = order_version + 1
+             WHERE id = $1
+             RETURNING *`,
+            [id]
+          );
+
+          const updatedOrder = updateResult.rows[0];
+
+          if (shouldRestoreLiquidity(currentOrder.status as any, 'pending' as any)) {
+            await client.query(
+              'UPDATE merchant_offers SET available_amount = available_amount + $1 WHERE id = $2',
+              [currentOrder.crypto_amount, currentOrder.offer_id]
+            );
+          }
+
+          return updatedOrder;
+        });
+
+        return NextResponse.json({
+          success: true,
+          data: { ...serializeOrder(relistResult), relisted: true },
+        });
+      }
+
+      // Regular cancel (with escrow refund if needed)
+      const result = await atomicCancelWithRefund(
+        id,
+        currentOrder.status,
+        actorType as any || 'merchant',
+        actorId || '',
+        reason ?? undefined,
+        {
+          type: currentOrder.type,
+          crypto_amount: currentOrder.crypto_amount,
+          merchant_id: currentOrder.merchant_id,
+          user_id: currentOrder.user_id,
+          buyer_merchant_id: currentOrder.buyer_merchant_id ?? null,
+          order_number: Number(currentOrder.order_number),
+          crypto_currency: currentOrder.crypto_currency,
+          fiat_amount: currentOrder.fiat_amount,
+          fiat_currency: currentOrder.fiat_currency,
+        }
+      );
+
+      if (!result.success) {
+        return NextResponse.json(
+          { success: false, error: result.error },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: serializeOrder(result.order!),
+      });
+    }
+
+    // Non-mock: proxy to core-api
     const queryStr = `actor_type=${actorType}&actor_id=${actorId}${reason ? `&reason=${encodeURIComponent(reason)}` : ''}`;
     return proxyCoreApi(`/v1/orders/${id}?${queryStr}`, { method: 'DELETE' });
   } catch (error) {

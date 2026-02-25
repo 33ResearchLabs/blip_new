@@ -78,27 +78,25 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({ orders,
                     className="p-2.5 glass-card rounded-lg hover:border-white/[0.10] transition-colors cursor-pointer"
                   >
                     {/* Row 1: User + type + time */}
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-white/80">{order.user || 'Unknown'}</span>
-                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
-                          order.orderType === 'buy'
-                            ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
-                            : 'bg-white/[0.06] border-white/[0.08] text-white/50'
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-xs font-medium text-white/80 capitalize truncate min-w-0">{order.user || 'Unknown'}</span>
+                      <div className="flex-1" />
+                      <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border shrink-0 ${
+                        order.orderType === 'buy'
+                          ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
+                          : 'bg-white/[0.06] border-white/[0.08] text-white/50'
+                      }`}>
+                        {order.orderType === 'buy' ? 'SELL' : 'BUY'}
+                      </span>
+                      {order.myRole && (
+                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border shrink-0 ${
+                          order.myRole === 'buyer'
+                            ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                            : 'bg-purple-500/10 border-purple-500/20 text-purple-400'
                         }`}>
-                          {order.orderType === 'buy' ? 'SELL' : 'BUY'}
+                          {order.myRole === 'buyer' ? 'BUYER' : 'SELLER'}
                         </span>
-                        {order.myRole && (
-                          <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
-                            order.myRole === 'buyer'
-                              ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                              : 'bg-purple-500/10 border-purple-500/20 text-purple-400'
-                          }`}>
-                            {order.myRole === 'buyer' ? 'BUYER' : 'SELLER'}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[9px] text-white/25 font-mono">{timeAgo}</span>
+                      )}
                     </div>
 
                     {/* Row 2: Amount */}

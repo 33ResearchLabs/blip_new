@@ -12,6 +12,8 @@ import { Order, ActorType } from '@/lib/types/database';
 import { validateTransition } from '@/lib/orders/stateMachine';
 import { createTransactionInTx } from '@/lib/db/repositories/transactions';
 import { logger } from '@/lib/logger';
+import { emitOrderEvent, buildEvent } from '@/lib/events';
+import { FEATURES } from '@/lib/config/featureFlags';
 
 export interface EscrowLockResult {
   success: boolean;
@@ -180,25 +182,53 @@ export async function mockEscrowLock(
         description: `Escrow locked for order #${updatedOrder.order_number}`,
       });
 
-      // 9. Insert order_events record
-      await client.query(
-        `INSERT INTO order_events
-         (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
-         VALUES ($1, 'escrow_locked', $2, $3, $4, 'escrowed', $5)`,
-        [
-          orderId,
-          actorType,
-          actorId,
-          lockedOrder.status,
-          JSON.stringify({
-            tx_hash: txHash,
-            debited_entity_type: payer.entityType,
-            debited_entity_id: payer.entityId,
-            debited_amount: amount,
-            mock_mode: true,
-          }),
-        ]
-      );
+      // 9. Emit order event (audit trail + chat message + notification outbox)
+      if (FEATURES.SYSTEM_CHAT_MESSAGES) {
+        await emitOrderEvent(
+          client,
+          buildEvent({
+            orderId,
+            eventType: 'order.escrowed',
+            orderVersion: updatedOrder.order_version,
+            actorType,
+            actorId,
+            previousStatus: lockedOrder.status as any,
+            newStatus: 'escrowed',
+            payload: {
+              txHash,
+              amount,
+              currency: lockedOrder.crypto_currency || 'USDT',
+              debitedEntityType: payer.entityType,
+              debitedEntityId: payer.entityId,
+              debitedAmount: amount,
+              mockMode: true,
+              merchantId: lockedOrder.merchant_id,
+              userId: lockedOrder.user_id,
+              buyerMerchantId: lockedOrder.buyer_merchant_id,
+            },
+          })
+        );
+      } else {
+        // Legacy: only order_events (no chat message, no outbox)
+        await client.query(
+          `INSERT INTO order_events
+           (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
+           VALUES ($1, 'escrow_locked', $2, $3, $4, 'escrowed', $5)`,
+          [
+            orderId,
+            actorType,
+            actorId,
+            lockedOrder.status,
+            JSON.stringify({
+              tx_hash: txHash,
+              debited_entity_type: payer.entityType,
+              debited_entity_id: payer.entityId,
+              debited_amount: amount,
+              mock_mode: true,
+            }),
+          ]
+        );
+      }
 
       logger.info('[MockEscrow] Escrow locked', {
         orderId,

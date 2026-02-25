@@ -586,8 +586,8 @@ export async function POST(request: NextRequest) {
 
       if (rows.length === 0) {
         return NextResponse.json(
-          { success: false, error: 'Invalid email or password' },
-          { status: 401 }
+          { success: false, error: 'No account found with this email' },
+          { status: 404 }
         );
       }
 

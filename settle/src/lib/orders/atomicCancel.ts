@@ -24,6 +24,8 @@ import { MOCK_MODE } from '@/lib/config/mockMode';
 import { logger } from '@/lib/logger';
 import { validateTransition } from './stateMachine';
 import { createTransactionInTx } from '@/lib/db/repositories/transactions';
+import { emitOrderEvent, buildEvent } from '@/lib/events';
+import { FEATURES } from '@/lib/config/featureFlags';
 
 export interface AtomicCancelResult {
   success: boolean;
@@ -207,60 +209,87 @@ export async function atomicCancelWithRefund(
 
       const updatedOrder = updateResult.rows[0] as Order;
 
-      // Create order_events record
-      await client.query(
-        `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
-         VALUES ($1, 'order_cancelled', $2, $3, $4, 'cancelled', $5)`,
-        [
+      const cancelReason = reason || 'Cancelled by ' + actorType;
+      const refundedAmount = hadEscrow && MOCK_MODE
+        ? (lockedOrder.escrow_debited_amount != null
+          ? parseFloat(String(lockedOrder.escrow_debited_amount))
+          : amount)
+        : 0;
+
+      if (FEATURES.SYSTEM_CHAT_MESSAGES) {
+        // Unified path: order_events + chat_messages + notification_outbox
+        await emitOrderEvent(client, buildEvent({
           orderId,
+          eventType: 'order.cancelled',
+          orderVersion: updatedOrder.order_version,
           actorType,
           actorId,
-          currentStatus,
-          JSON.stringify({
-            reason: reason || 'Cancelled by ' + actorType,
-            had_escrow: hadEscrow,
-            refunded_amount: hadEscrow && MOCK_MODE
-              ? (lockedOrder.escrow_debited_amount != null
-                ? parseFloat(String(lockedOrder.escrow_debited_amount))
-                : amount)
-              : 0,
-            refunded_entity_type: hadEscrow && MOCK_MODE
-              ? (lockedOrder.escrow_debited_entity_type || null)
-              : null,
-            refunded_entity_id: hadEscrow && MOCK_MODE
-              ? (lockedOrder.escrow_debited_entity_id || null)
-              : null,
-            atomic_cancellation: true,
-          }),
-        ]
-      );
-
-      // Create notification_outbox record
-      await client.query(
-        `INSERT INTO notification_outbox (event_type, order_id, payload)
-         VALUES ($1, $2, $3)`,
-        [
-          'ORDER_CANCELLED',
-          orderId,
-          JSON.stringify({
-            orderId,
+          previousStatus: currentStatus as any,
+          newStatus: 'cancelled',
+          payload: {
+            reason: cancelReason,
+            cancelledBy: actorType,
+            escrowRefunded: hadEscrow && MOCK_MODE,
+            refundedAmount,
+            refundedEntityType: hadEscrow && MOCK_MODE
+              ? (lockedOrder.escrow_debited_entity_type || null) : null,
+            refundedEntityId: hadEscrow && MOCK_MODE
+              ? (lockedOrder.escrow_debited_entity_id || null) : null,
+            atomicCancellation: true,
             userId: updatedOrder.user_id,
             merchantId: updatedOrder.merchant_id,
             buyerMerchantId: updatedOrder.buyer_merchant_id,
-            status: 'cancelled',
-            previousStatus: currentStatus,
-            orderNumber: updatedOrder.order_number,
-            cryptoAmount: updatedOrder.crypto_amount,
-            cryptoCurrency: updatedOrder.crypto_currency,
-            fiatAmount: updatedOrder.fiat_amount,
-            fiatCurrency: updatedOrder.fiat_currency,
-            orderType: updatedOrder.type,
-            orderVersion: updatedOrder.order_version,
-            reason: reason || 'Cancelled by ' + actorType,
-            updatedAt: new Date().toISOString(),
-          }),
-        ]
-      );
+          },
+        }));
+      } else {
+        // Legacy path: inline order_events + notification_outbox (no chat messages)
+        await client.query(
+          `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
+           VALUES ($1, 'order_cancelled', $2, $3, $4, 'cancelled', $5)`,
+          [
+            orderId,
+            actorType,
+            actorId,
+            currentStatus,
+            JSON.stringify({
+              reason: cancelReason,
+              had_escrow: hadEscrow,
+              refunded_amount: refundedAmount,
+              refunded_entity_type: hadEscrow && MOCK_MODE
+                ? (lockedOrder.escrow_debited_entity_type || null) : null,
+              refunded_entity_id: hadEscrow && MOCK_MODE
+                ? (lockedOrder.escrow_debited_entity_id || null) : null,
+              atomic_cancellation: true,
+            }),
+          ]
+        );
+
+        await client.query(
+          `INSERT INTO notification_outbox (event_type, order_id, payload)
+           VALUES ($1, $2, $3)`,
+          [
+            'ORDER_CANCELLED',
+            orderId,
+            JSON.stringify({
+              orderId,
+              userId: updatedOrder.user_id,
+              merchantId: updatedOrder.merchant_id,
+              buyerMerchantId: updatedOrder.buyer_merchant_id,
+              status: 'cancelled',
+              previousStatus: currentStatus,
+              orderNumber: updatedOrder.order_number,
+              cryptoAmount: updatedOrder.crypto_amount,
+              cryptoCurrency: updatedOrder.crypto_currency,
+              fiatAmount: updatedOrder.fiat_amount,
+              fiatCurrency: updatedOrder.fiat_currency,
+              orderType: updatedOrder.type,
+              orderVersion: updatedOrder.order_version,
+              reason: cancelReason,
+              updatedAt: new Date().toISOString(),
+            }),
+          ]
+        );
+      }
 
       logger.info('[Atomic] Order cancelled with events and outbox', {
         orderId,
