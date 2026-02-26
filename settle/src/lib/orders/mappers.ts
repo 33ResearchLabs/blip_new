@@ -57,6 +57,27 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
     : dbOrder.rate;
 
   const isM2M = !!dbOrder.buyer_merchant_id;
+  const myRole = dbOrder.my_role || (merchantId ? computeMyRole(dbOrder, merchantId) : undefined);
+
+  // Resolve counterparty name (show the OTHER side, not yourself)
+  let counterpartyName: string;
+  if (isM2M) {
+    counterpartyName = myRole === 'buyer'
+      ? (dbOrder.merchant?.display_name || 'Seller')
+      : (dbOrder.buyer_merchant?.display_name || 'Buyer');
+  } else if (myRole === 'seller') {
+    // I'm the seller — counterparty is the buyer (user)
+    // If no buyer yet (pending sell order), show "Waiting..."
+    counterpartyName = dbOrder.user?.name && dbOrder.accepted_at
+      ? dbOrder.user.name
+      : (dbOrder.accepted_at ? (dbOrder.user?.name || 'User') : 'Waiting...');
+  } else if (myRole === 'buyer') {
+    // I'm the buyer — counterparty is the seller (merchant)
+    counterpartyName = dbOrder.merchant?.display_name || 'Merchant';
+  } else {
+    // Observer — show the user who created the order
+    counterpartyName = dbOrder.user?.name || 'User';
+  }
 
   const minimalStatus = dbOrder.minimal_status || normalizeLegacyStatus(dbOrder.status);
   let uiStatus = mapMinimalStatusToUIStatus(minimalStatus as any, dbOrder.is_my_order);
@@ -72,16 +93,8 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
 
   return {
     id: dbOrder.id,
-    user: isM2M
-      ? (dbOrder.my_role === 'buyer'
-          ? (dbOrder.merchant?.display_name || 'Seller')
-          : (dbOrder.buyer_merchant?.display_name || 'Buyer'))
-      : userName,
-    emoji: getUserEmoji(isM2M
-      ? (dbOrder.my_role === 'buyer'
-          ? (dbOrder.merchant?.display_name || 'S')
-          : (dbOrder.buyer_merchant?.display_name || 'B'))
-      : userName),
+    user: counterpartyName,
+    emoji: getUserEmoji(counterpartyName),
     amount: cryptoAmount,
     fromCurrency: "USDC",
     toCurrency: "AED",

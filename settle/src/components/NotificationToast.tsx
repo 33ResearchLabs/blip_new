@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSounds } from '@/hooks/useSounds';
 import {
   Bell,
   CheckCircle2,
@@ -75,6 +76,7 @@ export function showToast(toast: Omit<Toast, 'id' | 'timestamp'>) {
 export function NotificationToastContainer({ position = 'top-right' }: NotificationToastContainerProps) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const { playSound } = useSounds();
 
   const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
@@ -88,6 +90,13 @@ export function NotificationToastContainer({ position = 'top-right' }: Notificat
   const addToast = useCallback((toast: Omit<Toast, 'id' | 'timestamp'>) => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const newToast: Toast = { ...toast, id, timestamp: Date.now() };
+
+    // Play sound based on toast type
+    if (toast.type === 'success' || toast.type === 'complete') {
+      playSound('order_complete');
+    } else if (toast.type === 'error') {
+      playSound('error');
+    }
 
     setToasts(prev => {
       const next = [newToast, ...prev];
@@ -110,7 +119,7 @@ export function NotificationToastContainer({ position = 'top-right' }: Notificat
       const timer = setTimeout(() => removeToast(id), duration);
       timersRef.current.set(id, timer);
     }
-  }, [removeToast]);
+  }, [removeToast, playSound]);
 
   useEffect(() => {
     addToastGlobal = addToast;

@@ -266,6 +266,7 @@ export const merchantCreateOrderSchema = z.object({
   escrow_creator_wallet: z.string().nullish(),
   matched_offer_id: uuidSchema.nullish(), // Matched offer for M2M
   expiry_minutes: z.number().min(1).max(1440).default(15), // Order expiry in minutes (default 15, max 24h)
+  dry_run: z.boolean().optional(), // Validate only, don't create order
 });
 
 // Corridor Bridge schemas
@@ -273,7 +274,7 @@ export const corridorProviderSchema = z.object({
   merchant_id: uuidSchema,
   is_active: z.boolean().default(false),
   fee_percentage: z.number().min(0, 'Fee cannot be negative').max(10, 'Fee cannot exceed 10%').default(0.5),
-  min_amount: z.number().positive('Min amount must be positive').default(100),
+  min_amount: z.number().positive('Min amount must be positive').default(1),
   max_amount: z.number().positive('Max amount must be positive').default(50000),
   auto_accept: z.boolean().default(true),
 }).refine(

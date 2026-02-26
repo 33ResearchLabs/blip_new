@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const provider = await upsertProvider(merchant_id, {
       is_active: is_active ?? false,
       fee_percentage: fee_percentage ?? 0.5,
-      min_amount: min_amount ?? 100,
+      min_amount: min_amount ?? 1,
       max_amount: max_amount ?? 50000,
       auto_accept: auto_accept ?? true,
     });

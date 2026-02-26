@@ -152,6 +152,7 @@ export async function POST(request: NextRequest) {
       escrow_pda,
       escrow_creator_wallet,
       expiry_minutes,
+      dry_run,
     } = parseResult.data;
 
     // Verify the creating merchant exists
@@ -285,6 +286,11 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse([
         `Amount must be between ${offer.min_amount} and ${offer.max_amount}`,
       ]);
+    }
+
+    // Dry run: validate only, don't create the order
+    if (dry_run) {
+      return NextResponse.json({ success: true, validated: true });
     }
 
     // --- Price engine: resolve effective rate ---

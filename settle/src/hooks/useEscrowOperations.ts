@@ -165,6 +165,30 @@ export function useEscrowOperations({
     setEscrowError(null);
 
     try {
+      // Pre-validate sell order BEFORE locking escrow to prevent funds getting stuck
+      const pendingSell = (window as any).__pendingSellOrder;
+      if (pendingSell && escrowOrder.id.startsWith('temp-')) {
+        const validateRes = await fetch("/api/merchant/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            merchant_id: pendingSell.merchantId,
+            type: pendingSell.tradeType,
+            crypto_amount: pendingSell.cryptoAmount,
+            payment_method: pendingSell.paymentMethod,
+            spread_preference: pendingSell.spreadPreference,
+            priority_fee: pendingSell.priorityFee || 0,
+            matched_offer_id: pendingSell.matchedOfferId,
+            dry_run: true,
+          }),
+        });
+        if (!validateRes.ok) {
+          const errData = await validateRes.json().catch(() => ({}));
+          const errMsg = errData.details?.[0] || errData.error || 'Order validation failed';
+          throw new Error(errMsg);
+        }
+      }
+
       let escrowResult: { success: boolean; txHash: string; tradeId?: number; tradePda?: string; escrowPda?: string; error?: string };
 
       if (isMockMode) {

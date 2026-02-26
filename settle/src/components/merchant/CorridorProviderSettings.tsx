@@ -80,7 +80,7 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
           merchant_id: merchantId,
           is_active: isActive,
           fee_percentage: parseFloat(feePercentage) || 0.5,
-          min_amount: parseFloat(minAmount) || 100,
+          min_amount: parseFloat(minAmount) || 1,
           max_amount: parseFloat(maxAmount) || 50000,
           auto_accept: autoAccept,
         }),
