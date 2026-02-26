@@ -29,7 +29,7 @@ import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
 import { emitOrderEvent, buildEvent } from '@/lib/events';
 import { FEATURES } from '@/lib/config/featureFlags';
 import { transaction } from '@/lib/db';
-import { sendDirectMessage } from '@/lib/db/repositories/directMessages';
+import { sendDirectMessage, addContact } from '@/lib/db/repositories/directMessages';
 
 // Prevent Next.js from caching this route
 export const dynamic = 'force-dynamic';
@@ -172,9 +172,22 @@ export async function PATCH(
         }
 
         const relistResult = await transaction(async (client) => {
+          // Restore merchant_id from the original offer (acceptance may have reassigned it)
+          let originalMerchantId = currentOrder.merchant_id;
+          if (currentOrder.offer_id) {
+            const offerResult = await client.query(
+              'SELECT merchant_id FROM merchant_offers WHERE id = $1',
+              [currentOrder.offer_id]
+            );
+            if (offerResult.rows[0]) {
+              originalMerchantId = offerResult.rows[0].merchant_id;
+            }
+          }
+
           const updateResult = await client.query(
             `UPDATE orders
              SET status = 'pending',
+                 merchant_id = $2,
                  accepted_at = NULL,
                  acceptor_wallet_address = NULL,
                  buyer_merchant_id = NULL,
@@ -185,10 +198,19 @@ export async function PATCH(
                  order_version = order_version + 1
              WHERE id = $1
              RETURNING *`,
-            [id]
+            [id, originalMerchantId]
           );
 
           const updatedOrder = updateResult.rows[0];
+
+          // Update existing order receipt DM status to "cancelled"
+          await client.query(
+            `UPDATE direct_messages
+             SET content = jsonb_set(content::jsonb, '{status}', '"cancelled"')::text
+             WHERE content LIKE '%"order_receipt"%'
+               AND content LIKE $1`,
+            [`%${id}%`]
+          );
 
           // Restore liquidity
           if (shouldRestoreLiquidity(currentOrder.status as any, 'pending' as any)) {
@@ -300,30 +322,38 @@ export async function PATCH(
 
           // Send order receipt as Direct Message to counterparty
           if (status === 'accepted') {
-            const receiptJson = JSON.stringify({
+            const baseReceipt = {
               type: 'order_receipt',
               orderId: order.id,
               orderNumber: order.order_number || order.id.slice(0, 8).toUpperCase(),
-              orderType: order.type,
               cryptoAmount: Number(order.crypto_amount || 0),
               cryptoCurrency: order.crypto_currency || 'USDC',
               fiatAmount: Number(order.fiat_amount || 0),
               fiatCurrency: order.fiat_currency || 'AED',
               rate: Number(order.rate || 0),
               status: 'accepted',
-            });
+            };
 
             const isM2M = !!order.buyer_merchant_id;
-            if (isM2M && order.buyer_merchant_id) {
-              const iAmSeller = actor_id === order.merchant_id;
+            if (isM2M && order.buyer_merchant_id && order.merchant_id) {
+              // Auto-create contacts for both merchants so the conversation appears in DMs
+              Promise.all([
+                addContact({ merchant_id: order.merchant_id, target_id: order.buyer_merchant_id, target_type: 'merchant' }),
+                addContact({ merchant_id: order.buyer_merchant_id, target_id: order.merchant_id, target_type: 'merchant' }),
+              ]).catch(err => logger.error('[DM] Failed to auto-create contacts', { orderId: order.id, error: (err as Error).message }));
+
+              // Send one receipt from seller to buyer — both parties see it in their conversation.
+              // orderType = 'sell' from seller's perspective (merchant_id is the seller in M2M).
+              const receiptJson = JSON.stringify({ ...baseReceipt, orderType: 'sell' });
               sendDirectMessage({
                 sender_type: 'merchant',
-                sender_id: actor_id,
+                sender_id: order.merchant_id,
                 recipient_type: 'merchant',
-                recipient_id: iAmSeller ? order.buyer_merchant_id : order.merchant_id,
+                recipient_id: order.buyer_merchant_id,
                 content: receiptJson,
               }).catch(err => logger.error('[DM] Failed to send order receipt', { orderId: order.id, error: (err as Error).message }));
             } else if (order.merchant_id && order.user_id) {
+              const receiptJson = JSON.stringify({ ...baseReceipt, orderType: order.type });
               sendDirectMessage({
                 sender_type: 'merchant',
                 sender_id: order.merchant_id,
@@ -417,9 +447,22 @@ export async function DELETE(
         }
 
         const relistResult = await transaction(async (client) => {
+          // Restore merchant_id from the original offer (acceptance may have reassigned it)
+          let originalMerchantId = currentOrder.merchant_id;
+          if (currentOrder.offer_id) {
+            const offerResult = await client.query(
+              'SELECT merchant_id FROM merchant_offers WHERE id = $1',
+              [currentOrder.offer_id]
+            );
+            if (offerResult.rows[0]) {
+              originalMerchantId = offerResult.rows[0].merchant_id;
+            }
+          }
+
           const updateResult = await client.query(
             `UPDATE orders
              SET status = 'pending',
+                 merchant_id = $2,
                  accepted_at = NULL,
                  acceptor_wallet_address = NULL,
                  buyer_merchant_id = NULL,
@@ -430,10 +473,19 @@ export async function DELETE(
                  order_version = order_version + 1
              WHERE id = $1
              RETURNING *`,
-            [id]
+            [id, originalMerchantId]
           );
 
           const updatedOrder = updateResult.rows[0];
+
+          // Update existing order receipt DM status to "cancelled"
+          await client.query(
+            `UPDATE direct_messages
+             SET content = jsonb_set(content::jsonb, '{status}', '"cancelled"')::text
+             WHERE content LIKE '%"order_receipt"%'
+               AND content LIKE $1`,
+            [`%${id}%`]
+          );
 
           if (shouldRestoreLiquidity(currentOrder.status as any, 'pending' as any)) {
             await client.query(

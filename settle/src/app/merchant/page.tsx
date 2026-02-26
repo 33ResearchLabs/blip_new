@@ -252,6 +252,28 @@ export default function MerchantDashboard() {
     rate: "3.67",
     premium: "0.25",
   });
+  // Debounced amount validation for Open Trade modal
+  const [tradeAmountWarning, setTradeAmountWarning] = useState<string | null>(null);
+  const tradeAmountDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    setTradeAmountWarning(null);
+    if (tradeAmountDebounceRef.current) clearTimeout(tradeAmountDebounceRef.current);
+
+    const amt = parseFloat(openTradeForm.cryptoAmount);
+    if (!openTradeForm.cryptoAmount || !amt || amt <= 0) return;
+
+    tradeAmountDebounceRef.current = setTimeout(() => {
+      if (openTradeForm.tradeType === 'sell' && effectiveBalance !== null && amt > effectiveBalance) {
+        setTradeAmountWarning(`Exceeds balance (${effectiveBalance.toLocaleString()} USDC available)`);
+      } else if (amt < 1) {
+        setTradeAmountWarning('Minimum amount is 1 USDC');
+      }
+    }, 600);
+
+    return () => { if (tradeAmountDebounceRef.current) clearTimeout(tradeAmountDebounceRef.current); };
+  }, [openTradeForm.cryptoAmount, openTradeForm.tradeType, effectiveBalance]);
+
   // (Filter/sort state moved to Zustand store — PendingOrdersPanel subscribes directly)
   // Mobile view state (consolidated: stats folded into history, offers folded into marketplace)
   const [mobileView, setMobileView] = useState<'orders' | 'escrow' | 'chat' | 'history' | 'marketplace'>('orders');
@@ -581,22 +603,18 @@ export default function MerchantDashboard() {
       const desc = amt ? (usr ? `${amt} · ${usr}` : amt) : '';
 
       if (newStatus === 'payment_sent') {
-        addNotification('payment', desc ? `Payment marked sent · ${desc}` : 'Payment sent for order', orderId);
-        playSound('notification');
-        toast.showPaymentSent(orderId);
+        // Toast/notification already shown by useOrderActions on API success.
+        // Only refresh data here — no duplicate toast.
       } else if (newStatus === 'escrowed') {
-        addNotification('escrow', amt ? `Escrow locked · ${amt} secured` : 'Escrow locked on order', orderId);
-        playSound('notification');
-        toast.showEscrowLocked();
+        // Toast/notification already shown by useEscrowOperations on API success.
+        // Only refresh data here — no duplicate toast.
       } else if (newStatus === 'completed') {
-        addNotification('complete', desc ? `Trade completed! ${desc}` : 'Trade completed!', orderId);
-        playSound('order_complete');
-        toast.showTradeComplete();
+        // Toast/notification already shown by useOrderActions or useEscrowOperations on API success.
+        // Only refresh balance here — no duplicate toast.
         refreshBalance();
       } else if (newStatus === 'disputed') {
-        addNotification('dispute', desc ? `Dispute opened · ${desc}` : 'Dispute opened on order', orderId);
-        playSound('error');
-        toast.showDisputeOpened(orderId);
+        // Toast/notification already shown by useDisputeHandlers on API success.
+        // Only refresh data here — no duplicate toast.
       } else if (newStatus === 'cancelled') {
         // 'cancelled' is broadcast to all merchants - only notify involved ones
         if (isRelevantOrder()) {
@@ -2410,7 +2428,7 @@ export default function MerchantDashboard() {
                             type: "sell", // Merchant sells AED, user buys AED
                             payment_method: "bank",
                             rate: effectiveRate,
-                            min_amount: parseFloat(corridorForm.minAmount || "100"),
+                            min_amount: parseFloat(corridorForm.minAmount || "1"),
                             max_amount: parseFloat(corridorForm.maxAmount || "10000"),
                             available_amount: availableAmount,
                             bank_name: "Emirates NBD",
@@ -2556,10 +2574,10 @@ export default function MerchantDashboard() {
                       />
                       <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-500">USDC</span>
                     </div>
-                    {openTradeForm.tradeType === "sell" && effectiveBalance !== null && parseFloat(openTradeForm.cryptoAmount || "0") > effectiveBalance && (
+                    {tradeAmountWarning && (
                       <p className="text-[10px] text-red-400 mt-1 ml-1 flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
-                        Exceeds your wallet balance ({effectiveBalance.toLocaleString()} USDC)
+                        {tradeAmountWarning}
                       </p>
                     )}
                   </div>

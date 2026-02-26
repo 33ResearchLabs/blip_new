@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, memo } from 'react';
+import { useState, useEffect, useMemo, useRef, memo } from 'react';
 import {
   Zap,
   Target,
@@ -10,6 +10,7 @@ import {
   Loader2,
   Flame,
   ArrowRightLeft,
+  AlertTriangle,
 } from 'lucide-react';
 
 interface ConfigPanelProps {
@@ -122,6 +123,27 @@ export const ConfigPanel = memo(function ConfigPanel({
   const cryptoAmount = parseFloat(openTradeForm.cryptoAmount) || 0;
   const maxAmount = effectiveBalance || 0;
 
+  // Debounced amount validation warning
+  const [amountWarning, setAmountWarning] = useState<string | null>(null);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    setAmountWarning(null);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!openTradeForm.cryptoAmount || cryptoAmount <= 0) return;
+
+    debounceRef.current = setTimeout(() => {
+      if (cryptoAmount > maxAmount && maxAmount > 0) {
+        setAmountWarning(`Exceeds balance (${maxAmount.toLocaleString()} USDC available)`);
+      } else if (cryptoAmount < 1) {
+        setAmountWarning('Minimum amount is 1 USDC');
+      }
+    }, 600);
+
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [openTradeForm.cryptoAmount, cryptoAmount, maxAmount]);
+
   const pricing = useMemo(() => {
     const totalSpread = tier.base + priorityFee;
     const buyRate = currentRate * (1 - totalSpread / 100);
@@ -171,6 +193,12 @@ export const ConfigPanel = memo(function ConfigPanel({
               <span className="text-white/30">≈ {(cryptoAmount * currentRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AED</span>
               <span className="text-white/20">@ {currentRate.toFixed(4)}</span>
             </div>
+          )}
+          {amountWarning && (
+            <p className="text-[10px] text-red-400 mt-1.5 ml-1 flex items-center gap-1 font-mono">
+              <AlertTriangle className="w-3 h-3 shrink-0" />
+              {amountWarning}
+            </p>
           )}
         </div>
 
