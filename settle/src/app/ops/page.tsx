@@ -1,25 +1,36 @@
 'use client';
 
 /**
- * Ops Debug Page (localhost-only)
+ * Ops Console (admin-gated)
  *
  * Tabs: Outbox | Stuck Orders | Workers | Order Search
  * Route: /ops
  *
- * Production guard: renders 404 if NODE_ENV === 'production'.
+ * Production guard: /api/ops returns 404 outside localhost — triggers blocked state.
+ * Admin auth: requires blip_admin_token in localStorage (for search/nav links).
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 
-type Tab = 'outbox' | 'stuck' | 'workers' | 'search';
+type Tab = 'outbox' | 'stuck' | 'workers' | 'orders' | 'search';
 
 export default function OpsPage() {
-  const [tab, setTab] = useState<Tab>('outbox');
+  const [tab, setTab] = useState<Tab>('orders');
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [blocked, setBlocked] = useState(false);
+
+  // Admin token (for nav links and action endpoints)
+  const [token, setToken] = useState<string | null>(null);
+  const [tokenInput, setTokenInput] = useState('');
+  const [showTokenInput, setShowTokenInput] = useState(false);
+
+  useEffect(() => {
+    setToken(localStorage.getItem('blip_admin_token'));
+  }, []);
 
   const fetchData = useCallback(async (currentTab: Tab, orderId?: string) => {
     setLoading(true);
@@ -66,6 +77,15 @@ export default function OpsPage() {
     if (searchInput.trim()) fetchData('search', searchInput.trim());
   };
 
+  const saveToken = () => {
+    if (tokenInput.trim()) {
+      localStorage.setItem('blip_admin_token', tokenInput.trim());
+      setToken(tokenInput.trim());
+      setTokenInput('');
+      setShowTokenInput(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
@@ -75,9 +95,59 @@ export default function OpsPage() {
             <h1 className="text-lg font-mono font-bold tracking-tight">ops</h1>
             <p className="text-xs text-gray-500 mt-0.5">localhost debug panel</p>
           </div>
-          <div className="flex items-center gap-1 text-xs text-gray-600">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            dev
+          <div className="flex items-center gap-4">
+            {/* Nav links (require token) */}
+            {token && (
+              <div className="flex items-center gap-3 text-xs font-mono">
+                <Link href="/ops/disputes" className="text-gray-400 hover:text-white transition-colors">
+                  disputes →
+                </Link>
+              </div>
+            )}
+
+            {/* Token status */}
+            {!token ? (
+              showTokenInput ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={tokenInput}
+                    onChange={(e) => setTokenInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && saveToken()}
+                    placeholder="Admin token..."
+                    className="bg-gray-900 border border-white/10 rounded px-2 py-1 text-xs font-mono text-white placeholder-gray-600 focus:outline-none focus:border-white/30 w-56"
+                  />
+                  <button onClick={saveToken} className="text-xs font-mono text-gray-400 hover:text-white">
+                    save
+                  </button>
+                  <button onClick={() => setShowTokenInput(false)} className="text-xs font-mono text-gray-600 hover:text-gray-400">
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowTokenInput(true)}
+                  className="text-xs font-mono text-gray-600 hover:text-gray-400"
+                >
+                  + admin token
+                </button>
+              )
+            ) : (
+              <button
+                onClick={() => {
+                  localStorage.removeItem('blip_admin_token');
+                  setToken(null);
+                }}
+                className="text-xs font-mono text-gray-600 hover:text-gray-400"
+              >
+                sign out
+              </button>
+            )}
+
+            <div className="flex items-center gap-1 text-xs text-gray-600">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              dev
+            </div>
           </div>
         </div>
       </div>
@@ -85,7 +155,7 @@ export default function OpsPage() {
       {/* Tabs */}
       <div className="border-b border-white/10 px-6">
         <div className="max-w-7xl mx-auto flex gap-0">
-          {(['outbox', 'stuck', 'workers', 'search'] as Tab[]).map((t) => (
+          {(['orders', 'outbox', 'stuck', 'workers', 'search'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -106,6 +176,7 @@ export default function OpsPage() {
         {loading && !data && <p className="text-gray-500 text-sm">Loading...</p>}
         {error && <p className="text-red-400 text-sm">Error: {error}</p>}
 
+        {tab === 'orders' && data?.tab === 'orders' && <LiveOrdersPanel data={data} />}
         {tab === 'outbox' && data?.tab === 'outbox' && <OutboxPanel data={data} />}
         {tab === 'stuck' && data?.tab === 'stuck' && <StuckPanel data={data} />}
         {tab === 'workers' && data?.tab === 'workers' && <WorkersPanel data={data} />}
@@ -116,9 +187,101 @@ export default function OpsPage() {
             setSearchInput={setSearchInput}
             onSearch={handleSearch}
             loading={loading}
+            adminToken={token}
           />
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Live Orders Panel ──
+
+const STAGES = ['pending', 'accepted', 'escrowed', 'payment_sent', 'payment_confirmed', 'releasing', 'disputed'] as const;
+
+function stageIndex(status: string): number {
+  const idx = STAGES.indexOf(status as any);
+  return idx >= 0 ? idx : 0;
+}
+
+function LiveOrdersPanel({ data }: { data: any }) {
+  const orders = data.orders || [];
+
+  if (orders.length === 0) {
+    return <p className="text-gray-500 text-sm">No active orders.</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {orders.map((o: any) => {
+        const idx = stageIndex(o.status);
+        return (
+          <div key={o.id} className="bg-gray-900 border border-white/10 rounded-lg p-4">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-sm text-blue-400">{o.order_number || o.id.slice(0, 8)}</span>
+                <span className="text-xs font-mono text-gray-400 uppercase">{o.type} {o.crypto_amount} USDC</span>
+                <span className="text-xs text-gray-500">{o.fiat_amount} AED</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <StatusBadge status={o.status} />
+                <span className="text-xs text-gray-600 font-mono">{formatAge(o.age_sec)}</span>
+              </div>
+            </div>
+
+            {/* Stage pipeline */}
+            <div className="flex items-center gap-0.5 mb-3">
+              {STAGES.map((stage, i) => {
+                const isActive = i === idx;
+                const isDone = i < idx;
+                const isFuture = i > idx;
+                return (
+                  <div key={stage} className="flex items-center flex-1">
+                    <div
+                      className={`h-1.5 flex-1 rounded-full transition-colors ${
+                        isDone ? 'bg-emerald-500' :
+                        isActive ? 'bg-blue-500 animate-pulse' :
+                        'bg-white/5'
+                      }`}
+                      title={stage}
+                    />
+                    {i < STAGES.length - 1 && <div className="w-0.5" />}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Stage labels */}
+            <div className="flex items-center gap-0.5 mb-3">
+              {STAGES.map((stage, i) => {
+                const isActive = i === idx;
+                const isDone = i < idx;
+                return (
+                  <div key={stage} className="flex-1 text-center">
+                    <span className={`text-[9px] font-mono ${
+                      isActive ? 'text-blue-400' : isDone ? 'text-emerald-600' : 'text-gray-700'
+                    }`}>
+                      {stage.replace('payment_', 'pay_').replace('confirmed', 'conf')}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Participants */}
+            <div className="flex items-center gap-4 text-xs font-mono text-gray-500">
+              <span>seller: {o.merchant_name || o.merchant_id?.slice(0, 8)}</span>
+              {o.buyer_merchant_id && (
+                <span>buyer: {o.buyer_name || o.buyer_merchant_id?.slice(0, 8)}</span>
+              )}
+              {o.escrow_tx_hash && <span className="text-purple-500">escrow_tx</span>}
+              {o.escrowed_at && <span className="text-emerald-500">funded</span>}
+              {!o.escrowed_at && o.escrow_tx_hash && <span className="text-amber-500">intent only</span>}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -326,12 +489,14 @@ function SearchPanel({
   setSearchInput,
   onSearch,
   loading,
+  adminToken,
 }: {
   data: any;
   searchInput: string;
   setSearchInput: (v: string) => void;
   onSearch: () => void;
   loading: boolean;
+  adminToken: string | null;
 }) {
   return (
     <div>
@@ -367,7 +532,17 @@ function SearchPanel({
                       <span className="font-mono text-sm text-blue-400">{order.order_number}</span>
                       <span className="text-gray-500 text-xs ml-2">{order.id}</span>
                     </div>
-                    <StatusBadge status={order.status} />
+                    <div className="flex items-center gap-3">
+                      <StatusBadge status={order.status} />
+                      {adminToken && (
+                        <Link
+                          href={`/ops/orders/${order.id}`}
+                          className="text-xs px-2 py-1 bg-white/5 rounded hover:bg-white/10 transition-colors font-mono"
+                        >
+                          inspect →
+                        </Link>
+                      )}
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm font-mono">
                     <Field label="type" value={order.type} />

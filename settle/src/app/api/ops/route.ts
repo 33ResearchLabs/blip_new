@@ -33,6 +33,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(await getStuckOrders());
       case 'workers':
         return NextResponse.json(getWorkerHeartbeats());
+      case 'orders':
+        return NextResponse.json(await getLiveOrders());
       case 'search':
         if (!orderId) {
           return NextResponse.json({ error: 'order_id required' }, { status: 400 });
@@ -146,6 +148,49 @@ function getWorkerHeartbeats() {
     outbox: readHeartbeat('outbox'),
     expiry: readHeartbeat('expiry'),
   };
+}
+
+// ── Live Orders (all non-terminal) ──
+
+async function getLiveOrders() {
+  const orders = await query<{
+    id: string;
+    order_number: string;
+    status: string;
+    type: string;
+    crypto_amount: string;
+    fiat_amount: string;
+    merchant_id: string;
+    buyer_merchant_id: string | null;
+    merchant_name: string | null;
+    buyer_name: string | null;
+    escrow_tx_hash: string | null;
+    escrowed_at: string | null;
+    accepted_at: string | null;
+    payment_sent_at: string | null;
+    payment_confirmed_at: string | null;
+    created_at: string;
+    expires_at: string | null;
+    age_sec: number;
+  }>(
+    `SELECT o.id, o.order_number, o.status, o.type,
+            o.crypto_amount::text, o.fiat_amount::text,
+            o.merchant_id, o.buyer_merchant_id,
+            m1.business_name as merchant_name,
+            m2.business_name as buyer_name,
+            o.escrow_tx_hash, o.escrowed_at::text, o.accepted_at::text,
+            o.payment_sent_at::text, o.payment_confirmed_at::text,
+            o.created_at::text, o.expires_at::text,
+            EXTRACT(EPOCH FROM (NOW() - o.created_at))::int as age_sec
+     FROM orders o
+     LEFT JOIN merchants m1 ON m1.id = o.merchant_id
+     LEFT JOIN merchants m2 ON m2.id = o.buyer_merchant_id
+     WHERE o.status NOT IN ('completed', 'cancelled', 'expired')
+     ORDER BY o.created_at DESC
+     LIMIT 50`
+  );
+
+  return { tab: 'orders', orders };
 }
 
 // ── Order Search ──

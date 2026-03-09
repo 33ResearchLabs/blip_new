@@ -3,7 +3,8 @@
 import { useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { showConfirmation } from "@/stores/confirmationStore";
-import type { Order, DbOrder } from "@/types/merchant";
+import type { Order, DbOrder, Notification } from "@/types/merchant";
+import type { SoundType } from "@/hooks/useSounds";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
 import { computeMyRole } from "@/lib/orders/statusResolver";
 import { showToast } from "@/components/NotificationToast";
@@ -15,8 +16,8 @@ interface UseEscrowOperationsParams {
   solanaWallet: any;
   effectiveBalance: number | null;
   inAppBalance: number | null;
-  addNotification: (type: string, message: string, orderId?: string) => void;
-  playSound: (sound: string) => void;
+  addNotification: (type: Notification['type'], message: string, orderId?: string) => void;
+  playSound: (sound: SoundType) => void;
   afterMutationReconcile: (orderId: string, optimisticUpdate?: Partial<Order>) => Promise<void>;
   fetchOrders: () => Promise<void>;
   refreshBalance: () => void;
@@ -283,7 +284,10 @@ export function useEscrowOperations({
           try {
             const res = await fetch(`/api/orders/${escrowOrder.id}/escrow`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                "Idempotency-Key": `${escrowOrder.id}:escrow:${escrowOrder.orderVersion || 1}`,
+              },
               body: JSON.stringify(escrowPayload),
             });
             if (res.ok) {
@@ -628,7 +632,7 @@ export function useEscrowOperations({
           const wasRelisted = data.data?.relisted || data.data?.status === 'pending';
           if (wasRelisted) {
             addNotification('system', 'Order returned to marketplace for other merchants.', orderId);
-            showToast({ type: 'info', title: 'Order Relisted', message: 'Order returned to marketplace for other merchants.' });
+            showToast({ type: 'system', title: 'Order Relisted', message: 'Order returned to marketplace for other merchants.' });
             await afterMutationReconcile(orderId, { status: "pending" as const });
           } else {
             addNotification('system', 'Order cancelled successfully.', orderId);

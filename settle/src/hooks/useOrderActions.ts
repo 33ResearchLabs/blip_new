@@ -2,7 +2,8 @@
 
 import { useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
-import type { Order, DbOrder } from "@/types/merchant";
+import type { Order, DbOrder, Notification } from "@/types/merchant";
+import type { SoundType } from "@/hooks/useSounds";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
 import { showToast } from "@/components/NotificationToast";
 
@@ -12,8 +13,8 @@ interface UseOrderActionsParams {
   isMockMode: boolean;
   solanaWallet: any;
   effectiveBalance: number | null;
-  addNotification: (type: string, message: string, orderId?: string) => void;
-  playSound: (sound: string) => void;
+  addNotification: (type: Notification['type'], message: string, orderId?: string) => void;
+  playSound: (sound: SoundType) => void;
   afterMutationReconcile: (orderId: string, optimisticUpdate?: Partial<Order>) => Promise<void>;
   setShowWalletModal: (show: boolean) => void;
   handleOpenChat: (order: Order) => void;
@@ -53,7 +54,7 @@ export function useOrderActions({
     if (!merchantId || isAccepting) return;
 
     // Pre-check: verify order is still available (race condition guard)
-    if (order.status === 'accepted' || order.dbOrder?.status === 'accepted') {
+    if (order.status === 'active' || order.dbOrder?.status === 'accepted') {
       addNotification('system', 'This order was already taken by another merchant.', order.id);
       playSound('error');
       return;
@@ -352,7 +353,10 @@ export function useOrderActions({
 
       const res = await fetch(`/api/orders/${order.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": `${order.id}:payment_sent:${order.orderVersion || 1}`,
+        },
         body: JSON.stringify(proceedBody),
       });
 
@@ -395,7 +399,10 @@ export function useOrderActions({
     try {
       const res = await fetch(`/api/orders/${order.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": `${order.id}:payment_sent:${order.orderVersion || 1}`,
+        },
         body: JSON.stringify({
           status: "payment_sent",
           actor_type: "merchant",
@@ -439,7 +446,10 @@ export function useOrderActions({
     try {
       const res = await fetch(`/api/orders/${order.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": `${order.id}:completed:${order.orderVersion || 1}`,
+        },
         body: JSON.stringify({
           status: "completed",
           actor_type: "merchant",
@@ -487,9 +497,13 @@ export function useOrderActions({
 
     setIsCompleting(true);
     try {
+      const matchedOrder = orders.find(o => o.id === orderId);
       const res = await fetch(`/api/orders/${orderId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": `${orderId}:completed:${matchedOrder?.orderVersion || 1}`,
+        },
         body: JSON.stringify({
           status: "completed",
           actor_type: "merchant",
@@ -735,7 +749,37 @@ export function useOrderActions({
         });
 
       } else {
-        // BUY order flow: Create directly
+        // BUY order flow: Sign trade intent on-chain, then create in DB
+        let escrowFields: Record<string, any> = {};
+
+        if (!isMockMode && solanaWallet.connected && solanaWallet.createTradeOnly) {
+          try {
+            const tradeId = Date.now();
+            const result = await solanaWallet.createTradeOnly({
+              tradeId,
+              amount: parseFloat(openTradeForm.cryptoAmount),
+              side: 'buy',
+            });
+
+            if (result.success && result.txHash) {
+              escrowFields = {
+                escrow_tx_hash: result.txHash,
+                escrow_trade_id: result.tradeId,
+                escrow_trade_pda: result.tradePda,
+                escrow_pda: result.escrowPda,
+                escrow_creator_wallet: solanaWallet.walletAddress,
+                escrow_funded: false, // BUY = trade intent only, no funds locked
+              };
+            }
+          } catch (signErr: any) {
+            if (signErr?.message?.includes('cancelled by user') || signErr?.message?.includes('User rejected')) {
+              throw new Error('Transaction cancelled');
+            }
+            console.error('[BuyOrder] On-chain trade intent failed:', signErr);
+            throw new Error(`On-chain signing failed: ${signErr.message}`);
+          }
+        }
+
         const res = await fetch("/api/merchant/orders", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -747,6 +791,7 @@ export function useOrderActions({
             spread_preference: openTradeForm.spreadPreference,
             priority_fee: priorityFee || 0,
             expiry_minutes: openTradeForm.expiryMinutes || 15,
+            ...escrowFields,
           }),
         });
 
