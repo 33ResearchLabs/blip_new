@@ -172,6 +172,11 @@ export const createOrderSchema = z.object({
   user_bank_account: z.string().max(50).optional(), // User's bank IBAN for receiving fiat (sell orders)
   buyer_wallet_address: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'Invalid Solana wallet address').optional(), // Buyer's Solana wallet for receiving crypto (buy orders)
   buyer_merchant_id: uuidSchema.optional(), // For M2M trades: merchant acting as buyer
+  escrow_tx_hash: z.string().max(128).optional(), // On-chain trade intent tx hash
+  escrow_trade_id: z.number().optional(), // On-chain trade ID
+  escrow_trade_pda: z.string().max(64).optional(), // Trade PDA address
+  escrow_pda: z.string().max(64).optional(), // Escrow PDA address
+  escrow_funded: z.boolean().optional(), // true = actual escrow funded, false = trade intent only
 });
 
 export const updateOrderStatusSchema = z.object({
@@ -264,6 +269,7 @@ export const merchantCreateOrderSchema = z.object({
   escrow_trade_pda: z.string().nullish(),
   escrow_pda: z.string().nullish(),
   escrow_creator_wallet: z.string().nullish(),
+  escrow_funded: z.boolean().optional(), // true = actual escrow funded, false = trade intent only
   matched_offer_id: uuidSchema.nullish(), // Matched offer for M2M
   expiry_minutes: z.number().min(1).max(1440).default(15), // Order expiry in minutes (default 15, max 24h)
   dry_run: z.boolean().optional(), // Validate only, don't create order

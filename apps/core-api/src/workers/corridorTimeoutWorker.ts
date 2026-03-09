@@ -64,16 +64,19 @@ async function processOverdueFulfillments(): Promise<number> {
           await client.query(
             `INSERT INTO ledger_entries
              (account_type, account_id, entry_type, amount, asset,
-              related_order_id, description, metadata, balance_before, balance_after)
+              related_order_id, description, metadata, balance_before, balance_after, idempotency_key)
              SELECT 'merchant', $1, 'CORRIDOR_SAED_TRANSFER', $2, 'sAED', $3,
                     'Corridor timeout sAED refund: ' || $2 || ' fils',
-                    $4::jsonb, sinr_balance - $2, sinr_balance
-             FROM merchants WHERE id = $1`,
+                    $4::jsonb, sinr_balance - $2, sinr_balance,
+                    $5
+             FROM merchants WHERE id = $1
+             ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
             [
               buyerMerchantId,
               saedAmount,
               orderId,
               JSON.stringify({ refund: true, reason: 'LP_TIMEOUT' }),
+              `${fulfillmentId}:CORRIDOR_SAED_TRANSFER:timeout`,
             ]
           );
         }

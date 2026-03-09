@@ -30,6 +30,11 @@
       "types": "./dist/types/index.d.ts",
       "import": "./dist/types/index.js",
       "require": "./dist/types/index.js"
+    },
+    "./events": {
+      "types": "./dist/events/index.d.ts",
+      "import": "./dist/events/index.js",
+      "require": "./dist/events/index.js"
     }
   },
   "scripts": {
@@ -37,7 +42,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "pg": "^8.11.3"
+    "pg": "^8.11.3",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^20.11.16",

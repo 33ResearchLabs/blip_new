@@ -14,7 +14,7 @@ const {
   getAccount,
 } = require('@solana/spl-token');
 const crypto = require('crypto');
-const bs58 = require('bs58');
+const bs58 = require('bs58').default;
 const fs = require('fs');
 const path = require('path');
 
@@ -288,6 +288,23 @@ async function fundEscrow(merchantId, amount) {
   const keypair = getKeypair(merchantId);
   if (!keypair) throw new Error('Wallet not unlocked. Use /unlock first.');
 
+  // Pre-check balances before attempting on-chain TX
+  const pubkey = keypair.publicKey.toBase58();
+  const [usdtBalance, solBalance] = await Promise.all([
+    getUsdtBalance(pubkey),
+    getSolBalance(pubkey),
+  ]);
+  if (usdtBalance < amount) {
+    throw new Error(
+      `Insufficient USDT balance. You need ${amount} USDT but only have ${usdtBalance.toFixed(2)} USDT. (SOL: ${solBalance.toFixed(4)})`
+    );
+  }
+  if (solBalance < 0.01) {
+    throw new Error(
+      `Insufficient SOL for transaction fees. You have ${solBalance.toFixed(4)} SOL, need at least 0.01 SOL. (USDT: ${usdtBalance.toFixed(2)})`
+    );
+  }
+
   const tradeId = Date.now();
   const amountLamports = Math.floor(amount * 1_000_000);
   const [tradePda] = findTradePda(keypair.publicKey, tradeId);
@@ -338,6 +355,52 @@ async function fundEscrow(merchantId, amount) {
 }
 
 /**
+ * Create trade on-chain without funding (intent to buy).
+ * Signs a createTrade instruction with side=0 (buy).
+ */
+async function createTradeOnChain(merchantId, amount) {
+  const keypair = getKeypair(merchantId);
+  if (!keypair) throw new Error('Wallet not unlocked. Use /unlock first.');
+
+  const solBalance = await getSolBalance(keypair.publicKey.toBase58());
+  if (solBalance < 0.01) {
+    throw new Error(
+      `Insufficient SOL for transaction fees. You have ${solBalance.toFixed(4)} SOL, need at least 0.01 SOL.\nFund your wallet: \`${keypair.publicKey.toBase58()}\``
+    );
+  }
+
+  const tradeId = Date.now();
+  const amountLamports = Math.floor(amount * 1_000_000);
+  const [tradePda] = findTradePda(keypair.publicKey, tradeId);
+  const [escrowPda] = findEscrowPda(tradePda);
+  const [protocolConfigPda] = findProtocolConfigPda();
+
+  const transaction = new Transaction();
+
+  const tradeIdBuf = new BN(tradeId).toArrayLike(Buffer, 'le', 8);
+  const amountBuf = new BN(amountLamports).toArrayLike(Buffer, 'le', 8);
+  const sideBuf = Buffer.from([0]); // 0=buy
+  transaction.add(buildInstruction(DISC.createTrade, [tradeIdBuf, amountBuf, sideBuf], [
+    { pubkey: keypair.publicKey, isSigner: true, isWritable: true },
+    { pubkey: protocolConfigPda, isSigner: false, isWritable: false },
+    { pubkey: tradePda, isSigner: false, isWritable: true },
+    { pubkey: USDT_MINT, isSigner: false, isWritable: false },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+  ]));
+
+  const txHash = await signAndSend(keypair, transaction);
+
+  return {
+    success: true,
+    txHash,
+    tradeId,
+    tradePda: tradePda.toBase58(),
+    escrowPda: escrowPda.toBase58(),
+    creatorWallet: keypair.publicKey.toBase58(),
+  };
+}
+
+/**
  * Release escrow: transfer from vault to counterparty
  * Called when seller confirms fiat received and releases crypto.
  */
@@ -345,15 +408,54 @@ async function releaseEscrowOnChain(merchantId, creatorPubkeyStr, tradeId, count
   const keypair = getKeypair(merchantId);
   if (!keypair) throw new Error('Wallet not unlocked. Use /unlock first.');
 
+  const solBalance = await getSolBalance(keypair.publicKey.toBase58());
+  if (solBalance < 0.01) {
+    throw new Error(
+      `Insufficient SOL for transaction fees. You have ${solBalance.toFixed(4)} SOL, need at least 0.01 SOL.\nFund your wallet: \`${keypair.publicKey.toBase58()}\``
+    );
+  }
+
   const connection = getConnection();
   const creatorPk = new PublicKey(creatorPubkeyStr);
-  const counterpartyPk = new PublicKey(counterpartyStr);
   const [tradePda] = findTradePda(creatorPk, tradeId);
   const [escrowPda] = findEscrowPda(tradePda);
   const [vaultAuthority] = findVaultAuthorityPda(escrowPda);
   const [protocolConfigPda] = findProtocolConfigPda();
+
+  // Read the on-chain trade account to get the REAL counterparty
+  // Trade layout: 8 disc + 32 creator + 32 counterparty = counterparty at offset 40
+  const tradeInfo = await connection.getAccountInfo(tradePda);
+  if (!tradeInfo) throw new Error('Trade account not found on-chain.');
+
+  const onChainCreator = new PublicKey(tradeInfo.data.slice(8, 40));
+  const onChainCounterparty = new PublicKey(tradeInfo.data.slice(40, 72));
+  const onChainStatus = tradeInfo.data[112]; // 8+32+32+8+32+8 = 120... wait, 8+32+32+8+32+8=120, status at 120
+  const isZero = onChainCounterparty.equals(PublicKey.default);
+
+  console.log(`[Release] Trade PDA: ${tradePda.toBase58()}`);
+  console.log(`[Release] On-chain creator: ${onChainCreator.toBase58()}`);
+  console.log(`[Release] On-chain counterparty: ${onChainCounterparty.toBase58()} (zero=${isZero})`);
+  console.log(`[Release] DB counterparty: ${counterpartyStr || 'none'}`);
+  console.log(`[Release] Caller (signer): ${keypair.publicKey.toBase58()}`);
+  console.log(`[Release] Creator passed in: ${creatorPubkeyStr}`);
+
+  // Use on-chain counterparty if set, otherwise fall back to DB value
+  let counterpartyPk;
+  if (!isZero) {
+    counterpartyPk = onChainCounterparty;
+    if (counterpartyStr && counterpartyPk.toBase58() !== counterpartyStr) {
+      console.log(`[Release] On-chain counterparty differs from DB — using on-chain`);
+    }
+  } else if (counterpartyStr) {
+    // Counterparty not set on-chain — acceptTrade was never called
+    throw new Error('Buyer has not joined the escrow on-chain yet. They need to unlock their wallet and view this order first (acceptTrade).');
+  } else {
+    throw new Error('Cannot release: no counterparty set on-chain or in database.');
+  }
+
   const vaultAta = await getAssociatedTokenAddress(USDT_MINT, vaultAuthority, true);
   const counterpartyAta = await getAssociatedTokenAddress(USDT_MINT, counterpartyPk);
+  console.log(`[Release] counterpartyAta: ${counterpartyAta.toBase58()}`);
   const treasuryAta = await getAssociatedTokenAddress(USDT_MINT, TREASURY);
 
   const transaction = new Transaction();
@@ -409,6 +511,13 @@ async function refundEscrowOnChain(merchantId, creatorPubkeyStr, tradeId) {
   const keypair = getKeypair(merchantId);
   if (!keypair) throw new Error('Wallet not unlocked. Use /unlock first.');
 
+  const solBalance = await getSolBalance(keypair.publicKey.toBase58());
+  if (solBalance < 0.01) {
+    throw new Error(
+      `Insufficient SOL for transaction fees. You have ${solBalance.toFixed(4)} SOL, need at least 0.01 SOL.\nFund your wallet: \`${keypair.publicKey.toBase58()}\``
+    );
+  }
+
   const connection = getConnection();
   const creatorPk = new PublicKey(creatorPubkeyStr);
   const [tradePda] = findTradePda(creatorPk, tradeId);
@@ -454,6 +563,13 @@ async function acceptTradeOnChain(merchantId, creatorPubkeyStr, tradeId) {
   const keypair = getKeypair(merchantId);
   if (!keypair) throw new Error('Wallet not unlocked. Use /unlock first.');
 
+  const solBalance = await getSolBalance(keypair.publicKey.toBase58());
+  if (solBalance < 0.01) {
+    throw new Error(
+      `Insufficient SOL for transaction fees. You have ${solBalance.toFixed(4)} SOL, need at least 0.01 SOL.\nFund your wallet: \`${keypair.publicKey.toBase58()}\``
+    );
+  }
+
   const creatorPk = new PublicKey(creatorPubkeyStr);
   const [tradePda] = findTradePda(creatorPk, tradeId);
   const [escrowPda] = findEscrowPda(tradePda);
@@ -493,6 +609,7 @@ module.exports = {
   getSolBalance,
   // Escrow operations
   fundEscrow,
+  createTradeOnChain,
   acceptTradeOnChain,
   releaseEscrowOnChain,
   refundEscrowOnChain,

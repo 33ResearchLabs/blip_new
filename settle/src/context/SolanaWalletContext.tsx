@@ -330,6 +330,14 @@ interface SolanaWalletContextType {
     extensionSeconds: number;  // Additional seconds to extend (e.g., 86400 for 24 hours)
   }) => Promise<TradeOperationResult>;
 
+  // Create trade on-chain WITHOUT funding (intent to buy)
+  // Only signs createTrade instruction, no escrow funding
+  createTradeOnly: (params: {
+    tradeId: number;
+    amount: number;
+    side: 'buy' | 'sell';
+  }) => Promise<TradeOperationResult>;
+
   // Fund escrow WITHOUT counterparty (for M2M open orders)
   // Creates trade + funds escrow, counterparty joins later via acceptTrade
   fundEscrowOnly: (params: {
@@ -1227,6 +1235,78 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [publicKey, program, signTransaction, connection]);
 
+  // Create trade on-chain WITHOUT funding (intent to buy)
+  // Only signs createTrade instruction — no escrow, no USDC needed, just SOL for gas
+  const createTradeOnly = useCallback(async (params: {
+    tradeId: number;
+    amount: number;
+    side: 'buy' | 'sell';
+  }): Promise<TradeOperationResult> => {
+    if (!publicKey || !program || !signTransaction) {
+      throw new Error('Wallet not connected');
+    }
+
+    try {
+      await ensureProtocolConfigInitialized();
+
+      const [tradePda] = findTradePda(publicKey, params.tradeId);
+      const [escrowPda] = findEscrowPda(tradePda);
+
+      const amountBN = new BN(Math.floor(params.amount * 1_000_000));
+      const sideEnum = params.side === 'buy' ? TradeSide.Buy : TradeSide.Sell;
+
+      console.log('[createTradeOnly] Signing trade intent on-chain:', {
+        tradeId: params.tradeId,
+        amount: amountBN.toString(),
+        side: params.side,
+        tradePda: tradePda.toString(),
+      });
+
+      const createTradeTx = await buildCreateTradeTx(
+        program,
+        publicKey,
+        USDT_MINT,
+        {
+          tradeId: params.tradeId,
+          amount: amountBN,
+          side: sideEnum,
+        }
+      );
+
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+      createTradeTx.recentBlockhash = blockhash;
+      createTradeTx.feePayer = publicKey;
+
+      const signedTx = await signTransaction(createTradeTx);
+      const txHash = await connection.sendRawTransaction(signedTx.serialize(), {
+        skipPreflight: true,
+        maxRetries: 5,
+      });
+
+      await connection.confirmTransaction({
+        signature: txHash,
+        blockhash,
+        lastValidBlockHeight,
+      });
+
+      console.log('[createTradeOnly] Trade intent signed on-chain:', txHash);
+
+      return {
+        txHash,
+        success: true,
+        tradePda: tradePda.toString(),
+        escrowPda: escrowPda.toString(),
+        tradeId: params.tradeId,
+      };
+    } catch (error: any) {
+      console.error('Create trade failed:', error);
+      if (error?.message?.includes('User rejected')) {
+        throw new Error('Transaction cancelled by user');
+      }
+      throw error;
+    }
+  }, [publicKey, program, signTransaction, connection, ensureProtocolConfigInitialized]);
+
   // Fund escrow WITHOUT counterparty (unified flow for U2M and M2M)
   // Creates trade + funds escrow, counterparty joins later via acceptTrade
   const fundEscrowOnly = useCallback(async (params: {
@@ -1909,6 +1989,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     releaseEscrow,
     refundEscrow,
     extendEscrow,
+    createTradeOnly,
     fundEscrowOnly,
     acceptTrade,
     depositToEscrow,

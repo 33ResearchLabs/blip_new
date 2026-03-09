@@ -62,6 +62,7 @@ interface OrderDetails {
     rating: number;
     total_trades: number;
     total_volume?: number;
+    avatar_url?: string | null;
   };
   merchant?: {
     id: string;
@@ -71,6 +72,7 @@ interface OrderDetails {
     rating: number;
     total_trades: number;
     is_online?: boolean;
+    avatar_url?: string | null;
   };
   buyer_merchant?: {
     id: string;
@@ -80,6 +82,7 @@ interface OrderDetails {
     rating: number;
     total_trades: number;
     is_online?: boolean;
+    avatar_url?: string | null;
   };
   offer?: {
     id: string;

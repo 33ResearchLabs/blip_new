@@ -4,6 +4,7 @@ import {
   getOrderWithRelations,
 } from '@/lib/db/repositories/orders';
 import { logger, normalizeStatus } from 'settlement-core';
+import { randomUUID } from 'crypto';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
 import {
@@ -118,6 +119,8 @@ export async function POST(
     }
 
     // Mock mode (or Core-API absent): handle escrow lock locally
+    const requestId = request.headers.get('x-request-id') || randomUUID();
+    const idempotencyKey = request.headers.get('idempotency-key') || randomUUID();
     const isMockMode = MOCK_MODE || !process.env.CORE_API_URL;
     if (isMockMode) {
       const result = await mockEscrowLock(
@@ -130,7 +133,8 @@ export async function POST(
           escrow_trade_pda: parseResult.data.escrow_trade_pda ?? undefined,
           escrow_pda: parseResult.data.escrow_pda ?? undefined,
           escrow_creator_wallet: parseResult.data.escrow_creator_wallet ?? undefined,
-        }
+        },
+        requestId
       );
 
       if (!result.success) {
@@ -149,6 +153,8 @@ export async function POST(
     const depositResponse = await proxyCoreApi(`/v1/orders/${id}/escrow`, {
       method: 'POST',
       body: parseResult.data,
+      requestId,
+      idempotencyKey,
     });
 
     // Fire Pusher notification for escrow deposit
@@ -161,6 +167,7 @@ export async function POST(
             orderId: order.id,
             userId: order.user_id || '',
             merchantId: order.merchant_id || '',
+            buyerMerchantId: order.buyer_merchant_id || undefined,
             status: order.status || 'escrowed',
             minimal_status: normalizeStatus(order.status || 'escrowed'),
             order_version: order.order_version,
@@ -204,6 +211,8 @@ export async function PATCH(
     }
 
     const { tx_hash, actor_type, actor_id } = parseResult.data;
+    const requestId = request.headers.get('x-request-id') || randomUUID();
+    const idempotencyKey = request.headers.get('idempotency-key') || randomUUID();
 
     // Forward to core-api (single writer for all mutations)
     const releaseResponse = await proxyCoreApi(`/v1/orders/${id}/events`, {
@@ -211,6 +220,8 @@ export async function PATCH(
       body: { event_type: 'release', tx_hash },
       actorType: actor_type,
       actorId: actor_id,
+      requestId,
+      idempotencyKey,
     });
 
     // Fire Pusher notification for escrow release
@@ -223,6 +234,7 @@ export async function PATCH(
             orderId: order.id,
             userId: order.user_id || '',
             merchantId: order.merchant_id || '',
+            buyerMerchantId: order.buyer_merchant_id || undefined,
             status: order.status || 'completed',
             minimal_status: normalizeStatus(order.status || 'completed'),
             order_version: order.order_version,

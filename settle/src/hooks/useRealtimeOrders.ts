@@ -12,6 +12,12 @@ import { usePusherOptional } from '@/context/PusherContext';
 import { getUserChannel, getMerchantChannel, getAllMerchantsChannel } from '@/lib/pusher/channels';
 import { ORDER_EVENTS } from '@/lib/pusher/events';
 import { shouldAcceptUpdate } from '@/lib/orders/statusResolver';
+import {
+  pusherOrderCreatedSchema,
+  pusherStatusUpdatedSchema,
+  pusherOrderCancelledSchema,
+  broadcastPayloadSchema,
+} from 'settlement-core/events';
 
 interface OrderData {
   id: string;
@@ -303,6 +309,16 @@ export function useRealtimeOrders(
     // ── Event handlers (queue into batch, don't touch state directly) ──
 
     const handleOrderCreated = (rawData: unknown) => {
+      // Validate with Zod if schema_version present (LOCK #5)
+      const raw = rawData as Record<string, unknown>;
+      if (raw?.schema_version != null) {
+        const result = pusherOrderCreatedSchema.safeParse(raw);
+        if (!result.success) {
+          console.warn('[Pusher] ORDER_CREATED validation failed, ignoring', result.error.issues);
+          return;
+        }
+      }
+
       const data = rawData as {
         orderId: string;
         status: string;
@@ -326,6 +342,16 @@ export function useRealtimeOrders(
     };
 
     const handleStatusUpdated = (rawData: unknown) => {
+      // Validate with Zod if schema_version present (LOCK #5)
+      const raw = rawData as Record<string, unknown>;
+      if (raw?.schema_version != null) {
+        const result = pusherStatusUpdatedSchema.safeParse(raw);
+        if (!result.success) {
+          console.warn('[Pusher] STATUS_UPDATED validation failed, ignoring', result.error.issues);
+          return;
+        }
+      }
+
       const data = rawData as {
         orderId: string;
         status: string;
@@ -350,6 +376,16 @@ export function useRealtimeOrders(
     };
 
     const handleCancelled = (rawData: unknown) => {
+      // Validate with Zod if schema_version present (LOCK #5)
+      const raw = rawData as Record<string, unknown>;
+      if (raw?.schema_version != null) {
+        const result = pusherOrderCancelledSchema.safeParse(raw);
+        if (!result.success) {
+          console.warn('[Pusher] ORDER_CANCELLED validation failed, ignoring', result.error.issues);
+          return;
+        }
+      }
+
       const data = rawData as {
         orderId: string;
         order_version?: number;
@@ -448,6 +484,18 @@ export function useRealtimeOrders(
           }
 
           if (msg.type !== 'order_event') return;
+
+          // Validate WS message with Zod if schema_version present (LOCK #5)
+          if (msg.schema_version != null) {
+            const result = broadcastPayloadSchema.safeParse(msg);
+            if (!result.success) {
+              console.warn('[WS] Incoming event failed validation, ignoring', {
+                event_type: msg.event_type,
+                issues: result.error.issues,
+              });
+              return;
+            }
+          }
 
           const { event_type, order_id, status, minimal_status, order_version, previousStatus, buyer_merchant_id, merchant_id } = msg;
 

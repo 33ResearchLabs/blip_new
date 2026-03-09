@@ -111,8 +111,25 @@ body.dashboard-layout {
 .text-display {
   font-size: clamp(48px, 8vw, 96px);
   line-height: 1.05;
-  letter-spacing: -0.02em;
-  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-weight: 900;
+}
+
+/* Micro label — uppercase tracked, used for section headers */
+.label-micro {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+/* Big number display — wallet balances etc */
+.text-balance {
+  font-size: clamp(44px, 12vw, 64px);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-weight: 900;
 }
 
 .text-large-title {
@@ -227,15 +244,28 @@ button, a, input, select, textarea,
 
 /* Default glass card — neutral, no orange */
 .glass-card {
-  background: rgba(255, 255, 255, 0.025);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 :root.light .glass-card {
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* Premium glass — for hero cards */
+.glass-card-hero {
+  background: linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.01) 100%);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+:root.light .glass-card-hero {
+  background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%);
+  border: 1px solid rgba(0, 0, 0, 0.07);
 }
 
 /* Resizable panel separator */
@@ -274,6 +304,63 @@ button, a, input, select, textarea,
   background:
     radial-gradient(ellipse at 30% -10%, rgba(249, 115, 22, 0.02) 0%, transparent 50%),
     var(--background);
+}
+
+/* Ambient glow blobs — animated, pointer-events-none */
+@keyframes ambient-drift-1 {
+  0%   { transform: translate(0, 0) scale(1); }
+  33%  { transform: translate(60px, -40px) scale(1.15); }
+  66%  { transform: translate(-30px, 60px) scale(0.9); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+@keyframes ambient-drift-2 {
+  0%   { transform: translate(0, 0) scale(1); }
+  33%  { transform: translate(-50px, 70px) scale(0.9); }
+  66%  { transform: translate(30px, -50px) scale(1.2); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+.ambient-blob-violet {
+  position: absolute;
+  width: 55%;
+  height: 55%;
+  border-radius: 9999px;
+  background: rgba(124, 58, 237, 0.07);
+  filter: blur(90px);
+  pointer-events: none;
+  animation: ambient-drift-1 18s linear infinite;
+  top: -15%;
+  left: -15%;
+}
+
+.ambient-blob-blue {
+  position: absolute;
+  width: 45%;
+  height: 45%;
+  border-radius: 9999px;
+  background: rgba(37, 99, 235, 0.07);
+  filter: blur(80px);
+  pointer-events: none;
+  animation: ambient-drift-2 14s linear infinite;
+  bottom: -10%;
+  right: -10%;
+}
+
+/* Card holographic shimmer sweep */
+@keyframes card-shimmer {
+  0%   { transform: translateX(-200%) skewX(-12deg); opacity: 0; }
+  40%  { opacity: 1; }
+  100% { transform: translateX(200%) skewX(-12deg); opacity: 0; }
+}
+
+.card-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+  animation: card-shimmer 3s ease-in-out infinite;
+  animation-delay: 2s;
 }
 
 /* Orange glow — very subtle, CTA only */

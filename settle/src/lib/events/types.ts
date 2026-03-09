@@ -55,6 +55,8 @@ export interface OrderLifecycleEvent {
   payload: Record<string, unknown>;
   /** Idempotency key: "{orderId}:{eventType}:{orderVersion}" */
   idempotencyKey: string;
+  /** Request ID for end-to-end tracing (optional, set by proxy/middleware) */
+  requestId?: string;
 }
 
 // ─── Per-Event Payloads ──────────────────────────────────────────────

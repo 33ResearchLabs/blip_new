@@ -17,6 +17,7 @@ import {
 } from 'settlement-core';
 import { broadcastOrderEvent } from '../ws/broadcast';
 import { bufferNotification } from '../batchWriter';
+import { idempotencyGuard } from '../middleware/idempotency';
 
 interface OrderRow {
   id: string;
@@ -46,6 +47,8 @@ interface CreateOrderPayload {
   escrow_trade_pda?: string;
   escrow_pda?: string;
   escrow_creator_wallet?: string;
+  // true = actual escrow funded (SELL), false = createTrade intent only (BUY)
+  escrow_funded?: boolean;
   // Bump/decay fields
   ref_price_at_create?: number;
   premium_bps_current?: number;
@@ -58,11 +61,14 @@ interface CreateOrderPayload {
   price_proof_sig?: string | null;
   price_proof_ref_price?: number | null;
   price_proof_expires_at?: string | null;
+  expiry_minutes?: number;
 }
 
 export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /v1/orders - Create order
-  fastify.post<{ Body: CreateOrderPayload }>('/orders', async (request, reply) => {
+  fastify.post<{ Body: CreateOrderPayload }>('/orders', {
+    preHandler: idempotencyGuard('orders.create'),
+  }, async (request, reply) => {
     const data = request.body;
 
     if (!data.user_id || !data.merchant_id || !data.offer_id) {
@@ -80,11 +86,13 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         'crypto_amount', 'fiat_amount', 'crypto_currency', 'fiat_currency', 'rate',
         'payment_details', 'status',
       ];
+      // escrow_funded=true means actual funds locked (SELL), false/absent means trade intent only (BUY)
+      const isEscrowFunded = data.escrow_tx_hash && data.escrow_funded !== false;
       const values: unknown[] = [
         data.user_id, data.merchant_id, data.offer_id, data.type, data.payment_method,
         data.crypto_amount, data.fiat_amount, 'USDC', 'AED', data.rate,
         data.payment_details ? JSON.stringify(data.payment_details) : null,
-        data.escrow_tx_hash ? 'escrowed' : 'pending',
+        isEscrowFunded ? 'escrowed' : 'pending',
       ];
       // expires_at uses raw SQL to avoid JS Date / Postgres timezone mismatch
       // (created_at is `timestamp without time zone` using DB-local now())
@@ -120,7 +128,7 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
           values.push(value);
         }
       }
-      if (data.escrow_tx_hash) {
+      if (isEscrowFunded) {
         fields.push('escrowed_at');
         values.push(new Date());
       }
@@ -176,6 +184,7 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /v1/merchant/orders - Merchant-initiated order creation
   fastify.post<{ Body: CreateOrderPayload & { is_m2m?: boolean } }>(
     '/merchant/orders',
+    { preHandler: idempotencyGuard('orders.merchant_create') },
     async (request, reply) => {
       const data = request.body;
 
@@ -189,18 +198,21 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         // Same creation logic - settle has already resolved the offer, created placeholder user, etc.
         // expires_at uses raw SQL to avoid JS Date / Postgres timezone mismatch
-        const expiresAtRaw = "now() + interval '15 minutes'";
+        const expiryMin = Math.max(1, Math.min(1440, data.expiry_minutes || 15));
+        const expiresAtRaw = `now() + interval '${expiryMin} minutes'`;
 
         const fields = [
           'user_id', 'merchant_id', 'offer_id', 'type', 'payment_method',
           'crypto_amount', 'fiat_amount', 'crypto_currency', 'fiat_currency', 'rate',
           'payment_details', 'status',
         ];
+        // escrow_funded=true means actual funds locked (SELL), false/absent means trade intent only (BUY)
+        const isEscrowFunded = data.escrow_tx_hash && data.escrow_funded !== false;
         const values: unknown[] = [
           data.user_id, data.merchant_id, data.offer_id, data.type, data.payment_method,
           data.crypto_amount, data.fiat_amount, 'USDC', 'AED', data.rate,
           data.payment_details ? JSON.stringify(data.payment_details) : null,
-          data.escrow_tx_hash ? 'escrowed' : 'pending',
+          isEscrowFunded ? 'escrowed' : 'pending',
         ];
 
         // Optional fields
@@ -236,7 +248,7 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
-        if (data.escrow_tx_hash) {
+        if (isEscrowFunded) {
           fields.push('escrowed_at');
           values.push(new Date());
         }

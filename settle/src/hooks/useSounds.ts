@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from 'react';
 
-type SoundType = 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete';
+export type SoundType = 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete';
 
 // Web Audio API based sound generator
 export function useSounds() {

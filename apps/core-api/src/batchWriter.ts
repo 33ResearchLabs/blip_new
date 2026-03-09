@@ -18,6 +18,7 @@ interface EventRow {
   old_status: string;
   new_status: string;
   metadata: string;
+  request_id?: string;
 }
 
 // --- Notification buffer ---
@@ -65,13 +66,13 @@ async function flush() {
     const vals: unknown[] = [];
     const phs: string[] = [];
     for (let i = 0; i < events.length; i++) {
-      const o = i * 7;
-      phs.push(`($${o+1},$${o+2},$${o+3},$${o+4},$${o+5},$${o+6},$${o+7})`);
+      const o = i * 8;
+      phs.push(`($${o+1},$${o+2},$${o+3},$${o+4},$${o+5},$${o+6},$${o+7},$${o+8})`);
       const e = events[i];
-      vals.push(e.order_id, e.event_type, e.actor_type, e.actor_id, e.old_status, e.new_status, e.metadata);
+      vals.push(e.order_id, e.event_type, e.actor_type, e.actor_id, e.old_status, e.new_status, e.metadata, e.request_id || null);
     }
     query(
-      `INSERT INTO order_events (order_id,event_type,actor_type,actor_id,old_status,new_status,metadata) VALUES ${phs.join(',')}`,
+      `INSERT INTO order_events (order_id,event_type,actor_type,actor_id,old_status,new_status,metadata,request_id) VALUES ${phs.join(',')}`,
       vals
     ).catch(() => {});
   }

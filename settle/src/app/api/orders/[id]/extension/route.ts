@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { queryOne } from '@/lib/db';
 import {
@@ -42,10 +43,14 @@ export async function POST(
     }
 
     const { actor_type, actor_id } = parseResult.data;
+    const requestId = request.headers.get('x-request-id') || randomUUID();
+    const idempotencyKey = request.headers.get('idempotency-key') || randomUUID();
 
     return proxyCoreApi(`/v1/orders/${id}/extension`, {
       method: 'POST',
       body: { actor_type, actor_id },
+      requestId,
+      idempotencyKey,
     });
   } catch (error) {
     logger.api.error('POST', '/api/orders/[id]/extension', error as Error);
@@ -69,10 +74,14 @@ export async function PUT(
     }
 
     const { actor_type, actor_id, accept } = parseResult.data;
+    const requestId = request.headers.get('x-request-id') || randomUUID();
+    const idempotencyKey = request.headers.get('idempotency-key') || randomUUID();
 
     return proxyCoreApi(`/v1/orders/${id}/extension`, {
       method: 'PUT',
       body: { actor_type, actor_id, accept },
+      requestId,
+      idempotencyKey,
     });
   } catch (error) {
     logger.api.error('PUT', '/api/orders/[id]/extension', error as Error);

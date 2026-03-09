@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePusherOptional } from '@/context/PusherContext';
 import { getOrderChannel } from '@/lib/pusher/channels';
 import { ORDER_EVENTS } from '@/lib/pusher/events';
+import { pusherStatusUpdatedSchema, pusherOrderCancelledSchema } from 'settlement-core/events';
 
 // Polling interval when Pusher is unavailable (3 seconds)
 const POLLING_INTERVAL = 3000;
@@ -172,6 +173,16 @@ export function useRealtimeOrder(
 
     // Handle order status updates
     const handleStatusUpdate = (rawData: unknown) => {
+      // Validate with Zod if schema_version present (LOCK #5)
+      const raw = rawData as Record<string, unknown>;
+      if (raw?.schema_version != null) {
+        const result = pusherStatusUpdatedSchema.safeParse(raw);
+        if (!result.success) {
+          console.warn('[Pusher] STATUS_UPDATED validation failed, ignoring', result.error.issues);
+          return;
+        }
+      }
+
       const data = rawData as {
         orderId: string;
         status: string;
@@ -193,6 +204,16 @@ export function useRealtimeOrder(
 
     // Handle order cancellation
     const handleCancelled = (rawData: unknown) => {
+      // Validate with Zod if schema_version present (LOCK #5)
+      const raw = rawData as Record<string, unknown>;
+      if (raw?.schema_version != null) {
+        const result = pusherOrderCancelledSchema.safeParse(raw);
+        if (!result.success) {
+          console.warn('[Pusher] ORDER_CANCELLED validation failed, ignoring', result.error.issues);
+          return;
+        }
+      }
+
       const data = rawData as { orderId: string };
       if (data.orderId !== orderId) return;
       setOrder(prev => prev ? { ...prev, status: 'cancelled' } : null);

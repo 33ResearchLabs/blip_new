@@ -15,6 +15,7 @@ import {
   errorResponse,
 } from '@/lib/middleware/auth';
 import { checkRateLimit, STANDARD_LIMIT, ORDER_LIMIT } from '@/lib/middleware/rateLimit';
+import { randomUUID } from 'crypto';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 
 // Prevent Next.js from caching this route
@@ -92,6 +93,10 @@ export async function POST(request: NextRequest) {
       user_bank_account,
       buyer_wallet_address,
       buyer_merchant_id,
+      escrow_tx_hash,
+      escrow_trade_id,
+      escrow_trade_pda,
+      escrow_pda,
     } = parseResult.data;
 
     // Authorization: verify the user exists and is making a request for themselves
@@ -178,8 +183,12 @@ export async function POST(request: NextRequest) {
           };
 
     // Forward to core-api (single writer for all mutations)
+    const requestId = request.headers.get('x-request-id') || randomUUID();
+    const idempotencyKey = request.headers.get('idempotency-key') || randomUUID();
     return proxyCoreApi('/v1/orders', {
       method: 'POST',
+      requestId,
+      idempotencyKey,
       body: {
         user_id,
         merchant_id: offer.merchant_id,
@@ -193,6 +202,12 @@ export async function POST(request: NextRequest) {
         buyer_wallet_address: type === 'buy' ? buyer_wallet_address : undefined,
         buyer_merchant_id,
         ref_price_at_create: offer.rate,
+        escrow_tx_hash,
+        escrow_trade_id,
+        escrow_trade_pda,
+        escrow_pda,
+        // type='sell' = user selling = escrow funded; type='buy' = intent only
+        escrow_funded: escrow_tx_hash ? type === 'sell' : undefined,
       },
     });
   } catch (error) {

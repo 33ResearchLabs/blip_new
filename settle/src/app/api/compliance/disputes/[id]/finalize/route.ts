@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { query } from '@/lib/db';
 import { updateOrderStatus } from '@/lib/db/repositories/orders';
 import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
@@ -171,12 +172,14 @@ export async function POST(
     }
 
     // Update order status via state machine
+    const requestId = request.headers.get('x-request-id') || randomUUID();
     const result = await updateOrderStatus(
       orderId,
       newOrderStatus,
       'system', // Compliance acts as system
       complianceId,
-      { resolution, notes }
+      { resolution, notes },
+      requestId
     );
 
     if (!result.success) {

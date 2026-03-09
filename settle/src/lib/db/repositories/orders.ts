@@ -545,7 +545,8 @@ export async function updateOrderStatus(
   newStatus: OrderStatus,
   actorType: ActorType,
   actorId: string,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  requestId?: string
 ): Promise<StatusUpdateResult> {
   try {
     // CRITICAL: Prevent writing transient micro-statuses
@@ -795,13 +796,14 @@ export async function updateOrderStatus(
             escrowPda: updatedOrder.escrow_pda,
             escrowTradePda: updatedOrder.escrow_trade_pda,
           },
+          requestId,
         }));
       } else {
         // Legacy path: inline order_events INSERT only (no unified chat/outbox)
         const eventType = getTransitionEventType(oldStatus, newStatus);
         await client.query(
-          `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata, request_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [
             orderId,
             eventType,
@@ -810,6 +812,7 @@ export async function updateOrderStatus(
             oldStatus,
             newStatus,
             JSON.stringify(metadata || {}),
+            requestId || null,
           ]
         );
       }
@@ -1350,22 +1353,11 @@ export async function expireOldOrders(): Promise<number> {
         orderId: order.id,
         userId: order.user_id,
         merchantId: order.merchant_id,
+        buyerMerchantId: order.buyer_merchant_id || undefined,
         status: newStatus,
         previousStatus: order.status,
         updatedAt: new Date().toISOString(),
       });
-
-      // Also notify the buyer merchant if this is an M2M trade
-      if (order.buyer_merchant_id) {
-        notifyOrderStatusUpdated({
-          orderId: order.id,
-          userId: order.user_id,
-          merchantId: order.buyer_merchant_id,
-          status: newStatus,
-          previousStatus: order.status,
-          updatedAt: new Date().toISOString(),
-        });
-      }
 
       // Record event for user
       await recordReputationEvent(

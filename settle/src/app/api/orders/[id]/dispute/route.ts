@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { query } from '@/lib/db';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 
@@ -29,9 +30,13 @@ export async function POST(
     const actorId = initiated_by === 'user'
       ? (user_id || '')
       : (merchant_id || '');
+    const requestId = request.headers.get('x-request-id') || randomUUID();
+    const idempotencyKey = request.headers.get('idempotency-key') || randomUUID();
     return proxyCoreApi(`/v1/orders/${orderId}/dispute`, {
       method: 'POST',
       body: { reason, description, initiated_by, actor_id: actorId },
+      requestId,
+      idempotencyKey,
     });
   } catch (error) {
     console.error('Failed to create dispute:', error);

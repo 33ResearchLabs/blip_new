@@ -20,6 +20,7 @@ import {
   successResponse,
   errorResponse,
 } from '@/lib/middleware/auth';
+import { randomUUID } from 'crypto';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import { notifyOrderCreated } from '@/lib/pusher/server';
 import { query } from '@/lib/db';
@@ -64,6 +65,48 @@ export async function GET(request: NextRequest) {
     if (!merchantExists) {
       console.error('[API] GET /api/merchant/orders - Merchant not found or not active:', merchant_id);
       return validationErrorResponse(['Merchant not found or not active']);
+    }
+
+    // --- Big orders view (merged from /api/merchant/big-orders) ---
+    const view = searchParams.get('view');
+    if (view === 'big_orders') {
+      const limit = parseInt(searchParams.get('limit') || '10', 10);
+      const includeCompleted = searchParams.get('include_completed') === 'true';
+
+      const merchantRow = await query(
+        `SELECT big_order_threshold FROM merchants WHERE id = $1`,
+        [merchant_id]
+      );
+      const threshold = (merchantRow[0] as { big_order_threshold?: number })?.big_order_threshold || 10000;
+
+      let bigQuery = `
+        SELECT o.id, o.order_number, o.status, o.type, o.crypto_amount, o.crypto_currency,
+               o.fiat_amount, o.fiat_currency, o.rate, o.payment_method, o.is_custom,
+               o.custom_notes, o.premium_percent, o.created_at, o.expires_at,
+               json_build_object('id', u.id, 'username', u.username, 'rating', u.rating,
+                 'total_trades', u.total_trades, 'total_volume', u.total_volume) as user
+        FROM orders o JOIN users u ON o.user_id = u.id
+        WHERE o.merchant_id = $1 AND (o.fiat_amount >= $2 OR o.is_custom = true)
+      `;
+      const qp: (string | number)[] = [merchant_id, threshold];
+      if (!includeCompleted) bigQuery += ` AND o.status NOT IN ('completed', 'cancelled', 'expired')`;
+      bigQuery += ` ORDER BY CASE WHEN o.status = 'pending' THEN 0 ELSE 1 END, o.is_custom DESC, o.fiat_amount DESC, o.created_at DESC LIMIT $3`;
+      qp.push(limit);
+
+      const bigOrders = await query(bigQuery, qp);
+      const statsResult = await query(
+        `SELECT COUNT(*) FILTER (WHERE fiat_amount >= $2 OR is_custom = true) as total_big_orders,
+                COUNT(*) FILTER (WHERE (fiat_amount >= $2 OR is_custom = true) AND status = 'pending') as pending_big_orders,
+                COALESCE(SUM(fiat_amount) FILTER (WHERE (fiat_amount >= $2 OR is_custom = true) AND status = 'completed'), 0) as completed_volume
+         FROM orders WHERE merchant_id = $1 AND status NOT IN ('cancelled', 'expired')`,
+        [merchant_id, threshold]
+      );
+      const stats = (statsResult[0] as { total_big_orders: string; pending_big_orders: string; completed_volume: string }) || { total_big_orders: '0', pending_big_orders: '0', completed_volume: '0' };
+
+      return successResponse({
+        orders: bigOrders, threshold,
+        stats: { totalBigOrders: parseInt(stats.total_big_orders) || 0, pendingBigOrders: parseInt(stats.pending_big_orders) || 0, completedVolume: parseFloat(stats.completed_volume) || 0 },
+      });
     }
 
     const status = statusParam ? statusParam.split(',') as string[] : undefined;
@@ -404,8 +447,12 @@ export async function POST(request: NextRequest) {
     const buyerMerchantId = isM2MTrade ? merchant_id : undefined;
 
     // Forward to core-api (single writer for all mutations)
+    const requestId = request.headers.get('x-request-id') || randomUUID();
+    const idempotencyKey = request.headers.get('idempotency-key') || randomUUID();
     const response = await proxyCoreApi('/v1/merchant/orders', {
       method: 'POST',
+      requestId,
+      idempotencyKey,
       body: {
         merchant_id,
         user_id: user.id,
@@ -425,6 +472,8 @@ export async function POST(request: NextRequest) {
         escrow_trade_pda,
         escrow_pda,
         escrow_creator_wallet,
+        // type='sell' from merchant = merchant sells = escrow funded; type='buy' = intent only
+        escrow_funded: escrow_tx_hash ? type === 'sell' : undefined,
         // Price engine fields
         ref_price_at_create: priceProofRefPrice ?? effectiveRate,
         price_proof_sig: priceProofSig,

@@ -8,7 +8,7 @@
 
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server as HTTPServer } from 'http';
-import { logger } from 'settlement-core';
+import { logger, broadcastPayloadSchema, SCHEMA_VERSION, VALIDATED_WS_EVENTS } from 'settlement-core';
 
 interface ClientMeta {
   actorType: string;
@@ -141,8 +141,25 @@ export interface BroadcastPayload {
 export function broadcastOrderEvent(payload: BroadcastPayload): void {
   if (!wss) return;
 
+  // Inject schema_version into all broadcasts
+  const enriched = { ...payload, schema_version: SCHEMA_VERSION };
+
+  // Validate the 5 critical events; pass-through others (LOCK #5)
+  if (VALIDATED_WS_EVENTS.has(payload.event_type as any)) {
+    const result = broadcastPayloadSchema.safeParse(enriched);
+    if (!result.success) {
+      logger.error('[WS] PAYLOAD VALIDATION FAILED — event NOT broadcast', {
+        event_type: payload.event_type,
+        order_id: payload.order_id,
+        issues: result.error.issues,
+      });
+      return;
+    }
+  }
+
   const message = JSON.stringify({
     type: 'order_event',
+    schema_version: SCHEMA_VERSION,
     event_type: payload.event_type,
     order_id: payload.order_id,
     status: payload.status,

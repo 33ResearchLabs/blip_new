@@ -59,7 +59,8 @@ export async function mockEscrowLock(
     escrow_trade_pda?: string;
     escrow_pda?: string;
     escrow_creator_wallet?: string;
-  }
+  },
+  requestId?: string
 ): Promise<EscrowLockResult> {
   try {
     const order = await transaction(async (client) => {
@@ -151,13 +152,14 @@ export async function mockEscrowLock(
 
       const updatedOrder = updateResult.rows[0] as Order;
 
-      // 7. Insert ledger entry
+      // 7. Insert ledger entry (idempotency_key dedupes with DB trigger)
       await client.query(
         `INSERT INTO ledger_entries
          (account_type, account_id, entry_type, amount, asset,
           related_order_id, related_tx_hash, description, metadata,
-          balance_before, balance_after)
-         VALUES ($1, $2, 'ESCROW_LOCK', $3, 'USDT', $4, $5, $6, $7, $8, $9)`,
+          balance_before, balance_after, idempotency_key)
+         VALUES ($1, $2, 'ESCROW_LOCK', $3, 'USDT', $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
         [
           payer.entityType,
           payer.entityId,
@@ -168,6 +170,7 @@ export async function mockEscrowLock(
           JSON.stringify({ order_type: lockedOrder.type }),
           currentBalance,
           balanceAfter,
+          `${orderId}:ESCROW_LOCK`,
         ]
       );
 
@@ -206,14 +209,15 @@ export async function mockEscrowLock(
               userId: lockedOrder.user_id,
               buyerMerchantId: lockedOrder.buyer_merchant_id,
             },
+            requestId,
           })
         );
       } else {
         // Legacy: only order_events (no chat message, no outbox)
         await client.query(
           `INSERT INTO order_events
-           (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
-           VALUES ($1, 'escrow_locked', $2, $3, $4, 'escrowed', $5)`,
+           (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata, request_id)
+           VALUES ($1, 'escrow_locked', $2, $3, $4, 'escrowed', $5, $6)`,
           [
             orderId,
             actorType,
@@ -226,6 +230,7 @@ export async function mockEscrowLock(
               debited_amount: amount,
               mock_mode: true,
             }),
+            requestId || null,
           ]
         );
       }

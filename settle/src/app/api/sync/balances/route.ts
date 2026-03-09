@@ -35,10 +35,16 @@ function isRealWallet(address: string): boolean {
  * POST /api/sync/balances — apply sync (update DB balances to match on-chain)
  */
 export async function GET() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
+  }
   return syncBalances(false);
 }
 
 export async function POST() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
+  }
   return syncBalances(true);
 }
 

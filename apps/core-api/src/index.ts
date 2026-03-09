@@ -14,7 +14,10 @@ import { expireRoutes } from './routes/expire';
 import { debugRoutes } from './routes/debug';
 import { conversionRoutes } from './routes/conversion';
 import { corridorRoutes } from './routes/corridor';
+import { opsDebugRoutes } from './routes/opsDebug';
 import { authHook } from './hooks/auth';
+import { registerRequestIdHeader, genReqId } from './hooks/requestId';
+import { registerIdempotencyCapture } from './middleware/idempotency';
 import { initWebSocketServer, closeWebSocketServer } from './ws/broadcast';
 import { startOutboxWorker, stopOutboxWorker } from './workers/notificationOutbox';
 import { startCorridorTimeoutWorker, stopCorridorTimeoutWorker } from './workers/corridorTimeoutWorker';
@@ -30,6 +33,7 @@ const fastify = Fastify({
   logger: {
     level: process.env.LOG_LEVEL || 'warn',
   },
+  genReqId,
 });
 
 // Register CORS
@@ -37,6 +41,12 @@ await fastify.register(cors, {
   origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
   credentials: true,
 });
+
+// Echo x-request-id in response headers (must be on root instance, not plugin)
+registerRequestIdHeader(fastify);
+
+// Idempotency: capture responses for replay (must be on root, before routes)
+registerIdempotencyCapture(fastify);
 
 // Register auth hook (before routes)
 await fastify.register(authHook);
@@ -51,6 +61,7 @@ await fastify.register(disputeRoutes, { prefix: '/v1' });
 await fastify.register(expireRoutes, { prefix: '/v1' });
 await fastify.register(conversionRoutes, { prefix: '/v1' });
 await fastify.register(corridorRoutes, { prefix: '/v1' });
+await fastify.register(opsDebugRoutes, { prefix: '/v1' });
 await fastify.register(debugRoutes);
 
 // Start server

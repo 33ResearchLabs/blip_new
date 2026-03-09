@@ -12,6 +12,7 @@ import {
   logger,
 } from 'settlement-core';
 import { broadcastOrderEvent } from '../ws/broadcast';
+import { idempotencyGuard } from '../middleware/idempotency';
 
 export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /v1/orders/:id/dispute - Open dispute
@@ -23,7 +24,9 @@ export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
       initiated_by: 'user' | 'merchant';
       actor_id: string;
     };
-  }>('/orders/:id/dispute', async (request, reply) => {
+  }>('/orders/:id/dispute', {
+    preHandler: idempotencyGuard('orders.dispute_open', (req) => (req.params as any).id),
+  }, async (request, reply) => {
     const { id } = request.params;
     const { reason, description, initiated_by, actor_id } = request.body;
 
@@ -140,7 +143,9 @@ export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
       action: 'accept' | 'reject';
       partyId: string;
     };
-  }>('/orders/:id/dispute/confirm', async (request, reply) => {
+  }>('/orders/:id/dispute/confirm', {
+    preHandler: idempotencyGuard('orders.dispute_confirm', (req) => (req.params as any).id),
+  }, async (request, reply) => {
     const { id } = request.params;
     const { party, action, partyId } = request.body;
 

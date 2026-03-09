@@ -10,7 +10,10 @@
     "test": "tsx tests/wsBroadcast.test.ts",
     "worker:outbox": "tsx src/workers/notificationOutbox.ts",
     "worker:expiry": "tsx src/workers/expiryWorker.ts",
-    "workers": "concurrently \"pnpm worker:outbox\" \"pnpm worker:expiry\""
+    "workers": "concurrently \"pnpm worker:outbox\" \"pnpm worker:expiry\"",
+    "sim:launch": "tsx scripts/launchSim.ts --orders 200 --concurrency 10",
+    "start:ci": "tsx src/index.ts",
+    "db:migrate:ci": "bash scripts/migrate-ci.sh"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

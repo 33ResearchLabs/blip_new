@@ -200,7 +200,7 @@ export function useOrderFetching({
   const fetchBigOrders = useCallback(async () => {
     if (!merchantId) return;
     try {
-      const res = await fetch(`/api/merchant/big-orders?merchant_id=${merchantId}&limit=10`);
+      const res = await fetch(`/api/merchant/orders?merchant_id=${merchantId}&view=big_orders&limit=10`);
       if (!res.ok) return;
       const data = await res.json();
       if (data.success && data.data?.orders) {

@@ -8,6 +8,7 @@
  */
 import type { FastifyPluginAsync } from 'fastify';
 import { transaction, logger, MOCK_MODE } from 'settlement-core';
+import { idempotencyGuard } from '../middleware/idempotency';
 
 interface ConvertPayload {
   account_type: 'merchant' | 'user';
@@ -62,7 +63,8 @@ async function logLedgerEntry(
   direction: string,
   usdtAmount: number,
   usdtBalanceBefore: number,
-  usdtBalanceAfter: number
+  usdtBalanceAfter: number,
+  idempotencyKey: string
 ): Promise<void> {
   const ledgerAmount = direction === 'usdt_to_sinr' ? -usdtAmount : usdtAmount;
   const description = direction === 'usdt_to_sinr'
@@ -71,9 +73,10 @@ async function logLedgerEntry(
 
   await client.query(
     `INSERT INTO ledger_entries
-     (account_type, account_id, entry_type, amount, asset, description, balance_before, balance_after)
-     VALUES ($1, $2, 'SYNTHETIC_CONVERSION', $3, 'USDT', $4, $5, $6)`,
-    [accountType, accountId, ledgerAmount, description, usdtBalanceBefore, usdtBalanceAfter]
+     (account_type, account_id, entry_type, amount, asset, description, balance_before, balance_after, idempotency_key)
+     VALUES ($1, $2, 'SYNTHETIC_CONVERSION', $3, 'USDT', $4, $5, $6, $7)
+     ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
+    [accountType, accountId, ledgerAmount, description, usdtBalanceBefore, usdtBalanceAfter, idempotencyKey]
   );
 }
 
@@ -113,7 +116,9 @@ export const conversionRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /v1/convert/usdt-to-sinr
   fastify.post<{
     Body: ConvertPayload;
-  }>('/convert/usdt-to-sinr', async (request, reply) => {
+  }>('/convert/usdt-to-sinr', {
+    preHandler: idempotencyGuard('convert.usdt_to_sinr'),
+  }, async (request, reply) => {
     const { account_type, account_id, amount, idempotency_key } = request.body;
 
     if (!account_type || !account_id || !amount) {
@@ -216,7 +221,7 @@ export const conversionRoutes: FastifyPluginAsync = async (fastify) => {
 
         // 6. Log ledger entry
         await logLedgerEntry(client, account_type, account_id, 'usdt_to_sinr',
-          usdtAmount, usdtBalance, newUsdtBalance);
+          usdtAmount, usdtBalance, newUsdtBalance, `conv:${conversionId}`);
 
         // 7. Log merchant transaction
         await logMerchantTransaction(client, account_type, account_id, 'usdt_to_sinr',
@@ -275,7 +280,9 @@ export const conversionRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /v1/convert/sinr-to-usdt
   fastify.post<{
     Body: ConvertPayload;
-  }>('/convert/sinr-to-usdt', async (request, reply) => {
+  }>('/convert/sinr-to-usdt', {
+    preHandler: idempotencyGuard('convert.sinr_to_usdt'),
+  }, async (request, reply) => {
     const { account_type, account_id, amount, idempotency_key } = request.body;
 
     if (!account_type || !account_id || !amount) {
@@ -371,7 +378,7 @@ export const conversionRoutes: FastifyPluginAsync = async (fastify) => {
 
         // 6. Log ledger entry
         await logLedgerEntry(client, account_type, account_id, 'sinr_to_usdt',
-          usdtAmount, usdtBalance, newUsdtBalance);
+          usdtAmount, usdtBalance, newUsdtBalance, `conv:${conversionId}`);
 
         // 7. Log merchant transaction
         await logMerchantTransaction(client, account_type, account_id, 'sinr_to_usdt',

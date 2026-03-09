@@ -355,6 +355,28 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     return { txHash, success: true, tradePda: tradePda.toString(), escrowPda: escrowPda.toString(), tradeId: params.tradeId };
   }, [keypair, program, signAndSend, refreshBalances, ensureProtocolConfig, touchActivity]);
 
+  const createTradeOnly = useCallback(async (params: {
+    tradeId: number; amount: number; side: 'buy' | 'sell';
+  }) => {
+    if (!keypair || !program) throw new Error('Wallet not connected');
+    touchActivity();
+    await ensureProtocolConfig();
+
+    const amountBN = new BN(Math.floor(params.amount * 1_000_000));
+    const sideEnum = params.side === 'buy' ? TradeSide.Buy : TradeSide.Sell;
+    const [tradePda] = findTradePda(keypair.publicKey, params.tradeId);
+    const [escrowPda] = findEscrowPda(tradePda);
+
+    console.log('[Embedded:createTradeOnly] Signing trade intent:', { tradeId: params.tradeId, side: params.side });
+
+    const createTradeTx = await buildCreateTradeTx(program, keypair.publicKey, USDT_MINT, {
+      tradeId: params.tradeId, amount: amountBN, side: sideEnum,
+    });
+
+    const txHash = await signAndSend(createTradeTx);
+    return { txHash, success: true, tradePda: tradePda.toString(), escrowPda: escrowPda.toString(), tradeId: params.tradeId };
+  }, [keypair, program, signAndSend, ensureProtocolConfig, touchActivity]);
+
   const fundEscrowOnly = useCallback(async (params: {
     tradeId: number; amount: number; side: 'buy' | 'sell';
   }) => {
@@ -601,6 +623,7 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     releaseEscrow,
     refundEscrow,
     extendEscrow,
+    createTradeOnly,
     fundEscrowOnly,
     acceptTrade,
     depositToEscrow,

@@ -21,6 +21,7 @@ import {
   successResponse,
   errorResponse,
 } from '@/lib/middleware/auth';
+import { randomUUID } from 'crypto';
 import { proxyCoreApi, signActorHeaders } from '@/lib/proxy/coreApi';
 import { MOCK_MODE } from '@/lib/config/mockMode';
 import { atomicCancelWithRefund } from '@/lib/orders/atomicCancel';
@@ -139,6 +140,8 @@ export async function PATCH(
     }
 
     const { status, actor_type, actor_id, reason, acceptor_wallet_address, refund_tx_hash } = parseResult.data;
+    const requestId = request.headers.get('x-request-id') || randomUUID();
+    const idempotencyKey = request.headers.get('idempotency-key') || randomUUID();
 
     // If refund_tx_hash provided, save it to DB regardless of mode
     if (refund_tx_hash) {
@@ -246,7 +249,8 @@ export async function PATCH(
           crypto_currency: currentOrder.crypto_currency,
           fiat_amount: currentOrder.fiat_amount,
           fiat_currency: currentOrder.fiat_currency,
-        }
+        },
+        requestId
       );
 
       if (!result.success) {
@@ -264,12 +268,14 @@ export async function PATCH(
 
     // Fetch current order status BEFORE proxy call (for previousStatus tracking)
     const currentOrder = await getOrderWithRelations(id);
-    const previousStatus = currentOrder?.status || null;
+    const previousStatus = currentOrder?.status ?? undefined;
 
     // Forward to core-api (single writer for all mutations)
     const response = await proxyCoreApi(`/v1/orders/${id}`, {
       method: 'PATCH',
       body: { status, actor_type, actor_id, reason, acceptor_wallet_address },
+      requestId,
+      idempotencyKey,
     });
 
     // Fire Pusher notification + system chat messages after successful proxy
@@ -283,6 +289,7 @@ export async function PATCH(
             orderId: order.id,
             userId: order.user_id || '',
             merchantId: order.merchant_id || '',
+            buyerMerchantId: order.buyer_merchant_id || undefined,
             status: order.status || status,
             minimal_status: normalizeStatus(order.status || status),
             order_version: order.order_version,
@@ -301,7 +308,7 @@ export async function PATCH(
                   orderVersion: order.order_version || 1,
                   actorType: actor_type as any,
                   actorId: actor_id,
-                  previousStatus: previousStatus,
+                  previousStatus: previousStatus ?? null,
                   newStatus: order.status || status,
                   payload: {
                     userId: order.user_id,
@@ -313,6 +320,7 @@ export async function PATCH(
                     fiatCurrency: order.fiat_currency || 'AED',
                     reason: reason || undefined,
                   },
+                  requestId,
                 })
               );
             }).catch(err => logger.error('[EventEmitter] Failed to emit after proxy', {
@@ -395,6 +403,8 @@ export async function DELETE(
     const actorType = searchParams.get('actor_type');
     const actorId = searchParams.get('actor_id');
     const reason = searchParams.get('reason');
+    const requestId = request.headers.get('x-request-id') || randomUUID();
+    const idempotencyKey = request.headers.get('idempotency-key') || randomUUID();
 
     // Mock mode: handle cancellation locally (mirrors PATCH mock-mode logic)
     const isMockMode = MOCK_MODE || !process.env.CORE_API_URL;
@@ -430,7 +440,8 @@ export async function DELETE(
               crypto_currency: currentOrder.crypto_currency,
               fiat_amount: currentOrder.fiat_amount,
               fiat_currency: currentOrder.fiat_currency,
-            }
+            },
+            requestId
           );
 
           if (!cancelResult.success) {
@@ -520,7 +531,8 @@ export async function DELETE(
           crypto_currency: currentOrder.crypto_currency,
           fiat_amount: currentOrder.fiat_amount,
           fiat_currency: currentOrder.fiat_currency,
-        }
+        },
+        requestId
       );
 
       if (!result.success) {
@@ -538,7 +550,7 @@ export async function DELETE(
 
     // Non-mock: proxy to core-api
     const queryStr = `actor_type=${actorType}&actor_id=${actorId}${reason ? `&reason=${encodeURIComponent(reason)}` : ''}`;
-    return proxyCoreApi(`/v1/orders/${id}?${queryStr}`, { method: 'DELETE' });
+    return proxyCoreApi(`/v1/orders/${id}?${queryStr}`, { method: 'DELETE', requestId, idempotencyKey });
   } catch (error) {
     logger.api.error('DELETE', '/api/orders/[id]', error as Error);
     return errorResponse('Internal server error');

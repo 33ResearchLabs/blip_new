@@ -61,7 +61,8 @@ export async function atomicCancelWithRefund(
     crypto_currency: string;
     fiat_amount: number;
     fiat_currency: string;
-  }
+  },
+  requestId?: string
 ): Promise<AtomicCancelResult> {
   // Validate transition
   const validation = validateTransition(currentStatus as any, 'cancelled', actorType);
@@ -143,16 +144,18 @@ export async function atomicCancelWithRefund(
           [debitAmount, refundId]
         );
 
-        // Ledger entry for refund
+        // Ledger entry for refund (idempotency_key dedupes with DB trigger)
         await client.query(
           `INSERT INTO ledger_entries
            (account_type, account_id, entry_type, amount, asset,
-            related_order_id, description, metadata, balance_before, balance_after)
+            related_order_id, description, metadata, balance_before, balance_after, idempotency_key)
            SELECT $1, $2, 'ESCROW_REFUND', $3, 'USDT', $4,
                   'Escrow refunded for cancelled order #' || $5,
                   $6::jsonb,
-                  balance - $3, balance
-           FROM ${refundTable} WHERE id = $2`,
+                  balance - $3, balance,
+                  $7
+           FROM ${refundTable} WHERE id = $2
+           ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
           [
             refundEntityType,
             refundId,
@@ -160,6 +163,7 @@ export async function atomicCancelWithRefund(
             orderId,
             lockedOrder.order_number,
             JSON.stringify({ cancellation_reason: reason || 'Cancelled by ' + actorType }),
+            `${orderId}:ESCROW_REFUND`,
           ]
         );
 
@@ -240,12 +244,13 @@ export async function atomicCancelWithRefund(
             merchantId: updatedOrder.merchant_id,
             buyerMerchantId: updatedOrder.buyer_merchant_id,
           },
+          requestId,
         }));
       } else {
         // Legacy path: inline order_events + notification_outbox (no chat messages)
         await client.query(
-          `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
-           VALUES ($1, 'order_cancelled', $2, $3, $4, 'cancelled', $5)`,
+          `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata, request_id)
+           VALUES ($1, 'order_cancelled', $2, $3, $4, 'cancelled', $5, $6)`,
           [
             orderId,
             actorType,
@@ -261,6 +266,7 @@ export async function atomicCancelWithRefund(
                 ? (lockedOrder.escrow_debited_entity_id || null) : null,
               atomic_cancellation: true,
             }),
+            requestId || null,
           ]
         );
 

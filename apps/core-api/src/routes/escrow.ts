@@ -14,6 +14,7 @@ import {
 } from 'settlement-core';
 import { broadcastOrderEvent } from '../ws/broadcast';
 import { bufferEvent, bufferNotification } from '../batchWriter';
+import { idempotencyGuard } from '../middleware/idempotency';
 
 interface EscrowDepositPayload {
   tx_hash: string;
@@ -31,7 +32,9 @@ export const escrowRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
     Params: { id: string };
     Body: EscrowDepositPayload;
-  }>('/orders/:id/escrow', async (request, reply) => {
+  }>('/orders/:id/escrow', {
+    preHandler: idempotencyGuard('orders.escrow', (req) => (req.params as any).id),
+  }, async (request, reply) => {
     const { id } = request.params;
     const {
       tx_hash,
@@ -86,7 +89,7 @@ export const escrowRoutes: FastifyPluginAsync = async (fastify) => {
       const merchantId = updatedOrder.merchant_id;
 
       // Batched fire-and-forget (zero round-trips, flushed every 50ms)
-      bufferEvent({ order_id: id, event_type: 'status_changed_to_escrowed', actor_type, actor_id, old_status: oldStatus, new_status: 'escrowed', metadata: JSON.stringify({ tx_hash }) });
+      bufferEvent({ order_id: id, event_type: 'status_changed_to_escrowed', actor_type, actor_id, old_status: oldStatus, new_status: 'escrowed', metadata: JSON.stringify({ tx_hash }), request_id: request.id });
       bufferNotification({ order_id: id, event_type: 'ORDER_ESCROWED', payload: JSON.stringify({ orderId: id, status: 'escrowed', previousStatus: oldStatus, escrowTxHash: tx_hash, updatedAt: new Date().toISOString() }) });
 
       broadcastOrderEvent({

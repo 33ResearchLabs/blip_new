@@ -184,6 +184,7 @@ const MockWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) => {
     releaseEscrow: mockTradeOp,
     refundEscrow: mockTradeOp,
     extendEscrow: mockTradeOp,
+    createTradeOnly: mockTradeOp,
     fundEscrowOnly: mockTradeOp,
     acceptTrade: mockTradeOp,
     depositToEscrow,

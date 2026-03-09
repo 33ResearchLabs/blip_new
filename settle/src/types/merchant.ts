@@ -33,16 +33,24 @@ export interface DbOrder {
   buyer_merchant_id?: string;
   buyer_merchant?: {
     id: string;
-    display_name: string;
+    display_name?: string;
+    business_name?: string;
     wallet_address?: string;
     avatar_url?: string | null;
+    rating: number;
+    total_trades: number;
+    is_online?: boolean;
   };
   merchant?: {
     id: string;
-    display_name: string;
+    display_name?: string;
+    business_name?: string;
     username?: string;
-    rating?: number;
+    rating: number;
+    total_trades: number;
     wallet_address?: string;
+    avatar_url?: string | null;
+    is_online?: boolean;
   };
   is_my_order?: boolean;
   my_role?: 'buyer' | 'seller' | 'observer';
@@ -161,7 +169,7 @@ export interface MerchantInfo {
 
 export interface Notification {
   id: string;
-  type: 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system';
+  type: 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system' | 'resolution';
   message: string;
   timestamp: number;
   read: boolean;

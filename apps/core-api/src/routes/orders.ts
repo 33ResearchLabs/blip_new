@@ -20,6 +20,8 @@ import {
   isTransientStatus,
   getTransitionEventType,
   shouldRestoreLiquidity,
+  checkPreCommit,
+  PreCommitInvariantError,
   logger,
   MOCK_MODE,
 } from 'settlement-core';
@@ -28,6 +30,7 @@ import {
 const bgQuery = (sql: string, params: unknown[]) => dbQuery(sql, params).catch(() => {});
 import { broadcastOrderEvent } from '../ws/broadcast';
 import { bufferEvent, bufferNotification, bufferReputation } from '../batchWriter';
+import { idempotencyGuard } from '../middleware/idempotency';
 
 interface OrderRow {
   id: string;
@@ -132,7 +135,9 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
       acceptor_wallet_address?: string;
       metadata?: Record<string, unknown>;
     };
-  }>('/orders/:id', async (request, reply) => {
+  }>('/orders/:id', {
+    preHandler: idempotencyGuard('orders.transition', (req) => (req.params as any).id),
+  }, async (request, reply) => {
     const { id } = request.params;
     const { status: newStatus, actor_type, actor_id, reason, acceptor_wallet_address } = request.body;
 
@@ -212,15 +217,48 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
       if (newStatus === 'accepted' || (newStatus === 'payment_pending' && request.body.metadata?.is_m2m)) {
         // Belt-and-suspenders: block self-acceptance before stored proc
         if (actor_type === 'merchant') {
-          const preCheck = await queryOne<{ merchant_id: string; user_id: string }>(
-            'SELECT o.merchant_id, u.username FROM orders o JOIN users u ON u.id = o.user_id WHERE o.id = $1',
+          const preCheck = await queryOne<{ merchant_id: string; user_id: string; type: string; escrow_tx_hash: string | null; crypto_amount: string; buyer_merchant_id: string | null; accepted_at: string | null }>(
+            'SELECT o.merchant_id, o.type, o.escrow_tx_hash, o.crypto_amount, o.buyer_merchant_id, o.accepted_at, u.username FROM orders o JOIN users u ON u.id = o.user_id WHERE o.id = $1',
             [id]
           );
+          // Early exit: already accepted (cheap check before hitting stored proc)
+          if (preCheck?.accepted_at) {
+            logger.info('[GUARD] Order already accepted, skipping stored proc', { orderId: id, actor_id });
+            return reply.status(409).send({ success: false, error: 'ALREADY_ACCEPTED' });
+          }
           if (preCheck && preCheck.merchant_id === actor_id) {
             const username = (preCheck as any).username || '';
             if (username.startsWith('open_order_') || username.startsWith('m2m_')) {
               logger.warn('[GUARD] Blocked self-acceptance', { orderId: id, actor_id });
               return reply.status(400).send({ success: false, error: 'Cannot accept your own order' });
+            }
+          }
+
+          // Balance pre-check: only when acceptor will be the SELLER (needs to fund escrow).
+          // Two cases where acceptor is seller:
+          //   1. M2M BUY order: buyer_merchant_id is set to creator, acceptor becomes seller
+          //   2. User-initiated buy (type=buy, no placeholder user): acceptor merchant is seller
+          // Acceptor is buyer (NO balance needed) when:
+          //   - M2M SELL order (type=buy but merchant-created): creator is seller, acceptor is buyer
+          //   - type=sell: user sells, acceptor buys
+          const username = (preCheck as any)?.username || '';
+          const isMerchantCreated = username.startsWith('open_order_') || username.startsWith('m2m_');
+          const acceptorIsSeller = preCheck && !preCheck.escrow_tx_hash && (
+            // M2M BUY: buyer_merchant_id points to creator, acceptor becomes seller
+            (preCheck.buyer_merchant_id && preCheck.buyer_merchant_id !== actor_id) ||
+            // User-initiated buy: merchant accepts as seller
+            (!preCheck.buyer_merchant_id && preCheck.type === 'buy' && !isMerchantCreated)
+          );
+          if (acceptorIsSeller) {
+            const merchantBalance = await queryOne<{ balance: string }>(
+              'SELECT balance FROM merchants WHERE id = $1',
+              [actor_id]
+            );
+            const balance = parseFloat(merchantBalance?.balance || '0');
+            const required = parseFloat(preCheck.crypto_amount);
+            if (balance < required) {
+              logger.warn('[GUARD] Insufficient balance to accept order', { orderId: id, actor_id, balance, required });
+              return reply.status(400).send({ success: false, error: `Insufficient balance. You need ${required} USDT but only have ${balance} USDT` });
             }
           }
         }
@@ -234,7 +272,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         }
         const order = data.order as OrderRow;
         const oldStatus = data.old_status;
-        bufferEvent({ order_id: id, event_type: getTransitionEventType(oldStatus, newStatus), actor_type, actor_id, old_status: oldStatus, new_status: newStatus, metadata: JSON.stringify(request.body.metadata || {}) });
+        bufferEvent({ order_id: id, event_type: getTransitionEventType(oldStatus, newStatus), actor_type, actor_id, old_status: oldStatus, new_status: newStatus, metadata: JSON.stringify(request.body.metadata || {}), request_id: request.id });
         bufferNotification({ order_id: id, event_type: `ORDER_${newStatus.toUpperCase()}`, payload: JSON.stringify({
           orderId: id, userId: order.user_id, merchantId: order.merchant_id,
           status: order.status, minimal_status: normalizeStatus(order.status as OrderStatus),
@@ -259,7 +297,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         if (!updated) {
           return reply.status(400).send({ success: false, error: 'Order not found or cannot transition to payment_sent' });
         }
-        bufferEvent({ order_id: id, event_type: 'status_changed_to_payment_sent', actor_type, actor_id, old_status: 'escrowed', new_status: 'payment_sent', metadata: '{}' });
+        bufferEvent({ order_id: id, event_type: 'status_changed_to_payment_sent', actor_type, actor_id, old_status: 'escrowed', new_status: 'payment_sent', metadata: '{}', request_id: request.id });
         bufferNotification({ order_id: id, event_type: 'ORDER_PAYMENT_SENT', payload: JSON.stringify({
           orderId: id, userId: updated.user_id, merchantId: updated.merchant_id,
           status: 'payment_sent', minimal_status: 'payment_sent',
@@ -348,6 +386,18 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           }
 
           return { success: true as const, order: updatedOrder, oldStatus, currentOrder, relisted: true };
+        }
+
+        // Centralized pre-commit invariant check (LOCK #4)
+        try {
+          checkPreCommit(currentOrder as any, newStatus, {
+            hasReleaseTxHash: !!(request.body.metadata?.release_tx_hash),
+          });
+        } catch (err) {
+          if (err instanceof PreCommitInvariantError) {
+            return { success: false as const, error: err.message };
+          }
+          throw err;
         }
 
         // Validate transition
@@ -551,7 +601,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
       const txOldStatus = result.oldStatus!;
       const txOrder = result.currentOrder!;
 
-      bufferEvent({ order_id: id, event_type: getTransitionEventType(txOldStatus, newStatus), actor_type, actor_id, old_status: txOldStatus, new_status: newStatus, metadata: JSON.stringify(request.body.metadata || {}) });
+      bufferEvent({ order_id: id, event_type: getTransitionEventType(txOldStatus, newStatus), actor_type, actor_id, old_status: txOldStatus, new_status: newStatus, metadata: JSON.stringify(request.body.metadata || {}), request_id: request.id });
       bufferNotification({ order_id: id, event_type: `ORDER_${newStatus.toUpperCase()}`, payload: JSON.stringify({
         orderId: id, userId: result.order!.user_id, merchantId: result.order!.merchant_id,
         status: result.order!.status, minimal_status: normalizeStatus(result.order!.status),
@@ -613,7 +663,9 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
       actor_id: string;
       reason?: string;
     };
-  }>('/orders/:id', async (request, reply) => {
+  }>('/orders/:id', {
+    preHandler: idempotencyGuard('orders.cancel', (req) => (req.params as any).id),
+  }, async (request, reply) => {
     const { id } = request.params;
     const { actor_type, actor_id, reason } = request.query;
 
@@ -887,7 +939,9 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
       tx_hash?: string;
       reason?: string;
     };
-  }>('/orders/:id/events', async (request, reply) => {
+  }>('/orders/:id/events', {
+    preHandler: idempotencyGuard('orders.finalize', (req) => (req.params as any).id),
+  }, async (request, reply) => {
     const { id } = request.params;
     const { event_type, tx_hash, reason } = request.body;
 
@@ -919,7 +973,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         const result = { updated: releaseData.order as OrderRow, oldOrder: { ...releaseData.order, status: releaseData.old_status } as OrderRow };
 
         // Batched fire-and-forget (zero round-trips)
-        bufferEvent({ order_id: id, event_type: 'status_changed_to_completed', actor_type: actorType!, actor_id: actorId!, old_status: result.oldOrder.status, new_status: 'completed', metadata: JSON.stringify({ tx_hash }) });
+        bufferEvent({ order_id: id, event_type: 'status_changed_to_completed', actor_type: actorType!, actor_id: actorId!, old_status: result.oldOrder.status, new_status: 'completed', metadata: JSON.stringify({ tx_hash }), request_id: request.id });
         bufferNotification({ order_id: id, event_type: 'ORDER_COMPLETED', payload: JSON.stringify({
           orderId: id, userId: result.oldOrder.user_id, merchantId: result.oldOrder.merchant_id,
           status: 'completed', minimal_status: normalizeStatus('completed'),

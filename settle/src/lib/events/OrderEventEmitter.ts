@@ -48,8 +48,8 @@ export async function emitOrderEvent(
     await client.query(
       `INSERT INTO order_events
        (id, order_id, event_type, actor_type, actor_id,
-        old_status, new_status, metadata, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        old_status, new_status, metadata, created_at, request_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
         eventId,
         event.orderId,
@@ -60,6 +60,7 @@ export async function emitOrderEvent(
         event.newStatus,
         JSON.stringify(event.payload),
         event.timestamp,
+        event.requestId || null,
       ]
     );
     await client.query('RELEASE SAVEPOINT sp_order_events');
@@ -154,6 +155,7 @@ export function buildEvent(params: {
   previousStatus: OrderLifecycleEvent['previousStatus'];
   newStatus: OrderLifecycleEvent['newStatus'];
   payload?: Record<string, unknown>;
+  requestId?: string;
 }): OrderLifecycleEvent {
   const eventId = randomUUID();
   const timestamp = new Date().toISOString();
@@ -175,5 +177,6 @@ export function buildEvent(params: {
       params.eventType,
       params.orderVersion
     ),
+    requestId: params.requestId,
   };
 }

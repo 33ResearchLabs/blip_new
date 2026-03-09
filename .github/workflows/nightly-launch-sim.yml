@@ -1,0 +1,82 @@
+name: Nightly Launch Simulation
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 2 * * *"  # 02:30 UTC daily
+
+jobs:
+  launch-sim:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: blip
+          POSTGRES_PASSWORD: blip
+          POSTGRES_DB: blip
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U blip -d blip"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      DATABASE_URL: postgresql://blip:blip@localhost:5432/blip
+      CORE_API_SECRET: ci_secret_only
+      # Required: stored procs skip blockchain verification when true
+      NEXT_PUBLIC_MOCK_MODE: 'true'
+      NODE_ENV: test
+      CI: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Migrate DB
+        run: pnpm -C apps/core-api db:migrate:ci
+
+      - name: Start core-api
+        run: |
+          pnpm -C apps/core-api start:ci &
+          echo $! > core_api_pid.txt
+          # Wait up to 60s for the health endpoint to respond
+          for i in {1..60}; do
+            curl -sf http://localhost:4010/health && break
+            sleep 1
+          done
+
+      - name: Run launch simulation
+        run: |
+          pnpm -C apps/core-api sim:launch -- \
+            --orders 200 --concurrency 10 --retryRate 0.2 --seed 1337 --noCleanup
+
+      - name: Upload sim report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-sim-report
+          path: apps/core-api/reports/*.json
+
+      - name: Stop core-api
+        if: always()
+        run: |
+          if [ -f core_api_pid.txt ]; then
+            kill $(cat core_api_pid.txt) || true
+          fi

@@ -274,8 +274,9 @@ export async function atomicConvert(input: ConversionInput): Promise<ConversionR
       const ledgerAmount = direction === 'usdt_to_sinr' ? -amountIn / 1_000_000 : amountIn / 1_000_000;
       await client.query(
         `INSERT INTO ledger_entries
-         (account_type, account_id, entry_type, amount, asset, description, balance_before, balance_after)
-         VALUES ($1, $2, 'SYNTHETIC_CONVERSION', $3, 'USDT', $4, $5, $6)`,
+         (account_type, account_id, entry_type, amount, asset, description, balance_before, balance_after, idempotency_key)
+         VALUES ($1, $2, 'SYNTHETIC_CONVERSION', $3, 'USDT', $4, $5, $6, $7)
+         ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
         [
           accountType,
           accountId,
@@ -283,6 +284,7 @@ export async function atomicConvert(input: ConversionInput): Promise<ConversionR
           `${direction === 'usdt_to_sinr' ? 'Converted USDT to sAED' : 'Converted sAED to USDT'}`,
           usdtBalance,
           newUsdtBalance,
+          `conv:${conversionId}`,
         ]
       );
 

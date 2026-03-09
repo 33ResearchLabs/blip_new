@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 
 // Confirm or reject a proposed dispute resolution
@@ -32,9 +33,11 @@ export async function POST(
       );
     }
 
+    const requestId = request.headers.get('x-request-id') || randomUUID();
     return proxyCoreApi(`/v1/orders/${orderId}/dispute/confirm`, {
       method: 'POST',
       body: { party, action, partyId },
+      requestId,
     });
   } catch (error) {
     console.error('Failed to confirm resolution:', error);

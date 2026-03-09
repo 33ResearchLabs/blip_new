@@ -11,5 +11,7 @@ export * from './finalization/atomicCancel';
 export * from './finalization/guards';
 export * from './types/index';
 export * from './config/mockMode';
+export * from './invariants/orderInvariantChecker';
+export * from './events/index';
 export * from './utils/logger';
 //# sourceMappingURL=index.d.ts.map

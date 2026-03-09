@@ -16,6 +16,10 @@ export * from './finalization/guards';
 export * from './types/index';
 // Config
 export * from './config/mockMode';
+// Invariants
+export * from './invariants/orderInvariantChecker';
+// Events (real-time schemas)
+export * from './events/index';
 // Utils
 export * from './utils/logger';
 //# sourceMappingURL=index.js.map

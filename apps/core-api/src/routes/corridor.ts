@@ -7,6 +7,7 @@
  */
 import type { FastifyPluginAsync } from 'fastify';
 import { transaction, logger } from 'settlement-core';
+import { idempotencyGuard } from '../middleware/idempotency';
 
 type PgClient = {
   query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
@@ -23,7 +24,9 @@ export const corridorRoutes: FastifyPluginAsync = async (fastify) => {
       fiat_amount: number;
       bank_details?: Record<string, unknown>;
     };
-  }>('/corridor/match', async (request, reply) => {
+  }>('/corridor/match', {
+    preHandler: idempotencyGuard('corridor.match', (req) => (req.body as any)?.order_id || null),
+  }, async (request, reply) => {
     const { order_id, buyer_merchant_id, seller_merchant_id, fiat_amount, bank_details } = request.body;
 
     if (!order_id || !buyer_merchant_id || !seller_merchant_id || !fiat_amount) {
@@ -83,8 +86,9 @@ export const corridorRoutes: FastifyPluginAsync = async (fastify) => {
         await client.query(
           `INSERT INTO ledger_entries
            (account_type, account_id, entry_type, amount, asset,
-            related_order_id, description, metadata, balance_before, balance_after)
-           VALUES ('merchant', $1, 'CORRIDOR_SAED_LOCK', $2, 'sAED', $3, $4, $5, $6, $7)`,
+            related_order_id, description, metadata, balance_before, balance_after, idempotency_key)
+           VALUES ('merchant', $1, 'CORRIDOR_SAED_LOCK', $2, 'sAED', $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
           [
             buyer_merchant_id,
             -totalSaedLock,
@@ -93,6 +97,7 @@ export const corridorRoutes: FastifyPluginAsync = async (fastify) => {
             JSON.stringify({ fiat_fils: fiatFils, fee_fils: corridorFeeFils, fee_pct: feePercentage }),
             buyerSaed,
             saedAfter,
+            `${order_id}:CORRIDOR_SAED_LOCK`,
           ]
         );
 
@@ -189,7 +194,9 @@ export const corridorRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch<{
     Params: { id: string };
     Body: { provider_status: 'payment_sent'; actor_id: string };
-  }>('/corridor/fulfillments/:id', async (request, reply) => {
+  }>('/corridor/fulfillments/:id', {
+    preHandler: idempotencyGuard('corridor.fulfillment_update', (req) => (req.params as any).id),
+  }, async (request, reply) => {
     const { id } = request.params;
     const { provider_status, actor_id } = request.body;
 

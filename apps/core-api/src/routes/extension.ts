@@ -15,6 +15,7 @@ import {
   logger,
 } from 'settlement-core';
 import { broadcastOrderEvent } from '../ws/broadcast';
+import { idempotencyGuard } from '../middleware/idempotency';
 
 export const extensionRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /v1/orders/:id/extension - Request extension
@@ -24,7 +25,9 @@ export const extensionRoutes: FastifyPluginAsync = async (fastify) => {
       actor_type: 'user' | 'merchant';
       actor_id: string;
     };
-  }>('/orders/:id/extension', async (request, reply) => {
+  }>('/orders/:id/extension', {
+    preHandler: idempotencyGuard('orders.extension_request', (req) => (req.params as any).id),
+  }, async (request, reply) => {
     const { id } = request.params;
     const { actor_type, actor_id } = request.body;
 
@@ -100,7 +103,9 @@ export const extensionRoutes: FastifyPluginAsync = async (fastify) => {
       actor_id: string;
       accept: boolean;
     };
-  }>('/orders/:id/extension', async (request, reply) => {
+  }>('/orders/:id/extension', {
+    preHandler: idempotencyGuard('orders.extension_respond', (req) => (req.params as any).id),
+  }, async (request, reply) => {
     const { id } = request.params;
     const { actor_type, actor_id, accept } = request.body;
 

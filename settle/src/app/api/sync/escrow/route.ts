@@ -32,6 +32,10 @@ interface StuckEscrow {
  * Also finds orders with escrow on-chain but no escrow_tx_hash in DB.
  */
 export async function GET() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
+  }
+
   const connection = new Connection(RPC_URL, 'confirmed');
   const mint = getUsdtMint(NETWORK);
 

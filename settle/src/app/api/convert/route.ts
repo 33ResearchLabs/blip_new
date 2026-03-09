@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import { unauthorizedResponse } from '@/lib/middleware/auth';
 import { cookies } from 'next/headers';
@@ -82,6 +83,8 @@ export async function POST(request: NextRequest) {
       ? '/v1/convert/usdt-to-sinr'
       : '/v1/convert/sinr-to-usdt';
 
+    const requestId = request.headers.get('x-request-id') || randomUUID();
+    const headerIdempotencyKey = request.headers.get('idempotency-key') || idempotencyKey || randomUUID();
     const response = await proxyCoreApi(endpoint, {
       method: 'POST',
       body: {
@@ -92,6 +95,8 @@ export async function POST(request: NextRequest) {
       },
       actorType: effectiveAccountType,
       actorId: effectiveAccountId,
+      requestId,
+      idempotencyKey: headerIdempotencyKey,
     });
 
     // Return the proxied response

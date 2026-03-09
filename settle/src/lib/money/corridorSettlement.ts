@@ -63,8 +63,9 @@ export async function lockBuyerSaed(
       await client.query(
         `INSERT INTO ledger_entries
          (account_type, account_id, entry_type, amount, asset,
-          related_order_id, description, metadata, balance_before, balance_after)
-         VALUES ('merchant', $1, 'CORRIDOR_SAED_LOCK', $2, 'sAED', $3, $4, $5, $6, $7)`,
+          related_order_id, description, metadata, balance_before, balance_after, idempotency_key)
+         VALUES ('merchant', $1, 'CORRIDOR_SAED_LOCK', $2, 'sAED', $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
         [
           buyerMerchantId,
           -totalLock,
@@ -73,6 +74,7 @@ export async function lockBuyerSaed(
           JSON.stringify({ fiat_fils: fiatFils, fee_fils: corridorFeeFils, fee_pct: corridorFeePercentage }),
           currentSaed,
           balanceAfter,
+          `${orderId}:CORRIDOR_SAED_LOCK`,
         ]
       );
 
@@ -156,8 +158,9 @@ export async function atomicCorridorSettlement(
   await client.query(
     `INSERT INTO ledger_entries
      (account_type, account_id, entry_type, amount, asset,
-      related_order_id, description, metadata, balance_before, balance_after)
-     VALUES ('merchant', $1, 'CORRIDOR_SAED_TRANSFER', $2, 'sAED', $3, $4, $5, $6, $7)`,
+      related_order_id, description, metadata, balance_before, balance_after, idempotency_key)
+     VALUES ('merchant', $1, 'CORRIDOR_SAED_TRANSFER', $2, 'sAED', $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
     [
       providerMerchantId,
       saedAmount,
@@ -166,6 +169,7 @@ export async function atomicCorridorSettlement(
       JSON.stringify({ total_saed: saedAmount, fee_fils: corridorFee, fiat_amount: fiatAmount }),
       lpBalanceBefore,
       lpBalanceAfter,
+      `${fulfillmentId}:CORRIDOR_SAED_TRANSFER:settlement`,
     ]
   );
 
@@ -257,8 +261,9 @@ export async function refundBuyerSaed(
   await client.query(
     `INSERT INTO ledger_entries
      (account_type, account_id, entry_type, amount, asset,
-      related_order_id, description, metadata, balance_before, balance_after)
-     VALUES ('merchant', $1, 'CORRIDOR_SAED_TRANSFER', $2, 'sAED', $3, $4, $5, $6, $7)`,
+      related_order_id, description, metadata, balance_before, balance_after, idempotency_key)
+     VALUES ('merchant', $1, 'CORRIDOR_SAED_TRANSFER', $2, 'sAED', $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
     [
       buyerMerchantId,
       saedAmount,
@@ -267,6 +272,7 @@ export async function refundBuyerSaed(
       JSON.stringify({ refund: true }),
       balanceBefore,
       balanceAfter,
+      `${fulfillmentId}:CORRIDOR_SAED_TRANSFER:refund`,
     ]
   );
 

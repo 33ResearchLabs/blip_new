@@ -3,6 +3,10 @@ import { query } from '@/lib/db';
 
 // Setup endpoint to run migrations for disputes feature
 export async function GET() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not available in production' }, { status: 403 });
+  }
+
   const results: string[] = [];
 
   try {

@@ -52,7 +52,7 @@ export function MerchantQuoteModal({
     setIsLoading(true);
     try {
       const res = await fetch(
-        `/api/merchant-quotes?merchant_id=${merchantId}&corridor_id=${corridorId}`
+        `/api/mempool?type=quotes&merchant_id=${merchantId}&corridor_id=${corridorId}`
       );
       if (res.ok) {
         const data = await res.json();
@@ -77,10 +77,11 @@ export function MerchantQuoteModal({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const res = await fetch('/api/merchant-quotes', {
+      const res = await fetch('/api/mempool', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'upsert_quote',
           merchant_id: merchantId,
           corridor_id: corridorId,
           min_price_aed_per_usdt: parseFloat(minPrice),

@@ -8,7 +8,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { createHmac } from 'crypto';
+import { createHmac, randomUUID } from 'crypto';
 import { logger } from 'settlement-core';
 import { CircuitBreaker } from '@/lib/events/circuitBreaker';
 
@@ -17,6 +17,8 @@ interface ProxyOptions {
   body?: unknown;
   actorType?: string;
   actorId?: string;
+  requestId?: string;
+  idempotencyKey?: string;
 }
 
 // Circuit breaker: opens after 5 consecutive failures, resets after 30s
@@ -78,6 +80,15 @@ export async function proxyCoreApi(
     headers['x-actor-signature'] = signActorHeaders(coreApiSecret, actorType, actorId);
   }
 
+  // Forward or generate request ID for end-to-end tracing
+  const requestId = options.requestId || randomUUID();
+  headers['x-request-id'] = requestId;
+
+  // Forward idempotency key for dedup
+  if (options.idempotencyKey) {
+    headers['Idempotency-Key'] = options.idempotencyKey;
+  }
+
   // Circuit breaker: fast-fail if core-api has been consistently failing
   if (!coreApiCircuit.canCall()) {
     const stats = coreApiCircuit.getStats();
@@ -114,7 +125,9 @@ export async function proxyCoreApi(
         .catch(() => {}); // should not fail
     }
 
-    return NextResponse.json(data, { status: response.status });
+    const res = NextResponse.json(data, { status: response.status });
+    res.headers.set('x-request-id', requestId);
+    return res;
   } catch (error) {
     // Record failure in circuit breaker
     coreApiCircuit.execute(() => Promise.reject(error)).catch(() => {});
@@ -123,12 +136,15 @@ export async function proxyCoreApi(
       url,
       method: options.method,
       error,
+      requestId,
       circuitState: coreApiCircuit.getState(),
     });
-    return NextResponse.json(
+    const errRes = NextResponse.json(
       { success: false, error: 'Core API unavailable — retry later' },
       { status: 503 }
     );
+    errRes.headers.set('x-request-id', requestId);
+    return errRes;
   } finally {
     clearTimeout(timeout);
   }

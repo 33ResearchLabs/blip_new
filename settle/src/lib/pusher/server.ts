@@ -7,6 +7,12 @@
 import { ORDER_EVENTS, CHAT_EVENTS, type PusherEvent } from './events';
 import { getUserChannel, getMerchantChannel, getOrderChannel, getAllMerchantsChannel } from './channels';
 import { CircuitBreaker, CircuitOpenError } from '@/lib/events/circuitBreaker';
+import {
+  SCHEMA_VERSION,
+  pusherOrderCreatedSchema,
+  pusherStatusUpdatedSchema,
+  pusherOrderCancelledSchema,
+} from 'settlement-core';
 
 // Circuit breaker: opens after 5 consecutive Pusher failures, resets after 30s
 const pusherCircuit = new CircuitBreaker({
@@ -168,7 +174,8 @@ export async function notifyOrderCreated(data: OrderEventData): Promise<void> {
     orderId: data.orderId,
   });
 
-  await triggerEvent(channels, ORDER_EVENTS.CREATED, {
+  const payload = {
+    schema_version: SCHEMA_VERSION,
     orderId: data.orderId,
     status: data.status,
     minimal_status: data.minimal_status,
@@ -176,7 +183,18 @@ export async function notifyOrderCreated(data: OrderEventData): Promise<void> {
     createdAt: data.updatedAt,
     creatorMerchantId: data.creatorMerchantId,
     data: data.data,
-  });
+  };
+
+  const validation = pusherOrderCreatedSchema.safeParse(payload);
+  if (!validation.success) {
+    console.error('[Pusher] ORDER_CREATED payload validation FAILED — NOT emitting', {
+      orderId: data.orderId,
+      issues: validation.error.issues,
+    });
+    return;
+  }
+
+  await triggerEvent(channels, ORDER_EVENTS.CREATED, payload);
 
   console.log('[Pusher] ORDER_CREATED broadcast sent to all merchants');
 }
@@ -194,13 +212,24 @@ export async function notifyOrderStatusUpdated(data: OrderEventData): Promise<vo
     getOrderChannel(data.orderId),
   ];
 
+  // Notify buyer merchant in M2M trades
+  if (data.buyerMerchantId && data.buyerMerchantId !== data.merchantId) {
+    channels.push(getMerchantChannel(data.buyerMerchantId));
+  }
+
+  // Also notify creator merchant if different (order reassignment cases)
+  if (data.creatorMerchantId && data.creatorMerchantId !== data.merchantId && data.creatorMerchantId !== data.buyerMerchantId) {
+    channels.push(getMerchantChannel(data.creatorMerchantId));
+  }
+
   // Only broadcast to all merchants when an order is claimed/removed from the pool
   const broadcastStatuses = ['accepted', 'cancelled', 'expired'];
   if (broadcastStatuses.includes(data.status)) {
     channels.push(getAllMerchantsChannel());
   }
 
-  await triggerEvent(channels, ORDER_EVENTS.STATUS_UPDATED, {
+  const payload = {
+    schema_version: SCHEMA_VERSION,
     orderId: data.orderId,
     status: data.status,
     minimal_status: data.minimal_status,
@@ -208,7 +237,19 @@ export async function notifyOrderStatusUpdated(data: OrderEventData): Promise<vo
     previousStatus: data.previousStatus,
     updatedAt: data.updatedAt,
     data: data.data,
-  });
+  };
+
+  const validation = pusherStatusUpdatedSchema.safeParse(payload);
+  if (!validation.success) {
+    console.error('[Pusher] STATUS_UPDATED payload validation FAILED — NOT emitting', {
+      orderId: data.orderId,
+      status: data.status,
+      issues: validation.error.issues,
+    });
+    return;
+  }
+
+  await triggerEvent(channels, ORDER_EVENTS.STATUS_UPDATED, payload);
 }
 
 /**
@@ -221,13 +262,25 @@ export async function notifyOrderCancelled(data: OrderEventData): Promise<void> 
     getOrderChannel(data.orderId),
   ];
 
-  await triggerEvent(channels, ORDER_EVENTS.CANCELLED, {
+  const payload = {
+    schema_version: SCHEMA_VERSION,
     orderId: data.orderId,
     minimal_status: data.minimal_status || 'cancelled',
     order_version: data.order_version,
     cancelledAt: data.updatedAt,
     data: data.data,
-  });
+  };
+
+  const validation = pusherOrderCancelledSchema.safeParse(payload);
+  if (!validation.success) {
+    console.error('[Pusher] ORDER_CANCELLED payload validation FAILED — NOT emitting', {
+      orderId: data.orderId,
+      issues: validation.error.issues,
+    });
+    return;
+  }
+
+  await triggerEvent(channels, ORDER_EVENTS.CANCELLED, payload);
 }
 
 // ============================================

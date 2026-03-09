@@ -203,11 +203,13 @@ export async function acceptOrder(
     return await transaction(async (client) => {
       // Lock order and check if still mineable
       const orderResult = await client.query(
-        `SELECT id, status, expires_at, corridor_id, crypto_amount,
-                ref_price_at_create, premium_bps_current, winner_merchant_id
-         FROM orders
-         WHERE id = $1
-         FOR UPDATE NOWAIT`,
+        `SELECT o.id, o.status, o.expires_at, o.corridor_id, o.crypto_amount,
+                o.ref_price_at_create, o.premium_bps_current, o.winner_merchant_id,
+                o.type, o.buyer_merchant_id, o.merchant_id, u.username
+         FROM orders o
+         JOIN users u ON u.id = o.user_id
+         WHERE o.id = $1
+         FOR UPDATE OF o NOWAIT`,
         [orderId]
       );
 
@@ -237,6 +239,25 @@ export async function acceptOrder(
 
       if (!canMineResult.rows[0]?.can_mine) {
         throw new Error('ORDER_NOT_MINEABLE');
+      }
+
+      // Balance pre-check: only when acceptor will be the SELLER (needs to fund escrow).
+      const isMerchantCreated = (order.username || '').startsWith('open_order_') || (order.username || '').startsWith('m2m_');
+      const acceptorIsSeller =
+        // M2M BUY: buyer_merchant_id points to creator, acceptor becomes seller
+        (order.buyer_merchant_id && order.buyer_merchant_id !== merchantId) ||
+        // User-initiated buy: merchant accepts as seller
+        (!order.buyer_merchant_id && order.type === 'buy' && !isMerchantCreated);
+      if (acceptorIsSeller) {
+        const balResult = await client.query(
+          'SELECT balance FROM merchants WHERE id = $1',
+          [merchantId]
+        );
+        const balance = parseFloat(balResult.rows[0]?.balance || '0');
+        const required = parseFloat(order.crypto_amount);
+        if (balance < required) {
+          throw new Error('INSUFFICIENT_BALANCE');
+        }
       }
 
       // Reserve liquidity in merchant quote
@@ -286,6 +307,7 @@ export async function acceptOrder(
       ORDER_EXPIRED: 'Order expired',
       ORDER_ALREADY_ACCEPTED: 'Order already accepted by another merchant',
       ORDER_NOT_MINEABLE: 'Order does not meet your quote requirements',
+      INSUFFICIENT_BALANCE: 'Insufficient balance to accept this order',
     };
 
     const message = errorMessages[error.message] || error.message;
