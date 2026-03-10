@@ -1,5 +1,6 @@
 "use client";
 
+import { LandingPage } from "@/components/user/LandingPage";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRealtimeChat } from "@/hooks/useRealtimeChat";
 import { useRealtimeOrder } from "@/hooks/useRealtimeOrder";
@@ -2054,130 +2055,19 @@ export default function Home() {
       {/* Toast Notifications */}
       <NotificationToastContainer position="top-right" />
       <AnimatePresence mode="wait">
-        {/* WELCOME / LOGIN */}
+        {/* WELCOME / LOGIN — new landing page */}
         {screen === "welcome" && (
-          <motion.div
-            key="welcome"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className={`flex-1 w-full ${maxW} flex flex-col items-center justify-center px-6`}
-          >
-            <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: "spring", damping: 15, stiffness: 200 }}
-              className="w-20 h-20 rounded-full bg-white/10 border border-white/10 flex items-center justify-center mb-8"
-            >
-              <Wallet className="w-10 h-10 text-white" />
-            </motion.div>
-            <motion.h1
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className="text-[32px] font-bold text-white mb-3 text-center"
-            >
-              Welcome to Blip <span className="text-white">Money</span>
-            </motion.h1>
-            <motion.p
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="text-neutral-400 text-center mb-8 text-[15px] leading-relaxed"
-            >
-              The easiest way to buy and sell crypto<br />with local currency
-            </motion.p>
-
-            {loginError && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="w-full bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400 mb-4"
-              >
-                {loginError}
-              </motion.div>
-            )}
-
-            {/* Login/Register Toggle */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.3 }}
-              className="w-full flex rounded-xl bg-neutral-900 p-1 mb-4"
-            >
-              <button
-                onClick={() => { setAuthMode('login'); setLoginError(''); }}
-                className={`flex-1 py-2 rounded-lg text-[14px] font-medium transition-colors ${
-                  authMode === 'login' ? 'bg-white/10 text-white border border-white/10' : 'text-neutral-400'
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => { setAuthMode('register'); setLoginError(''); }}
-                className={`flex-1 py-2 rounded-lg text-[14px] font-medium transition-colors ${
-                  authMode === 'register' ? 'bg-white/10 text-white border border-white/10' : 'text-neutral-400'
-                }`}
-              >
-                Create Account
-              </button>
-            </motion.div>
-
-            {/* Username/Password Form */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="w-full space-y-4"
-            >
-              <div className="w-full">
-                <label className="text-[13px] text-neutral-500 mb-2 block">Username</label>
-                <input
-                  type="text"
-                  value={loginForm.username}
-                  onChange={(e) => setLoginForm(prev => ({ ...prev, username: e.target.value }))}
-                  placeholder={authMode === 'register' ? 'Choose a username' : 'Enter your username'}
-                  className="w-full bg-neutral-900 rounded-2xl px-4 py-4 text-white text-[17px] placeholder:text-neutral-600 outline-none focus:ring-2 focus:ring-orange-500"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                />
-              </div>
-
-              <div className="w-full">
-                <label className="text-[13px] text-neutral-500 mb-2 block">Password</label>
-                <input
-                  type="password"
-                  value={loginForm.password}
-                  onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                  placeholder={authMode === 'register' ? 'Create a password (min 6 chars)' : 'Enter your password'}
-                  className="w-full bg-neutral-900 rounded-2xl px-4 py-4 text-white text-[17px] placeholder:text-neutral-600 outline-none focus:ring-2 focus:ring-orange-500"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      authMode === 'login' ? handleUserLogin() : handleUserRegister();
-                    }
-                  }}
-                />
-              </div>
-
-              <button
-                onClick={authMode === 'login' ? handleUserLogin : handleUserRegister}
-                disabled={isLoggingIn}
-                className="w-full py-4 rounded-2xl text-[17px] font-semibold flex items-center justify-center gap-2 bg-white/10 text-white disabled:opacity-50 hover:bg-white/20 transition-colors"
-              >
-                {isLoggingIn ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : authMode === 'login' ? (
-                  "Sign In"
-                ) : (
-                  "Create Account"
-                )}
-              </button>
-
-              <p className="text-neutral-500 text-[12px] text-center">
-                You can connect your wallet after signing in to enable on-chain trading
-              </p>
-            </motion.div>
-          </motion.div>
+          <LandingPage
+            loginForm={loginForm}
+            setLoginForm={setLoginForm}
+            authMode={authMode}
+            setAuthMode={setAuthMode}
+            handleUserLogin={handleUserLogin}
+            handleUserRegister={handleUserRegister}
+            isLoggingIn={isLoggingIn}
+            loginError={loginError}
+            setLoginError={setLoginError}
+          />
         )}
 
         {/* HOME */}
