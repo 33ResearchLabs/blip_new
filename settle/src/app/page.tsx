@@ -2164,7 +2164,15 @@ export default function Home() {
                 </motion.button>
                 <motion.button
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => setScreen("profile")}
+                  onClick={() => {
+                    if (IS_EMBEDDED_WALLET) {
+                      if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
+                      else if (embeddedWallet?.state === 'none') setShowWalletSetup(true);
+                      else setScreen("profile");
+                    } else {
+                      setScreen("profile");
+                    }
+                  }}
                   className="w-9 h-9 rounded-[14px] overflow-hidden"
                   style={{ border: '2px solid rgba(124,58,237,0.45)' }}
                 >
@@ -2250,6 +2258,89 @@ export default function Home() {
                   </div>
                 </div>
               </motion.div>
+
+              {/* Wallet Connect Prompt */}
+              {userId && !solanaWallet.connected && !solanaWallet.walletAddress && (
+                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+                  className="w-full rounded-[22px] p-4 mb-5"
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      {IS_EMBEDDED_WALLET && embeddedWallet?.state === 'locked'
+                        ? <Lock className="w-5 h-5 text-orange-400" />
+                        : <Wallet className="w-5 h-5" style={{ color: 'rgba(255,255,255,0.5)' }} />}
+                    </div>
+                    <div className="flex-1">
+                      <p style={{ fontSize: 15, fontWeight: 900, color: '#fff', marginBottom: 4 }}>
+                        {IS_EMBEDDED_WALLET
+                          ? embeddedWallet?.state === 'locked' ? 'Unlock Your Wallet' : 'Set Up Your Wallet'
+                          : 'Connect Your Wallet'}
+                      </p>
+                      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 12, lineHeight: 1.4 }}>
+                        {IS_EMBEDDED_WALLET
+                          ? embeddedWallet?.state === 'locked'
+                            ? 'Enter your password to unlock your in-app wallet'
+                            : 'Create or import a Solana wallet to start trading'
+                          : 'Link your Solana wallet to enable on-chain escrow and secure trading'}
+                      </p>
+                      <button
+                        onClick={() => {
+                          if (IS_EMBEDDED_WALLET) {
+                            if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
+                            else setShowWalletSetup(true);
+                          } else {
+                            setShowWalletModal(true);
+                          }
+                        }}
+                        className="px-4 py-2 rounded-[14px] text-[13px] font-black uppercase tracking-wider"
+                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', letterSpacing: '0.08em' }}>
+                        {IS_EMBEDDED_WALLET
+                          ? embeddedWallet?.state === 'locked' ? 'Unlock Wallet' : 'Create Wallet'
+                          : 'Connect Wallet'}
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Active Order Banner */}
+              {pendingOrders.length > 0 && (
+                <motion.button
+                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    setActiveOrderId(pendingOrders[0].id);
+                    if (pendingOrders[0].status === "pending") {
+                      setPendingTradeData({
+                        amount: pendingOrders[0].cryptoAmount,
+                        fiatAmount: pendingOrders[0].fiatAmount,
+                        type: pendingOrders[0].type,
+                        paymentMethod: pendingOrders[0].merchant.paymentMethod
+                      });
+                      setScreen("matching");
+                    } else {
+                      setScreen("order");
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 rounded-[22px] mb-5 text-left"
+                  style={{ padding: '12px 14px', background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.2)' }}>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                    style={{ background: 'rgba(249,115,22,0.1)' }}>
+                    <motion.div className="w-2.5 h-2.5 rounded-full bg-[#f97316]"
+                      animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
+                  </div>
+                  <div className="flex-1">
+                    <p style={{ fontSize: 14, fontWeight: 900, color: '#fff', marginBottom: 2 }}>
+                      {pendingOrders[0].type === "buy" ? "Buying" : "Selling"} {pendingOrders[0].cryptoAmount} USDT
+                    </p>
+                    <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      {pendingOrders[0].status === "pending" ? "Finding merchant..." : `Step ${pendingOrders[0].step} of 4 · Tap to continue`}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-5 h-5" style={{ color: '#f97316' }} />
+                </motion.button>
+              )}
 
               {/* Quick Stats Chips */}
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="flex gap-2.5 mb-6">
