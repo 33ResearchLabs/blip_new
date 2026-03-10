@@ -2187,7 +2187,8 @@ export default function Home() {
             {/* Scrollable Body */}
             <div className="flex-1 overflow-y-auto pb-28 no-scrollbar z-10" style={{ paddingLeft: 20, paddingRight: 20 }}>
 
-              {/* Wallet Card */}
+              {/* Wallet Card — only when connected */}
+              {solanaWallet.connected && (
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="relative mb-5">
                 <div className="absolute inset-0 rounded-[40px] opacity-70" style={{
                   background: 'radial-gradient(ellipse at 25% 35%, rgba(16,185,129,0.22) 0%, transparent 55%), radial-gradient(ellipse at 80% 75%, rgba(124,58,237,0.22) 0%, transparent 55%)',
@@ -2258,6 +2259,7 @@ export default function Home() {
                   </div>
                 </div>
               </motion.div>
+              )}
 
               {/* Wallet Connect Prompt */}
               {userId && !solanaWallet.connected && !solanaWallet.walletAddress && (
@@ -2359,10 +2361,10 @@ export default function Home() {
               {/* Action Grid */}
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.13 }} className="grid grid-cols-4 gap-2 mb-8">
                 {([
-                  { label: 'Buy', Icon: ArrowDownLeft, primary: true,  fn: () => { setTradeType('buy'); setScreen('trade'); } },
-                  { label: 'Sell', Icon: ArrowUpRight,  primary: false, fn: () => { setTradeType('sell'); setScreen('trade'); } },
-                  { label: 'Orders', Icon: Clock,       primary: false, fn: () => setScreen('orders') },
-                  { label: 'Scan', Icon: QrCode,        primary: false, fn: () => {} },
+                  { label: 'Buy',      Icon: ArrowDownLeft,  primary: true,  fn: () => { setTradeType('buy');  setScreen('trade'); } },
+                  { label: 'Sell',     Icon: ArrowUpRight,   primary: false, fn: () => { setTradeType('sell'); setScreen('trade'); } },
+                  { label: 'Orders',   Icon: Clock,          primary: false, fn: () => setScreen('orders') },
+                  { label: 'Messages', Icon: MessageCircle,  primary: false, fn: () => setScreen('chats') },
                 ] as const).map(({ label, Icon, primary, fn }) => (
                   <motion.button key={label} whileTap={{ scale: 0.94 }} onClick={fn} className="flex flex-col items-center gap-2">
                     <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={
@@ -4099,7 +4101,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="flex-1 px-5 pb-28 overflow-y-auto">
+            <div className="flex-1 px-5 pb-28 overflow-y-auto relative z-10">
               {/* Active Orders Tab */}
               {activityTab === 'active' && (
                 <>
