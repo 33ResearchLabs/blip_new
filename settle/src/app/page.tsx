@@ -2051,7 +2051,13 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-dvh bg-black flex flex-col items-center overflow-y-auto">
+    <div className="min-h-dvh flex flex-col items-center overflow-y-auto relative" style={{ background: '#080810' }}>
+      {/* Ambient glow orbs */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <motion.div animate={{ x: [0, 40, -30, 0], y: [0, -40, 50, 0], scale: [1, 1.15, 0.9, 1] }} transition={{ duration: 18, repeat: Infinity, ease: 'linear' }} className="absolute rounded-full" style={{ top: '-15%', left: '-10%', width: '65%', height: '55%', background: 'radial-gradient(ellipse, rgba(124,58,237,0.13) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+        <motion.div animate={{ x: [0, -40, 30, 0], y: [0, -40, 50, 0], scale: [1, 1.15, 0.9, 1] }} transition={{ duration: 22, repeat: Infinity, ease: 'linear' }} className="absolute rounded-full" style={{ bottom: '-20%', right: '-10%', width: '60%', height: '55%', background: 'radial-gradient(ellipse, rgba(16,185,129,0.09) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+        <motion.div animate={{ x: [0, 40, -30, 0], y: [0, 40, -50, 0], scale: [1, 1.15, 0.9, 1] }} transition={{ duration: 26, repeat: Infinity, ease: 'linear' }} className="absolute rounded-full" style={{ top: '35%', right: '15%', width: '40%', height: '40%', background: 'radial-gradient(ellipse, rgba(59,130,246,0.07) 0%, transparent 70%)', filter: 'blur(60px)' }} />
+      </div>
       {/* Toast Notifications */}
       <NotificationToastContainer position="top-right" />
       <AnimatePresence mode="wait">
@@ -2080,84 +2086,105 @@ export default function Home() {
             className={`flex-1 w-full ${maxW} flex flex-col`}
           >
             {/* Top Bar */}
-            <div className="px-5 pt-14 pb-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setScreen("profile")}
-                  className="w-10 h-10 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white text-sm font-semibold"
-                >
-                  {userName.charAt(0).toUpperCase()}
-                </button>
-                <div>
-                  <p className="text-[15px] font-semibold text-white">{userName}</p>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[13px] text-neutral-500 font-medium font-mono">
-                      {solanaWallet.connected && solanaWallet.walletAddress
-                        ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
-                        : 'Connect wallet'}
-                    </p>
-                    <ConnectionIndicator isConnected={!!userId} />
-                  </div>
+            <header className="px-5 pt-14 pb-3 flex items-center justify-between">
+              <div>
+                <p style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.38em', color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', marginBottom: 3 }}>Portfolio</p>
+                <div className="flex items-center gap-2">
+                  <span style={{ fontSize: 20, fontWeight: 900, letterSpacing: '-0.04em' }}>{userName}</span>
+                  <ConnectionIndicator isConnected={!!userId} />
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
+              <div className="flex items-center gap-2.5">
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
                   onClick={() => setScreen("chats")}
-                  className="w-10 h-10 rounded-full bg-neutral-900 flex items-center justify-center relative"
+                  className="w-9 h-9 rounded-xl flex items-center justify-center relative"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
                 >
-                  <MessageCircle className="w-[18px] h-[18px] text-neutral-400" />
+                  <Bell className="w-[15px] h-[15px]" style={{ color: 'rgba(255,255,255,0.4)' }} />
                   {orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) > 0 && (
-                    <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-white/10 border-2 border-black flex items-center justify-center">
+                    <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#7c3aed] border-2 border-[#080810] flex items-center justify-center">
                       <span className="text-[8px] font-bold text-white">
                         {orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0)}
                       </span>
                     </div>
                   )}
-                </button>
-                <button
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
                   onClick={() => {
                     if (IS_EMBEDDED_WALLET) {
                       if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
                       else if (embeddedWallet?.state === 'none') setShowWalletSetup(true);
-                      // If unlocked, could show wallet details — for now just refresh
-                      else solanaWallet.refreshBalances?.();
+                      else setScreen("profile");
                     } else {
-                      setShowWalletModal(true);
+                      setScreen("profile");
                     }
                   }}
-                  className={`h-10 rounded-full flex items-center justify-center gap-2 px-3 transition-all ${
-                    solanaWallet.connected
-                      ? 'bg-[#26A17B]/10 border border-[#26A17B]/30'
-                      : IS_EMBEDDED_WALLET && embeddedWallet?.state === 'locked'
-                        ? 'bg-orange-500/10 border border-orange-500/30'
-                        : 'bg-white/10 border border-white/10 hover:bg-white/20'
-                  }`}
+                  className="w-9 h-9 rounded-xl overflow-hidden"
+                  style={{ border: '2px solid rgba(124,58,237,0.45)' }}
                 >
-                  {solanaWallet.connected ? (
-                    <>
-                      <div className="w-2 h-2 rounded-full bg-[#26A17B]" />
-                      <span className="text-[12px] font-bold text-[#26A17B]">
-                        {solanaWallet.usdtBalance !== null
-                          ? solanaWallet.usdtBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })
-                          : '...'}
-                      </span>
-                    </>
-                  ) : IS_EMBEDDED_WALLET && embeddedWallet?.state === 'locked' ? (
-                    <>
-                      <Lock className="w-4 h-4 text-orange-400" />
-                      <span className="text-[12px] font-semibold text-orange-400">Unlock</span>
-                    </>
-                  ) : (
-                    <>
-                      <Wallet className="w-4 h-4 text-white" />
-                      <span className="text-[12px] font-semibold text-white">{IS_EMBEDDED_WALLET ? 'Setup' : 'Connect'}</span>
-                    </>
-                  )}
-                </button>
+                  <div className="w-full h-full flex items-center justify-center font-black text-sm text-white"
+                    style={{ background: 'linear-gradient(135deg, #7c3aed, #059669)' }}>
+                    {userName.charAt(0).toUpperCase()}
+                  </div>
+                </motion.button>
               </div>
-            </div>
+            </header>
 
             <div className="px-5 py-4">
+              {/* Wallet Balance Card - shown when connected */}
+              {solanaWallet.connected && (
+                <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="relative mb-5">
+                  <div className="absolute inset-0 rounded-[28px] opacity-60" style={{ background: 'radial-gradient(ellipse at 25% 35%, rgba(16,185,129,0.18) 0%, transparent 55%), radial-gradient(ellipse at 80% 75%, rgba(124,58,237,0.18) 0%, transparent 55%)', filter: 'blur(18px)', transform: 'scale(1.04)' }} />
+                  <div className="relative overflow-hidden rounded-[28px] p-5" style={{ background: 'linear-gradient(148deg, #0b0e1a 0%, #12102c 42%, #0c1a2e 100%)', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+                    <div className="absolute" style={{ top: 0, left: 0, width: 140, height: 140, background: 'radial-gradient(circle, rgba(16,185,129,0.14) 0%, transparent 70%)', transform: 'translate(-35%, -35%)' }} />
+                    <div className="absolute" style={{ bottom: 0, right: 0, width: 140, height: 140, background: 'radial-gradient(circle, rgba(124,58,237,0.16) 0%, transparent 70%)', transform: 'translate(35%, 35%)' }} />
+                    <motion.div animate={{ x: ['-200%', '200%'] }} transition={{ duration: 3.5, repeat: Infinity, repeatDelay: 6, ease: 'easeInOut' }} className="absolute inset-0 skew-x-12" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent)' }} />
+                    <div className="relative z-10">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 3 }}>USDT Balance</p>
+                          <div className="flex items-baseline gap-1">
+                            <span style={{ fontSize: 36, fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1 }}>
+                              {solanaWallet.usdtBalance !== null ? Math.floor(solanaWallet.usdtBalance).toLocaleString() : '—'}
+                            </span>
+                            {solanaWallet.usdtBalance !== null && (
+                              <span style={{ fontSize: 18, fontWeight: 900, color: 'rgba(255,255,255,0.25)', lineHeight: 1 }}>
+                                .{(solanaWallet.usdtBalance % 1).toFixed(2).slice(2)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="flex items-center gap-1 px-2 py-1 rounded-full mb-2" style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)' }}>
+                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
+                            <span style={{ fontSize: 9, fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Live</span>
+                          </div>
+                          <p style={{ fontSize: 9, fontFamily: 'monospace', color: 'rgba(255,255,255,0.3)' }}>
+                            {solanaWallet.walletAddress ? `${solanaWallet.walletAddress.slice(0, 4)}...${solanaWallet.walletAddress.slice(-4)}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="flex-1 rounded-[14px] px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <p style={{ fontSize: 7, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.22)', marginBottom: 2 }}>Active</p>
+                          <p style={{ fontSize: 14, fontWeight: 900, color: '#fbbf24' }}>{orders.filter(o => o.status !== 'complete').length} trades</p>
+                        </div>
+                        <div className="flex-1 rounded-[14px] px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <p style={{ fontSize: 7, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.22)', marginBottom: 2 }}>SOL</p>
+                          <p style={{ fontSize: 14, fontWeight: 900, color: '#a78bfa' }}>{solanaWallet.solBalance !== null ? solanaWallet.solBalance.toFixed(3) : '—'}</p>
+                        </div>
+                        <div className="flex-1 rounded-[14px] px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <p style={{ fontSize: 7, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.22)', marginBottom: 2 }}>Rate</p>
+                          <p style={{ fontSize: 14, fontWeight: 900, color: '#10b981' }}>{currentRate} AED</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Wallet Prompt - Embedded: setup/unlock; External: connect */}
               {userId && !solanaWallet.connected && !solanaWallet.walletAddress && (
                 <motion.div
@@ -2250,7 +2277,7 @@ export default function Home() {
               initial={{ y: 50, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="flex-1 bg-neutral-950 rounded-t-[32px] px-5 pt-6 pb-6 overflow-y-auto smooth-scroll">
+              className="flex-1 rounded-t-[32px] px-5 pt-6 pb-6 overflow-y-auto smooth-scroll" style={{ background: 'rgba(10,10,20,0.95)', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-[17px] font-semibold text-white">Trade</h2>
                 <div className="flex items-center gap-1 bg-neutral-900 rounded-full p-1">
@@ -2429,46 +2456,41 @@ export default function Home() {
             </motion.div>
 
             {/* Bottom Nav */}
-            <div className="fixed bottom-0 left-0 right-0 z-50">
+            <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-5">
               <div className={`${maxW} mx-auto`}>
-                <div className="glass-card border-t border-white/5 px-6 pb-8 pt-3">
-                  <div className="flex items-center justify-around">
-                    {[
-                      { key: "home", icon: Wallet, label: "Home" },
-                      { key: "orders", icon: Clock, label: "Activity" },
-                      { key: "chats", icon: MessageCircle, label: "Messages" },
-                      { key: "profile", icon: User, label: "Profile" },
-                    ].map(({ key, icon: Icon, label }) => {
-                      const unreadTotal = key === "chats" ? orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) : 0;
-                      return (
-                        <motion.button
-                          key={key}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => setScreen(key as Screen)}
-                          className={`flex flex-col items-center gap-1 relative px-3 py-1 rounded-xl transition-all ${
-                            screen === key ? "text-white" : "text-neutral-600"
-                          }`}
-                        >
-                          {screen === key && (
-                            <motion.div
-                              layoutId="nav-indicator"
-                              className="absolute inset-0 bg-white/5 rounded-xl"
-                              transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                            />
+                <div className="flex items-center justify-around px-2 py-2.5 rounded-[28px]"
+                  style={{ background: 'rgba(14,14,22,0.92)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  {[
+                    { key: "home", icon: Wallet, label: "Home" },
+                    { key: "orders", icon: Clock, label: "Activity" },
+                    { key: "chats", icon: MessageCircle, label: "Messages" },
+                    { key: "profile", icon: User, label: "Profile" },
+                  ].map(({ key, icon: Icon, label }) => {
+                    const on = screen === key;
+                    const unreadTotal = key === "chats" ? orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) : 0;
+                    return (
+                      <motion.button key={key} whileTap={{ scale: 0.85 }} onClick={() => setScreen(key as Screen)}
+                        className="relative flex flex-col items-center gap-1 px-5 py-1">
+                        {on && (
+                          <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
+                            style={{ background: 'rgba(124,58,237,0.18)' }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
+                        )}
+                        <div className="relative">
+                          <Icon className="w-5 h-5 relative z-10 transition-colors" strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.22)' }} />
+                          {unreadTotal > 0 && (
+                            <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-[#7c3aed] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                              {unreadTotal > 99 ? '99+' : unreadTotal}
+                            </span>
                           )}
-                          <div className="relative">
-                            <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
-                            {unreadTotal > 0 && (
-                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-white/10 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
-                                {unreadTotal > 99 ? '99+' : unreadTotal}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] font-medium relative z-10">{label}</span>
-                        </motion.button>
-                      );
-                    })}
-                  </div>
+                        </div>
+                        <span className="text-[8.5px] font-black uppercase tracking-wider relative z-10"
+                          style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.18)' }}>
+                          {label}
+                        </span>
+                      </motion.button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -2482,7 +2504,7 @@ export default function Home() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className={`flex-1 w-full ${maxW} flex flex-col bg-black`}
+            className={`flex-1 w-full ${maxW} flex flex-col`}
           >
             <div className="h-12" />
 
@@ -2724,7 +2746,7 @@ export default function Home() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className={`flex-1 w-full ${maxW} flex flex-col bg-black`}
+            className={`flex-1 w-full ${maxW} flex flex-col`}
           >
             <div className="h-12" />
 
@@ -3799,7 +3821,7 @@ export default function Home() {
             key="order-loading"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className={`flex-1 w-full ${maxW} flex flex-col bg-black items-center justify-center`}
+            className={`flex-1 w-full ${maxW} flex flex-col items-center justify-center`}
           >
             <div className="h-12" />
             <div className="px-5 py-4 flex items-center w-full">
@@ -3824,12 +3846,13 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={`flex-1 w-full ${maxW} flex flex-col bg-black`}
+            className={`flex-1 w-full ${maxW} flex flex-col`}
           >
             <div className="h-12" />
 
-            <div className="px-5 py-4">
-              <h1 className="text-[28px] font-semibold text-white">Activity</h1>
+            <div className="px-5 pt-2 pb-4">
+              <p style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.38em', color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', marginBottom: 3 }}>Overview</p>
+              <p style={{ fontSize: 26, fontWeight: 900, letterSpacing: '-0.04em', color: '#fff' }}>Activity</p>
             </div>
 
             {/* Activity Tabs */}
@@ -3986,46 +4009,41 @@ export default function Home() {
             </div>
 
             {/* Bottom Nav */}
-            <div className="fixed bottom-0 left-0 right-0 z-50">
+            <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-5">
               <div className={`${maxW} mx-auto`}>
-                <div className="glass-card border-t border-white/5 px-6 pb-8 pt-3">
-                  <div className="flex items-center justify-around">
-                    {[
-                      { key: "home", icon: Wallet, label: "Home" },
-                      { key: "orders", icon: Clock, label: "Activity" },
-                      { key: "chats", icon: MessageCircle, label: "Messages" },
-                      { key: "profile", icon: User, label: "Profile" },
-                    ].map(({ key, icon: Icon, label }) => {
-                      const unreadTotal = key === "chats" ? orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) : 0;
-                      return (
-                        <motion.button
-                          key={key}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => setScreen(key as Screen)}
-                          className={`flex flex-col items-center gap-1 relative px-3 py-1 rounded-xl transition-all ${
-                            screen === key ? "text-white" : "text-neutral-600"
-                          }`}
-                        >
-                          {screen === key && (
-                            <motion.div
-                              layoutId="nav-indicator-orders"
-                              className="absolute inset-0 bg-white/5 rounded-xl"
-                              transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                            />
+                <div className="flex items-center justify-around px-2 py-2.5 rounded-[28px]"
+                  style={{ background: 'rgba(14,14,22,0.92)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  {[
+                    { key: "home", icon: Wallet, label: "Home" },
+                    { key: "orders", icon: Clock, label: "Activity" },
+                    { key: "chats", icon: MessageCircle, label: "Messages" },
+                    { key: "profile", icon: User, label: "Profile" },
+                  ].map(({ key, icon: Icon, label }) => {
+                    const on = screen === key;
+                    const unreadTotal = key === "chats" ? orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) : 0;
+                    return (
+                      <motion.button key={key} whileTap={{ scale: 0.85 }} onClick={() => setScreen(key as Screen)}
+                        className="relative flex flex-col items-center gap-1 px-5 py-1">
+                        {on && (
+                          <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
+                            style={{ background: 'rgba(124,58,237,0.18)' }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
+                        )}
+                        <div className="relative">
+                          <Icon className="w-5 h-5 relative z-10 transition-colors" strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.22)' }} />
+                          {unreadTotal > 0 && (
+                            <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-[#7c3aed] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                              {unreadTotal > 99 ? '99+' : unreadTotal}
+                            </span>
                           )}
-                          <div className="relative">
-                            <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
-                            {unreadTotal > 0 && (
-                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-white/10 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
-                                {unreadTotal > 99 ? '99+' : unreadTotal}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] font-medium relative z-10">{label}</span>
-                        </motion.button>
-                      );
-                    })}
-                  </div>
+                        </div>
+                        <span className="text-[8.5px] font-black uppercase tracking-wider relative z-10"
+                          style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.18)' }}>
+                          {label}
+                        </span>
+                      </motion.button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -4039,19 +4057,22 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={`flex-1 w-full ${maxW} flex flex-col bg-black overflow-hidden`}
+            className={`flex-1 w-full ${maxW} flex flex-col overflow-hidden`}
           >
             <div className="h-12 shrink-0" />
 
-            <div className="px-5 py-4 shrink-0">
-              <h1 className="text-[28px] font-semibold text-white">Profile</h1>
+            <div className="px-5 pt-2 pb-4 shrink-0">
+              <p style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.38em', color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', marginBottom: 3 }}>Account</p>
+              <p style={{ fontSize: 26, fontWeight: 900, letterSpacing: '-0.04em', color: '#fff' }}>Profile</p>
             </div>
 
             <div className="flex-1 px-5 pb-24 overflow-y-auto">
               {/* User */}
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white text-xl font-semibold">
-                  {userName.charAt(0).toUpperCase()}
+                <div className="w-16 h-16 rounded-[20px] overflow-hidden" style={{ border: '2px solid rgba(124,58,237,0.5)' }}>
+                  <div className="w-full h-full flex items-center justify-center font-black text-xl text-white" style={{ background: 'linear-gradient(135deg, #7c3aed, #059669)' }}>
+                    {userName.charAt(0).toUpperCase()}
+                  </div>
                 </div>
                 <div>
                   <p className="text-[17px] font-semibold text-white">{userName}</p>
@@ -4433,46 +4454,41 @@ export default function Home() {
             </AnimatePresence>
 
             {/* Bottom Nav */}
-            <div className="fixed bottom-0 left-0 right-0 z-50">
+            <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-5">
               <div className={`${maxW} mx-auto`}>
-                <div className="glass-card border-t border-white/5 px-6 pb-8 pt-3">
-                  <div className="flex items-center justify-around">
-                    {[
-                      { key: "home", icon: Wallet, label: "Home" },
-                      { key: "orders", icon: Clock, label: "Activity" },
-                      { key: "chats", icon: MessageCircle, label: "Messages" },
-                      { key: "profile", icon: User, label: "Profile" },
-                    ].map(({ key, icon: Icon, label }) => {
-                      const unreadTotal = key === "chats" ? orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) : 0;
-                      return (
-                        <motion.button
-                          key={key}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => setScreen(key as Screen)}
-                          className={`flex flex-col items-center gap-1 relative px-3 py-1 rounded-xl transition-all ${
-                            screen === key ? "text-white" : "text-neutral-600"
-                          }`}
-                        >
-                          {screen === key && (
-                            <motion.div
-                              layoutId="nav-indicator-profile"
-                              className="absolute inset-0 bg-white/5 rounded-xl"
-                              transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                            />
+                <div className="flex items-center justify-around px-2 py-2.5 rounded-[28px]"
+                  style={{ background: 'rgba(14,14,22,0.92)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  {[
+                    { key: "home", icon: Wallet, label: "Home" },
+                    { key: "orders", icon: Clock, label: "Activity" },
+                    { key: "chats", icon: MessageCircle, label: "Messages" },
+                    { key: "profile", icon: User, label: "Profile" },
+                  ].map(({ key, icon: Icon, label }) => {
+                    const on = screen === key;
+                    const unreadTotal = key === "chats" ? orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) : 0;
+                    return (
+                      <motion.button key={key} whileTap={{ scale: 0.85 }} onClick={() => setScreen(key as Screen)}
+                        className="relative flex flex-col items-center gap-1 px-5 py-1">
+                        {on && (
+                          <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
+                            style={{ background: 'rgba(124,58,237,0.18)' }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
+                        )}
+                        <div className="relative">
+                          <Icon className="w-5 h-5 relative z-10 transition-colors" strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.22)' }} />
+                          {unreadTotal > 0 && (
+                            <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-[#7c3aed] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                              {unreadTotal > 99 ? '99+' : unreadTotal}
+                            </span>
                           )}
-                          <div className="relative">
-                            <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
-                            {unreadTotal > 0 && (
-                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-white/10 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
-                                {unreadTotal > 99 ? '99+' : unreadTotal}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] font-medium relative z-10">{label}</span>
-                        </motion.button>
-                      );
-                    })}
-                  </div>
+                        </div>
+                        <span className="text-[8.5px] font-black uppercase tracking-wider relative z-10"
+                          style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.18)' }}>
+                          {label}
+                        </span>
+                      </motion.button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -4486,7 +4502,7 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={`flex-1 w-full ${maxW} flex flex-col bg-black`}
+            className={`flex-1 w-full ${maxW} flex flex-col`}
           >
             <div className="h-12" />
 
@@ -4561,46 +4577,41 @@ export default function Home() {
             </div>
 
             {/* Bottom Nav */}
-            <div className="fixed bottom-0 left-0 right-0 z-50">
+            <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-5">
               <div className={`${maxW} mx-auto`}>
-                <div className="glass-card border-t border-white/5 px-6 pb-8 pt-3">
-                  <div className="flex items-center justify-around">
-                    {[
-                      { key: "home", icon: Wallet, label: "Home" },
-                      { key: "orders", icon: Clock, label: "Activity" },
-                      { key: "chats", icon: MessageCircle, label: "Messages" },
-                      { key: "profile", icon: User, label: "Profile" },
-                    ].map(({ key, icon: Icon, label }) => {
-                      const unreadTotal = key === "chats" ? orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) : 0;
-                      return (
-                        <motion.button
-                          key={key}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => setScreen(key as Screen)}
-                          className={`flex flex-col items-center gap-1 relative px-3 py-1 rounded-xl transition-all ${
-                            screen === key ? "text-white" : "text-neutral-600"
-                          }`}
-                        >
-                          {screen === key && (
-                            <motion.div
-                              layoutId="nav-indicator-chats"
-                              className="absolute inset-0 bg-white/5 rounded-xl"
-                              transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
-                            />
+                <div className="flex items-center justify-around px-2 py-2.5 rounded-[28px]"
+                  style={{ background: 'rgba(14,14,22,0.92)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                  {[
+                    { key: "home", icon: Wallet, label: "Home" },
+                    { key: "orders", icon: Clock, label: "Activity" },
+                    { key: "chats", icon: MessageCircle, label: "Messages" },
+                    { key: "profile", icon: User, label: "Profile" },
+                  ].map(({ key, icon: Icon, label }) => {
+                    const on = screen === key;
+                    const unreadTotal = key === "chats" ? orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) : 0;
+                    return (
+                      <motion.button key={key} whileTap={{ scale: 0.85 }} onClick={() => setScreen(key as Screen)}
+                        className="relative flex flex-col items-center gap-1 px-5 py-1">
+                        {on && (
+                          <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
+                            style={{ background: 'rgba(124,58,237,0.18)' }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
+                        )}
+                        <div className="relative">
+                          <Icon className="w-5 h-5 relative z-10 transition-colors" strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.22)' }} />
+                          {unreadTotal > 0 && (
+                            <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-[#7c3aed] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                              {unreadTotal > 99 ? '99+' : unreadTotal}
+                            </span>
                           )}
-                          <div className="relative">
-                            <Icon className="w-5 h-5 relative z-10" strokeWidth={screen === key ? 2.5 : 1.5} />
-                            {unreadTotal > 0 && (
-                              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-white/10 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
-                                {unreadTotal > 99 ? '99+' : unreadTotal}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] font-medium relative z-10">{label}</span>
-                        </motion.button>
-                      );
-                    })}
-                  </div>
+                        </div>
+                        <span className="text-[8.5px] font-black uppercase tracking-wider relative z-10"
+                          style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.18)' }}>
+                          {label}
+                        </span>
+                      </motion.button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -4614,7 +4625,7 @@ export default function Home() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className={`flex-1 w-full ${maxW} flex flex-col bg-black h-dvh`}
+            className={`flex-1 w-full ${maxW} flex flex-col h-dvh`}
           >
             {/* Chat Header */}
             <div className="bg-neutral-900 border-b border-neutral-800 pt-12 pb-3 px-4">
@@ -4774,7 +4785,7 @@ export default function Home() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className={`flex-1 w-full ${maxW} flex flex-col bg-black`}
+            className={`flex-1 w-full ${maxW} flex flex-col`}
           >
             <div className="h-12" />
 
@@ -4890,7 +4901,7 @@ export default function Home() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className={`flex-1 w-full ${maxW} flex flex-col bg-black`}
+            className={`flex-1 w-full ${maxW} flex flex-col`}
           >
             <div className="h-12" />
 
@@ -5024,7 +5035,7 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={`flex-1 w-full ${maxW} flex flex-col bg-black`}
+            className={`flex-1 w-full ${maxW} flex flex-col`}
           >
             <div className="h-12" />
 
