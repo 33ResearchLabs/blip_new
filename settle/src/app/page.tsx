@@ -2051,13 +2051,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-dvh flex flex-col items-center overflow-y-auto relative" style={{ background: '#080810' }}>
-      {/* Ambient glow orbs */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <motion.div animate={{ x: [0, 40, -30, 0], y: [0, -40, 50, 0], scale: [1, 1.15, 0.9, 1] }} transition={{ duration: 18, repeat: Infinity, ease: 'linear' }} className="absolute rounded-full" style={{ top: '-15%', left: '-10%', width: '65%', height: '55%', background: 'radial-gradient(ellipse, rgba(124,58,237,0.13) 0%, transparent 70%)', filter: 'blur(60px)' }} />
-        <motion.div animate={{ x: [0, -40, 30, 0], y: [0, -40, 50, 0], scale: [1, 1.15, 0.9, 1] }} transition={{ duration: 22, repeat: Infinity, ease: 'linear' }} className="absolute rounded-full" style={{ bottom: '-20%', right: '-10%', width: '60%', height: '55%', background: 'radial-gradient(ellipse, rgba(16,185,129,0.09) 0%, transparent 70%)', filter: 'blur(60px)' }} />
-        <motion.div animate={{ x: [0, 40, -30, 0], y: [0, 40, -50, 0], scale: [1, 1.15, 0.9, 1] }} transition={{ duration: 26, repeat: Infinity, ease: 'linear' }} className="absolute rounded-full" style={{ top: '35%', right: '15%', width: '40%', height: '40%', background: 'radial-gradient(ellipse, rgba(59,130,246,0.07) 0%, transparent 70%)', filter: 'blur(60px)' }} />
-      </div>
+    <div className="min-h-dvh flex flex-col items-center overflow-y-auto relative" style={{ background: '#0a0a0a' }}>
       {/* Toast Notifications */}
       <NotificationToastContainer position="top-right" />
       <AnimatePresence mode="wait">
@@ -2103,7 +2097,7 @@ export default function Home() {
                 >
                   <Bell className="w-[15px] h-[15px]" style={{ color: 'rgba(255,255,255,0.4)' }} />
                   {orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) > 0 && (
-                    <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#7c3aed] border-2 border-[#080810] flex items-center justify-center">
+                    <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#f97316] border-2 border-[#080810] flex items-center justify-center">
                       <span className="text-[8px] font-bold text-white">
                         {orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0)}
                       </span>
@@ -2122,10 +2116,10 @@ export default function Home() {
                     }
                   }}
                   className="w-9 h-9 rounded-xl overflow-hidden"
-                  style={{ border: '2px solid rgba(124,58,237,0.45)' }}
+                  style={{ border: '2px solid rgba(255,255,255,0.2)' }}
                 >
                   <div className="w-full h-full flex items-center justify-center font-black text-sm text-white"
-                    style={{ background: 'linear-gradient(135deg, #7c3aed, #059669)' }}>
+                    style={{ background: 'linear-gradient(135deg, #1a1a1a, #333)' }}>
                     {userName.charAt(0).toUpperCase()}
                   </div>
                 </motion.button>
@@ -2136,10 +2130,10 @@ export default function Home() {
               {/* Wallet Balance Card - shown when connected */}
               {solanaWallet.connected && (
                 <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="relative mb-5">
-                  <div className="absolute inset-0 rounded-[28px] opacity-60" style={{ background: 'radial-gradient(ellipse at 25% 35%, rgba(16,185,129,0.18) 0%, transparent 55%), radial-gradient(ellipse at 80% 75%, rgba(124,58,237,0.18) 0%, transparent 55%)', filter: 'blur(18px)', transform: 'scale(1.04)' }} />
-                  <div className="relative overflow-hidden rounded-[28px] p-5" style={{ background: 'linear-gradient(148deg, #0b0e1a 0%, #12102c 42%, #0c1a2e 100%)', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
-                    <div className="absolute" style={{ top: 0, left: 0, width: 140, height: 140, background: 'radial-gradient(circle, rgba(16,185,129,0.14) 0%, transparent 70%)', transform: 'translate(-35%, -35%)' }} />
-                    <div className="absolute" style={{ bottom: 0, right: 0, width: 140, height: 140, background: 'radial-gradient(circle, rgba(124,58,237,0.16) 0%, transparent 70%)', transform: 'translate(35%, 35%)' }} />
+                  <div className="absolute inset-0 rounded-[28px] opacity-60" style={{ background: 'radial-gradient(ellipse at 25% 35%, rgba(249,115,22,0.1) 0%, transparent 55%), radial-gradient(ellipse at 80% 75%, rgba(255,255,255,0.09) 0%, transparent 55%)', filter: 'blur(18px)', transform: 'scale(1.04)' }} />
+                  <div className="relative overflow-hidden rounded-[28px] p-5" style={{ background: 'linear-gradient(148deg, #111111 0%, #161616 42%, #111111 100%)', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+                    <div className="absolute" style={{ top: 0, left: 0, width: 140, height: 140, background: 'radial-gradient(circle, rgba(249,115,22,0.08) 0%, transparent 70%)', transform: 'translate(-35%, -35%)' }} />
+                    <div className="absolute" style={{ bottom: 0, right: 0, width: 140, height: 140, background: 'radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%)', transform: 'translate(35%, 35%)' }} />
                     <motion.div animate={{ x: ['-200%', '200%'] }} transition={{ duration: 3.5, repeat: Infinity, repeatDelay: 6, ease: 'easeInOut' }} className="absolute inset-0 skew-x-12" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent)' }} />
                     <div className="relative z-10">
                       <div className="flex items-center justify-between mb-3">
@@ -2157,9 +2151,9 @@ export default function Home() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="flex items-center gap-1 px-2 py-1 rounded-full mb-2" style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)' }}>
-                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
-                            <span style={{ fontSize: 9, fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Live</span>
+                          <div className="flex items-center gap-1 px-2 py-1 rounded-full mb-2" style={{ background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#f97316', boxShadow: 'none' }} />
+                            <span style={{ fontSize: 9, fontWeight: 900, color: '#f97316', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Live</span>
                           </div>
                           <p style={{ fontSize: 9, fontFamily: 'monospace', color: 'rgba(255,255,255,0.3)' }}>
                             {solanaWallet.walletAddress ? `${solanaWallet.walletAddress.slice(0, 4)}...${solanaWallet.walletAddress.slice(-4)}` : ''}
@@ -2169,15 +2163,15 @@ export default function Home() {
                       <div className="flex gap-2">
                         <div className="flex-1 rounded-[14px] px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
                           <p style={{ fontSize: 7, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.22)', marginBottom: 2 }}>Active</p>
-                          <p style={{ fontSize: 14, fontWeight: 900, color: '#fbbf24' }}>{orders.filter(o => o.status !== 'complete').length} trades</p>
+                          <p style={{ fontSize: 14, fontWeight: 900, color: '#f97316' }}>{orders.filter(o => o.status !== 'complete').length} trades</p>
                         </div>
                         <div className="flex-1 rounded-[14px] px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
                           <p style={{ fontSize: 7, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.22)', marginBottom: 2 }}>SOL</p>
-                          <p style={{ fontSize: 14, fontWeight: 900, color: '#a78bfa' }}>{solanaWallet.solBalance !== null ? solanaWallet.solBalance.toFixed(3) : '—'}</p>
+                          <p style={{ fontSize: 14, fontWeight: 900, color: '#fff' }}>{solanaWallet.solBalance !== null ? solanaWallet.solBalance.toFixed(3) : '—'}</p>
                         </div>
                         <div className="flex-1 rounded-[14px] px-3 py-2" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
                           <p style={{ fontSize: 7, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.22)', marginBottom: 2 }}>Rate</p>
-                          <p style={{ fontSize: 14, fontWeight: 900, color: '#10b981' }}>{currentRate} AED</p>
+                          <p style={{ fontSize: 14, fontWeight: 900, color: '#f97316' }}>{currentRate} AED</p>
                         </div>
                       </div>
                     </div>
@@ -2279,38 +2273,6 @@ export default function Home() {
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
               className="flex-1 rounded-t-[36px] px-5 pt-6 pb-28 overflow-y-auto smooth-scroll" style={{ background: 'rgba(8,8,16,0.97)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
 
-              {/* Rate strip with mini sparkline */}
-              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-[22px] p-4 mb-5 flex items-center gap-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div className="flex-1">
-                  <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 3 }}>Live Rate</p>
-                  <div className="flex items-baseline gap-1.5">
-                    <span style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1 }}>{currentRate}</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.3)' }}>AED/USDT</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)' }}>
-                      <ArrowUpRight className="w-2.5 h-2.5" style={{ color: '#10b981' }} />
-                      <span style={{ fontSize: 9, fontWeight: 900, color: '#10b981' }}>Stable</span>
-                    </div>
-                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', fontWeight: 600 }}>AED Pegged</span>
-                  </div>
-                </div>
-                {/* Mini sparkline */}
-                <svg width="90" height="40" viewBox="0 0 90 40" className="shrink-0">
-                  <defs>
-                    <linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
-                      <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-                    </linearGradient>
-                    <filter id="glow2"><feGaussianBlur stdDeviation="2" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-                  </defs>
-                  <path d="M0,28 L10,26 L20,29 L30,24 L40,22 L50,25 L60,19 L70,16 L80,18 L90,14" fill="none" stroke="#10b981" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M0,28 L10,26 L20,29 L30,24 L40,22 L50,25 L60,19 L70,16 L80,18 L90,14 L90,40 L0,40 Z" fill="url(#rg)" />
-                  <circle cx="90" cy="14" r="3" fill="#10b981" filter="url(#glow2)" />
-                  <circle cx="90" cy="14" r="6" fill="none" stroke="#10b981" strokeWidth="1" opacity="0.3" />
-                </svg>
-              </motion.div>
-
               {/* Buy / Sell big toggle */}
               <div className="flex gap-2.5 mb-6">
                 {([
@@ -2380,12 +2342,12 @@ export default function Home() {
               {/* Fee pill — shown when amount > 0 */}
               {amount && parseFloat(amount) > 0 && (
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex items-center justify-center gap-3 mb-5">
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                    <span style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.25)' }}>Fee</span>
-                    <span style={{ fontSize: 11, fontWeight: 900, color: '#fbbf24' }}>{(currentFees.totalFee * 100).toFixed(1)}%</span>
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <span style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)' }}>Fee</span>
+                    <span style={{ fontSize: 11, fontWeight: 900, color: '#f97316' }}>{(currentFees.totalFee * 100).toFixed(1)}%</span>
                     <div style={{ width: 1, height: 10, background: 'rgba(255,255,255,0.08)' }} />
-                    <span style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.2)' }}>Trader</span>
-                    <span style={{ fontSize: 11, fontWeight: 900, color: '#10b981' }}>{(currentFees.traderCut * 100).toFixed(2)}%</span>
+                    <span style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)' }}>Trader gets</span>
+                    <span style={{ fontSize: 11, fontWeight: 900, color: 'rgba(255,255,255,0.55)' }}>{(currentFees.traderCut * 100).toFixed(2)}%</span>
                   </div>
                 </motion.div>
               )}
@@ -2404,16 +2366,16 @@ export default function Home() {
                       onClick={() => setPaymentMethod(method)}
                       className="flex-1 flex items-center gap-3 rounded-[20px] p-3.5"
                       style={paymentMethod === method
-                        ? { background: 'rgba(124,58,237,0.18)', border: '1px solid rgba(124,58,237,0.4)' }
-                        : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+                        ? { background: '#ffffff' }
+                        : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
                     >
                       <div className="w-8 h-8 rounded-[12px] flex items-center justify-center shrink-0"
-                        style={paymentMethod === method ? { background: 'rgba(124,58,237,0.3)' } : { background: 'rgba(255,255,255,0.06)' }}>
-                        <Icon className="w-4 h-4" style={{ color: paymentMethod === method ? '#a78bfa' : 'rgba(255,255,255,0.35)' }} />
+                        style={paymentMethod === method ? { background: 'rgba(0,0,0,0.08)' } : { background: 'rgba(255,255,255,0.06)' }}>
+                        <Icon className="w-4 h-4" style={{ color: paymentMethod === method ? '#000' : 'rgba(255,255,255,0.35)' }} />
                       </div>
                       <div className="text-left">
-                        <p style={{ fontSize: 13, fontWeight: 900, color: paymentMethod === method ? '#a78bfa' : '#fff', letterSpacing: '-0.01em' }}>{label}</p>
-                        <p style={{ fontSize: 9, fontWeight: 700, color: paymentMethod === method ? 'rgba(167,139,250,0.55)' : 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{sub}</p>
+                        <p style={{ fontSize: 13, fontWeight: 900, color: paymentMethod === method ? '#000' : '#fff', letterSpacing: '-0.01em' }}>{label}</p>
+                        <p style={{ fontSize: 9, fontWeight: 700, color: paymentMethod === method ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.22)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{sub}</p>
                       </div>
                     </motion.button>
                   ))}
@@ -2473,7 +2435,7 @@ export default function Home() {
                 className="w-full mt-4 py-3 text-center"
                 style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.22)' }}
               >
-                Large amount? <span style={{ color: '#a78bfa' }}>Create an offer →</span>
+                Large amount? <span style={{ color: '#f97316' }}>Create an offer →</span>
               </button>
             </motion.div>
 
@@ -2495,19 +2457,19 @@ export default function Home() {
                         className="relative flex flex-col items-center gap-1 px-5 py-1">
                         {on && (
                           <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
-                            style={{ background: 'rgba(124,58,237,0.18)' }}
+                            style={{ background: 'rgba(255,255,255,0.09)' }}
                             transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
                         )}
                         <div className="relative">
-                          <Icon className="w-5 h-5 relative z-10 transition-colors" strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.22)' }} />
+                          <Icon className="w-5 h-5 relative z-10 transition-colors" strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#fff' : 'rgba(255,255,255,0.22)' }} />
                           {unreadTotal > 0 && (
-                            <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-[#7c3aed] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                            <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-[#f97316] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
                               {unreadTotal > 99 ? '99+' : unreadTotal}
                             </span>
                           )}
                         </div>
                         <span className="text-[8.5px] font-black uppercase tracking-wider relative z-10"
-                          style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.18)' }}>
+                          style={{ color: on ? '#fff' : 'rgba(255,255,255,0.18)' }}>
                           {label}
                         </span>
                       </motion.button>
@@ -2540,7 +2502,7 @@ export default function Home() {
             <div className="flex-1 px-5 flex flex-col">
               <div className="flex-1 flex flex-col items-center justify-center text-center">
                 <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
-                  <Shield className="w-10 h-10 text-violet-400" />
+                  <Shield className="w-10 h-10 text-white/70" />
                 </div>
                 <h2 className="text-[22px] font-semibold text-white mb-2">Lock {amount} USDT</h2>
                 <p className="text-[15px] text-neutral-500 mb-6 max-w-[280px]">
@@ -2561,7 +2523,7 @@ export default function Home() {
                     ) : (
                       <button
                         onClick={() => setShowWalletModal(true)}
-                        className="text-[14px] text-violet-400 font-medium"
+                        className="text-[14px] text-white/70 font-medium"
                       >
                         Connect Wallet
                       </button>
@@ -2597,7 +2559,7 @@ export default function Home() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[15px] text-neutral-500">Network</span>
-                    <span className="text-[14px] text-violet-400">Solana Devnet</span>
+                    <span className="text-[14px] text-white/70">Solana Devnet</span>
                   </div>
                 </div>
 
@@ -2788,7 +2750,7 @@ export default function Home() {
                   }`}>
                     {activeOrder.type === "buy"
                       ? <ArrowDownLeft className="w-5 h-5 text-white" />
-                      : <ArrowUpRight className="w-5 h-5 text-violet-400" />
+                      : <ArrowUpRight className="w-5 h-5 text-white/70" />
                     }
                   </div>
                   <div>
@@ -2817,10 +2779,10 @@ export default function Home() {
 
               {/* Escrow Status Section - Show for sell orders with escrow */}
               {activeOrder.type === "sell" && activeOrder.escrowTxHash && (
-                <div className="bg-violet-500/10 border border-violet-500/20 rounded-2xl p-4 mb-4">
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-full bg-violet-500/20 flex items-center justify-center">
-                      <Lock className="w-5 h-5 text-violet-400" />
+                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                      <Lock className="w-5 h-5 text-white/70" />
                     </div>
                     <div className="flex-1">
                       <p className="text-[15px] font-semibold text-white">Escrow Locked</p>
@@ -2847,7 +2809,7 @@ export default function Home() {
                           href={`https://explorer.solana.com/tx/${activeOrder.escrowTxHash}?cluster=devnet`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-violet-400 hover:text-violet-300"
+                          className="flex items-center gap-1 text-white/70 hover:text-white/90"
                         >
                           <span className="font-mono">{activeOrder.escrowTxHash.slice(0, 8)}...{activeOrder.escrowTxHash.slice(-6)}</span>
                           <ExternalLink className="w-3 h-3" />
@@ -3075,7 +3037,7 @@ export default function Home() {
                                 <div className="pt-2 border-t border-neutral-700">
                                   <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-1">Meeting Spot</p>
                                   <div className="flex items-start gap-2">
-                                    <Navigation className="w-4 h-4 text-violet-400 flex-shrink-0 mt-0.5" />
+                                    <Navigation className="w-4 h-4 text-white/70 flex-shrink-0 mt-0.5" />
                                     <p className="text-[13px] text-white">{activeOrder.merchant.meetingSpot}</p>
                                   </div>
                                 </div>
@@ -3284,7 +3246,7 @@ export default function Home() {
 
                           <div className="mt-3 h-1 bg-neutral-800 rounded-full overflow-hidden">
                             <motion.div
-                              className="h-full bg-violet-400"
+                              className="h-full bg-orange-400"
                               animate={{ x: ["-100%", "100%"] }}
                               transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
                               style={{ width: "30%" }}
@@ -3600,7 +3562,7 @@ export default function Home() {
                           <p className="text-[15px] font-medium text-white">{activeOrder.merchant.name}</p>
                           <div className="flex items-center gap-1.5">
                             <ConnectionIndicator isConnected={true} />
-                            <p className="text-[11px] text-emerald-400/80">Online</p>
+                            <p className="text-[11px] text-orange-400/80">Online</p>
                           </div>
                         </div>
                       </div>
@@ -3890,7 +3852,7 @@ export default function Home() {
                       ? { background: '#fff', color: '#000' }
                       : { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.07)' }}>
                     {tab === 'active' && activityTab === 'active' && (
-                      <motion.div className="w-1.5 h-1.5 rounded-full bg-[#10b981]" animate={{ scale: [1, 1.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
+                      <motion.div className="w-1.5 h-1.5 rounded-full bg-[#f97316]" animate={{ scale: [1, 1.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
                     )}
                     <span style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</span>
                     {count > 0 && (
@@ -3925,20 +3887,20 @@ export default function Home() {
                           style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
                         >
                           <div className="w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0"
-                            style={{ background: order.type === 'buy' ? 'rgba(16,185,129,0.12)' : 'rgba(124,58,237,0.12)', border: `1px solid ${order.type === 'buy' ? 'rgba(16,185,129,0.25)' : 'rgba(124,58,237,0.25)'}` }}>
-                            <motion.div className="w-2 h-2 rounded-full" style={{ background: order.type === 'buy' ? '#10b981' : '#a78bfa', boxShadow: `0 0 8px ${order.type === 'buy' ? '#10b981' : '#a78bfa'}` }} animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
+                            style={{ background: order.type === 'buy' ? 'rgba(249,115,22,0.1)' : 'rgba(255,255,255,0.05)', border: `1px solid ${order.type === 'buy' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.1)'}` }}>
+                            <motion.div className="w-2 h-2 rounded-full" style={{ background: order.type === 'buy' ? '#f97316' : '#fff', boxShadow: `0 0 8px ${order.type === 'buy' ? '#f97316' : '#fff'}` }} animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
                           </div>
                           <div className="flex-1 text-left min-w-0">
                             <div className="flex items-center justify-between mb-1">
                               <p style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.02em' }}>
                                 {order.type === 'buy' ? 'Buying' : 'Selling'} {order.cryptoAmount} USDT
                               </p>
-                              <p style={{ fontSize: 15, fontWeight: 900, color: order.type === 'buy' ? '#10b981' : '#a78bfa' }}>
+                              <p style={{ fontSize: 15, fontWeight: 900, color: order.type === 'buy' ? '#f97316' : '#fff' }}>
                                 {order.type === 'buy' ? '+' : '-'} د.إ{parseFloat(order.fiatAmount).toLocaleString()}
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 99, background: order.type === 'buy' ? 'rgba(16,185,129,0.12)' : 'rgba(124,58,237,0.12)', color: order.type === 'buy' ? '#10b981' : '#a78bfa' }}>Step {order.step}/4</span>
+                              <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 99, background: order.type === 'buy' ? 'rgba(249,115,22,0.1)' : 'rgba(255,255,255,0.05)', color: order.type === 'buy' ? '#f97316' : '#fff' }}>Step {order.step}/4</span>
                               {order.dbStatus === 'pending' && order.expiresAt ? (
                                 <span style={{ fontSize: 9, fontWeight: 700, fontFamily: 'monospace', color: Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)) < 60 ? '#f87171' : 'rgba(255,255,255,0.25)' }}>
                                   {(() => { const s = Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)); return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`; })()}
@@ -3979,19 +3941,19 @@ export default function Home() {
                         >
                           <div className="w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0"
                             style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                            <Check className="w-5 h-5" style={{ color: '#10b981' }} />
+                            <Check className="w-5 h-5" style={{ color: '#f97316' }} />
                           </div>
                           <div className="flex-1 text-left min-w-0">
                             <div className="flex items-center justify-between mb-1">
                               <p style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.02em' }}>
                                 {order.type === 'buy' ? 'Bought' : 'Sold'} {order.cryptoAmount} USDT
                               </p>
-                              <p style={{ fontSize: 15, fontWeight: 900, color: '#10b981' }}>
+                              <p style={{ fontSize: 15, fontWeight: 900, color: '#f97316' }}>
                                 {order.type === 'buy' ? '+' : '-'} د.إ{parseFloat(order.fiatAmount).toLocaleString()}
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 99, background: 'rgba(16,185,129,0.1)', color: '#10b981' }}>Done</span>
+                              <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 99, background: 'rgba(249,115,22,0.1)', color: '#f97316' }}>Done</span>
                               <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.2)' }}>{order.createdAt.toLocaleDateString()}</span>
                             </div>
                           </div>
@@ -4021,19 +3983,19 @@ export default function Home() {
                         className="relative flex flex-col items-center gap-1 px-5 py-1">
                         {on && (
                           <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
-                            style={{ background: 'rgba(124,58,237,0.18)' }}
+                            style={{ background: 'rgba(255,255,255,0.09)' }}
                             transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
                         )}
                         <div className="relative">
-                          <Icon className="w-5 h-5 relative z-10 transition-colors" strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.22)' }} />
+                          <Icon className="w-5 h-5 relative z-10 transition-colors" strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#fff' : 'rgba(255,255,255,0.22)' }} />
                           {unreadTotal > 0 && (
-                            <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-[#7c3aed] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                            <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-[#f97316] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
                               {unreadTotal > 99 ? '99+' : unreadTotal}
                             </span>
                           )}
                         </div>
                         <span className="text-[8.5px] font-black uppercase tracking-wider relative z-10"
-                          style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.18)' }}>
+                          style={{ color: on ? '#fff' : 'rgba(255,255,255,0.18)' }}>
                           {label}
                         </span>
                       </motion.button>
@@ -4064,8 +4026,8 @@ export default function Home() {
             <div className="flex-1 px-5 pb-24 overflow-y-auto">
               {/* User */}
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 rounded-[20px] overflow-hidden" style={{ border: '2px solid rgba(124,58,237,0.5)' }}>
-                  <div className="w-full h-full flex items-center justify-center font-black text-xl text-white" style={{ background: 'linear-gradient(135deg, #7c3aed, #059669)' }}>
+                <div className="w-16 h-16 rounded-[20px] overflow-hidden" style={{ border: '2px solid rgba(255,255,255,0.2)' }}>
+                  <div className="w-full h-full flex items-center justify-center font-black text-xl text-white" style={{ background: 'linear-gradient(135deg, #1a1a1a, #333)' }}>
                     {userName.charAt(0).toUpperCase()}
                   </div>
                 </div>
@@ -4085,8 +4047,8 @@ export default function Home() {
                 <div className="rounded-[22px] p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.055)' }}>
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0"
-                      style={{ background: solanaWallet.connected ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${solanaWallet.connected ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.07)'}` }}>
-                      <Wallet className="w-5 h-5" style={{ color: solanaWallet.connected ? '#10b981' : 'rgba(255,255,255,0.4)' }} />
+                      style={{ background: solanaWallet.connected ? 'rgba(249,115,22,0.08)' : 'rgba(255,255,255,0.05)', border: `1px solid ${solanaWallet.connected ? 'rgba(249,115,22,0.2)' : 'rgba(255,255,255,0.07)'}` }}>
+                      <Wallet className="w-5 h-5" style={{ color: solanaWallet.connected ? '#f97316' : 'rgba(255,255,255,0.4)' }} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.25)', marginBottom: 3 }}>
@@ -4108,7 +4070,7 @@ export default function Home() {
                       }}
                       className="w-8 h-8 rounded-[10px] flex items-center justify-center"
                       style={{ background: 'rgba(255,255,255,0.06)' }}>
-                      {copied ? <Check className="w-4 h-4" style={{ color: '#10b981' }} /> : <Copy className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.35)' }} />}
+                      {copied ? <Check className="w-4 h-4" style={{ color: '#f97316' }} /> : <Copy className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.35)' }} />}
                     </motion.button>
                   </div>
 
@@ -4118,13 +4080,13 @@ export default function Home() {
                       <div className="flex gap-2 mb-3">
                         <div className="flex-1 rounded-[14px] p-3" style={{ background: 'rgba(255,255,255,0.03)' }}>
                           <p style={{ fontSize: 7.5, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.2)', marginBottom: 4 }}>SOL</p>
-                          <p style={{ fontSize: 18, fontWeight: 900, color: '#a78bfa', letterSpacing: '-0.02em' }}>
+                          <p style={{ fontSize: 18, fontWeight: 900, color: '#fff', letterSpacing: '-0.02em' }}>
                             {solanaWallet.solBalance !== null ? solanaWallet.solBalance.toFixed(4) : '—'}
                           </p>
                         </div>
                         <div className="flex-1 rounded-[14px] p-3" style={{ background: 'rgba(255,255,255,0.03)' }}>
                           <p style={{ fontSize: 7.5, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.2)', marginBottom: 4 }}>USDT</p>
-                          <p style={{ fontSize: 18, fontWeight: 900, color: '#10b981', letterSpacing: '-0.02em' }}>
+                          <p style={{ fontSize: 18, fontWeight: 900, color: '#f97316', letterSpacing: '-0.02em' }}>
                             {solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : '—'}
                           </p>
                         </div>
@@ -4159,8 +4121,8 @@ export default function Home() {
                   <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase' }}>Bank Accounts</p>
                   <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowAddBank(true)}
                     className="w-8 h-8 rounded-[10px] flex items-center justify-center"
-                    style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.25)' }}>
-                    <Plus className="w-4 h-4" style={{ color: '#a78bfa' }} />
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <Plus className="w-4 h-4" style={{ color: '#fff' }} />
                   </motion.button>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -4173,7 +4135,7 @@ export default function Home() {
                         <div className="flex items-center gap-2 mb-0.5">
                           <p style={{ fontSize: 14, fontWeight: 900, letterSpacing: '-0.01em' }}>{acc.bank}</p>
                           {acc.isDefault && (
-                            <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: 99, background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>Default</span>
+                            <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: 99, background: 'rgba(249,115,22,0.1)', color: '#f97316' }}>Default</span>
                           )}
                         </div>
                         <p style={{ fontSize: 11, fontFamily: 'monospace', color: 'rgba(255,255,255,0.3)' }}>{acc.iban}</p>
@@ -4188,9 +4150,9 @@ export default function Home() {
                 <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 12 }}>Stats & Reputation</p>
                 <div className="flex gap-2.5 mb-3">
                   {[
-                    { label: 'Trades', value: completedOrders.length.toString(), color: '#a78bfa' },
-                    { label: 'Volume', value: completedOrders.reduce((s, o) => s + parseFloat(o.cryptoAmount), 0).toFixed(0) + ' USDT', color: '#10b981' },
-                    { label: 'Score', value: completedOrders.length > 0 ? (completedOrders.length / (completedOrders.length + timedOutOrders.length) * 100).toFixed(0) + '%' : '—', color: '#fbbf24' },
+                    { label: 'Trades', value: completedOrders.length.toString(), color: '#fff' },
+                    { label: 'Volume', value: completedOrders.reduce((s, o) => s + parseFloat(o.cryptoAmount), 0).toFixed(0) + ' USDT', color: '#f97316' },
+                    { label: 'Score', value: completedOrders.length > 0 ? (completedOrders.length / (completedOrders.length + timedOutOrders.length) * 100).toFixed(0) + '%' : '—', color: '#f97316' },
                   ].map(stat => (
                     <div key={stat.label} className="flex-1 rounded-[18px] px-3 py-3" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.055)' }}>
                       <p style={{ fontSize: 7.5, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.25)', marginBottom: 6 }}>{stat.label}</p>
@@ -4202,14 +4164,14 @@ export default function Home() {
                   <div className="rounded-[18px] p-4 flex items-center justify-between" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
                     <div>
                       <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Reputation Tier</p>
-                      <p style={{ fontSize: 16, fontWeight: 900, letterSpacing: '-0.02em', color: '#fbbf24' }}>
+                      <p style={{ fontSize: 16, fontWeight: 900, letterSpacing: '-0.02em', color: '#f97316' }}>
                         {completedOrders.length >= 50 ? 'Elite Trader' : completedOrders.length >= 20 ? 'Trusted' : completedOrders.length >= 10 ? 'Established' : completedOrders.length >= 3 ? 'Emerging' : 'New Trader'}
                       </p>
                     </div>
                     <div className="flex items-end gap-1">
                       {[...Array(5)].map((_, i) => {
                         const lvl = completedOrders.length >= 50 ? 5 : completedOrders.length >= 20 ? 4 : completedOrders.length >= 10 ? 3 : completedOrders.length >= 3 ? 2 : 1;
-                        return <div key={i} style={{ width: 4, height: 8 + i * 4, borderRadius: 3, background: i < lvl ? '#fbbf24' : 'rgba(255,255,255,0.07)' }} />;
+                        return <div key={i} style={{ width: 4, height: 8 + i * 4, borderRadius: 3, background: i < lvl ? '#f97316' : 'rgba(255,255,255,0.07)' }} />;
                       })}
                     </div>
                   </div>
@@ -4220,15 +4182,15 @@ export default function Home() {
               <div className="mb-6">
                 <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 12 }}>Analytics</p>
                 <a href="/console" className="flex items-center gap-3 rounded-[18px] p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0" style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.25)' }}>
-                    <Clock className="w-5 h-5" style={{ color: '#a78bfa' }} />
+                  <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <Clock className="w-5 h-5" style={{ color: '#fff' }} />
                   </div>
                   <div className="flex-1">
                     <p style={{ fontSize: 14, fontWeight: 900, letterSpacing: '-0.01em' }}>Console</p>
                     <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Timeouts & Analytics</p>
                   </div>
                   {timedOutOrders.length > 0 && (
-                    <span style={{ fontSize: 10, fontWeight: 900, padding: '3px 8px', borderRadius: 99, background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)' }}>
+                    <span style={{ fontSize: 10, fontWeight: 900, padding: '3px 8px', borderRadius: 99, background: 'rgba(249,115,22,0.1)', color: '#f97316', border: '1px solid rgba(249,115,22,0.25)' }}>
                       {timedOutOrders.length} timeout{timedOutOrders.length !== 1 ? 's' : ''}
                     </span>
                   )}
@@ -4430,19 +4392,19 @@ export default function Home() {
                         className="relative flex flex-col items-center gap-1 px-5 py-1">
                         {on && (
                           <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
-                            style={{ background: 'rgba(124,58,237,0.18)' }}
+                            style={{ background: 'rgba(255,255,255,0.09)' }}
                             transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
                         )}
                         <div className="relative">
-                          <Icon className="w-5 h-5 relative z-10 transition-colors" strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.22)' }} />
+                          <Icon className="w-5 h-5 relative z-10 transition-colors" strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#fff' : 'rgba(255,255,255,0.22)' }} />
                           {unreadTotal > 0 && (
-                            <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-[#7c3aed] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                            <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-[#f97316] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
                               {unreadTotal > 99 ? '99+' : unreadTotal}
                             </span>
                           )}
                         </div>
                         <span className="text-[8.5px] font-black uppercase tracking-wider relative z-10"
-                          style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.18)' }}>
+                          style={{ color: on ? '#fff' : 'rgba(255,255,255,0.18)' }}>
                           {label}
                         </span>
                       </motion.button>
@@ -4553,19 +4515,19 @@ export default function Home() {
                         className="relative flex flex-col items-center gap-1 px-5 py-1">
                         {on && (
                           <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
-                            style={{ background: 'rgba(124,58,237,0.18)' }}
+                            style={{ background: 'rgba(255,255,255,0.09)' }}
                             transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
                         )}
                         <div className="relative">
-                          <Icon className="w-5 h-5 relative z-10 transition-colors" strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.22)' }} />
+                          <Icon className="w-5 h-5 relative z-10 transition-colors" strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#fff' : 'rgba(255,255,255,0.22)' }} />
                           {unreadTotal > 0 && (
-                            <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-[#7c3aed] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
+                            <span className="absolute -top-1 -right-2 min-w-[16px] h-4 bg-[#f97316] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 z-20">
                               {unreadTotal > 99 ? '99+' : unreadTotal}
                             </span>
                           )}
                         </div>
                         <span className="text-[8.5px] font-black uppercase tracking-wider relative z-10"
-                          style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.18)' }}>
+                          style={{ color: on ? '#fff' : 'rgba(255,255,255,0.18)' }}>
                           {label}
                         </span>
                       </motion.button>
@@ -4599,7 +4561,7 @@ export default function Home() {
                   <p className="text-[15px] font-semibold text-white">{activeOrder.merchant.name}</p>
                   <div className="flex items-center gap-1.5">
                     <ConnectionIndicator isConnected={true} />
-                    <p className="text-[12px] text-emerald-400/80">Online</p>
+                    <p className="text-[12px] text-orange-400/80">Online</p>
                   </div>
                 </div>
                 <button
@@ -5252,7 +5214,7 @@ export default function Home() {
             exit={{ opacity: 0, y: -50, scale: 0.9 }}
             className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm"
           >
-            <div className="bg-[#1a1a1a] rounded-2xl p-4 border border-white/6 shadow-xl shadow-emerald-500/10">
+            <div className="bg-[#141414] rounded-2xl p-4 border border-white/6 shadow-xl shadow-black/20">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
                   <Check className="w-5 h-5 text-white" />
