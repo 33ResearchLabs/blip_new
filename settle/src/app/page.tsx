@@ -1283,7 +1283,7 @@ export default function Home() {
           type: 'buy',
           payment_method: paymentMethod,
           preference: tradePreference,
-          buyer_wallet_address: solanaWallet.walletAddress, // Buyer's Solana wallet for receiving crypto
+          buyer_wallet_address: solanaWallet.walletAddress ?? undefined, // Buyer's Solana wallet for receiving crypto
         }),
       });
       const orderData = await orderRes.json();
@@ -1367,7 +1367,7 @@ export default function Home() {
           type: tradeType,
           payment_method: 'cash',
           preference: tradePreference,
-          buyer_wallet_address: tradeType === 'buy' ? solanaWallet.walletAddress : undefined, // Buyer's wallet for buy orders
+          buyer_wallet_address: tradeType === 'buy' ? (solanaWallet.walletAddress ?? undefined) : undefined, // Buyer's wallet for buy orders
         }),
       });
       const orderData = await orderRes.json();
