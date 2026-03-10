@@ -2,12 +2,12 @@
 
 import { useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
-import type { Order } from "@/types/merchant";
+import type { Order, Notification } from "@/types/merchant";
 
 interface UseDisputeHandlersParams {
   solanaWallet: any;
-  addNotification: (type: string, message: string, orderId?: string) => void;
-  playSound: (sound: string) => void;
+  addNotification: (type: Notification['type'], message: string, orderId?: string) => void;
+  playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
   toast: any;
   afterMutationReconcile: (orderId: string, optimisticUpdate?: Partial<Order>) => Promise<void>;
   fetchOrders: () => Promise<void>;
@@ -265,6 +265,7 @@ export function useDisputeHandlers({
 
     // Actions
     openDisputeModal,
+    closeDisputeModal: () => setShowDisputeModal(false),
     submitDispute,
     fetchDisputeInfo,
     requestExtension,

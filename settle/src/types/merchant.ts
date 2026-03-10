@@ -31,6 +31,10 @@ export interface DbOrder {
   buyer_wallet_address?: string;
   acceptor_wallet_address?: string;
   buyer_merchant_id?: string;
+  merchant_username?: string;
+  merchant_display_name?: string;
+  buyer_merchant_username?: string;
+  buyer_merchant_display_name?: string;
   buyer_merchant?: {
     id: string;
     display_name: string;
@@ -86,6 +90,7 @@ export interface Order {
   dbOrder?: DbOrder;
   escrowTradeId?: number;
   escrowTradePda?: string;
+  escrowPda?: string;
   escrowCreatorWallet?: string;
   escrowTxHash?: string;
   refundTxHash?: string;

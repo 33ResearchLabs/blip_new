@@ -265,6 +265,7 @@ export const merchantCreateOrderSchema = z.object({
   escrow_pda: z.string().nullish(),
   escrow_creator_wallet: z.string().nullish(),
   matched_offer_id: uuidSchema.nullish(), // Matched offer for M2M
+  expiry_minutes: z.number().int().positive().optional(),
 });
 
 // Corridor Bridge schemas

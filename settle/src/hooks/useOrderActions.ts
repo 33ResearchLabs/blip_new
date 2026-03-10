@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
-import type { Order, DbOrder } from "@/types/merchant";
+import type { Order, DbOrder, Notification } from "@/types/merchant";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
@@ -11,8 +11,8 @@ interface UseOrderActionsParams {
   isMockMode: boolean;
   solanaWallet: any;
   effectiveBalance: number | null;
-  addNotification: (type: string, message: string, orderId?: string) => void;
-  playSound: (sound: string) => void;
+  addNotification: (type: Notification['type'], message: string, orderId?: string) => void;
+  playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
   afterMutationReconcile: (orderId: string, optimisticUpdate?: Partial<Order>) => Promise<void>;
   setShowWalletModal: (show: boolean) => void;
   handleOpenChat: (order: Order) => void;
@@ -540,8 +540,8 @@ export function useOrderActions({
   // DIRECT ORDER CREATION (from ConfigPanel)
   // ═══════════════════════════════════════════════════════════════════
   const handleDirectOrderCreation = async (
-    openTradeForm: { tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: string; spreadPreference: string },
-    setOpenTradeForm: (form: { tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: string; spreadPreference: string }) => void,
+    openTradeForm: { tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: 'bank' | 'cash'; spreadPreference: 'best' | 'fastest' | 'cheap'; expiryMinutes: 15 | 90 },
+    setOpenTradeForm: (form: { tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: 'bank' | 'cash'; spreadPreference: 'best' | 'fastest' | 'cheap'; expiryMinutes: 15 | 90 }) => void,
     tradeType?: 'buy' | 'sell',
     priorityFee?: number,
   ) => {
@@ -623,6 +623,7 @@ export function useOrderActions({
           cryptoAmount: "",
           paymentMethod: "bank",
           spreadPreference: "fastest",
+          expiryMinutes: 15,
         });
 
       } else {
@@ -658,6 +659,7 @@ export function useOrderActions({
           cryptoAmount: "",
           paymentMethod: "bank",
           spreadPreference: "fastest",
+          expiryMinutes: 15,
         });
       }
 

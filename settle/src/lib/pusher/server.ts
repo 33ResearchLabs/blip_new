@@ -114,6 +114,8 @@ interface OrderEventData {
   orderId: string;
   userId: string;
   merchantId: string;
+  buyerMerchantId?: string;
+  creatorMerchantId?: string;
   status: string;
   minimal_status?: string;
   order_version?: number;

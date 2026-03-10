@@ -356,7 +356,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                 {/* Merchant Avatar + Name */}
                 <UserBadge
                   name={offer.merchant.display_name}
-                  avatarUrl={offer.merchant.avatar_url}
+                  avatarUrl={offer.merchant.avatar_url ?? undefined}
                   merchantId={offer.merchant.id}
                   size="lg"
                   showName={false}

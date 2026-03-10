@@ -8,6 +8,8 @@ import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextA
 interface InProgressPanelProps {
   orders: any[];
   onSelectOrder: (order: any) => void;
+  onOpenChat?: (order: any) => void;
+  onOpenDispute?: (order: any) => void;
 }
 
 const WAITING_ACTIONS = ['Wait for Acceptance', 'Wait for Payment', 'Wait for Escrow', 'Wait for Confirmation', 'Waiting for Acceptor', 'Waiting for Confirmation'];

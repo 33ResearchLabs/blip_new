@@ -561,7 +561,7 @@ export default function MerchantDashboard() {
     disputeDescription, setDisputeDescription,
     isSubmittingDispute, disputeInfo, setDisputeInfo,
     isRespondingToResolution, extensionRequests, setExtensionRequests, requestingExtension,
-    openDisputeModal, submitDispute, fetchDisputeInfo,
+    openDisputeModal, closeDisputeModal, submitDispute, fetchDisputeInfo,
     requestExtension, respondToExtension, respondToResolution,
   } = dispute;
 
@@ -922,7 +922,7 @@ export default function MerchantDashboard() {
         targetType = 'merchant';
         targetName = dbOrder.merchant_username || dbOrder.merchant_display_name || order.user || 'Seller';
       } else {
-        targetId = dbOrder?.user_id || order.userId || '';
+        targetId = dbOrder?.user_id || order.user || '';
         targetType = 'user';
         targetName = order.user || 'User';
       }
@@ -933,7 +933,7 @@ export default function MerchantDashboard() {
         targetType = 'merchant';
         targetName = dbOrder.buyer_merchant_username || dbOrder.buyer_merchant_display_name || order.user || 'Buyer';
       } else {
-        targetId = dbOrder?.user_id || order.userId || '';
+        targetId = dbOrder?.user_id || order.user || '';
         targetType = 'user';
         targetName = order.user || 'User';
       }
@@ -1758,8 +1758,7 @@ export default function MerchantDashboard() {
                         </button>
                         <button
                           onClick={() => {
-                            setDisputeOrderId(order.id);
-                            setShowDisputeModal(true);
+                            openDisputeModal(order.id);
                           }}
                           className="h-11 w-11 border border-white/10 hover:border-red-500/30 rounded-lg flex items-center justify-center transition-colors group"
                         >
@@ -2921,6 +2920,7 @@ export default function MerchantDashboard() {
                             cryptoAmount: "",
                             paymentMethod: "bank",
                             spreadPreference: "fastest",
+                            expiryMinutes: 15,
                           });
 
                         } catch (error) {
@@ -2973,6 +2973,7 @@ export default function MerchantDashboard() {
                           cryptoAmount: "",
                           paymentMethod: "bank",
                           spreadPreference: "fastest",
+                          expiryMinutes: 15,
                         });
                       } catch (error) {
                         console.error("Error creating buy order:", error);
@@ -3018,7 +3019,7 @@ export default function MerchantDashboard() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
-              onClick={() => setShowDisputeModal(false)}
+              onClick={() => closeDisputeModal()}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -3039,7 +3040,7 @@ export default function MerchantDashboard() {
                     </div>
                   </div>
                   <button
-                    onClick={() => setShowDisputeModal(false)}
+                    onClick={() => closeDisputeModal()}
                     className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
                   >
                     <X className="w-4 h-4 text-gray-500" />
@@ -3083,7 +3084,7 @@ export default function MerchantDashboard() {
                 {/* Footer */}
                 <div className="px-5 pb-5 flex gap-3">
                   <button
-                    onClick={() => setShowDisputeModal(false)}
+                    onClick={() => closeDisputeModal()}
                     className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
                   >
                     Cancel

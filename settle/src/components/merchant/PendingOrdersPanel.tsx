@@ -24,6 +24,8 @@ interface PendingOrdersPanelProps {
   onSelectOrder: (order: any) => void;
   onSelectMempoolOrder: (order: any) => void;
   fetchOrders: () => void;
+  onCancelOrder?: (order: any) => void;
+  onOpenChat?: (order: any) => void;
 }
 
 // ─── Virtualized order list (renders only visible rows) ──────────
