@@ -2187,8 +2187,7 @@ export default function Home() {
             {/* Scrollable Body */}
             <div className="flex-1 overflow-y-auto pb-28 no-scrollbar z-10" style={{ paddingLeft: 20, paddingRight: 20 }}>
 
-              {/* Wallet Card — only when connected */}
-              {solanaWallet.connected && (
+              {/* Wallet Card — always visible */}
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="relative mb-5">
                 <div className="absolute inset-0 rounded-[40px] opacity-70" style={{
                   background: 'radial-gradient(ellipse at 25% 35%, rgba(16,185,129,0.22) 0%, transparent 55%), radial-gradient(ellipse at 80% 75%, rgba(124,58,237,0.22) 0%, transparent 55%)',
@@ -2219,92 +2218,82 @@ export default function Home() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase' }}>Devnet</p>
-                        <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase' }}>v 1.0</p>
+                        <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase' }}>Signature</p>
+                        <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase' }}>v 2.0</p>
                       </div>
                     </div>
-                    <div className="mb-1">
-                      <p style={{ fontSize: 8.5, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 4 }}>USDT Balance</p>
-                      <div className="flex items-baseline gap-0">
-                        <span style={{ fontSize: 54, fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1, color: '#fff' }}>
-                          {solanaWallet.usdtBalance !== null ? Math.floor(solanaWallet.usdtBalance).toLocaleString() : '0'}
-                        </span>
-                        <span style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.02em', color: 'rgba(255,255,255,0.25)', lineHeight: 1 }}>
-                          {solanaWallet.usdtBalance !== null ? '.' + (solanaWallet.usdtBalance % 1).toFixed(2).slice(2) : '.00'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.13)', border: '1px solid rgba(16,185,129,0.3)' }}>
-                        <TrendingUp size={9} style={{ color: '#10b981' }} />
-                        <span style={{ fontSize: 10, fontWeight: 900, color: '#10b981' }}>{completedOrders.length} trades done</span>
-                      </div>
-                      <span style={{ fontSize: 8.5, fontWeight: 700, color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{currentRate} AED</span>
-                    </div>
-                    <div className="mb-4" style={{ marginLeft: -4, marginRight: -4 }}>
-                      <HomeSparkline />
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p style={{ fontSize: 7, fontWeight: 900, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase', marginBottom: 2 }}>Wallet</p>
-                        <p style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 600, color: 'rgba(255,255,255,0.45)' }}>
-                          {solanaWallet.walletAddress ? `${solanaWallet.walletAddress.slice(0,4)}...${solanaWallet.walletAddress.slice(-4)}` : 'Not connected'}
+
+                    {solanaWallet.connected ? (
+                      <>
+                        <div className="mb-1">
+                          <p style={{ fontSize: 8.5, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 4 }}>Total Balance</p>
+                          <div className="flex items-baseline gap-0">
+                            <span style={{ fontSize: 54, fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1, color: '#fff' }}>
+                              {solanaWallet.usdtBalance !== null ? Math.floor(solanaWallet.usdtBalance).toLocaleString() : '0'}
+                            </span>
+                            <span style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.02em', color: 'rgba(255,255,255,0.25)', lineHeight: 1 }}>
+                              {solanaWallet.usdtBalance !== null ? '.' + (solanaWallet.usdtBalance % 1).toFixed(2).slice(2) : '.00'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.13)', border: '1px solid rgba(16,185,129,0.3)' }}>
+                            <TrendingUp size={9} style={{ color: '#10b981' }} />
+                            <span style={{ fontSize: 10, fontWeight: 900, color: '#10b981' }}>{completedOrders.length > 0 ? `+${completedOrders.length} trades` : 'Ready'}</span>
+                          </div>
+                          <span style={{ fontSize: 8.5, fontWeight: 700, color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{currentRate} AED</span>
+                        </div>
+                        <div className="mb-4" style={{ marginLeft: -4, marginRight: -4 }}>
+                          <HomeSparkline />
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p style={{ fontSize: 7, fontWeight: 900, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase', marginBottom: 2 }}>ID Hash</p>
+                            <p style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 600, color: 'rgba(255,255,255,0.45)' }}>
+                              {solanaWallet.walletAddress ? `${solanaWallet.walletAddress.slice(0,4)}...${solanaWallet.walletAddress.slice(-4)}` : '—'}
+                            </p>
+                          </div>
+                          <div className="flex" style={{ gap: 0 }}>
+                            {['#1a56db', '#7c3aed'].map((c, i) => (
+                              <div key={i} className="w-7 h-7 rounded-full flex items-center justify-center"
+                                style={{ background: c, border: '2px solid rgba(0,0,0,0.5)', marginLeft: i > 0 ? -8 : 0, opacity: 0.75 }}>
+                                {i === 0 && <div className="w-1.5 h-1.5 rounded-full bg-white opacity-70" />}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-start gap-3 py-2">
+                        <div>
+                          <p style={{ fontSize: 8.5, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 4 }}>Total Balance</p>
+                          <p style={{ fontSize: 42, fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1, color: 'rgba(255,255,255,0.15)' }}>——</p>
+                        </div>
+                        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', lineHeight: 1.4, marginTop: 8 }}>
+                          {IS_EMBEDDED_WALLET
+                            ? embeddedWallet?.state === 'locked' ? 'Unlock your wallet to see balance' : 'Set up a wallet to start trading'
+                            : 'Connect your Solana wallet to trade'}
                         </p>
+                        <button
+                          onClick={() => {
+                            if (IS_EMBEDDED_WALLET) {
+                              if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
+                              else setShowWalletSetup(true);
+                            } else {
+                              setShowWalletModal(true);
+                            }
+                          }}
+                          className="px-4 py-2 rounded-[14px] text-[13px] font-black uppercase tracking-wider mt-1"
+                          style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }}>
+                          {IS_EMBEDDED_WALLET
+                            ? embeddedWallet?.state === 'locked' ? 'Unlock Wallet' : 'Create Wallet'
+                            : 'Connect Wallet'}
+                        </button>
                       </div>
-                      <div className="flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                        <div className="w-1.5 h-1.5 rounded-full" style={{ background: solanaWallet.connected ? '#10b981' : 'rgba(255,255,255,0.2)' }} />
-                        <span style={{ fontSize: 9, fontWeight: 900, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{solanaWallet.connected ? 'Online' : 'Offline'}</span>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               </motion.div>
-              )}
-
-              {/* Wallet Connect Prompt */}
-              {userId && !solanaWallet.connected && !solanaWallet.walletAddress && (
-                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-                  className="w-full rounded-[22px] p-4 mb-5"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                      {IS_EMBEDDED_WALLET && embeddedWallet?.state === 'locked'
-                        ? <Lock className="w-5 h-5 text-orange-400" />
-                        : <Wallet className="w-5 h-5" style={{ color: 'rgba(255,255,255,0.5)' }} />}
-                    </div>
-                    <div className="flex-1">
-                      <p style={{ fontSize: 15, fontWeight: 900, color: '#fff', marginBottom: 4 }}>
-                        {IS_EMBEDDED_WALLET
-                          ? embeddedWallet?.state === 'locked' ? 'Unlock Your Wallet' : 'Set Up Your Wallet'
-                          : 'Connect Your Wallet'}
-                      </p>
-                      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginBottom: 12, lineHeight: 1.4 }}>
-                        {IS_EMBEDDED_WALLET
-                          ? embeddedWallet?.state === 'locked'
-                            ? 'Enter your password to unlock your in-app wallet'
-                            : 'Create or import a Solana wallet to start trading'
-                          : 'Link your Solana wallet to enable on-chain escrow and secure trading'}
-                      </p>
-                      <button
-                        onClick={() => {
-                          if (IS_EMBEDDED_WALLET) {
-                            if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
-                            else setShowWalletSetup(true);
-                          } else {
-                            setShowWalletModal(true);
-                          }
-                        }}
-                        className="px-4 py-2 rounded-[14px] text-[13px] font-black uppercase tracking-wider"
-                        style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', letterSpacing: '0.08em' }}>
-                        {IS_EMBEDDED_WALLET
-                          ? embeddedWallet?.state === 'locked' ? 'Unlock Wallet' : 'Create Wallet'
-                          : 'Connect Wallet'}
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
 
               {/* Active Order Banner */}
               {pendingOrders.length > 0 && (
@@ -2345,26 +2334,32 @@ export default function Home() {
               )}
 
               {/* Quick Stats Chips */}
-              <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="flex gap-2.5 mb-6">
-                {[
-                  { label: 'Active', value: `${pendingOrders.length} trades`, color: '#f97316' },
-                  { label: 'Done', value: `${completedOrders.length} trades`, color: '#10b981' },
-                  { label: 'Rate', value: `${currentRate} AED`, color: 'rgba(255,255,255,0.7)' },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="flex-1 rounded-[18px] px-3 py-3" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.055)' }}>
-                    <p style={{ fontSize: 7.5, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.18em', color: 'rgba(255,255,255,0.25)', marginBottom: 6 }}>{label}</p>
-                    <p style={{ fontSize: 13, fontWeight: 900, color }}>{value}</p>
-                  </div>
-                ))}
-              </motion.div>
+              {(() => {
+                const totalIn = completedOrders.filter(o => o.type === 'buy').reduce((s, o) => s + parseFloat(o.fiatAmount || '0'), 0);
+                const totalOut = completedOrders.filter(o => o.type === 'sell').reduce((s, o) => s + parseFloat(o.fiatAmount || '0'), 0);
+                return (
+                  <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="flex gap-2.5 mb-6">
+                    {[
+                      { label: 'Total In',  value: totalIn > 0 ? `+د.إ${totalIn.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '+د.إ0', color: '#10b981' },
+                      { label: 'Total Out', value: totalOut > 0 ? `-د.إ${totalOut.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-د.إ0', color: '#f87171' },
+                      { label: 'Pending',   value: `${pendingOrders.length} txns`, color: '#fbbf24' },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="flex-1 rounded-[18px] px-3 py-3" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.055)' }}>
+                        <p style={{ fontSize: 7.5, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.18em', color: 'rgba(255,255,255,0.25)', marginBottom: 6 }}>{label}</p>
+                        <p style={{ fontSize: 13, fontWeight: 900, color }}>{value}</p>
+                      </div>
+                    ))}
+                  </motion.div>
+                );
+              })()}
 
               {/* Action Grid */}
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.13 }} className="grid grid-cols-4 gap-2 mb-8">
                 {([
-                  { label: 'Buy',      Icon: ArrowDownLeft,  primary: true,  fn: () => { setTradeType('buy');  setScreen('trade'); } },
-                  { label: 'Sell',     Icon: ArrowUpRight,   primary: false, fn: () => { setTradeType('sell'); setScreen('trade'); } },
-                  { label: 'Orders',   Icon: Clock,          primary: false, fn: () => setScreen('orders') },
-                  { label: 'Messages', Icon: MessageCircle,  primary: false, fn: () => setScreen('chats') },
+                  { label: 'Send',     Icon: ArrowUpRight,   primary: true,  fn: () => { setTradeType('buy');  setScreen('trade'); } },
+                  { label: 'Receive',  Icon: ArrowDownLeft,  primary: false, fn: () => { setTradeType('sell'); setScreen('trade'); } },
+                  { label: 'Activity', Icon: Activity,       primary: false, fn: () => setScreen('orders') },
+                  { label: 'Scan',     Icon: QrCode,         primary: false, fn: () => setScreen('chats') },
                 ] as const).map(({ label, Icon, primary, fn }) => (
                   <motion.button key={label} whileTap={{ scale: 0.94 }} onClick={fn} className="flex flex-col items-center gap-2">
                     <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={
