@@ -1,7 +1,8 @@
-'use client';
+"use client";
 
-import { Loader2, Zap } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion } from "framer-motion";
+import { Zap, Loader2 } from "lucide-react";
+import Link from "next/link";
 
 interface LandingPageProps {
   loginForm: { username: string; password: string };
@@ -19,74 +20,58 @@ export function LandingPage({
   loginForm, setLoginForm, authMode, setAuthMode,
   handleUserLogin, handleUserRegister, isLoggingIn, loginError, setLoginError,
 }: LandingPageProps) {
-  const submit = () => {
-    setLoginError('');
-    authMode === 'login' ? handleUserLogin() : handleUserRegister();
-  };
+  const submit = () => authMode === 'login' ? handleUserLogin() : handleUserRegister();
 
   return (
-    <div className="flex flex-col h-full w-full items-center justify-center relative"
-      style={{ background: '#080810' }}>
-
-      {/* Ambient glow */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute rounded-full" style={{
-          top: '-15%', left: '-10%', width: '65%', height: '55%',
-          background: 'radial-gradient(ellipse, rgba(124,58,237,0.13) 0%, transparent 70%)',
-          filter: 'blur(60px)',
-        }} />
-        <div className="absolute rounded-full" style={{
-          bottom: '-20%', right: '-10%', width: '60%', height: '55%',
-          background: 'radial-gradient(ellipse, rgba(16,185,129,0.09) 0%, transparent 70%)',
-          filter: 'blur(60px)',
-        }} />
+    <div className="min-h-screen bg-[#060606] text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Ambient background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-orange-500/[0.03] rounded-full blur-[150px]" />
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-white/[0.01] rounded-full blur-[200px]" />
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
-        className="relative z-10 w-full px-6"
-        style={{ maxWidth: 400 }}
-      >
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-10">
-          <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4"
-            style={{ background: 'linear-gradient(135deg, #059669, #7c3aed)', boxShadow: '0 0 32px rgba(124,58,237,0.35)' }}>
-            <Zap size={26} className="fill-white text-white" />
+      <div className="w-full max-w-sm relative z-10">
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-2.5 mb-4">
+            <Zap className="w-7 h-7 text-white fill-white" />
+            <span className="text-[22px] leading-none">
+              <span className="font-bold text-white">Blip</span>{' '}
+              <span className="italic text-white/90">money</span>
+            </span>
           </div>
-          <h1 style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.04em', color: '#fff', marginBottom: 4 }}>Blip Money</h1>
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', fontWeight: 500 }}>P2P Settlement Network</p>
+          <h1 className="text-xl font-bold mb-2">Welcome</h1>
+          <p className="text-sm text-gray-500">P2P trading, powered by crypto</p>
         </div>
 
-        {/* Toggle */}
-        <div className="flex rounded-[14px] p-1 mb-6"
-          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-          {(['login', 'register'] as const).map(m => (
-            <button key={m} onClick={() => { setAuthMode(m); setLoginError(''); }}
-              className="flex-1 py-2 rounded-[10px] text-[13px] font-black uppercase tracking-wider transition-all"
-              style={{
-                background: authMode === m ? 'rgba(255,255,255,0.09)' : 'transparent',
-                color: authMode === m ? '#fff' : 'rgba(255,255,255,0.3)',
-                border: 'none', cursor: 'pointer',
-              }}>
-              {m === 'login' ? 'Sign In' : 'Register'}
-            </button>
-          ))}
+        {/* Tabs */}
+        <div className="flex mb-4 bg-white/[0.03] rounded-xl p-1">
+          <button
+            onClick={() => { setAuthMode('login'); setLoginError(''); }}
+            className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              authMode === 'login' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Sign In
+          </button>
+          <button
+            onClick={() => { setAuthMode('register'); setLoginError(''); }}
+            className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              authMode === 'register' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Create Account
+          </button>
         </div>
 
-        {/* Error */}
-        {loginError && (
-          <div className="rounded-[14px] px-4 py-3 mb-4 text-sm"
-            style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171' }}>
-            {loginError}
-          </div>
-        )}
+        <div className="bg-white/[0.02] rounded-2xl border border-white/[0.04] p-6 space-y-4">
+          {loginError && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400">
+              {loginError}
+            </div>
+          )}
 
-        {/* Fields */}
-        <div className="flex flex-col gap-3 mb-4">
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: 6 }}>Username</label>
+            <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Username</label>
             <input
               type="text"
               value={loginForm.username}
@@ -94,52 +79,50 @@ export function LandingPage({
               placeholder={authMode === 'register' ? 'Choose a username' : 'Your username'}
               autoCapitalize="none"
               autoCorrect="off"
+              className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
               onKeyDown={e => e.key === 'Enter' && submit()}
-              style={{
-                width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 14, padding: '13px 16px', color: '#fff', fontSize: 15, outline: 'none',
-                boxSizing: 'border-box', fontFamily: 'inherit',
-              }}
             />
           </div>
+
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.1em', display: 'block', marginBottom: 6 }}>Password</label>
+            <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Password</label>
             <input
               type="password"
               value={loginForm.password}
               onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
-              placeholder={authMode === 'register' ? 'Min 6 characters' : 'Your password'}
+              placeholder={authMode === 'register' ? 'Min. 6 characters' : '••••••••'}
+              className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
               onKeyDown={e => e.key === 'Enter' && submit()}
-              style={{
-                width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 14, padding: '13px 16px', color: '#fff', fontSize: 15, outline: 'none',
-                boxSizing: 'border-box', fontFamily: 'inherit',
-              }}
             />
           </div>
+
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={submit}
+            disabled={isLoggingIn || !loginForm.username || !loginForm.password}
+            className={`w-full py-3 rounded-xl text-sm font-bold transition-colors disabled:opacity-50 ${
+              authMode === 'login'
+                ? 'bg-white text-black hover:bg-white/90'
+                : 'bg-white/10 border border-white/10 text-white hover:bg-white/20'
+            }`}
+          >
+            {isLoggingIn
+              ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />{authMode === 'login' ? 'Signing in...' : 'Creating...'}</span>
+              : authMode === 'login' ? 'Sign In' : 'Create Account'}
+          </motion.button>
+
+          <p className="text-[11px] text-gray-500 text-center">
+            Connect your wallet after signing in to enable on-chain trading
+          </p>
         </div>
 
-        {/* Submit */}
-        <motion.button
-          whileTap={{ scale: 0.97 }}
-          onClick={submit}
-          disabled={isLoggingIn}
-          className="w-full flex items-center justify-center gap-2"
-          style={{
-            height: 54, borderRadius: 16, fontSize: 15, fontWeight: 900, border: 'none',
-            background: isLoggingIn ? 'rgba(255,255,255,0.08)' : '#fff',
-            color: isLoggingIn ? 'rgba(255,255,255,0.3)' : '#090909',
-            cursor: isLoggingIn ? 'not-allowed' : 'pointer',
-          }}>
-          {isLoggingIn
-            ? <Loader2 size={18} className="animate-spin" />
-            : authMode === 'login' ? 'Sign In' : 'Create Account'}
-        </motion.button>
-
-        <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: 20, lineHeight: 1.5 }}>
-          Connect your Solana wallet after signing in to enable trading
-        </p>
-      </motion.div>
+        <div className="mt-8 text-center space-y-2">
+          <p className="text-[10px] text-white/15 font-mono">Blip Money v1.0</p>
+          <div className="flex items-center justify-center gap-3 text-[10px] text-white/20">
+            <Link href="/merchant" className="hover:text-white/40 transition-colors">Merchant Portal</Link>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
