@@ -2277,181 +2277,203 @@ export default function Home() {
               initial={{ y: 50, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="flex-1 rounded-t-[32px] px-5 pt-6 pb-6 overflow-y-auto smooth-scroll" style={{ background: 'rgba(10,10,20,0.95)', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-[17px] font-semibold text-white">Trade</h2>
-                <div className="flex items-center gap-1 bg-neutral-900 rounded-full p-1">
-                  {(["buy", "sell"] as const).map(type => (
-                    <button
-                      key={type}
-                      onClick={() => setTradeType(type)}
-                      className={`px-4 py-1.5 rounded-full text-[13px] font-medium transition-all ${
-                        tradeType === type
-                          ? "bg-white/10 text-white"
-                          : "text-neutral-500"
-                      }`}
-                    >
-                      {type === "buy" ? "Buy" : "Sell"}
-                    </button>
-                  ))}
+              className="flex-1 rounded-t-[36px] px-5 pt-6 pb-28 overflow-y-auto smooth-scroll" style={{ background: 'rgba(8,8,16,0.97)', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+
+              {/* Rate strip with mini sparkline */}
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="rounded-[22px] p-4 mb-5 flex items-center gap-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div className="flex-1">
+                  <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 3 }}>Live Rate</p>
+                  <div className="flex items-baseline gap-1.5">
+                    <span style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1 }}>{currentRate}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.3)' }}>AED/USDT</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)' }}>
+                      <ArrowUpRight className="w-2.5 h-2.5" style={{ color: '#10b981' }} />
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#10b981' }}>Stable</span>
+                    </div>
+                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', fontWeight: 600 }}>AED Pegged</span>
+                  </div>
                 </div>
+                {/* Mini sparkline */}
+                <svg width="90" height="40" viewBox="0 0 90 40" className="shrink-0">
+                  <defs>
+                    <linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+                      <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+                    </linearGradient>
+                    <filter id="glow2"><feGaussianBlur stdDeviation="2" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+                  </defs>
+                  <path d="M0,28 L10,26 L20,29 L30,24 L40,22 L50,25 L60,19 L70,16 L80,18 L90,14" fill="none" stroke="#10b981" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M0,28 L10,26 L20,29 L30,24 L40,22 L50,25 L60,19 L70,16 L80,18 L90,14 L90,40 L0,40 Z" fill="url(#rg)" />
+                  <circle cx="90" cy="14" r="3" fill="#10b981" filter="url(#glow2)" />
+                  <circle cx="90" cy="14" r="6" fill="none" stroke="#10b981" strokeWidth="1" opacity="0.3" />
+                </svg>
+              </motion.div>
+
+              {/* Buy / Sell big toggle */}
+              <div className="flex gap-2.5 mb-6">
+                {([
+                  { type: 'buy' as const, label: 'Buy USDT', sub: 'Pay AED', Icon: ArrowDownLeft },
+                  { type: 'sell' as const, label: 'Sell USDT', sub: 'Get AED', Icon: ArrowUpRight },
+                ] as const).map(({ type, label, sub, Icon }) => (
+                  <motion.button
+                    key={type}
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => setTradeType(type)}
+                    className="flex-1 flex flex-col items-start gap-1.5 rounded-[24px] p-4"
+                    style={tradeType === type
+                      ? { background: '#ffffff', boxShadow: '0 8px 32px rgba(255,255,255,0.1)' }
+                      : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}
+                  >
+                    <div className="w-9 h-9 rounded-[14px] flex items-center justify-center mb-1"
+                      style={tradeType === type ? { background: 'rgba(0,0,0,0.08)' } : { background: 'rgba(255,255,255,0.06)' }}>
+                      <Icon className="w-5 h-5" style={{ color: tradeType === type ? '#000' : 'rgba(255,255,255,0.4)' }} strokeWidth={2.5} />
+                    </div>
+                    <p style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.02em', color: tradeType === type ? '#000' : '#fff' }}>{label}</p>
+                    <p style={{ fontSize: 10, fontWeight: 700, color: tradeType === type ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{sub}</p>
+                  </motion.button>
+                ))}
               </div>
 
-              {/* Amount Input */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-                className="glass-card rounded-2xl p-4 mb-4 hover-lift"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[13px] text-neutral-500">
-                    {tradeType === "buy" ? "You pay" : "You sell"}
-                  </span>
-                  {solanaWallet.connected ? (
-                    <span className="text-[13px] text-neutral-500">
-                      Balance: <span className="text-[#26A17B]">{solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '...'}</span> USDT
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => setShowWalletModal(true)}
-                      className="text-[13px] text-white/70 hover:text-white transition-colors"
-                    >
-                      Connect Wallet
-                    </button>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
+              {/* Amount — big centered input */}
+              <div className="text-center mb-5">
+                <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.38em', color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase', marginBottom: 12 }}>
+                  {tradeType === 'buy' ? 'You Pay' : 'You Sell'}
+                </p>
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <span style={{ fontSize: 44, fontWeight: 900, letterSpacing: '-0.04em', color: 'rgba(255,255,255,0.2)', lineHeight: 1 }}>₮</span>
                   <input
                     type="text"
                     inputMode="decimal"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
                     placeholder="0"
-                    className="flex-1 text-[32px] font-semibold text-white bg-transparent outline-none placeholder:text-neutral-700 focus-glow"
+                    style={{ fontSize: 64, fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1, background: 'transparent', border: 'none', outline: 'none', color: '#fff', width: amount ? `${Math.max(60, amount.length * 38)}px` : '60px', textAlign: 'center', minWidth: 60, maxWidth: 220 }}
                   />
-                  <div className="flex items-center gap-2 bg-neutral-800/80 rounded-xl px-3 py-2">
-                    <div className="w-6 h-6 rounded-full bg-[#26A17B] flex items-center justify-center">
-                      <span className="text-white text-[10px] font-bold">₮</span>
-                    </div>
-                    <span className="text-[15px] font-medium text-white">USDT</span>
-                  </div>
+                  <span style={{ fontSize: 18, fontWeight: 900, color: 'rgba(255,255,255,0.3)' }}>USDT</span>
                 </div>
-              </motion.div>
-
-              {/* Swap Icon */}
-              <div className="flex justify-center -my-2 relative z-10">
-                <div className="w-10 h-10 rounded-full bg-neutral-800 border-4 border-neutral-950 flex items-center justify-center">
-                  <ArrowDownUp className="w-4 h-4 text-neutral-400" />
+                {/* Fiat output */}
+                <div className="flex items-center justify-center gap-2">
+                  <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: '-0.02em', color: 'rgba(255,255,255,0.35)' }}>
+                    د.إ {amount && parseFloat(amount) > 0 ? parseFloat(fiatAmount).toLocaleString() : '0'}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.2)' }}>AED</span>
                 </div>
+                {/* Balance indicator */}
+                {solanaWallet.connected && (
+                  <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.18)', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                    Balance: {solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : '—'} USDT
+                  </p>
+                )}
               </div>
 
-              {/* Output */}
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 }}
-                className="glass-card rounded-2xl p-4 mb-3 hover-lift"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[13px] text-neutral-500">
-                    {tradeType === "buy" ? "You receive" : "You get"}
-                  </span>
-                  <span className="text-[13px] text-neutral-500">Rate: 1 USDC = {currentRate} AED</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <p className="flex-1 text-[32px] font-semibold text-white">
-                    <span className="text-neutral-400">د.إ</span> {amount ? parseFloat(fiatAmount).toLocaleString() : "0"}
-                  </p>
-                  <div className="flex items-center gap-2 bg-neutral-800/80 rounded-xl px-3 py-2">
-                    <span className="text-[15px]">🇦🇪</span>
-                    <span className="text-[15px] font-medium text-white">AED</span>
-                  </div>
-                </div>
-              </motion.div>
+              {/* Separator */}
+              <div className="flex items-center gap-3 mb-5">
+                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.05)' }} />
+                <motion.button whileTap={{ scale: 0.9 }} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <ArrowDownUp className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.4)' }} />
+                </motion.button>
+                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.05)' }} />
+              </div>
 
-              {/* Fee Breakdown - Subtle inline */}
+              {/* Fee pill — shown when amount > 0 */}
               {amount && parseFloat(amount) > 0 && (
-                <div className="flex items-center justify-center gap-3 text-[10px] text-neutral-600 mb-3">
-                  <span>Fee: {(currentFees.totalFee * 100).toFixed(1)}%</span>
-                  <span className="text-neutral-700">•</span>
-                  <span className="text-neutral-500">Trader gets {(currentFees.traderCut * 100).toFixed(2)}%</span>
-                </div>
+                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex items-center justify-center gap-3 mb-5">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <span style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.25)' }}>Fee</span>
+                    <span style={{ fontSize: 11, fontWeight: 900, color: '#fbbf24' }}>{(currentFees.totalFee * 100).toFixed(1)}%</span>
+                    <div style={{ width: 1, height: 10, background: 'rgba(255,255,255,0.08)' }} />
+                    <span style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.2)' }}>Trader</span>
+                    <span style={{ fontSize: 11, fontWeight: 900, color: '#10b981' }}>{(currentFees.traderCut * 100).toFixed(2)}%</span>
+                  </div>
+                </motion.div>
               )}
 
-              {/* Payment Method - Compact */}
-              <div className="mb-4 flex items-center justify-between">
-                <p className="text-[13px] text-neutral-500">Pay via</p>
-                <div className="flex items-center gap-1 bg-neutral-900 rounded-lg p-1">
-                  <button
-                    onClick={() => setPaymentMethod("bank")}
-                    className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all flex items-center gap-1.5 ${
-                      paymentMethod === "bank"
-                        ? "bg-neutral-800 text-white"
-                        : "text-neutral-500"
-                    }`}
-                  >
-                    <Building2 className="w-3.5 h-3.5" />
-                    Bank
-                  </button>
-                  <button
-                    onClick={() => setPaymentMethod("cash")}
-                    className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all flex items-center gap-1.5 ${
-                      paymentMethod === "cash"
-                        ? "bg-neutral-800 text-white"
-                        : "text-neutral-500"
-                    }`}
-                  >
-                    <Banknote className="w-3.5 h-3.5" />
-                    Cash
-                  </button>
-                </div>
-              </div>
-
-              {/* Speed Options */}
-              <div className="mb-5">
-                <p className="text-[13px] text-neutral-500 mb-3">Matching priority</p>
-                <div className="flex gap-2">
+              {/* Payment Method — big cards */}
+              <div className="mb-4">
+                <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 10 }}>Pay Via</p>
+                <div className="flex gap-2.5">
                   {([
-                    { key: "fast", label: "Fastest" },
-                    { key: "best", label: "Best rate" },
-                    { key: "cheap", label: "Cheapest" },
-                  ] as const).map(({ key, label }) => (
-                    <button
-                      key={key}
-                      onClick={() => setTradePreference(key)}
-                      className={`flex-1 py-2.5 rounded-xl text-[13px] font-medium transition-all ${
-                        tradePreference === key
-                          ? "bg-white/10 text-white ring-1 ring-white/10"
-                          : "bg-neutral-900 text-neutral-400"
-                      }`}
+                    { method: 'bank' as const, label: 'Bank Transfer', sub: 'Wire / IBAN', Icon: Building2 },
+                    { method: 'cash' as const, label: 'Cash', sub: 'Meet in person', Icon: Banknote },
+                  ] as const).map(({ method, label, sub, Icon }) => (
+                    <motion.button
+                      key={method}
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => setPaymentMethod(method)}
+                      className="flex-1 flex items-center gap-3 rounded-[20px] p-3.5"
+                      style={paymentMethod === method
+                        ? { background: 'rgba(124,58,237,0.18)', border: '1px solid rgba(124,58,237,0.4)' }
+                        : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
                     >
-                      {label}
-                    </button>
+                      <div className="w-8 h-8 rounded-[12px] flex items-center justify-center shrink-0"
+                        style={paymentMethod === method ? { background: 'rgba(124,58,237,0.3)' } : { background: 'rgba(255,255,255,0.06)' }}>
+                        <Icon className="w-4 h-4" style={{ color: paymentMethod === method ? '#a78bfa' : 'rgba(255,255,255,0.35)' }} />
+                      </div>
+                      <div className="text-left">
+                        <p style={{ fontSize: 13, fontWeight: 900, color: paymentMethod === method ? '#a78bfa' : '#fff', letterSpacing: '-0.01em' }}>{label}</p>
+                        <p style={{ fontSize: 9, fontWeight: 700, color: paymentMethod === method ? 'rgba(167,139,250,0.55)' : 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{sub}</p>
+                      </div>
+                    </motion.button>
                   ))}
                 </div>
               </div>
 
-              {/* CTA */}
+              {/* Speed Options — compact chips */}
+              <div className="mb-6">
+                <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 10 }}>Priority</p>
+                <div className="flex gap-2">
+                  {([
+                    { key: 'fast' as const, label: 'Fastest', emoji: '⚡', fee: '3%' },
+                    { key: 'best' as const, label: 'Best Rate', emoji: '★', fee: '2.5%' },
+                    { key: 'cheap' as const, label: 'Cheapest', emoji: '◎', fee: '1.5%' },
+                  ] as const).map(({ key, label, emoji, fee }) => (
+                    <motion.button
+                      key={key}
+                      whileTap={{ scale: 0.94 }}
+                      onClick={() => setTradePreference(key)}
+                      className="flex-1 flex flex-col items-center gap-1 rounded-[18px] py-3"
+                      style={tradePreference === key
+                        ? { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }
+                        : { background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.04)' }}
+                    >
+                      <span style={{ fontSize: 16 }}>{emoji}</span>
+                      <span style={{ fontSize: 10, fontWeight: 900, color: tradePreference === key ? '#fff' : 'rgba(255,255,255,0.3)', letterSpacing: '-0.01em' }}>{label}</span>
+                      <span style={{ fontSize: 8, fontWeight: 900, color: tradePreference === key ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{fee}</span>
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+
+              {/* CTA — big primary button */}
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 onClick={startTrade}
                 disabled={!amount || parseFloat(amount) <= 0 || isLoading || !userId}
-                className={`w-full py-4 rounded-2xl text-[17px] font-semibold transition-all flex items-center justify-center gap-2 press-effect ${
-                  amount && parseFloat(amount) > 0 && !isLoading
-                    ? "bg-white/10 text-white glow-accent"
-                    : "bg-neutral-900 text-neutral-600"
-                }`}
+                className="w-full flex items-center justify-center gap-3"
+                style={{
+                  height: 72, borderRadius: 28, fontSize: 18, fontWeight: 900,
+                  ...(amount && parseFloat(amount) > 0 && !isLoading
+                    ? { background: '#ffffff', color: '#000', boxShadow: '0 16px 48px rgba(255,255,255,0.09)' }
+                    : { background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.07)' })
+                }}
               >
-                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Continue"}
+                {isLoading
+                  ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'inherit' }} />
+                  : amount && parseFloat(amount) > 0
+                    ? <>{tradeType === 'buy' ? 'Buy' : 'Sell'} {amount} USDT <ArrowUpRight className="w-5 h-5" /></>
+                    : 'Enter Amount'
+                }
               </motion.button>
 
               {/* Create Offer */}
               <button
                 onClick={() => setScreen("create-offer")}
-                className="w-full mt-3 py-3 text-[15px] text-neutral-500 font-medium"
+                className="w-full mt-4 py-3 text-center"
+                style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.22)' }}
               >
-                Have a large amount? <span className="text-white">Create an offer</span>
+                Large amount? <span style={{ color: '#a78bfa' }}>Create an offer →</span>
               </button>
             </motion.div>
 
@@ -3856,104 +3878,75 @@ export default function Home() {
             </div>
 
             {/* Activity Tabs */}
-            <div className="px-5 mb-4">
-              <div className="flex bg-neutral-900 rounded-xl p-1">
-                <button
-                  onClick={() => setActivityTab('active')}
-                  className={`flex-1 py-2.5 rounded-lg text-[13px] font-medium transition-all flex items-center justify-center gap-2 ${
-                    activityTab === 'active'
-                      ? 'bg-neutral-800 text-white'
-                      : 'text-neutral-500'
-                  }`}
-                >
-                  <motion.div
-                    className="w-2 h-2 rounded-full bg-white/10"
-                    animate={activityTab === 'active' ? { scale: [1, 1.3, 1] } : {}}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                  />
-                  Active
-                  {pendingOrders.length > 0 && (
-                    <span className="px-1.5 py-0.5 bg-white/10 text-white/70 text-[10px] rounded-full">
-                      {pendingOrders.length}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={() => setActivityTab('completed')}
-                  className={`flex-1 py-2.5 rounded-lg text-[13px] font-medium transition-all flex items-center justify-center gap-2 ${
-                    activityTab === 'completed'
-                      ? 'bg-neutral-800 text-white'
-                      : 'text-neutral-500'
-                  }`}
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  Completed
-                  {completedOrders.length > 0 && (
-                    <span className="px-1.5 py-0.5 bg-white/10 text-white text-[10px] rounded-full">
-                      {completedOrders.length}
-                    </span>
-                  )}
-                </button>
+            <div className="px-5 mb-5">
+              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                {([
+                  { tab: 'active' as const, label: 'Active', count: pendingOrders.length },
+                  { tab: 'completed' as const, label: 'Completed', count: completedOrders.length },
+                ] as const).map(({ tab, label, count }) => (
+                  <motion.button key={tab} whileTap={{ scale: 0.94 }} onClick={() => setActivityTab(tab)}
+                    className="shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full"
+                    style={activityTab === tab
+                      ? { background: '#fff', color: '#000' }
+                      : { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                    {tab === 'active' && activityTab === 'active' && (
+                      <motion.div className="w-1.5 h-1.5 rounded-full bg-[#10b981]" animate={{ scale: [1, 1.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
+                    )}
+                    <span style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</span>
+                    {count > 0 && (
+                      <span style={{ fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: 99, background: activityTab === tab ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.08)', color: activityTab === tab ? '#000' : 'rgba(255,255,255,0.4)' }}>{count}</span>
+                    )}
+                  </motion.button>
+                ))}
               </div>
             </div>
 
-            <div className="flex-1 px-5 pb-24 overflow-y-auto">
+            <div className="flex-1 px-5 pb-28 overflow-y-auto">
               {/* Active Orders Tab */}
               {activityTab === 'active' && (
                 <>
                   {pendingOrders.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center py-20">
-                      <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center mb-4">
-                        <Clock className="w-8 h-8 text-neutral-600" />
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                      <div className="w-16 h-16 rounded-[20px] flex items-center justify-center mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <Clock className="w-7 h-7" style={{ color: 'rgba(255,255,255,0.2)' }} />
                       </div>
-                      <p className="text-[17px] font-medium text-white mb-1">No active trades</p>
-                      <p className="text-[15px] text-neutral-500">Start a new trade from the home screen</p>
+                      <p style={{ fontSize: 20, fontWeight: 900, letterSpacing: '-0.03em', marginBottom: 6 }}>No active trades</p>
+                      <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', fontWeight: 600 }}>Start a new trade from the home screen</p>
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      {pendingOrders.map(order => (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {pendingOrders.map((order, i) => (
                         <motion.button
                           key={order.id}
+                          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={() => {
-                            setActiveOrderId(order.id);
-                            setScreen("order");
-                          }}
-                          className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center gap-3"
+                          onClick={() => { setActiveOrderId(order.id); setScreen("order"); }}
+                          className="w-full flex items-center gap-3 rounded-[22px]"
+                          style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
                         >
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5">
-                            <motion.div
-                              className="w-2 h-2 rounded-full bg-white/10"
-                              animate={{ scale: [1, 1.3, 1] }}
-                              transition={{ duration: 1.5, repeat: Infinity }}
-                            />
+                          <div className="w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0"
+                            style={{ background: order.type === 'buy' ? 'rgba(16,185,129,0.12)' : 'rgba(124,58,237,0.12)', border: `1px solid ${order.type === 'buy' ? 'rgba(16,185,129,0.25)' : 'rgba(124,58,237,0.25)'}` }}>
+                            <motion.div className="w-2 h-2 rounded-full" style={{ background: order.type === 'buy' ? '#10b981' : '#a78bfa', boxShadow: `0 0 8px ${order.type === 'buy' ? '#10b981' : '#a78bfa'}` }} animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
                           </div>
-                          <div className="flex-1 text-left">
-                            <p className="text-[15px] font-medium text-white">
-                              {order.type === "buy" ? "Buying" : "Selling"} ${order.cryptoAmount} USDC
-                            </p>
-                            <p className="text-[13px] text-neutral-500">
-                              د.إ {parseFloat(order.fiatAmount).toLocaleString()}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-[13px] font-medium text-white/70">
-                              Step {order.step}/4
-                            </p>
-                            {order.dbStatus === 'pending' && order.expiresAt ? (
-                              <p className={`text-[11px] font-mono ${
-                                Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)) < 60
-                                  ? "text-red-400"
-                                  : "text-white/70"
-                              }`}>
-                                {(() => {
-                                  const secs = Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000));
-                                  return `${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, '0')}`;
-                                })()}
+                          <div className="flex-1 text-left min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <p style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.02em' }}>
+                                {order.type === 'buy' ? 'Buying' : 'Selling'} {order.cryptoAmount} USDT
                               </p>
-                            ) : (
-                              <p className="text-[11px] text-neutral-600">{order.createdAt.toLocaleDateString()}</p>
-                            )}
+                              <p style={{ fontSize: 15, fontWeight: 900, color: order.type === 'buy' ? '#10b981' : '#a78bfa' }}>
+                                {order.type === 'buy' ? '+' : '-'} د.إ{parseFloat(order.fiatAmount).toLocaleString()}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 99, background: order.type === 'buy' ? 'rgba(16,185,129,0.12)' : 'rgba(124,58,237,0.12)', color: order.type === 'buy' ? '#10b981' : '#a78bfa' }}>Step {order.step}/4</span>
+                              {order.dbStatus === 'pending' && order.expiresAt ? (
+                                <span style={{ fontSize: 9, fontWeight: 700, fontFamily: 'monospace', color: Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)) < 60 ? '#f87171' : 'rgba(255,255,255,0.25)' }}>
+                                  {(() => { const s = Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)); return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`; })()}
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.2)' }}>{order.createdAt.toLocaleDateString()}</span>
+                              )}
+                            </div>
                           </div>
                         </motion.button>
                       ))}
@@ -3966,39 +3959,41 @@ export default function Home() {
               {activityTab === 'completed' && (
                 <>
                   {completedOrders.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center py-20">
-                      <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center mb-4">
-                        <Check className="w-8 h-8 text-neutral-600" />
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                      <div className="w-16 h-16 rounded-[20px] flex items-center justify-center mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                        <Check className="w-7 h-7" style={{ color: 'rgba(255,255,255,0.2)' }} />
                       </div>
-                      <p className="text-[17px] font-medium text-white mb-1">No completed trades</p>
-                      <p className="text-[15px] text-neutral-500">Your completed transactions will appear here</p>
+                      <p style={{ fontSize: 20, fontWeight: 900, letterSpacing: '-0.03em', marginBottom: 6 }}>No completed trades</p>
+                      <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', fontWeight: 600 }}>Completed transactions appear here</p>
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      {completedOrders.map(order => (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {completedOrders.map((order, i) => (
                         <motion.button
                           key={order.id}
+                          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
                           whileTap={{ scale: 0.98 }}
-                          onClick={() => {
-                            setActiveOrderId(order.id);
-                            setScreen("order");
-                          }}
-                          className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center gap-3"
+                          onClick={() => { setActiveOrderId(order.id); setScreen("order"); }}
+                          className="w-full flex items-center gap-3 rounded-[22px]"
+                          style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}
                         >
-                          <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/5">
-                            <Check className="w-5 h-5 text-white" />
+                          <div className="w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0"
+                            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                            <Check className="w-5 h-5" style={{ color: '#10b981' }} />
                           </div>
-                          <div className="flex-1 text-left">
-                            <p className="text-[15px] font-medium text-white">
-                              {order.type === "buy" ? "Bought" : "Sold"} ${order.cryptoAmount} USDC
-                            </p>
-                            <p className="text-[13px] text-neutral-500">
-                              د.إ {parseFloat(order.fiatAmount).toLocaleString()}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-[13px] font-medium text-white">Completed</p>
-                            <p className="text-[11px] text-neutral-600">{order.createdAt.toLocaleDateString()}</p>
+                          <div className="flex-1 text-left min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <p style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.02em' }}>
+                                {order.type === 'buy' ? 'Bought' : 'Sold'} {order.cryptoAmount} USDT
+                              </p>
+                              <p style={{ fontSize: 15, fontWeight: 900, color: '#10b981' }}>
+                                {order.type === 'buy' ? '+' : '-'} د.إ{parseFloat(order.fiatAmount).toLocaleString()}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 99, background: 'rgba(16,185,129,0.1)', color: '#10b981' }}>Done</span>
+                              <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.2)' }}>{order.createdAt.toLocaleDateString()}</span>
+                            </div>
                           </div>
                         </motion.button>
                       ))}
@@ -4086,27 +4081,24 @@ export default function Home() {
 
               {/* Wallet */}
               <div className="mb-6">
-                <p className="text-[13px] text-neutral-500 mb-3 uppercase tracking-wide">Solana Wallet</p>
-                <div className="bg-neutral-900 rounded-2xl p-4">
+                <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 12 }}>Solana Wallet</p>
+                <div className="rounded-[22px] p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.055)' }}>
                   <div className="flex items-center gap-3 mb-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      solanaWallet.connected
-                        ? 'bg-white/10'
-                        : 'bg-neutral-700'
-                    }`}>
-                      <Wallet className="w-5 h-5 text-white" />
+                    <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0"
+                      style={{ background: solanaWallet.connected ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)', border: `1px solid ${solanaWallet.connected ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.07)'}` }}>
+                      <Wallet className="w-5 h-5" style={{ color: solanaWallet.connected ? '#10b981' : 'rgba(255,255,255,0.4)' }} />
                     </div>
-                    <div className="flex-1">
-                      <p className="text-[13px] text-neutral-500">
+                    <div className="flex-1 min-w-0">
+                      <p style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.25)', marginBottom: 3 }}>
                         {solanaWallet.connected ? 'Solana Devnet' : 'Not Connected'}
                       </p>
-                      <p className="text-[15px] font-mono text-white">
+                      <p style={{ fontSize: 13, fontFamily: 'monospace', color: '#fff', fontWeight: 600 }}>
                         {solanaWallet.connected && solanaWallet.walletAddress
-                          ? `${solanaWallet.walletAddress.slice(0, 8)}...${solanaWallet.walletAddress.slice(-6)}`
+                          ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
                           : 'Connect your wallet'}
                       </p>
                     </div>
-                    <button
+                    <motion.button whileTap={{ scale: 0.9 }}
                       onClick={async () => {
                         if (solanaWallet.connected && solanaWallet.walletAddress) {
                           await copyToClipboard(solanaWallet.walletAddress);
@@ -4114,46 +4106,36 @@ export default function Home() {
                           setTimeout(() => setCopied(false), 2000);
                         }
                       }}
-                      className="p-2"
-                    >
-                      {copied ? (
-                        <Check className="w-5 h-5 text-white" />
-                      ) : (
-                        <Copy className="w-5 h-5 text-neutral-500" />
-                      )}
-                    </button>
+                      className="w-8 h-8 rounded-[10px] flex items-center justify-center"
+                      style={{ background: 'rgba(255,255,255,0.06)' }}>
+                      {copied ? <Check className="w-4 h-4" style={{ color: '#10b981' }} /> : <Copy className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.35)' }} />}
+                    </motion.button>
                   </div>
 
                   {/* Solana Balances */}
                   {solanaWallet.connected && (
-                    <div className="border-t border-neutral-800 pt-4 mt-4">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-neutral-800 rounded-xl p-3">
-                          <p className="text-[11px] text-neutral-500 mb-1">SOL Balance</p>
-                          <p className="text-[17px] font-semibold text-white">
-                            {solanaWallet.solBalance !== null ? solanaWallet.solBalance.toFixed(4) : '...'} SOL
+                    <div className="pt-3 mt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div className="flex gap-2 mb-3">
+                        <div className="flex-1 rounded-[14px] p-3" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                          <p style={{ fontSize: 7.5, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.2)', marginBottom: 4 }}>SOL</p>
+                          <p style={{ fontSize: 18, fontWeight: 900, color: '#a78bfa', letterSpacing: '-0.02em' }}>
+                            {solanaWallet.solBalance !== null ? solanaWallet.solBalance.toFixed(4) : '—'}
                           </p>
                         </div>
-                        <div className="bg-neutral-800 rounded-xl p-3">
-                          <p className="text-[11px] text-neutral-500 mb-1">USDT Balance</p>
-                          <p className="text-[17px] font-semibold text-white">
-                            {solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : '...'} USDT
+                        <div className="flex-1 rounded-[14px] p-3" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                          <p style={{ fontSize: 7.5, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.2)', marginBottom: 4 }}>USDT</p>
+                          <p style={{ fontSize: 18, fontWeight: 900, color: '#10b981', letterSpacing: '-0.02em' }}>
+                            {solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : '—'}
                           </p>
                         </div>
                       </div>
-                      <div className="flex gap-2 mt-3">
-                        <button
-                          onClick={() => solanaWallet.refreshBalances()}
-                          className="flex-1 py-2 text-[13px] text-neutral-400 hover:text-white transition-colors"
-                        >
+                      <div className="flex gap-2">
+                        <motion.button whileTap={{ scale: 0.96 }} onClick={() => solanaWallet.refreshBalances()} className="flex-1 py-2.5 rounded-[14px] text-center" style={{ background: 'rgba(255,255,255,0.04)', fontSize: 11, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.35)' }}>
                           Refresh
-                        </button>
-                        <button
-                          onClick={() => solanaWallet.disconnect()}
-                          className="flex-1 py-2 text-[13px] text-red-400 hover:text-red-300 transition-colors"
-                        >
+                        </motion.button>
+                        <motion.button whileTap={{ scale: 0.96 }} onClick={() => solanaWallet.disconnect()} className="flex-1 py-2.5 rounded-[14px] text-center" style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', fontSize: 11, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#f87171' }}>
                           Disconnect
-                        </button>
+                        </motion.button>
                       </div>
                     </div>
                   )}
@@ -4174,102 +4156,79 @@ export default function Home() {
               {/* Banks */}
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-[13px] text-neutral-500 uppercase tracking-wide">Bank Accounts</p>
-                  <button
-                    onClick={() => setShowAddBank(true)}
-                    className="w-8 h-8 rounded-full bg-neutral-900 flex items-center justify-center"
-                  >
-                    <Plus className="w-4 h-4 text-neutral-400" />
-                  </button>
+                  <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase' }}>Bank Accounts</p>
+                  <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowAddBank(true)}
+                    className="w-8 h-8 rounded-[10px] flex items-center justify-center"
+                    style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.25)' }}>
+                    <Plus className="w-4 h-4" style={{ color: '#a78bfa' }} />
+                  </motion.button>
                 </div>
-
-                {bankAccounts.map(acc => (
-                  <div key={acc.id} className="bg-neutral-900 rounded-2xl p-4 mb-2">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {bankAccounts.map(acc => (
+                    <div key={acc.id} className="flex items-center gap-3 rounded-[18px] p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.05)' }}>
                         <span className="text-lg">🏦</span>
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="text-[15px] font-medium text-white">{acc.bank}</p>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p style={{ fontSize: 14, fontWeight: 900, letterSpacing: '-0.01em' }}>{acc.bank}</p>
                           {acc.isDefault && (
-                            <span className="px-2 py-0.5 bg-white/5 text-white text-[11px] rounded-full">Default</span>
+                            <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: 99, background: 'rgba(16,185,129,0.12)', color: '#10b981' }}>Default</span>
                           )}
                         </div>
-                        <p className="text-[13px] text-neutral-500 font-mono">{acc.iban}</p>
+                        <p style={{ fontSize: 11, fontFamily: 'monospace', color: 'rgba(255,255,255,0.3)' }}>{acc.iban}</p>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
 
-              {/* Stats */}
-              <div>
-                <p className="text-[13px] text-neutral-500 mb-3 uppercase tracking-wide">Stats & Reputation</p>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-neutral-900 rounded-2xl p-4">
-                    <p className="text-[28px] font-semibold text-white">{completedOrders.length}</p>
-                    <p className="text-[13px] text-neutral-500">Trades</p>
-                  </div>
-                  <div className="bg-neutral-900 rounded-2xl p-4">
-                    <p className="text-[28px] font-semibold text-white">
-                      {completedOrders.reduce((s, o) => s + parseFloat(o.cryptoAmount), 0).toFixed(0)}
-                    </p>
-                    <p className="text-[13px] text-neutral-500">Volume</p>
-                  </div>
-                  <div className="bg-neutral-900 rounded-2xl p-4">
-                    <p className="text-[28px] font-semibold text-white">
-                      {completedOrders.length > 0 ? (completedOrders.length / (completedOrders.length + timedOutOrders.length) * 100).toFixed(0) : '—'}
-                    </p>
-                    <p className="text-[13px] text-neutral-500">Score %</p>
-                  </div>
+              {/* Stats & Reputation */}
+              <div className="mb-6">
+                <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 12 }}>Stats & Reputation</p>
+                <div className="flex gap-2.5 mb-3">
+                  {[
+                    { label: 'Trades', value: completedOrders.length.toString(), color: '#a78bfa' },
+                    { label: 'Volume', value: completedOrders.reduce((s, o) => s + parseFloat(o.cryptoAmount), 0).toFixed(0) + ' USDT', color: '#10b981' },
+                    { label: 'Score', value: completedOrders.length > 0 ? (completedOrders.length / (completedOrders.length + timedOutOrders.length) * 100).toFixed(0) + '%' : '—', color: '#fbbf24' },
+                  ].map(stat => (
+                    <div key={stat.label} className="flex-1 rounded-[18px] px-3 py-3" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.055)' }}>
+                      <p style={{ fontSize: 7.5, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.25)', marginBottom: 6 }}>{stat.label}</p>
+                      <p style={{ fontSize: 18, fontWeight: 900, color: stat.color, letterSpacing: '-0.02em' }}>{stat.value}</p>
+                    </div>
+                  ))}
                 </div>
-                {/* Reputation tier */}
                 {completedOrders.length > 0 && (
-                  <div className="mt-3 bg-neutral-900 rounded-2xl p-4 flex items-center justify-between">
+                  <div className="rounded-[18px] p-4 flex items-center justify-between" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
                     <div>
-                      <p className="text-[13px] font-medium text-white">Reputation Level</p>
-                      <p className="text-[11px] text-neutral-500 mt-0.5">
-                        {completedOrders.length >= 50 ? 'Elite Trader' :
-                         completedOrders.length >= 20 ? 'Trusted' :
-                         completedOrders.length >= 10 ? 'Established' :
-                         completedOrders.length >= 3 ? 'Emerging' : 'New Trader'}
+                      <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Reputation Tier</p>
+                      <p style={{ fontSize: 16, fontWeight: 900, letterSpacing: '-0.02em', color: '#fbbf24' }}>
+                        {completedOrders.length >= 50 ? 'Elite Trader' : completedOrders.length >= 20 ? 'Trusted' : completedOrders.length >= 10 ? 'Established' : completedOrders.length >= 3 ? 'Emerging' : 'New Trader'}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1">
-                      {[...Array(5)].map((_, i) => (
-                        <div
-                          key={i}
-                          className={`w-2 h-6 rounded-full ${
-                            i < (completedOrders.length >= 50 ? 5 : completedOrders.length >= 20 ? 4 : completedOrders.length >= 10 ? 3 : completedOrders.length >= 3 ? 2 : 1)
-                              ? 'bg-orange-400/80'
-                              : 'bg-neutral-800'
-                          }`}
-                        />
-                      ))}
+                    <div className="flex items-end gap-1">
+                      {[...Array(5)].map((_, i) => {
+                        const lvl = completedOrders.length >= 50 ? 5 : completedOrders.length >= 20 ? 4 : completedOrders.length >= 10 ? 3 : completedOrders.length >= 3 ? 2 : 1;
+                        return <div key={i} style={{ width: 4, height: 8 + i * 4, borderRadius: 3, background: i < lvl ? '#fbbf24' : 'rgba(255,255,255,0.07)' }} />;
+                      })}
                     </div>
                   </div>
                 )}
               </div>
 
               {/* Console & Analytics */}
-              <div className="mt-6">
-                <p className="text-[13px] text-neutral-500 mb-3 uppercase tracking-wide">Analytics</p>
-                <a
-                  href="/console"
-                  className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center justify-between hover:bg-neutral-800 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
-                      <Clock className="w-5 h-5 text-white/70" />
-                    </div>
-                    <div>
-                      <p className="text-[15px] font-medium text-white">Console</p>
-                      <p className="text-[12px] text-neutral-500">View timeouts & analytics</p>
-                    </div>
+              <div className="mb-6">
+                <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 12 }}>Analytics</p>
+                <a href="/console" className="flex items-center gap-3 rounded-[18px] p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0" style={{ background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.25)' }}>
+                    <Clock className="w-5 h-5" style={{ color: '#a78bfa' }} />
+                  </div>
+                  <div className="flex-1">
+                    <p style={{ fontSize: 14, fontWeight: 900, letterSpacing: '-0.01em' }}>Console</p>
+                    <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Timeouts & Analytics</p>
                   </div>
                   {timedOutOrders.length > 0 && (
-                    <span className="px-2 py-1 bg-white/5 text-white/70 text-[11px] rounded-full font-medium">
+                    <span style={{ fontSize: 10, fontWeight: 900, padding: '3px 8px', borderRadius: 99, background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)' }}>
                       {timedOutOrders.length} timeout{timedOutOrders.length !== 1 ? 's' : ''}
                     </span>
                   )}
