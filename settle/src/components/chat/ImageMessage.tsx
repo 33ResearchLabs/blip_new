@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X, Download, ExternalLink } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface ImageMessageProps {
   imageUrl: string;
@@ -18,7 +19,7 @@ export function ImageMessage({ imageUrl, caption, isOwn = false }: ImageMessageP
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(imageUrl);
+      const response = await fetchWithAuth(imageUrl);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');

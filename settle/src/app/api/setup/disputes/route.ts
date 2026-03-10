@@ -1,8 +1,18 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { requireAdminAuth } from '@/lib/middleware/auth';
 
 // Setup endpoint to run migrations for disputes feature
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Block in production
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ success: false, error: 'Disabled in production' }, { status: 403 });
+  }
+  // Require admin auth if configured
+  if (process.env.ADMIN_SECRET) {
+    const authError = requireAdminAuth(request);
+    if (authError) return authError;
+  }
   const results: string[] = [];
 
   try {

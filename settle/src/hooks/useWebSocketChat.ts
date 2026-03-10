@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useWebSocketChatContextOptional } from '@/context/WebSocketChatContext';
 import type { WSNewMessageEvent, WSTypingEvent, ActorType, MessageType } from '@/lib/websocket/types';
 
@@ -125,7 +126,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
     async (orderId: string, chatId: string) => {
       try {
         console.log('[Chat] Fetching messages for order:', orderId);
-        const res = await fetch(`/api/orders/${orderId}/messages`);
+        const res = await fetchWithAuth(`/api/orders/${orderId}/messages`);
         if (!res.ok) {
           console.log('[Chat] Messages API not available - using demo mode');
           return;
@@ -376,7 +377,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
       } else {
         // Fallback to HTTP API
         try {
-          const res = await fetch(`/api/orders/${window.orderId}/messages`, {
+          const res = await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -420,7 +421,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
       } else {
         // Fallback to HTTP API
         try {
-          await fetch(`/api/orders/${window.orderId}/messages`, {
+          await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -446,7 +447,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
       } else {
         // Fallback to HTTP API
         try {
-          await fetch(`/api/orders/${window.orderId}/typing`, {
+          await fetchWithAuth(`/api/orders/${window.orderId}/typing`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

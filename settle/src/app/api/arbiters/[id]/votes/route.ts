@@ -4,6 +4,7 @@ import {
   submitArbiterVote,
 } from '@/lib/arbiters/repository';
 import { query } from '@/lib/db';
+import { requireAuth } from '@/lib/middleware/auth';
 
 // GET - Get arbiter's pending votes
 export async function GET(
@@ -11,7 +12,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Authorization — mandatory
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { id: arbiterId } = await params;
+
+    // Verify the authenticated user is this arbiter
+    if (auth.actorId !== arbiterId) {
+      return NextResponse.json(
+        { success: false, error: 'You can only view your own votes' },
+        { status: 403 }
+      );
+    }
 
     // Get pending votes
     const pendingVotes = await getArbiterPendingVotes(arbiterId);
@@ -49,7 +62,19 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Authorization — mandatory
+    const authPost = await requireAuth(request);
+    if (authPost instanceof NextResponse) return authPost;
+
     const { id: arbiterId } = await params;
+
+    // Verify the authenticated user is this arbiter
+    if (authPost.actorId !== arbiterId) {
+      return NextResponse.json(
+        { success: false, error: 'You can only submit votes as yourself' },
+        { status: 403 }
+      );
+    }
     const body = await request.json();
     const { arbitration_id, vote, reasoning } = body;
 

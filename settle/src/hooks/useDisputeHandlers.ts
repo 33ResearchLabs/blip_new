@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, Notification } from "@/types/merchant";
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface UseDisputeHandlersParams {
   solanaWallet: any;
@@ -79,7 +80,7 @@ export function useDisputeHandlers({
       }
 
       // Submit dispute to API
-      const res = await fetch(`/api/orders/${disputeOrderId}/dispute`, {
+      const res = await fetchWithAuth(`/api/orders/${disputeOrderId}/dispute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -118,7 +119,7 @@ export function useDisputeHandlers({
   // ─── Fetch dispute info ───
   const fetchDisputeInfo = useCallback(async (orderId: string) => {
     try {
-      const res = await fetch(`/api/orders/${orderId}/dispute`);
+      const res = await fetchWithAuth(`/api/orders/${orderId}/dispute`);
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
@@ -136,7 +137,7 @@ export function useDisputeHandlers({
 
     setRequestingExtension(orderId);
     try {
-      const res = await fetch(`/api/orders/${orderId}/extension`, {
+      const res = await fetchWithAuth(`/api/orders/${orderId}/extension`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -178,7 +179,7 @@ export function useDisputeHandlers({
 
     setRequestingExtension(orderId);
     try {
-      const res = await fetch(`/api/orders/${orderId}/extension`, {
+      const res = await fetchWithAuth(`/api/orders/${orderId}/extension`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -223,7 +224,7 @@ export function useDisputeHandlers({
 
     setIsRespondingToResolution(true);
     try {
-      const res = await fetch(`/api/orders/${orderId}/dispute/confirm`, {
+      const res = await fetchWithAuth(`/api/orders/${orderId}/dispute/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

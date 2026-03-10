@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 export interface DirectChatMessage {
   id: string;
@@ -56,7 +57,7 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
     const mid = merchantIdRef.current;
     if (!mid) return;
     try {
-      const res = await fetch(`/api/merchant/direct-messages?merchant_id=${mid}`);
+      const res = await fetchWithAuth(`/api/merchant/direct-messages?merchant_id=${mid}`);
       if (!res.ok) return;
       const data = await res.json();
       if (data.success) {
@@ -73,7 +74,7 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
     const mid = merchantIdRef.current;
     if (!mid) return;
     try {
-      const res = await fetch(`/api/merchant/direct-messages?merchant_id=${mid}&target_id=${targetId}`);
+      const res = await fetchWithAuth(`/api/merchant/direct-messages?merchant_id=${mid}&target_id=${targetId}`);
       if (!res.ok) return;
       const data = await res.json();
       if (data.success && data.data.messages) {
@@ -164,7 +165,7 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
     setMessages(prev => [...prev, tempMsg]);
 
     try {
-      const res = await fetch('/api/merchant/direct-messages', {
+      const res = await fetchWithAuth('/api/merchant/direct-messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -199,7 +200,7 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
   const addContact = useCallback(async (targetId: string, targetType: 'user' | 'merchant') => {
     if (!merchantId) return;
     try {
-      const res = await fetch('/api/merchant/contacts', {
+      const res = await fetchWithAuth('/api/merchant/contacts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -219,7 +220,7 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
   const removeContactById = useCallback(async (contactId: string) => {
     if (!merchantId) return;
     try {
-      const res = await fetch(`/api/merchant/contacts?merchant_id=${merchantId}&contact_id=${contactId}`, {
+      const res = await fetchWithAuth(`/api/merchant/contacts?merchant_id=${merchantId}&contact_id=${contactId}`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -233,7 +234,7 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
   const toggleFavorite = useCallback(async (contactId: string, currentFav: boolean) => {
     if (!merchantId) return;
     try {
-      await fetch('/api/merchant/contacts', {
+      await fetchWithAuth('/api/merchant/contacts', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

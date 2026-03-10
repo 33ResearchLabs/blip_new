@@ -1,15 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
+import { requireAuth, canAccessOrder, forbiddenResponse } from '@/lib/middleware/auth';
+import { checkRateLimit, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
 
 // Create a dispute for an order
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limit: 10 dispute operations per minute
+  const rateLimitResponse = checkRateLimit(request, 'dispute:create', STRICT_LIMIT);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const { id: orderId } = await params;
     const body = await request.json();
+
+    // Require authentication
+    const auth = await requireAuth(request, body);
+    if (auth instanceof NextResponse) return auth;
+
+    // Verify access to this order
+    const canAccess = await canAccessOrder(auth, orderId);
+    if (!canAccess) {
+      return forbiddenResponse('You do not have access to this order');
+    }
+
     const { reason, description, initiated_by, user_id, merchant_id } = body;
 
     if (!reason) {

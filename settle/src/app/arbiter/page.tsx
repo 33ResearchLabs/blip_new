@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 // Dynamically import wallet
 const useSolanaWalletHook = () => {
@@ -129,7 +130,7 @@ export default function ArbiterDashboard() {
     try {
       // First check if user exists with this wallet
       // For now, we'll use a simple check
-      const arbiterRes = await fetch(`/api/arbiters?wallet_address=${solanaWallet.walletAddress}`);
+      const arbiterRes = await fetchWithAuth(`/api/arbiters?wallet_address=${solanaWallet.walletAddress}`);
 
       if (arbiterRes.ok) {
         const data = await arbiterRes.json();
@@ -137,7 +138,7 @@ export default function ArbiterDashboard() {
           setArbiter(data.data);
 
           // Fetch pending votes
-          const votesRes = await fetch(`/api/arbiters/${data.data.id}/votes`);
+          const votesRes = await fetchWithAuth(`/api/arbiters/${data.data.id}/votes`);
           if (votesRes.ok) {
             const votesData = await votesRes.json();
             if (votesData.success) {
@@ -149,7 +150,7 @@ export default function ArbiterDashboard() {
       }
 
       // Fetch leaderboard
-      const leaderboardRes = await fetch('/api/arbiters?action=leaderboard&limit=10');
+      const leaderboardRes = await fetchWithAuth('/api/arbiters?action=leaderboard&limit=10');
       if (leaderboardRes.ok) {
         const lbData = await leaderboardRes.json();
         if (lbData.success) {
@@ -177,7 +178,7 @@ export default function ArbiterDashboard() {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch(`/api/arbiters/${arbiter.id}/votes`, {
+      const res = await fetchWithAuth(`/api/arbiters/${arbiter.id}/votes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

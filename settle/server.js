@@ -83,8 +83,53 @@ server
     console.log(`> WebSocket available at ${wsProtocol}://${hostname}:${port}/ws/chat`);
   });
 
+// Graceful shutdown — close pool + server on SIGTERM/SIGINT
+function gracefulShutdown(signal) {
+  console.log(`> ${signal} received — shutting down gracefully...`);
+  isReady = false; // Stop accepting new requests
+
+  // Close WebSocket connections
+  wss.clients.forEach((client) => client.terminate());
+
+  server.close(() => {
+    console.log('> HTTP server closed');
+    process.exit(0);
+  });
+
+  // Force exit after 10s if connections don't close
+  setTimeout(() => {
+    console.error('> Forced shutdown after timeout');
+    process.exit(1);
+  }, 10_000);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 // Prepare Next.js in the background
-app.prepare().then(() => {
+app.prepare().then(async () => {
+  // Validate DB connectivity before marking ready
+  try {
+    const { Pool } = require('pg');
+    const testPool = new Pool({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5432'),
+      database: process.env.DB_NAME || 'settle',
+      user: process.env.DB_USER || 'zeus',
+      password: process.env.DB_PASSWORD || '',
+      connectionTimeoutMillis: 5000,
+    });
+    await testPool.query('SELECT 1');
+    await testPool.end();
+    console.log('> Database connection verified');
+  } catch (dbErr) {
+    console.error('> WARNING: Database connection failed:', dbErr.message);
+    if (process.env.NODE_ENV === 'production') {
+      console.error('> FATAL: Cannot start without database in production');
+      process.exit(1);
+    }
+  }
+
   isReady = true;
   console.log(`> Next.js ready — accepting requests`);
 

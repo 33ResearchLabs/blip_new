@@ -6,7 +6,7 @@ import {
   uuidSchema,
 } from '@/lib/validation/schemas';
 import {
-  getAuthContext,
+  requireAuth,
   canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
@@ -45,13 +45,12 @@ export async function GET(
     }
 
     // Authorization check
-    const auth = getAuthContext(request);
-    if (auth) {
-      const canAccess = await canAccessOrder(auth, id);
-      if (!canAccess) {
-        logger.auth.forbidden(`GET /api/orders/${id}/review`, auth.actorId, 'Not order participant');
-        return forbiddenResponse('You do not have access to this order');
-      }
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    const canAccess = await canAccessOrder(auth, id);
+    if (!canAccess) {
+      logger.auth.forbidden(`GET /api/orders/${id}/review`, auth.actorId, 'Not order participant');
+      return forbiddenResponse('You do not have access to this order');
     }
 
     const review = await getReviewByOrderId(id);
@@ -60,7 +59,7 @@ export async function GET(
       return notFoundResponse('Review');
     }
 
-    logger.api.request('GET', `/api/orders/${id}/review`, auth?.actorId);
+    logger.api.request('GET', `/api/orders/${id}/review`, auth.actorId);
     return successResponse(review);
   } catch (error) {
     logger.api.error('GET', '/api/orders/[id]/review', error as Error);

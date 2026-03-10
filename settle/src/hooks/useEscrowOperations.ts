@@ -5,6 +5,7 @@ import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, DbOrder, Notification } from "@/types/merchant";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
 import { computeMyRole } from "@/lib/orders/statusResolver";
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 
@@ -80,7 +81,7 @@ export function useEscrowOperations({
 
     let orderToUse = order;
     try {
-      const res = await fetch(`/api/orders/${order.id}`);
+      const res = await fetchWithAuth(`/api/orders/${order.id}`);
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
@@ -194,7 +195,7 @@ export function useEscrowOperations({
       if (pendingSellOrder && isTempOrder) {
         playSound('trade_complete');
         try {
-          const res = await fetch("/api/merchant/orders", {
+          const res = await fetchWithAuth("/api/merchant/orders", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -248,7 +249,7 @@ export function useEscrowOperations({
         for (let attempt = 0; attempt < 3 && !recorded; attempt++) {
           if (attempt > 0) await new Promise(r => setTimeout(r, 2000 * attempt));
           try {
-            const res = await fetch(`/api/orders/${escrowOrder.id}/escrow`, {
+            const res = await fetchWithAuth(`/api/orders/${escrowOrder.id}/escrow`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(escrowPayload),
@@ -323,7 +324,7 @@ export function useEscrowOperations({
     }
 
     try {
-      const res = await fetch(`/api/orders/${order.id}`);
+      const res = await fetchWithAuth(`/api/orders/${order.id}`);
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
@@ -406,7 +407,7 @@ export function useEscrowOperations({
       if (releaseResult.success) {
         setReleaseTxHash(releaseResult.txHash);
 
-        const releaseBackendRes = await fetch(`/api/orders/${releaseOrder.id}/escrow`, {
+        const releaseBackendRes = await fetchWithAuth(`/api/orders/${releaseOrder.id}/escrow`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -468,7 +469,7 @@ export function useEscrowOperations({
     }
 
     try {
-      const res = await fetch(`/api/orders/${order.id}`);
+      const res = await fetchWithAuth(`/api/orders/${order.id}`);
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
@@ -520,7 +521,7 @@ export function useEscrowOperations({
       if (refundResult.success) {
         setCancelTxHash(refundResult.txHash);
 
-        await fetch(`/api/orders/${cancelOrder.id}`, {
+        await fetchWithAuth(`/api/orders/${cancelOrder.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -562,7 +563,7 @@ export function useEscrowOperations({
     if (!confirmed) return;
 
     try {
-      const res = await fetch(`/api/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&reason=Cancelled by merchant`, {
+      const res = await fetchWithAuth(`/api/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&reason=Cancelled by merchant`, {
         method: 'DELETE',
       });
 

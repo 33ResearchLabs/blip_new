@@ -1,18 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { getAuthContext } from '@/lib/middleware/auth';
+import { requireAuth } from '@/lib/middleware/auth';
+import { checkRateLimit, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
 
 // Propose a resolution (requires 2 confirmations from user and merchant)
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // Require compliance auth
-  const auth = getAuthContext(request);
-  if (!auth || (auth.actorType !== 'compliance' && auth.actorType !== 'system')) {
+  // Rate limit dispute resolutions
+  const rl = checkRateLimit(request, 'dispute:resolve', STRICT_LIMIT);
+  if (rl) return rl;
+
+  // Require DB-verified compliance auth
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+  if (auth.actorType !== 'compliance' && auth.actorType !== 'system') {
     return NextResponse.json(
       { success: false, error: 'Compliance authentication required' },
-      { status: 401 }
+      { status: 403 }
     );
   }
 
@@ -153,6 +159,16 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Require DB-verified compliance auth
+  const patchAuth = await requireAuth(request);
+  if (patchAuth instanceof NextResponse) return patchAuth;
+  if (patchAuth.actorType !== 'compliance' && patchAuth.actorType !== 'system') {
+    return NextResponse.json(
+      { success: false, error: 'Compliance authentication required' },
+      { status: 403 }
+    );
+  }
+
   try {
     const { id: orderId } = await params;
     const body = await request.json();

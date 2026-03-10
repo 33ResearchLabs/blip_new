@@ -1,5 +1,7 @@
 // API Client for frontend
 
+import { fetchWithAuth } from './fetchWithAuth';
+
 const API_BASE = '/api';
 
 export class ApiError extends Error {
@@ -15,7 +17,7 @@ async function request<T>(
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
 
-  const response = await fetch(url, {
+  const response = await fetchWithAuth(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

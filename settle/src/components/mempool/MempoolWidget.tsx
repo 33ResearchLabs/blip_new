@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Zap, Clock, TrendingUp, ArrowRight, Loader2, RotateCcw } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface MempoolOrder {
   id: string;
@@ -45,7 +46,7 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
 
   const fetchOrders = async () => {
     try {
-      const res = await fetch('/api/mempool?type=orders&corridor_id=USDT_AED&limit=50');
+      const res = await fetchWithAuth('/api/mempool?type=orders&corridor_id=USDT_AED&limit=50');
       if (res.ok) {
         const data = await res.json();
         if (data.success) {

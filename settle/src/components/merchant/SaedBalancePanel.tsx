@@ -9,6 +9,7 @@ import {
   Check,
   AlertCircle
 } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface SaedBalancePanelProps {
   merchantId: string;
@@ -49,7 +50,7 @@ export function SaedBalancePanel({
     }
 
     try {
-      const res = await fetch(`/api/convert?userId=${merchantId}&type=merchant`);
+      const res = await fetchWithAuth(`/api/convert?userId=${merchantId}&type=merchant`);
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.balances) {
@@ -97,7 +98,7 @@ export function SaedBalancePanel({
         ? Math.floor(amount * 1_000_000)
         : Math.floor(amount * 100);
 
-      const response = await fetch('/api/convert', {
+      const response = await fetchWithAuth('/api/convert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

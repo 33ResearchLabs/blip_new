@@ -3,6 +3,8 @@ import { query } from '@/lib/db';
 import { updateOrderStatus } from '@/lib/db/repositories/orders';
 import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
 import { logger } from '@/lib/logger';
+import { requireAuth } from '@/lib/middleware/auth';
+import { checkRateLimit, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
 
 /**
  * Finalize a dispute resolution
@@ -21,6 +23,20 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limit dispute finalization
+  const rl = checkRateLimit(request, 'dispute:finalize', STRICT_LIMIT);
+  if (rl) return rl;
+
+  // Require DB-verified compliance auth
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+  if (auth.actorType !== 'compliance' && auth.actorType !== 'system') {
+    return NextResponse.json(
+      { success: false, error: 'Compliance authentication required' },
+      { status: 403 }
+    );
+  }
+
   try {
     const { id: orderId } = await params;
     const body = await request.json();

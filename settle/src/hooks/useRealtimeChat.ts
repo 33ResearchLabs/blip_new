@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { usePusherOptional } from '@/context/PusherContext';
 import { getOrderChannel } from '@/lib/pusher/channels';
 import { CHAT_EVENTS } from '@/lib/pusher/events';
@@ -137,7 +138,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       try {
         // Include auth params in URL
         const authParam = actorId ? `?user_id=${actorId}` : '';
-        const res = await fetch(`/api/orders/${orderId}/messages${authParam}`);
+        const res = await fetchWithAuth(`/api/orders/${orderId}/messages${authParam}`);
         if (!res.ok) {
           // API not available (demo mode) - use empty messages
           console.log('Messages API not available - using demo mode', res.status);
@@ -422,7 +423,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
 
       try {
         // Send to API (will trigger Pusher event)
-        const res = await fetch(`/api/orders/${window.orderId}/messages`, {
+        const res = await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -465,7 +466,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       );
 
       try {
-        await fetch(`/api/orders/${window.orderId}/messages`, {
+        await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -486,7 +487,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       if (!window?.orderId) return;
 
       try {
-        await fetch(`/api/orders/${window.orderId}/typing`, {
+        await fetchWithAuth(`/api/orders/${window.orderId}/typing`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

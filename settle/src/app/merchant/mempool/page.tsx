@@ -8,6 +8,7 @@ import { MerchantQuoteControl } from '@/components/mempool/MerchantQuoteControl'
 import { MempoolFilters, MempoolFilterState } from '@/components/mempool/MempoolFilters';
 import { Zap, ArrowLeft, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface MempoolOrder {
   id: string;
@@ -59,7 +60,7 @@ export default function MempoolPage() {
           const merchant = JSON.parse(savedMerchant);
 
           // Validate merchant still exists
-          const checkRes = await fetch(`/api/auth/merchant?action=check_session&merchant_id=${merchant.id}`);
+          const checkRes = await fetchWithAuth(`/api/auth/merchant?action=check_session&merchant_id=${merchant.id}`);
           if (checkRes.ok) {
             const checkData = await checkRes.json();
             if (checkData.success && checkData.data?.valid) {

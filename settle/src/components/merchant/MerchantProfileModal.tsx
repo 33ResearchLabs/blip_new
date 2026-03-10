@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Loader2, Check, AlertCircle, Shield, Star } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 // 50 pre-made avatar options using DiceBear API and other sources
 const PRESET_AVATARS = [
@@ -110,7 +111,7 @@ export function MerchantProfileModal({
 
   useEffect(() => {
     if (isOpen && merchantId) {
-      fetch(`/api/reputation?entityId=${merchantId}&entityType=merchant`)
+      fetchWithAuth(`/api/reputation?entityId=${merchantId}&entityType=merchant`)
         .then(r => r.json())
         .then(data => { if (data.success) setReputation(data.data); })
         .catch(() => {});
@@ -124,7 +125,7 @@ export function MerchantProfileModal({
     setIsUploading(true);
 
     try {
-      const updateRes = await fetch(`/api/merchant/${merchantId}`, {
+      const updateRes = await fetchWithAuth(`/api/merchant/${merchantId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ avatar_url: avatarUrl }),
@@ -148,7 +149,7 @@ export function MerchantProfileModal({
     setIsSavingBio(true);
     setError(null);
     try {
-      const res = await fetch(`/api/merchant/${merchantId}`, {
+      const res = await fetchWithAuth(`/api/merchant/${merchantId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bio }),

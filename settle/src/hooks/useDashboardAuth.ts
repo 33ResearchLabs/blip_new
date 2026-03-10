@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface UseDashboardAuthParams {
   isMockMode: boolean;
@@ -47,7 +48,7 @@ export function useDashboardAuth({
 
     try {
       if (merchantId && merchantInfo) {
-        const res = await fetch('/api/auth/merchant', {
+        const res = await fetchWithAuth('/api/auth/merchant', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -81,7 +82,7 @@ export function useDashboardAuth({
       const bs58 = await import('bs58');
       const signature = bs58.default.encode(signatureUint8);
 
-      const res = await fetch('/api/auth/merchant', {
+      const res = await fetchWithAuth('/api/auth/merchant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -128,7 +129,7 @@ export function useDashboardAuth({
     setLoginError("");
 
     try {
-      const res = await fetch('/api/auth/merchant', {
+      const res = await fetchWithAuth('/api/auth/merchant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -178,7 +179,7 @@ export function useDashboardAuth({
     setLoginError("");
 
     try {
-      const res = await fetch('/api/auth/merchant', {
+      const res = await fetchWithAuth('/api/auth/merchant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -229,7 +230,7 @@ export function useDashboardAuth({
         const savedMerchant = localStorage.getItem('blip_merchant');
         if (savedMerchant) {
           const merchant = JSON.parse(savedMerchant);
-          const checkRes = await fetch(`/api/auth/merchant?action=check_session&merchant_id=${merchant.id}`);
+          const checkRes = await fetchWithAuth(`/api/auth/merchant?action=check_session&merchant_id=${merchant.id}`);
           if (checkRes.ok) {
             const checkData = await checkRes.json();
             if (checkData.success && checkData.data?.valid) {

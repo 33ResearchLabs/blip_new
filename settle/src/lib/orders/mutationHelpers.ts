@@ -1,3 +1,4 @@
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 /**
  * Mutation Helpers - Utilities for Safe Optimistic Updates
  *
@@ -44,7 +45,7 @@ export async function executeSafeMutation<T = any>(
   try {
     console.log(`[Mutation] ${method} ${endpoint}`, payload);
 
-    const res = await fetch(endpoint, {
+    const res = await fetchWithAuth(endpoint, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -141,7 +142,7 @@ export async function refetchSingleOrder(
   onUpdate: (order: any) => void
 ): Promise<void> {
   try {
-    const res = await fetch(`/api/orders/${orderId}`);
+    const res = await fetchWithAuth(`/api/orders/${orderId}`);
     if (!res.ok) {
       console.error(`[Refetch] Failed to fetch order ${orderId}: ${res.status}`);
       return;

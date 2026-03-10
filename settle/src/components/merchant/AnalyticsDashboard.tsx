@@ -9,6 +9,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell
 } from 'recharts';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface AnalyticsData {
   period: string;
@@ -91,7 +92,7 @@ export function AnalyticsDashboard({ merchantId }: AnalyticsDashboardProps) {
   const fetchAnalytics = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/merchant/analytics?merchant_id=${merchantId}&period=${period}`);
+      const res = await fetchWithAuth(`/api/merchant/analytics?merchant_id=${merchantId}&period=${period}`);
       if (!res.ok) throw new Error('Failed to fetch');
       const result = await res.json();
       if (result.success) {

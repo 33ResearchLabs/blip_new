@@ -1,14 +1,21 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { requireAdminAuth } from '@/lib/middleware/auth';
 
 // Seed test accounts for development
-export async function GET() {
-  // Block in production - this creates test data with known credentials
+export async function GET(request: NextRequest) {
+  // Block in production
   if (process.env.NODE_ENV === 'production') {
     return NextResponse.json(
       { success: false, error: 'This endpoint is disabled in production' },
       { status: 403 }
     );
+  }
+
+  // Require admin auth even in dev (unless ADMIN_SECRET not set)
+  if (process.env.ADMIN_SECRET) {
+    const authError = requireAdminAuth(request);
+    if (authError) return authError;
   }
 
   const results: string[] = [];
@@ -166,18 +173,19 @@ export async function GET() {
       results,
       accounts: {
         users: [
-          { email: 'alice@test.com', password: 'user123', name: 'Alice', balance: '100,000 USDC' },
-          { email: 'bob@test.com', password: 'user123', name: 'Bob', balance: '100,000 USDC' },
-          { email: 'charlie@test.com', password: 'user123', name: 'Charlie', balance: '100,000 USDC' },
+          { email: 'alice@test.com', name: 'Alice', balance: '100,000 USDC' },
+          { email: 'bob@test.com', name: 'Bob', balance: '100,000 USDC' },
+          { email: 'charlie@test.com', name: 'Charlie', balance: '100,000 USDC' },
         ],
         merchants: [
-          { email: 'quickswap@merchant.com', password: 'merchant123', name: 'QuickSwap', balance: '500,000 USDC' },
-          { email: 'desertgold@merchant.com', password: 'merchant123', name: 'DesertGold', balance: '500,000 USDC' },
+          { email: 'quickswap@merchant.com', name: 'QuickSwap', balance: '500,000 USDC' },
+          { email: 'desertgold@merchant.com', name: 'DesertGold', balance: '500,000 USDC' },
         ],
         compliance: [
-          { email: 'support@blip.money', password: 'compliance123', name: 'Support Agent', role: 'support' },
-          { email: 'compliance@blip.money', password: 'compliance123', name: 'Compliance Officer', role: 'compliance' },
+          { email: 'support@blip.money', name: 'Support Agent', role: 'support' },
+          { email: 'compliance@blip.money', name: 'Compliance Officer', role: 'compliance' },
         ],
+        note: 'Passwords not shown. Set via COMPLIANCE_PASSWORD env var.',
       },
     });
   } catch (error) {

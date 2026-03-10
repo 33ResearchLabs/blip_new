@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { requireAuth } from '@/lib/middleware/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    // Authorization — mandatory
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const merchantId = request.nextUrl.searchParams.get('merchantId');
     const limit = Math.min(parseInt(request.nextUrl.searchParams.get('limit') || '50', 10), 100);
 
     if (!merchantId) {
       return NextResponse.json({ error: 'merchantId required' }, { status: 400 });
+    }
+
+    // Ownership check — merchants can only view their own notifications
+    if (auth.actorType === 'merchant' && auth.actorId !== merchantId) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     // Fetch recent notifications with order details for richer messages

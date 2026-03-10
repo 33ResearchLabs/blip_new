@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { usePusherOptional } from '@/context/PusherContext';
 import { getOrderChannel } from '@/lib/pusher/channels';
 import { ORDER_EVENTS } from '@/lib/pusher/events';
@@ -102,7 +103,7 @@ export function useRealtimeOrder(
     }
 
     try {
-      const res = await fetch(`/api/orders/${orderId}`);
+      const res = await fetchWithAuth(`/api/orders/${orderId}`);
 
       if (!res.ok) {
         // API not available (demo mode)

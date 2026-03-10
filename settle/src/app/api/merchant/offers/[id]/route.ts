@@ -1,8 +1,8 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { updateOffer, getOfferById, deleteOffer } from '@/lib/db/repositories/merchants';
 import { updateOfferSchema, uuidSchema } from '@/lib/validation/schemas';
 import {
-  getAuthContext,
+  requireAuth,
   forbiddenResponse,
   validationErrorResponse,
   successResponse,
@@ -76,13 +76,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     // Authorization: only the merchant can update their own offers
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'merchant' && auth.actorId === currentOffer.merchant_id;
-      if (!isOwner && auth.actorType !== 'system') {
-        logger.auth.forbidden('PATCH /api/merchant/offers/[id]', auth.actorId, 'Not offer owner');
-        return forbiddenResponse('You can only update your own offers');
-      }
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    if (auth.actorType === 'merchant' && auth.actorId !== currentOffer.merchant_id) {
+      logger.auth.forbidden('PATCH /api/merchant/offers/[id]', auth.actorId, 'Not offer owner');
+      return forbiddenResponse('You can only update your own offers');
     }
 
     // Additional validation: max_amount >= min_amount
@@ -143,13 +141,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     // Authorization: only the merchant can delete their own offers
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'merchant' && auth.actorId === currentOffer.merchant_id;
-      if (!isOwner && auth.actorType !== 'system') {
-        logger.auth.forbidden('DELETE /api/merchant/offers/[id]', auth.actorId, 'Not offer owner');
-        return forbiddenResponse('You can only delete your own offers');
-      }
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    if (auth.actorType === 'merchant' && auth.actorId !== currentOffer.merchant_id) {
+      logger.auth.forbidden('DELETE /api/merchant/offers/[id]', auth.actorId, 'Not offer owner');
+      return forbiddenResponse('You can only delete your own offers');
     }
 
     // Perform deletion

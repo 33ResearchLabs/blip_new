@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
   getMerchantContacts,
   updateMerchantContact,
@@ -6,7 +6,7 @@ import {
   removeContact,
 } from '@/lib/db/repositories/directMessages';
 import {
-  getAuthContext,
+  requireAuth,
   verifyMerchant,
   forbiddenResponse,
   validationErrorResponse,
@@ -25,12 +25,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Authorization check
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'merchant' && auth.actorId === merchantId;
-      if (!isOwner && auth.actorType !== 'system') {
-        return forbiddenResponse('You can only access your own contacts');
-      }
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    if (auth.actorType === 'merchant' && auth.actorId !== merchantId) {
+      return forbiddenResponse('You can only access your own contacts');
     }
 
     // Verify merchant exists
@@ -59,12 +57,10 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Authorization check
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'merchant' && auth.actorId === merchant_id;
-      if (!isOwner && auth.actorType !== 'system') {
-        return forbiddenResponse('You can only update your own contacts');
-      }
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    if (auth.actorType === 'merchant' && auth.actorId !== merchant_id) {
+      return forbiddenResponse('You can only update your own contacts');
     }
 
     const contact = await updateMerchantContact(contact_id, merchant_id, {
@@ -102,12 +98,10 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(['Cannot add yourself as a contact']);
     }
 
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'merchant' && auth.actorId === merchant_id;
-      if (!isOwner && auth.actorType !== 'system') {
-        return forbiddenResponse('You can only add contacts to your own list');
-      }
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    if (auth.actorType === 'merchant' && auth.actorId !== merchant_id) {
+      return forbiddenResponse('You can only add contacts to your own list');
     }
 
     const merchantExists = await verifyMerchant(merchant_id);
@@ -134,12 +128,10 @@ export async function DELETE(request: NextRequest) {
       return validationErrorResponse(['merchant_id and contact_id are required']);
     }
 
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'merchant' && auth.actorId === merchantId;
-      if (!isOwner && auth.actorType !== 'system') {
-        return forbiddenResponse('You can only remove your own contacts');
-      }
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    if (auth.actorType === 'merchant' && auth.actorId !== merchantId) {
+      return forbiddenResponse('You can only remove your own contacts');
     }
 
     const removed = await removeContact(contactId, merchantId);

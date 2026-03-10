@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Star, Trophy, TrendingUp, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface TopRatedSeller {
   id: string;
@@ -28,7 +29,7 @@ export function TopRatedSellers() {
 
   const fetchTopSellers = async () => {
     try {
-      const res = await fetch('/api/ratings?type=top-sellers&limit=10');
+      const res = await fetchWithAuth('/api/ratings?type=top-sellers&limit=10');
       if (res.ok) {
         const data = await res.json();
         if (data.success) {

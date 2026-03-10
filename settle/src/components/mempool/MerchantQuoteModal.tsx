@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, Zap, Loader2, Power } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface MerchantQuote {
   id: string;
@@ -51,7 +52,7 @@ export function MerchantQuoteModal({
   const fetchQuote = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(
+      const res = await fetchWithAuth(
         `/api/merchant-quotes?merchant_id=${merchantId}&corridor_id=${corridorId}`
       );
       if (res.ok) {
@@ -77,7 +78,7 @@ export function MerchantQuoteModal({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const res = await fetch('/api/merchant-quotes', {
+      const res = await fetchWithAuth('/api/merchant-quotes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

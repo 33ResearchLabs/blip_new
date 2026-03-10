@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { queryOne } from '@/lib/db';
 import {
@@ -9,6 +9,7 @@ import {
 } from 'settlement-core';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import {
+  requireAuth,
   notFoundResponse,
   validationErrorResponse,
   successResponse,
@@ -32,6 +33,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Authorization — mandatory
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { id } = await params;
     const body = await request.json();
 
@@ -59,6 +64,10 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Authorization — mandatory
+    const authPut = await requireAuth(request);
+    if (authPut instanceof NextResponse) return authPut;
+
     const { id } = await params;
     const body = await request.json();
 
@@ -86,6 +95,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Authorization — mandatory
+    const authGet = await requireAuth(request);
+    if (authGet instanceof NextResponse) return authGet;
+
     const { id } = await params;
 
     const order = await queryOne<Order>(

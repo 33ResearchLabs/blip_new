@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, DbOrder, Notification } from "@/types/merchant";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 
@@ -107,7 +108,7 @@ export function useOrderActions({
         requestBody.acceptor_wallet_address = solanaWallet.walletAddress;
       }
 
-      const acceptRes = await fetch(`/api/orders/${order.id}`, {
+      const acceptRes = await fetchWithAuth(`/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
@@ -165,7 +166,7 @@ export function useOrderActions({
       const bankDetails = order.dbOrder?.payment_details || {};
 
       const coreApiUrl = process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:4010';
-      const matchRes = await fetch(`${coreApiUrl}/v1/corridor/match`, {
+      const matchRes = await fetchWithAuth(`${coreApiUrl}/v1/corridor/match`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -241,7 +242,7 @@ export function useOrderActions({
         claimBody.acceptor_wallet_signature = signature;
       }
 
-      const res = await fetch(`/api/orders/${order.id}`, {
+      const res = await fetchWithAuth(`/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(claimBody),
@@ -309,7 +310,7 @@ export function useOrderActions({
         proceedBody.acceptor_wallet_signature = signature;
       }
 
-      const res = await fetch(`/api/orders/${order.id}`, {
+      const res = await fetchWithAuth(`/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(proceedBody),
@@ -344,7 +345,7 @@ export function useOrderActions({
     setMarkingDone(true);
 
     try {
-      const res = await fetch(`/api/orders/${order.id}`, {
+      const res = await fetchWithAuth(`/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -382,7 +383,7 @@ export function useOrderActions({
     setMarkingDone(true);
 
     try {
-      const res = await fetch(`/api/orders/${order.id}`, {
+      const res = await fetchWithAuth(`/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -416,7 +417,7 @@ export function useOrderActions({
     if (!merchantId) return;
 
     try {
-      const res = await fetch(`/api/orders/${orderId}`, {
+      const res = await fetchWithAuth(`/api/orders/${orderId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -506,7 +507,7 @@ export function useOrderActions({
           return;
         }
 
-        const response = await fetch(`/api/orders/${orderId}/escrow`, {
+        const response = await fetchWithAuth(`/api/orders/${orderId}/escrow`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -567,7 +568,7 @@ export function useOrderActions({
           payment_method: openTradeForm.paymentMethod,
           exclude_merchant: merchantId,
         });
-        const offerRes = await fetch(`/api/offers?${offerParams}`);
+        const offerRes = await fetchWithAuth(`/api/offers?${offerParams}`);
         const offerData = await offerRes.json();
 
         let matchedOffer: { id: string; merchant?: { wallet_address?: string; display_name?: string } } | null = null;
@@ -628,7 +629,7 @@ export function useOrderActions({
 
       } else {
         // BUY order flow: Create directly
-        const res = await fetch("/api/merchant/orders", {
+        const res = await fetchWithAuth("/api/merchant/orders", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

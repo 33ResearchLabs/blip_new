@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
+import { requireAuth } from '@/lib/middleware/auth';
+import { checkRateLimit, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 
 // Configure Cloudinary
 cloudinary.config({
@@ -9,6 +11,14 @@ cloudinary.config({
 });
 
 export async function POST(request: NextRequest) {
+  // Rate limit upload signatures
+  const rl = checkRateLimit(request, 'upload:signature', STANDARD_LIMIT);
+  if (rl) return rl;
+
+  // Require authenticated user/merchant
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     // Get request body
     const body = await request.json();

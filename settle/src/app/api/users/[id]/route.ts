@@ -1,11 +1,11 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getUserById, updateUser } from '@/lib/db/repositories/users';
 import {
   updateUserSchema,
   uuidSchema,
 } from '@/lib/validation/schemas';
 import {
-  getAuthContext,
+  requireAuth,
   forbiddenResponse,
   notFoundResponse,
   validationErrorResponse,
@@ -36,15 +36,14 @@ export async function GET(
       return validationErrorResponse([idValidation.error!]);
     }
 
-    // Authorization: users can only view their own profile (merchants/system can view any)
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'user' && auth.actorId === id;
-      const isMerchantOrSystem = auth.actorType === 'merchant' || auth.actorType === 'system';
-      if (!isOwner && !isMerchantOrSystem) {
-        logger.auth.forbidden(`GET /api/users/${id}`, auth.actorId, 'Not profile owner');
-        return forbiddenResponse('You can only access your own profile');
-      }
+    // Authorization — mandatory
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    const isOwner = auth.actorType === 'user' && auth.actorId === id;
+    const isMerchantOrSystem = auth.actorType === 'merchant' || auth.actorType === 'system';
+    if (!isOwner && !isMerchantOrSystem) {
+      logger.auth.forbidden(`GET /api/users/${id}`, auth.actorId, 'Not profile owner');
+      return forbiddenResponse('You can only access your own profile');
     }
 
     const user = await getUserById(id);
@@ -53,7 +52,7 @@ export async function GET(
       return notFoundResponse('User');
     }
 
-    logger.api.request('GET', `/api/users/${id}`, auth?.actorId);
+    logger.api.request('GET', `/api/users/${id}`, auth.actorId);
     return successResponse(user);
   } catch (error) {
     logger.api.error('GET', '/api/users/[id]', error as Error);
@@ -83,14 +82,13 @@ export async function PATCH(
       return validationErrorResponse(errors);
     }
 
-    // Authorization: users can only update their own profile
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'user' && auth.actorId === id;
-      if (!isOwner && auth.actorType !== 'system') {
-        logger.auth.forbidden(`PATCH /api/users/${id}`, auth.actorId, 'Updating different user');
-        return forbiddenResponse('You can only update your own profile');
-      }
+    // Authorization — mandatory
+    const authPatch = await requireAuth(request);
+    if (authPatch instanceof NextResponse) return authPatch;
+    const isPatchOwner = authPatch.actorType === 'user' && authPatch.actorId === id;
+    if (!isPatchOwner && authPatch.actorType !== 'system') {
+      logger.auth.forbidden(`PATCH /api/users/${id}`, authPatch.actorId, 'Updating different user');
+      return forbiddenResponse('You can only update your own profile');
     }
 
     const user = await updateUser(id, parseResult.data);
@@ -99,7 +97,7 @@ export async function PATCH(
       return notFoundResponse('User');
     }
 
-    logger.api.request('PATCH', `/api/users/${id}`, auth?.actorId);
+    logger.api.request('PATCH', `/api/users/${id}`, authPatch.actorId);
     return successResponse(user);
   } catch (error) {
     logger.api.error('PATCH', '/api/users/[id]', error as Error);

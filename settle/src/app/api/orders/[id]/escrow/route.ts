@@ -10,7 +10,7 @@ import {
   uuidSchema,
 } from '@/lib/validation/schemas';
 import {
-  getAuthContext,
+  requireAuth,
   canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
@@ -18,6 +18,7 @@ import {
   successResponse,
   errorResponse,
 } from '@/lib/middleware/auth';
+import { checkRateLimit, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
 import { serializeOrder } from '@/lib/api/orderSerializer';
 import { MOCK_MODE } from '@/lib/config/mockMode';
 import { mockEscrowLock } from '@/lib/money/escrowLock';
@@ -56,8 +57,9 @@ export async function GET(
       return validationErrorResponse(['Invalid order ID format']);
     }
 
-    // Get auth context
-    const auth = getAuthContext(request);
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
 
     // Fetch order
     const order = await getOrderWithRelations(id);
@@ -66,11 +68,9 @@ export async function GET(
     }
 
     // Check authorization
-    if (auth) {
-      const canAccess = await canAccessOrder(auth, id);
-      if (!canAccess) {
-        return forbiddenResponse('You do not have access to this order');
-      }
+    const canAccess = await canAccessOrder(auth, id);
+    if (!canAccess) {
+      return forbiddenResponse('You do not have access to this order');
     }
 
     // Return escrow details with minimal_status
@@ -99,6 +99,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limit: 10 escrow operations per minute
+  const rateLimitResponse = checkRateLimit(request, 'escrow:deposit', STRICT_LIMIT);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const { id } = await params;
 
@@ -109,6 +113,16 @@ export async function POST(
     }
 
     const body = await request.json();
+
+    // Require authentication
+    const auth = await requireAuth(request, body);
+    if (auth instanceof NextResponse) return auth;
+
+    // Verify access to this order
+    const canAccess = await canAccessOrder(auth, id);
+    if (!canAccess) {
+      return forbiddenResponse('You do not have access to this order');
+    }
 
     // Validate request body
     const parseResult = escrowDepositSchema.safeParse(body);
@@ -124,7 +138,7 @@ export async function POST(
         id,
         parseResult.data.actor_type,
         parseResult.data.actor_id,
-        parseResult.data.tx_hash || `mock-escrow-${id}-${Date.now()}`,
+        parseResult.data.tx_hash || `dev-escrow-${id}-${Date.now()}`,
         {
           escrow_trade_id: parseResult.data.escrow_trade_id ?? undefined,
           escrow_trade_pda: parseResult.data.escrow_trade_pda ?? undefined,
@@ -195,6 +209,16 @@ export async function PATCH(
     }
 
     const body = await request.json();
+
+    // Require authentication
+    const auth = await requireAuth(request, body);
+    if (auth instanceof NextResponse) return auth;
+
+    // Verify access to this order
+    const canAccess = await canAccessOrder(auth, id);
+    if (!canAccess) {
+      return forbiddenResponse('You do not have access to this order');
+    }
 
     // Validate request body
     const parseResult = escrowReleaseSchema.safeParse(body);

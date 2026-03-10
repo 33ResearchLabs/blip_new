@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Shield, Star, ArrowLeft, Loader2, CheckCircle2, Clock, TrendingUp, Award } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 const TIER_COLORS: Record<string, { text: string; bg: string; border: string }> = {
   newcomer: { text: 'text-white/50', bg: 'bg-white/[0.04]', border: 'border-white/[0.08]' },
@@ -67,8 +68,8 @@ export default function MerchantProfilePage() {
     if (!merchantId) return;
 
     Promise.all([
-      fetch(`/api/merchant/${merchantId}`).then(r => r.json()),
-      fetch(`/api/reputation?entityId=${merchantId}&entityType=merchant`).then(r => r.json()),
+      fetchWithAuth(`/api/merchant/${merchantId}`).then(r => r.json()),
+      fetchWithAuth(`/api/reputation?entityId=${merchantId}&entityType=merchant`).then(r => r.json()),
     ])
       .then(([merchantRes, repRes]) => {
         if (!merchantRes.success) {

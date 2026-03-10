@@ -29,6 +29,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMerchantStore } from '@/stores/merchantStore';
 import { CorridorProviderSettings } from '@/components/merchant/CorridorProviderSettings';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 // Avatar presets (same as profile modal)
 const PRESET_AVATARS = [
@@ -125,7 +126,7 @@ export default function MerchantSettingsPage() {
     if (!id) return;
 
     try {
-      const res = await fetch(`/api/merchant/${id}`);
+      const res = await fetchWithAuth(`/api/merchant/${id}`);
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -165,7 +166,7 @@ export default function MerchantSettingsPage() {
       const id = merchantId || JSON.parse(localStorage.getItem('blip_merchant') || '{}')?.id;
       if (!id) return;
       try {
-        const res = await fetch(`/api/users/${id}/bank-accounts`);
+        const res = await fetchWithAuth(`/api/users/${id}/bank-accounts`);
         if (res.ok) {
           const data = await res.json();
           if (data.success) setBankAccounts(data.data || []);
@@ -197,7 +198,7 @@ export default function MerchantSettingsPage() {
         return;
       }
 
-      const res = await fetch(`/api/merchant/${id}`, {
+      const res = await fetchWithAuth(`/api/merchant/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -243,7 +244,7 @@ export default function MerchantSettingsPage() {
     setPasswordSuccess(false);
 
     try {
-      const res = await fetch('/api/auth/merchant', {
+      const res = await fetchWithAuth('/api/auth/merchant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -276,7 +277,7 @@ export default function MerchantSettingsPage() {
     setIsAddingBank(true);
     try {
       const id = merchantId || merchant?.id;
-      const res = await fetch(`/api/users/${id}/bank-accounts`, {
+      const res = await fetchWithAuth(`/api/users/${id}/bank-accounts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newBank),
@@ -299,7 +300,7 @@ export default function MerchantSettingsPage() {
   const handleDeleteBank = async (bankId: string) => {
     try {
       const id = merchantId || merchant?.id;
-      const res = await fetch(`/api/users/${id}/bank-accounts?bank_id=${bankId}`, {
+      const res = await fetchWithAuth(`/api/users/${id}/bank-accounts?bank_id=${bankId}`, {
         method: 'DELETE',
       });
       if (res.ok) {

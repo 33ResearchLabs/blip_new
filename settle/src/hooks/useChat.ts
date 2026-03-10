@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 export interface ChatMessage {
   id: string;
@@ -59,7 +60,7 @@ export function useChat(options: UseChatOptions = {}) {
   // Fetch messages for an order
   const fetchMessages = useCallback(async (orderId: string, chatId: string) => {
     try {
-      const res = await fetch(`/api/orders/${orderId}/messages`);
+      const res = await fetchWithAuth(`/api/orders/${orderId}/messages`);
       if (!res.ok) {
         // API not available (demo mode)
         console.log('Messages API not available - running in demo mode');
@@ -231,7 +232,7 @@ export function useChat(options: UseChatOptions = {}) {
 
     try {
       // Send to API
-      const res = await fetch(`/api/orders/${window.orderId}/messages`, {
+      const res = await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -277,7 +278,7 @@ export function useChat(options: UseChatOptions = {}) {
     ));
 
     try {
-      await fetch(`/api/orders/${window.orderId}/messages`, {
+      await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

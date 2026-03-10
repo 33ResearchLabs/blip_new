@@ -30,6 +30,11 @@ import {
 } from "lucide-react";
 import { useRealtimeChat } from "@/hooks/useRealtimeChat";
 import { usePusher } from "@/context/PusherContext";
+import { useComplianceAuth } from "@/hooks/useComplianceAuth";
+import { useDisputeManagement } from "@/hooks/useDisputeManagement";
+import type { DisputeOrder } from "@/hooks/useDisputeManagement";
+import DisputeCard, { getEmoji, formatTimeAgo } from "@/components/compliance/DisputeCard";
+import ResolveModal from "@/components/compliance/ResolveModal";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
 import dynamic from "next/dynamic";
 
@@ -62,85 +67,6 @@ const useSolanaWalletHook = () => {
   }
 };
 
-interface DisputeOrder {
-  id: string;
-  orderNumber: string;
-  type: "buy" | "sell";
-  paymentMethod: "bank" | "cash";
-  cryptoAmount: number;
-  fiatAmount: number;
-  cryptoCurrency: string;
-  fiatCurrency: string;
-  rate: number;
-  orderStatus: string;
-  createdAt: string;
-  expiresAt: string;
-  dispute: {
-    id: string;
-    status: string;
-    reason: string;
-    description: string;
-    initiatedBy: "user" | "merchant";
-    createdAt: string;
-    resolvedAt: string | null;
-    resolutionNotes: string | null;
-  } | null;
-  user: {
-    id: string;
-    name: string;
-    wallet: string;
-    rating: number;
-    trades: number;
-  };
-  merchant: {
-    id: string;
-    name: string;
-    wallet: string;
-    rating: number;
-    trades: number;
-  };
-}
-
-interface ComplianceMember {
-  id: string;
-  email: string | null;
-  wallet_address: string | null;
-  name: string;
-  role: string;
-}
-
-// Helper to get emoji from name
-const getEmoji = (name: string | null | undefined): string => {
-  const emojis = ["🦊", "🦧", "🐋", "🦄", "🔥", "💎", "🐺", "🦁", "🐯", "🐻"];
-  if (!name) return emojis[0];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return emojis[Math.abs(hash) % emojis.length];
-};
-
-// Format time ago
-const formatTimeAgo = (dateString: string): string => {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${diffDays}d ago`;
-};
-
-const notifications = [
-  { id: 1, type: "dispute", message: "New dispute from whale_69", time: "just now", read: false },
-  { id: 2, type: "resolved", message: "Dispute #ord_5 resolved", time: "2m ago", read: false },
-  { id: 3, type: "escalated", message: "Case #ord_3 escalated", time: "5m ago", read: true },
-];
-
 // Quick questions for compliance chat
 const QUICK_QUESTIONS = [
   "Can you provide proof of payment?",
@@ -151,43 +77,25 @@ const QUICK_QUESTIONS = [
 ];
 
 export default function ComplianceDashboard() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [member, setMember] = useState<ComplianceMember | null>(null);
-  const [loginForm, setLoginForm] = useState({ email: "support@blip.money", password: "compliance123" });
-  const [loginError, setLoginError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [authMethod, setAuthMethod] = useState<'email' | 'wallet'>('email');
-  const [showWalletModal, setShowWalletModal] = useState(false);
-  const [isWalletLoggingIn, setIsWalletLoggingIn] = useState(false);
-
   // Solana wallet hook
   const solanaWallet = useSolanaWalletHook();
 
-  const [disputes, setDisputes] = useState<DisputeOrder[]>([]);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [showResolveModal, setShowResolveModal] = useState(false);
-  const [selectedDispute, setSelectedDispute] = useState<DisputeOrder | null>(null);
-  const [resolveForm, setResolveForm] = useState({
-    resolution: "" as "" | "user" | "merchant" | "split",
-    notes: "",
-    splitUser: 50,
-    splitMerchant: 50,
-  });
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [selectedProfile, setSelectedProfile] = useState<{
-    type: "user" | "merchant";
-    id: string;
-    name: string;
-    wallet: string;
-    rating: number;
-    trades: number;
-  } | null>(null);
-  // Mobile view state: 'open' | 'investigating' | 'resolved' | 'chat'
-  const [mobileView, setMobileView] = useState<'open' | 'investigating' | 'resolved' | 'chat'>('open');
-
-  const chatInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  // Auth hook
+  const auth = useComplianceAuth(solanaWallet);
+  const {
+    isLoggedIn,
+    member,
+    loginForm,
+    setLoginForm,
+    loginError,
+    isLoading,
+    showWalletModal,
+    setShowWalletModal,
+    isWalletLoggingIn,
+    handleLogin,
+    handleWalletLogin,
+    handleLogout,
+  } = auth;
 
   // Notifications state
   const [notifications, setNotifications] = useState<{
@@ -205,7 +113,7 @@ export default function ComplianceDashboard() {
   };
 
   // Add notification helper
-  const addNotification = (type: 'dispute' | 'resolution' | 'escalation' | 'system', message: string, disputeId?: string) => {
+  const addNotification = useCallback((type: 'dispute' | 'resolution' | 'escalation' | 'system', message: string, disputeId?: string) => {
     const newNotif = {
       id: `notif-${Date.now()}`,
       type,
@@ -214,8 +122,43 @@ export default function ComplianceDashboard() {
       read: false,
       disputeId,
     };
-    setNotifications(prev => [newNotif, ...prev].slice(0, 50)); // Keep max 50 notifications
-  };
+    setNotifications(prev => [newNotif, ...prev].slice(0, 50));
+  }, []);
+
+  // Dispute management hook
+  const disputeMgmt = useDisputeManagement(member, solanaWallet, addNotification);
+  const {
+    disputes,
+    showResolveModal,
+    setShowResolveModal,
+    selectedDispute,
+    setSelectedDispute,
+    resolveForm,
+    setResolveForm,
+    isProcessingOnChain,
+    fetchDisputes,
+    startInvestigating,
+    resolveDispute,
+    finalizeDispute,
+    getDisputeReasonInfo,
+  } = disputeMgmt;
+
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState<{
+    type: "user" | "merchant";
+    id: string;
+    name: string;
+    wallet: string;
+    rating: number;
+    trades: number;
+  } | null>(null);
+  // Mobile view state: 'open' | 'investigating' | 'resolved' | 'chat'
+  const [mobileView, setMobileView] = useState<'open' | 'investigating' | 'resolved' | 'chat'>('open');
+
+  const chatInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   // Pusher context
   const { setActor } = usePusher();
@@ -239,116 +182,6 @@ export default function ComplianceDashboard() {
     actorId: member?.id,
   });
 
-  // Login handler
-  const handleLogin = async () => {
-    setIsLoading(true);
-    setLoginError("");
-
-    try {
-      const res = await fetch("/api/auth/compliance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: loginForm.email,
-          password: loginForm.password,
-          action: "login",
-        }),
-      });
-
-      const data = await res.json();
-
-      if (data.success) {
-        setMember(data.data.member);
-        setIsLoggedIn(true);
-        localStorage.setItem("compliance_member", JSON.stringify(data.data.member));
-      } else {
-        setLoginError(data.error || "Login failed");
-      }
-    } catch (error) {
-      console.error("Login error:", error);
-      setLoginError("Connection failed");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Wallet login handler
-  const handleWalletLogin = async () => {
-    if (!solanaWallet.connected || !solanaWallet.walletAddress) {
-      setShowWalletModal(true);
-      return;
-    }
-
-    setIsWalletLoggingIn(true);
-    setLoginError("");
-
-    try {
-      const res = await fetch("/api/auth/compliance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          wallet_address: solanaWallet.walletAddress,
-          action: "wallet_login",
-        }),
-      });
-
-      const data = await res.json();
-
-      if (data.success) {
-        setMember(data.data.member);
-        setAuthMethod('wallet');
-        setIsLoggedIn(true);
-        localStorage.setItem("compliance_member", JSON.stringify({ ...data.data.member, authMethod: 'wallet' }));
-      } else {
-        setLoginError(data.error || "Wallet not authorized for compliance access");
-      }
-    } catch (error) {
-      console.error("Wallet login error:", error);
-      setLoginError("Connection failed");
-    } finally {
-      setIsWalletLoggingIn(false);
-    }
-  };
-
-  // Auto-login when wallet connects
-  useEffect(() => {
-    if (solanaWallet.connected && solanaWallet.walletAddress && !isLoggedIn && !isWalletLoggingIn) {
-      // Check if we should auto-login (user clicked wallet login button)
-      const pendingWalletLogin = sessionStorage.getItem("pending_compliance_wallet_login");
-      if (pendingWalletLogin) {
-        sessionStorage.removeItem("pending_compliance_wallet_login");
-        handleWalletLogin();
-      }
-    }
-  }, [solanaWallet.connected, solanaWallet.walletAddress, isLoggedIn, isWalletLoggingIn]);
-
-  // Check for saved session
-  useEffect(() => {
-    const saved = localStorage.getItem("compliance_member");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setMember(parsed);
-        setIsLoggedIn(true);
-      } catch {
-        localStorage.removeItem("compliance_member");
-      }
-    }
-  }, []);
-
-  // Fetch disputes
-  const fetchDisputes = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/compliance/disputes`);
-      const data = await res.json();
-      if (data.success) {
-        setDisputes(data.data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch disputes:", error);
-    }
-  }, []);
-
   useEffect(() => {
     if (isLoggedIn) {
       fetchDisputes();
@@ -360,198 +193,13 @@ export default function ComplianceDashboard() {
   // Open dispute group chat
   const handleOpenDisputeChat = (dispute: DisputeOrder) => {
     const chatName = `Dispute #${dispute.orderNumber}`;
-    const emoji = "⚖️";
+    const emoji = "\u2696\uFE0F";
     openChat(chatName, emoji, dispute.id);
 
     setTimeout(() => {
       const chat = chatWindows.find(w => w.orderId === dispute.id);
       if (chat) setActiveChatId(chat.id);
     }, 50);
-  };
-
-  // Get dispute reason icon and label
-  const getDisputeReasonInfo = (reason: string | undefined) => {
-    switch (reason) {
-      case 'payment_not_received':
-        return { icon: '💸', label: 'Payment Not Received', color: 'text-red-400' };
-      case 'crypto_not_received':
-        return { icon: '🪙', label: 'Crypto Not Received', color: 'text-orange-400' };
-      case 'wrong_amount':
-        return { icon: '🔢', label: 'Wrong Amount', color: 'text-blue-400' };
-      case 'fraud':
-        return { icon: '🚨', label: 'Fraud', color: 'text-red-500' };
-      default:
-        return { icon: '❓', label: reason || 'Other', color: 'text-gray-400' };
-    }
-  };
-
-  // Start investigating
-  const startInvestigating = async (orderId: string) => {
-    if (!member) return;
-
-    const dispute = disputes.find(d => d.id === orderId);
-
-    try {
-      const res = await fetch(`/api/compliance/disputes/${orderId}/resolve`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "investigating",
-          complianceId: member.id,
-          notes: "Started investigation",
-        }),
-      });
-
-      if (res.ok) {
-        addNotification('dispute', `Started investigation on dispute #${dispute?.orderNumber || orderId}`, orderId);
-        fetchDisputes();
-      }
-    } catch (error) {
-      console.error("Failed to start investigation:", error);
-    }
-  };
-
-  // Resolve dispute
-  const resolveDispute = async () => {
-    if (!member || !selectedDispute || !resolveForm.resolution) return;
-
-    try {
-      const res = await fetch(`/api/compliance/disputes/${selectedDispute.id}/resolve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          resolution: resolveForm.resolution,
-          notes: resolveForm.notes,
-          complianceId: member.id,
-          splitPercentage: resolveForm.resolution === "split" ? {
-            user: resolveForm.splitUser,
-            merchant: resolveForm.splitMerchant,
-          } : undefined,
-        }),
-      });
-
-      if (res.ok) {
-        const resolutionText = resolveForm.resolution === 'user' ? 'in favor of user' :
-                              resolveForm.resolution === 'merchant' ? 'in favor of merchant' : 'with split';
-        addNotification('resolution', `Dispute #${selectedDispute.orderNumber} resolved ${resolutionText}`, selectedDispute.id);
-        setShowResolveModal(false);
-        setSelectedDispute(null);
-        setResolveForm({ resolution: "", notes: "", splitUser: 50, splitMerchant: 50 });
-        fetchDisputes();
-      }
-    } catch (error) {
-      console.error("Failed to resolve dispute:", error);
-    }
-  };
-
-  // State for on-chain processing
-  const [isProcessingOnChain, setIsProcessingOnChain] = useState(false);
-
-  // Finalize dispute - forcibly resolve and handle escrow
-  const finalizeDispute = async () => {
-    if (!member || !selectedDispute || !resolveForm.resolution) return;
-
-    // Check if compliance member is wallet-connected
-    const canDoOnChain = member.wallet_address && solanaWallet.connected && solanaWallet.walletAddress === member.wallet_address;
-
-    try {
-      // First, call the API to get escrow details
-      const res = await fetch(`/api/compliance/disputes/${selectedDispute.id}/finalize`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          resolution: resolveForm.resolution,
-          notes: resolveForm.notes,
-          complianceId: member.id,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        let txHash: string | null = null;
-
-        // If wallet-connected and there's escrow to process, attempt on-chain action
-        // NOTE: This will only work if the compliance wallet has authority on the escrow program
-        // (either as protocol authority or if the program supports arbiter functionality)
-        if (canDoOnChain && data.data?.escrowDetails) {
-          setIsProcessingOnChain(true);
-          const escrow = data.data.escrowDetails;
-
-          try {
-            // V2.3: Use resolveDispute for proper on-chain dispute resolution
-            // Maps 'user' -> release_to_buyer, 'merchant' -> refund_to_seller
-            if (resolveForm.resolution === 'user' || resolveForm.resolution === 'merchant') {
-              const resolutionType = resolveForm.resolution === 'user' ? 'release_to_buyer' : 'refund_to_seller';
-              addNotification('system', `Resolving dispute on-chain (${resolutionType})...`, selectedDispute.id);
-
-              const result = await solanaWallet.resolveDispute({
-                creatorPubkey: escrow.escrow_creator_wallet,
-                tradeId: escrow.escrow_trade_id,
-                resolution: resolutionType,
-              });
-
-              if (result.success && result.txHash) {
-                txHash = result.txHash;
-                addNotification('resolution', `On-chain dispute resolved: ${result.txHash.slice(0, 8)}...`, selectedDispute.id);
-
-                // Update the order with the resolution tx hash
-                await fetch(`/api/orders/${selectedDispute.id}/escrow`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    tx_hash: result.txHash,
-                    actor_type: 'system',
-                    actor_id: member.id,
-                  }),
-                });
-              } else {
-                throw new Error('Dispute resolution failed');
-              }
-            }
-          } catch (chainError) {
-            console.error('[Compliance] On-chain operation failed:', chainError);
-            const errorMsg = chainError instanceof Error ? chainError.message : 'Unknown error';
-            // Check if it's an authority error
-            if (errorMsg.includes('authority') || errorMsg.includes('signer') || errorMsg.includes('constraint')) {
-              addNotification('dispute', `On-chain failed: Wallet may not have program authority. Manual processing required.`, selectedDispute.id);
-            } else {
-              addNotification('dispute', `On-chain operation failed: ${errorMsg}`, selectedDispute.id);
-            }
-            // Show escrow details for manual handling
-            console.log('[Compliance] Escrow details for manual processing:', escrow);
-          } finally {
-            setIsProcessingOnChain(false);
-          }
-        } else if (data.data?.escrowDetails) {
-          // No wallet connected, log escrow details for manual processing
-          console.log('[Compliance] Escrow details for manual processing:', data.data.escrowDetails);
-          addNotification('system', `Escrow details logged to console for manual processing`, selectedDispute.id);
-        }
-
-        const resolutionText = resolveForm.resolution === 'user' ? 'in favor of user (escrow released)' :
-                              resolveForm.resolution === 'merchant' ? 'in favor of merchant (escrow refunded)' : 'with split';
-        addNotification('resolution', `Dispute #${selectedDispute.orderNumber} FINALIZED ${resolutionText}`, selectedDispute.id);
-
-        setShowResolveModal(false);
-        setSelectedDispute(null);
-        setResolveForm({ resolution: "", notes: "", splitUser: 50, splitMerchant: 50 });
-        fetchDisputes();
-      } else {
-        console.error("Failed to finalize dispute:", data.error);
-        addNotification('dispute', `Failed to finalize: ${data.error}`, selectedDispute.id);
-      }
-    } catch (error) {
-      console.error("Failed to finalize dispute:", error);
-      setIsProcessingOnChain(false);
-    }
-  };
-
-  // Logout
-  const handleLogout = () => {
-    localStorage.removeItem("compliance_member");
-    setMember(null);
-    setIsLoggedIn(false);
   };
 
   // Scroll to bottom of messages
@@ -688,25 +336,7 @@ export default function ComplianceDashboard() {
               </div>
             </details>
 
-            <div className="border-t border-white/[0.04] pt-4 mt-4">
-              <p className="text-xs text-gray-500 mb-3 text-center">Test Accounts:</p>
-              <div className="space-y-2">
-                <button
-                  onClick={() => setLoginForm({ email: "support@blip.money", password: "compliance123" })}
-                  className="w-full p-2 bg-white/[0.02] hover:bg-white/[0.05] rounded-lg text-left transition-colors"
-                >
-                  <p className="text-xs font-medium">Support Agent</p>
-                  <p className="text-[10px] text-gray-500">support@blip.money / compliance123</p>
-                </button>
-                <button
-                  onClick={() => setLoginForm({ email: "compliance@blip.money", password: "compliance123" })}
-                  className="w-full p-2 bg-white/[0.02] hover:bg-white/[0.05] rounded-lg text-left transition-colors"
-                >
-                  <p className="text-xs font-medium">Compliance Officer</p>
-                  <p className="text-[10px] text-gray-500">compliance@blip.money / compliance123</p>
-                </button>
-              </div>
-            </div>
+            {/* Test account shortcuts removed for production safety */}
           </div>
         </div>
 
@@ -865,7 +495,7 @@ export default function ComplianceDashboard() {
               </button>
             )}
             <div className="w-7 h-7 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-sm">
-              🛡️
+              {"\u{1F6E1}\uFE0F"}
             </div>
             <div className="hidden sm:block">
               <p className="text-[11px] font-medium">{member?.name || "Agent"}</p>
@@ -937,88 +567,17 @@ export default function ComplianceDashboard() {
                 <div className="h-full overflow-y-auto p-3 space-y-3">
                   <AnimatePresence mode="popLayout">
                     {openDisputes.length > 0 ? (
-                      openDisputes.map((dispute, i) => {
-                        const reasonInfo = getDisputeReasonInfo(dispute.dispute?.reason);
-                        return (
-                          <motion.div
-                            key={dispute.id}
-                            layout
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, x: -30 }}
-                            transition={{ delay: i * 0.03 }}
-                            className="p-3 bg-[#151515] rounded-xl border border-red-500/20 hover:border-red-500/40 transition-all group"
-                          >
-                            {/* Header */}
-                            <div className="flex items-start gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center text-lg shrink-0">
-                                {reasonInfo.icon}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold">#{dispute.orderNumber}</span>
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                                    dispute.dispute?.initiatedBy === "user"
-                                      ? "bg-blue-500/20 text-blue-400"
-                                      : "bg-purple-500/20 text-purple-400"
-                                  }`}>
-                                    {dispute.dispute?.initiatedBy === "user" ? "User" : "Merchant"}
-                                  </span>
-                                </div>
-                                <p className={`text-xs ${reasonInfo.color} mt-0.5`}>{reasonInfo.label}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm font-bold">${dispute.cryptoAmount.toLocaleString()}</p>
-                                <p className="text-[10px] text-gray-500">
-                                  {formatTimeAgo(dispute.dispute?.createdAt || dispute.createdAt)}
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* Parties */}
-                            <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center gap-3">
-                              <div className="flex items-center gap-1.5 flex-1">
-                                <div className="w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center text-xs">
-                                  {getEmoji(dispute.user.name)}
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="text-[10px] font-medium truncate">{dispute.user.name}</p>
-                                  <p className="text-[9px] text-gray-500">{dispute.user.trades} trades</p>
-                                </div>
-                              </div>
-                              <span className="text-[10px] text-gray-600">vs</span>
-                              <div className="flex items-center gap-1.5 flex-1 justify-end">
-                                <div className="min-w-0 text-right">
-                                  <p className="text-[10px] font-medium truncate">{dispute.merchant.name}</p>
-                                  <p className="text-[9px] text-gray-500">{dispute.merchant.trades} trades</p>
-                                </div>
-                                <div className="w-6 h-6 rounded-full bg-purple-500/10 flex items-center justify-center text-xs">
-                                  {getEmoji(dispute.merchant.name)}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="mt-3 flex items-center gap-2">
-                              <motion.button
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => startInvestigating(dispute.id)}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 rounded-lg text-xs font-medium text-orange-400 transition-all"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                Investigate
-                              </motion.button>
-                              <button
-                                onClick={() => handleOpenDisputeChat(dispute)}
-                                className="flex items-center gap-1.5 px-3 py-2 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-lg text-xs text-gray-400 transition-all"
-                              >
-                                <MessageCircle className="w-3.5 h-3.5" />
-                                Chat
-                              </button>
-                            </div>
-                          </motion.div>
-                        );
-                      })
+                      openDisputes.map((dispute, i) => (
+                        <DisputeCard
+                          key={dispute.id}
+                          dispute={dispute}
+                          reasonInfo={getDisputeReasonInfo(dispute.dispute?.reason)}
+                          variant="open"
+                          index={i}
+                          onInvestigate={startInvestigating}
+                          onChat={handleOpenDisputeChat}
+                        />
+                      ))
                     ) : (
                       <div className="flex flex-col items-center justify-center h-full py-12">
                         <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mb-3">
@@ -1047,83 +606,20 @@ export default function ComplianceDashboard() {
                 <div className="h-full overflow-y-auto p-3 space-y-3">
                   <AnimatePresence mode="popLayout">
                     {investigatingDisputes.length > 0 ? (
-                      investigatingDisputes.map((dispute, i) => {
-                        const reasonInfo = getDisputeReasonInfo(dispute.dispute?.reason);
-                        return (
-                          <motion.div
-                            key={dispute.id}
-                            layout
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            exit={{ opacity: 0, x: 10 }}
-                            transition={{ delay: i * 0.03 }}
-                            className="p-3 bg-[#151515] rounded-xl border border-orange-500/20 hover:border-orange-500/30 transition-all"
-                          >
-                            {/* Header */}
-                            <div className="flex items-start gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                                <Search className="w-5 h-5 text-orange-400" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-bold">#{dispute.orderNumber}</span>
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded">
-                                    In Progress
-                                  </span>
-                                </div>
-                                <p className={`text-xs ${reasonInfo.color} mt-0.5`}>
-                                  {reasonInfo.icon} {reasonInfo.label}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm font-bold">${dispute.cryptoAmount.toLocaleString()}</p>
-                                <p className="text-[10px] text-orange-400">
-                                  {formatTimeAgo(dispute.dispute?.createdAt || dispute.createdAt)}
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* Parties Mini */}
-                            <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center gap-2">
-                              <div className="flex items-center gap-1">
-                                <div className="w-5 h-5 rounded-full bg-blue-500/10 flex items-center justify-center text-[10px]">
-                                  {getEmoji(dispute.user.name)}
-                                </div>
-                                <span className="text-[10px] text-gray-400">{dispute.user.name}</span>
-                              </div>
-                              <span className="text-[10px] text-gray-600">vs</span>
-                              <div className="flex items-center gap-1">
-                                <div className="w-5 h-5 rounded-full bg-purple-500/10 flex items-center justify-center text-[10px]">
-                                  {getEmoji(dispute.merchant.name)}
-                                </div>
-                                <span className="text-[10px] text-gray-400">{dispute.merchant.name}</span>
-                              </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="mt-3 flex items-center gap-2">
-                              <button
-                                onClick={() => handleOpenDisputeChat(dispute)}
-                                className="flex items-center gap-1.5 px-3 py-2 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-lg text-xs text-gray-400 transition-all"
-                              >
-                                <MessageCircle className="w-3.5 h-3.5" />
-                                Chat
-                              </button>
-                              <motion.button
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => {
-                                  setSelectedDispute(dispute);
-                                  setShowResolveModal(true);
-                                }}
-                                className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-400 rounded-lg text-xs font-bold text-black transition-all"
-                              >
-                                <Scale className="w-3.5 h-3.5" />
-                                Resolve
-                              </motion.button>
-                            </div>
-                          </motion.div>
-                        );
-                      })
+                      investigatingDisputes.map((dispute, i) => (
+                        <DisputeCard
+                          key={dispute.id}
+                          dispute={dispute}
+                          reasonInfo={getDisputeReasonInfo(dispute.dispute?.reason)}
+                          variant="investigating"
+                          index={i}
+                          onChat={handleOpenDisputeChat}
+                          onResolve={(d) => {
+                            setSelectedDispute(d);
+                            setShowResolveModal(true);
+                          }}
+                        />
+                      ))
                     ) : (
                       <div className="flex flex-col items-center justify-center h-full py-12">
                         <div className="w-16 h-16 rounded-full bg-white/[0.04] flex items-center justify-center mb-3">
@@ -1155,10 +651,10 @@ export default function ComplianceDashboard() {
                       resolvedDisputes.map((dispute, i) => {
                         const resolution = dispute.dispute?.status?.replace("resolved_", "") || "";
                         const resolutionInfo = {
-                          user: { icon: "👤", label: "Favor User", color: "bg-blue-500/10 text-blue-400" },
-                          merchant: { icon: "🏪", label: "Favor Merchant", color: "bg-purple-500/10 text-purple-400" },
-                          split: { icon: "⚖️", label: "Split", color: "bg-orange-500/10 text-orange-400" },
-                        }[resolution] || { icon: "✓", label: "Resolved", color: "bg-emerald-500/10 text-emerald-400" };
+                          user: { icon: "\u{1F464}", label: "Favor User", color: "bg-blue-500/10 text-blue-400" },
+                          merchant: { icon: "\u{1F3EA}", label: "Favor Merchant", color: "bg-purple-500/10 text-purple-400" },
+                          split: { icon: "\u2696\uFE0F", label: "Split", color: "bg-orange-500/10 text-orange-400" },
+                        }[resolution] || { icon: "\u2713", label: "Resolved", color: "bg-emerald-500/10 text-emerald-400" };
 
                         return (
                           <motion.div
@@ -1181,7 +677,7 @@ export default function ComplianceDashboard() {
                                   </span>
                                 </div>
                                 <p className="text-xs text-gray-500 mt-0.5">
-                                  ${dispute.cryptoAmount.toLocaleString()} • {formatTimeAgo(dispute.dispute?.resolvedAt || dispute.createdAt)}
+                                  ${dispute.cryptoAmount.toLocaleString()} {"\u2022"} {formatTimeAgo(dispute.dispute?.resolvedAt || dispute.createdAt)}
                                 </p>
                               </div>
                               <button className="p-1.5 hover:bg-white/[0.04] rounded">
@@ -1557,9 +1053,9 @@ export default function ComplianceDashboard() {
                           notif.type === 'escalation' ? 'bg-orange-500/20' :
                           'bg-white/[0.08]'
                         }`}>
-                          {notif.type === 'dispute' ? '⚠️' :
-                           notif.type === 'resolution' ? '✅' :
-                           notif.type === 'escalation' ? '🔥' : '🔔'}
+                          {notif.type === 'dispute' ? '\u26A0\uFE0F' :
+                           notif.type === 'resolution' ? '\u2705' :
+                           notif.type === 'escalation' ? '\u{1F525}' : '\u{1F514}'}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs text-gray-300 leading-tight">{notif.message}</p>
@@ -1644,7 +1140,7 @@ export default function ComplianceDashboard() {
                           }}
                           className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 rounded text-blue-400 hover:bg-blue-500/20 transition-colors"
                         >
-                          👤 {chatDispute?.user.name || "User"}
+                          {"\u{1F464}"} {chatDispute?.user.name || "User"}
                         </button>
                         <button
                           onClick={() => {
@@ -1662,9 +1158,9 @@ export default function ComplianceDashboard() {
                           }}
                           className="text-[10px] px-1.5 py-0.5 bg-purple-500/10 rounded text-purple-400 hover:bg-purple-500/20 transition-colors"
                         >
-                          🏪 {chatDispute?.merchant.name || "Merchant"}
+                          {"\u{1F3EA}"} {chatDispute?.merchant.name || "Merchant"}
                         </button>
-                        <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/10 rounded text-orange-400">🛡️ You</span>
+                        <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/10 rounded text-orange-400">{"\u{1F6E1}\uFE0F"} You</span>
                       </div>
                     );
                   })()}
@@ -1690,11 +1186,11 @@ export default function ComplianceDashboard() {
                             {(() => {
                               try {
                                 const data = JSON.parse(msg.text);
-                                if (data.type === 'dispute_opened') return `🚨 ${data.reason}`;
-                                if (data.type === 'resolution_proposed') return `⚖️ Resolution proposed: ${data.resolution}`;
-                                if (data.type === 'resolution_rejected') return `❌ Resolution rejected`;
-                                if (data.type === 'resolution_accepted') return `✅ Resolution accepted by ${data.party}`;
-                                if (data.type === 'resolution_finalized') return `🎉 Dispute resolved!`;
+                                if (data.type === 'dispute_opened') return `\u{1F6A8} ${data.reason}`;
+                                if (data.type === 'resolution_proposed') return `\u2696\uFE0F Resolution proposed: ${data.resolution}`;
+                                if (data.type === 'resolution_rejected') return `\u274C Resolution rejected`;
+                                if (data.type === 'resolution_accepted') return `\u2705 Resolution accepted by ${data.party}`;
+                                if (data.type === 'resolution_finalized') return `\u{1F389} Dispute resolved!`;
                                 return msg.text;
                               } catch {
                                 return msg.text;
@@ -1720,7 +1216,7 @@ export default function ComplianceDashboard() {
                           {/* Sender name */}
                           {msg.from !== "me" && (
                             <p className={`text-[10px] ${senderColor} mb-1 px-1`}>
-                              {msg.senderType === 'user' ? '👤' : msg.senderType === 'merchant' ? '🏪' : '🛡️'} {senderLabel}
+                              {msg.senderType === 'user' ? '\u{1F464}' : msg.senderType === 'merchant' ? '\u{1F3EA}' : '\u{1F6E1}\uFE0F'} {senderLabel}
                             </p>
                           )}
                           <div
@@ -1842,212 +1338,19 @@ export default function ComplianceDashboard() {
       </div>
 
       {/* Resolve Modal */}
-      <AnimatePresence>
-        {showResolveModal && selectedDispute && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
-              onClick={() => setShowResolveModal(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md"
-            >
-              <div className="bg-[#151515] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
-                {/* Header */}
-                <div className="px-6 py-4 border-b border-white/[0.04] flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                      <Scale className="w-5 h-5 text-orange-400" />
-                    </div>
-                    <div>
-                      <h2 className="text-base font-semibold">Resolve Dispute</h2>
-                      <p className="text-xs text-gray-500">#{selectedDispute.orderNumber} • ${selectedDispute.cryptoAmount.toLocaleString()}</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowResolveModal(false)}
-                    className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
-                  >
-                    <X className="w-5 h-5 text-gray-500" />
-                  </button>
-                </div>
-
-                {/* Body */}
-                <div className="p-6 space-y-5">
-                  {/* Parties Summary */}
-                  <div className="flex items-center gap-4 p-4 bg-[#1a1a1a] rounded-xl">
-                    <div className="flex-1 text-center">
-                      <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-lg mx-auto mb-2">
-                        {getEmoji(selectedDispute.user.name)}
-                      </div>
-                      <p className="text-xs font-medium">{selectedDispute.user.name}</p>
-                      <p className="text-[10px] text-gray-500">{selectedDispute.user.trades} trades</p>
-                    </div>
-                    <div className="text-gray-600">vs</div>
-                    <div className="flex-1 text-center">
-                      <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center text-lg mx-auto mb-2">
-                        {getEmoji(selectedDispute.merchant.name)}
-                      </div>
-                      <p className="text-xs font-medium">{selectedDispute.merchant.name}</p>
-                      <p className="text-[10px] text-gray-500">{selectedDispute.merchant.trades} trades</p>
-                    </div>
-                  </div>
-
-                  {/* Resolution Options */}
-                  <div>
-                    <label className="text-xs text-gray-500 uppercase tracking-wide mb-3 block">Resolution</label>
-                    <div className="grid grid-cols-3 gap-3">
-                      <button
-                        onClick={() => setResolveForm(prev => ({ ...prev, resolution: "user" }))}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
-                          resolveForm.resolution === "user"
-                            ? "border-blue-500/50 bg-blue-500/10"
-                            : "border-white/[0.04] hover:border-white/[0.08] bg-[#1a1a1a]"
-                        }`}
-                      >
-                        <span className="text-2xl">👤</span>
-                        <span className="text-xs font-medium">Favor User</span>
-                      </button>
-
-                      <button
-                        onClick={() => setResolveForm(prev => ({ ...prev, resolution: "split" }))}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
-                          resolveForm.resolution === "split"
-                            ? "border-orange-500/50 bg-orange-500/10"
-                            : "border-white/[0.04] hover:border-white/[0.08] bg-[#1a1a1a]"
-                        }`}
-                      >
-                        <span className="text-2xl">⚖️</span>
-                        <span className="text-xs font-medium">Split</span>
-                      </button>
-
-                      <button
-                        onClick={() => setResolveForm(prev => ({ ...prev, resolution: "merchant" }))}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
-                          resolveForm.resolution === "merchant"
-                            ? "border-purple-500/50 bg-purple-500/10"
-                            : "border-white/[0.04] hover:border-white/[0.08] bg-[#1a1a1a]"
-                        }`}
-                      >
-                        <span className="text-2xl">🏪</span>
-                        <span className="text-xs font-medium">Favor Merchant</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Split Percentages */}
-                  {resolveForm.resolution === "split" && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs text-gray-500 mb-2 block">User Gets</label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            value={resolveForm.splitUser}
-                            onChange={(e) => {
-                              const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
-                              setResolveForm(prev => ({
-                                ...prev,
-                                splitUser: val,
-                                splitMerchant: 100 - val,
-                              }));
-                            }}
-                            className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none pr-8"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">%</span>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs text-gray-500 mb-2 block">Merchant Gets</label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            value={resolveForm.splitMerchant}
-                            onChange={(e) => {
-                              const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
-                              setResolveForm(prev => ({
-                                ...prev,
-                                splitMerchant: val,
-                                splitUser: 100 - val,
-                              }));
-                            }}
-                            className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none pr-8"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">%</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Notes */}
-                  <div>
-                    <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Notes (Optional)</label>
-                    <textarea
-                      value={resolveForm.notes}
-                      onChange={(e) => setResolveForm(prev => ({ ...prev, notes: e.target.value }))}
-                      placeholder="Add resolution notes..."
-                      rows={3}
-                      className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 resize-none focus:ring-1 focus:ring-orange-500/30"
-                    />
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="px-6 pb-6 space-y-3">
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setShowResolveModal(false)}
-                      className="flex-1 py-3 rounded-xl text-sm font-medium bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <motion.button
-                      whileTap={{ scale: 0.98 }}
-                      onClick={resolveDispute}
-                      disabled={!resolveForm.resolution}
-                      className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-500 text-black hover:bg-orange-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
-                    >
-                      <Check className="w-4 h-4" />
-                      Propose
-                    </motion.button>
-                  </div>
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    onClick={finalizeDispute}
-                    disabled={!resolveForm.resolution || isProcessingOnChain}
-                    className="w-full py-3 rounded-xl text-sm font-bold bg-red-600 text-white hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
-                  >
-                    {isProcessingOnChain ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Processing on-chain...
-                      </>
-                    ) : (
-                      <>
-                        <Shield className="w-4 h-4" />
-                        Finalize &amp; Release/Refund Escrow
-                      </>
-                    )}
-                  </motion.button>
-                  <p className="text-[10px] text-gray-500 text-center">
-                    {member?.wallet_address && solanaWallet.connected ? (
-                      <span className="text-purple-400">Wallet connected - will process on-chain automatically</span>
-                    ) : (
-                      "Finalize will update the order status. Connect wallet for automatic on-chain processing."
-                    )}
-                  </p>
-                </div>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      <ResolveModal
+        showResolveModal={showResolveModal}
+        selectedDispute={selectedDispute}
+        resolveForm={resolveForm}
+        setResolveForm={setResolveForm}
+        isProcessingOnChain={isProcessingOnChain}
+        walletConnected={solanaWallet.connected}
+        walletAddress={solanaWallet.walletAddress}
+        memberWalletAddress={member?.wallet_address}
+        onResolve={resolveDispute}
+        onFinalize={finalizeDispute}
+        onClose={() => setShowResolveModal(false)}
+      />
 
       {/* Profile Modal */}
       <AnimatePresence>
@@ -2115,7 +1418,7 @@ export default function ComplianceDashboard() {
                     </div>
                     <p className="text-2xl font-bold flex items-center gap-1">
                       {selectedProfile.rating.toFixed(1)}
-                      <span className="text-sm text-yellow-500">★</span>
+                      <span className="text-sm text-yellow-500">{"\u2605"}</span>
                     </p>
                   </div>
                   <div className="p-4 bg-[#1a1a1a] rounded-xl">

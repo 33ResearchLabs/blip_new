@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMerchantById, updateMerchant } from '@/lib/db/repositories/merchants';
 import { updateMerchantSchema, uuidSchema } from '@/lib/validation/schemas';
+import { requireAuth, forbiddenResponse } from '@/lib/middleware/auth';
 
 export async function GET(
   request: NextRequest,
@@ -49,6 +50,15 @@ export async function PATCH(
         { success: false, error: 'Invalid merchant ID format' },
         { status: 400 }
       );
+    }
+
+    // Require authentication for profile modification
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
+    // Verify the authenticated merchant matches the profile being modified
+    if (auth.actorType === 'merchant' && auth.actorId !== id) {
+      return forbiddenResponse('You can only modify your own profile');
     }
 
     const body = await request.json();

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Activity, Users, Clock, Loader2 } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface CorridorData {
   corridor_id: string;
@@ -25,7 +26,7 @@ export function MarketSnapshot() {
 
   const fetchCorridorData = async () => {
     try {
-      const res = await fetch('/api/mempool?type=corridor&corridor_id=USDT_AED');
+      const res = await fetchWithAuth('/api/mempool?type=corridor&corridor_id=USDT_AED');
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data.corridor) {

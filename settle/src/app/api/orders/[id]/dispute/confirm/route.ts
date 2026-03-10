@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
+import { requireAuth } from '@/lib/middleware/auth';
 
 // Confirm or reject a proposed dispute resolution
 export async function POST(
@@ -7,9 +8,21 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Authorization — mandatory
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { id: orderId } = await params;
     const body = await request.json();
     const { party, action, partyId } = body;
+
+    // Verify authenticated user matches claimed partyId
+    if (auth.actorId !== partyId) {
+      return NextResponse.json(
+        { success: false, error: 'You can only confirm/reject as yourself' },
+        { status: 403 }
+      );
+    }
 
     if (!party || !action || !partyId) {
       return NextResponse.json(

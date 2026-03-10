@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { Paperclip, X, Loader2, FileText, Image as ImageIcon, File } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface FileUploadProps {
   orderId: string;
@@ -53,7 +54,7 @@ export function FileUpload({
   // Get upload signature from server
   const getSignature = async (): Promise<UploadSignature | null> => {
     try {
-      const res = await fetch('/api/upload/signature', {
+      const res = await fetchWithAuth('/api/upload/signature', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId }),

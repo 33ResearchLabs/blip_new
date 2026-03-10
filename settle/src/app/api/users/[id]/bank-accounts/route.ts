@@ -4,8 +4,9 @@ import {
   addBankAccountSchema,
   uuidSchema,
 } from '@/lib/validation/schemas';
+import { NextResponse } from 'next/server';
 import {
-  getAuthContext,
+  requireAuth,
   forbiddenResponse,
   notFoundResponse,
   validationErrorResponse,
@@ -36,14 +37,13 @@ export async function GET(
       return validationErrorResponse([idValidation.error!]);
     }
 
-    // Authorization: users can only view their own bank accounts
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'user' && auth.actorId === id;
-      if (!isOwner && auth.actorType !== 'system') {
-        logger.auth.forbidden(`GET /api/users/${id}/bank-accounts`, auth.actorId, 'Not account owner');
-        return forbiddenResponse('You can only access your own bank accounts');
-      }
+    // Authorization — mandatory
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    const isOwner = auth.actorType === 'user' && auth.actorId === id;
+    if (!isOwner && auth.actorType !== 'system') {
+      logger.auth.forbidden(`GET /api/users/${id}/bank-accounts`, auth.actorId, 'Not account owner');
+      return forbiddenResponse('You can only access your own bank accounts');
     }
 
     // Check user exists
@@ -53,7 +53,7 @@ export async function GET(
     }
 
     const accounts = await getUserBankAccounts(id);
-    logger.api.request('GET', `/api/users/${id}/bank-accounts`, auth?.actorId);
+    logger.api.request('GET', `/api/users/${id}/bank-accounts`, auth.actorId);
     return successResponse(accounts);
   } catch (error) {
     logger.api.error('GET', '/api/users/[id]/bank-accounts', error as Error);
@@ -83,14 +83,13 @@ export async function POST(
       return validationErrorResponse(errors);
     }
 
-    // Authorization: users can only add bank accounts to their own profile
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'user' && auth.actorId === id;
-      if (!isOwner && auth.actorType !== 'system') {
-        logger.auth.forbidden(`POST /api/users/${id}/bank-accounts`, auth.actorId, 'Adding to different user');
-        return forbiddenResponse('You can only add bank accounts to your own profile');
-      }
+    // Authorization — mandatory
+    const authPost = await requireAuth(request);
+    if (authPost instanceof NextResponse) return authPost;
+    const isPostOwner = authPost.actorType === 'user' && authPost.actorId === id;
+    if (!isPostOwner && authPost.actorType !== 'system') {
+      logger.auth.forbidden(`POST /api/users/${id}/bank-accounts`, authPost.actorId, 'Adding to different user');
+      return forbiddenResponse('You can only add bank accounts to your own profile');
     }
 
     // Check user exists

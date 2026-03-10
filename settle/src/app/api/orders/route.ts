@@ -7,7 +7,7 @@ import {
   userOrdersQuerySchema,
 } from '@/lib/validation/schemas';
 import {
-  getAuthContext,
+  requireAuth,
   verifyUser,
   forbiddenResponse,
   validationErrorResponse,
@@ -41,14 +41,13 @@ export async function GET(request: NextRequest) {
 
     const { user_id } = parseResult.data;
 
-    // Authorization: check if requester can access this user's orders
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'user' && auth.actorId === user_id;
-      if (!isOwner && auth.actorType !== 'system') {
-        logger.auth.forbidden('GET /api/orders', auth.actorId, 'Not order owner');
-        return forbiddenResponse('You can only access your own orders');
-      }
+    // Authorization: require authenticated user
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    const isOwner = auth.actorType === 'user' && auth.actorId === user_id;
+    if (!isOwner && auth.actorType !== 'system') {
+      logger.auth.forbidden('GET /api/orders', auth.actorId, 'Not order owner');
+      return forbiddenResponse('You can only access your own orders');
     }
 
     const orders = await getUserOrders(user_id);
@@ -94,14 +93,13 @@ export async function POST(request: NextRequest) {
       buyer_merchant_id,
     } = parseResult.data;
 
-    // Authorization: verify the user exists and is making a request for themselves
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'user' && auth.actorId === user_id;
-      if (!isOwner && auth.actorType !== 'system') {
-        logger.auth.forbidden('POST /api/orders', auth.actorId, 'Creating order for different user');
-        return forbiddenResponse('You can only create orders for yourself');
-      }
+    // Authorization: require authenticated user creating order for themselves
+    const auth = await requireAuth(request, body);
+    if (auth instanceof NextResponse) return auth;
+    const isOwner = auth.actorType === 'user' && auth.actorId === user_id;
+    if (!isOwner && auth.actorType !== 'system') {
+      logger.auth.forbidden('POST /api/orders', auth.actorId, 'Creating order for different user');
+      return forbiddenResponse('You can only create orders for yourself');
     }
 
     // Verify user exists

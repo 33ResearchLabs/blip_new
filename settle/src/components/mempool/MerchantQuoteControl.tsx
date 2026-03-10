@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Settings, Save, Loader2, Power, DollarSign, Package } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface MerchantQuote {
   id: string;
@@ -45,7 +46,7 @@ export function MerchantQuoteControl({
   const fetchQuote = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(
+      const res = await fetchWithAuth(
         `/api/merchant-quotes?merchant_id=${merchantId}&corridor_id=${corridorId}`
       );
       if (res.ok) {
@@ -71,7 +72,7 @@ export function MerchantQuoteControl({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const res = await fetch('/api/merchant-quotes', {
+      const res = await fetchWithAuth('/api/merchant-quotes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

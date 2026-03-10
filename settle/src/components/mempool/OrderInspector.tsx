@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, ArrowUpCircle, CheckCircle, Clock, TrendingUp, Activity, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface MempoolOrder {
   id: string;
@@ -62,7 +63,7 @@ export function OrderInspector({
 
     setIsLoadingEvents(true);
     try {
-      const res = await fetch(`/api/mempool?type=events&order_id=${order.id}&limit=20`);
+      const res = await fetchWithAuth(`/api/mempool?type=events&order_id=${order.id}&limit=20`);
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -81,7 +82,7 @@ export function OrderInspector({
 
     setIsBumping(true);
     try {
-      const res = await fetch('/api/mempool', {
+      const res = await fetchWithAuth('/api/mempool', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -113,7 +114,7 @@ export function OrderInspector({
 
     setIsAccepting(true);
     try {
-      const res = await fetch('/api/mempool', {
+      const res = await fetchWithAuth('/api/mempool', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

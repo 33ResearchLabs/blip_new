@@ -7,6 +7,7 @@ import {
 } from '@/lib/arbiters/repository';
 import { checkArbiterEligibility, ARBITER_REQUIREMENTS } from '@/lib/arbiters/types';
 import { query } from '@/lib/db';
+import { requireAuth, requireAdminAuth } from '@/lib/middleware/auth';
 
 // GET - Get arbiter info or leaderboard
 export async function GET(request: NextRequest) {
@@ -121,6 +122,10 @@ export async function GET(request: NextRequest) {
 // POST - Register as arbiter
 export async function POST(request: NextRequest) {
   try {
+    // Authorization — must be the user registering themselves
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const body = await request.json();
     const { user_id, wallet_address } = body;
 
@@ -128,6 +133,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'user_id and wallet_address are required' },
         { status: 400 }
+      );
+    }
+
+    // Verify the authenticated user is registering themselves
+    if (auth.actorType !== 'system' && auth.actorId !== user_id) {
+      return NextResponse.json(
+        { success: false, error: 'You can only register yourself as an arbiter' },
+        { status: 403 }
       );
     }
 
@@ -191,8 +204,12 @@ export async function POST(request: NextRequest) {
 }
 
 // PUT - Initialize arbiter system (admin)
-export async function PUT() {
+export async function PUT(request: NextRequest) {
   try {
+    // Admin-only endpoint
+    const adminAuth = requireAdminAuth(request);
+    if (adminAuth) return adminAuth;
+
     await initializeArbiterTables();
 
     return NextResponse.json({

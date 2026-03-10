@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Loader2, AlertCircle } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface UsernameModalProps {
   isOpen: boolean;
@@ -55,7 +56,7 @@ export default function UsernameModal({
       setError('');
 
       try {
-        const response = await fetch(apiEndpoint, {
+        const response = await fetchWithAuth(apiEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

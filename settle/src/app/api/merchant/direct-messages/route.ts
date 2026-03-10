@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
   getMerchantDirectConversations,
   getDirectMessages,
@@ -7,7 +7,7 @@ import {
   getMerchantUnreadDirectCount,
 } from '@/lib/db/repositories/directMessages';
 import {
-  getAuthContext,
+  requireAuth,
   verifyMerchant,
   forbiddenResponse,
   validationErrorResponse,
@@ -27,12 +27,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Authorization check
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'merchant' && auth.actorId === merchantId;
-      if (!isOwner && auth.actorType !== 'system') {
-        return forbiddenResponse('You can only access your own messages');
-      }
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    if (auth.actorType === 'merchant' && auth.actorId !== merchantId) {
+      return forbiddenResponse('You can only access your own messages');
     }
 
     // Verify merchant exists
@@ -85,12 +83,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Authorization check
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'merchant' && auth.actorId === merchant_id;
-      if (!isOwner && auth.actorType !== 'system') {
-        return forbiddenResponse('You can only send messages as yourself');
-      }
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    if (auth.actorType === 'merchant' && auth.actorId !== merchant_id) {
+      return forbiddenResponse('You can only send messages as yourself');
     }
 
     // Verify merchant exists

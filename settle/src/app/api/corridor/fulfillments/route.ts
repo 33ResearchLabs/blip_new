@@ -10,8 +10,12 @@ import {
   getActiveFulfillmentsForProvider,
   getFulfillmentByOrderId,
 } from '@/lib/db/repositories/corridor';
+import { requireAuth } from '@/lib/middleware/auth';
 
 export async function GET(request: NextRequest) {
+  // Require auth to view fulfillments
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const providerMerchantId = request.nextUrl.searchParams.get('provider_merchant_id');
   const orderId = request.nextUrl.searchParams.get('order_id');
 

@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
   createRating,
   getOrderRatingStatus,
@@ -11,7 +11,7 @@ import {
 } from '@/lib/db/repositories/ratings';
 import { queryOne } from '@/lib/db';
 import {
-  getAuthContext,
+  requireAuth,
   validationErrorResponse,
   successResponse,
   errorResponse,
@@ -48,13 +48,12 @@ export async function GET(request: NextRequest) {
         return validationErrorResponse(['entity_type and entity_id are required for pending ratings']);
       }
 
-      // Authorization check
-      const auth = getAuthContext(request);
-      if (auth) {
-        const isOwner = auth.actorType === entityType && auth.actorId === entityId;
-        if (!isOwner && auth.actorType !== 'system') {
-          return forbiddenResponse('You can only view your own pending ratings');
-        }
+      // Authorization — mandatory for pending ratings
+      const auth = await requireAuth(request);
+      if (auth instanceof NextResponse) return auth;
+      const isOwner = auth.actorType === entityType && auth.actorId === entityId;
+      if (!isOwner && auth.actorType !== 'system') {
+        return forbiddenResponse('You can only view your own pending ratings');
       }
 
       if (entityType === 'merchant') {
@@ -92,13 +91,12 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(['Rating must be between 1 and 5']);
     }
 
-    // Authorization check
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === rater_type && auth.actorId === rater_id;
-      if (!isOwner && auth.actorType !== 'system') {
-        return forbiddenResponse('You can only submit ratings as yourself');
-      }
+    // Authorization — mandatory
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    const isAuthOwner = auth.actorType === rater_type && auth.actorId === rater_id;
+    if (!isAuthOwner && auth.actorType !== 'system') {
+      return forbiddenResponse('You can only submit ratings as yourself');
     }
 
     // Check if already rated

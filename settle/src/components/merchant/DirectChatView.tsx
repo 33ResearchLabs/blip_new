@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Send, Store, User, CheckCheck, Paperclip, Loader2, X, Image as ImageIcon } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface DirectChatMessage {
   id: string;
@@ -85,7 +86,7 @@ export function DirectChatView({
 
     setIsUploading(true);
     try {
-      const sigRes = await fetch('/api/upload/signature', {
+      const sigRes = await fetchWithAuth('/api/upload/signature', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId: 'direct-chat' }),
@@ -102,7 +103,7 @@ export function DirectChatView({
       formData.append('api_key', sig.apiKey);
       formData.append('folder', sig.folder);
 
-      const uploadRes = await fetch(
+      const uploadRes = await fetchWithAuth(
         `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`,
         { method: 'POST', body: formData }
       );

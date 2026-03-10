@@ -1,7 +1,7 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import {
-  getAuthContext,
+  requireAuth,
   verifyMerchant,
   forbiddenResponse,
   validationErrorResponse,
@@ -25,13 +25,12 @@ export async function GET(request: NextRequest) {
       return validationErrorResponse(['merchant_id is required']);
     }
 
-    // Authorization check
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'merchant' && auth.actorId === merchantId;
-      if (!isOwner && auth.actorType !== 'system') {
-        return forbiddenResponse('You can only access your own analytics');
-      }
+    // Authorization check — mandatory
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    const isOwner = auth.actorType === 'merchant' && auth.actorId === merchantId;
+    if (!isOwner && auth.actorType !== 'system') {
+      return forbiddenResponse('You can only access your own analytics');
     }
 
     // Verify merchant exists

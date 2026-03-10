@@ -1,14 +1,21 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { requireAdminAuth } from '@/lib/middleware/auth';
 
 // Clear all orders from the database (development only)
-export async function POST() {
+export async function POST(request: NextRequest) {
   // Block in production - this is a destructive endpoint
   if (process.env.NODE_ENV === 'production') {
     return NextResponse.json(
       { success: false, error: 'This endpoint is disabled in production' },
       { status: 403 }
     );
+  }
+
+  // Require admin auth even in dev (unless ADMIN_SECRET not set)
+  if (process.env.ADMIN_SECRET) {
+    const authError = requireAdminAuth(request);
+    if (authError) return authError;
   }
 
   try {
@@ -34,6 +41,6 @@ export async function POST() {
 }
 
 // Also support GET for easy browser access
-export async function GET() {
-  return POST();
+export async function GET(request: NextRequest) {
+  return POST(request);
 }

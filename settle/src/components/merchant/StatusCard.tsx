@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Shield,
 } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface StatusCardProps {
   balance: number;
@@ -95,7 +96,7 @@ export const StatusCard = memo(function StatusCard({
 
   useEffect(() => {
     if (!merchantId) return;
-    fetch(`/api/reputation?entityId=${merchantId}&entityType=merchant`)
+    fetchWithAuth(`/api/reputation?entityId=${merchantId}&entityType=merchant`)
       .then(r => r.json())
       .then(data => {
         if (data.success && data.data?.score) {
@@ -107,7 +108,7 @@ export const StatusCard = memo(function StatusCard({
 
   const fetchCorridorData = async () => {
     try {
-      const res = await fetch('/api/corridor/dynamic-rate');
+      const res = await fetchWithAuth('/api/corridor/dynamic-rate');
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
@@ -124,7 +125,7 @@ export const StatusCard = memo(function StatusCard({
   const fetchSaedBalance = useCallback(async () => {
     if (!merchantId) return;
     try {
-      const res = await fetch(`/api/convert?userId=${merchantId}&type=merchant`);
+      const res = await fetchWithAuth(`/api/convert?userId=${merchantId}&type=merchant`);
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.balances) {
@@ -170,7 +171,7 @@ export const StatusCard = memo(function StatusCard({
         ? Math.floor(amount * 1_000_000)
         : Math.floor(amount * 100);
 
-      const response = await fetch('/api/convert', {
+      const response = await fetchWithAuth('/api/convert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -1,10 +1,21 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  typescript: {
-    // Pre-existing type error in typography.ts - ignore during build
-    ignoreBuildErrors: true,
-  },
+  // TypeScript errors MUST be fixed — do not set ignoreBuildErrors: true
 };
 
-export default nextConfig;
+// Wrap with Sentry if @sentry/nextjs is installed
+let exportedConfig: NextConfig = nextConfig;
+try {
+  const { withSentryConfig } = require("@sentry/nextjs");
+  exportedConfig = withSentryConfig(nextConfig, {
+    // Suppresses source map upload logs during build
+    silent: true,
+    // Automatically tree-shake Sentry logger statements to reduce bundle size
+    disableLogger: true,
+  });
+} catch {
+  // @sentry/nextjs not installed — skip Sentry wrapper
+}
+
+export default exportedConfig;

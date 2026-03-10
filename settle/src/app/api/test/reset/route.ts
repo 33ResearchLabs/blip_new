@@ -15,12 +15,12 @@ import fs from 'fs';
 import path from 'path';
 
 export async function POST(request: Request) {
-  // Guard: Only allow in non-production environments (or test harness)
-  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_TEST_ENDPOINTS !== '1') {
+  // Guard: Block in production entirely (no bypass flag)
+  if (process.env.NODE_ENV === 'production') {
     return NextResponse.json(
       {
         success: false,
-        error: 'Reset endpoint is disabled in production for safety',
+        error: 'Reset endpoint is disabled in production',
       },
       { status: 403 }
     );

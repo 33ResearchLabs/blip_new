@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { BlipScoreBreakdown, SORT_OPTIONS, SortOption } from "@/lib/scoring/blipScore";
 import { UserBadge } from "./UserBadge";
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface MerchantInfo {
   id: string;
@@ -105,7 +106,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
 
   // Fetch initial ref price on mount
   useEffect(() => {
-    fetch("/api/corridor/dynamic-rate")
+    fetchWithAuth("/api/corridor/dynamic-rate")
       .then(res => res.json())
       .then(data => {
         if (data.success && data.data?.ref_price) {
@@ -150,7 +151,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
         params.set("payment_method", paymentFilter);
       }
 
-      const res = await fetch(`/api/marketplace/offers?${params.toString()}`);
+      const res = await fetchWithAuth(`/api/marketplace/offers?${params.toString()}`);
       if (!res.ok) {
         throw new Error("Failed to fetch offers");
       }

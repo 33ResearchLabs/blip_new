@@ -7,8 +7,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getProviderByMerchantId, upsertProvider } from '@/lib/db/repositories/corridor';
+import { requireAuth, forbiddenResponse } from '@/lib/middleware/auth';
+import { checkRateLimit, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 
 export async function GET(request: NextRequest) {
+  // Require auth to view provider config
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
   const merchantId = request.nextUrl.searchParams.get('merchant_id');
   if (!merchantId) {
     return NextResponse.json({ success: false, error: 'merchant_id required' }, { status: 400 });
@@ -24,12 +30,25 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Rate limit provider updates
+  const rl = checkRateLimit(request, 'corridor:providers', STANDARD_LIMIT);
+  if (rl) return rl;
+
+  // Require DB-verified auth
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const body = await request.json();
     const { merchant_id, is_active, fee_percentage, min_amount, max_amount, auto_accept } = body;
 
     if (!merchant_id) {
       return NextResponse.json({ success: false, error: 'merchant_id required' }, { status: 400 });
+    }
+
+    // Only the merchant themselves or system can update their provider config
+    if (auth.actorType === 'merchant' && auth.actorId !== merchant_id) {
+      return forbiddenResponse('You can only manage your own provider config');
     }
 
     if (fee_percentage != null && (fee_percentage < 0 || fee_percentage > 10)) {

@@ -10,8 +10,8 @@ import { getOrderById } from '../db/repositories/orders';
 import { getUserById } from '../db/repositories/users';
 import { getMerchantById } from '../db/repositories/merchants';
 
-// Admin auth secret - MUST be set in production
-const ADMIN_SECRET = process.env.ADMIN_SECRET || 'dev-only-admin-secret-change-in-production';
+// Admin auth secret - MUST be configured via environment variable
+const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
 
 /**
  * Generate a signed admin token (HMAC-based, stateless)
@@ -60,6 +60,13 @@ export function verifyAdminToken(token: string): { valid: boolean; username?: st
  * Usage: const authErr = requireAdminAuth(request); if (authErr) return authErr;
  */
 export function requireAdminAuth(request: NextRequest): NextResponse | null {
+  if (!ADMIN_SECRET) {
+    return NextResponse.json(
+      { success: false, error: 'Admin auth not configured — set ADMIN_SECRET env var' },
+      { status: 401 }
+    );
+  }
+
   const authHeader = request.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return NextResponse.json(
@@ -93,7 +100,22 @@ export interface AuthContext {
  * For now, we trust the actor_type and actor_id from request
  */
 export function getAuthContext(request: NextRequest, body?: Record<string, unknown>): AuthContext | null {
-  // Try to get from body first (for POST/PATCH requests)
+  // 1. Check headers first (set by middleware, most trusted)
+  const headerUserId = request.headers.get('x-user-id');
+  const headerMerchantId = request.headers.get('x-merchant-id');
+  const headerComplianceId = request.headers.get('x-compliance-id');
+
+  if (headerUserId) {
+    return { actorType: 'user', actorId: headerUserId, userId: headerUserId };
+  }
+  if (headerMerchantId) {
+    return { actorType: 'merchant', actorId: headerMerchantId, merchantId: headerMerchantId };
+  }
+  if (headerComplianceId) {
+    return { actorType: 'compliance', actorId: headerComplianceId, complianceId: headerComplianceId };
+  }
+
+  // 2. Try to get from body (for POST/PATCH requests)
   if (body) {
     const actorType = body.actor_type as string;
     const actorId = body.actor_id as string || body.sender_id as string || body.user_id as string;
@@ -139,6 +161,92 @@ export function getAuthContext(request: NextRequest, body?: Record<string, unkno
   }
 
   return null;
+}
+
+// ── Verified auth context with DB lookup + cache ──────────────────────
+
+interface CacheEntry {
+  exists: boolean;
+  ts: number;
+}
+
+const VERIFY_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const verifyCache = new Map<string, CacheEntry>();
+
+function getCached(key: string): boolean | null {
+  const entry = verifyCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > VERIFY_CACHE_TTL_MS) {
+    verifyCache.delete(key);
+    return null;
+  }
+  return entry.exists;
+}
+
+function setCache(key: string, exists: boolean): void {
+  // Evict stale entries periodically (keep map bounded)
+  if (verifyCache.size > 500) {
+    const now = Date.now();
+    for (const [k, v] of verifyCache) {
+      if (now - v.ts > VERIFY_CACHE_TTL_MS) verifyCache.delete(k);
+    }
+  }
+  verifyCache.set(key, { exists, ts: Date.now() });
+}
+
+async function actorExistsInDb(auth: AuthContext): Promise<boolean> {
+  const cacheKey = `${auth.actorType}:${auth.actorId}`;
+  const cached = getCached(cacheKey);
+  if (cached !== null) return cached;
+
+  let exists = false;
+  if (auth.actorType === 'user' && auth.userId) {
+    exists = await verifyUser(auth.userId);
+  } else if (auth.actorType === 'merchant' && auth.merchantId) {
+    exists = await verifyMerchant(auth.merchantId);
+  } else if (auth.actorType === 'system') {
+    // System actors are always valid (internal calls)
+    exists = true;
+  } else if (auth.actorType === 'compliance' && auth.complianceId) {
+    // Compliance officers are stored as users — verify they exist
+    exists = await verifyUser(auth.complianceId);
+  }
+
+  setCache(cacheKey, exists);
+  return exists;
+}
+
+/**
+ * Like getAuthContext() but also confirms the actor exists in the DB.
+ * Returns null if extraction fails OR the actor doesn't exist.
+ */
+export async function getVerifiedAuthContext(
+  request: NextRequest,
+  body?: Record<string, unknown>
+): Promise<AuthContext | null> {
+  const auth = getAuthContext(request, body);
+  if (!auth) return null;
+
+  const exists = await actorExistsInDb(auth);
+  return exists ? auth : null;
+}
+
+/**
+ * One-liner auth gate for routes.
+ * Returns an AuthContext on success or a 401 NextResponse on failure.
+ *
+ * Usage:
+ *   const auth = await requireAuth(request, body);
+ *   if (auth instanceof NextResponse) return auth;
+ *   // auth is AuthContext here
+ */
+export async function requireAuth(
+  request: NextRequest,
+  body?: Record<string, unknown>
+): Promise<AuthContext | NextResponse> {
+  const auth = await getVerifiedAuthContext(request, body);
+  if (!auth) return unauthorizedResponse('Authentication required');
+  return auth;
 }
 
 /**

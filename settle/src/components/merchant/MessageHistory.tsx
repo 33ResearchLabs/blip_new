@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { MessageCircle, Search, X, ChevronRight, Clock, User, CheckCheck } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface Conversation {
   order_id: string;
@@ -102,7 +103,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
         params.set('order_status', statusFilter);
       }
 
-      const res = await fetch(`/api/merchant/messages?${params}`);
+      const res = await fetchWithAuth(`/api/merchant/messages?${params}`);
       if (!res.ok) throw new Error('Failed to fetch');
 
       const data = await res.json();

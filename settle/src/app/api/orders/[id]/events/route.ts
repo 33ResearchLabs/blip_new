@@ -1,8 +1,8 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getOrderEvents, getOrderById } from '@/lib/db/repositories/orders';
 import { uuidSchema } from '@/lib/validation/schemas';
 import {
-  getAuthContext,
+  requireAuth,
   canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
@@ -26,8 +26,9 @@ export async function GET(
       return validationErrorResponse(['Invalid order ID format']);
     }
 
-    // Get auth context from query params
-    const auth = getAuthContext(request);
+    // Authorization check
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
 
     // Fetch order to verify it exists
     const order = await getOrderById(id);
@@ -35,13 +36,11 @@ export async function GET(
       return notFoundResponse('Order');
     }
 
-    // Check authorization if auth context provided
-    if (auth) {
-      const canAccess = await canAccessOrder(auth, id);
-      if (!canAccess) {
-        logger.auth.forbidden(`GET /api/orders/${id}/events`, auth.actorId, 'Not order participant');
-        return forbiddenResponse('You do not have access to this order');
-      }
+    // Check order access
+    const canAccess = await canAccessOrder(auth, id);
+    if (!canAccess) {
+      logger.auth.forbidden(`GET /api/orders/${id}/events`, auth.actorId, 'Not order participant');
+      return forbiddenResponse('You do not have access to this order');
     }
 
     // Fetch order events
@@ -67,7 +66,7 @@ export async function GET(
       }),
     };
 
-    logger.api.request('GET', `/api/orders/${id}/events`, auth?.actorId);
+    logger.api.request('GET', `/api/orders/${id}/events`, auth.actorId);
     return successResponse(enrichedResponse);
   } catch (error) {
     logger.api.error('GET', '/api/orders/[id]/events', error as Error);

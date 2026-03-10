@@ -1,11 +1,11 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import {
-  getAuthContext,
+  requireAuth,
+  requireAdminAuth,
   successResponse,
   errorResponse,
   validationErrorResponse,
-  unauthorizedResponse,
   forbiddenResponse,
 } from '@/lib/middleware/auth';
 
@@ -37,11 +37,10 @@ export async function GET(request: NextRequest) {
       return validationErrorResponse(['merchant_id or user_id is required']);
     }
 
-    // Verify the requester is authorized to view this ledger
-    const auth = getAuthContext(request);
-    if (!auth) {
-      return unauthorizedResponse('Authentication required to view ledger');
-    }
+    // Verify the requester is authorized (DB-verified)
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     // Users can only view their own ledger, merchants can only view their own
     if (merchantId && auth.actorType === 'merchant' && auth.actorId !== merchantId) {
       return forbiddenResponse('You can only view your own ledger');
@@ -83,14 +82,11 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/ledger - Manually log a ledger entry (admin/testing only)
+// POST /api/ledger - Manually log a ledger entry (admin only)
 export async function POST(request: NextRequest) {
-  // Block manual ledger entries in production unless admin-authenticated
-  if (process.env.NODE_ENV === 'production') {
-    const { requireAdminAuth } = await import('@/lib/middleware/auth');
-    const authError = requireAdminAuth(request);
-    if (authError) return authError;
-  }
+  // Always require admin auth for manual ledger entries
+  const authError = requireAdminAuth(request);
+  if (authError) return authError;
 
   try {
     const body = await request.json();

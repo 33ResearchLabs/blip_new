@@ -11,6 +11,7 @@ import {
   Flame,
   ArrowRightLeft,
 } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface ConfigPanelProps {
   merchantId: string | null;
@@ -101,7 +102,7 @@ export const ConfigPanel = memo(function ConfigPanel({
   useEffect(() => {
     const fetchRate = async () => {
       try {
-        const res = await fetch('/api/corridor/dynamic-rate');
+        const res = await fetchWithAuth('/api/corridor/dynamic-rate');
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.data.ref_price) {

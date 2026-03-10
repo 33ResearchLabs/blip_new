@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
   getMempoolOrders,
   getMineableOrdersForMerchant,
@@ -11,12 +11,13 @@ import {
   calculateRefPriceFromTrades,
 } from '@/lib/db/repositories/mempool';
 import {
-  getAuthContext,
+  requireAuth,
   validationErrorResponse,
   successResponse,
   errorResponse,
   forbiddenResponse,
 } from '@/lib/middleware/auth';
+import { checkRateLimit, STANDARD_LIMIT, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
 
 // GET /api/mempool - Get mempool orders or market data
 export async function GET(request: NextRequest) {
@@ -55,13 +56,12 @@ export async function GET(request: NextRequest) {
         return validationErrorResponse(['merchant_id is required for mineable orders']);
       }
 
-      // Authorization check
-      const auth = getAuthContext(request);
-      if (auth) {
-        const isOwner = auth.actorType === 'merchant' && auth.actorId === merchantId;
-        if (!isOwner && auth.actorType !== 'system') {
-          return forbiddenResponse('You can only view your own mineable orders');
-        }
+      // Authorization check (DB-verified)
+      const auth = await requireAuth(request);
+      if (auth instanceof NextResponse) return auth;
+      const isOwner = auth.actorType === 'merchant' && auth.actorId === merchantId;
+      if (!isOwner && auth.actorType !== 'system') {
+        return forbiddenResponse('You can only view your own mineable orders');
       }
 
       const orders = await getMineableOrdersForMerchant(merchantId, corridorId);
@@ -109,6 +109,14 @@ export async function GET(request: NextRequest) {
 
 // POST /api/mempool - Perform mempool actions (bump, accept)
 export async function POST(request: NextRequest) {
+  // Rate limit mutations
+  const rl = checkRateLimit(request, 'mempool:post', STRICT_LIMIT);
+  if (rl) return rl;
+
+  // Require auth for all mempool mutations
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const body = await request.json();
     const { action, order_id, merchant_id, is_auto } = body;
@@ -121,13 +129,6 @@ export async function POST(request: NextRequest) {
     if (action === 'bump') {
       if (!order_id) {
         return validationErrorResponse(['order_id is required for bump action']);
-      }
-
-      // Authorization check - only order creator can bump
-      const auth = getAuthContext(request);
-      if (auth && auth.actorType !== 'system') {
-        // TODO: Verify that the authenticated user is the order creator
-        // For now, we'll allow it if they're authenticated
       }
 
       const result = await bumpOrderPriority(order_id, is_auto || false);
@@ -146,13 +147,10 @@ export async function POST(request: NextRequest) {
         return validationErrorResponse(['order_id and merchant_id are required for accept action']);
       }
 
-      // Authorization check
-      const auth = getAuthContext(request);
-      if (auth) {
-        const isOwner = auth.actorType === 'merchant' && auth.actorId === merchant_id;
-        if (!isOwner && auth.actorType !== 'system') {
-          return forbiddenResponse('You can only accept orders as yourself');
-        }
+      // Authorization check (auth already verified above)
+      const isOwner = auth.actorType === 'merchant' && auth.actorId === merchant_id;
+      if (!isOwner && auth.actorType !== 'system') {
+        return forbiddenResponse('You can only accept orders as yourself');
       }
 
       // Self-accept guard: cannot accept your own order

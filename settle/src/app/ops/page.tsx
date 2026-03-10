@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 type Tab = 'outbox' | 'stuck' | 'workers' | 'search';
 
@@ -29,7 +30,7 @@ export default function OpsPage() {
       if (currentTab === 'search' && orderId) {
         params.set('order_id', orderId);
       }
-      const res = await fetch(`/api/ops?${params}`);
+      const res = await fetchWithAuth(`/api/ops?${params}`);
       if (res.status === 404) {
         setBlocked(true);
         return;

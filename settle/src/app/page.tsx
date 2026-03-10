@@ -8,38 +8,10 @@ import { usePusher } from "@/context/PusherContext";
 import { copyToClipboard } from "@/lib/clipboard";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowDownUp,
-  ChevronRight,
   ChevronLeft,
-  MessageCircle,
   X,
   Check,
-  Star,
-  Copy,
-  MapPin,
-  Clock,
-  User,
-  Plus,
-  Trash2,
-  Wallet,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Shield,
-  Bell,
-  Navigation,
-  ExternalLink,
-  Banknote,
-  Building2,
-  AlertTriangle,
   Loader2,
-  Sun,
-  Moon,
-  Lock,
-  TrendingUp,
-  Zap,
-  QrCode,
-  Activity,
-  ChevronDown,
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
 import { useSounds } from "@/hooks/useSounds";
@@ -89,281 +61,35 @@ const useSolanaWalletHook = () => {
   }
 };
 
-// Types
-type Screen = "home" | "order" | "escrow" | "orders" | "profile" | "chats" | "chat-view" | "create-offer" | "cash-confirm" | "matching" | "welcome" | "trade";
-type TradeType = "buy" | "sell";
-type TradePreference = "fast" | "cheap" | "best";
-type PaymentMethod = "bank" | "cash";
-type OrderStep = 1 | 2 | 3 | 4;
-type OrderStatus = "pending" | "payment" | "waiting" | "complete" | "disputed";
-
-// Merchant type from DB
-interface Merchant {
-  id: string;
-  display_name: string;
-  business_name: string;
-  rating: number;
-  total_trades: number;
-  is_online: boolean;
-  avg_response_time_mins: number;
-  wallet_address?: string;
-}
-
-// Offer type from DB
-interface Offer {
-  id: string;
-  merchant_id: string;
-  type: "buy" | "sell";
-  payment_method: PaymentMethod;
-  rate: number;
-  min_amount: number;
-  max_amount: number;
-  available_amount: number;
-  bank_name: string | null;
-  bank_account_name: string | null;
-  bank_iban: string | null;
-  location_name: string | null;
-  location_address: string | null;
-  location_lat: number | null;
-  location_lng: number | null;
-  meeting_instructions: string | null;
-  merchant: Merchant;
-}
-
-// Order from DB
-interface DbOrder {
-  id: string;
-  order_number: string;
-  user_id: string;
-  merchant_id: string;
-  offer_id: string;
-  type: "buy" | "sell";
-  payment_method: PaymentMethod;
-  crypto_amount: number;
-  crypto_currency: string;
-  fiat_amount: number;
-  fiat_currency: string;
-  rate: number;
-  status: string;
-  payment_details: Record<string, unknown> | null;
-  created_at: string;
-  expires_at: string;
-  merchant: Merchant;
-  offer: Offer;
-  unread_count?: number;
-  last_message?: {
-    content: string;
-    sender_type: "user" | "merchant" | "system";
-    created_at: string;
-  } | null;
-  // Escrow on-chain references
-  escrow_tx_hash?: string;
-  escrow_trade_id?: number;
-  escrow_trade_pda?: string;
-  escrow_pda?: string;
-  escrow_creator_wallet?: string;
-  // Merchant's wallet address captured when accepting sell orders
-  acceptor_wallet_address?: string;
-}
-
-// UI Order type (maps DB order to UI)
-interface Order {
-  id: string;
-  type: TradeType;
-  cryptoAmount: string;
-  cryptoCode: string;
-  fiatAmount: string;
-  fiatCode: string;
-  merchant: {
-    id: string;
-    name: string;
-    rating: number;
-    trades: number;
-    rate: number;
-    paymentMethod: PaymentMethod;
-    bank?: string;
-    iban?: string;
-    accountName?: string;
-    location?: string;
-    address?: string;
-    lat?: number;
-    lng?: number;
-    meetingSpot?: string;
-    walletAddress?: string;
-  };
-  status: OrderStatus;
-  step: OrderStep;
-  createdAt: Date;
-  expiresAt: Date;
-  dbStatus?: string; // Original DB status
-  unreadCount?: number;
-  lastMessage?: {
-    content: string;
-    fromMerchant: boolean;
-    createdAt: Date;
-  } | null;
-  // Escrow on-chain references for release
-  escrowTradeId?: number;
-  escrowTradePda?: string;
-  escrowCreatorWallet?: string;
-  escrowTxHash?: string;
-  // Merchant's wallet address captured when accepting (for sell order escrow release)
-  acceptorWalletAddress?: string;
-}
-
-interface BankAccount {
-  id: string;
-  bank: string;
-  iban: string;
-  name: string;
-  isDefault: boolean;
-}
-
-// Map DB status to UI status/step
-function mapDbStatusToUI(dbStatus: string): { status: OrderStatus; step: OrderStep } {
-  switch (dbStatus) {
-    case 'pending':
-      return { status: 'pending', step: 1 };
-    case 'accepted':
-    case 'escrow_pending':
-    case 'escrowed':
-    case 'payment_pending':
-      return { status: 'payment', step: 2 };
-    case 'payment_sent':
-    case 'payment_confirmed':
-    case 'releasing':
-      return { status: 'waiting', step: 3 };
-    case 'completed':
-      return { status: 'complete', step: 4 };
-    case 'cancelled':
-    case 'disputed':
-    case 'expired':
-      return { status: 'complete', step: 4 };
-    default:
-      return { status: 'pending', step: 1 };
-  }
-}
-
-// Map DB order to UI order
-function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
-  // Guard against completely missing data
-  if (!dbOrder) {
-    return null;
-  }
-
-  const { status, step } = mapDbStatusToUI(dbOrder.status);
-  const offer = dbOrder.offer;
-  // Use merchant data if available, or create a minimal fallback to prevent order disappearing
-  const merchant = dbOrder.merchant || {
-    id: dbOrder.merchant_id || 'unknown',
-    display_name: 'Merchant',
-    rating: 5.0,
-    total_trades: 0,
-    wallet_address: undefined,
-  } as Merchant;
-
-  return {
-    id: dbOrder.id,
-    type: dbOrder.type as TradeType,
-    cryptoAmount: dbOrder.crypto_amount.toString(),
-    cryptoCode: dbOrder.crypto_currency,
-    fiatAmount: dbOrder.fiat_amount.toString(),
-    fiatCode: dbOrder.fiat_currency,
-    merchant: {
-      id: merchant.id,
-      name: merchant.display_name,
-      rating: parseFloat(merchant.rating?.toString() || '5.0'),
-      trades: merchant.total_trades,
-      rate: parseFloat(dbOrder.rate.toString()),
-      paymentMethod: dbOrder.payment_method,
-      bank: offer?.bank_name || undefined,
-      iban: offer?.bank_iban || undefined,
-      accountName: offer?.bank_account_name || undefined,
-      location: offer?.location_name || undefined,
-      address: offer?.location_address || undefined,
-      lat: offer?.location_lat || undefined,
-      lng: offer?.location_lng || undefined,
-      meetingSpot: offer?.meeting_instructions || undefined,
-      walletAddress: merchant.wallet_address || undefined,
-    },
-    status,
-    step,
-    createdAt: new Date(dbOrder.created_at),
-    expiresAt: new Date(dbOrder.expires_at),
-    dbStatus: dbOrder.status,
-    unreadCount: dbOrder.unread_count || 0,
-    lastMessage: dbOrder.last_message ? {
-      content: dbOrder.last_message.content,
-      fromMerchant: dbOrder.last_message.sender_type === 'merchant',
-      createdAt: new Date(dbOrder.last_message.created_at),
-    } : null,
-    // Escrow on-chain references for release
-    escrowTradeId: dbOrder.escrow_trade_id,
-    escrowTradePda: dbOrder.escrow_trade_pda,
-    escrowCreatorWallet: dbOrder.escrow_creator_wallet,
-    escrowTxHash: dbOrder.escrow_tx_hash,
-    // Merchant's wallet address captured when accepting (for sell order escrow release)
-    acceptorWalletAddress: dbOrder.acceptor_wallet_address,
-  };
-}
-
-// Fee structure based on trade preference
-const FEE_CONFIG = {
-  fast: { totalFee: 0.03, traderCut: 0.01 },    // 3% total, 1% to trader
-  best: { totalFee: 0.025, traderCut: 0.005 },  // 2.5% total, 0.5% to trader
-  cheap: { totalFee: 0.015, traderCut: 0.0025 }, // 1.5% total, 0.25% to trader
-} as const;
-
-// ─── Sparkline SVG ────────────────────────────────────────────────────────────
-const SPARK_DATA = [28, 42, 33, 58, 44, 70, 55, 82, 69, 98, 87, 115, 102, 138];
-const HomeSparkline = ({ width = 300, height = 52 }: { width?: number; height?: number }) => {
-  const data = SPARK_DATA;
-  const max = Math.max(...data), min = Math.min(...data), rng = max - min || 1;
-  const pts = data.map((v, i) => ({
-    x: (i / (data.length - 1)) * width,
-    y: height - 6 - ((v - min) / rng) * (height - 14),
-  }));
-  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const area = `${line} L${width},${height} L0,${height} Z`;
-  const last = pts[pts.length - 1];
-  return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="w-full">
-      <defs>
-        <linearGradient id="hsg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#10b981" stopOpacity="0.28" />
-          <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-        </linearGradient>
-        <filter id="hglow">
-          <feGaussianBlur stdDeviation="2.5" result="b" />
-          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
-      </defs>
-      <path d={area} fill="url(#hsg)" />
-      <path d={line} fill="none" stroke="#10b981" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={last.x} cy={last.y} r="3.5" fill="#10b981" filter="url(#hglow)" />
-      <circle cx={last.x} cy={last.y} r="7" fill="none" stroke="#10b981" strokeWidth="1" opacity="0.35" />
-    </svg>
-  );
-};
-
-// ─── Ambient glow orbs ────────────────────────────────────────────────────────
-const HomeAmbientGlow = () => (
-  <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-    {([
-      { color: 'rgba(124,58,237,0.13)', dur: 18, style: { top: '-15%', left: '-10%', width: '65%', height: '55%' } },
-      { color: 'rgba(16,185,129,0.09)', dur: 22, style: { bottom: '-20%', right: '-10%', width: '60%', height: '55%' } },
-      { color: 'rgba(59,130,246,0.07)', dur: 26, style: { top: '35%', right: '15%', width: '40%', height: '40%' } },
-    ] as const).map((orb, i) => (
-      <motion.div
-        key={i}
-        animate={{ x: [0, 40 * (i % 2 === 0 ? 1 : -1), -30, 0], y: [0, -40, 50, 0], scale: [1, 1.15, 0.9, 1] }}
-        transition={{ duration: orb.dur, repeat: Infinity, ease: 'linear' }}
-        className="absolute rounded-full"
-        style={{ ...orb.style, background: `radial-gradient(ellipse, ${orb.color} 0%, transparent 70%)`, filter: 'blur(60px)' }}
-      />
-    ))}
-  </div>
-);
+// Types, helpers, and components extracted to @/components/user/screens/
+import type {
+  Screen,
+  TradeType,
+  TradePreference,
+  PaymentMethod,
+  OrderStep,
+  OrderStatus,
+  Offer,
+  DbOrder,
+  Order,
+  BankAccount,
+} from "@/components/user/screens/types";
+import { mapDbStatusToUI, mapDbOrderToUI, FEE_CONFIG } from "@/components/user/screens/helpers";
+import { HomeAmbientGlow } from "@/components/user/screens/HomeDecorations";
+import {
+  HomeScreen,
+  TradeCreationScreen,
+  EscrowLockScreen,
+  OrderDetailScreen,
+  OrdersListScreen,
+  ProfileScreen,
+  ChatListScreen,
+  ChatViewScreen,
+  CreateOfferScreen,
+  CashConfirmScreen,
+  MatchingScreen,
+} from "@/components/user/screens";
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 export default function Home() {
   const { theme, toggleTheme } = useTheme();
@@ -727,7 +453,7 @@ export default function Home() {
           setTimedOutOrders(prev => [...prev, { ...expiredOrder, status: 'complete' as OrderStatus, dbStatus: 'expired' }]);
           setOrders(prev => prev.filter(o => o.id !== activeOrderId));
 
-          fetch(`/api/orders/${activeOrderId}`, {
+          fetchWithAuth(`/api/orders/${activeOrderId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -798,7 +524,7 @@ export default function Home() {
   // Connect with wallet address
   const connectWallet = useCallback(async (walletAddress: string, name?: string) => {
     try {
-      const res = await fetch('/api/auth/wallet', {
+      const res = await fetchWithAuth('/api/auth/wallet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wallet_address: walletAddress, type: 'user', name }),
@@ -894,7 +620,7 @@ export default function Home() {
       const signature = bs58.default.encode(signatureUint8);
 
       // Set username via API
-      const res = await fetch('/api/auth/user', {
+      const res = await fetchWithAuth('/api/auth/user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -942,7 +668,7 @@ export default function Home() {
     setLoginError("");
 
     try {
-      const res = await fetch('/api/auth/user', {
+      const res = await fetchWithAuth('/api/auth/user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1000,7 +726,7 @@ export default function Home() {
     setLoginError("");
 
     try {
-      const res = await fetch('/api/auth/user', {
+      const res = await fetchWithAuth('/api/auth/user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1049,7 +775,7 @@ export default function Home() {
           console.log('[Session] Restoring user session:', user.username);
 
           // Validate user still exists in database
-          const checkRes = await fetch(`/api/auth/user?action=check_session&user_id=${user.id}`);
+          const checkRes = await fetchWithAuth(`/api/auth/user?action=check_session&user_id=${user.id}`);
           if (checkRes.ok) {
             const checkData = await checkRes.json();
             if (checkData.success && checkData.data?.valid) {
@@ -1093,7 +819,7 @@ export default function Home() {
   // Fetch orders
   const fetchOrders = useCallback(async (uid: string) => {
     try {
-      const res = await fetch(`/api/orders?user_id=${uid}`);
+      const res = await fetchWithAuth(`/api/orders?user_id=${uid}`);
       if (!res.ok) {
         // API not available (demo mode)
         console.log('Orders API not available - running in demo mode');
@@ -1115,7 +841,7 @@ export default function Home() {
   // Fetch bank accounts
   const fetchBankAccounts = useCallback(async (uid: string) => {
     try {
-      const res = await fetch(`/api/users/${uid}/bank-accounts`);
+      const res = await fetchWithAuth(`/api/users/${uid}/bank-accounts`);
       if (!res.ok) {
         // API not available (demo mode)
         console.log('Bank accounts API not available - running in demo mode');
@@ -1139,7 +865,7 @@ export default function Home() {
   // Fetch resolved disputes
   const fetchResolvedDisputes = useCallback(async (uid: string) => {
     try {
-      const res = await fetch(`/api/disputes/resolved?actor_type=user&actor_id=${uid}`);
+      const res = await fetchWithAuth(`/api/disputes/resolved?actor_type=user&actor_id=${uid}`);
       if (!res.ok) return;
       const data = await res.json();
       if (data.success && data.data) {
@@ -1232,7 +958,7 @@ export default function Home() {
         payment_method: paymentMethod,
         preference: tradePreference,
       });
-      const offerRes = await fetch(`/api/offers?${params}`);
+      const offerRes = await fetchWithAuth(`/api/offers?${params}`);
       const offerData = await offerRes.json();
 
       if (!offerRes.ok || !offerData.success || !offerData.data) {
@@ -1273,7 +999,7 @@ export default function Home() {
       }
 
       // Create order in DB - include buyer wallet address for crypto delivery
-      const orderRes = await fetch('/api/orders', {
+      const orderRes = await fetchWithAuth('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1357,7 +1083,7 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      const orderRes = await fetch('/api/orders', {
+      const orderRes = await fetchWithAuth('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1544,7 +1270,7 @@ export default function Home() {
       // Step 4: Create order in database with escrow details
       setEscrowTxStatus('recording');
 
-      const orderRes = await fetch('/api/orders', {
+      const orderRes = await fetchWithAuth('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1581,7 +1307,7 @@ export default function Home() {
       }
 
       // Step 5: Record escrow deposit with tx hash and on-chain references
-      const escrowRes = await fetch(`/api/orders/${orderData.data.id}/escrow`, {
+      const escrowRes = await fetchWithAuth(`/api/orders/${orderData.data.id}/escrow`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1664,7 +1390,7 @@ export default function Home() {
       }
 
       // Update status in API (always, regardless of on-chain result)
-      const res = await fetch(`/api/orders/${activeOrder.id}`, {
+      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1747,7 +1473,7 @@ export default function Home() {
         // In mock mode, credit the merchant with the USDC
         if (userIsMockMode) {
           try {
-            await fetch('/api/mock/balance', {
+            await fetchWithAuth('/api/mock/balance', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1764,7 +1490,7 @@ export default function Home() {
         }
 
         // Record the release on the backend - this also marks order as completed
-        const escrowRes = await fetch(`/api/orders/${activeOrder.id}/escrow`, {
+        const escrowRes = await fetchWithAuth(`/api/orders/${activeOrder.id}/escrow`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1800,7 +1526,7 @@ export default function Home() {
 
       // For buy orders (no escrow from user), just confirm payment received
       // This should only happen for orders where merchant releases to buyer
-      const res = await fetch(`/api/orders/${activeOrder.id}`, {
+      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1873,7 +1599,7 @@ export default function Home() {
       }
 
       // Submit dispute to API (always, regardless of on-chain result)
-      const res = await fetch(`/api/orders/${activeOrder.id}/dispute`, {
+      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/dispute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1910,7 +1636,7 @@ export default function Home() {
   // Fetch dispute info for current order
   const fetchDisputeInfo = useCallback(async (orderId: string) => {
     try {
-      const res = await fetch(`/api/orders/${orderId}/dispute`);
+      const res = await fetchWithAuth(`/api/orders/${orderId}/dispute`);
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {
@@ -1928,7 +1654,7 @@ export default function Home() {
 
     setIsRespondingToResolution(true);
     try {
-      const res = await fetch(`/api/orders/${activeOrder.id}/dispute/confirm`, {
+      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/dispute/confirm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1975,7 +1701,7 @@ export default function Home() {
 
     setRequestingExtension(true);
     try {
-      const res = await fetch(`/api/orders/${activeOrder.id}/extension`, {
+      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/extension`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2012,7 +1738,7 @@ export default function Home() {
 
     setRequestingExtension(true);
     try {
-      const res = await fetch(`/api/orders/${extensionRequest.orderId}/extension`, {
+      const res = await fetchWithAuth(`/api/orders/${extensionRequest.orderId}/extension`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2053,7 +1779,7 @@ export default function Home() {
     if (!newBank.bank || !newBank.iban || !newBank.name || !userId) return;
 
     try {
-      const res = await fetch(`/api/users/${userId}/bank-accounts`, {
+      const res = await fetchWithAuth(`/api/users/${userId}/bank-accounts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2106,12 +1832,13 @@ export default function Home() {
     );
   }
 
+
   return (
     <div className="min-h-dvh flex flex-col items-center overflow-y-auto relative" style={{ background: '#0a0a0a' }}>
       {/* Toast Notifications */}
       <NotificationToastContainer position="top-right" />
       <AnimatePresence mode="wait">
-        {/* WELCOME / LOGIN — new landing page */}
+        {/* WELCOME / LOGIN */}
         {screen === "welcome" && (
           <LandingPage
             loginForm={loginForm}
@@ -2136,383 +1863,25 @@ export default function Home() {
             className={`flex-1 w-full ${maxW} flex flex-col relative`}
             style={{ background: '#080810' }}
           >
-            <HomeAmbientGlow />
-            {/* Top Bar */}
-            <header className="px-5 pt-14 pb-3 flex items-center justify-between z-10">
-              <div>
-                <p style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.38em', color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', marginBottom: 3 }}>Portfolio</p>
-                <div className="flex items-center gap-1.5">
-                  <span style={{ fontSize: 20, fontWeight: 900, letterSpacing: '-0.04em' }}>{userName}</span>
-                  <ConnectionIndicator isConnected={!!userId} />
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <motion.button
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setScreen("chats")}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center relative"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
-                >
-                  <Bell className="w-[15px] h-[15px]" style={{ color: 'rgba(255,255,255,0.4)' }} />
-                  {orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0) > 0 && (
-                    <div className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#f97316] border-2 border-[#080810] flex items-center justify-center">
-                      <span className="text-[8px] font-bold text-white">
-                        {orders.reduce((sum, o) => sum + (o.unreadCount || 0), 0)}
-                      </span>
-                    </div>
-                  )}
-                </motion.button>
-                <motion.button
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => {
-                    if (IS_EMBEDDED_WALLET) {
-                      if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
-                      else if (embeddedWallet?.state === 'none') setShowWalletSetup(true);
-                      else setScreen("profile");
-                    } else {
-                      setScreen("profile");
-                    }
-                  }}
-                  className="w-9 h-9 rounded-[14px] overflow-hidden"
-                  style={{ border: '2px solid rgba(124,58,237,0.45)' }}
-                >
-                  <div className="w-full h-full flex items-center justify-center font-black text-sm text-white"
-                    style={{ background: 'linear-gradient(135deg, #7c3aed, #059669)' }}>
-                    {userName.charAt(0).toUpperCase()}
-                  </div>
-                </motion.button>
-              </div>
-            </header>
-
-            {/* Scrollable Body */}
-            <div className="flex-1 overflow-y-auto pb-28 no-scrollbar z-10" style={{ paddingLeft: 20, paddingRight: 20 }}>
-
-              {/* Wallet Card — always visible */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="relative mb-5">
-                <div className="absolute inset-0 rounded-[40px] opacity-70" style={{
-                  background: 'radial-gradient(ellipse at 25% 35%, rgba(16,185,129,0.22) 0%, transparent 55%), radial-gradient(ellipse at 80% 75%, rgba(124,58,237,0.22) 0%, transparent 55%)',
-                  filter: 'blur(22px)', transform: 'scale(1.05)',
-                }} />
-                <div className="relative overflow-hidden rounded-[40px]" style={{
-                  background: 'linear-gradient(148deg, #0b0e1a 0%, #12102c 42%, #0c1a2e 100%)',
-                  border: '1px solid rgba(255,255,255,0.085)',
-                  boxShadow: '0 28px 72px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.055)',
-                  minHeight: 252,
-                }}>
-                  <div className="absolute" style={{ top: 0, left: 0, width: 180, height: 180, background: 'radial-gradient(circle, rgba(16,185,129,0.16) 0%, transparent 70%)', transform: 'translate(-38%, -38%)' }} />
-                  <div className="absolute" style={{ bottom: 0, right: 0, width: 180, height: 180, background: 'radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%)', transform: 'translate(38%, 38%)' }} />
-                  <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)', backgroundSize: '22px 22px', opacity: 0.4 }} />
-                  <motion.div animate={{ x: ['-220%', '220%'] }} transition={{ duration: 3.5, repeat: Infinity, repeatDelay: 5.5, ease: 'easeInOut' }} className="absolute inset-0 skew-x-12" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.035), transparent)' }} />
-                  <div className="relative z-10 p-6">
-                    <div className="flex justify-between items-start mb-5">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-[14px] flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #059669, #7c3aed)', boxShadow: '0 0 18px rgba(16,185,129,0.35)' }}>
-                          <Zap size={15} className="fill-white text-white" />
-                        </div>
-                        <div>
-                          <p style={{ fontSize: 10, fontWeight: 900, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>BLIP</p>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 6px #10b981' }} />
-                            <span style={{ fontSize: 8, fontWeight: 900, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.2em' }}>Live</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase' }}>Signature</p>
-                        <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase' }}>v 2.0</p>
-                      </div>
-                    </div>
-
-                    {solanaWallet.connected ? (
-                      <>
-                        <div className="mb-1">
-                          <p style={{ fontSize: 8.5, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 4 }}>Total Balance</p>
-                          <div className="flex items-baseline gap-0">
-                            <span style={{ fontSize: 54, fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1, color: '#fff' }}>
-                              {solanaWallet.usdtBalance !== null ? Math.floor(solanaWallet.usdtBalance).toLocaleString() : '0'}
-                            </span>
-                            <span style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.02em', color: 'rgba(255,255,255,0.25)', lineHeight: 1 }}>
-                              {solanaWallet.usdtBalance !== null ? '.' + (solanaWallet.usdtBalance % 1).toFixed(2).slice(2) : '.00'}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 mb-4">
-                          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full" style={{ background: 'rgba(16,185,129,0.13)', border: '1px solid rgba(16,185,129,0.3)' }}>
-                            <TrendingUp size={9} style={{ color: '#10b981' }} />
-                            <span style={{ fontSize: 10, fontWeight: 900, color: '#10b981' }}>{completedOrders.length > 0 ? `+${completedOrders.length} trades` : 'Ready'}</span>
-                          </div>
-                          <span style={{ fontSize: 8.5, fontWeight: 700, color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>{currentRate} AED</span>
-                        </div>
-                        <div className="mb-4" style={{ marginLeft: -4, marginRight: -4 }}>
-                          <HomeSparkline />
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p style={{ fontSize: 7, fontWeight: 900, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase', marginBottom: 2 }}>ID Hash</p>
-                            <p style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 600, color: 'rgba(255,255,255,0.45)' }}>
-                              {solanaWallet.walletAddress ? `${solanaWallet.walletAddress.slice(0,4)}...${solanaWallet.walletAddress.slice(-4)}` : '—'}
-                            </p>
-                          </div>
-                          <div className="flex" style={{ gap: 0 }}>
-                            {['#1a56db', '#7c3aed'].map((c, i) => (
-                              <div key={i} className="w-7 h-7 rounded-full flex items-center justify-center"
-                                style={{ background: c, border: '2px solid rgba(0,0,0,0.5)', marginLeft: i > 0 ? -8 : 0, opacity: 0.75 }}>
-                                {i === 0 && <div className="w-1.5 h-1.5 rounded-full bg-white opacity-70" />}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex flex-col items-start gap-3 py-2">
-                        <div>
-                          <p style={{ fontSize: 8.5, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 4 }}>Total Balance</p>
-                          <p style={{ fontSize: 42, fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1, color: 'rgba(255,255,255,0.15)' }}>——</p>
-                        </div>
-                        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', lineHeight: 1.4, marginTop: 8 }}>
-                          {IS_EMBEDDED_WALLET
-                            ? embeddedWallet?.state === 'locked' ? 'Unlock your wallet to see balance' : 'Set up a wallet to start trading'
-                            : 'Connect your Solana wallet to trade'}
-                        </p>
-                        <button
-                          onClick={() => {
-                            if (IS_EMBEDDED_WALLET) {
-                              if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
-                              else setShowWalletSetup(true);
-                            } else {
-                              setShowWalletModal(true);
-                            }
-                          }}
-                          className="px-4 py-2 rounded-[14px] text-[13px] font-black uppercase tracking-wider mt-1"
-                          style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: '#fff' }}>
-                          {IS_EMBEDDED_WALLET
-                            ? embeddedWallet?.state === 'locked' ? 'Unlock Wallet' : 'Create Wallet'
-                            : 'Connect Wallet'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Active Order Banner */}
-              {pendingOrders.length > 0 && (
-                <motion.button
-                  initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => {
-                    setActiveOrderId(pendingOrders[0].id);
-                    if (pendingOrders[0].status === "pending") {
-                      setPendingTradeData({
-                        amount: pendingOrders[0].cryptoAmount,
-                        fiatAmount: pendingOrders[0].fiatAmount,
-                        type: pendingOrders[0].type,
-                        paymentMethod: pendingOrders[0].merchant.paymentMethod
-                      });
-                      setScreen("matching");
-                    } else {
-                      setScreen("order");
-                    }
-                  }}
-                  className="w-full flex items-center gap-3 rounded-[22px] mb-5 text-left"
-                  style={{ padding: '12px 14px', background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.2)' }}>
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                    style={{ background: 'rgba(249,115,22,0.1)' }}>
-                    <motion.div className="w-2.5 h-2.5 rounded-full bg-[#f97316]"
-                      animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
-                  </div>
-                  <div className="flex-1">
-                    <p style={{ fontSize: 14, fontWeight: 900, color: '#fff', marginBottom: 2 }}>
-                      {pendingOrders[0].type === "buy" ? "Buying" : "Selling"} {pendingOrders[0].cryptoAmount} USDT
-                    </p>
-                    <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                      {pendingOrders[0].status === "pending" ? "Finding merchant..." : `Step ${pendingOrders[0].step} of 4 · Tap to continue`}
-                    </p>
-                  </div>
-                  <ChevronRight className="w-5 h-5" style={{ color: '#f97316' }} />
-                </motion.button>
-              )}
-
-              {/* Quick Stats Chips */}
-              {(() => {
-                const totalIn = completedOrders.filter(o => o.type === 'buy').reduce((s, o) => s + parseFloat(o.fiatAmount || '0'), 0);
-                const totalOut = completedOrders.filter(o => o.type === 'sell').reduce((s, o) => s + parseFloat(o.fiatAmount || '0'), 0);
-                return (
-                  <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="flex gap-2.5 mb-6">
-                    {[
-                      { label: 'Total In',  value: totalIn > 0 ? `+د.إ${totalIn.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '+د.إ0', color: '#10b981' },
-                      { label: 'Total Out', value: totalOut > 0 ? `-د.إ${totalOut.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '-د.إ0', color: '#f87171' },
-                      { label: 'Pending',   value: `${pendingOrders.length} txns`, color: '#fbbf24' },
-                    ].map(({ label, value, color }) => (
-                      <div key={label} className="flex-1 rounded-[18px] px-3 py-3" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.055)' }}>
-                        <p style={{ fontSize: 7.5, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.18em', color: 'rgba(255,255,255,0.25)', marginBottom: 6 }}>{label}</p>
-                        <p style={{ fontSize: 13, fontWeight: 900, color }}>{value}</p>
-                      </div>
-                    ))}
-                  </motion.div>
-                );
-              })()}
-
-              {/* Action Grid */}
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.13 }} className="grid grid-cols-4 gap-2 mb-8">
-                {([
-                  { label: 'Send',     Icon: ArrowUpRight,   primary: true,  fn: () => { setTradeType('buy');  setScreen('trade'); } },
-                  { label: 'Receive',  Icon: ArrowDownLeft,  primary: false, fn: () => { setTradeType('sell'); setScreen('trade'); } },
-                  { label: 'Activity', Icon: Activity,       primary: false, fn: () => setScreen('orders') },
-                  { label: 'Scan',     Icon: QrCode,         primary: false, fn: () => setScreen('chats') },
-                ] as const).map(({ label, Icon, primary, fn }) => (
-                  <motion.button key={label} whileTap={{ scale: 0.94 }} onClick={fn} className="flex flex-col items-center gap-2">
-                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={
-                      primary
-                        ? { background: '#ffffff', boxShadow: '0 8px 28px rgba(255,255,255,0.12)' }
-                        : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }
-                    }>
-                      <Icon size={21} strokeWidth={2.5} style={{ color: primary ? '#000' : 'rgba(255,255,255,0.45)' }} />
-                    </div>
-                    <span style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: primary ? '#fff' : 'rgba(255,255,255,0.3)' }}>{label}</span>
-                  </motion.button>
-                ))}
-              </motion.div>
-
-              {/* Circle — recent trade partners */}
-              <div className="mb-8">
-                <div className="flex justify-between items-center mb-4">
-                  <p style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase' }}>Circle</p>
-                </div>
-                {orders.length === 0 ? (
-                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', fontWeight: 600 }}>No trading partners yet</p>
-                ) : (
-                  <div className="flex gap-4 overflow-x-auto no-scrollbar" style={{ marginLeft: -4, paddingLeft: 4, paddingRight: 4 }}>
-                    {(() => {
-                      const seen = new Set<string>();
-                      return orders.filter(o => { if (seen.has(o.merchant.id)) return false; seen.add(o.merchant.id); return true; }).slice(0, 4);
-                    })().map((order, i) => {
-                      const colors = ['#7c3aed', '#059669', '#1a56db', '#f97316'];
-                      const isActive = order.status !== 'complete';
-                      return (
-                        <motion.div key={order.merchant.id}
-                          initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.18 + i * 0.06 }}
-                          whileTap={{ scale: 0.94 }} className="flex flex-col items-center gap-2 shrink-0">
-                          <div className="relative">
-                            <div style={isActive
-                              ? { padding: 2, borderRadius: 24, background: `linear-gradient(135deg, ${colors[i % colors.length]}, #10b981)` }
-                              : { padding: 2, borderRadius: 24, border: '1px solid rgba(255,255,255,0.1)' }}>
-                              <div style={{ width: 56, height: 56, borderRadius: 22, background: `linear-gradient(135deg, ${colors[i % colors.length]}33, ${colors[i % colors.length]}66)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <span style={{ fontSize: 22, fontWeight: 900, color: colors[i % colors.length] }}>{order.merchant.name?.charAt(0)?.toUpperCase() ?? '?'}</span>
-                              </div>
-                            </div>
-                            {isActive && (
-                              <motion.div animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 2, repeat: Infinity }}
-                                className="absolute flex items-center justify-center"
-                                style={{ bottom: -4, right: -4, width: 16, height: 16, borderRadius: '50%', background: '#10b981', border: '2px solid #080810', boxShadow: '0 0 8px rgba(16,185,129,0.7)' }}>
-                                <Zap size={7} className="fill-white text-white" />
-                              </motion.div>
-                            )}
-                          </div>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)' }}>{order.merchant.name?.split(' ')?.[0] ?? 'Trader'}</span>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Recent Pulse */}
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <p style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase' }}>Recent Pulse</p>
-                  <motion.button whileTap={{ scale: 0.94 }} onClick={() => setScreen('orders')}
-                    style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.1em', color: '#a78bfa', textTransform: 'uppercase' }}>
-                    See all
-                  </motion.button>
-                </div>
-                {orders.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-10 text-center">
-                    <div className="w-14 h-14 rounded-[20px] flex items-center justify-center mb-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                      <Activity size={22} style={{ color: 'rgba(255,255,255,0.15)' }} />
-                    </div>
-                    <p style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.02em', marginBottom: 4 }}>No trades yet</p>
-                    <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', fontWeight: 600 }}>Start your first P2P trade</p>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {orders.slice(0, 4).map((order, i) => {
-                      const isBuy = order.type === 'buy';
-                      const catColor = isBuy ? '#f97316' : '#10b981';
-                      const catLabel = isBuy ? 'Buy' : 'Sell';
-                      return (
-                        <motion.button key={order.id}
-                          initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.22 + i * 0.07 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => { setActiveOrderId(order.id); setScreen('order'); }}
-                          className="w-full flex items-center gap-3 rounded-[22px] text-left"
-                          style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                          <div className="relative shrink-0 rounded-2xl flex items-center justify-center" style={{ width: 48, height: 48, background: `${catColor}18`, border: `1px solid ${catColor}30` }}>
-                            {isBuy
-                              ? <ArrowDownLeft size={20} style={{ color: catColor }} strokeWidth={2.5} />
-                              : <ArrowUpRight size={20} style={{ color: catColor }} strokeWidth={2.5} />}
-                            {order.status !== 'complete' && (
-                              <motion.div animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }}
-                                className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full" style={{ background: catColor }} />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-center" style={{ marginBottom: 4 }}>
-                              <p style={{ fontSize: 14.5, fontWeight: 900, letterSpacing: '-0.02em', color: '#fff' }} className="truncate">
-                                {isBuy ? 'Buying' : 'Selling'} {order.cryptoAmount} USDT
-                              </p>
-                              <p style={{ fontSize: 14.5, fontWeight: 900, marginLeft: 8, flexShrink: 0, color: isBuy ? '#f97316' : '#10b981' }}>
-                                {isBuy ? 'د.إ' : '+د.إ'}{parseFloat(order.fiatAmount).toLocaleString()}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '1px 7px', borderRadius: 99, background: `${catColor}1a`, color: catColor, border: `1px solid ${catColor}40` }}>
-                                {catLabel}
-                              </span>
-                              <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.25)' }}>
-                                {order.merchant.name} · Step {order.step}/4
-                              </span>
-                            </div>
-                          </div>
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Bottom Nav */}
-            <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-5">
-              <div className={`${maxW} mx-auto`}>
-                <div className="flex items-center justify-around px-2 py-2.5 rounded-[28px]"
-                  style={{ background: 'rgba(14,14,22,0.92)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                  {([
-                    { key: "home",   icon: Wallet,        label: "Home" },
-                    { key: "orders", icon: Activity,      label: "Activity" },
-                    { key: "trade",  icon: Zap,           label: "Trade" },
-                    { key: "profile",icon: User,          label: "You" },
-                  ] as const).map(({ key, icon: Icon, label }) => {
-                    const on = screen === key;
-                    return (
-                      <motion.button key={key} whileTap={{ scale: 0.85 }} onClick={() => setScreen(key as Screen)}
-                        className="relative flex flex-col items-center gap-1 px-5 py-1">
-                        {on && (
-                          <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
-                            style={{ background: 'rgba(124,58,237,0.18)' }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
-                        )}
-                        <Icon size={19} strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.22)', position: 'relative' }} />
-                        <span className="text-[8.5px] font-black uppercase tracking-wider relative z-10"
-                          style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.18)' }}>
-                          {label}
-                        </span>
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            <HomeScreen
+              userName={userName}
+              userId={userId}
+              orders={orders}
+              completedOrders={completedOrders}
+              pendingOrders={pendingOrders}
+              currentRate={currentRate}
+              screen={screen}
+              setScreen={setScreen}
+              setTradeType={setTradeType}
+              setActiveOrderId={setActiveOrderId}
+              setPendingTradeData={setPendingTradeData}
+              setShowWalletModal={setShowWalletModal}
+              setShowWalletSetup={setShowWalletSetup}
+              setShowWalletUnlock={setShowWalletUnlock}
+              solanaWallet={solanaWallet}
+              embeddedWallet={embeddedWallet}
+              maxW={maxW}
+            />
           </motion.div>
         )}
 
@@ -2523,192 +1892,26 @@ export default function Home() {
             initial={{ opacity: 0, x: 18 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -18 }}
-            className={`flex-1 w-full ${maxW} flex flex-col relative`}
-            style={{ background: '#080810' }}
+            className={`flex-1 w-full ${maxW} flex flex-col`}
           >
-            <HomeAmbientGlow />
-            <header className="px-5 pt-14 pb-3 flex items-center gap-4 z-10">
-              <motion.button whileTap={{ scale: 0.9 }} onClick={() => setScreen('home')} className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                <ChevronLeft size={18} strokeWidth={2.5} />
-              </motion.button>
-              <div>
-                <p style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.38em', color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', marginBottom: 2 }}>P2P Exchange</p>
-                <p style={{ fontSize: 18, fontWeight: 900, letterSpacing: '-0.03em' }}>Trade USDT</p>
-              </div>
-            </header>
-
-            <div className="flex-1 px-5 pb-28 overflow-y-auto z-10">
-              {/* Buy / Sell toggle */}
-              <div className="flex gap-2.5 mb-6">
-                {([
-                  { type: 'buy' as const, label: 'Buy USDT', sub: 'Pay AED', Icon: ArrowDownLeft },
-                  { type: 'sell' as const, label: 'Sell USDT', sub: 'Get AED', Icon: ArrowUpRight },
-                ] as const).map(({ type, label, sub, Icon }) => (
-                  <motion.button key={type} whileTap={{ scale: 0.96 }} onClick={() => setTradeType(type)}
-                    className="flex-1 flex flex-col items-start gap-1.5 rounded-[24px] p-4"
-                    style={tradeType === type
-                      ? { background: '#ffffff', boxShadow: '0 8px 32px rgba(255,255,255,0.1)' }
-                      : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                    <div className="w-9 h-9 rounded-[14px] flex items-center justify-center mb-1"
-                      style={tradeType === type ? { background: 'rgba(0,0,0,0.08)' } : { background: 'rgba(255,255,255,0.06)' }}>
-                      <Icon className="w-5 h-5" style={{ color: tradeType === type ? '#000' : 'rgba(255,255,255,0.4)' }} strokeWidth={2.5} />
-                    </div>
-                    <p style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.02em', color: tradeType === type ? '#000' : '#fff' }}>{label}</p>
-                    <p style={{ fontSize: 10, fontWeight: 700, color: tradeType === type ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{sub}</p>
-                  </motion.button>
-                ))}
-              </div>
-
-              {/* Amount */}
-              <div className="text-center mb-5">
-                <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.38em', color: 'rgba(255,255,255,0.18)', textTransform: 'uppercase', marginBottom: 12 }}>
-                  {tradeType === 'buy' ? 'You Pay' : 'You Sell'}
-                </p>
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <span style={{ fontSize: 44, fontWeight: 900, letterSpacing: '-0.04em', color: 'rgba(255,255,255,0.2)', lineHeight: 1 }}>₮</span>
-                  <input
-                    type="text" inputMode="decimal" value={amount}
-                    onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-                    placeholder="0"
-                    style={{ fontSize: 64, fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1, background: 'transparent', border: 'none', outline: 'none', color: '#fff', width: amount ? `${Math.max(60, amount.length * 38)}px` : '60px', textAlign: 'center', minWidth: 60, maxWidth: 220 }}
-                  />
-                  <span style={{ fontSize: 18, fontWeight: 900, color: 'rgba(255,255,255,0.3)' }}>USDT</span>
-                </div>
-                <div className="flex items-center justify-center gap-2">
-                  <span style={{ fontSize: 22, fontWeight: 900, letterSpacing: '-0.02em', color: 'rgba(255,255,255,0.35)' }}>
-                    د.إ {amount && parseFloat(amount) > 0 ? parseFloat(fiatAmount).toLocaleString() : '0'}
-                  </span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.2)' }}>AED</span>
-                </div>
-                {solanaWallet.connected && (
-                  <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.18)', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                    Balance: {solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : '—'} USDT
-                  </p>
-                )}
-              </div>
-
-              {/* Separator */}
-              <div className="flex items-center gap-3 mb-5">
-                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.05)' }} />
-                <motion.button whileTap={{ scale: 0.9 }} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <ArrowDownUp className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.4)' }} />
-                </motion.button>
-                <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.05)' }} />
-              </div>
-
-              {amount && parseFloat(amount) > 0 && (
-                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex items-center justify-center gap-3 mb-5">
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <span style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.3)' }}>Fee</span>
-                    <span style={{ fontSize: 11, fontWeight: 900, color: '#f97316' }}>{(currentFees.totalFee * 100).toFixed(1)}%</span>
-                    <div style={{ width: 1, height: 10, background: 'rgba(255,255,255,0.08)' }} />
-                    <span style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)' }}>Trader gets</span>
-                    <span style={{ fontSize: 11, fontWeight: 900, color: 'rgba(255,255,255,0.55)' }}>{(currentFees.traderCut * 100).toFixed(2)}%</span>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* Payment Method */}
-              <div className="mb-4">
-                <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 10 }}>Pay Via</p>
-                <div className="flex gap-2.5">
-                  {([
-                    { method: 'bank' as const, label: 'Bank Transfer', sub: 'Wire / IBAN', Icon: Building2 },
-                    { method: 'cash' as const, label: 'Cash', sub: 'Meet in person', Icon: Banknote },
-                  ] as const).map(({ method, label, sub, Icon }) => (
-                    <motion.button key={method} whileTap={{ scale: 0.96 }} onClick={() => setPaymentMethod(method)}
-                      className="flex-1 flex items-center gap-3 rounded-[20px] p-3.5"
-                      style={paymentMethod === method ? { background: '#ffffff' } : { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                      <div className="w-8 h-8 rounded-[12px] flex items-center justify-center shrink-0"
-                        style={paymentMethod === method ? { background: 'rgba(0,0,0,0.08)' } : { background: 'rgba(255,255,255,0.06)' }}>
-                        <Icon className="w-4 h-4" style={{ color: paymentMethod === method ? '#000' : 'rgba(255,255,255,0.35)' }} />
-                      </div>
-                      <div className="text-left">
-                        <p style={{ fontSize: 13, fontWeight: 900, color: paymentMethod === method ? '#000' : '#fff', letterSpacing: '-0.01em' }}>{label}</p>
-                        <p style={{ fontSize: 9, fontWeight: 700, color: paymentMethod === method ? 'rgba(0,0,0,0.4)' : 'rgba(255,255,255,0.22)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{sub}</p>
-                      </div>
-                    </motion.button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Speed */}
-              <div className="mb-6">
-                <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 10 }}>Priority</p>
-                <div className="flex gap-2">
-                  {([
-                    { key: 'fast' as const, label: 'Fastest', emoji: '⚡', fee: '3%' },
-                    { key: 'best' as const, label: 'Best Rate', emoji: '★', fee: '2.5%' },
-                    { key: 'cheap' as const, label: 'Cheapest', emoji: '◎', fee: '1.5%' },
-                  ] as const).map(({ key, label, emoji, fee }) => (
-                    <motion.button key={key} whileTap={{ scale: 0.94 }} onClick={() => setTradePreference(key)}
-                      className="flex-1 flex flex-col items-center gap-1 rounded-[18px] py-3"
-                      style={tradePreference === key
-                        ? { background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }
-                        : { background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                      <span style={{ fontSize: 16 }}>{emoji}</span>
-                      <span style={{ fontSize: 10, fontWeight: 900, color: tradePreference === key ? '#fff' : 'rgba(255,255,255,0.3)', letterSpacing: '-0.01em' }}>{label}</span>
-                      <span style={{ fontSize: 8, fontWeight: 900, color: tradePreference === key ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{fee}</span>
-                    </motion.button>
-                  ))}
-                </div>
-              </div>
-
-              {/* CTA */}
-              <motion.button whileTap={{ scale: 0.97 }} onClick={startTrade}
-                disabled={!amount || parseFloat(amount) <= 0 || isLoading || !userId}
-                className="w-full flex items-center justify-center gap-3"
-                style={{
-                  height: 76, borderRadius: 28, fontSize: 18, fontWeight: 900,
-                  ...(amount && parseFloat(amount) > 0 && !isLoading
-                    ? { background: '#ffffff', color: '#000', boxShadow: '0 16px 48px rgba(255,255,255,0.09)' }
-                    : { background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.07)' })
-                }}>
-                {isLoading
-                  ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'inherit' }} />
-                  : amount && parseFloat(amount) > 0
-                    ? <>{tradeType === 'buy' ? 'Buy' : 'Sell'} {amount} USDT <ArrowUpRight className="w-5 h-5" /></>
-                    : 'Enter Amount'
-                }
-              </motion.button>
-
-              <button onClick={() => setScreen("create-offer")} className="w-full mt-4 py-3 text-center"
-                style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.22)' }}>
-                Large amount? <span style={{ color: '#f97316' }}>Create an offer →</span>
-              </button>
-            </div>
-
-            {/* Bottom Nav */}
-            <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-5">
-              <div className={`${maxW} mx-auto`}>
-                <div className="flex items-center justify-around px-2 py-2.5 rounded-[28px]"
-                  style={{ background: 'rgba(14,14,22,0.92)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                  {([
-                    { key: "home",   icon: Wallet,   label: "Home" },
-                    { key: "orders", icon: Activity, label: "Activity" },
-                    { key: "trade",  icon: Zap,      label: "Trade" },
-                    { key: "profile",icon: User,     label: "You" },
-                  ] as const).map(({ key, icon: Icon, label }) => {
-                    const on = screen === key;
-                    return (
-                      <motion.button key={key} whileTap={{ scale: 0.85 }} onClick={() => setScreen(key as Screen)}
-                        className="relative flex flex-col items-center gap-1 px-5 py-1">
-                        {on && (
-                          <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
-                            style={{ background: 'rgba(124,58,237,0.18)' }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
-                        )}
-                        <Icon size={19} strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.22)', position: 'relative' }} />
-                        <span className="text-[8.5px] font-black uppercase tracking-wider relative z-10"
-                          style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.18)' }}>
-                          {label}
-                        </span>
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            <TradeCreationScreen
+              screen={screen}
+              setScreen={setScreen}
+              tradeType={tradeType}
+              setTradeType={setTradeType}
+              tradePreference={tradePreference}
+              setTradePreference={setTradePreference}
+              paymentMethod={paymentMethod}
+              setPaymentMethod={setPaymentMethod}
+              amount={amount}
+              setAmount={setAmount}
+              fiatAmount={fiatAmount}
+              currentFees={currentFees}
+              isLoading={isLoading}
+              userId={userId}
+              startTrade={startTrade}
+              solanaWallet={solanaWallet}
+            />
           </motion.div>
         )}
 
@@ -2721,236 +1924,23 @@ export default function Home() {
             exit={{ opacity: 0, x: -20 }}
             className={`flex-1 w-full ${maxW} flex flex-col`}
           >
-            <div className="h-12" />
-
-            <div className="px-5 py-4 flex items-center">
-              <button onClick={() => { setScreen("home"); setEscrowTxStatus('idle'); setEscrowError(null); }} className="p-2 -ml-2">
-                <ChevronLeft className="w-6 h-6 text-white" />
-              </button>
-              <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">Confirm Escrow</h1>
-            </div>
-
-            <div className="flex-1 px-5 flex flex-col">
-              <div className="flex-1 flex flex-col items-center justify-center text-center">
-                <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
-                  <Shield className="w-10 h-10 text-white/70" />
-                </div>
-                <h2 className="text-[22px] font-semibold text-white mb-2">Lock {amount} USDT</h2>
-                <p className="text-[15px] text-neutral-500 mb-6 max-w-[280px]">
-                  Your USDT will be held securely on Solana until you confirm receiving payment
-                </p>
-
-                {/* Wallet Status */}
-                <div className="w-full bg-neutral-900 rounded-2xl p-4 mb-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[15px] text-neutral-500">Wallet</span>
-                    {solanaWallet.connected ? (
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-white/10" />
-                        <span className="text-[14px] text-white font-mono">
-                          {solanaWallet.walletAddress?.slice(0, 4)}...{solanaWallet.walletAddress?.slice(-4)}
-                        </span>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setShowWalletModal(true)}
-                        className="text-[14px] text-white/70 font-medium"
-                      >
-                        Connect Wallet
-                      </button>
-                    )}
-                  </div>
-                  {solanaWallet.connected && (
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-neutral-800">
-                      <span className="text-[15px] text-neutral-500">Balance</span>
-                      <span className={`text-[15px] font-medium ${
-                        solanaWallet.usdtBalance !== null && solanaWallet.usdtBalance >= parseFloat(amount || '0')
-                          ? 'text-white'
-                          : 'text-red-400'
-                      }`}>
-                        {solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : '...'} USDT
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Order Details */}
-                <div className="w-full bg-neutral-900 rounded-2xl p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[15px] text-neutral-500">Amount to Lock</span>
-                    <span className="text-[15px] font-medium text-white">{amount} USDT</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[15px] text-neutral-500">You'll receive</span>
-                    <span className="text-[15px] font-medium text-white">د.إ {parseFloat(fiatAmount).toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[15px] text-neutral-500">Rate</span>
-                    <span className="text-[15px] text-neutral-400">1 USDT = {currentRate} AED</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[15px] text-neutral-500">Network</span>
-                    <span className="text-[14px] text-white/70">Solana Devnet</span>
-                  </div>
-                </div>
-
-                {/* Bank Account Note - where merchant will send fiat */}
-                <div className="w-full bg-neutral-900 rounded-2xl p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Banknote className="w-4 h-4 text-neutral-500" />
-                    <span className="text-[12px] text-neutral-500">Payment details for merchant</span>
-                  </div>
-                  <textarea
-                    value={userBankAccount}
-                    onChange={(e) => setUserBankAccount(e.target.value)}
-                    placeholder="Enter your bank IBAN or payment details..."
-                    rows={2}
-                    className="w-full bg-neutral-800 rounded-lg px-3 py-2 text-[13px] text-white placeholder:text-neutral-600 outline-none focus:ring-1 focus:ring-orange-500 resize-none"
-                  />
-                </div>
-
-                {/* Program Not Ready Warning - shows when wallet connected but Anchor program failed to initialize */}
-                {solanaWallet.connected && !solanaWallet.programReady && (
-                  <div className="w-full mt-4 bg-white/5 border border-white/6 rounded-xl p-4">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-white/70 flex-shrink-0 mt-0.5" />
-                      <div className="text-left flex-1">
-                        <p className="text-[14px] text-white/70 font-medium">Wallet Needs Reconnection</p>
-                        <p className="text-[13px] text-neutral-400 mt-1">
-                          The escrow program is not ready. Please reconnect your wallet.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-3">
-                      <button
-                        onClick={() => {
-                          solanaWallet.disconnect();
-                          setTimeout(() => setShowWalletModal(true), 100);
-                        }}
-                        className="flex-1 py-2 rounded-lg bg-white/10 text-[14px] text-white/70 font-medium"
-                      >
-                        Reconnect Wallet
-                      </button>
-                      <button
-                        onClick={() => solanaWallet.reinitializeProgram()}
-                        className="py-2 px-4 rounded-lg bg-neutral-800 text-[14px] text-neutral-300"
-                      >
-                        Retry
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Error Message */}
-                {escrowError && (
-                  <div className="w-full mt-4 bg-red-500/10 border border-red-500/20 rounded-xl p-4">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                      <div className="text-left">
-                        <p className="text-[14px] text-red-400 font-medium">Transaction Failed</p>
-                        <p className="text-[13px] text-neutral-400 mt-1">{escrowError}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => { setEscrowError(null); setEscrowTxStatus('idle'); }}
-                      className="w-full mt-3 py-2 rounded-lg bg-neutral-800 text-[14px] text-neutral-300"
-                    >
-                      Try Again
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Show waiting state after success */}
-              {escrowTxStatus === 'success' ? (
-                <div className="pb-10 space-y-4">
-                  {/* Success indicator */}
-                  <div className="bg-white/5 border border-white/6 rounded-2xl p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                        <Lock className="w-5 h-5 text-white" />
-                      </div>
-                      <div>
-                        <p className="text-[15px] font-semibold text-white">Escrow Locked</p>
-                        <p className="text-[13px] text-neutral-400">Your USDC is secured on-chain</p>
-                      </div>
-                    </div>
-                    {escrowTxHash && (
-                      <a
-                        href={`https://explorer.solana.com/tx/${escrowTxHash}?cluster=devnet`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-[13px] text-white/50 hover:text-white"
-                      >
-                        View Transaction <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )}
-                  </div>
-
-                  {/* Waiting for merchant */}
-                  <div className="bg-neutral-900 rounded-2xl p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                        <Clock className="w-5 h-5 text-white/70" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-[15px] font-medium text-white">Waiting for merchant</p>
-                        <p className="text-[13px] text-neutral-500">Merchant will accept and send fiat to your bank</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 h-1 bg-neutral-800 rounded-full overflow-hidden">
-                      <motion.div
-                        className="h-full bg-white/10"
-                        animate={{ x: ["-100%", "100%"] }}
-                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                        style={{ width: "30%" }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Go to order details */}
-                  <button
-                    onClick={() => setScreen("order")}
-                    className="w-full py-3 rounded-xl bg-neutral-800 text-[15px] font-medium text-white"
-                  >
-                    View Order Details
-                  </button>
-                </div>
-              ) : (
-                <div className="pb-10">
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    onClick={confirmEscrow}
-                    disabled={isLoading || (solanaWallet.connected && !solanaWallet.programReady)}
-                    className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-white/10 text-white flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {escrowTxStatus === 'signing' && (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Sign in Wallet...
-                      </>
-                    )}
-                    {escrowTxStatus === 'confirming' && (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Confirming...
-                      </>
-                    )}
-                    {escrowTxStatus === 'recording' && (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Recording...
-                      </>
-                    )}
-                    {(escrowTxStatus === 'idle' || escrowTxStatus === 'error' || escrowTxStatus === 'connecting') && (
-                      solanaWallet.connected
-                        ? (solanaWallet.programReady ? "Confirm & Lock" : "Wallet Not Ready")
-                        : "Connect Wallet to Lock"
-                    )}
-                  </motion.button>
-                </div>
-              )}
-            </div>
+            <EscrowLockScreen
+              setScreen={setScreen}
+              amount={amount}
+              fiatAmount={fiatAmount}
+              currentRate={currentRate}
+              escrowTxStatus={escrowTxStatus}
+              setEscrowTxStatus={setEscrowTxStatus}
+              escrowTxHash={escrowTxHash}
+              escrowError={escrowError}
+              setEscrowError={setEscrowError}
+              isLoading={isLoading}
+              confirmEscrow={confirmEscrow}
+              userBankAccount={userBankAccount}
+              setUserBankAccount={setUserBankAccount}
+              setShowWalletModal={setShowWalletModal}
+              solanaWallet={solanaWallet}
+            />
           </motion.div>
         )}
 
@@ -2963,1070 +1953,48 @@ export default function Home() {
             exit={{ opacity: 0, x: -20 }}
             className={`flex-1 w-full ${maxW} flex flex-col`}
           >
-            <div className="h-12" />
-
-            <div className="px-5 py-4 flex items-center">
-              <button onClick={() => setScreen("home")} className="p-2 -ml-2">
-                <ChevronLeft className="w-6 h-6 text-white" />
-              </button>
-              <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">Order Details</h1>
-            </div>
-
-            <div className="flex-1 px-5 overflow-auto pb-6">
-              {/* Order Summary */}
-              <div className="bg-neutral-900 rounded-2xl p-4 mb-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    activeOrder.type === "buy" ? "bg-white/5" : "bg-white/5"
-                  }`}>
-                    {activeOrder.type === "buy"
-                      ? <ArrowDownLeft className="w-5 h-5 text-white" />
-                      : <ArrowUpRight className="w-5 h-5 text-white/70" />
-                    }
-                  </div>
-                  <div>
-                    <p className="text-[17px] font-semibold text-white">
-                      {activeOrder.type === "buy" ? "Buying" : "Selling"} ${activeOrder.cryptoAmount} USDC
-                    </p>
-                    <p className="text-[13px] text-neutral-500">
-                      د.إ {parseFloat(activeOrder.fiatAmount).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Progress */}
-                <div className="flex items-center gap-1 mb-2">
-                  {[1, 2, 3, 4].map(step => (
-                    <div
-                      key={step}
-                      className={`flex-1 h-1 rounded-full ${
-                        step <= activeOrder.step ? "bg-white/10" : "bg-neutral-800"
-                      }`}
-                    />
-                  ))}
-                </div>
-                <p className="text-[13px] text-neutral-500">Step {activeOrder.step} of 4</p>
-              </div>
-
-              {/* Escrow Status Section - Show for sell orders with escrow */}
-              {activeOrder.type === "sell" && activeOrder.escrowTxHash && (
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                      <Lock className="w-5 h-5 text-white/70" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-[15px] font-semibold text-white">Escrow Locked</p>
-                      <p className="text-[13px] text-neutral-400">
-                        Your USDC is secured on-chain
-                      </p>
-                    </div>
-                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                      <Check className="w-4 h-4 text-white" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 text-[13px]">
-                    {activeOrder.escrowTradeId && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-neutral-500">Trade ID</span>
-                        <span className="text-white font-mono">#{activeOrder.escrowTradeId}</span>
-                      </div>
-                    )}
-                    {activeOrder.escrowTxHash && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-neutral-500">Transaction</span>
-                        <a
-                          href={`https://explorer.solana.com/tx/${activeOrder.escrowTxHash}?cluster=devnet`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-white/70 hover:text-white/90"
-                        >
-                          <span className="font-mono">{activeOrder.escrowTxHash.slice(0, 8)}...{activeOrder.escrowTxHash.slice(-6)}</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Extension Request Banner */}
-              {extensionRequest && extensionRequest.requestedBy === 'merchant' && extensionRequest.orderId === activeOrder.id && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-white/5 border border-white/6 rounded-2xl p-4 mb-4"
-                >
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                      <Clock className="w-5 h-5 text-white/70" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-[15px] font-semibold text-white">Extension Requested</p>
-                      <p className="text-[13px] text-neutral-400">
-                        Merchant wants +{extensionRequest.extensionMinutes} minutes
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <motion.button
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => respondToExtension(true)}
-                      disabled={requestingExtension}
-                      className="flex-1 py-3 rounded-xl bg-white/10 text-white text-[15px] font-semibold disabled:opacity-50"
-                    >
-                      {requestingExtension ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Accept"}
-                    </motion.button>
-                    <motion.button
-                      whileTap={{ scale: 0.97 }}
-                      onClick={() => respondToExtension(false)}
-                      disabled={requestingExtension}
-                      className="flex-1 py-3 rounded-xl bg-neutral-800 text-white text-[15px] font-semibold disabled:opacity-50"
-                    >
-                      Decline
-                    </motion.button>
-                  </div>
-                  <p className="text-[11px] text-neutral-500 text-center mt-2">
-                    Extensions used: {extensionRequest.extensionCount}/{extensionRequest.maxExtensions}
-                  </p>
-                </motion.div>
-              )}
-
-              {/* Request Extension Button - shown when user wants to extend */}
-              {activeOrder.step >= 2 && activeOrder.step < 4 && !extensionRequest && (
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={requestExtension}
-                  disabled={requestingExtension}
-                  className="w-full py-3 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 text-[13px] font-medium mb-4 flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {requestingExtension ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Clock className="w-4 h-4" />
-                      Request Time Extension
-                    </>
-                  )}
-                </motion.button>
-              )}
-
-              {/* Steps */}
-              <div className="space-y-3">
-                {/* Step 1 */}
-                <div className={`p-4 rounded-2xl ${activeOrder.step >= 1 ? "bg-neutral-900" : "bg-neutral-950"}`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold ${
-                      activeOrder.step > 1 ? "bg-white/10 text-black" :
-                      activeOrder.step === 1 ? "bg-white/10 text-black" : "bg-neutral-800 text-neutral-500"
-                    }`}>
-                      {activeOrder.step > 1 ? <Check className="w-4 h-4" /> : "1"}
-                    </div>
-                    <div>
-                      <p className={`text-[15px] font-medium ${activeOrder.step >= 1 ? "text-white" : "text-neutral-600"}`}>
-                        Order created
-                      </p>
-                      {activeOrder.step >= 1 && (
-                        <p className="text-[13px] text-neutral-500">Matched with {activeOrder.merchant.name}</p>
-                      )}
-                      {/* For sell orders in pending status, show waiting for merchant to accept */}
-                      {activeOrder.step === 1 && activeOrder.type === "sell" && activeOrder.dbStatus === 'pending' && (
-                        <div className="mt-3 bg-white/5 border border-white/6 rounded-xl p-4">
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                              <Loader2 className="w-4 h-4 text-white/70 animate-spin" />
-                            </div>
-                            <div>
-                              <p className="text-[14px] font-medium text-white/70">Waiting for Merchant</p>
-                              <p className="text-[12px] text-neutral-400">Merchant will sign with their wallet to accept</p>
-                            </div>
-                          </div>
-                          <p className="text-[12px] text-neutral-500">
-                            Once accepted, you'll lock your USDT to escrow. The merchant's verified wallet will receive funds when you confirm payment.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Step 2 */}
-                <div className={`p-4 rounded-2xl ${activeOrder.step >= 2 ? "bg-neutral-900" : "bg-neutral-950"}`}>
-                  <div className="flex items-start gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
-                      activeOrder.step > 2 ? "bg-white/10 text-black" :
-                      activeOrder.step === 2 ? "bg-white/10 text-black" : "bg-neutral-800 text-neutral-500"
-                    }`}>
-                      {activeOrder.step > 2 ? <Check className="w-4 h-4" /> : "2"}
-                    </div>
-                    <div className="flex-1">
-                      <p className={`text-[15px] font-medium ${activeOrder.step >= 2 ? "text-white" : "text-neutral-600"}`}>
-                        {activeOrder.type === "buy"
-                          ? activeOrder.merchant.paymentMethod === "cash"
-                            ? "Meet & pay cash"
-                            : "Send payment"
-                          : "Waiting for merchant"}
-                      </p>
-
-                      {/* Funds Locked indicator - show when escrow is locked */}
-                      {activeOrder.step === 2 && activeOrder.dbStatus === 'escrowed' && (
-                        <div className="mt-2 flex items-center gap-2 bg-white/5 border border-white/6 rounded-lg px-3 py-2">
-                          <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center">
-                            <Lock className="w-3 h-3 text-white" />
-                          </div>
-                          <span className="text-[13px] font-medium text-white">
-                            {activeOrder.type === "buy" ? "Funds locked in escrow" : "Your USDT locked in escrow"}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Show escrow funding in progress for buy orders when escrow not yet funded */}
-                      {activeOrder.step === 2 && activeOrder.type === "buy" && activeOrder.dbStatus !== 'escrowed' && (
-                        <div className="mt-3 space-y-3">
-                          <div className="bg-white/5 border border-white/6 rounded-xl p-4">
-                            <div className="flex items-center gap-3 mb-3">
-                              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                                <Loader2 className="w-5 h-5 text-white/70 animate-spin" />
-                              </div>
-                              <div>
-                                <p className="text-[15px] font-medium text-white/70">Escrow Funding in Progress</p>
-                                <p className="text-[12px] text-neutral-400">Merchant is locking USDT in escrow</p>
-                              </div>
-                            </div>
-                            <div className="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
-                              <motion.div
-                                className="h-full bg-white/10"
-                                animate={{ x: ["-100%", "100%"] }}
-                                transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                                style={{ width: "40%" }}
-                              />
-                            </div>
-                            <p className="mt-3 text-[12px] text-neutral-500">
-                              Once the merchant funds the escrow, you'll be able to send your payment.
-                            </p>
-                          </div>
-                          <button
-                            onClick={handleOpenChat}
-                            className="w-full py-3 rounded-xl text-[15px] font-medium bg-neutral-800 text-white flex items-center justify-center gap-2"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                            Message Merchant
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Show payment UI only when escrow is funded */}
-                      {activeOrder.step === 2 && activeOrder.type === "buy" && activeOrder.dbStatus === 'escrowed' && (
-                        <div className="mt-3 space-y-3">
-                          {activeOrder.merchant.paymentMethod === "cash" ? (
-                            <>
-                              {/* Map Preview */}
-                              <div className="relative rounded-xl overflow-hidden">
-                                <div
-                                  className="h-40 bg-neutral-800 relative"
-                                  style={{
-                                    backgroundImage: `url('https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/pin-s+a855f7(${activeOrder.merchant.lng},${activeOrder.merchant.lat})/${activeOrder.merchant.lng},${activeOrder.merchant.lat},14,0/400x200@2x?access_token=pk.placeholder')`,
-                                    backgroundSize: 'cover',
-                                    backgroundPosition: 'center'
-                                  }}
-                                >
-                                  {/* Fallback map UI */}
-                                  <div className="absolute inset-0 bg-white/5" />
-                                  <div className="absolute inset-0 flex items-center justify-center">
-                                    <div className="flex flex-col items-center">
-                                      <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shadow-lg shadow-white/10 mb-1">
-                                        <MapPin className="w-5 h-5 text-white" />
-                                      </div>
-                                      <div className="w-1 h-3 bg-white/10 rounded-b-full" />
-                                    </div>
-                                  </div>
-                                  {/* Grid pattern for map feel */}
-                                  <div className="absolute inset-0 opacity-10">
-                                    <div className="w-full h-full" style={{
-                                      backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
-                                      backgroundSize: '40px 40px'
-                                    }} />
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={() => window.open(`https://maps.google.com/?q=${activeOrder.merchant.lat},${activeOrder.merchant.lng}`, '_blank')}
-                                  className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-1.5"
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5 text-white" />
-                                  <span className="text-[12px] font-medium text-white">Open Maps</span>
-                                </button>
-                              </div>
-
-                              {/* Meeting Details */}
-                              <div className="bg-neutral-800 rounded-xl p-3 space-y-3">
-                                <div>
-                                  <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-1">Meeting Location</p>
-                                  <p className="text-[15px] font-medium text-white">{activeOrder.merchant.location}</p>
-                                  <p className="text-[13px] text-neutral-400">{activeOrder.merchant.address}</p>
-                                </div>
-                                <div className="pt-2 border-t border-neutral-700">
-                                  <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-1">Meeting Spot</p>
-                                  <div className="flex items-start gap-2">
-                                    <Navigation className="w-4 h-4 text-white/70 flex-shrink-0 mt-0.5" />
-                                    <p className="text-[13px] text-white">{activeOrder.merchant.meetingSpot}</p>
-                                  </div>
-                                </div>
-                                <div className="pt-2 border-t border-neutral-700">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[13px] text-neutral-500">Cash Amount</span>
-                                    <span className="text-[17px] font-semibold text-white">
-                                      د.إ {parseFloat(activeOrder.fiatAmount).toLocaleString()}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Action Buttons */}
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={handleOpenChat}
-                                  className="flex-1 py-3 rounded-xl text-[15px] font-medium bg-neutral-800 text-white flex items-center justify-center gap-2"
-                                >
-                                  <MessageCircle className="w-4 h-4" />
-                                  Chat
-                                </button>
-                                <motion.button
-                                  whileTap={{ scale: 0.98 }}
-                                  onClick={markPaymentSent}
-                                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold bg-white/10 text-white"
-                                >
-                                  I'm at the location
-                                </motion.button>
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div className="bg-neutral-800 rounded-xl p-3 space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[13px] text-neutral-500">Bank</span>
-                                  <span className="text-[13px] text-white">{activeOrder.merchant.bank}</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[13px] text-neutral-500">IBAN</span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[13px] text-white font-mono">{activeOrder.merchant.iban}</span>
-                                    <button onClick={() => handleCopy(activeOrder.merchant.iban || '')}>
-                                      {copied ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4 text-neutral-500" />}
-                                    </button>
-                                  </div>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[13px] text-neutral-500">Name</span>
-                                  <span className="text-[13px] text-white">{activeOrder.merchant.accountName}</span>
-                                </div>
-                                <div className="pt-2 border-t border-neutral-700">
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-[13px] text-neutral-500">Amount</span>
-                                    <span className="text-[17px] font-semibold text-white">
-                                      د.إ {parseFloat(activeOrder.fiatAmount).toLocaleString()}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={handleOpenChat}
-                                  className="flex-1 py-3 rounded-xl text-[15px] font-medium bg-neutral-800 text-white flex items-center justify-center gap-2"
-                                >
-                                  <MessageCircle className="w-4 h-4" />
-                                  Chat
-                                </button>
-                                <motion.button
-                                  whileTap={{ scale: 0.98 }}
-                                  onClick={markPaymentSent}
-                                  disabled={isLoading}
-                                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold bg-white/10 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {isLoading ? 'Processing...' : "I've sent the payment"}
-                                </motion.button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Sell order step 2 - merchant accepted with wallet signature, now user locks escrow */}
-                      {/* Also check escrowTxHash as backup - if it exists, escrow is already locked */}
-                      {activeOrder.step === 2 && activeOrder.type === "sell" && activeOrder.dbStatus === 'accepted' && !activeOrder.escrowTxHash && (
-                        <div className="mt-3 space-y-3">
-                          <div className="bg-white/5 border border-white/6 rounded-xl p-4">
-                            <div className="flex items-center gap-3 mb-3">
-                              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                                <Lock className="w-5 h-5 text-white" />
-                              </div>
-                              <div>
-                                <p className="text-[15px] font-medium text-white">Merchant Accepted - Lock Escrow</p>
-                                <p className="text-[12px] text-neutral-400">Merchant verified their wallet. Lock funds to proceed.</p>
-                              </div>
-                            </div>
-                            <p className="text-[12px] text-neutral-500 mb-3">
-                              The merchant has signed with their wallet ({activeOrder.acceptorWalletAddress?.slice(0, 4)}...{activeOrder.acceptorWalletAddress?.slice(-4)}). Lock your {activeOrder.cryptoAmount} USDT to the escrow. Funds will be released to this wallet when you confirm payment received.
-                            </p>
-                            <motion.button
-                              whileTap={{ scale: 0.98 }}
-                              onClick={async () => {
-                                if (!solanaWallet.connected) {
-                                  setShowWalletModal(true);
-                                  return;
-                                }
-                                if (!solanaWallet.programReady) {
-                                  alert('Wallet not ready. Please reconnect your wallet.');
-                                  return;
-                                }
-                                setIsLoading(true);
-                                try {
-                                  // Use acceptorWalletAddress (captured when merchant signed to accept)
-                                  // This is the wallet the merchant proved ownership of via signature
-                                  const merchantWallet = activeOrder.acceptorWalletAddress || activeOrder.merchant.walletAddress;
-                                  if (!merchantWallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet)) {
-                                    alert('Merchant wallet not available. Please wait for merchant to accept the order with their wallet.');
-                                    setIsLoading(false);
-                                    return;
-                                  }
-                                  const escrowResult = await solanaWallet.depositToEscrow({
-                                    amount: parseFloat(activeOrder.cryptoAmount),
-                                    merchantWallet,
-                                  });
-                                  if (escrowResult.success) {
-                                    // Record escrow deposit
-                                    await fetch(`/api/orders/${activeOrder.id}/escrow`, {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        tx_hash: escrowResult.txHash,
-                                        actor_type: 'user',
-                                        actor_id: userId,
-                                        escrow_address: solanaWallet.walletAddress,
-                                        escrow_trade_id: escrowResult.tradeId,
-                                        escrow_trade_pda: escrowResult.tradePda,
-                                        escrow_pda: escrowResult.escrowPda,
-                                        escrow_creator_wallet: solanaWallet.walletAddress,
-                                      }),
-                                    });
-                                    // Update local state
-                                    setOrders(prev => prev.map(o =>
-                                      o.id === activeOrder.id ? { ...o, dbStatus: 'escrowed', escrowTxHash: escrowResult.txHash } : o
-                                    ));
-                                    playSound('trade_complete');
-                                  }
-                                } catch (err: any) {
-                                  console.error('Escrow failed:', err);
-                                  alert(err?.message || 'Failed to lock escrow. Please try again.');
-                                  playSound('error');
-                                } finally {
-                                  setIsLoading(false);
-                                }
-                              }}
-                              disabled={isLoading || (solanaWallet.connected && !solanaWallet.programReady)}
-                              className="w-full py-3 rounded-xl text-[15px] font-semibold bg-white/10 text-white flex items-center justify-center gap-2 disabled:opacity-50"
-                            >
-                              {isLoading ? (
-                                <>
-                                  <Loader2 className="w-5 h-5 animate-spin" />
-                                  Locking...
-                                </>
-                              ) : !solanaWallet.connected ? (
-                                <>
-                                  <Wallet className="w-5 h-5" />
-                                  Connect Wallet to Lock
-                                </>
-                              ) : !solanaWallet.programReady ? (
-                                'Wallet Not Ready'
-                              ) : (
-                                <>
-                                  <Lock className="w-5 h-5" />
-                                  Lock {activeOrder.cryptoAmount} USDT to Escrow
-                                </>
-                              )}
-                            </motion.button>
-                          </div>
-                          <button
-                            onClick={handleOpenChat}
-                            className="w-full py-3 rounded-xl text-[15px] font-medium bg-neutral-800 text-white flex items-center justify-center gap-2"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                            Message Merchant
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Sell order step 2 - escrow IS locked, waiting for payment */}
-                      {/* Show if dbStatus is escrowed OR if escrowTxHash exists (backup check) */}
-                      {activeOrder.step === 2 && activeOrder.type === "sell" && (activeOrder.dbStatus === 'escrowed' || activeOrder.escrowTxHash) && (
-                        <div className="mt-2">
-                          <p className="text-[13px] text-neutral-500">Your USDT is locked in escrow. Waiting for merchant to send AED payment...</p>
-
-                          {/* Show expected payment amount */}
-                          <div className="mt-3 bg-neutral-800 rounded-xl p-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-[12px] text-neutral-500">Expected payment</span>
-                              <span className="text-[15px] font-semibold text-white">
-                                د.إ {parseFloat(activeOrder.fiatAmount).toLocaleString()}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-neutral-600">
-                              Merchant will send this amount to your bank account
-                            </p>
-                          </div>
-
-                          <div className="mt-3 h-1 bg-neutral-800 rounded-full overflow-hidden">
-                            <motion.div
-                              className="h-full bg-orange-400"
-                              animate={{ x: ["-100%", "100%"] }}
-                              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                              style={{ width: "30%" }}
-                            />
-                          </div>
-                          <button
-                            onClick={handleOpenChat}
-                            className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium bg-neutral-800 text-white flex items-center justify-center gap-2"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                            Message Merchant
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Step 3 */}
-                <div className={`p-4 rounded-2xl ${activeOrder.step >= 3 ? "bg-neutral-900" : "bg-neutral-950"}`}>
-                  <div className="flex items-start gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
-                      activeOrder.step > 3 ? "bg-white/10 text-black" :
-                      activeOrder.step === 3 ? "bg-white/10 text-black" : "bg-neutral-800 text-neutral-500"
-                    }`}>
-                      {activeOrder.step > 3 ? <Check className="w-4 h-4" /> : "3"}
-                    </div>
-                    <div className="flex-1">
-                      <p className={`text-[15px] font-medium ${activeOrder.step >= 3 ? "text-white" : "text-neutral-600"}`}>
-                        {activeOrder.type === "buy" ? "Confirming payment" : "Confirm received"}
-                      </p>
-
-                      {activeOrder.step === 3 && activeOrder.type === "buy" && (
-                        <div className="mt-2">
-                          <p className="text-[13px] text-neutral-500">Seller is verifying your payment...</p>
-                          <div className="mt-2 h-1 bg-neutral-800 rounded-full overflow-hidden">
-                            <motion.div
-                              className="h-full bg-white/10"
-                              animate={{ x: ["-100%", "100%"] }}
-                              transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                              style={{ width: "30%" }}
-                            />
-                          </div>
-                          <button
-                            onClick={handleOpenChat}
-                            className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium bg-neutral-800 text-white flex items-center justify-center gap-2"
-                          >
-                            <MessageCircle className="w-4 h-4" />
-                            Message Seller
-                          </button>
-                        </div>
-                      )}
-
-                      {activeOrder.step === 3 && activeOrder.type === "sell" && (
-                        <div className="mt-3">
-                          <div className="bg-white/5 border border-white/6 rounded-xl p-3 mb-3">
-                            <p className="text-[13px] text-white/70">
-                              Merchant has sent د.إ {parseFloat(activeOrder.fiatAmount).toLocaleString()} to your bank.
-                            </p>
-                            <p className="text-[12px] text-neutral-500 mt-1">
-                              Check your bank account before confirming.
-                            </p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={handleOpenChat}
-                              className="flex-1 py-3 rounded-xl text-[15px] font-medium bg-neutral-800 text-white flex items-center justify-center gap-2"
-                            >
-                              <MessageCircle className="w-4 h-4" />
-                              Chat
-                            </button>
-                            <motion.button
-                              whileTap={{ scale: 0.98 }}
-                              onClick={confirmFiatReceived}
-                              disabled={isLoading}
-                              className="flex-[2] py-3 rounded-xl text-[15px] font-semibold bg-white/10 text-white flex items-center justify-center gap-2 disabled:opacity-50"
-                            >
-                              {isLoading ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 animate-spin" />
-                                  Releasing...
-                                </>
-                              ) : (
-                                <>
-                                  <Check className="w-4 h-4" />
-                                  Confirm & Release
-                                </>
-                              )}
-                            </motion.button>
-                          </div>
-                          <p className="text-[11px] text-neutral-600 mt-2 text-center">
-                            This will sign a wallet transaction to release escrow to merchant
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Step 4 */}
-                <div className={`p-4 rounded-2xl ${activeOrder.step >= 4 ? "bg-neutral-900" : "bg-neutral-950"}`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold ${
-                      activeOrder.step >= 4 ? "bg-white/10 text-black" : "bg-neutral-800 text-neutral-500"
-                    }`}>
-                      {activeOrder.step >= 4 ? <Check className="w-4 h-4" /> : "4"}
-                    </div>
-                    <div>
-                      <p className={`text-[15px] font-medium ${activeOrder.step >= 4 ? "text-white" : "text-neutral-600"}`}>
-                        Complete
-                      </p>
-                      {activeOrder.step >= 4 && (
-                        <p className="text-[13px] text-white">Trade completed successfully</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Rating */}
-                {activeOrder.step >= 4 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-neutral-900 rounded-2xl p-4 text-center"
-                  >
-                    <p className="text-[15px] text-neutral-400 mb-3">Rate your experience</p>
-                    <div className="flex justify-center gap-2">
-                      {[1, 2, 3, 4, 5].map(star => (
-                        <button key={star} onClick={() => setRating(star)}>
-                          <Star className={`w-8 h-8 ${star <= rating ? "fill-amber-400 text-white/70" : "text-neutral-700"}`} />
-                        </button>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </div>
-
-              {/* Merchant */}
-              <div className="mt-4 bg-neutral-900 rounded-2xl p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white font-semibold">
-                      {activeOrder.merchant.name.charAt(0)}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-[15px] font-medium text-white">{activeOrder.merchant.name}</p>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                          activeOrder.merchant.paymentMethod === "cash"
-                            ? "bg-white/5 text-white"
-                            : "bg-white/10 text-white/70"
-                        }`}>
-                          {activeOrder.merchant.paymentMethod === "cash" ? "Cash" : "Bank"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Star className="w-3 h-3 fill-amber-400 text-white/70" />
-                        <span className="text-[13px] text-neutral-400">{activeOrder.merchant.rating} · {activeOrder.merchant.trades} trades</span>
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleOpenChat}
-                    className="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center"
-                  >
-                    <MessageCircle className="w-5 h-5 text-neutral-400" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Dispute Button - Show for active orders (step 2-3) */}
-              {activeOrder.step >= 2 && activeOrder.step < 4 && activeOrder.status !== "disputed" && (
-                <button
-                  onClick={() => setShowDisputeModal(true)}
-                  className="w-full mt-3 py-3 rounded-2xl text-[14px] font-medium bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center gap-2"
-                >
-                  <AlertTriangle className="w-4 h-4" />
-                  Report Issue
-                </button>
-              )}
-
-              {/* Already Disputed */}
-              {activeOrder.status === "disputed" && (
-                <div className="mt-3 py-3 px-4 rounded-2xl bg-red-500/10 border border-red-500/20">
-                  <div className="flex items-center gap-2 text-red-400">
-                    <AlertTriangle className="w-4 h-4" />
-                    <span className="text-[14px] font-medium">Dispute in Progress</span>
-                  </div>
-                  <p className="text-[12px] text-neutral-500 mt-1">Our team is reviewing this case.</p>
-                </div>
-              )}
-
-              {activeOrder.step >= 4 && (
-                <motion.button
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setScreen("home")}
-                  className="w-full mt-4 py-4 rounded-2xl text-[17px] font-semibold bg-neutral-900 text-white"
-                >
-                  Done
-                </motion.button>
-              )}
-            </div>
-
-            {/* Dispute Modal */}
-            <AnimatePresence>
-              {showDisputeModal && (
-                <>
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 bg-black/80 z-50"
-                    onClick={() => setShowDisputeModal(false)}
-                  />
-                  <motion.div
-                    initial={{ y: "100%" }}
-                    animate={{ y: 0 }}
-                    exit={{ y: "100%" }}
-                    transition={{ type: "spring", damping: 30 }}
-                    className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} bg-neutral-900 rounded-t-3xl p-6`}
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="w-5 h-5 text-red-400" />
-                        <h3 className="text-[17px] font-semibold text-white">Report Issue</h3>
-                      </div>
-                      <button onClick={() => setShowDisputeModal(false)}>
-                        <X className="w-5 h-5 text-neutral-500" />
-                      </button>
-                    </div>
-
-                    <p className="text-[13px] text-neutral-500 mb-4">
-                      If you&apos;re having a problem with this trade, let us know and our support team will help resolve it.
-                    </p>
-
-                    <div className="mb-4">
-                      <label className="text-[12px] text-neutral-500 uppercase tracking-wide mb-2 block">Reason</label>
-                      <select
-                        value={disputeReason}
-                        onChange={(e) => setDisputeReason(e.target.value)}
-                        className="w-full bg-neutral-800 rounded-xl px-4 py-3 text-[15px] text-white outline-none appearance-none"
-                      >
-                        <option value="">Select a reason...</option>
-                        <option value="payment_not_received">Payment not received</option>
-                        <option value="crypto_not_received">Crypto not received</option>
-                        <option value="wrong_amount">Wrong amount sent</option>
-                        <option value="fraud">Suspected fraud</option>
-                        <option value="other">Other issue</option>
-                      </select>
-                    </div>
-
-                    <div className="mb-6">
-                      <label className="text-[12px] text-neutral-500 uppercase tracking-wide mb-2 block">Description</label>
-                      <textarea
-                        value={disputeDescription}
-                        onChange={(e) => setDisputeDescription(e.target.value)}
-                        placeholder="Describe the issue in detail..."
-                        rows={3}
-                        className="w-full bg-neutral-800 rounded-xl px-4 py-3 text-[15px] text-white outline-none placeholder:text-neutral-600 resize-none"
-                      />
-                    </div>
-
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => setShowDisputeModal(false)}
-                        className="flex-1 py-3 rounded-xl text-[15px] font-medium bg-neutral-800 text-white"
-                      >
-                        Cancel
-                      </button>
-                      <motion.button
-                        whileTap={{ scale: 0.98 }}
-                        onClick={submitDispute}
-                        disabled={!disputeReason || isSubmittingDispute}
-                        className="flex-[2] py-3 rounded-xl text-[15px] font-semibold bg-red-500 text-white disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        {isSubmittingDispute ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <AlertTriangle className="w-4 h-4" />
-                        )}
-                        {isSubmittingDispute ? "Submitting..." : "Submit Dispute"}
-                      </motion.button>
-                    </div>
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
-
-            {/* Chat */}
-            <AnimatePresence>
-              {showChat && (
-                <>
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 bg-black/80 z-40"
-                    onClick={() => setShowChat(false)}
-                  />
-                  <motion.div
-                    initial={{ y: "100%" }}
-                    animate={{ y: 0 }}
-                    exit={{ y: "100%" }}
-                    transition={{ type: "spring", damping: 30 }}
-                    className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} bg-neutral-900 rounded-t-3xl h-[70vh] flex flex-col`}
-                  >
-                    <div className="flex items-center justify-between p-4 border-b border-neutral-800">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-white/10 border border-white/10" />
-                        <div>
-                          <p className="text-[15px] font-medium text-white">{activeOrder.merchant.name}</p>
-                          <div className="flex items-center gap-1.5">
-                            <ConnectionIndicator isConnected={true} />
-                            <p className="text-[11px] text-orange-400/80">Online</p>
-                          </div>
-                        </div>
-                      </div>
-                      <button onClick={() => setShowChat(false)} className="p-2">
-                        <X className="w-5 h-5 text-neutral-500" />
-                      </button>
-                    </div>
-                    <div
-                      ref={chatMessagesRef}
-                      className="flex-1 overflow-y-auto p-4 space-y-3"
-                    >
-                      {activeChat && activeChat.messages.length > 0 ? (
-                        activeChat.messages.map((msg) => {
-                          // Parse dispute/resolution messages from JSON content
-                          if (msg.messageType === 'dispute') {
-                            try {
-                              const data = JSON.parse(msg.text);
-                              return (
-                                <div key={msg.id} className="flex justify-center">
-                                  <div className="w-full max-w-[90%] bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <AlertTriangle className="w-4 h-4 text-red-400" />
-                                      <span className="text-[13px] font-semibold text-red-400">Dispute Opened</span>
-                                    </div>
-                                    <p className="text-[14px] text-white mb-1">
-                                      <span className="text-neutral-400">Reason:</span> {data.reason?.replace(/_/g, ' ')}
-                                    </p>
-                                    {data.description && (
-                                      <p className="text-[13px] text-neutral-400">{data.description}</p>
-                                    )}
-                                    <p className="text-[11px] text-neutral-500 mt-2">
-                                      Our support team will review this case
-                                    </p>
-                                  </div>
-                                </div>
-                              );
-                            } catch {
-                              // Fall back to regular message if parsing fails
-                            }
-                          }
-
-                          if (msg.messageType === 'resolution') {
-                            try {
-                              const data = JSON.parse(msg.text);
-                              return (
-                                <div key={msg.id} className="flex justify-center">
-                                  <div className="w-full max-w-[90%] bg-white/5 border border-white/6 rounded-2xl p-4">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <Shield className="w-4 h-4 text-white/70" />
-                                      <span className="text-[13px] font-semibold text-white/70">
-                                        {data.type === 'resolution_proposed' ? 'Resolution Proposed' : 'Resolution Finalized'}
-                                      </span>
-                                    </div>
-                                    <p className="text-[14px] text-white mb-1">
-                                      <span className="text-neutral-400">Decision:</span> {data.resolution?.replace(/_/g, ' ')}
-                                    </p>
-                                    {data.notes && (
-                                      <p className="text-[13px] text-neutral-400 mb-2">{data.notes}</p>
-                                    )}
-                                    {data.type === 'resolution_proposed' && !disputeInfo?.user_confirmed && (
-                                      <div className="flex gap-2 mt-3">
-                                        <button
-                                          onClick={() => respondToResolution('reject')}
-                                          disabled={isRespondingToResolution}
-                                          className="flex-1 py-2 rounded-xl text-[13px] font-medium bg-neutral-800 text-white disabled:opacity-50"
-                                        >
-                                          Reject
-                                        </button>
-                                        <button
-                                          onClick={() => respondToResolution('accept')}
-                                          disabled={isRespondingToResolution}
-                                          className="flex-1 py-2 rounded-xl text-[13px] font-semibold bg-white/10 text-white disabled:opacity-50"
-                                        >
-                                          Accept
-                                        </button>
-                                      </div>
-                                    )}
-                                    {disputeInfo?.user_confirmed && !disputeInfo?.merchant_confirmed && (
-                                      <p className="text-[11px] text-white mt-2">
-                                        You accepted. Waiting for merchant confirmation...
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            } catch {
-                              // Fall back to regular message if parsing fails
-                            }
-                          }
-
-                          // Resolution finalized message
-                          if (msg.messageType === 'resolution_finalized') {
-                            try {
-                              const data = JSON.parse(msg.text);
-                              return (
-                                <div key={msg.id} className="flex justify-center">
-                                  <div className="w-full max-w-[90%] bg-white/5 border border-white/6 rounded-2xl p-4">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <Check className="w-4 h-4 text-white" />
-                                      <span className="text-[13px] font-semibold text-white">Resolution Finalized</span>
-                                    </div>
-                                    <p className="text-[14px] text-white">
-                                      Decision: {data.resolution?.replace(/_/g, ' ')}
-                                    </p>
-                                    <p className="text-[11px] text-neutral-500 mt-2">
-                                      Both parties confirmed. Case closed.
-                                    </p>
-                                  </div>
-                                </div>
-                              );
-                            } catch {
-                              // Fall back to regular message
-                            }
-                          }
-
-                          // Resolution accepted/rejected system messages
-                          if (msg.messageType === 'resolution_accepted' || msg.messageType === 'resolution_rejected') {
-                            try {
-                              const data = JSON.parse(msg.text);
-                              const isAccepted = data.type === 'resolution_accepted';
-                              return (
-                                <div key={msg.id} className="flex justify-center">
-                                  <div className={`px-4 py-2 rounded-2xl text-[13px] ${
-                                    isAccepted ? 'bg-white/5 text-white' : 'bg-red-500/10 text-red-400'
-                                  }`}>
-                                    {data.party === 'user' ? 'You' : 'Merchant'} {isAccepted ? 'accepted' : 'rejected'} the resolution
-                                  </div>
-                                </div>
-                              );
-                            } catch {
-                              // Fall back to regular message
-                            }
-                          }
-
-                          // Regular messages
-                          return (
-                            <div
-                              key={msg.id}
-                              className={`flex ${msg.from === "me" ? "justify-end" : msg.from === "system" ? "justify-center" : "justify-start"}`}
-                            >
-                              <div className={`max-w-[80%] flex flex-col ${msg.from === "me" ? "items-end" : "items-start"}`}>
-                                {msg.from !== "me" && msg.from !== "system" && msg.senderName && (
-                                  <span className="text-[11px] text-neutral-500 mb-0.5 px-1">{msg.senderName}</span>
-                                )}
-                                <div
-                                  className={`px-4 py-2 rounded-2xl text-[15px] ${
-                                    msg.from === "me"
-                                      ? "bg-white text-black"
-                                      : msg.from === "system"
-                                      ? "bg-neutral-700/50 text-neutral-300 text-[13px]"
-                                      : "bg-neutral-800 text-white"
-                                  }`}
-                                >
-                                  {msg.text}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div className="flex-1 flex items-center justify-center h-full">
-                          <p className="text-neutral-600 text-[15px]">No messages yet</p>
-                        </div>
-                      )}
-
-                      {/* Show pending resolution if dispute exists and has a proposal */}
-                      {disputeInfo?.status === 'pending_confirmation' && disputeInfo.proposed_resolution && !activeChat?.messages.some(m => m.messageType === 'resolution') && (
-                        <div className="flex justify-center">
-                          <div className="w-full max-w-[90%] bg-white/5 border border-white/6 rounded-2xl p-4">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Shield className="w-4 h-4 text-white/70" />
-                              <span className="text-[13px] font-semibold text-white/70">Resolution Proposed</span>
-                            </div>
-                            <p className="text-[14px] text-white mb-1">
-                              <span className="text-neutral-400">Decision:</span> {disputeInfo.proposed_resolution.replace(/_/g, ' ')}
-                            </p>
-                            {disputeInfo.resolution_notes && (
-                              <p className="text-[13px] text-neutral-400 mb-2">{disputeInfo.resolution_notes}</p>
-                            )}
-                            {!disputeInfo.user_confirmed && (
-                              <div className="flex gap-2 mt-3">
-                                <button
-                                  onClick={() => respondToResolution('reject')}
-                                  disabled={isRespondingToResolution}
-                                  className="flex-1 py-2 rounded-xl text-[13px] font-medium bg-neutral-800 text-white disabled:opacity-50"
-                                >
-                                  Reject
-                                </button>
-                                <button
-                                  onClick={() => respondToResolution('accept')}
-                                  disabled={isRespondingToResolution}
-                                  className="flex-1 py-2 rounded-xl text-[13px] font-semibold bg-white/10 text-white disabled:opacity-50"
-                                >
-                                  Accept
-                                </button>
-                              </div>
-                            )}
-                            {disputeInfo.user_confirmed && !disputeInfo.merchant_confirmed && (
-                              <p className="text-[11px] text-white mt-2">
-                                You accepted. Waiting for merchant confirmation...
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-4 border-t border-neutral-800 pb-8">
-                      <div className="flex gap-2">
-                        <input
-                          ref={chatInputRef}
-                          value={chatMessage}
-                          onChange={(e) => setChatMessage(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                              e.preventDefault();
-                              handleSendMessage();
-                            }
-                          }}
-                          placeholder="Message..."
-                          className="flex-1 bg-neutral-800 rounded-xl px-4 py-3 text-[15px] text-white placeholder:text-neutral-600 outline-none"
-                        />
-                        <button
-                          onClick={handleSendMessage}
-                          className="w-12 h-12 rounded-xl bg-white flex items-center justify-center"
-                        >
-                          <ChevronRight className="w-5 h-5 text-black" />
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
+            <OrderDetailScreen
+              setScreen={setScreen}
+              activeOrder={activeOrder}
+              isLoading={isLoading}
+              setIsLoading={setIsLoading}
+              handleOpenChat={handleOpenChat}
+              markPaymentSent={markPaymentSent}
+              confirmFiatReceived={confirmFiatReceived}
+              rating={rating}
+              setRating={setRating}
+              copied={copied}
+              handleCopy={handleCopy}
+              extensionRequest={extensionRequest}
+              requestExtension={requestExtension}
+              respondToExtension={respondToExtension}
+              requestingExtension={requestingExtension}
+              showChat={showChat}
+              setShowChat={setShowChat}
+              chatMessage={chatMessage}
+              setChatMessage={setChatMessage}
+              chatInputRef={chatInputRef}
+              chatMessagesRef={chatMessagesRef}
+              activeChat={activeChat ?? null}
+              handleSendMessage={handleSendMessage}
+              showDisputeModal={showDisputeModal}
+              setShowDisputeModal={setShowDisputeModal}
+              disputeReason={disputeReason}
+              setDisputeReason={setDisputeReason}
+              disputeDescription={disputeDescription}
+              setDisputeDescription={setDisputeDescription}
+              submitDispute={submitDispute}
+              isSubmittingDispute={isSubmittingDispute}
+              disputeInfo={disputeInfo}
+              respondToResolution={respondToResolution}
+              isRespondingToResolution={isRespondingToResolution}
+              solanaWallet={solanaWallet}
+              setShowWalletModal={setShowWalletModal}
+              userId={userId}
+              setOrders={setOrders}
+              playSound={playSound}
+              maxW={maxW}
+            />
           </motion.div>
         )}
 
@@ -4064,171 +2032,16 @@ export default function Home() {
             className={`flex-1 w-full ${maxW} flex flex-col relative`}
             style={{ background: '#080810' }}
           >
-            <HomeAmbientGlow />
-            <div className="h-12" />
-
-            <div className="px-5 pt-2 pb-4 z-10">
-              <p style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.38em', color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', marginBottom: 3 }}>Overview</p>
-              <p style={{ fontSize: 26, fontWeight: 900, letterSpacing: '-0.04em', color: '#fff' }}>Activity</p>
-            </div>
-
-            {/* Activity Tabs */}
-            <div className="px-5 mb-5">
-              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                {([
-                  { tab: 'active' as const, label: 'Active', count: pendingOrders.length },
-                  { tab: 'completed' as const, label: 'Completed', count: completedOrders.length },
-                ] as const).map(({ tab, label, count }) => (
-                  <motion.button key={tab} whileTap={{ scale: 0.94 }} onClick={() => setActivityTab(tab)}
-                    className="shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full"
-                    style={activityTab === tab
-                      ? { background: '#fff', color: '#000' }
-                      : { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                    {tab === 'active' && activityTab === 'active' && (
-                      <motion.div className="w-1.5 h-1.5 rounded-full bg-[#f97316]" animate={{ scale: [1, 1.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
-                    )}
-                    <span style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</span>
-                    {count > 0 && (
-                      <span style={{ fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: 99, background: activityTab === tab ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.08)', color: activityTab === tab ? '#000' : 'rgba(255,255,255,0.4)' }}>{count}</span>
-                    )}
-                  </motion.button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex-1 px-5 pb-28 overflow-y-auto relative z-10">
-              {/* Active Orders Tab */}
-              {activityTab === 'active' && (
-                <>
-                  {pendingOrders.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-center">
-                      <div className="w-16 h-16 rounded-[20px] flex items-center justify-center mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <Clock className="w-7 h-7" style={{ color: 'rgba(255,255,255,0.2)' }} />
-                      </div>
-                      <p style={{ fontSize: 20, fontWeight: 900, letterSpacing: '-0.03em', marginBottom: 6 }}>No active trades</p>
-                      <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', fontWeight: 600 }}>Start a new trade from the home screen</p>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {pendingOrders.map((order, i) => (
-                        <motion.button
-                          key={order.id}
-                          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => { setActiveOrderId(order.id); setScreen("order"); }}
-                          className="w-full flex items-center gap-3 rounded-[22px]"
-                          style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
-                        >
-                          <div className="w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0"
-                            style={{ background: order.type === 'buy' ? 'rgba(249,115,22,0.1)' : 'rgba(255,255,255,0.05)', border: `1px solid ${order.type === 'buy' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.1)'}` }}>
-                            <motion.div className="w-2 h-2 rounded-full" style={{ background: order.type === 'buy' ? '#f97316' : '#fff', boxShadow: `0 0 8px ${order.type === 'buy' ? '#f97316' : '#fff'}` }} animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
-                          </div>
-                          <div className="flex-1 text-left min-w-0">
-                            <div className="flex items-center justify-between mb-1">
-                              <p style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.02em' }}>
-                                {order.type === 'buy' ? 'Buying' : 'Selling'} {order.cryptoAmount} USDT
-                              </p>
-                              <p style={{ fontSize: 15, fontWeight: 900, color: order.type === 'buy' ? '#f97316' : '#fff' }}>
-                                {order.type === 'buy' ? '+' : '-'} د.إ{parseFloat(order.fiatAmount).toLocaleString()}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 99, background: order.type === 'buy' ? 'rgba(249,115,22,0.1)' : 'rgba(255,255,255,0.05)', color: order.type === 'buy' ? '#f97316' : '#fff' }}>Step {order.step}/4</span>
-                              {order.dbStatus === 'pending' && order.expiresAt ? (
-                                <span style={{ fontSize: 9, fontWeight: 700, fontFamily: 'monospace', color: Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)) < 60 ? '#f87171' : 'rgba(255,255,255,0.25)' }}>
-                                  {(() => { const s = Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)); return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`; })()}
-                                </span>
-                              ) : (
-                                <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.2)' }}>{order.createdAt.toLocaleDateString()}</span>
-                              )}
-                            </div>
-                          </div>
-                        </motion.button>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Completed Orders Tab */}
-              {activityTab === 'completed' && (
-                <>
-                  {completedOrders.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-center">
-                      <div className="w-16 h-16 rounded-[20px] flex items-center justify-center mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                        <Check className="w-7 h-7" style={{ color: 'rgba(255,255,255,0.2)' }} />
-                      </div>
-                      <p style={{ fontSize: 20, fontWeight: 900, letterSpacing: '-0.03em', marginBottom: 6 }}>No completed trades</p>
-                      <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', fontWeight: 600 }}>Completed transactions appear here</p>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {completedOrders.map((order, i) => (
-                        <motion.button
-                          key={order.id}
-                          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
-                          whileTap={{ scale: 0.98 }}
-                          onClick={() => { setActiveOrderId(order.id); setScreen("order"); }}
-                          className="w-full flex items-center gap-3 rounded-[22px]"
-                          style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}
-                        >
-                          <div className="w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0"
-                            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                            <Check className="w-5 h-5" style={{ color: '#f97316' }} />
-                          </div>
-                          <div className="flex-1 text-left min-w-0">
-                            <div className="flex items-center justify-between mb-1">
-                              <p style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.02em' }}>
-                                {order.type === 'buy' ? 'Bought' : 'Sold'} {order.cryptoAmount} USDT
-                              </p>
-                              <p style={{ fontSize: 15, fontWeight: 900, color: '#f97316' }}>
-                                {order.type === 'buy' ? '+' : '-'} د.إ{parseFloat(order.fiatAmount).toLocaleString()}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 99, background: 'rgba(249,115,22,0.1)', color: '#f97316' }}>Done</span>
-                              <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.2)' }}>{order.createdAt.toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                        </motion.button>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            {/* Bottom Nav */}
-            <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-5">
-              <div className={`${maxW} mx-auto`}>
-                <div className="flex items-center justify-around px-2 py-2.5 rounded-[28px]"
-                  style={{ background: 'rgba(14,14,22,0.92)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                  {([
-                    { key: "home",   icon: Wallet,   label: "Home" },
-                    { key: "orders", icon: Activity, label: "Activity" },
-                    { key: "trade",  icon: Zap,      label: "Trade" },
-                    { key: "profile",icon: User,     label: "You" },
-                  ] as const).map(({ key, icon: Icon, label }) => {
-                    const on = screen === key;
-                    return (
-                      <motion.button key={key} whileTap={{ scale: 0.85 }} onClick={() => setScreen(key as Screen)}
-                        className="relative flex flex-col items-center gap-1 px-5 py-1">
-                        {on && (
-                          <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
-                            style={{ background: 'rgba(124,58,237,0.18)' }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
-                        )}
-                        <Icon size={19} strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.22)', position: 'relative' }} />
-                        <span className="text-[8.5px] font-black uppercase tracking-wider relative z-10"
-                          style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.18)' }}>
-                          {label}
-                        </span>
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            <OrdersListScreen
+              screen={screen}
+              setScreen={setScreen}
+              setActiveOrderId={setActiveOrderId}
+              activityTab={activityTab}
+              setActivityTab={setActivityTab}
+              pendingOrders={pendingOrders}
+              completedOrders={completedOrders}
+              maxW={maxW}
+            />
           </motion.div>
         )}
 
@@ -4242,396 +2055,40 @@ export default function Home() {
             className={`flex-1 w-full ${maxW} flex flex-col overflow-hidden relative`}
             style={{ background: '#080810' }}
           >
-            <HomeAmbientGlow />
-            <div className="h-12 shrink-0" />
-
-            <div className="px-5 pt-2 pb-4 shrink-0 z-10">
-              <p style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.38em', color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', marginBottom: 3 }}>Account</p>
-              <p style={{ fontSize: 26, fontWeight: 900, letterSpacing: '-0.04em', color: '#fff' }}>Profile</p>
-            </div>
-
-            <div className="flex-1 px-5 pb-24 overflow-y-auto">
-              {/* User */}
-              <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 rounded-[20px] overflow-hidden" style={{ border: '2px solid rgba(255,255,255,0.2)' }}>
-                  <div className="w-full h-full flex items-center justify-center font-black text-xl text-white" style={{ background: 'linear-gradient(135deg, #1a1a1a, #333)' }}>
-                    {userName.charAt(0).toUpperCase()}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[17px] font-semibold text-white">{userName}</p>
-                  <p className="text-[13px] text-neutral-500 font-mono">
-                    {solanaWallet.connected && solanaWallet.walletAddress
-                      ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
-                      : 'Wallet not connected'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Wallet */}
-              <div className="mb-6">
-                <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 12 }}>Solana Wallet</p>
-                <div className="rounded-[22px] p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.055)' }}>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0"
-                      style={{ background: solanaWallet.connected ? 'rgba(249,115,22,0.08)' : 'rgba(255,255,255,0.05)', border: `1px solid ${solanaWallet.connected ? 'rgba(249,115,22,0.2)' : 'rgba(255,255,255,0.07)'}` }}>
-                      <Wallet className="w-5 h-5" style={{ color: solanaWallet.connected ? '#f97316' : 'rgba(255,255,255,0.4)' }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(255,255,255,0.25)', marginBottom: 3 }}>
-                        {solanaWallet.connected ? 'Solana Devnet' : 'Not Connected'}
-                      </p>
-                      <p style={{ fontSize: 13, fontFamily: 'monospace', color: '#fff', fontWeight: 600 }}>
-                        {solanaWallet.connected && solanaWallet.walletAddress
-                          ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
-                          : 'Connect your wallet'}
-                      </p>
-                    </div>
-                    <motion.button whileTap={{ scale: 0.9 }}
-                      onClick={async () => {
-                        if (solanaWallet.connected && solanaWallet.walletAddress) {
-                          await copyToClipboard(solanaWallet.walletAddress);
-                          setCopied(true);
-                          setTimeout(() => setCopied(false), 2000);
-                        }
-                      }}
-                      className="w-8 h-8 rounded-[10px] flex items-center justify-center"
-                      style={{ background: 'rgba(255,255,255,0.06)' }}>
-                      {copied ? <Check className="w-4 h-4" style={{ color: '#f97316' }} /> : <Copy className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.35)' }} />}
-                    </motion.button>
-                  </div>
-
-                  {/* Solana Balances */}
-                  {solanaWallet.connected && (
-                    <div className="pt-3 mt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                      <div className="flex gap-2 mb-3">
-                        <div className="flex-1 rounded-[14px] p-3" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                          <p style={{ fontSize: 7.5, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.2)', marginBottom: 4 }}>SOL</p>
-                          <p style={{ fontSize: 18, fontWeight: 900, color: '#fff', letterSpacing: '-0.02em' }}>
-                            {solanaWallet.solBalance !== null ? solanaWallet.solBalance.toFixed(4) : '—'}
-                          </p>
-                        </div>
-                        <div className="flex-1 rounded-[14px] p-3" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                          <p style={{ fontSize: 7.5, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.2)', marginBottom: 4 }}>USDT</p>
-                          <p style={{ fontSize: 18, fontWeight: 900, color: '#f97316', letterSpacing: '-0.02em' }}>
-                            {solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : '—'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <motion.button whileTap={{ scale: 0.96 }} onClick={() => solanaWallet.refreshBalances()} className="flex-1 py-2.5 rounded-[14px] text-center" style={{ background: 'rgba(255,255,255,0.04)', fontSize: 11, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.35)' }}>
-                          Refresh
-                        </motion.button>
-                        <motion.button whileTap={{ scale: 0.96 }} onClick={() => solanaWallet.disconnect()} className="flex-1 py-2.5 rounded-[14px] text-center" style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.2)', fontSize: 11, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#f87171' }}>
-                          Disconnect
-                        </motion.button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Connect Solana Wallet Button */}
-                  {!solanaWallet.connected && (
-                    <button
-                      onClick={() => setShowWalletModal(true)}
-                      className="w-full mt-4 py-3 rounded-xl text-[14px] font-medium bg-white/10 border border-white/10 text-white hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
-                    >
-                      <Wallet className="w-4 h-4" />
-                      Connect Solana Wallet
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Banks */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-3">
-                  <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase' }}>Bank Accounts</p>
-                  <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowAddBank(true)}
-                    className="w-8 h-8 rounded-[10px] flex items-center justify-center"
-                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <Plus className="w-4 h-4" style={{ color: '#fff' }} />
-                  </motion.button>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {bankAccounts.map(acc => (
-                    <div key={acc.id} className="flex items-center gap-3 rounded-[18px] p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                      <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                        <span className="text-lg">🏦</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <p style={{ fontSize: 14, fontWeight: 900, letterSpacing: '-0.01em' }}>{acc.bank}</p>
-                          {acc.isDefault && (
-                            <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: 99, background: 'rgba(249,115,22,0.1)', color: '#f97316' }}>Default</span>
-                          )}
-                        </div>
-                        <p style={{ fontSize: 11, fontFamily: 'monospace', color: 'rgba(255,255,255,0.3)' }}>{acc.iban}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Stats & Reputation */}
-              <div className="mb-6">
-                <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 12 }}>Stats & Reputation</p>
-                <div className="flex gap-2.5 mb-3">
-                  {[
-                    { label: 'Trades', value: completedOrders.length.toString(), color: '#fff' },
-                    { label: 'Volume', value: completedOrders.reduce((s, o) => s + parseFloat(o.cryptoAmount), 0).toFixed(0) + ' USDT', color: '#f97316' },
-                    { label: 'Score', value: completedOrders.length > 0 ? (completedOrders.length / (completedOrders.length + timedOutOrders.length) * 100).toFixed(0) + '%' : '—', color: '#f97316' },
-                  ].map(stat => (
-                    <div key={stat.label} className="flex-1 rounded-[18px] px-3 py-3" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.055)' }}>
-                      <p style={{ fontSize: 7.5, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.25)', marginBottom: 6 }}>{stat.label}</p>
-                      <p style={{ fontSize: 18, fontWeight: 900, color: stat.color, letterSpacing: '-0.02em' }}>{stat.value}</p>
-                    </div>
-                  ))}
-                </div>
-                {completedOrders.length > 0 && (
-                  <div className="rounded-[18px] p-4 flex items-center justify-between" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div>
-                      <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Reputation Tier</p>
-                      <p style={{ fontSize: 16, fontWeight: 900, letterSpacing: '-0.02em', color: '#f97316' }}>
-                        {completedOrders.length >= 50 ? 'Elite Trader' : completedOrders.length >= 20 ? 'Trusted' : completedOrders.length >= 10 ? 'Established' : completedOrders.length >= 3 ? 'Emerging' : 'New Trader'}
-                      </p>
-                    </div>
-                    <div className="flex items-end gap-1">
-                      {[...Array(5)].map((_, i) => {
-                        const lvl = completedOrders.length >= 50 ? 5 : completedOrders.length >= 20 ? 4 : completedOrders.length >= 10 ? 3 : completedOrders.length >= 3 ? 2 : 1;
-                        return <div key={i} style={{ width: 4, height: 8 + i * 4, borderRadius: 3, background: i < lvl ? '#f97316' : 'rgba(255,255,255,0.07)' }} />;
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Console & Analytics */}
-              <div className="mb-6">
-                <p style={{ fontSize: 8, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 12 }}>Analytics</p>
-                <a href="/console" className="flex items-center gap-3 rounded-[18px] p-4" style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div className="w-10 h-10 rounded-[14px] flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
-                    <Clock className="w-5 h-5" style={{ color: '#fff' }} />
-                  </div>
-                  <div className="flex-1">
-                    <p style={{ fontSize: 14, fontWeight: 900, letterSpacing: '-0.01em' }}>Console</p>
-                    <p style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Timeouts & Analytics</p>
-                  </div>
-                  {timedOutOrders.length > 0 && (
-                    <span style={{ fontSize: 10, fontWeight: 900, padding: '3px 8px', borderRadius: 99, background: 'rgba(249,115,22,0.1)', color: '#f97316', border: '1px solid rgba(249,115,22,0.25)' }}>
-                      {timedOutOrders.length} timeout{timedOutOrders.length !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                </a>
-              </div>
-
-              {/* Resolved Disputes */}
-              {resolvedDisputes.length > 0 && (
-                <div className="mt-6">
-                  <p className="text-[13px] text-neutral-500 mb-3 uppercase tracking-wide">Resolved Disputes</p>
-                  <div className="space-y-2">
-                    {resolvedDisputes.map(dispute => (
-                      <div key={dispute.id} className="bg-neutral-900 rounded-2xl p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[13px] font-medium text-white">#{dispute.orderNumber}</span>
-                            <span className={`px-2 py-0.5 text-[10px] rounded-full ${
-                              dispute.resolvedInFavorOf === 'user'
-                                ? 'bg-white/5 text-white'
-                                : dispute.resolvedInFavorOf === 'merchant'
-                                ? 'bg-white/10 text-white/70'
-                                : 'bg-white/5 text-white/70'
-                            }`}>
-                              {dispute.resolvedInFavorOf === 'user' ? 'Won' :
-                               dispute.resolvedInFavorOf === 'merchant' ? 'Lost' : 'Split'}
-                            </span>
-                          </div>
-                          <p className="text-[12px] text-neutral-500">
-                            {new Date(dispute.resolvedAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <p className="text-[12px] text-neutral-400">vs {dispute.otherPartyName}</p>
-                          <p className="text-[14px] font-semibold text-white">
-                            ${dispute.cryptoAmount.toLocaleString()}
-                          </p>
-                        </div>
-                        <p className="text-[11px] text-neutral-500 mt-1 capitalize">
-                          {dispute.reason.replace(/_/g, ' ')}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Theme Toggle */}
-              <div className="mt-6">
-                <p className="text-[13px] text-neutral-500 mb-3 uppercase tracking-wide">Appearance</p>
-                <button
-                  onClick={toggleTheme}
-                  className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    {theme === 'dark' ? (
-                      <Moon className="w-5 h-5 text-white/70" />
-                    ) : (
-                      <Sun className="w-5 h-5 text-white/70" />
-                    )}
-                    <span className="text-[15px] text-white">
-                      {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
-                    </span>
-                  </div>
-                  <div className={`w-12 h-7 rounded-full p-1 transition-colors ${
-                    theme === 'light' ? 'bg-white/10' : 'bg-neutral-700'
-                  }`}>
-                    <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
-                      theme === 'light' ? 'translate-x-5' : 'translate-x-0'
-                    }`} />
-                  </div>
-                </button>
-              </div>
-
-              {/* Logout */}
-              <div className="mt-8">
-                <button
-                  onClick={() => {
-                    console.log('[User] Signing out...');
-                    // Clear all session data
-                    localStorage.removeItem('blip_user');
-                    localStorage.removeItem('blip_wallet');
-                    // Reset all auth refs to prevent auto-login
-                    isAuthenticatingRef.current = false;
-                    lastAuthenticatedWalletRef.current = null;
-                    authAttemptedForWalletRef.current = null;
-                    // Close any modals
-                    setShowUsernameModal(false);
-                    setShowWalletModal(false);
-                    // Clear state
-                    setUserId(null);
-                    setUserWallet(null);
-                    setUserName('Guest');
-                    setUserBalance(0);
-                    setOrders([]);
-                    setBankAccounts([]);
-                    setResolvedDisputes([]);
-                    setLoginError('');
-                    setLoginForm({ username: '', password: '' });
-                    // Disconnect wallet first, then change screen
-                    if (solanaWallet.disconnect) {
-                      solanaWallet.disconnect();
-                    }
-                    // Force page reload to fully reset state
-                    window.location.href = '/';
-                  }}
-                  className="w-full py-4 rounded-2xl bg-red-500/10 text-red-400 text-[15px] font-medium"
-                >
-                  Sign Out
-                </button>
-              </div>
-            </div>
-
-            {/* Add Bank */}
-            <AnimatePresence>
-              {showAddBank && (
-                <>
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 bg-black/80 z-40"
-                    onClick={() => setShowAddBank(false)}
-                  />
-                  <motion.div
-                    initial={{ y: "100%" }}
-                    animate={{ y: 0 }}
-                    exit={{ y: "100%" }}
-                    transition={{ type: "spring", damping: 30 }}
-                    className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} bg-neutral-900 rounded-t-3xl`}
-                  >
-                    <div className="flex items-center justify-between p-4 border-b border-neutral-800">
-                      <h2 className="text-[17px] font-semibold text-white">Add Bank Account</h2>
-                      <button onClick={() => setShowAddBank(false)}>
-                        <X className="w-5 h-5 text-neutral-500" />
-                      </button>
-                    </div>
-                    <div className="p-4 space-y-4">
-                      <div>
-                        <label className="text-[13px] text-neutral-500 mb-1 block">Bank Name</label>
-                        <input
-                          value={newBank.bank}
-                          onChange={(e) => setNewBank(p => ({ ...p, bank: e.target.value }))}
-                          placeholder="Emirates NBD"
-                          className="w-full bg-neutral-800 rounded-xl px-4 py-3 text-white placeholder:text-neutral-600 outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[13px] text-neutral-500 mb-1 block">IBAN</label>
-                        <input
-                          value={newBank.iban}
-                          onChange={(e) => setNewBank(p => ({ ...p, iban: e.target.value }))}
-                          placeholder="AE12 0345 0000 0012 3456 789"
-                          className="w-full bg-neutral-800 rounded-xl px-4 py-3 text-white font-mono placeholder:text-neutral-600 outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[13px] text-neutral-500 mb-1 block">Account Name</label>
-                        <input
-                          value={newBank.name}
-                          onChange={(e) => setNewBank(p => ({ ...p, name: e.target.value }))}
-                          placeholder="John Doe"
-                          className="w-full bg-neutral-800 rounded-xl px-4 py-3 text-white placeholder:text-neutral-600 outline-none"
-                        />
-                      </div>
-                    </div>
-                    <div className="p-4 pb-8">
-                      <button
-                        onClick={addBankAccount}
-                        disabled={!newBank.bank || !newBank.iban || !newBank.name}
-                        className={`w-full py-4 rounded-2xl text-[17px] font-semibold ${
-                          newBank.bank && newBank.iban && newBank.name
-                            ? "bg-white/10 text-white"
-                            : "bg-neutral-800 text-neutral-600"
-                        }`}
-                      >
-                        Add Account
-                      </button>
-                    </div>
-                  </motion.div>
-                </>
-              )}
-            </AnimatePresence>
-
-            {/* Bottom Nav */}
-            <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-5">
-              <div className={`${maxW} mx-auto`}>
-                <div className="flex items-center justify-around px-2 py-2.5 rounded-[28px]"
-                  style={{ background: 'rgba(14,14,22,0.92)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                  {([
-                    { key: "home",   icon: Wallet,   label: "Home" },
-                    { key: "orders", icon: Activity, label: "Activity" },
-                    { key: "trade",  icon: Zap,      label: "Trade" },
-                    { key: "profile",icon: User,     label: "You" },
-                  ] as const).map(({ key, icon: Icon, label }) => {
-                    const on = screen === key;
-                    return (
-                      <motion.button key={key} whileTap={{ scale: 0.85 }} onClick={() => setScreen(key as Screen)}
-                        className="relative flex flex-col items-center gap-1 px-5 py-1">
-                        {on && (
-                          <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
-                            style={{ background: 'rgba(124,58,237,0.18)' }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
-                        )}
-                        <Icon size={19} strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.22)', position: 'relative' }} />
-                        <span className="text-[8.5px] font-black uppercase tracking-wider relative z-10"
-                          style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.18)' }}>
-                          {label}
-                        </span>
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            <ProfileScreen
+              screen={screen}
+              setScreen={setScreen}
+              userName={userName}
+              completedOrders={completedOrders}
+              timedOutOrders={timedOutOrders}
+              solanaWallet={solanaWallet}
+              setShowWalletModal={setShowWalletModal}
+              copied={copied}
+              setCopied={setCopied}
+              bankAccounts={bankAccounts}
+              showAddBank={showAddBank}
+              setShowAddBank={setShowAddBank}
+              newBank={newBank}
+              setNewBank={setNewBank}
+              addBankAccount={addBankAccount}
+              resolvedDisputes={resolvedDisputes}
+              theme={theme}
+              toggleTheme={toggleTheme}
+              isAuthenticatingRef={isAuthenticatingRef}
+              lastAuthenticatedWalletRef={lastAuthenticatedWalletRef}
+              authAttemptedForWalletRef={authAttemptedForWalletRef}
+              setShowUsernameModal={setShowUsernameModal}
+              setUserId={setUserId}
+              setUserWallet={setUserWallet}
+              setUserName={setUserName}
+              setUserBalance={setUserBalance}
+              setOrders={setOrders}
+              setBankAccounts={setBankAccounts}
+              setResolvedDisputes={setResolvedDisputes}
+              setLoginError={setLoginError}
+              setLoginForm={setLoginForm}
+              maxW={maxW}
+            />
           </motion.div>
         )}
 
@@ -4644,113 +2101,18 @@ export default function Home() {
             exit={{ opacity: 0 }}
             className={`flex-1 w-full ${maxW} flex flex-col`}
           >
-            <div className="h-12" />
-
-            <div className="px-5 py-4 flex items-center">
-              <button onClick={() => setScreen("home")} className="p-2 -ml-2">
-                <ChevronLeft className="w-6 h-6 text-white" />
-              </button>
-              <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">Messages</h1>
-            </div>
-
-            <div className="flex-1 px-5 pb-28 overflow-y-auto">
-              {orders.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-20">
-                  <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center mb-4">
-                    <MessageCircle className="w-8 h-8 text-neutral-600" />
-                  </div>
-                  <p className="text-[17px] font-medium text-white mb-1">No messages</p>
-                  <p className="text-[15px] text-neutral-500">Start a trade to chat with merchants</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {orders.map(order => (
-                    <motion.button
-                      key={order.id}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => {
-                        setActiveOrderId(order.id);
-                        setScreen("chat-view");
-                        // Clear unread count when opening chat
-                        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, unreadCount: 0 } : o));
-                      }}
-                      className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center gap-3"
-                    >
-                      <div className="relative">
-                        <div className="w-12 h-12 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white font-semibold">
-                          {order.merchant.name.charAt(0)}
-                        </div>
-                        {(order.unreadCount || 0) > 0 && (
-                          <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-white/10 flex items-center justify-center">
-                            <span className="text-[10px] font-bold text-white">{order.unreadCount}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 text-left min-w-0">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <p className={`text-[15px] font-medium ${(order.unreadCount || 0) > 0 ? 'text-white' : 'text-neutral-300'}`}>
-                            {order.merchant.name}
-                          </p>
-                          <p className="text-[11px] text-neutral-600">
-                            {order.lastMessage
-                              ? order.lastMessage.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                              : order.createdAt.toLocaleDateString()
-                            }
-                          </p>
-                        </div>
-                        <p className={`text-[13px] truncate ${(order.unreadCount || 0) > 0 ? 'text-neutral-300 font-medium' : 'text-neutral-500'}`}>
-                          {order.lastMessage
-                            ? (order.lastMessage.fromMerchant ? '' : 'You: ') + order.lastMessage.content
-                            : order.status === "complete"
-                              ? "Trade completed"
-                              : `${order.type === "buy" ? "Buying" : "Selling"} ${order.cryptoAmount} USDC`
-                          }
-                        </p>
-                      </div>
-                      {order.status !== "complete" && !(order.unreadCount || 0) && (
-                        <div className="w-2 h-2 rounded-full bg-neutral-700" />
-                      )}
-                    </motion.button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Bottom Nav */}
-            <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-5">
-              <div className={`${maxW} mx-auto`}>
-                <div className="flex items-center justify-around px-2 py-2.5 rounded-[28px]"
-                  style={{ background: 'rgba(14,14,22,0.92)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                  {([
-                    { key: "home",   icon: Wallet,   label: "Home" },
-                    { key: "orders", icon: Activity, label: "Activity" },
-                    { key: "trade",  icon: Zap,      label: "Trade" },
-                    { key: "profile",icon: User,     label: "You" },
-                  ] as const).map(({ key, icon: Icon, label }) => {
-                    const on = (screen as Screen) === key;
-                    return (
-                      <motion.button key={key} whileTap={{ scale: 0.85 }} onClick={() => setScreen(key as Screen)}
-                        className="relative flex flex-col items-center gap-1 px-5 py-1">
-                        {on && (
-                          <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
-                            style={{ background: 'rgba(124,58,237,0.18)' }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
-                        )}
-                        <Icon size={19} strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.22)', position: 'relative' }} />
-                        <span className="text-[8.5px] font-black uppercase tracking-wider relative z-10"
-                          style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.18)' }}>
-                          {label}
-                        </span>
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            <ChatListScreen
+              screen={screen}
+              setScreen={setScreen}
+              orders={orders}
+              setActiveOrderId={setActiveOrderId}
+              setOrders={setOrders}
+              maxW={maxW}
+            />
           </motion.div>
         )}
 
-        {/* CHAT VIEW - WhatsApp-style chat conversation */}
+        {/* CHAT VIEW */}
         {screen === "chat-view" && activeOrder && (
           <motion.div
             key="chat-view"
@@ -4759,154 +2121,15 @@ export default function Home() {
             exit={{ opacity: 0, x: -20 }}
             className={`flex-1 w-full ${maxW} flex flex-col h-dvh`}
           >
-            {/* Chat Header */}
-            <div className="bg-neutral-900 border-b border-neutral-800 pt-12 pb-3 px-4">
-              <div className="flex items-center gap-3">
-                <button onClick={() => setScreen("chats")} className="p-2 -ml-2">
-                  <ChevronLeft className="w-6 h-6 text-white" />
-                </button>
-                <div className="w-10 h-10 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white font-semibold">
-                  {activeOrder.merchant.name.charAt(0)}
-                </div>
-                <div className="flex-1">
-                  <p className="text-[15px] font-semibold text-white">{activeOrder.merchant.name}</p>
-                  <div className="flex items-center gap-1.5">
-                    <ConnectionIndicator isConnected={true} />
-                    <p className="text-[12px] text-orange-400/80">Online</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setScreen("order")}
-                  className="p-2 bg-neutral-800 rounded-full"
-                >
-                  <ArrowUpRight className="w-4 h-4 text-neutral-400" />
-                </button>
-              </div>
-              {/* Order summary bar */}
-              <div className="mt-3 bg-neutral-800/50 rounded-xl px-3 py-2 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${
-                    activeOrder.status === 'complete' ? 'bg-white/10' :
-                    activeOrder.status === 'disputed' ? 'bg-red-400' : 'bg-white/10'
-                  }`} />
-                  <span className="text-[12px] text-neutral-400">
-                    {activeOrder.type === "buy" ? "Buying" : "Selling"} {activeOrder.cryptoAmount} USDC
-                  </span>
-                </div>
-                <span className="text-[12px] text-neutral-500">
-                  د.إ {parseFloat(activeOrder.fiatAmount).toLocaleString()}
-                </span>
-              </div>
-            </div>
-
-            {/* Messages Area */}
-            <div
-              ref={chatMessagesRef}
-              className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
-              style={{ background: 'linear-gradient(to bottom, #0a0a0a, #111)' }}
-            >
-              {activeChat && activeChat.messages.length > 0 ? (
-                activeChat.messages.map((msg) => {
-                  // Parse dispute/resolution messages
-                  if (msg.messageType === 'dispute') {
-                    try {
-                      const data = JSON.parse(msg.text);
-                      return (
-                        <div key={msg.id} className="flex justify-center">
-                          <div className="w-full max-w-[90%] bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
-                            <div className="flex items-center gap-2 mb-2">
-                              <AlertTriangle className="w-4 h-4 text-red-400" />
-                              <span className="text-[13px] font-semibold text-red-400">Dispute Opened</span>
-                            </div>
-                            <p className="text-[14px] text-white mb-1">
-                              <span className="text-neutral-400">Reason:</span> {data.reason?.replace(/_/g, ' ')}
-                            </p>
-                            {data.description && (
-                              <p className="text-[13px] text-neutral-400">{data.description}</p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    } catch {
-                      // Fall back to regular message
-                    }
-                  }
-
-                  if (msg.messageType === 'system') {
-                    return (
-                      <div key={msg.id} className="flex justify-center">
-                        <div className="bg-neutral-800/50 px-4 py-1.5 rounded-full">
-                          <p className="text-[12px] text-neutral-400">{msg.text}</p>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  // Regular messages - WhatsApp style
-                  const isMe = msg.from === "me";
-                  return (
-                    <div
-                      key={msg.id}
-                      className={`flex ${isMe ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${
-                          isMe
-                            ? "bg-white/10 text-white rounded-br-md"
-                            : "bg-neutral-800 text-white rounded-bl-md"
-                        }`}
-                      >
-                        <p className="text-[15px] leading-relaxed">{msg.text}</p>
-                        <p className={`text-[10px] mt-1 ${isMe ? 'text-white/70' : 'text-neutral-500'}`}>
-                          {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center py-20">
-                  <div className="w-16 h-16 rounded-full bg-neutral-800 flex items-center justify-center mb-4">
-                    <MessageCircle className="w-8 h-8 text-neutral-600" />
-                  </div>
-                  <p className="text-[15px] text-neutral-500">No messages yet</p>
-                  <p className="text-[13px] text-neutral-600 mt-1">Send a message to start the conversation</p>
-                </div>
-              )}
-            </div>
-
-            {/* Message Input - WhatsApp style */}
-            <div className="bg-neutral-900 border-t border-neutral-800 px-4 py-3 pb-8">
-              <div className="flex items-center gap-3">
-                <input
-                  type="text"
-                  placeholder="Type a message..."
-                  className="flex-1 bg-neutral-800 rounded-full px-5 py-3 text-[15px] text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-orange-500/30"
-                  value={chatMessage}
-                  onChange={(e) => setChatMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && chatMessage.trim()) {
-                      sendChatMessage(activeOrder.id, chatMessage.trim());
-                      setChatMessage('');
-                    }
-                  }}
-                />
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => {
-                    if (chatMessage.trim()) {
-                      sendChatMessage(activeOrder.id, chatMessage.trim());
-                      setChatMessage('');
-                    }
-                  }}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                    chatMessage.trim() ? 'bg-white/10' : 'bg-neutral-800'
-                  }`}
-                >
-                  <ArrowUpRight className={`w-5 h-5 ${chatMessage.trim() ? 'text-white' : 'text-neutral-500'}`} />
-                </motion.button>
-              </div>
-            </div>
+            <ChatViewScreen
+              setScreen={setScreen}
+              activeOrder={activeOrder}
+              activeChat={activeChat ?? null}
+              chatMessage={chatMessage}
+              setChatMessage={setChatMessage}
+              sendChatMessage={sendChatMessage}
+              chatMessagesRef={chatMessagesRef}
+            />
           </motion.div>
         )}
 
@@ -4919,110 +2142,11 @@ export default function Home() {
             exit={{ opacity: 0, x: -20 }}
             className={`flex-1 w-full ${maxW} flex flex-col`}
           >
-            <div className="h-12" />
-
-            <div className="px-5 py-4 flex items-center">
-              <button onClick={() => setScreen("home")} className="p-2 -ml-2">
-                <ChevronLeft className="w-6 h-6 text-white" />
-              </button>
-              <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">Create Offer</h1>
-            </div>
-
-            <div className="flex-1 px-5">
-              <p className="text-[15px] text-neutral-500 mb-6">
-                Post an offer for others to accept. Great for large amounts or custom rates.
-              </p>
-
-              {/* Offer Type */}
-              <div className="mb-5">
-                <p className="text-[13px] text-neutral-500 mb-3">I want to</p>
-                <div className="flex gap-2">
-                  {(["buy", "sell"] as const).map(type => (
-                    <button
-                      key={type}
-                      onClick={() => setTradeType(type)}
-                      className={`flex-1 py-3 rounded-xl text-[15px] font-medium transition-all ${
-                        tradeType === type
-                          ? "bg-white/10 text-white"
-                          : "bg-neutral-900 text-neutral-400"
-                      }`}
-                    >
-                      {type === "buy" ? "Buy USDC" : "Sell USDC"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Amount */}
-              <div className="mb-5">
-                <p className="text-[13px] text-neutral-500 mb-2">Amount</p>
-                <div className="bg-neutral-900 rounded-xl p-4">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="0"
-                      className="flex-1 text-[24px] font-semibold text-white bg-transparent outline-none placeholder:text-neutral-700"
-                    />
-                    <span className="text-[15px] font-medium text-neutral-400">USDC</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Rate */}
-              <div className="mb-5">
-                <p className="text-[13px] text-neutral-500 mb-2">Your rate (AED per USDC)</p>
-                <div className="bg-neutral-900 rounded-xl p-4">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="3.67"
-                      className="flex-1 text-[24px] font-semibold text-white bg-transparent outline-none placeholder:text-neutral-700"
-                    />
-                    <span className="text-[15px] font-medium text-neutral-400">AED</span>
-                  </div>
-                </div>
-                <p className="text-[13px] text-neutral-600 mt-2">Market rate: 3.67 AED</p>
-              </div>
-
-              {/* Min/Max */}
-              <div className="mb-5">
-                <p className="text-[13px] text-neutral-500 mb-2">Order limits (optional)</p>
-                <div className="flex gap-3">
-                  <div className="flex-1 bg-neutral-900 rounded-xl p-3">
-                    <p className="text-[11px] text-neutral-600 mb-1">Min</p>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="100"
-                      className="w-full text-[17px] font-medium text-white bg-transparent outline-none placeholder:text-neutral-700"
-                    />
-                  </div>
-                  <div className="flex-1 bg-neutral-900 rounded-xl p-3">
-                    <p className="text-[11px] text-neutral-600 mb-1">Max</p>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      placeholder="10,000"
-                      className="w-full text-[17px] font-medium text-white bg-transparent outline-none placeholder:text-neutral-700"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-5 pb-10">
-              <motion.button
-                whileTap={{ scale: 0.98 }}
-                className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-white/10 text-white"
-              >
-                Post Offer
-              </motion.button>
-              <p className="text-[13px] text-neutral-600 text-center mt-3">
-                Your offer will be visible to all traders
-              </p>
-            </div>
+            <CreateOfferScreen
+              setScreen={setScreen}
+              tradeType={tradeType}
+              setTradeType={setTradeType}
+            />
           </motion.div>
         )}
 
@@ -5035,132 +2159,20 @@ export default function Home() {
             exit={{ opacity: 0, x: -20 }}
             className={`flex-1 w-full ${maxW} flex flex-col`}
           >
-            <div className="h-12" />
-
-            <div className="px-5 py-4 flex items-center">
-              <button onClick={() => { setScreen("home"); setSelectedOffer(null); }} className="p-2 -ml-2">
-                <ChevronLeft className="w-6 h-6 text-white" />
-              </button>
-              <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">Confirm Meeting</h1>
-            </div>
-
-            <div className="flex-1 px-5 overflow-auto">
-              {/* Order Summary */}
-              <div className="bg-neutral-900 rounded-2xl p-4 mb-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[13px] text-neutral-500">You {tradeType === "buy" ? "pay" : "receive"}</span>
-                  <span className="text-[22px] font-semibold text-white">د.إ {parseFloat(fiatAmount).toLocaleString()}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[13px] text-neutral-500">You {tradeType === "buy" ? "receive" : "sell"}</span>
-                  <span className="text-[17px] font-medium text-neutral-400">{amount} USDC</span>
-                </div>
-              </div>
-
-              {/* Merchant Card */}
-              <div className="bg-neutral-900 rounded-2xl p-4 mb-4">
-                <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-3">Meeting with</p>
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white text-lg font-semibold">
-                    {selectedOffer.merchant.display_name.charAt(0)}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-[17px] font-medium text-white">{selectedOffer.merchant.display_name}</p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1">
-                        <Star className="w-3 h-3 fill-amber-400 text-white/70" />
-                        <span className="text-[13px] text-neutral-400">{selectedOffer.merchant.rating}</span>
-                      </div>
-                      <span className="text-neutral-600">·</span>
-                      <span className="text-[13px] text-neutral-400">{selectedOffer.merchant.total_trades} trades</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Location Preview */}
-              <div className="bg-neutral-900 rounded-2xl overflow-hidden mb-4">
-                <div className="relative h-36">
-                  <div className="absolute inset-0 bg-black/30" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="flex flex-col items-center">
-                      <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center shadow-lg shadow-white/10 mb-1">
-                        <MapPin className="w-6 h-6 text-white" />
-                      </div>
-                      <div className="w-1 h-4 bg-white/10 rounded-b-full" />
-                    </div>
-                  </div>
-                  {/* Grid pattern */}
-                  <div className="absolute inset-0 opacity-10">
-                    <div className="w-full h-full" style={{
-                      backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
-                      backgroundSize: '30px 30px'
-                    }} />
-                  </div>
-                  {selectedOffer.location_lat && selectedOffer.location_lng && (
-                    <button
-                      onClick={() => window.open(`https://maps.google.com/?q=${selectedOffer.location_lat},${selectedOffer.location_lng}`, '_blank')}
-                      className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-1.5"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5 text-white" />
-                      <span className="text-[12px] font-medium text-white">Open Maps</span>
-                    </button>
-                  )}
-                </div>
-                <div className="p-4 space-y-3">
-                  <div>
-                    <p className="text-[15px] font-medium text-white">{selectedOffer.location_name}</p>
-                    <p className="text-[13px] text-neutral-400">{selectedOffer.location_address}</p>
-                  </div>
-                  {selectedOffer.meeting_instructions && (
-                    <div className="pt-3 border-t border-neutral-800">
-                      <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-1">Meeting spot</p>
-                      <div className="flex items-start gap-2">
-                        <Navigation className="w-4 h-4 text-white flex-shrink-0 mt-0.5" />
-                        <p className="text-[13px] text-white">{selectedOffer.meeting_instructions}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Safety Notice */}
-              <div className="bg-white/5 border border-white/6 rounded-2xl p-4 mb-4">
-                <div className="flex items-start gap-3">
-                  <Shield className="w-5 h-5 text-white/70 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-[13px] font-medium text-white/70 mb-1">Safety tips</p>
-                    <ul className="text-[12px] text-neutral-400 space-y-1">
-                      <li>• Meet in public places only</li>
-                      <li>• Verify the amount before handing over cash</li>
-                      <li>• Keep chat records of your conversation</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="px-5 pb-10 space-y-3">
-              <motion.button
-                whileTap={{ scale: 0.98 }}
-                onClick={confirmCashOrder}
-                disabled={isLoading}
-                className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-white/10 text-white flex items-center justify-center gap-2"
-              >
-                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Confirm & Start Trade"}
-              </motion.button>
-              <button
-                onClick={() => { setScreen("home"); setSelectedOffer(null); }}
-                className="w-full py-3 text-[15px] font-medium text-neutral-500"
-              >
-                Cancel
-              </button>
-            </div>
+            <CashConfirmScreen
+              setScreen={setScreen}
+              selectedOffer={selectedOffer}
+              setSelectedOffer={setSelectedOffer}
+              tradeType={tradeType}
+              amount={amount}
+              fiatAmount={fiatAmount}
+              isLoading={isLoading}
+              confirmCashOrder={confirmCashOrder}
+            />
           </motion.div>
         )}
 
-        {/* MATCHING - Order Placed State */}
+        {/* MATCHING */}
         {screen === "matching" && pendingTradeData && (
           <motion.div
             key="matching"
@@ -5169,203 +2181,19 @@ export default function Home() {
             exit={{ opacity: 0 }}
             className={`flex-1 w-full ${maxW} flex flex-col`}
           >
-            <div className="h-12" />
-
-            {/* Header */}
-            <div className="px-5 py-4 flex items-center justify-between">
-              <button
-                onClick={() => setScreen("home")}
-                className="p-2 -ml-2"
-              >
-                <ChevronLeft className="w-6 h-6 text-white" />
-              </button>
-              <h1 className="text-[17px] font-semibold text-white">Order Placed</h1>
-              <div className="w-10" />
-            </div>
-
-            <div className="flex-1 px-5 overflow-auto smooth-scroll">
-              {/* Amount Display */}
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="text-center py-8"
-              >
-                <p className="text-[13px] text-neutral-500 mb-2">You&apos;re buying</p>
-                <div className="flex items-baseline justify-center gap-2">
-                  <p className="text-[36px] font-semibold text-white tracking-tight">{pendingTradeData.amount}</p>
-                  <p className="text-[17px] text-neutral-400">USDC</p>
-                </div>
-                <motion.div
-                  initial={{ y: 10, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.2 }}
-                  className="mt-4 inline-flex items-center gap-2 glass-card rounded-full px-4 py-2"
-                >
-                  <span className="text-[13px] text-neutral-500">for</span>
-                  <span className="text-[15px] font-medium text-white">د.إ {parseFloat(pendingTradeData.fiatAmount).toLocaleString()}</span>
-                </motion.div>
-              </motion.div>
-
-              {/* Status */}
-              <motion.div
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="glass-card rounded-2xl p-4 mb-4"
-              >
-                <div className="flex items-center gap-3 mb-4 pb-4 border-b border-neutral-800">
-                  <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center relative">
-                    <motion.div
-                      className="absolute inset-0 rounded-full border-2 border-white/6"
-                      animate={{ scale: [1, 1.3, 1], opacity: [0.5, 0, 0.5] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    />
-                    <motion.div
-                      className="w-3 h-3 rounded-full bg-white/10"
-                      animate={{ scale: [1, 0.8, 1] }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
-                    />
-                  </div>
-                  <div>
-                    <p className="text-[15px] font-medium text-white">Finding a merchant</p>
-                    <p className="text-[13px] text-neutral-500">We&apos;ll notify you when ready</p>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center flex-shrink-0">
-                      <Check className="w-3 h-3 text-black" />
-                    </div>
-                    <p className="text-[14px] text-white">Order submitted</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full border-2 border-neutral-600 flex items-center justify-center flex-shrink-0">
-                      <motion.div
-                        className="w-1.5 h-1.5 rounded-full bg-neutral-400"
-                        animate={{ scale: [1, 1.3, 1] }}
-                        transition={{ duration: 1, repeat: Infinity }}
-                      />
-                    </div>
-                    <p className="text-[14px] text-neutral-400">Matching with merchant</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-5 h-5 rounded-full border-2 border-neutral-800 flex-shrink-0" />
-                    <p className="text-[14px] text-neutral-600">Ready to pay</p>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Countdown Timer */}
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.4 }}
-                className="glass-card rounded-2xl p-5 mb-4 text-center"
-              >
-                <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-2">Time remaining</p>
-                <div className="flex items-center justify-center gap-2">
-                  <Clock className={`w-5 h-5 ${matchingTimeLeft < 60 ? 'text-red-400' : matchingTimeLeft < 180 ? 'text-white/70' : 'text-white/70'}`} />
-                  <p className={`text-[28px] font-semibold tracking-tight ${matchingTimeLeft < 60 ? 'text-red-400' : matchingTimeLeft < 180 ? 'text-white/70' : 'text-white'}`}>
-                    {formatTimeLeft(matchingTimeLeft)}
-                  </p>
-                </div>
-                {matchingTimeLeft < 180 && (
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-[12px] text-white/70 mt-2"
-                  >
-                    {matchingTimeLeft < 60 ? 'Order will expire soon!' : 'Hurry! Time is running out'}
-                  </motion.p>
-                )}
-                {/* Progress bar */}
-                <div className="w-full h-1 bg-neutral-800 rounded-full mt-3 overflow-hidden">
-                  <motion.div
-                    className={`h-full rounded-full ${matchingTimeLeft < 60 ? 'bg-red-500' : matchingTimeLeft < 180 ? 'bg-white/10' : 'bg-white/10'}`}
-                    initial={{ width: '100%' }}
-                    animate={{ width: `${(matchingTimeLeft / (15 * 60)) * 100}%` }}
-                    transition={{ duration: 0.5 }}
-                  />
-                </div>
-              </motion.div>
-
-              {/* Info */}
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="bg-neutral-900 rounded-xl p-4">
-                  <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-1">Payment</p>
-                  <p className="text-[15px] font-medium text-white capitalize">{pendingTradeData.paymentMethod}</p>
-                </div>
-                <div className="bg-neutral-900 rounded-xl p-4">
-                  <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-1">Rate</p>
-                  <p className="text-[15px] font-medium text-white">{currentRate} AED</p>
-                </div>
-              </div>
-
-              {/* Note */}
-              <p className="text-[13px] text-neutral-600 text-center px-4">
-                If no merchant accepts within {Math.ceil(matchingTimeLeft / 60)} minutes, your order will be moved to timeout.
-              </p>
-            </div>
-
-            {/* Bottom Actions */}
-            <div className="px-5 pb-10 pt-4 space-y-3">
-              <motion.button
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setScreen("home")}
-                className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-white/10 text-white"
-              >
-                Done
-              </motion.button>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    if (activeOrderId) {
-                      setOrders(prev => prev.map(o =>
-                        o.id === activeOrderId ? { ...o, status: "payment" as OrderStatus, step: 2 as OrderStep } : o
-                      ));
-                      setPendingTradeData(null);
-                      setScreen("order");
-                    }
-                  }}
-                  className="flex-1 py-3 rounded-xl text-[13px] font-medium bg-neutral-900 text-neutral-400"
-                >
-                  Demo: Accept
-                </button>
-                <button
-                  onClick={async () => {
-                    if (activeOrderId && userId) {
-                      try {
-                        // Call API to cancel the order
-                        const res = await fetch(`/api/orders/${activeOrderId}`, {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            status: 'cancelled',
-                            actor_type: 'user',
-                            actor_id: userId,
-                            reason: 'User cancelled order',
-                          }),
-                        });
-                        const data = await res.json();
-                        if (data.success) {
-                          setOrders(prev => prev.filter(o => o.id !== activeOrderId));
-                          toast.showOrderCancelled('You cancelled the order');
-                        }
-                      } catch (err) {
-                        console.error('Failed to cancel order:', err);
-                        toast.showWarning('Failed to cancel order');
-                      }
-                    }
-                    setPendingTradeData(null);
-                    setScreen("home");
-                  }}
-                  className="flex-1 py-3 rounded-xl text-[13px] font-medium bg-neutral-900 text-neutral-500"
-                >
-                  Cancel Order
-                </button>
-              </div>
-            </div>
+            <MatchingScreen
+              setScreen={setScreen}
+              pendingTradeData={pendingTradeData}
+              matchingTimeLeft={matchingTimeLeft}
+              formatTimeLeft={formatTimeLeft}
+              currentRate={currentRate}
+              activeOrderId={activeOrderId}
+              userId={userId}
+              setOrders={setOrders}
+              setPendingTradeData={setPendingTradeData}
+              toast={toast}
+              maxW={maxW}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -5437,7 +2265,7 @@ export default function Home() {
                   </p>
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-gray-300 font-medium">{acceptedOrderInfo.cryptoAmount} USDC</span>
-                    <span className="text-gray-500">•</span>
+                    <span className="text-gray-500">{'\u2022'}</span>
                     <span className="text-gray-400">{acceptedOrderInfo.fiatAmount.toLocaleString()} AED</span>
                   </div>
                 </div>

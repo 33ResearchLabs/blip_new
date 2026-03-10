@@ -11,6 +11,7 @@ import {
   Clock,
   CheckCircle2,
 } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface CorridorProviderSettingsProps {
   merchantId: string | null;
@@ -46,7 +47,7 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
   const fetchProvider = useCallback(async () => {
     if (!merchantId) return;
     try {
-      const res = await fetch(`/api/corridor/providers?merchant_id=${merchantId}`);
+      const res = await fetchWithAuth(`/api/corridor/providers?merchant_id=${merchantId}`);
       const json = await res.json();
       if (json.success && json.data) {
         const p = json.data as ProviderData;
@@ -73,7 +74,7 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
     setSaving(true);
     setSaveMsg('');
     try {
-      const res = await fetch('/api/corridor/providers', {
+      const res = await fetchWithAuth('/api/corridor/providers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

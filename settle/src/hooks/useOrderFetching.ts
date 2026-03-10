@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { DbOrder, Order, LeaderboardEntry, BigOrderRequest } from "@/types/merchant";
 import { getEffectiveStatus, mapDbOrderToUI } from "@/lib/orders/mappers";
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 // Resolved dispute shape (inline — no separate type needed)
 export interface ResolvedDispute {
@@ -77,7 +78,7 @@ export function useOrderFetching({
     fetchAbortRef.current = controller;
 
     try {
-      const res = await fetch(`/api/merchant/orders?merchant_id=${merchantId}&include_all_pending=true&_t=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
+      const res = await fetchWithAuth(`/api/merchant/orders?merchant_id=${merchantId}&include_all_pending=true&_t=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
       if (!res.ok) {
         const errorBody = await res.json().catch(() => null);
         console.error('[Merchant] Failed to fetch orders:', res.status, res.statusText, errorBody);
@@ -150,7 +151,7 @@ export function useOrderFetching({
     const controller = new AbortController();
     balanceAbortRef.current = controller;
     try {
-      const res = await fetch(`/api/mock/balance?userId=${merchantId}&type=merchant`, { signal: controller.signal });
+      const res = await fetchWithAuth(`/api/mock/balance?userId=${merchantId}&type=merchant`, { signal: controller.signal });
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -169,7 +170,7 @@ export function useOrderFetching({
     const controller = new AbortController();
     mempoolAbortRef.current = controller;
     try {
-      const res = await fetch('/api/mempool?type=orders&corridor_id=USDT_AED&limit=50', { signal: controller.signal });
+      const res = await fetchWithAuth('/api/mempool?type=orders&corridor_id=USDT_AED&limit=50', { signal: controller.signal });
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data?.orders) {
@@ -186,7 +187,7 @@ export function useOrderFetching({
   const fetchResolvedDisputes = useCallback(async () => {
     if (!merchantId) return;
     try {
-      const res = await fetch(`/api/disputes/resolved?actor_type=merchant&actor_id=${merchantId}`);
+      const res = await fetchWithAuth(`/api/disputes/resolved?actor_type=merchant&actor_id=${merchantId}`);
       if (!res.ok) return;
       const data = await res.json();
       if (data.success && data.data) {
@@ -200,7 +201,7 @@ export function useOrderFetching({
   const fetchBigOrders = useCallback(async () => {
     if (!merchantId) return;
     try {
-      const res = await fetch(`/api/merchant/big-orders?merchant_id=${merchantId}&limit=10`);
+      const res = await fetchWithAuth(`/api/merchant/big-orders?merchant_id=${merchantId}&limit=10`);
       if (!res.ok) return;
       const data = await res.json();
       if (data.success && data.data?.orders) {
@@ -234,7 +235,7 @@ export function useOrderFetching({
   const fetchActiveOffers = useCallback(async () => {
     if (!merchantId) return;
     try {
-      const res = await fetch(`/api/merchant/offers?merchant_id=${merchantId}`);
+      const res = await fetchWithAuth(`/api/merchant/offers?merchant_id=${merchantId}`);
       if (!res.ok) return;
       const data = await res.json();
       if (data.success && data.data) {
@@ -247,7 +248,7 @@ export function useOrderFetching({
 
   const fetchLeaderboard = useCallback(async () => {
     try {
-      const res = await fetch('/api/merchants/leaderboard');
+      const res = await fetchWithAuth('/api/merchants/leaderboard');
       if (!res.ok) return;
       const data = await res.json();
       if (data.success && data.data) {
@@ -271,7 +272,7 @@ export function useOrderFetching({
   // ─── Single-order refetch (authoritative, no version check) ───
   const refetchSingleOrder = useCallback(async (orderId: string) => {
     try {
-      const res = await fetch(`/api/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&_t=${Date.now()}`, {
+      const res = await fetchWithAuth(`/api/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&_t=${Date.now()}`, {
         cache: 'no-store'
       });
       if (!res.ok) {
@@ -374,7 +375,7 @@ export function useOrderFetching({
     if (!merchantId) return;
     const expireOrders = async () => {
       try {
-        await fetch('/api/orders/expire', { method: 'POST' });
+        await fetchWithAuth('/api/orders/expire', { method: 'POST' });
       } catch (error) {
         console.error('[Merchant] Failed to expire orders:', error);
       }

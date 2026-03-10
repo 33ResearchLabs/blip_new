@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import {
+  requireAuth,
   successResponse,
   errorResponse,
   validationErrorResponse,
@@ -10,6 +11,10 @@ import {
 // Matching engine: Find best matching order based on spread preference, reputation, and time
 export async function GET(request: NextRequest) {
   try {
+    // Authorization — mandatory
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const searchParams = request.nextUrl.searchParams;
 
     // Required parameters
@@ -126,6 +131,10 @@ export async function GET(request: NextRequest) {
 // Get order book statistics
 export async function POST(request: NextRequest) {
   try {
+    // Authorization — mandatory
+    const authPost = await requireAuth(request);
+    if (authPost instanceof NextResponse) return authPost;
+
     const body = await request.json();
     const { type, payment_method } = body;
 

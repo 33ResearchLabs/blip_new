@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { ArrowDownLeft, ArrowUpRight, Lock, Unlock, RotateCcw, Receipt, Loader2, RefreshCw } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface Transaction {
   id: string;
@@ -60,7 +61,7 @@ export function TransactionHistory({ merchantId }: TransactionHistoryProps) {
   const fetchTransactions = useCallback(async () => {
     if (!merchantId) return;
     try {
-      const res = await fetch(`/api/merchant/transactions?merchant_id=${merchantId}&limit=30`);
+      const res = await fetchWithAuth(`/api/merchant/transactions?merchant_id=${merchantId}&limit=30`);
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.data) {

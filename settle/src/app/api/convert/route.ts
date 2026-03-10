@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
-import { unauthorizedResponse } from '@/lib/middleware/auth';
+import { requireAuth, unauthorizedResponse } from '@/lib/middleware/auth';
 import { cookies } from 'next/headers';
 
 const MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
@@ -109,6 +109,10 @@ export async function POST(request: NextRequest) {
 // GET endpoint to fetch current balances and rate
 export async function GET(request: NextRequest) {
   try {
+    // Authorization — mandatory
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const type = searchParams.get('type') || 'merchant';
@@ -117,6 +121,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'userId is required' },
         { status: 400 }
+      );
+    }
+
+    // Ownership check — can only query your own balance
+    if (auth.actorId !== userId) {
+      return NextResponse.json(
+        { success: false, error: 'You can only view your own balance' },
+        { status: 403 }
       );
     }
 

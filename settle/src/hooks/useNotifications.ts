@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { Notification } from "@/types/merchant";
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 export function useNotifications(merchantId: string | null, isLoggedIn: boolean) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -42,7 +43,7 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
       hasShownWelcome.current = true;
       addNotification('system', 'Welcome back! You are now online.');
 
-      fetch(`/api/merchant/notifications?merchantId=${merchantId}&limit=50`)
+      fetchWithAuth(`/api/merchant/notifications?merchantId=${merchantId}&limit=50`)
         .then(res => res.json())
         .then(data => {
           if (data.notifications?.length) {

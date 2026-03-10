@@ -153,8 +153,14 @@ export async function POST(request: NextRequest) {
 
       const member = rows[0] as { id: string; email: string; wallet_address: string | null; name: string; role: string };
 
-      // Compliance password from env vars (with dev fallback)
-      const compliancePassword = process.env.COMPLIANCE_PASSWORD || 'compliance123';
+      // Compliance password MUST be set via environment variable
+      const compliancePassword = process.env.COMPLIANCE_PASSWORD;
+      if (!compliancePassword) {
+        return NextResponse.json(
+          { success: false, error: 'Compliance auth not configured — set COMPLIANCE_PASSWORD env var' },
+          { status: 500 }
+        );
+      }
       if (password !== compliancePassword) {
         return NextResponse.json(
           { success: false, error: 'Invalid credentials' },

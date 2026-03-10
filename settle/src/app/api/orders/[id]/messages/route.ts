@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getOrderMessages, sendMessage, markMessagesAsRead, getOrderById, markOrderHasManualMessage } from '@/lib/db/repositories/orders';
 import {
   sendMessageSchema,
@@ -6,7 +6,7 @@ import {
   uuidSchema,
 } from '@/lib/validation/schemas';
 import {
-  getAuthContext,
+  requireAuth,
   canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
@@ -14,6 +14,7 @@ import {
   successResponse,
   errorResponse,
 } from '@/lib/middleware/auth';
+import { checkRateLimit, MESSAGE_LIMIT } from '@/lib/middleware/rateLimit';
 import { logger } from '@/lib/logger';
 import { notifyNewMessage, notifyMessagesRead } from '@/lib/pusher/server';
 
@@ -39,6 +40,10 @@ export async function GET(
       return validationErrorResponse([idValidation.error!]);
     }
 
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     // Check order exists
     const order = await getOrderById(id);
     if (!order) {
@@ -46,17 +51,14 @@ export async function GET(
     }
 
     // Authorization check
-    const auth = getAuthContext(request);
-    if (auth) {
-      const canAccess = await canAccessOrder(auth, id);
-      if (!canAccess) {
-        logger.auth.forbidden(`GET /api/orders/${id}/messages`, auth.actorId, 'Not order participant');
-        return forbiddenResponse('You do not have access to this order');
-      }
+    const canAccess = await canAccessOrder(auth, id);
+    if (!canAccess) {
+      logger.auth.forbidden(`GET /api/orders/${id}/messages`, auth.actorId, 'Not order participant');
+      return forbiddenResponse('You do not have access to this order');
     }
 
     const messages = await getOrderMessages(id);
-    logger.api.request('GET', `/api/orders/${id}/messages`, auth?.actorId);
+    logger.api.request('GET', `/api/orders/${id}/messages`, auth.actorId);
     return successResponse(messages);
   } catch (error) {
     logger.api.error('GET', '/api/orders/[id]/messages', error as Error);
@@ -77,7 +79,15 @@ export async function POST(
       return validationErrorResponse([idValidation.error!]);
     }
 
+    // Rate limit: 30 messages per minute
+    const rateLimitResponse = checkRateLimit(request, 'messages:send', MESSAGE_LIMIT);
+    if (rateLimitResponse) return rateLimitResponse;
+
     const body = await request.json();
+
+    // Require authentication
+    const auth = await requireAuth(request, body);
+    if (auth instanceof NextResponse) return auth;
 
     // Validate request body
     const parseResult = sendMessageSchema.safeParse(body);
@@ -94,9 +104,8 @@ export async function POST(
       return notFoundResponse('Order');
     }
 
-    // Authorization: verify sender can access this order
-    const auth = { actorType: sender_type, actorId: sender_id };
-    const canAccess = await canAccessOrder(auth as { actorType: 'user' | 'merchant' | 'system'; actorId: string }, id);
+    // Authorization: verify authenticated actor can access this order
+    const canAccess = await canAccessOrder(auth, id);
     if (!canAccess) {
       logger.auth.forbidden(`POST /api/orders/${id}/messages`, sender_id, 'Not order participant');
       return forbiddenResponse('You do not have access to this order');
@@ -172,14 +181,15 @@ export async function PATCH(
       return notFoundResponse('Order');
     }
 
-    // Authorization check (need reader_id from auth context)
-    const auth = getAuthContext(request);
-    if (auth) {
-      const canAccess = await canAccessOrder(auth, id);
-      if (!canAccess) {
-        logger.auth.forbidden(`PATCH /api/orders/${id}/messages`, auth.actorId, 'Not order participant');
-        return forbiddenResponse('You do not have access to this order');
-      }
+    // Require authentication
+    const auth = await requireAuth(request, body);
+    if (auth instanceof NextResponse) return auth;
+
+    // Authorization check
+    const canAccess = await canAccessOrder(auth, id);
+    if (!canAccess) {
+      logger.auth.forbidden(`PATCH /api/orders/${id}/messages`, auth.actorId, 'Not order participant');
+      return forbiddenResponse('You do not have access to this order');
     }
 
     await markMessagesAsRead(id, reader_type);

@@ -1,18 +1,22 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
   upsertMerchantQuote,
   getMerchantQuote,
 } from '@/lib/db/repositories/mempool';
 import {
-  getAuthContext,
+  requireAuth,
   validationErrorResponse,
   successResponse,
   errorResponse,
   forbiddenResponse,
 } from '@/lib/middleware/auth';
+import { checkRateLimit, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 
-// GET /api/merchant-quotes - Get merchant quote
+// GET /api/merchant-quotes - Get merchant quote (requires auth)
 export async function GET(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const searchParams = request.nextUrl.searchParams;
     const merchantId = searchParams.get('merchant_id');
@@ -32,6 +36,14 @@ export async function GET(request: NextRequest) {
 
 // POST /api/merchant-quotes - Create or update merchant quote
 export async function POST(request: NextRequest) {
+  // Rate limit quote updates
+  const rl = checkRateLimit(request, 'merchant-quotes:post', STANDARD_LIMIT);
+  if (rl) return rl;
+
+  // Require DB-verified auth
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const body = await request.json();
     const {
@@ -51,13 +63,10 @@ export async function POST(request: NextRequest) {
       ]);
     }
 
-    // Authorization check
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'merchant' && auth.actorId === merchant_id;
-      if (!isOwner && auth.actorType !== 'system') {
-        return forbiddenResponse('You can only manage your own quotes');
-      }
+    // Authorization check (auth already DB-verified)
+    const isOwner = auth.actorType === 'merchant' && auth.actorId === merchant_id;
+    if (!isOwner && auth.actorType !== 'system') {
+      return forbiddenResponse('You can only manage your own quotes');
     }
 
     // Validate values

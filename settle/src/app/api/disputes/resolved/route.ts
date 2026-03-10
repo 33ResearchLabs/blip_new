@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserResolvedDisputes, getMerchantResolvedDisputes } from '@/lib/db/repositories/disputes';
+import { requireAuth } from '@/lib/middleware/auth';
 
 // GET resolved disputes for a user or merchant
 export async function GET(request: NextRequest) {
   try {
+    // Authorization check
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const searchParams = request.nextUrl.searchParams;
     const actorType = searchParams.get('actor_type'); // 'user' | 'merchant'
     const actorId = searchParams.get('actor_id');
@@ -19,6 +24,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Invalid actor_type' },
         { status: 400 }
+      );
+    }
+
+    // Verify the requester is accessing their own disputes
+    if (auth.actorType !== 'system' && auth.actorId !== actorId) {
+      return NextResponse.json(
+        { success: false, error: 'You can only view your own disputes' },
+        { status: 403 }
       );
     }
 

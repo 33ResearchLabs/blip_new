@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMerchantTransactions, getOrderTransactions, getMerchantBalanceSummary } from '@/lib/db/repositories/transactions';
-import { getAuthContext, verifyMerchant, forbiddenResponse, validationErrorResponse, successResponse, errorResponse } from '@/lib/middleware/auth';
+import { requireAuth, verifyMerchant, forbiddenResponse, validationErrorResponse, successResponse, errorResponse } from '@/lib/middleware/auth';
 import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
@@ -12,14 +12,13 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get('offset') || '0');
     const summary = searchParams.get('summary') === 'true';
 
-    // Authorization
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'merchant' && auth.actorId === merchantId;
-      if (!isOwner && auth.actorType !== 'system') {
-        logger.auth.forbidden('GET /api/merchant/transactions', auth.actorId, 'Not merchant owner');
-        return forbiddenResponse('You can only access your own transactions');
-      }
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    const isOwner = auth.actorType === 'merchant' && auth.actorId === merchantId;
+    if (!isOwner && auth.actorType !== 'system') {
+      logger.auth.forbidden('GET /api/merchant/transactions', auth.actorId, 'Not merchant owner');
+      return forbiddenResponse('You can only access your own transactions');
     }
 
     // Get balance summary

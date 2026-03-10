@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { ImagePlus, X, Loader2 } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface ImageUploadProps {
   orderId: string;
@@ -32,7 +33,7 @@ export function ImageUpload({
   // Get upload signature from server
   const getSignature = async (): Promise<UploadSignature | null> => {
     try {
-      const res = await fetch('/api/upload/signature', {
+      const res = await fetchWithAuth('/api/upload/signature', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId }),

@@ -56,13 +56,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get actor info from headers (set by client)
+    // Get actor identity from headers (set by Pusher client)
+    // DB verification happens per-channel in the switch block below
     const actorType = request.headers.get('x-actor-type') as 'user' | 'merchant' | null;
     const actorId = request.headers.get('x-actor-id');
 
-    if (!actorType || !actorId) {
+    if (!actorType || !actorId || !['user', 'merchant'].includes(actorType)) {
       return NextResponse.json(
-        { error: 'Missing actor credentials' },
+        { error: 'Missing or invalid actor credentials' },
         { status: 401 }
       );
     }

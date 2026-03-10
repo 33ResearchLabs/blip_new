@@ -12,7 +12,7 @@ MERCHANT_ID="eb40bc7c-0f0f-428b-b6fd-e41d3e31f85a"  # TestMerchant1
 # Generate admin token
 ADMIN_TOKEN=$(node -e "
 const crypto = require('crypto');
-const ADMIN_SECRET = 'dev-only-admin-secret-change-in-production';
+const ADMIN_SECRET = process.env.ADMIN_SECRET || (() => { throw new Error('ADMIN_SECRET env var required'); })();
 const username = 'admin';
 const ts = Math.floor(Date.now() / 1000);
 const payload = \`\${username}:\${ts}\`;

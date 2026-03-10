@@ -7,6 +7,7 @@ import {
 } from '@/lib/arbiters/repository';
 import { VOTING_CONFIG } from '@/lib/arbiters/types';
 import { query } from '@/lib/db';
+import { requireAuth } from '@/lib/middleware/auth';
 
 // GET - Get arbitration details for a dispute
 export async function GET(
@@ -14,6 +15,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Authorization — mandatory
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { id: orderId } = await params;
 
     // Get arbitration by order ID
@@ -75,6 +80,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Authorization — mandatory (compliance or system only)
+    const authPost = await requireAuth(request);
+    if (authPost instanceof NextResponse) return authPost;
+
     const { id: orderId } = await params;
 
     // Initialize tables
@@ -174,6 +183,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Authorization — mandatory
+    const authPatch = await requireAuth(request);
+    if (authPatch instanceof NextResponse) return authPatch;
+
     const { id: orderId } = await params;
 
     const arbitration = await query(

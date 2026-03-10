@@ -1,0 +1,129 @@
+// Types
+export type Screen = "home" | "order" | "escrow" | "orders" | "profile" | "chats" | "chat-view" | "create-offer" | "cash-confirm" | "matching" | "welcome" | "trade";
+export type TradeType = "buy" | "sell";
+export type TradePreference = "fast" | "cheap" | "best";
+export type PaymentMethod = "bank" | "cash";
+export type OrderStep = 1 | 2 | 3 | 4;
+export type OrderStatus = "pending" | "payment" | "waiting" | "complete" | "disputed";
+
+// Merchant type from DB
+export interface Merchant {
+  id: string;
+  display_name: string;
+  business_name: string;
+  rating: number;
+  total_trades: number;
+  is_online: boolean;
+  avg_response_time_mins: number;
+  wallet_address?: string;
+}
+
+// Offer type from DB
+export interface Offer {
+  id: string;
+  merchant_id: string;
+  type: "buy" | "sell";
+  payment_method: PaymentMethod;
+  rate: number;
+  min_amount: number;
+  max_amount: number;
+  available_amount: number;
+  bank_name: string | null;
+  bank_account_name: string | null;
+  bank_iban: string | null;
+  location_name: string | null;
+  location_address: string | null;
+  location_lat: number | null;
+  location_lng: number | null;
+  meeting_instructions: string | null;
+  merchant: Merchant;
+}
+
+// Order from DB
+export interface DbOrder {
+  id: string;
+  order_number: string;
+  user_id: string;
+  merchant_id: string;
+  offer_id: string;
+  type: "buy" | "sell";
+  payment_method: PaymentMethod;
+  crypto_amount: number;
+  crypto_currency: string;
+  fiat_amount: number;
+  fiat_currency: string;
+  rate: number;
+  status: string;
+  payment_details: Record<string, unknown> | null;
+  created_at: string;
+  expires_at: string;
+  merchant: Merchant;
+  offer: Offer;
+  unread_count?: number;
+  last_message?: {
+    content: string;
+    sender_type: "user" | "merchant" | "system";
+    created_at: string;
+  } | null;
+  // Escrow on-chain references
+  escrow_tx_hash?: string;
+  escrow_trade_id?: number;
+  escrow_trade_pda?: string;
+  escrow_pda?: string;
+  escrow_creator_wallet?: string;
+  // Merchant's wallet address captured when accepting sell orders
+  acceptor_wallet_address?: string;
+}
+
+// UI Order type (maps DB order to UI)
+export interface Order {
+  id: string;
+  type: TradeType;
+  cryptoAmount: string;
+  cryptoCode: string;
+  fiatAmount: string;
+  fiatCode: string;
+  merchant: {
+    id: string;
+    name: string;
+    rating: number;
+    trades: number;
+    rate: number;
+    paymentMethod: PaymentMethod;
+    bank?: string;
+    iban?: string;
+    accountName?: string;
+    location?: string;
+    address?: string;
+    lat?: number;
+    lng?: number;
+    meetingSpot?: string;
+    walletAddress?: string;
+  };
+  status: OrderStatus;
+  step: OrderStep;
+  createdAt: Date;
+  expiresAt: Date;
+  dbStatus?: string; // Original DB status
+  unreadCount?: number;
+  lastMessage?: {
+    content: string;
+    fromMerchant: boolean;
+    createdAt: Date;
+  } | null;
+  // Escrow on-chain references for release
+  escrowTradeId?: number;
+  escrowTradePda?: string;
+  escrowCreatorWallet?: string;
+  escrowTxHash?: string;
+  // Merchant's wallet address captured when accepting (for sell order escrow release)
+  acceptorWalletAddress?: string;
+}
+
+export interface BankAccount {
+  id: string;
+  bank: string;
+  iban: string;
+  name: string;
+  isDefault: boolean;
+}

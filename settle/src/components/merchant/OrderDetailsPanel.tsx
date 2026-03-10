@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { getAuthoritativeStatus, getNextAction, deriveOrderUI } from '@/lib/orders/statusResolver';
 import { copyToClipboard } from '@/lib/clipboard';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface OrderDetails {
   id: string;
@@ -196,7 +197,7 @@ export function OrderDetailsPanel({
     const fetchOrder = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/orders/${orderId}`);
+        const res = await fetchWithAuth(`/api/orders/${orderId}`);
         if (!res.ok) throw new Error('Failed to fetch');
         const data = await res.json();
         if (data.success) {

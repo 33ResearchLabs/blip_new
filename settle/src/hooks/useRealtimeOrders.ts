@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { usePusherOptional } from '@/context/PusherContext';
 import { getUserChannel, getMerchantChannel, getAllMerchantsChannel } from '@/lib/pusher/channels';
 import { ORDER_EVENTS } from '@/lib/pusher/events';
@@ -224,7 +225,7 @@ export function useRealtimeOrders(
           ? `/api/merchants/${actorId}/orders?merchant_id=${actorId}`
           : `/api/users/${actorId}/orders?user_id=${actorId}`;
 
-      const res = await fetch(endpoint);
+      const res = await fetchWithAuth(endpoint);
 
       if (!res.ok) {
         setIsLoading(false);

@@ -1,11 +1,11 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getMerchantOffers, createOffer } from '@/lib/db/repositories/merchants';
 import {
   createOfferSchema,
   uuidSchema,
 } from '@/lib/validation/schemas';
 import {
-  getAuthContext,
+  requireAuth,
   verifyMerchant,
   forbiddenResponse,
   validationErrorResponse,
@@ -29,20 +29,18 @@ export async function GET(request: NextRequest) {
       return validationErrorResponse(['Invalid merchant_id format']);
     }
 
-    // Authorization: check if requester can access this merchant's offers
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'merchant' && auth.actorId === merchantId;
-      // Allow users to view offers (they need to see them for ordering)
-      const isUser = auth.actorType === 'user';
-      if (!isOwner && !isUser && auth.actorType !== 'system') {
-        logger.auth.forbidden('GET /api/merchant/offers', auth.actorId, 'Access denied');
-        return forbiddenResponse('Access denied');
-      }
+    // Authorization — mandatory
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    const isOwner = auth.actorType === 'merchant' && auth.actorId === merchantId;
+    const isUser = auth.actorType === 'user';
+    if (!isOwner && !isUser && auth.actorType !== 'system') {
+      logger.auth.forbidden('GET /api/merchant/offers', auth.actorId, 'Access denied');
+      return forbiddenResponse('Access denied');
     }
 
     const offers = await getMerchantOffers(merchantId);
-    logger.api.request('GET', '/api/merchant/offers', auth?.actorId);
+    logger.api.request('GET', '/api/merchant/offers', auth.actorId);
     return successResponse(offers);
   } catch (error) {
     logger.api.error('GET', '/api/merchant/offers', error as Error);
@@ -79,14 +77,13 @@ export async function POST(request: NextRequest) {
       meeting_instructions,
     } = parseResult.data;
 
-    // Authorization: only the merchant can create their own offers
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'merchant' && auth.actorId === merchant_id;
-      if (!isOwner && auth.actorType !== 'system') {
-        logger.auth.forbidden('POST /api/merchant/offers', auth.actorId, 'Creating offer for different merchant');
-        return forbiddenResponse('You can only create offers for yourself');
-      }
+    // Authorization — mandatory
+    const authPost = await requireAuth(request);
+    if (authPost instanceof NextResponse) return authPost;
+    const isPostOwner = authPost.actorType === 'merchant' && authPost.actorId === merchant_id;
+    if (!isPostOwner && authPost.actorType !== 'system') {
+      logger.auth.forbidden('POST /api/merchant/offers', authPost.actorId, 'Creating offer for different merchant');
+      return forbiddenResponse('You can only create offers for yourself');
     }
 
     // Verify merchant exists

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { requireAuth } from '@/lib/middleware/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +14,17 @@ export async function PATCH(
 ) {
   try {
     const { id: merchantId } = await params;
+
+    // Authorization — mandatory + ownership check
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    if (auth.actorType !== 'merchant' || auth.actorId !== merchantId) {
+      return NextResponse.json(
+        { success: false, error: 'You can only update your own Telegram settings' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { telegram_chat_id } = body;
 

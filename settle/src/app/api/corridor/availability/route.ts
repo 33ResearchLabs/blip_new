@@ -6,8 +6,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { checkCorridorAvailability } from '@/lib/db/repositories/corridor';
+import { requireAuth } from '@/lib/middleware/auth';
 
 export async function GET(request: NextRequest) {
+  // Require auth to check availability
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
   const fiatAmountStr = request.nextUrl.searchParams.get('fiat_amount');
   const excludeStr = request.nextUrl.searchParams.get('exclude');
 

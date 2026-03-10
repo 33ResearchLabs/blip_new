@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
 import { generateAdminToken, verifyAdminToken } from '@/lib/middleware/auth';
 
-// Admin credentials from env vars (with dev fallbacks)
+// Admin credentials from env vars (no fallbacks — must be configured)
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'pass123';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 // POST - Admin login
 export async function POST(request: NextRequest) {
@@ -13,6 +13,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const { username, password } = await request.json();
+
+    if (!ADMIN_PASSWORD) {
+      return NextResponse.json(
+        { success: false, error: 'Admin auth not configured — set ADMIN_PASSWORD env var' },
+        { status: 500 }
+      );
+    }
 
     if (!username || !password) {
       return NextResponse.json(

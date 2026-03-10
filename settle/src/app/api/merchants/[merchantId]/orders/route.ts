@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMerchantOrders } from '@/lib/db/repositories/orders';
 import { logger } from '@/lib/logger';
 import { serializeOrders } from '@/lib/api/orderSerializer';
-import { getAuthContext } from '@/lib/middleware/auth';
+import { requireAuth } from '@/lib/middleware/auth';
 
 export async function GET(
   request: NextRequest,
@@ -19,13 +19,8 @@ export async function GET(
     }
 
     // Verify the requester is authorized to view this merchant's orders
-    const auth = getAuthContext(request);
-    if (!auth) {
-      return NextResponse.json(
-        { success: false, error: 'Authentication required' },
-        { status: 401 }
-      );
-    }
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
     // Merchants can only view their own orders via this endpoint
     if (auth.actorType === 'merchant' && auth.actorId !== merchantId) {
       return NextResponse.json(

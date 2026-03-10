@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ArrowUpRight, ArrowDownRight, Loader2, RefreshCw, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface Transaction {
   id: string;
@@ -46,7 +47,7 @@ export function TransactionHistoryModal({
 
     try {
       // Fetch summary
-      const summaryRes = await fetch(
+      const summaryRes = await fetchWithAuth(
         `/api/merchant/transactions?merchant_id=${merchantId}&summary=true`
       );
       if (summaryRes.ok) {
@@ -57,7 +58,7 @@ export function TransactionHistoryModal({
       }
 
       // Fetch transactions
-      const txRes = await fetch(
+      const txRes = await fetchWithAuth(
         `/api/merchant/transactions?merchant_id=${merchantId}&limit=50`
       );
       if (txRes.ok) {

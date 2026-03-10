@@ -13,6 +13,7 @@ import {
   Check,
 } from 'lucide-react';
 import { copyToClipboard } from '@/lib/clipboard';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface CorridorLPPanelProps {
   merchantId: string | null;
@@ -54,7 +55,7 @@ export function CorridorLPPanel({ merchantId }: CorridorLPPanelProps) {
   const fetchFulfillments = useCallback(async () => {
     if (!merchantId) return;
     try {
-      const res = await fetch(`/api/corridor/fulfillments?provider_merchant_id=${merchantId}`);
+      const res = await fetchWithAuth(`/api/corridor/fulfillments?provider_merchant_id=${merchantId}`);
       const json = await res.json();
       if (json.success) {
         setFulfillments(json.data || []);
@@ -77,7 +78,7 @@ export function CorridorLPPanel({ merchantId }: CorridorLPPanelProps) {
     setSendingId(fulfillmentId);
     try {
       const coreApiUrl = process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:4010';
-      const res = await fetch(`${coreApiUrl}/v1/corridor/fulfillments/${fulfillmentId}`, {
+      const res = await fetchWithAuth(`${coreApiUrl}/v1/corridor/fulfillments/${fulfillmentId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -17,6 +17,7 @@ import {
   hasEncryptedWallet,
 } from '@/lib/wallet/embeddedWallet';
 import { Keypair } from '@solana/web3.js';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 // Wallet hook — same pattern as merchant page
 const useSolanaWalletHook = () => {
@@ -97,7 +98,7 @@ export default function WalletPage() {
         const savedMerchant = localStorage.getItem('blip_merchant');
         if (savedMerchant) {
           const merchant = JSON.parse(savedMerchant);
-          const checkRes = await fetch(`/api/auth/merchant?action=check_session&merchant_id=${merchant.id}`);
+          const checkRes = await fetchWithAuth(`/api/auth/merchant?action=check_session&merchant_id=${merchant.id}`);
           if (checkRes.ok) {
             const checkData = await checkRes.json();
             if (checkData.success && checkData.data?.valid) {

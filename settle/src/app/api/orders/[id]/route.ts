@@ -11,7 +11,7 @@ import {
   uuidSchema,
 } from '@/lib/validation/schemas';
 import {
-  getAuthContext,
+  requireAuth,
   canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
@@ -50,8 +50,9 @@ export async function GET(
       return validationErrorResponse([idValidation.error!]);
     }
 
-    // Get auth context from query params
-    const auth = getAuthContext(request);
+    // Require authenticated user
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
 
     // FEATURE FLAG: Proxy to core-api if enabled
     if (process.env.USE_CORE_API === '1' && process.env.CORE_API_URL) {
@@ -87,13 +88,11 @@ export async function GET(
       return notFoundResponse('Order');
     }
 
-    // Check authorization if auth context provided
-    if (auth) {
-      const canAccess = await canAccessOrder(auth, id);
-      if (!canAccess) {
-        logger.auth.forbidden(`GET /api/orders/${id}`, auth.actorId, 'Not order participant');
-        return forbiddenResponse('You do not have access to this order');
-      }
+    // Check authorization
+    const canAccess = await canAccessOrder(auth, id);
+    if (!canAccess) {
+      logger.auth.forbidden(`GET /api/orders/${id}`, auth.actorId, 'Not order participant');
+      return forbiddenResponse('You do not have access to this order');
     }
 
     // Add minimal_status to response (8-state normalized status)
@@ -124,6 +123,17 @@ export async function PATCH(
     }
 
     const body = await request.json();
+
+    // Require authentication
+    const auth = await requireAuth(request, body);
+    if (auth instanceof NextResponse) return auth;
+
+    // Verify access to this order
+    const canAccess = await canAccessOrder(auth, id);
+    if (!canAccess) {
+      logger.auth.forbidden(`PATCH /api/orders/${id}`, auth.actorId, 'Not order participant');
+      return forbiddenResponse('You do not have access to this order');
+    }
 
     // Validate request body
     const parseResult = updateOrderStatusSchema.safeParse(body);

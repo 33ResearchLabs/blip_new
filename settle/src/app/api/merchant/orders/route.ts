@@ -13,13 +13,14 @@ import {
   merchantCreateOrderSchema,
 } from '@/lib/validation/schemas';
 import {
-  getAuthContext,
+  requireAuth,
   verifyMerchant,
   forbiddenResponse,
   validationErrorResponse,
   successResponse,
   errorResponse,
 } from '@/lib/middleware/auth';
+import { checkRateLimit, ORDER_LIMIT } from '@/lib/middleware/rateLimit';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import { notifyOrderCreated } from '@/lib/pusher/server';
 import { query } from '@/lib/db';
@@ -49,14 +50,13 @@ export async function GET(request: NextRequest) {
 
     const { merchant_id } = parseResult.data;
 
-    // Authorization: check if requester can access this merchant's orders
-    const auth = getAuthContext(request);
-    if (auth) {
-      const isOwner = auth.actorType === 'merchant' && auth.actorId === merchant_id;
-      if (!isOwner && auth.actorType !== 'system') {
-        logger.auth.forbidden('GET /api/merchant/orders', auth.actorId, 'Not merchant owner');
-        return forbiddenResponse('You can only access your own orders');
-      }
+    // Authorization: require authenticated merchant
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+    const isOwner = auth.actorType === 'merchant' && auth.actorId === merchant_id;
+    if (!isOwner && auth.actorType !== 'system') {
+      logger.auth.forbidden('GET /api/merchant/orders', auth.actorId, 'Not merchant owner');
+      return forbiddenResponse('You can only access your own orders');
     }
 
     // Verify merchant exists and is active
@@ -127,8 +127,16 @@ async function fetchCorridorRefPrice(corridorId = 'USDT_AED') {
 
 // Merchant-initiated order creation
 export async function POST(request: NextRequest) {
+  // Rate limit: 20 orders per minute
+  const rateLimitResponse = checkRateLimit(request, 'merchant-orders:create', ORDER_LIMIT);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body = await request.json();
+
+    // Authorization: require authenticated merchant
+    const auth = await requireAuth(request, body);
+    if (auth instanceof NextResponse) return auth;
 
     // Validate request body
     const parseResult = merchantCreateOrderSchema.safeParse(body);
@@ -153,6 +161,12 @@ export async function POST(request: NextRequest) {
       escrow_creator_wallet,
       expiry_minutes,
     } = parseResult.data;
+
+    // Verify the authenticated merchant matches the merchant_id in request
+    if (auth.actorType === 'merchant' && auth.actorId !== merchant_id) {
+      logger.auth.forbidden('POST /api/merchant/orders', auth.actorId, 'Creating order for different merchant');
+      return forbiddenResponse('You can only create orders for yourself');
+    }
 
     // Verify the creating merchant exists
     const merchantExists = await verifyMerchant(merchant_id);

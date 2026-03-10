@@ -29,6 +29,7 @@ import Link from "next/link";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 import { usePusher } from "@/context/PusherContext";
 import { useSounds } from "@/hooks/useSounds";
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 // ============================================
 // TYPES
@@ -229,7 +230,7 @@ export default function AdminConsolePage() {
       try {
         const savedToken = localStorage.getItem("blip_admin_token");
         if (savedToken) {
-          const res = await fetch("/api/auth/admin", {
+          const res = await fetchWithAuth("/api/auth/admin", {
             headers: { Authorization: `Bearer ${savedToken}` },
           });
           const data = await res.json();
@@ -255,7 +256,7 @@ export default function AdminConsolePage() {
     setIsAdminLoggingIn(true);
     setAdminLoginError("");
     try {
-      const res = await fetch("/api/auth/admin", {
+      const res = await fetchWithAuth("/api/auth/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(adminLoginForm),
@@ -290,10 +291,10 @@ export default function AdminConsolePage() {
     setIsRefreshing(true);
     try {
       const [statsRes, ordersRes, merchantsRes, activityRes] = await Promise.all([
-        fetch("/api/admin/stats", { headers }),
-        fetch("/api/admin/orders?limit=500", { headers }),
-        fetch("/api/admin/merchants?sort=volume&limit=20", { headers }),
-        fetch("/api/admin/activity?limit=30", { headers }),
+        fetchWithAuth("/api/admin/stats", { headers }),
+        fetchWithAuth("/api/admin/orders?limit=500", { headers }),
+        fetchWithAuth("/api/admin/merchants?sort=volume&limit=20", { headers }),
+        fetchWithAuth("/api/admin/activity?limit=30", { headers }),
       ]);
       const [statsData, ordersData, merchantsData, activityData] = await Promise.all([
         statsRes.json(), ordersRes.json(), merchantsRes.json(), activityRes.json(),

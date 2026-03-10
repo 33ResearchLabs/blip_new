@@ -8,6 +8,7 @@ import {
   Loader2,
   ExternalLink,
 } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface LedgerEntry {
   id: string;
@@ -35,7 +36,7 @@ export function TransactionsTab({ merchantId }: TransactionsTabProps) {
   const fetchLedger = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/ledger?merchant_id=${merchantId}&limit=100`);
+      const res = await fetchWithAuth(`/api/ledger?merchant_id=${merchantId}&limit=100`);
       if (res.ok) {
         const data = await res.json();
         if (data.success) {

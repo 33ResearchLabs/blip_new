@@ -22,6 +22,7 @@ import {
   MapPin,
   Info,
 } from "lucide-react";
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface MerchantOffer {
   id: string;
@@ -81,7 +82,7 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
     setError(null);
 
     try {
-      const res = await fetch(`/api/merchant/offers?merchant_id=${merchantId}`);
+      const res = await fetchWithAuth(`/api/merchant/offers?merchant_id=${merchantId}`);
       if (!res.ok) {
         throw new Error("Failed to fetch offers");
       }
@@ -171,7 +172,7 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
     setUpdateError(null);
 
     try {
-      const res = await fetch(`/api/merchant/offers/${editingOffer.id}`, {
+      const res = await fetchWithAuth(`/api/merchant/offers/${editingOffer.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -218,7 +219,7 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
     setTogglingId(offer.id);
 
     try {
-      const res = await fetch(`/api/merchant/offers/${offer.id}`, {
+      const res = await fetchWithAuth(`/api/merchant/offers/${offer.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
