@@ -36,12 +36,15 @@ function getAuthHeaders(): Record<string, string> {
 
   // 3. User ID from localStorage (user-facing app, not merchant portal)
   try {
-    const userId = localStorage.getItem('blip_user_id');
-    if (userId) {
-      headers['x-user-id'] = userId;
+    const saved = localStorage.getItem('blip_user');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed?.id) {
+        headers['x-user-id'] = parsed.id;
+      }
     }
   } catch {
-    // SSR — skip
+    // SSR or corrupt — skip
   }
 
   return headers;
