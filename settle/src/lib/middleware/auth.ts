@@ -101,18 +101,27 @@ export interface AuthContext {
  */
 export function getAuthContext(request: NextRequest, body?: Record<string, unknown>): AuthContext | null {
   // 1. Check headers first (set by middleware, most trusted)
+  // Detect merchant context from URL path to resolve correct actor when both headers are present
   const headerUserId = request.headers.get('x-user-id');
   const headerMerchantId = request.headers.get('x-merchant-id');
   const headerComplianceId = request.headers.get('x-compliance-id');
+  const isMerchantRoute = request.nextUrl.pathname.includes('/merchant');
 
-  if (headerUserId) {
+  if (headerComplianceId) {
+    return { actorType: 'compliance', actorId: headerComplianceId, complianceId: headerComplianceId };
+  }
+  // If both user and merchant headers exist, use route context to pick the right one
+  if (headerMerchantId && headerUserId) {
+    if (isMerchantRoute) {
+      return { actorType: 'merchant', actorId: headerMerchantId, merchantId: headerMerchantId };
+    }
     return { actorType: 'user', actorId: headerUserId, userId: headerUserId };
   }
   if (headerMerchantId) {
     return { actorType: 'merchant', actorId: headerMerchantId, merchantId: headerMerchantId };
   }
-  if (headerComplianceId) {
-    return { actorType: 'compliance', actorId: headerComplianceId, complianceId: headerComplianceId };
+  if (headerUserId) {
+    return { actorType: 'user', actorId: headerUserId, userId: headerUserId };
   }
 
   // 2. Try to get from body (for POST/PATCH requests)
