@@ -14,10 +14,8 @@ interface EnvVar {
 }
 
 const ENV_SCHEMA: EnvVar[] = [
-  // Database
-  { key: 'DB_HOST', required: true },
-  { key: 'DB_NAME', required: true },
-  { key: 'DB_USER', required: true },
+  // Database — either DATABASE_URL or individual vars
+  // (checked separately below)
 
   // Security (required in production)
   { key: 'ADMIN_SECRET', required: true, secret: true },
@@ -43,6 +41,17 @@ const ENV_SCHEMA: EnvVar[] = [
 export function validateEnv(): { valid: boolean; missing: string[]; warnings: string[] } {
   const missing: string[] = [];
   const warnings: string[] = [];
+
+  // Check database: need either DATABASE_URL or DB_HOST+DB_NAME+DB_USER
+  const hasDbUrl = !!process.env.DATABASE_URL;
+  const hasDbParts = !!process.env.DB_HOST && !!process.env.DB_NAME && !!process.env.DB_USER;
+  if (!hasDbUrl && !hasDbParts) {
+    if (isProduction) {
+      missing.push('DATABASE_URL (or DB_HOST+DB_NAME+DB_USER)');
+    } else {
+      warnings.push('DATABASE_URL (or DB_HOST+DB_NAME+DB_USER)');
+    }
+  }
 
   for (const { key, required } of ENV_SCHEMA) {
     const value = process.env[key];
