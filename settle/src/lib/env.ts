@@ -71,12 +71,12 @@ export function validateEnv(): { valid: boolean; missing: string[]; warnings: st
   };
 }
 
-// Auto-validate on import in production — fail fast
+// Auto-validate on import — warn but don't crash
 if (isProduction) {
   const result = validateEnv();
   if (!result.valid) {
-    throw new Error(
-      `FATAL: Missing required environment variables: ${result.missing.join(', ')}`
+    console.warn(
+      `[env] Missing environment variables: ${result.missing.join(', ')}`
     );
   }
 }
