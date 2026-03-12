@@ -21,20 +21,35 @@ export default function OpsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const [blocked, setBlocked] = useState(false);
+  const [adminSecret, setAdminSecret] = useState('');
+  const [needsAuth, setNeedsAuth] = useState(false);
+  const [secretInput, setSecretInput] = useState('');
+
+  // Restore admin secret from sessionStorage
+  useEffect(() => {
+    const saved = sessionStorage.getItem('ops_admin_secret');
+    if (saved) setAdminSecret(saved);
+  }, []);
 
   const fetchData = useCallback(async (currentTab: Tab, orderId?: string) => {
     setLoading(true);
     setError(null);
     try {
+      const secret = sessionStorage.getItem('ops_admin_secret') || '';
       const params = new URLSearchParams({ tab: currentTab });
       if (currentTab === 'search' && orderId) {
         params.set('order_id', orderId);
       }
-      const res = await fetchWithAuth(`/api/ops?${params}`);
+      const res = await fetchWithAuth(`/api/ops?${params}`, {
+        headers: { 'x-admin-secret': secret },
+      });
       if (res.status === 404) {
+        setNeedsAuth(true);
         setBlocked(true);
         return;
       }
+      setBlocked(false);
+      setNeedsAuth(false);
       if (!res.ok) throw new Error(`${res.status}`);
       setData(await res.json());
     } catch (err: any) {
@@ -54,6 +69,46 @@ export default function OpsPage() {
     const iv = setInterval(() => fetchData(tab), 10000);
     return () => clearInterval(iv);
   }, [tab, fetchData]);
+
+  if (blocked && needsAuth) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+        <div className="bg-[#111] border border-white/10 rounded-xl p-6 w-full max-w-sm space-y-4">
+          <h2 className="text-white font-mono font-bold">Ops Access</h2>
+          <input
+            type="password"
+            value={secretInput}
+            onChange={(e) => setSecretInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && secretInput) {
+                sessionStorage.setItem('ops_admin_secret', secretInput);
+                setAdminSecret(secretInput);
+                setBlocked(false);
+                setNeedsAuth(false);
+                fetchData(tab);
+              }
+            }}
+            placeholder="Admin secret"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white font-mono placeholder:text-white/20 focus:outline-none focus:border-orange-500/50"
+            autoFocus
+          />
+          <button
+            onClick={() => {
+              if (!secretInput) return;
+              sessionStorage.setItem('ops_admin_secret', secretInput);
+              setAdminSecret(secretInput);
+              setBlocked(false);
+              setNeedsAuth(false);
+              fetchData(tab);
+            }}
+            className="w-full py-2 bg-orange-500 text-black font-bold font-mono rounded-lg hover:bg-orange-400"
+          >
+            Unlock
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (blocked) {
     return (

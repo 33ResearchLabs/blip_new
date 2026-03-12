@@ -7,7 +7,7 @@
  * - Worker heartbeat status
  * - Order search by ID with event timeline
  *
- * Returns 404 in production to hide endpoint existence.
+ * Protected by ADMIN_SECRET in production.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -17,9 +17,12 @@ import { readFileSync } from 'fs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  // Production guard
+  // In production, require admin secret via header or query param
   if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const secret = request.headers.get('x-admin-secret') || request.nextUrl.searchParams.get('secret');
+    if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
   }
 
   const tab = request.nextUrl.searchParams.get('tab') || 'outbox';
