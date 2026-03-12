@@ -153,8 +153,10 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Global guard: reject transitions on self-referencing orders (merchant_id = buyer_merchant_id)
-      // EXCEPT: 'accepted' (acceptance reassigns merchant_id) and 'cancelled' (always allowed)
-      if (newStatus !== 'cancelled' && newStatus !== 'accepted') {
+      // EXCEPT: 'accepted' (acceptance reassigns merchant_id), 'escrowed' (pre-lock before acceptance),
+      // and 'cancelled' (always allowed). These are expected for merchant-created BUY orders.
+      const selfRefAllowed = ['cancelled', 'accepted', 'escrowed'];
+      if (!selfRefAllowed.includes(newStatus)) {
         const selfRefCheck = await queryOne<{ id: string }>(
           `SELECT id FROM orders WHERE id = $1 AND merchant_id = buyer_merchant_id`,
           [id]

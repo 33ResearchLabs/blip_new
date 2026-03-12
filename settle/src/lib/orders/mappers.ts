@@ -61,7 +61,7 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
   // Pre-locked SELL order (escrowed but no buyer yet) should show as "pending"
   // for observers so they can accept it. Only the creator sees it in "escrow" panel.
   // NEVER downgrade if merchant_id matches me — it's definitely my order.
-  const iAmAssignedMerchant = merchantId && dbOrder.merchant_id === merchantId;
+  const iAmAssignedMerchant = merchantId && (dbOrder.merchant_id === merchantId || dbOrder.buyer_merchant_id === merchantId);
   if (uiStatus === 'escrow' && (minimalStatus === 'escrowed' || dbOrder.status === 'escrowed')
       && !dbOrder.accepted_at && !dbOrder.is_my_order && !iAmAssignedMerchant) {
     uiStatus = 'pending';

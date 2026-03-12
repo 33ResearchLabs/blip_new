@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
         ) as user
       FROM orders o
       JOIN users u ON o.user_id = u.id
-      WHERE o.merchant_id = $1
+      WHERE (o.merchant_id = $1 OR o.buyer_merchant_id = $1)
         AND (o.fiat_amount >= $2 OR o.is_custom = true)
     `;
 
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
         COUNT(*) FILTER (WHERE (fiat_amount >= $2 OR is_custom = true) AND status = 'pending') as pending_big_orders,
         COALESCE(SUM(fiat_amount) FILTER (WHERE (fiat_amount >= $2 OR is_custom = true) AND status = 'completed'), 0) as completed_volume
       FROM orders
-      WHERE merchant_id = $1 AND status NOT IN ('cancelled', 'expired')`,
+      WHERE (merchant_id = $1 OR buyer_merchant_id = $1) AND status NOT IN ('cancelled', 'expired')`,
       [merchantId, threshold]
     );
 

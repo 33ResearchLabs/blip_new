@@ -82,6 +82,10 @@ export async function POST(
 
     const body = await request.json();
 
+    // Require authentication first — prevents spoofed actor_id in body
+    const auth = await requireAuth(request, body);
+    if (auth instanceof NextResponse) return auth;
+
     // Validate request body
     const parseResult = submitReviewSchema.safeParse(body);
     if (!parseResult.success) {
@@ -91,6 +95,11 @@ export async function POST(
 
     const { reviewer_type, reviewer_id, reviewee_type, reviewee_id, rating, comment } = parseResult.data;
 
+    // Verify the authenticated actor matches the reviewer
+    if (auth.actorId !== reviewer_id) {
+      return forbiddenResponse('Authenticated identity does not match reviewer_id');
+    }
+
     // Check order exists
     const order = await getOrderById(id);
     if (!order) {
@@ -98,8 +107,7 @@ export async function POST(
     }
 
     // Authorization: verify reviewer is a participant in this order
-    const auth = { actorType: reviewer_type, actorId: reviewer_id };
-    const canAccess = await canAccessOrder(auth as { actorType: 'user' | 'merchant' | 'system'; actorId: string }, id);
+    const canAccess = await canAccessOrder(auth, id);
     if (!canAccess) {
       logger.auth.forbidden(`POST /api/orders/${id}/review`, reviewer_id, 'Not order participant');
       return forbiddenResponse('You do not have access to this order');
@@ -111,7 +119,10 @@ export async function POST(
     }
 
     // Verify the reviewer is reviewing the correct party
-    // Users can only review merchants, merchants can only review users
+    // Users review merchants, merchants review users (or counterparty merchant in M2M)
+    const isMerchantBuyer = order.buyer_merchant_id && reviewer_id === order.buyer_merchant_id;
+    const isMerchantSeller = reviewer_id === order.merchant_id;
+
     if (reviewer_type === 'user') {
       if (reviewer_id !== order.user_id) {
         return forbiddenResponse('You can only submit reviews for your own orders');
@@ -120,11 +131,26 @@ export async function POST(
         return validationErrorResponse(['Users can only review the merchant of this order']);
       }
     } else if (reviewer_type === 'merchant') {
-      if (reviewer_id !== order.merchant_id) {
+      // Merchant can be either seller (merchant_id) or buyer (buyer_merchant_id) in M2M
+      if (!isMerchantSeller && !isMerchantBuyer) {
         return forbiddenResponse('You can only submit reviews for your own orders');
       }
-      if (reviewee_type !== 'user' || reviewee_id !== order.user_id) {
-        return validationErrorResponse(['Merchants can only review the user of this order']);
+      // M2M: merchant reviews the counterparty merchant
+      if (isMerchantBuyer && order.buyer_merchant_id) {
+        // I'm the buyer merchant, I should review the seller merchant
+        if (reviewee_type !== 'merchant' || reviewee_id !== order.merchant_id) {
+          return validationErrorResponse(['As buyer merchant, you can only review the seller merchant']);
+        }
+      } else if (isMerchantSeller && order.buyer_merchant_id) {
+        // I'm the seller merchant in M2M, I should review the buyer merchant
+        if (reviewee_type !== 'merchant' || reviewee_id !== order.buyer_merchant_id) {
+          return validationErrorResponse(['As seller merchant, you can only review the buyer merchant']);
+        }
+      } else {
+        // Non-M2M: merchant reviews the user
+        if (reviewee_type !== 'user' || reviewee_id !== order.user_id) {
+          return validationErrorResponse(['Merchants can only review the user of this order']);
+        }
       }
     }
 
