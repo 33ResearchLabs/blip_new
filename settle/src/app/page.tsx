@@ -2374,6 +2374,18 @@ export default function Home() {
             if (ok) setShowWalletUnlock(false);
             return ok;
           }}
+          onForgotPassword={() => {
+            setShowWalletUnlock(false);
+            setShowWalletSetup(true);
+          }}
+          onCreateNew={() => {
+            // Clear existing wallet data so setup shows fresh
+            localStorage.removeItem('blip_embedded_wallet');
+            localStorage.removeItem('blip_wallet');
+            localStorage.removeItem('blip_user');
+            setShowWalletUnlock(false);
+            setShowWalletSetup(true);
+          }}
           onClose={() => setShowWalletUnlock(false)}
         />
       )}
