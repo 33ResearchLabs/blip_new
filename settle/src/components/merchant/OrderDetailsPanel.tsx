@@ -53,6 +53,14 @@ interface OrderDetails {
   cancellation_reason?: string;
   extension_count?: number;
   max_extensions?: number;
+  // Unhappy path fields
+  cancel_requested_by?: string | null;
+  cancel_requested_at?: string | null;
+  cancel_request_reason?: string | null;
+  last_activity_at?: string | null;
+  inactivity_warned_at?: string | null;
+  disputed_at?: string | null;
+  dispute_auto_resolve_at?: string | null;
   user: {
     id: string;
     username?: string;
@@ -110,6 +118,8 @@ interface OrderDetailsPanelProps {
   onAcceptOrder?: (orderId: string) => void;
   onCancelOrder?: (orderId: string) => void;
   onOpenDispute?: (orderId: string) => void;
+  onRequestCancel?: (orderId: string) => void;
+  onRespondToCancel?: (orderId: string, accept: boolean) => void;
   onLockEscrow?: (orderId: string) => void;
   onReleaseEscrow?: (orderId: string) => void;
   merchantId?: string;
@@ -183,6 +193,8 @@ export function OrderDetailsPanel({
   onAcceptOrder,
   onCancelOrder,
   onOpenDispute,
+  onRequestCancel,
+  onRespondToCancel,
   onLockEscrow,
   onReleaseEscrow,
   merchantId,
@@ -359,7 +371,7 @@ export function OrderDetailsPanel({
                 </p>
                 <span className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-medium
                   ${order.type === 'buy' ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'}`}>
-                  {order.type === 'buy' ? 'Sell Order' : 'Buy Order'}
+                  {order.type === 'buy' ? 'Send USDT' : 'Receive USDT'}
                 </span>
               </div>
             </div>
@@ -742,6 +754,91 @@ export function OrderDetailsPanel({
                 {order.extension_count} of {order.max_extensions || 3} extensions used
               </p>
             </div>
+          )}
+
+          {/* Cancel Request Banner */}
+          {order.cancel_requested_by === 'user' && (
+            <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <XCircle className="w-5 h-5 text-orange-400" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-white">Cancel Requested by User</p>
+                  <p className="text-xs text-white/50">{order.cancel_request_reason || 'User requested cancellation'}</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onRespondToCancel?.(order.id, true)}
+                  className="flex-1 py-2.5 rounded-xl bg-orange-500/20 text-orange-300 text-sm font-semibold hover:bg-orange-500/30"
+                >
+                  Agree to Cancel
+                </button>
+                <button
+                  onClick={() => onRespondToCancel?.(order.id, false)}
+                  className="flex-1 py-2.5 rounded-xl bg-white/[0.06] text-white/70 text-sm font-semibold hover:bg-white/[0.10]"
+                >
+                  Continue Order
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Cancel Request Pending — merchant requested, waiting for user */}
+          {order.cancel_requested_by === 'merchant' && (
+            <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <Clock className="w-5 h-5 text-orange-400 animate-pulse" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-white">Cancel Request Sent</p>
+                  <p className="text-xs text-white/50">Waiting for user to approve cancellation</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Inactivity Warning */}
+          {order.inactivity_warned_at && order.status !== 'disputed' && !['completed', 'cancelled', 'expired'].includes(order.status) && (
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-yellow-400" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-yellow-300">Inactivity Warning</p>
+                  <p className="text-xs text-white/50">
+                    No activity for 15+ minutes. Complete or cancel soon to avoid auto-escalation.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Dispute Auto-Resolve Countdown */}
+          {order.status === 'disputed' && order.dispute_auto_resolve_at && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <Clock className="w-5 h-5 text-red-400" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-red-300">Dispute Timer</p>
+                  <p className="text-xs text-white/50">
+                    {new Date(order.dispute_auto_resolve_at) > new Date()
+                      ? `Auto-refund to escrow funder in ${Math.max(0, Math.round((new Date(order.dispute_auto_resolve_at).getTime() - Date.now()) / 3600000))}h ${Math.max(0, Math.round(((new Date(order.dispute_auto_resolve_at).getTime() - Date.now()) % 3600000) / 60000))}m`
+                      : 'Auto-refund processing...'
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Request Cancel Button — for merchant to initiate */}
+          {!order.cancel_requested_by && !['completed', 'cancelled', 'expired', 'disputed', 'pending'].includes(order.status) && (
+            <button
+              onClick={() => onRequestCancel?.(order.id)}
+              className="w-full py-2.5 rounded-xl bg-orange-500/10 text-orange-400 text-sm font-medium flex items-center justify-center gap-2
+                         hover:bg-orange-500/20 transition-colors border border-orange-500/20"
+            >
+              <XCircle className="w-4 h-4" />
+              Request Cancellation
+            </button>
           )}
 
           {/* Action Buttons - uses deriveOrderUI for consistent status/actions */}

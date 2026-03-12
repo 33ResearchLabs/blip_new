@@ -1,5 +1,5 @@
 // Types
-export type Screen = "home" | "order" | "escrow" | "orders" | "profile" | "chats" | "chat-view" | "create-offer" | "cash-confirm" | "matching" | "welcome" | "trade";
+export type Screen = "home" | "order" | "escrow" | "orders" | "profile" | "chats" | "chat-view" | "create-offer" | "cash-confirm" | "matching" | "welcome" | "trade" | "wallet";
 export type TradeType = "buy" | "sell";
 export type TradePreference = "fast" | "cheap" | "best";
 export type PaymentMethod = "bank" | "cash";
@@ -73,6 +73,14 @@ export interface DbOrder {
   escrow_creator_wallet?: string;
   // Merchant's wallet address captured when accepting sell orders
   acceptor_wallet_address?: string;
+  // Unhappy path fields
+  cancel_requested_by?: string | null;
+  cancel_requested_at?: string | null;
+  cancel_request_reason?: string | null;
+  last_activity_at?: string | null;
+  inactivity_warned_at?: string | null;
+  disputed_at?: string | null;
+  dispute_auto_resolve_at?: string | null;
 }
 
 // UI Order type (maps DB order to UI)
@@ -118,6 +126,16 @@ export interface Order {
   escrowTxHash?: string;
   // Merchant's wallet address captured when accepting (for sell order escrow release)
   acceptorWalletAddress?: string;
+  // Unhappy path state
+  cancelRequest?: {
+    requestedBy: string;
+    requestedAt: Date;
+    reason: string;
+  } | null;
+  inactivityWarned?: boolean;
+  lastActivityAt?: Date | null;
+  disputedAt?: Date | null;
+  disputeAutoResolveAt?: Date | null;
 }
 
 export interface BankAccount {

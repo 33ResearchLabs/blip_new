@@ -17,10 +17,10 @@
  * Post-commit invariant validation ensures this contract is maintained.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-import { transaction } from '../db/client.js';
-import { MOCK_MODE } from '../config/mockMode.js';
-import { logger } from '../utils/logger.js';
-import { validateTransition } from '../state-machine/stateMachine.js';
+import { transaction } from '../db/client';
+import { MOCK_MODE } from '../config/mockMode';
+import { logger } from '../utils/logger';
+import { validateTransition } from '../state-machine/stateMachine';
 /**
  * Atomically cancel an order with escrow refund
  *

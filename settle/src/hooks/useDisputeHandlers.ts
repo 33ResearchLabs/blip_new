@@ -252,6 +252,69 @@ export function useDisputeHandlers({
     }
   };
 
+  // ─── Cancel Request handlers ───
+  const [isRequestingCancel, setIsRequestingCancel] = useState(false);
+
+  const requestCancelOrder = useCallback(async (orderId: string) => {
+    if (!merchantId) return;
+    setIsRequestingCancel(true);
+    try {
+      const res = await fetchWithAuth(`/api/orders/${orderId}/cancel-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actor_type: 'merchant',
+          actor_id: merchantId,
+          reason: 'Merchant requested cancellation',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        playSound('click');
+        addNotification('order', 'Cancel request sent to user', orderId);
+        await afterMutationReconcile(orderId);
+      } else {
+        playSound('error');
+        addNotification('system', data.error || 'Failed to request cancel', orderId);
+      }
+    } catch (err) {
+      playSound('error');
+      addNotification('system', 'Failed to request cancel', orderId);
+    } finally {
+      setIsRequestingCancel(false);
+    }
+  }, [merchantId, playSound, addNotification, afterMutationReconcile]);
+
+  const respondToCancelRequest = useCallback(async (orderId: string, accept: boolean) => {
+    if (!merchantId) return;
+    setIsRequestingCancel(true);
+    try {
+      const res = await fetchWithAuth(`/api/orders/${orderId}/cancel-request`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actor_type: 'merchant',
+          actor_id: merchantId,
+          accept,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        playSound(accept ? 'click' : 'notification');
+        addNotification('order', accept ? 'Order cancelled by mutual agreement' : 'Cancel request declined', orderId);
+        await afterMutationReconcile(orderId);
+      } else {
+        playSound('error');
+        addNotification('system', data.error || 'Failed to respond to cancel', orderId);
+      }
+    } catch (err) {
+      playSound('error');
+      addNotification('system', 'Failed to respond to cancel', orderId);
+    } finally {
+      setIsRequestingCancel(false);
+    }
+  }, [merchantId, playSound, addNotification, afterMutationReconcile]);
+
   return {
     // State
     showDisputeModal,
@@ -263,6 +326,7 @@ export function useDisputeHandlers({
     isRespondingToResolution,
     extensionRequests, setExtensionRequests,
     requestingExtension,
+    isRequestingCancel,
 
     // Actions
     openDisputeModal,
@@ -272,5 +336,7 @@ export function useDisputeHandlers({
     requestExtension,
     respondToExtension,
     respondToResolution,
+    requestCancelOrder,
+    respondToCancelRequest,
   };
 }

@@ -87,6 +87,10 @@ export interface OrderDetailScreenProps {
   } | null;
   respondToResolution: (action: 'accept' | 'reject') => void;
   isRespondingToResolution: boolean;
+  // Cancel request
+  requestCancelOrder: (reason?: string) => void;
+  respondToCancelRequest: (accept: boolean) => void;
+  isRequestingCancel: boolean;
   // Solana
   solanaWallet: {
     connected: boolean;
@@ -142,6 +146,9 @@ export const OrderDetailScreen = ({
   disputeInfo,
   respondToResolution,
   isRespondingToResolution,
+  requestCancelOrder,
+  respondToCancelRequest,
+  isRequestingCancel,
   solanaWallet,
   setShowWalletModal,
   userId,
@@ -278,6 +285,109 @@ export const OrderDetailScreen = ({
             <p className="text-[11px] text-neutral-500 text-center mt-2">
               Extensions used: {extensionRequest.extensionCount}/{extensionRequest.maxExtensions}
             </p>
+          </motion.div>
+        )}
+
+        {/* Cancel Request Banner — merchant requested cancel, user decides */}
+        {activeOrder.cancelRequest && activeOrder.cancelRequest.requestedBy === 'merchant' && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4 mb-4"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+                <X className="w-5 h-5 text-orange-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[15px] font-semibold text-white">Cancel Requested</p>
+                <p className="text-[13px] text-neutral-400">
+                  Merchant wants to cancel: {activeOrder.cancelRequest.reason}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => respondToCancelRequest(true)}
+                disabled={isRequestingCancel}
+                className="flex-1 py-3 rounded-xl bg-orange-500/20 text-orange-300 text-[15px] font-semibold disabled:opacity-50"
+              >
+                {isRequestingCancel ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Agree to Cancel"}
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => respondToCancelRequest(false)}
+                disabled={isRequestingCancel}
+                className="flex-1 py-3 rounded-xl bg-neutral-800 text-white text-[15px] font-semibold disabled:opacity-50"
+              >
+                Continue Order
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Cancel Request Pending — user requested, waiting for merchant */}
+        {activeOrder.cancelRequest && activeOrder.cancelRequest.requestedBy === 'user' && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4 mb-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+                <Loader2 className="w-5 h-5 text-orange-400 animate-spin" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[15px] font-semibold text-white">Cancel Request Sent</p>
+                <p className="text-[13px] text-neutral-400">Waiting for merchant to approve</p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Inactivity Warning Banner */}
+        {activeOrder.inactivityWarned && activeOrder.status !== "disputed" && activeOrder.status !== "complete" && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-4 mb-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-yellow-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[15px] font-semibold text-yellow-300">Inactivity Warning</p>
+                <p className="text-[13px] text-neutral-400">
+                  No activity for 15+ minutes. Complete this order soon or it will be auto-cancelled/disputed.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Dispute Auto-Resolve Countdown */}
+        {activeOrder.status === "disputed" && activeOrder.disputeAutoResolveAt && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 mb-4"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                <Clock className="w-5 h-5 text-red-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[15px] font-semibold text-red-300">Dispute Timer</p>
+                <p className="text-[13px] text-neutral-400">
+                  {new Date(activeOrder.disputeAutoResolveAt) > new Date()
+                    ? `Auto-refund to escrow funder in ${Math.max(0, Math.round((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) / 3600000))}h ${Math.max(0, Math.round(((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) % 3600000) / 60000))}m`
+                    : 'Auto-refund processing...'
+                  }
+                </p>
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -829,7 +939,17 @@ export const OrderDetailScreen = ({
           </div>
         </div>
 
-        {/* Dispute Button - Show for active orders (step 2-3) */}
+        {/* Cancel & Dispute Buttons - Show for active orders (step 2-3) */}
+        {activeOrder.step >= 2 && activeOrder.step < 4 && activeOrder.status !== "disputed" && !activeOrder.cancelRequest && (
+          <button
+            onClick={() => requestCancelOrder()}
+            disabled={isRequestingCancel}
+            className="w-full mt-3 py-3 rounded-2xl text-[14px] font-medium bg-orange-500/10 border border-orange-500/20 text-orange-400 flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {isRequestingCancel ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+            Request Cancellation
+          </button>
+        )}
         {activeOrder.step >= 2 && activeOrder.step < 4 && activeOrder.status !== "disputed" && (
           <button
             onClick={() => setShowDisputeModal(true)}

@@ -8,6 +8,11 @@ import { OrderStatus, ActorType } from '../types/index';
 export declare const ORDER_STATUSES: readonly OrderStatus[];
 export declare const GLOBAL_ORDER_TIMEOUT_MINUTES = 15;
 export declare const STATUS_TIMEOUTS: Partial<Record<OrderStatus, number>>;
+export declare const INACTIVITY_WARNING_MINUTES = 15;
+export declare const INACTIVITY_ESCALATION_MINUTES = 60;
+export declare const DISPUTE_AUTO_RESOLVE_HOURS = 24;
+export declare const INACTIVITY_TRACKED_STATUSES: readonly OrderStatus[];
+export declare const CANCEL_REQUEST_STATUSES: readonly OrderStatus[];
 interface TransitionRule {
     to: OrderStatus;
     allowedActors: ActorType[];
@@ -78,5 +83,27 @@ export declare function getExtensionDuration(status: OrderStatus): number;
  * - If no response -> cancelled
  */
 export declare function getExpiryOutcome(status: OrderStatus, extensionCount: number, maxExtensions?: number): 'disputed' | 'cancelled';
+/**
+ * Check if a cancel request can be made in the current status.
+ * Before acceptance: unilateral cancel is fine (no request needed).
+ * After acceptance: need mutual agreement via cancel request.
+ */
+export declare function canRequestCancel(status: OrderStatus): boolean;
+/**
+ * Check if unilateral cancel is allowed (no approval needed).
+ * Only pending and escrow_pending allow unilateral cancel.
+ */
+export declare function canUnilateralCancel(status: OrderStatus): boolean;
+/**
+ * Check if inactivity tracking applies to this status
+ */
+export declare function isInactivityTracked(status: OrderStatus): boolean;
+/**
+ * Determine inactivity escalation outcome for an order.
+ * After 1hr of inactivity:
+ *   - If escrow exists → ask non-escrow party if tx done → if not, dispute
+ *   - If no escrow → cancel
+ */
+export declare function getInactivityOutcome(status: OrderStatus, hasEscrow: boolean): 'disputed' | 'cancelled';
 export {};
 //# sourceMappingURL=stateMachine.d.ts.map

@@ -88,6 +88,7 @@ import {
   CreateOfferScreen,
   CashConfirmScreen,
   MatchingScreen,
+  WalletScreen,
 } from "@/components/user/screens";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
@@ -132,6 +133,7 @@ export default function Home() {
     maxExtensions: number;
   } | null>(null);
   const [requestingExtension, setRequestingExtension] = useState(false);
+  const [isRequestingCancel, setIsRequestingCancel] = useState(false);
   const [pendingTradeData, setPendingTradeData] = useState<{ amount: string; fiatAmount: string; type: TradeType; paymentMethod: PaymentMethod } | null>(null);
   const [matchingTimeLeft, setMatchingTimeLeft] = useState<number>(15 * 60); // 15 minutes in seconds
   const [timedOutOrders, setTimedOutOrders] = useState<Order[]>([]);
@@ -282,7 +284,9 @@ export default function Home() {
   const { order: realtimeOrder, refetch: refetchActiveOrder } = useRealtimeOrder(activeOrderId, {
     onStatusChange: (newStatus, previousStatus, orderData) => {
       // Show acceptance notification on ANY screen when merchant accepts the order
-      if (previousStatus === 'pending' && (newStatus === 'accepted' || newStatus === 'escrowed')) {
+      // Also handle when previousStatus is undefined (fallback: if we're on matching screen, treat as pending→accepted)
+      const wasPending = previousStatus === 'pending' || (!previousStatus && screen === 'matching');
+      if (wasPending && (newStatus === 'accepted' || newStatus === 'escrowed')) {
         const merchantName = orderData?.merchant?.display_name || orderData?.merchant?.business_name || 'Merchant';
         playSound('notification');
 
@@ -378,9 +382,33 @@ export default function Home() {
       }
 
       // Force refetch when status changes to escrowed to ensure UI updates
+      // Also auto-call acceptTrade on-chain so the user joins the escrow as counterparty
       if (newStatus === 'escrowed') {
         console.log('[User] Escrow locked - refetching order data');
         refetchActiveOrder();
+
+        // Auto-accept trade on-chain (user joins escrow as counterparty)
+        // This is REQUIRED before the merchant can release escrow
+        if (solanaWallet.connected && orderData) {
+          const escrowCreatorWallet = (orderData as any).escrow_creator_wallet;
+          const escrowTradeId = (orderData as any).escrow_trade_id;
+          if (escrowCreatorWallet && escrowTradeId) {
+            console.log('[User] Auto-calling acceptTrade on-chain:', { escrowCreatorWallet, escrowTradeId });
+            solanaWallet.acceptTrade({
+              creatorPubkey: escrowCreatorWallet,
+              tradeId: Number(escrowTradeId),
+            }).then((result: any) => {
+              if (result.success) {
+                console.log('[User] acceptTrade success:', result.txHash);
+              } else {
+                console.warn('[User] acceptTrade failed:', result.error);
+              }
+            }).catch((err: any) => {
+              // May fail if already accepted — that's fine
+              console.warn('[User] acceptTrade error (may already be accepted):', err.message);
+            });
+          }
+        }
       }
     },
     onExtensionRequested: (data) => {
@@ -422,6 +450,33 @@ export default function Home() {
       refetchActiveOrder();
     }
   }, [screen, activeOrder, activeOrderId, refetchActiveOrder]);
+
+  // Auto-accept trade on-chain when viewing an escrowed order (safety net)
+  // This ensures the user joins the escrow even if they missed the real-time event
+  const acceptTradeCalledRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!activeOrder || !solanaWallet.connected) return;
+    const dbStatus = activeOrder.dbStatus || activeOrder.status;
+    // Only for buy orders where merchant has locked escrow
+    if (activeOrder.type !== 'buy') return;
+    if (!['escrowed', 'payment_sent', 'payment_confirmed'].includes(dbStatus)) return;
+    if (!activeOrder.escrowCreatorWallet || !activeOrder.escrowTradeId) return;
+    if (acceptTradeCalledRef.current.has(activeOrder.id)) return;
+
+    acceptTradeCalledRef.current.add(activeOrder.id);
+    console.log('[User] Safety net: calling acceptTrade for escrowed order', activeOrder.id);
+    solanaWallet.acceptTrade({
+      creatorPubkey: activeOrder.escrowCreatorWallet,
+      tradeId: Number(activeOrder.escrowTradeId),
+    }).then((result: any) => {
+      if (result.success) {
+        console.log('[User] acceptTrade success (safety net):', result.txHash);
+      }
+    }).catch((err: any) => {
+      // Expected if already accepted
+      console.log('[User] acceptTrade skipped (likely already accepted):', err.message);
+    });
+  }, [activeOrder?.id, activeOrder?.dbStatus, activeOrder?.escrowCreatorWallet, solanaWallet.connected]);
 
   // Countdown timer for matching screen - use actual order expiration time
   useEffect(() => {
@@ -1363,10 +1418,30 @@ export default function Home() {
 
     setIsLoading(true);
     try {
-      // V2.3: If wallet connected and order has escrow, confirm payment on-chain first
-      // This transitions the trade from Locked → PaymentSent on-chain
-      // CRITICAL: After this, auto-refund is FORBIDDEN - only dispute resolution can adjudicate
+      // V2.3: If wallet connected and order has escrow, ensure acceptTrade + confirmPayment on-chain
       if (solanaWallet.connected && activeOrder.escrowTradeId && activeOrder.escrowCreatorWallet) {
+        // Step 1: Ensure user has joined escrow as counterparty (acceptTrade)
+        // This MUST happen before confirmPayment or releaseEscrow can work
+        try {
+          console.log('[User] Ensuring acceptTrade before confirmPayment:', {
+            tradeId: activeOrder.escrowTradeId,
+            creatorWallet: activeOrder.escrowCreatorWallet,
+          });
+          const acceptResult = await solanaWallet.acceptTrade({
+            creatorPubkey: activeOrder.escrowCreatorWallet,
+            tradeId: activeOrder.escrowTradeId,
+          });
+          if (acceptResult.success) {
+            console.log('[User] acceptTrade success:', acceptResult.txHash);
+          }
+        } catch (acceptErr: any) {
+          // Expected to fail if already accepted — safe to continue
+          console.log('[User] acceptTrade skipped (likely already done):', acceptErr.message);
+        }
+
+        // Step 2: Confirm payment on-chain
+        // This transitions the trade from Locked → PaymentSent on-chain
+        // CRITICAL: After this, auto-refund is FORBIDDEN - only dispute resolution can adjudicate
         console.log('[User] Confirming payment on-chain:', {
           tradeId: activeOrder.escrowTradeId,
           creatorWallet: activeOrder.escrowCreatorWallet,
@@ -1775,6 +1850,65 @@ export default function Home() {
     }
   };
 
+  // ── Cancel Request handlers ──
+  const requestCancelOrder = async (reason?: string) => {
+    if (!activeOrder || !userId) return;
+    setIsRequestingCancel(true);
+    try {
+      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/cancel-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actor_type: 'user',
+          actor_id: userId,
+          reason: reason || 'User requested cancellation',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        playSound('click');
+        fetchOrders(userId);
+      } else {
+        playSound('error');
+        alert(data.error || 'Failed to request cancel');
+      }
+    } catch (err) {
+      console.error('Failed to request cancel:', err);
+      playSound('error');
+    } finally {
+      setIsRequestingCancel(false);
+    }
+  };
+
+  const respondToCancelRequest = async (accept: boolean) => {
+    if (!activeOrder || !userId) return;
+    setIsRequestingCancel(true);
+    try {
+      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/cancel-request`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actor_type: 'user',
+          actor_id: userId,
+          accept,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        playSound(accept ? 'click' : 'notification');
+        fetchOrders(userId);
+      } else {
+        playSound('error');
+        alert(data.error || 'Failed to respond to cancel');
+      }
+    } catch (err) {
+      console.error('Failed to respond to cancel request:', err);
+      playSound('error');
+    } finally {
+      setIsRequestingCancel(false);
+    }
+  };
+
   const addBankAccount = async () => {
     if (!newBank.bank || !newBank.iban || !newBank.name || !userId) return;
 
@@ -1988,6 +2122,9 @@ export default function Home() {
               disputeInfo={disputeInfo}
               respondToResolution={respondToResolution}
               isRespondingToResolution={isRespondingToResolution}
+              requestCancelOrder={requestCancelOrder}
+              respondToCancelRequest={respondToCancelRequest}
+              isRequestingCancel={isRequestingCancel}
               solanaWallet={solanaWallet}
               setShowWalletModal={setShowWalletModal}
               userId={userId}
@@ -2168,6 +2305,28 @@ export default function Home() {
               fiatAmount={fiatAmount}
               isLoading={isLoading}
               confirmCashOrder={confirmCashOrder}
+            />
+          </motion.div>
+        )}
+
+        {/* WALLET */}
+        {screen === "wallet" && (
+          <motion.div
+            key="wallet"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={`flex-1 w-full ${maxW} flex flex-col`}
+          >
+            <WalletScreen
+              screen={screen}
+              setScreen={setScreen}
+              solanaWallet={solanaWallet}
+              embeddedWallet={embeddedWallet}
+              setShowWalletModal={setShowWalletModal}
+              setShowWalletSetup={setShowWalletSetup}
+              setShowWalletUnlock={setShowWalletUnlock}
+              maxW={maxW}
             />
           </motion.div>
         )}

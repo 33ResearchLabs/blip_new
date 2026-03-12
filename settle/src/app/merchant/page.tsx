@@ -575,6 +575,7 @@ export default function MerchantDashboard() {
     isRespondingToResolution, extensionRequests, setExtensionRequests, requestingExtension,
     openDisputeModal, closeDisputeModal, submitDispute, fetchDisputeInfo,
     requestExtension, respondToExtension, respondToResolution,
+    requestCancelOrder, respondToCancelRequest,
   } = dispute;
 
   // Real-time orders subscription - triggers refetch on updates
@@ -590,7 +591,7 @@ export default function MerchantDashboard() {
       const isRelevant = order?.merchant_id === merchantId || order?.buyer_merchant_id === merchantId;
       if (isRelevant) {
         playSound('new_order');
-        const typeLabel = order?.type === 'buy' ? 'Sell' : 'Buy';
+        const typeLabel = order?.type === 'buy' ? 'Send' : 'Receive';
         const amt = order?.crypto_amount ? `${Number(order.crypto_amount).toLocaleString()} USDC` : '';
         const fiat = order?.fiat_amount ? `${Number(order.fiat_amount).toLocaleString()} AED` : '';
         addNotification('order',
@@ -2629,6 +2630,8 @@ export default function MerchantDashboard() {
             if (order) openReleaseModal(order);
           }}
           onOpenDispute={openDisputeModal}
+          onRequestCancel={requestCancelOrder}
+          onRespondToCancel={respondToCancelRequest}
         />
       )}
 

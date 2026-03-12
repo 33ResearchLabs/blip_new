@@ -33,8 +33,35 @@ export const STATUS_TIMEOUTS: Partial<Record<OrderStatus, number>> = {
   accepted: 15,
   escrowed: 15,
   payment_sent: 15,
-  disputed: 4320, // 72 hours for dispute resolution
+  disputed: 1440, // 24 hours — auto-refund to escrow funder
 };
+
+// =====================
+// UNHAPPY PATH TIMERS
+// =====================
+
+// Inactivity: warn after 15min of no activity, escalate after 1hr
+export const INACTIVITY_WARNING_MINUTES = 15;
+export const INACTIVITY_ESCALATION_MINUTES = 60;
+
+// Dispute: auto-refund to escrow funder after 24 hours
+export const DISPUTE_AUTO_RESOLVE_HOURS = 24;
+
+// Statuses where inactivity tracking applies (post-acceptance, pre-completion)
+export const INACTIVITY_TRACKED_STATUSES: readonly OrderStatus[] = [
+  'accepted',
+  'escrowed',
+  'payment_pending',
+  'payment_sent',
+];
+
+// Statuses where cancel request is allowed (post-acceptance, escrow involved)
+export const CANCEL_REQUEST_STATUSES: readonly OrderStatus[] = [
+  'accepted',
+  'escrowed',
+  'payment_pending',
+  'payment_sent',
+];
 
 // Define allowed transitions: from -> to[]
 // Key insight: transitions depend on who is performing the action
@@ -110,17 +137,10 @@ export const TERMINAL_STATUSES: readonly OrderStatus[] = [
 ];
 
 // Statuses where liquidity should be restored on exit
-// Includes 'escrowed' because when an escrowed order is cancelled,
-// the offer's available_amount must be restored to prevent negative drift.
 export const RESTORE_LIQUIDITY_ON_EXIT: readonly OrderStatus[] = [
   'pending',
   'accepted',
   'escrow_pending',
-  'escrowed',
-  'payment_pending',
-  'payment_sent',
-  'payment_confirmed',
-  'releasing',
 ];
 
 // Statuses where the order is considered "active" (not terminal)
@@ -355,5 +375,53 @@ export function getExpiryOutcome(
   }
 
   // Before escrow or if extensions remain, just cancel
+  return 'cancelled';
+}
+
+// =====================
+// CANCEL REQUEST SYSTEM
+// =====================
+
+/**
+ * Check if a cancel request can be made in the current status.
+ * Before acceptance: unilateral cancel is fine (no request needed).
+ * After acceptance: need mutual agreement via cancel request.
+ */
+export function canRequestCancel(status: OrderStatus): boolean {
+  return (CANCEL_REQUEST_STATUSES as readonly string[]).includes(status);
+}
+
+/**
+ * Check if unilateral cancel is allowed (no approval needed).
+ * Only pending and escrow_pending allow unilateral cancel.
+ */
+export function canUnilateralCancel(status: OrderStatus): boolean {
+  return status === 'pending' || status === 'escrow_pending';
+}
+
+// =====================
+// INACTIVITY SYSTEM
+// =====================
+
+/**
+ * Check if inactivity tracking applies to this status
+ */
+export function isInactivityTracked(status: OrderStatus): boolean {
+  return (INACTIVITY_TRACKED_STATUSES as readonly string[]).includes(status);
+}
+
+/**
+ * Determine inactivity escalation outcome for an order.
+ * After 1hr of inactivity:
+ *   - If escrow exists → ask non-escrow party if tx done → if not, dispute
+ *   - If no escrow → cancel
+ */
+export function getInactivityOutcome(
+  status: OrderStatus,
+  hasEscrow: boolean,
+): 'disputed' | 'cancelled' {
+  if (hasEscrow && ['escrowed', 'payment_pending', 'payment_sent'].includes(status)) {
+    return 'disputed';
+  }
   return 'cancelled';
 }

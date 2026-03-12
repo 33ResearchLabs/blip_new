@@ -54,34 +54,9 @@ export async function GET(
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
-    // FEATURE FLAG: Proxy to core-api if enabled
-    if (process.env.USE_CORE_API === '1' && process.env.CORE_API_URL) {
-      try {
-        const coreApiUrl = `${process.env.CORE_API_URL}/v1/orders/${id}`;
-        const headers: Record<string, string> = {};
-
-        const coreApiSecret = process.env.CORE_API_SECRET;
-        if (coreApiSecret) headers['x-core-api-secret'] = coreApiSecret;
-
-        if (auth) {
-          headers['x-actor-type'] = auth.actorType;
-          headers['x-actor-id'] = auth.actorId;
-          if (coreApiSecret) {
-            headers['x-actor-signature'] = signActorHeaders(coreApiSecret, auth.actorType, auth.actorId);
-          }
-        }
-
-        const response = await fetch(coreApiUrl, { headers });
-        const data = await response.json();
-
-        return NextResponse.json(data, { status: response.status });
-      } catch (proxyError) {
-        logger.error('[Proxy] Failed to reach core-api', { error: proxyError });
-        // Fall through to local logic
-      }
-    }
-
-    // LOCAL LOGIC (read-only fallback)
+    // NOTE: GET always uses local query (read-only) because core-api
+    // doesn't return joined merchant/user/offer objects needed by the UI.
+    // Core-api proxy is used only for mutations (PATCH).
     // Fetch order
     const order = await getOrderWithRelations(id);
     if (!order) {
@@ -129,10 +104,14 @@ export async function PATCH(
     if (auth instanceof NextResponse) return auth;
 
     // Verify access to this order
-    const canAccess = await canAccessOrder(auth, id);
-    if (!canAccess) {
-      logger.auth.forbidden(`PATCH /api/orders/${id}`, auth.actorId, 'Not order participant');
-      return forbiddenResponse('You do not have access to this order');
+    // Skip access check for 'accepted' status — merchant is joining, not yet a participant
+    const isAccepting = body.status === 'accepted';
+    if (!isAccepting) {
+      const canAccess = await canAccessOrder(auth, id);
+      if (!canAccess) {
+        logger.auth.forbidden(`PATCH /api/orders/${id}`, auth.actorId, 'Not order participant');
+        return forbiddenResponse('You do not have access to this order');
+      }
     }
 
     // Validate request body
@@ -143,6 +122,17 @@ export async function PATCH(
     }
 
     const { status, actor_type, actor_id, reason, acceptor_wallet_address, refund_tx_hash } = parseResult.data;
+
+    // Fetch current order status BEFORE the update so we can send previousStatus in Pusher
+    let previousStatus: string | undefined;
+    try {
+      const currentOrder = await getOrderWithRelations(id);
+      if (currentOrder) {
+        previousStatus = currentOrder.status;
+      }
+    } catch (e) {
+      logger.warn('[PATCH /orders] Could not fetch previous status', { orderId: id });
+    }
 
     // If refund_tx_hash provided, save it to DB regardless of mode
     if (refund_tx_hash) {
@@ -212,8 +202,9 @@ export async function PATCH(
             status: order.status || status,
             minimal_status: normalizeStatus(order.status || status),
             order_version: order.order_version,
-            previousStatus: undefined,
+            previousStatus,
             updatedAt: new Date().toISOString(),
+            data: order,
           }).catch(err => logger.error('[Pusher] Failed to notify status update', { error: err }));
         }
         return NextResponse.json(resBody, { status: response.status });

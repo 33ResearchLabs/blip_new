@@ -10,6 +10,7 @@ import { orderCreateRoutes } from './routes/orderCreate';
 import { escrowRoutes } from './routes/escrow';
 import { extensionRoutes } from './routes/extension';
 import { disputeRoutes } from './routes/dispute';
+import { cancelRequestRoutes } from './routes/cancelRequest';
 import { expireRoutes } from './routes/expire';
 import { debugRoutes } from './routes/debug';
 import { conversionRoutes } from './routes/conversion';
@@ -20,6 +21,7 @@ import { startOutboxWorker, stopOutboxWorker } from './workers/notificationOutbo
 import { startCorridorTimeoutWorker, stopCorridorTimeoutWorker } from './workers/corridorTimeoutWorker';
 import { startAutoBumpWorker, stopAutoBumpWorker } from './workers/autoBumpWorker';
 import { startPriceFeedWorker, stopPriceFeedWorker } from './workers/priceFeedWorker';
+import { startUnhappyPathWorker, stopUnhappyPathWorker } from './workers/unhappyPathWorker';
 import { closePool } from 'settlement-core';
 
 const PORT = parseInt(process.env.CORE_API_PORT || '4010', 10);
@@ -48,6 +50,7 @@ await fastify.register(orderCreateRoutes, { prefix: '/v1' });
 await fastify.register(escrowRoutes, { prefix: '/v1' });
 await fastify.register(extensionRoutes, { prefix: '/v1' });
 await fastify.register(disputeRoutes, { prefix: '/v1' });
+await fastify.register(cancelRequestRoutes, { prefix: '/v1' });
 await fastify.register(expireRoutes, { prefix: '/v1' });
 await fastify.register(conversionRoutes, { prefix: '/v1' });
 await fastify.register(corridorRoutes, { prefix: '/v1' });
@@ -65,6 +68,7 @@ try {
     startCorridorTimeoutWorker();
     startAutoBumpWorker();
     startPriceFeedWorker();
+    startUnhappyPathWorker();
   }
 } catch (err) {
   fastify.log.error(err);
@@ -78,6 +82,7 @@ const shutdown = async (signal: string) => {
     stopCorridorTimeoutWorker();
     stopAutoBumpWorker();
     stopPriceFeedWorker();
+    stopUnhappyPathWorker();
     closeWebSocketServer();
   }
   await fastify.close();

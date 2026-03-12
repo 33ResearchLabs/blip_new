@@ -85,6 +85,16 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
     escrowTxHash: dbOrder.escrow_tx_hash,
     // Merchant's wallet address captured when accepting (for sell order escrow release)
     acceptorWalletAddress: dbOrder.acceptor_wallet_address,
+    // Unhappy path state
+    cancelRequest: dbOrder.cancel_requested_by ? {
+      requestedBy: dbOrder.cancel_requested_by,
+      requestedAt: new Date(dbOrder.cancel_requested_at!),
+      reason: dbOrder.cancel_request_reason || 'Requested cancellation',
+    } : null,
+    inactivityWarned: !!dbOrder.inactivity_warned_at,
+    lastActivityAt: dbOrder.last_activity_at ? new Date(dbOrder.last_activity_at) : null,
+    disputedAt: dbOrder.disputed_at ? new Date(dbOrder.disputed_at) : null,
+    disputeAutoResolveAt: dbOrder.dispute_auto_resolve_at ? new Date(dbOrder.dispute_auto_resolve_at) : null,
   };
 }
 
