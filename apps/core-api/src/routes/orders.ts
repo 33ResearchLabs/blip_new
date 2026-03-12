@@ -152,9 +152,9 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      // Global guard: reject any transition on self-referencing orders (merchant_id = buyer_merchant_id)
-      // These orders are fundamentally broken — no real counterparty exists
-      if (newStatus !== 'cancelled') {
+      // Global guard: reject transitions on self-referencing orders (merchant_id = buyer_merchant_id)
+      // EXCEPT: 'accepted' (acceptance reassigns merchant_id) and 'cancelled' (always allowed)
+      if (newStatus !== 'cancelled' && newStatus !== 'accepted') {
         const selfRefCheck = await queryOne<{ id: string }>(
           `SELECT id FROM orders WHERE id = $1 AND merchant_id = buyer_merchant_id`,
           [id]
