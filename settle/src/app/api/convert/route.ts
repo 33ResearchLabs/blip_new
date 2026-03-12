@@ -27,6 +27,10 @@ export async function POST(request: NextRequest) {
     const body: ConvertRequest = await request.json();
     const { direction, amount, accountType, accountId, idempotencyKey } = body;
 
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     // Validation
     if (!direction || !amount) {
       return NextResponse.json(
@@ -72,6 +76,14 @@ export async function POST(request: NextRequest) {
       if (!effectiveAccountId) {
         return unauthorizedResponse('Session required');
       }
+    }
+
+    // Security: enforce account matches authenticated identity
+    if (effectiveAccountId !== auth.actorId) {
+      return NextResponse.json(
+        { success: false, error: 'Cannot convert on behalf of another account' },
+        { status: 403 }
+      );
     }
 
     // If in MOCK_MODE or core-api not configured, handle locally

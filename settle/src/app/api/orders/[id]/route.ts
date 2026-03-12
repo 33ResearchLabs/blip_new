@@ -238,13 +238,25 @@ export async function DELETE(
       return validationErrorResponse([idValidation.error!]);
     }
 
+    // Require authentication
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     // Get params from query string
     const searchParams = request.nextUrl.searchParams;
     const actorType = searchParams.get('actor_type');
     const actorId = searchParams.get('actor_id');
     const reason = searchParams.get('reason');
 
-    const queryStr = `actor_type=${actorType}&actor_id=${actorId}${reason ? `&reason=${encodeURIComponent(reason)}` : ''}`;
+    // Security: enforce actor matches authenticated identity
+    if (actorId && actorId !== auth.actorId) {
+      return forbiddenResponse('actor_id does not match authenticated identity');
+    }
+
+    const effectiveActorId = actorId || auth.actorId;
+    const effectiveActorType = actorType || auth.actorType;
+
+    const queryStr = `actor_type=${effectiveActorType}&actor_id=${effectiveActorId}${reason ? `&reason=${encodeURIComponent(reason)}` : ''}`;
     return proxyCoreApi(`/v1/orders/${id}?${queryStr}`, { method: 'DELETE' });
   } catch (error) {
     logger.api.error('DELETE', '/api/orders/[id]', error as Error);
