@@ -5,6 +5,7 @@ import { logger, canRequestCancel, canUnilateralCancel } from 'settlement-core';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import {
   requireAuth,
+  forbiddenResponse,
   notFoundResponse,
   validationErrorResponse,
   successResponse,
@@ -41,6 +42,11 @@ export async function POST(
       return validationErrorResponse(errors);
     }
 
+    // Security: enforce actor matches authenticated identity
+    if (parseResult.data.actor_id !== auth.actorId) {
+      return forbiddenResponse('actor_id does not match authenticated identity');
+    }
+
     return proxyCoreApi(`/v1/orders/${id}/cancel-request`, {
       method: 'POST',
       body: parseResult.data,
@@ -67,6 +73,11 @@ export async function PUT(
     if (!parseResult.success) {
       const errors = parseResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`);
       return validationErrorResponse(errors);
+    }
+
+    // Security: enforce actor matches authenticated identity
+    if (parseResult.data.actor_id !== auth.actorId) {
+      return forbiddenResponse('actor_id does not match authenticated identity');
     }
 
     return proxyCoreApi(`/v1/orders/${id}/cancel-request`, {

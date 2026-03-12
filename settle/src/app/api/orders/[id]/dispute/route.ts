@@ -46,6 +46,12 @@ export async function POST(
     const actorId = initiated_by === 'user'
       ? (user_id || '')
       : (merchant_id || '');
+
+    // Security: enforce actor matches authenticated identity
+    if (actorId !== auth.actorId) {
+      return forbiddenResponse('actor_id does not match authenticated identity');
+    }
+
     return proxyCoreApi(`/v1/orders/${orderId}/dispute`, {
       method: 'POST',
       body: { reason, description, initiated_by, actor_id: actorId },

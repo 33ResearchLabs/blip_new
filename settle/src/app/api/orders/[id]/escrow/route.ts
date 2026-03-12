@@ -131,6 +131,11 @@ export async function POST(
       return validationErrorResponse(errors);
     }
 
+    // Security: enforce actor matches authenticated identity
+    if (parseResult.data.actor_id !== auth.actorId) {
+      return forbiddenResponse('actor_id does not match authenticated identity');
+    }
+
     // Mock mode (or Core-API absent): handle escrow lock locally
     const isMockMode = MOCK_MODE || !process.env.CORE_API_URL;
     if (isMockMode) {
@@ -228,6 +233,11 @@ export async function PATCH(
     }
 
     const { tx_hash, actor_type, actor_id } = parseResult.data;
+
+    // Security: enforce actor matches authenticated identity
+    if (actor_id !== auth.actorId) {
+      return forbiddenResponse('actor_id does not match authenticated identity');
+    }
 
     // Forward to core-api (single writer for all mutations)
     const releaseResponse = await proxyCoreApi(`/v1/orders/${id}/events`, {

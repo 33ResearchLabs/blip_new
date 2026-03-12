@@ -123,6 +123,11 @@ export async function PATCH(
 
     const { status, actor_type, actor_id, reason, acceptor_wallet_address, refund_tx_hash } = parseResult.data;
 
+    // Security: enforce actor matches authenticated identity
+    if (actor_id !== auth.actorId) {
+      return forbiddenResponse('actor_id does not match authenticated identity');
+    }
+
     // Fetch current order status BEFORE the update so we can send previousStatus in Pusher
     let previousStatus: string | undefined;
     try {

@@ -10,6 +10,7 @@ import {
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import {
   requireAuth,
+  forbiddenResponse,
   notFoundResponse,
   validationErrorResponse,
   successResponse,
@@ -48,6 +49,11 @@ export async function POST(
 
     const { actor_type, actor_id } = parseResult.data;
 
+    // Security: enforce actor matches authenticated identity
+    if (actor_id !== auth.actorId) {
+      return forbiddenResponse('actor_id does not match authenticated identity');
+    }
+
     return proxyCoreApi(`/v1/orders/${id}/extension`, {
       method: 'POST',
       body: { actor_type, actor_id },
@@ -78,6 +84,11 @@ export async function PUT(
     }
 
     const { actor_type, actor_id, accept } = parseResult.data;
+
+    // Security: enforce actor matches authenticated identity
+    if (actor_id !== authPut.actorId) {
+      return forbiddenResponse('actor_id does not match authenticated identity');
+    }
 
     return proxyCoreApi(`/v1/orders/${id}/extension`, {
       method: 'PUT',

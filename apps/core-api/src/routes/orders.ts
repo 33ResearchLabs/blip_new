@@ -287,6 +287,16 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         const currentOrder = currentResult.rows[0];
         const oldStatus = currentOrder.status;
 
+        // Security: verify actor is a participant (skip for 'accepted' — acceptor is joining)
+        if (newStatus !== 'accepted') {
+          const isParticipant = actor_id === currentOrder.user_id
+            || actor_id === currentOrder.merchant_id
+            || (currentOrder.buyer_merchant_id && actor_id === currentOrder.buyer_merchant_id);
+          if (!isParticipant && actor_type !== 'system') {
+            return { success: false as const, error: 'Not authorized — you are not a participant in this order' };
+          }
+        }
+
         // Validate transition
         const validation = validateTransition(oldStatus, newStatus, actor_type);
         if (!validation.valid) {
@@ -717,6 +727,32 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
       if (event_type === 'release') {
         if (!tx_hash) {
           return reply.status(400).send({ success: false, error: 'tx_hash required for release' });
+        }
+
+        // Security: verify actor is authorized to release this order
+        const releaseOrder = await queryOne<{ status: string; merchant_id: string; user_id: string; buyer_merchant_id: string | null; release_tx_hash: string | null }>(
+          'SELECT status, merchant_id, user_id, buyer_merchant_id, release_tx_hash FROM orders WHERE id = $1',
+          [id]
+        );
+        if (!releaseOrder) {
+          return reply.status(404).send({ success: false, error: 'Order not found' });
+        }
+        // Double-release guard: reject if already released
+        if (releaseOrder.release_tx_hash) {
+          return reply.status(400).send({ success: false, error: 'Order already released' });
+        }
+        // Status guard: only allow release from valid states
+        const releasableStatuses = ['payment_confirmed', 'releasing', 'escrowed', 'payment_sent', 'payment_pending'];
+        if (!releasableStatuses.includes(releaseOrder.status)) {
+          return reply.status(400).send({ success: false, error: `Cannot release order in status '${releaseOrder.status}'` });
+        }
+        // Authorization: only the seller (merchant_id) or system can release
+        const isAuthorized = actorType === 'system'
+          || actorId === releaseOrder.merchant_id
+          || (actorType === 'merchant' && actorId === releaseOrder.buyer_merchant_id);
+        if (!isAuthorized) {
+          logger.error('[GUARD] Unauthorized release attempt', { orderId: id, actorType, actorId });
+          return reply.status(403).send({ success: false, error: 'Not authorized to release this order' });
         }
 
         // Single stored procedure: FOR UPDATE + update + credit balance (1 round-trip)
