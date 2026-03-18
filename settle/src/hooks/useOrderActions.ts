@@ -59,6 +59,7 @@ export function useOrderActions({
     if (!solanaWallet.walletAddress) {
       addNotification('system', 'Please connect your wallet first to accept orders.', order.id);
       setShowWalletModal(true);
+      setAcceptingOrderId(null);
       return;
     }
 

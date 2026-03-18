@@ -250,7 +250,6 @@ export async function getAllPendingOrdersForMerchant(
              WHEN o.merchant_id = $1 AND o.accepted_at IS NOT NULL THEN true
              WHEN o.merchant_id = $1 AND (u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%') THEN true
              WHEN o.escrow_creator_wallet IS NOT NULL AND LOWER(o.escrow_creator_wallet) = LOWER(current_m.wallet_address) THEN true
-             WHEN o.merchant_id = $1 THEN true
              ELSE false
            END as is_my_order,
            json_build_object(

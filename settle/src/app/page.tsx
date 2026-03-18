@@ -247,6 +247,14 @@ export default function Home() {
               userBankAccount={tradeCreation.userBankAccount}
               setUserBankAccount={tradeCreation.setUserBankAccount}
               setShowWalletModal={auth.setShowWalletModal}
+              onConnectWallet={() => {
+                if (embeddedWallet) {
+                  if (embeddedWallet.state === 'none') auth.setShowWalletSetup(true);
+                  else if (embeddedWallet.state === 'locked') auth.setShowWalletUnlock(true);
+                } else {
+                  auth.setShowWalletModal(true);
+                }
+              }}
               solanaWallet={solanaWallet}
             />
           </Panel>

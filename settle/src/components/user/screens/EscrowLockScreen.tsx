@@ -28,6 +28,7 @@ export interface EscrowLockScreenProps {
   userBankAccount: string;
   setUserBankAccount: (v: string) => void;
   setShowWalletModal: (v: boolean) => void;
+  onConnectWallet?: () => void;
   solanaWallet: {
     connected: boolean;
     walletAddress: string | null;
@@ -53,8 +54,10 @@ export const EscrowLockScreen = ({
   userBankAccount,
   setUserBankAccount,
   setShowWalletModal,
+  onConnectWallet,
   solanaWallet,
 }: EscrowLockScreenProps) => {
+  const handleConnectWallet = onConnectWallet || (() => setShowWalletModal(true));
   return (
     <>
       <div className="h-12" />
@@ -89,7 +92,7 @@ export const EscrowLockScreen = ({
                 </div>
               ) : (
                 <button
-                  onClick={() => setShowWalletModal(true)}
+                  onClick={handleConnectWallet}
                   className="text-[14px] text-white/70 font-medium"
                 >
                   Connect Wallet
@@ -161,7 +164,7 @@ export const EscrowLockScreen = ({
                 <button
                   onClick={() => {
                     solanaWallet.disconnect();
-                    setTimeout(() => setShowWalletModal(true), 100);
+                    setTimeout(handleConnectWallet, 100);
                   }}
                   className="flex-1 py-2 rounded-lg bg-white/10 text-[14px] text-white/70 font-medium"
                 >
@@ -253,7 +256,7 @@ export const EscrowLockScreen = ({
           <div className="pb-10">
             <motion.button
               whileTap={{ scale: 0.98 }}
-              onClick={confirmEscrow}
+              onClick={solanaWallet.connected ? confirmEscrow : handleConnectWallet}
               disabled={isLoading || (solanaWallet.connected && !solanaWallet.programReady)}
               className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-white/10 text-white flex items-center justify-center gap-2 disabled:opacity-50"
             >
