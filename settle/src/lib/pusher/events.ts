@@ -20,6 +20,7 @@ export const CHAT_EVENTS = {
   MESSAGES_READ: 'chat:messages-read',
   TYPING_START: 'chat:typing-start',
   TYPING_STOP: 'chat:typing-stop',
+  DM_NEW: 'chat:dm-new',
 } as const;
 
 // Notification events

@@ -284,8 +284,10 @@ export default function Home() {
               setChatMessage={userEffects.setChatMessage}
               chatInputRef={userEffects.chatInputRef}
               chatMessagesRef={userEffects.chatMessagesRef}
-              activeChat={userEffects.activeChat}
+              activeChat={userEffects.activeChat as any}
               handleSendMessage={userEffects.handleSendMessage}
+              sendChatMessage={userEffects.sendChatMessage}
+              sendTypingIndicator={userEffects.sendTypingIndicator}
               showDisputeModal={orderActions.showDisputeModal}
               setShowDisputeModal={orderActions.setShowDisputeModal}
               disputeReason={orderActions.disputeReason}

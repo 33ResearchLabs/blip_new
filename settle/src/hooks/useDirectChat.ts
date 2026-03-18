@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { usePusherOptional } from '@/context/PusherContext';
+import { CHAT_EVENTS } from '@/lib/pusher/events';
+import { getMerchantChannel } from '@/lib/pusher/channels';
 
 export interface DirectChatMessage {
   id: string;
@@ -51,6 +54,10 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
   const pollMsgRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const merchantIdRef = useRef(merchantId);
   merchantIdRef.current = merchantId;
+
+  const pusher = usePusherOptional();
+  const activeContactIdRef = useRef(activeContactId);
+  activeContactIdRef.current = activeContactId;
 
   // Fetch conversation list
   const fetchConversations = useCallback(async () => {
@@ -113,6 +120,55 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
       if (pollConvRef.current) clearInterval(pollConvRef.current);
     };
   }, [merchantId, fetchConversations]);
+
+  // Real-time: subscribe to merchant's private Pusher channel for incoming DMs
+  useEffect(() => {
+    if (!pusher || !merchantId) return;
+
+    const channelName = getMerchantChannel(merchantId);
+    const channel = pusher.subscribe(channelName);
+    if (!channel) return;
+
+    const handleNewDM = (raw: unknown) => {
+      const data = raw as {
+        messageId: string;
+        senderType: string;
+        senderId: string;
+        content: string;
+        messageType: string;
+        imageUrl?: string;
+        createdAt: string;
+      };
+      // If we're chatting with this sender, add the message to the list
+      const currentContactId = activeContactIdRef.current;
+      if (currentContactId && data.senderId === currentContactId) {
+        const newMsg: DirectChatMessage = {
+          id: data.messageId,
+          from: 'them',
+          text: data.content,
+          timestamp: new Date(data.createdAt),
+          messageType: (data.messageType as 'text' | 'image') || 'text',
+          imageUrl: data.imageUrl,
+          isRead: false,
+        };
+        setMessages(prev => {
+          // Avoid duplicates
+          if (prev.some(m => m.id === data.messageId)) return prev;
+          return [...prev, newMsg];
+        });
+      }
+
+      // Refresh conversations to update last message + unread count
+      fetchConversations();
+    };
+
+    channel.bind(CHAT_EVENTS.DM_NEW, handleNewDM);
+
+    return () => {
+      channel.unbind(CHAT_EVENTS.DM_NEW, handleNewDM);
+      pusher.unsubscribe(channelName);
+    };
+  }, [pusher, merchantId, fetchConversations]);
 
   // Message polling (5s) when chat is open
   useEffect(() => {

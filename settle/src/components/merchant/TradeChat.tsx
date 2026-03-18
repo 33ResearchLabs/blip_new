@@ -21,7 +21,7 @@ import {
   Users
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { BankInfoCard, EscrowCard, StatusEventCard, detectEventType } from '../chat/cards';
+import { BankInfoCard, EscrowCard, ReceiptCard, StatusEventCard, detectEventType } from '../chat/cards';
 
 // Message type from the chat system
 interface ChatMessage {
@@ -642,6 +642,20 @@ export function TradeChat({
                     );
                   }
 
+                  // Order receipt card
+                  if (eventType === 'order_receipt' && structuredData?.data) {
+                    return (
+                      <motion.div
+                        key={msg.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                      >
+                        <ReceiptCard data={structuredData.data as Record<string, unknown>} />
+                      </motion.div>
+                    );
+                  }
+
                   // Default status event card
                   return (
                     <motion.div
@@ -738,6 +752,35 @@ export function TradeChat({
                   {/* Messages for this date */}
                   <div className="space-y-3">
                     {group.messages.map((msg, msgIndex) => {
+                      // Detect receipt card messages (JSON with type: 'order_receipt')
+                      let receiptData: Record<string, unknown> | null = null;
+                      try {
+                        if (msg.text.startsWith('{')) {
+                          const parsed = JSON.parse(msg.text);
+                          if (parsed.type === 'order_receipt' && parsed.data) {
+                            receiptData = parsed.data;
+                          }
+                        }
+                      } catch { /* not JSON */ }
+
+                      if (receiptData) {
+                        return (
+                          <motion.div
+                            key={msg.id}
+                            data-testid={`chat-msg-${msg.id}`}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: msgIndex * 0.02 }}
+                            className="max-w-[90%]"
+                          >
+                            <ReceiptCard data={receiptData} />
+                            <span className="text-[10px] text-gray-500 mt-1 block">
+                              {formatTime(msg.timestamp)}
+                            </span>
+                          </motion.div>
+                        );
+                      }
+
                       const senderInfo = getSenderInfo(msg);
 
                       return (

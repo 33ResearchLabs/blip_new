@@ -282,6 +282,35 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
     [pusher]
   );
 
+  // Retry subscriptions when Pusher connects (fixes race condition where
+  // openChat is called before Pusher is ready)
+  useEffect(() => {
+    if (!pusher) return;
+    // Re-subscribe all open chat windows that aren't subscribed yet
+    chatWindows.forEach((w) => {
+      if (w.orderId && !subscribedChannelsRef.current.get(w.orderId)) {
+        console.log('[useRealtimeChat] Late-subscribing to order:', w.orderId);
+        subscribeToOrder(w.orderId, w.id);
+      }
+    });
+  }, [pusher, chatWindows, subscribeToOrder]);
+
+  // Polling fallback: refresh messages every 5s for open chat windows
+  // This ensures messages arrive even if Pusher isn't connected
+  useEffect(() => {
+    if (chatWindows.length === 0) return;
+
+    const interval = setInterval(() => {
+      chatWindows.forEach((w) => {
+        if (w.orderId) {
+          fetchMessages(w.orderId, w.id);
+        }
+      });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [chatWindows, fetchMessages]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {

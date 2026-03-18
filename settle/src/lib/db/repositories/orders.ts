@@ -1006,9 +1006,9 @@ export async function getOrderMessages(orderId: string): Promise<ChatMessage[]> 
         ELSE 'System'
       END as sender_name
     FROM chat_messages cm
-    LEFT JOIN users u ON cm.sender_type = 'user' AND cm.sender_id = u.id::text
-    LEFT JOIN merchants m ON cm.sender_type = 'merchant' AND cm.sender_id = m.id::text
-    LEFT JOIN compliance_team ct ON cm.sender_type = 'compliance' AND cm.sender_id = ct.id::text
+    LEFT JOIN users u ON cm.sender_type = 'user' AND cm.sender_id = u.id
+    LEFT JOIN merchants m ON cm.sender_type = 'merchant' AND cm.sender_id = m.id
+    LEFT JOIN compliance_team ct ON cm.sender_type = 'compliance' AND cm.sender_id = ct.id
     WHERE cm.order_id = $1
       AND cm.sender_type != 'system'
       AND cm.message_type != 'system'

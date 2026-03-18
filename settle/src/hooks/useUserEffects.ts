@@ -100,6 +100,7 @@ export function useUserEffects({
     chatWindows,
     openChat,
     sendMessage: sendChatMessage,
+    sendTypingIndicator,
   } = useRealtimeChat({
     actorType: "user",
     actorId: userId || undefined,
@@ -435,6 +436,7 @@ export function useUserEffects({
     chatWindows,
     openChat,
     sendChatMessage,
+    sendTypingIndicator,
     activeChat: activeChat ?? null,
     showChat, setShowChat,
     chatMessage, setChatMessage,

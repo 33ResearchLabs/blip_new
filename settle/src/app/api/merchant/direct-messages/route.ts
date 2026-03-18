@@ -6,6 +6,8 @@ import {
   markDirectMessagesAsRead,
   getMerchantUnreadDirectCount,
 } from '@/lib/db/repositories/directMessages';
+import { notifyNewDirectMessage, notifyNewMessage } from '@/lib/pusher/server';
+import { query } from '@/lib/db';
 import {
   requireAuth,
   verifyMerchant,
@@ -104,6 +106,54 @@ export async function POST(request: NextRequest) {
       message_type: message_type || 'text',
       image_url,
     });
+
+    // Notify recipient in real-time via Pusher
+    notifyNewDirectMessage({
+      messageId: message.id,
+      senderType: 'merchant',
+      senderId: merchant_id,
+      recipientType: targetType,
+      recipientId: targetId,
+      content,
+      messageType: message_type || 'text',
+      imageUrl: image_url,
+      createdAt: message.created_at?.toISOString?.() || new Date().toISOString(),
+    }).catch(err => console.error('[DM] Pusher notification failed:', err));
+
+    // Bridge: also insert into chat_messages so user sees it in order chat
+    try {
+      // Find the active (non-terminal) order between merchant and recipient
+      const orderRows = await query<{ id: string }>(
+        `SELECT id FROM orders
+         WHERE ((merchant_id = $1 AND user_id = $2) OR (merchant_id = $2 AND user_id = $1)
+                OR (buyer_merchant_id = $1 AND user_id = $2) OR (buyer_merchant_id = $2 AND user_id = $1)
+                OR (merchant_id = $1 AND buyer_merchant_id = $2) OR (merchant_id = $2 AND buyer_merchant_id = $1))
+           AND status NOT IN ('completed', 'cancelled', 'expired', 'disputed')
+         ORDER BY created_at DESC LIMIT 1`,
+        [merchant_id, targetId]
+      );
+      if (orderRows.length > 0) {
+        const orderId = orderRows[0].id;
+        await query(
+          `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type, image_url)
+           VALUES ($1, 'merchant', $2, $3, $4, $5)`,
+          [orderId, merchant_id, content, message_type || 'text', image_url || null]
+        );
+        // Notify via Pusher order channel so user gets it in real-time
+        notifyNewMessage({
+          orderId,
+          messageId: message.id,
+          senderType: 'merchant',
+          senderId: merchant_id,
+          content,
+          messageType: message_type || 'text',
+          imageUrl: image_url,
+          createdAt: message.created_at?.toISOString?.() || new Date().toISOString(),
+        }).catch(() => {});
+      }
+    } catch (bridgeErr) {
+      console.error('[DM] Bridge to chat_messages failed:', bridgeErr);
+    }
 
     return successResponse(message, 201);
   } catch (error) {

@@ -252,6 +252,36 @@ export async function notifyMessagesRead(
 }
 
 /**
+ * Notify new direct message to recipient's private channel
+ */
+export async function notifyNewDirectMessage(data: {
+  messageId: string;
+  senderType: 'merchant' | 'user';
+  senderId: string;
+  recipientType: 'merchant' | 'user';
+  recipientId: string;
+  content: string;
+  messageType: string;
+  imageUrl?: string;
+  createdAt: string;
+}): Promise<void> {
+  // Send to recipient's private channel
+  const recipientChannel = data.recipientType === 'merchant'
+    ? getMerchantChannel(data.recipientId)
+    : getUserChannel(data.recipientId);
+
+  await triggerEvent(recipientChannel, CHAT_EVENTS.DM_NEW, {
+    messageId: data.messageId,
+    senderType: data.senderType,
+    senderId: data.senderId,
+    content: data.content,
+    messageType: data.messageType,
+    imageUrl: data.imageUrl,
+    createdAt: data.createdAt,
+  });
+}
+
+/**
  * Notify typing status
  */
 export async function notifyTyping(

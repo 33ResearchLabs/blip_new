@@ -8,6 +8,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
+import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
 import type { Screen, Order } from "./types";
 import type { RefObject } from "react";
 
@@ -124,6 +125,23 @@ export const ChatViewScreen = ({
                 </div>
               );
             }
+
+            // Detect receipt card messages
+            try {
+              if (msg.text.startsWith('{')) {
+                const parsed = JSON.parse(msg.text);
+                if (parsed.type === 'order_receipt' && parsed.data) {
+                  return (
+                    <div key={msg.id} className="max-w-[90%] mx-auto">
+                      <ReceiptCard data={parsed.data} />
+                      <p className="text-[10px] text-neutral-500 mt-1 text-center">
+                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  );
+                }
+              }
+            } catch { /* not JSON */ }
 
             const isMe = msg.from === "me";
             return (

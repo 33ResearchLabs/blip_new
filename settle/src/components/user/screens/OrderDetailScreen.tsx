@@ -22,9 +22,13 @@ import {
   Wallet,
 } from "lucide-react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
+import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
 import type { Screen, Order } from "./types";
-import type { RefObject } from "react";
+import { type RefObject, useState as useLocalState, useRef as useLocalRef, useCallback as useLocalCallback, useEffect as useLocalEffect } from "react";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import dynamic from 'next/dynamic';
+
+const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 
 export interface OrderDetailScreenProps {
   setScreen: (s: Screen) => void;
@@ -59,6 +63,7 @@ export interface OrderDetailScreenProps {
   activeChat: {
     id: string;
     orderId?: string;
+    isTyping?: boolean;
     messages: Array<{
       id: string;
       text: string;
@@ -66,9 +71,12 @@ export interface OrderDetailScreenProps {
       timestamp: Date;
       senderName?: string;
       messageType?: string;
+      imageUrl?: string;
     }>;
   } | null;
   handleSendMessage: () => void;
+  sendChatMessage?: (chatId: string, text: string, imageUrl?: string) => void;
+  sendTypingIndicator?: (chatId: string, isTyping: boolean) => void;
   // Dispute
   showDisputeModal: boolean;
   setShowDisputeModal: (v: boolean) => void;
@@ -135,6 +143,8 @@ export const OrderDetailScreen = ({
   chatMessagesRef,
   activeChat,
   handleSendMessage,
+  sendChatMessage,
+  sendTypingIndicator,
   showDisputeModal,
   setShowDisputeModal,
   disputeReason,
@@ -156,6 +166,104 @@ export const OrderDetailScreen = ({
   playSound,
   maxW,
 }: OrderDetailScreenProps) => {
+  const [showEmojiPicker, setShowEmojiPicker] = useLocalState(false);
+  const [isUploading, setIsUploading] = useLocalState(false);
+  const [pendingImage, setPendingImage] = useLocalState<{ file: File; previewUrl: string } | null>(null);
+  const fileInputRef = useLocalRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useLocalRef<NodeJS.Timeout | null>(null);
+
+  // Handle file select — only store locally + show preview (no upload yet)
+  const handleFileSelect = useLocalCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) return; // 10MB max
+    if (!file.type.startsWith('image/')) return;
+
+    const previewUrl = URL.createObjectURL(file);
+    setPendingImage({ file, previewUrl });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, []);
+
+  // Clear pending image
+  const clearPendingImage = useLocalCallback(() => {
+    if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
+    setPendingImage(null);
+  }, [pendingImage]);
+
+  // Upload image to Cloudinary and send message
+  const uploadAndSend = useLocalCallback(async () => {
+    if (!pendingImage || !activeChat || !sendChatMessage) return;
+
+    setIsUploading(true);
+    try {
+      // Include userId header explicitly for auth
+      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (userId) authHeaders['x-user-id'] = userId;
+      const sigRes = await fetch('/api/upload/signature', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ orderId: activeChat.orderId || 'chat' }),
+      });
+      if (!sigRes.ok) { setIsUploading(false); return; }
+      const sigData = await sigRes.json();
+      if (!sigData.success) { setIsUploading(false); return; }
+      const sig = sigData.data;
+
+      const formData = new FormData();
+      formData.append('file', pendingImage.file);
+      formData.append('signature', sig.signature);
+      formData.append('timestamp', sig.timestamp.toString());
+      formData.append('api_key', sig.apiKey);
+      formData.append('folder', sig.folder);
+
+      const uploadRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`,
+        { method: 'POST', body: formData }
+      );
+      if (uploadRes.ok) {
+        const result = await uploadRes.json();
+        const text = chatMessage.trim() || 'Photo';
+        sendChatMessage(activeChat.id, text, result.secure_url);
+        setChatMessage('');
+        playSound('send');
+      }
+    } catch {
+      // Upload failed silently
+    } finally {
+      setIsUploading(false);
+      clearPendingImage();
+    }
+  }, [pendingImage, activeChat, sendChatMessage, chatMessage, setChatMessage, playSound, clearPendingImage, userId]);
+
+  // Cleanup preview URL on unmount
+  useLocalEffect(() => {
+    return () => {
+      if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
+    };
+  }, [pendingImage]);
+
+  // Handle typing indicator
+  const handleTypingChange = useLocalCallback((value: string) => {
+    setChatMessage(value);
+    if (!activeChat || !sendTypingIndicator) return;
+
+    // Send typing start
+    sendTypingIndicator(activeChat.id, true);
+
+    // Clear previous timeout and set new one to send typing stop
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      sendTypingIndicator(activeChat.id, false);
+    }, 2000);
+  }, [activeChat, sendTypingIndicator, setChatMessage]);
+
+  // Cleanup typing timeout
+  useLocalEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
+  }, []);
+
   return (
     <>
       <div className="h-12" />
@@ -1237,6 +1345,23 @@ export const OrderDetailScreen = ({
                       }
                     }
 
+                    // Detect receipt card messages
+                    try {
+                      if (msg.text.startsWith('{')) {
+                        const parsed = JSON.parse(msg.text);
+                        if (parsed.type === 'order_receipt' && parsed.data) {
+                          return (
+                            <div key={msg.id} className="max-w-[90%] mx-auto">
+                              <ReceiptCard data={parsed.data} />
+                              <p className="text-[10px] text-neutral-500 mt-1 text-center">
+                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          );
+                        }
+                      }
+                    } catch { /* not JSON */ }
+
                     // Regular messages
                     return (
                       <div
@@ -1256,7 +1381,17 @@ export const OrderDetailScreen = ({
                                 : "bg-neutral-800 text-white"
                             }`}
                           >
-                            {msg.text}
+                            {msg.messageType === 'image' && msg.imageUrl && (
+                              <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer">
+                                <img
+                                  src={msg.imageUrl}
+                                  alt="Shared image"
+                                  className="max-w-full max-h-48 rounded-xl mb-1 object-contain"
+                                  loading="lazy"
+                                />
+                              </a>
+                            )}
+                            {msg.text !== 'Photo' && <span>{msg.text}</span>}
                           </div>
                         </div>
                       </div>
@@ -1309,26 +1444,126 @@ export const OrderDetailScreen = ({
                   </div>
                 )}
               </div>
+              {/* Typing indicator */}
+              {activeChat?.isTyping && (
+                <div className="px-4 py-1">
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-1.5 h-1.5 rounded-full bg-neutral-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                    <span className="text-[11px] text-neutral-500">{activeOrder.merchant.name} is typing...</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Emoji picker */}
+              {showEmojiPicker && (
+                <div className="absolute bottom-24 left-4 right-4 z-50">
+                  <EmojiPicker
+                    onEmojiClick={(emojiData: { emoji: string }) => {
+                      setChatMessage(chatMessage + emojiData.emoji);
+                      setShowEmojiPicker(false);
+                      chatInputRef.current?.focus();
+                    }}
+                    width="100%"
+                    height={350}
+                    theme={"dark" as any}
+                    searchDisabled
+                    skinTonesDisabled
+                    previewConfig={{ showPreview: false }}
+                  />
+                </div>
+              )}
+
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+
+              {/* Image preview bar */}
+              {pendingImage && (
+                <div className="px-4 py-2 border-t border-neutral-800 flex items-center gap-3">
+                  <div className="relative">
+                    <img
+                      src={pendingImage.previewUrl}
+                      alt="Preview"
+                      className="w-16 h-16 rounded-xl object-cover border border-neutral-700"
+                    />
+                    <button
+                      onClick={clearPendingImage}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-neutral-700 flex items-center justify-center"
+                    >
+                      <X className="w-3 h-3 text-white" />
+                    </button>
+                  </div>
+                  <span className="text-[13px] text-neutral-400 flex-1">Image ready to send</span>
+                </div>
+              )}
+
               <div className="p-4 border-t border-neutral-800 pb-8">
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  {/* Emoji button */}
+                  <button
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className="w-10 h-10 rounded-xl bg-neutral-800 flex items-center justify-center shrink-0"
+                  >
+                    <span className="text-lg">😊</span>
+                  </button>
+                  {/* Image attach button */}
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                    className="w-10 h-10 rounded-xl bg-neutral-800 flex items-center justify-center shrink-0 disabled:opacity-50"
+                  >
+                    {isUploading ? (
+                      <Loader2 className="w-4 h-4 text-neutral-400 animate-spin" />
+                    ) : (
+                      <ArrowUpRight className="w-4 h-4 text-neutral-400" />
+                    )}
+                  </button>
                   <input
                     ref={chatInputRef}
                     value={chatMessage}
-                    onChange={(e) => setChatMessage(e.target.value)}
+                    onChange={(e) => handleTypingChange(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
-                        handleSendMessage();
+                        if (pendingImage) {
+                          uploadAndSend();
+                        } else {
+                          handleSendMessage();
+                        }
+                        setShowEmojiPicker(false);
                       }
                     }}
-                    placeholder="Message..."
+                    placeholder={pendingImage ? "Add a caption..." : "Message..."}
                     className="flex-1 bg-neutral-800 rounded-xl px-4 py-3 text-[15px] text-white placeholder:text-neutral-600 outline-none"
                   />
                   <button
-                    onClick={handleSendMessage}
-                    className="w-12 h-12 rounded-xl bg-white flex items-center justify-center"
+                    onClick={() => {
+                      if (pendingImage) {
+                        uploadAndSend();
+                      } else {
+                        handleSendMessage();
+                      }
+                      setShowEmojiPicker(false);
+                    }}
+                    disabled={isUploading}
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                      pendingImage ? 'bg-orange-500' : 'bg-white'
+                    } disabled:opacity-50`}
                   >
-                    <ChevronRight className="w-5 h-5 text-black" />
+                    {isUploading ? (
+                      <Loader2 className="w-5 h-5 text-black animate-spin" />
+                    ) : (
+                      <ChevronRight className={`w-5 h-5 ${pendingImage ? 'text-white' : 'text-black'}`} />
+                    )}
                   </button>
                 </div>
               </div>

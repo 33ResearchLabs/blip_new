@@ -28,6 +28,7 @@ import {
 const bgQuery = (sql: string, params: unknown[]) => dbQuery(sql, params).catch(() => {});
 import { broadcastOrderEvent } from '../ws/broadcast';
 import { bufferEvent, bufferNotification, bufferReputation } from '../batchWriter';
+import { createOrderReceipt, updateOrderReceipt } from '../receipts';
 
 interface OrderRow {
   id: string;
@@ -203,6 +204,8 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             event_type: 'ORDER_CANCELLED', order_id: id, status: 'cancelled', minimal_status: 'cancelled',
             order_version: cancelResult.order!.order_version, userId: order.user_id, merchantId: order.merchant_id, buyerMerchantId: order.buyer_merchant_id ?? undefined, previousStatus: order.status,
           });
+          // Fire-and-forget: update receipt on cancel
+          updateOrderReceipt(id, 'cancelled', { refund_tx_hash: cancelResult.order?.refund_tx_hash, cancelled_at: true });
           return reply.send({ success: true, data: { ...cancelResult.order, minimal_status: normalizeStatus(cancelResult.order!.status) } });
         }
         // Non-escrow cancel falls through to general TX path
@@ -245,6 +248,10 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           minimal_status: normalizeStatus(order.status as OrderStatus), order_version: order.order_version,
           userId: order.user_id, merchantId: order.merchant_id, buyerMerchantId: order.buyer_merchant_id ?? undefined, previousStatus: oldStatus,
         });
+        // Fire-and-forget: create order receipt on acceptance
+        createOrderReceipt(id, order as any, actor_id).catch((err) => {
+          fastify.log.error({ error: err, orderId: id }, '[Receipt] Failed to create order receipt');
+        });
         return reply.send({ success: true, data: { ...order, minimal_status: normalizeStatus(order.status as OrderStatus) } });
       }
 
@@ -270,6 +277,8 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           minimal_status: 'payment_sent', order_version: updated.order_version,
           userId: updated.user_id, merchantId: updated.merchant_id, buyerMerchantId: updated.buyer_merchant_id ?? undefined, previousStatus: 'escrowed',
         });
+        // Fire-and-forget: update receipt status
+        updateOrderReceipt(id, 'payment_sent', { payment_sent_at: true });
         return reply.send({ success: true, data: { ...updated, minimal_status: normalizeStatus(updated.status) } });
       }
 
@@ -487,6 +496,13 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         order_version: result.order!.order_version, previousStatus: txOldStatus, updatedAt: new Date().toISOString(),
       })});
 
+      // Fire-and-forget: update receipt on status transition
+      updateOrderReceipt(id, newStatus, {
+        escrowed_at: newStatus === 'escrowed' || undefined,
+        completed_at: newStatus === 'completed' || undefined,
+        cancelled_at: newStatus === 'cancelled' || newStatus === 'expired' || undefined,
+      });
+
       // Stats (completion) — single CTE round-trip (can't batch UPDATEs)
       if (newStatus === 'completed') {
         bgQuery(
@@ -610,6 +626,8 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           buyerMerchantId: order.buyer_merchant_id ?? undefined,
           previousStatus: order.status,
         });
+        // Fire-and-forget: update receipt on DELETE cancel (with escrow)
+        updateOrderReceipt(id, 'cancelled', { refund_tx_hash: result.order?.refund_tx_hash, cancelled_at: true });
 
         return reply.send({
           success: true,
@@ -694,6 +712,8 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           buyerMerchantId: result.order!.buyer_merchant_id ?? undefined,
           previousStatus: order.status,
         });
+        // Fire-and-forget: update receipt on DELETE cancel (simple)
+        updateOrderReceipt(id, 'cancelled', { cancelled_at: true });
 
         return reply.send({
           success: true,
@@ -802,6 +822,8 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           buyerMerchantId: result.oldOrder.buyer_merchant_id ?? undefined,
           previousStatus: result.oldOrder.status,
         });
+        // Fire-and-forget: update receipt with release info
+        updateOrderReceipt(id, 'completed', { release_tx_hash: tx_hash, completed_at: true });
 
         return reply.send({
           success: true,
@@ -858,6 +880,8 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           buyerMerchantId: order.buyer_merchant_id ?? undefined,
           previousStatus: order.status,
         });
+        // Fire-and-forget: update receipt on refund
+        updateOrderReceipt(id, 'cancelled', { refund_tx_hash: refundResult.order?.refund_tx_hash, cancelled_at: true });
 
         return reply.send({
           success: true,

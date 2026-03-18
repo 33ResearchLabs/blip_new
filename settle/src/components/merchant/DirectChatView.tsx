@@ -3,6 +3,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Send, Store, User, CheckCheck, Paperclip, Loader2, X, Image as ImageIcon } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { ReceiptCard } from '@/components/chat/cards/ReceiptCard';
+import dynamic from 'next/dynamic';
+
+const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 
 interface DirectChatMessage {
   id: string;
@@ -19,6 +23,7 @@ interface DirectChatViewProps {
   contactType: 'user' | 'merchant';
   messages: DirectChatMessage[];
   isLoading: boolean;
+  isTyping?: boolean;
   onSendMessage: (text: string, imageUrl?: string) => void;
   onBack: () => void;
 }
@@ -48,11 +53,14 @@ export function DirectChatView({
   contactType,
   messages,
   isLoading,
+  isTyping,
   onSendMessage,
   onBack,
 }: DirectChatViewProps) {
   const [inputText, setInputText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [pendingImage, setPendingImage] = useState<{ file: File; previewUrl: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -77,13 +85,26 @@ export function DirectChatView({
     }
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Store file locally + show preview (no upload yet)
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 10 * 1024 * 1024) return;
+    if (!file.type.startsWith('image/')) return;
 
-    if (file.size > 10 * 1024 * 1024) return; // 10MB max
-    if (!file.type.startsWith('image/')) return; // Images only for now
+    const previewUrl = URL.createObjectURL(file);
+    setPendingImage({ file, previewUrl });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
+  const clearPendingImage = () => {
+    if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
+    setPendingImage(null);
+  };
+
+  // Upload to Cloudinary then send message + image URL together
+  const uploadAndSend = async () => {
+    if (!pendingImage) return;
     setIsUploading(true);
     try {
       const sigRes = await fetchWithAuth('/api/upload/signature', {
@@ -97,27 +118,36 @@ export function DirectChatView({
       const sig = sigData.data;
 
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', pendingImage.file);
       formData.append('signature', sig.signature);
       formData.append('timestamp', sig.timestamp.toString());
       formData.append('api_key', sig.apiKey);
       formData.append('folder', sig.folder);
 
-      const uploadRes = await fetchWithAuth(
+      const uploadRes = await fetch(
         `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`,
         { method: 'POST', body: formData }
       );
       if (uploadRes.ok) {
         const result = await uploadRes.json();
-        onSendMessage('Photo', result.secure_url);
+        const text = inputText.trim() || 'Photo';
+        onSendMessage(text, result.secure_url);
+        setInputText('');
       }
     } catch {
       // Upload failed silently
     } finally {
       setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      clearPendingImage();
     }
   };
+
+  // Cleanup preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
+    };
+  }, [pendingImage]);
 
   // Group messages by date and detect consecutive same-sender groups
   let lastDate = '';
@@ -171,6 +201,17 @@ export function DirectChatView({
               const isFirstInGroup = !prevMsg || prevMsg.from !== msg.from ||
                 (msg.timestamp.getTime() - prevMsg.timestamp.getTime() > 120000); // 2 min gap = new group
 
+              // Detect receipt card messages
+              let receiptData: Record<string, unknown> | null = null;
+              try {
+                if (msg.text.startsWith('{')) {
+                  const parsed = JSON.parse(msg.text);
+                  if (parsed.type === 'order_receipt' && parsed.data) {
+                    receiptData = parsed.data;
+                  }
+                }
+              } catch { /* not JSON */ }
+
               return (
                 <div key={msg.id}>
                   {showDate && (
@@ -181,7 +222,15 @@ export function DirectChatView({
                     </div>
                   )}
 
-                  {msg.from === 'them' ? (
+                  {receiptData ? (
+                    /* Receipt card — shown centered for both parties */
+                    <div className="max-w-[90%] mx-auto my-2">
+                      <ReceiptCard data={receiptData} />
+                      <span className="text-[9px] text-white/20 mt-1 block text-center font-mono">
+                        {formatTime(msg.timestamp)}
+                      </span>
+                    </div>
+                  ) : msg.from === 'them' ? (
                     /* Incoming message */
                     <div className={`flex items-end gap-1.5 ${isFirstInGroup ? 'mt-2' : 'mt-0.5'}`}>
                       {isFirstInGroup ? (
@@ -241,10 +290,60 @@ export function DirectChatView({
                 </div>
               );
             })}
+            {/* Typing indicator */}
+            {isTyping && (
+              <div className="flex items-center gap-1.5 px-2 py-1">
+                <div className="flex gap-0.5">
+                  <div className="w-1 h-1 rounded-full bg-white/30 animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-1 h-1 rounded-full bg-white/30 animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-1 h-1 rounded-full bg-white/30 animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+                <span className="text-[9px] text-white/30 font-mono">{contactName} typing...</span>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
         )}
       </div>
+
+      {/* Emoji picker */}
+      {showEmojiPicker && (
+        <div className="border-t border-white/[0.04]">
+          <EmojiPicker
+            onEmojiClick={(emojiData: { emoji: string }) => {
+              setInputText(prev => prev + emojiData.emoji);
+              setShowEmojiPicker(false);
+              inputRef.current?.focus();
+            }}
+            width="100%"
+            height={280}
+            theme={"dark" as any}
+            searchDisabled
+            skinTonesDisabled
+            previewConfig={{ showPreview: false }}
+          />
+        </div>
+      )}
+
+      {/* Image preview bar */}
+      {pendingImage && (
+        <div className="px-2 py-1.5 border-t border-white/[0.04] flex items-center gap-2">
+          <div className="relative">
+            <img
+              src={pendingImage.previewUrl}
+              alt="Preview"
+              className="w-12 h-12 rounded-lg object-cover border border-white/[0.06]"
+            />
+            <button
+              onClick={clearPendingImage}
+              className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-neutral-700 flex items-center justify-center"
+            >
+              <X className="w-2.5 h-2.5 text-white" />
+            </button>
+          </div>
+          <span className="text-[9px] text-white/30 font-mono flex-1">Ready to send</span>
+        </div>
+      )}
 
       {/* Input */}
       <div className="px-2 py-1.5 border-t border-white/[0.04]">
@@ -256,6 +355,14 @@ export function DirectChatView({
           className="hidden"
         />
         <div className="flex items-center gap-1.5">
+          {/* Emoji button */}
+          <button
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            className="p-1.5 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] transition-colors"
+            title="Emoji"
+          >
+            <span className="text-xs">😊</span>
+          </button>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
@@ -273,18 +380,34 @@ export function DirectChatView({
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (pendingImage) { uploadAndSend(); } else { handleSend(); }
+                setShowEmojiPicker(false);
+              }
+            }}
+            placeholder={pendingImage ? "Add a caption..." : "Type a message..."}
             className="flex-1 px-3 py-1.5 text-[11px] bg-white/[0.02] border border-white/[0.06] rounded-lg
                        text-white placeholder:text-white/15 focus:outline-none focus:border-white/15 transition-colors font-mono"
           />
           <button
-            onClick={handleSend}
-            disabled={!inputText.trim()}
-            className="p-1.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-400 disabled:opacity-20
-                       hover:bg-orange-500/30 transition-colors"
+            onClick={() => {
+              if (pendingImage) { uploadAndSend(); } else { handleSend(); }
+              setShowEmojiPicker(false);
+            }}
+            disabled={!inputText.trim() && !pendingImage}
+            className={`p-1.5 rounded-lg border transition-colors disabled:opacity-20 ${
+              pendingImage
+                ? 'bg-orange-500/30 border-orange-500/40 text-orange-300 hover:bg-orange-500/40'
+                : 'bg-orange-500/20 border-orange-500/30 text-orange-400 hover:bg-orange-500/30'
+            }`}
           >
-            <Send className="w-3 h-3" />
+            {isUploading ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              <Send className="w-3 h-3" />
+            )}
           </button>
         </div>
       </div>
