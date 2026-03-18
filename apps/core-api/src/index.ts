@@ -40,6 +40,15 @@ await fastify.register(cors, {
   credentials: true,
 });
 
+// Mitigate CVE-2025-fastify-content-type-bypass (fastify <5.7.2):
+// Strip tab/newline chars from Content-Type before Fastify parses it.
+fastify.addHook('onRequest', async (request) => {
+  const ct = request.headers['content-type'];
+  if (ct && /[\t\r\n]/.test(ct)) {
+    request.headers['content-type'] = ct.replace(/[\t\r\n]/g, '');
+  }
+});
+
 // Register auth hook (before routes)
 await fastify.register(authHook);
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Wallet, Activity, Zap, User } from "lucide-react";
+import { Home, Wallet, Activity, Zap, User } from "lucide-react";
 import type { Screen } from "./types";
 
 interface BottomNavProps {
@@ -16,15 +16,16 @@ export const BottomNav = ({ screen, setScreen, maxW }: BottomNavProps) => (
       <div className="flex items-center justify-around px-2 py-2.5 rounded-[28px]"
         style={{ background: 'rgba(14,14,22,0.92)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.07)' }}>
         {([
-          { key: "home",   icon: Wallet,   label: "Home" },
-          { key: "orders", icon: Activity, label: "Activity" },
+          { key: "home",   icon: Home,     label: "Home" },
+          { key: "wallet", icon: Wallet,   label: "Wallet" },
           { key: "trade",  icon: Zap,      label: "Trade" },
+          { key: "orders", icon: Activity, label: "Activity" },
           { key: "profile",icon: User,     label: "You" },
         ] as const).map(({ key, icon: Icon, label }) => {
           const on = (screen as string) === key;
           return (
             <motion.button key={key} whileTap={{ scale: 0.85 }} onClick={() => setScreen(key as Screen)}
-              className="relative flex flex-col items-center gap-1 px-5 py-1">
+              className="relative flex flex-col items-center gap-1 px-3 py-1">
               {on && (
                 <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
                   style={{ background: 'rgba(124,58,237,0.18)' }}

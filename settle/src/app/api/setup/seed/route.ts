@@ -193,7 +193,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: false,
       error: 'Seed failed',
-      details: error instanceof Error ? error.message : String(error),
+      
       results,
     }, { status: 500 });
   }

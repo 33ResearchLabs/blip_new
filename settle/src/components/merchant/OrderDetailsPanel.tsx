@@ -873,8 +873,11 @@ export function OrderDetailsPanel({
                   onClose();
                   break;
                 case 'confirmPayment':
-                case 'openReleaseModal':
                   onConfirmPayment?.(order.id);
+                  onClose();
+                  break;
+                case 'openReleaseModal':
+                  onReleaseEscrow?.(order.id);
                   onClose();
                   break;
                 case 'openDisputeModal':

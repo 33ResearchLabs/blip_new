@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     } = parseResult.data;
 
     // Authorization: require authenticated user creating order for themselves
-    const auth = await requireAuth(request, body);
+    const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
     const isOwner = auth.actorType === 'user' && auth.actorId === user_id;
     if (!isOwner && auth.actorType !== 'system') {

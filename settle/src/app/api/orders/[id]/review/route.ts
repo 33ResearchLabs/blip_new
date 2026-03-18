@@ -83,7 +83,7 @@ export async function POST(
     const body = await request.json();
 
     // Require authentication first — prevents spoofed actor_id in body
-    const auth = await requireAuth(request, body);
+    const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
     // Validate request body

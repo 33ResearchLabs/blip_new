@@ -13,7 +13,11 @@ export const authHook: FastifyPluginAsync = async (fastify) => {
   const secret = process.env.CORE_API_SECRET;
 
   if (!secret) {
-    fastify.log.warn('[Auth] CORE_API_SECRET not set -- auth disabled');
+    if (process.env.NODE_ENV === 'production') {
+      fastify.log.error('[Auth] FATAL: CORE_API_SECRET not set in production — refusing to start without auth');
+      throw new Error('CORE_API_SECRET is required in production');
+    }
+    fastify.log.warn('[Auth] CORE_API_SECRET not set -- auth disabled (dev only)');
     return;
   }
 

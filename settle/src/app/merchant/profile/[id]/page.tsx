@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { Shield, Star, ArrowLeft, Loader2, CheckCircle2, Clock, TrendingUp, Award } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
@@ -133,7 +134,7 @@ export default function MerchantProfilePage() {
             {/* Avatar */}
             <div className="relative shrink-0">
               {merchant.avatar_url ? (
-                <img src={merchant.avatar_url} alt={merchant.display_name} className="w-20 h-20 rounded-full object-cover border-2 border-white/10" />
+                <Image src={merchant.avatar_url} alt={merchant.display_name} width={80} height={80} className="rounded-full object-cover border-2 border-white/10" />
               ) : (
                 <div className="w-20 h-20 rounded-full border-2 border-white/10 flex items-center justify-center text-3xl bg-white/5">
                   {merchant.display_name.charAt(0).toUpperCase()}

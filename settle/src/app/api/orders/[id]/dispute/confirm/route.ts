@@ -52,7 +52,7 @@ export async function POST(
   } catch (error) {
     console.error('Failed to confirm resolution:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to confirm resolution', details: error instanceof Error ? error.message : String(error) },
+      { success: false, error: 'Failed to confirm resolution' },
       { status: 500 }
     );
   }

@@ -54,7 +54,14 @@ export async function proxyCoreApi(
   if (options.body) headers['Content-Type'] = 'application/json';
 
   const coreApiSecret = process.env.CORE_API_SECRET;
-  if (coreApiSecret) headers['x-core-api-secret'] = coreApiSecret;
+  if (!coreApiSecret) {
+    logger.error('[Proxy] CORE_API_SECRET not configured — refusing to send unsigned request');
+    return NextResponse.json(
+      { success: false, error: 'Service misconfigured' },
+      { status: 503 }
+    );
+  }
+  headers['x-core-api-secret'] = coreApiSecret;
 
   // Extract actor identity from options or body
   const body = options.body as Record<string, unknown> | undefined;
@@ -65,12 +72,14 @@ export async function proxyCoreApi(
   if (actorId) headers['x-actor-id'] = actorId;
 
   // HMAC-sign actor headers
-  if (coreApiSecret && actorType && actorId) {
+  if (actorType && actorId) {
     headers['x-actor-signature'] = signActorHeaders(coreApiSecret, actorType, actorId);
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  // 10s for normal mutations, 20s for escrow operations (on-chain can be slow)
+  const timeoutMs = path.includes('escrow') || path.includes('release') || path.includes('refund') ? 20000 : 10000;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(url, {

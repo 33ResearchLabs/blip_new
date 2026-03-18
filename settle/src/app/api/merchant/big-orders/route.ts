@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
     `;
 
     const queryParams: (string | number | boolean)[] = [merchantId, threshold];
-    let paramIndex = 3;
+    const paramIndex = 3;
 
     // Filter by status
     if (!includeCompleted) {

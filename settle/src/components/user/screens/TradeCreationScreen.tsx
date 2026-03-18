@@ -193,7 +193,7 @@ export const TradeCreationScreen = ({
           {isLoading
             ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'inherit' }} />
             : amount && parseFloat(amount) > 0
-              ? <>{tradeType === 'buy' ? 'Buy' : 'Sell'} {amount} USDT <ArrowUpRight className="w-5 h-5" /></>
+              ? <>{tradeType === 'buy' ? 'Receive' : 'Send'} {amount} USDT <ArrowUpRight className="w-5 h-5" /></>
               : 'Enter Amount'
           }
         </motion.button>

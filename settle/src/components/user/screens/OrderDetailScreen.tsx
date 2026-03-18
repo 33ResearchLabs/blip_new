@@ -195,7 +195,7 @@ export const OrderDetailScreen = ({
               <div
                 key={step}
                 className={`flex-1 h-1 rounded-full ${
-                  step <= activeOrder.step ? "bg-white/10" : "bg-neutral-800"
+                  step <= activeOrder.step ? "bg-white/40" : "bg-neutral-800"
                 }`}
               />
             ))}
@@ -426,10 +426,12 @@ export const OrderDetailScreen = ({
                   Order created
                 </p>
                 {activeOrder.step >= 1 && (
-                  <p className="text-[13px] text-neutral-500">Matched with {activeOrder.merchant.name}</p>
+                  <p className="text-[13px] text-neutral-500">
+                    {activeOrder.dbStatus === 'pending' ? 'Waiting for merchant...' : `Matched with ${activeOrder.merchant.name}`}
+                  </p>
                 )}
-                {/* For sell orders in pending status, show waiting for merchant to accept */}
-                {activeOrder.step === 1 && activeOrder.type === "sell" && activeOrder.dbStatus === 'pending' && (
+                {/* For sell orders waiting for merchant to accept */}
+                {activeOrder.step === 1 && activeOrder.type === "sell" && (activeOrder.dbStatus === 'pending' || activeOrder.dbStatus === 'escrowed') && (
                   <div className="mt-3 bg-white/5 border border-white/6 rounded-xl p-4">
                     <div className="flex items-center gap-3 mb-2">
                       <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
@@ -437,12 +439,18 @@ export const OrderDetailScreen = ({
                       </div>
                       <div>
                         <p className="text-[14px] font-medium text-white/70">Waiting for Merchant</p>
-                        <p className="text-[12px] text-neutral-400">Merchant will sign with their wallet to accept</p>
+                        <p className="text-[12px] text-neutral-400">{activeOrder.dbStatus === 'escrowed' ? 'Your USDT is locked. Waiting for merchant to accept' : 'Merchant will sign with their wallet to accept'}</p>
                       </div>
                     </div>
-                    <p className="text-[12px] text-neutral-500">
-                      Once accepted, you&apos;ll lock your USDT to escrow. The merchant&apos;s verified wallet will receive funds when you confirm payment.
-                    </p>
+                    {activeOrder.dbStatus === 'escrowed' ? (
+                      <p className="text-[12px] text-neutral-500">
+                        Your USDT is secured in escrow on-chain. The merchant will accept and send fiat to your bank account.
+                      </p>
+                    ) : (
+                      <p className="text-[12px] text-neutral-500">
+                        Once accepted, you&apos;ll lock your USDT to escrow. The merchant&apos;s verified wallet will receive funds when you confirm payment.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -514,8 +522,8 @@ export const OrderDetailScreen = ({
                   </div>
                 )}
 
-                {/* Show payment UI only when escrow is funded */}
-                {activeOrder.step === 2 && activeOrder.type === "buy" && activeOrder.dbStatus === 'escrowed' && (
+                {/* Show payment UI when escrow is funded (escrowed or payment_pending) */}
+                {activeOrder.step === 2 && activeOrder.type === "buy" && (activeOrder.dbStatus === 'escrowed' || activeOrder.dbStatus === 'payment_pending') && (
                   <div className="mt-3 space-y-3">
                     {activeOrder.merchant.paymentMethod === "cash" ? (
                       <>

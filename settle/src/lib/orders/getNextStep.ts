@@ -1,24 +1,14 @@
-/**
- * getNextStep() - Determines exactly what a merchant should do next for an order
- *
- * Pure function with zero side effects. Takes order state + current merchant context
- * and returns a structured object describing the next action.
- */
+import { computeMyRole, MyRole } from './statusResolver';
+import { normalizeStatus } from './statusNormalizer';
+import { OrderStatus } from '../types/database';
 
 export interface NextStepResult {
-  /** Who needs to act? */
   actor: 'me' | 'counterparty' | 'system' | 'none';
-  /** Button text: "Lock Escrow", "I've Paid", "Release", etc. */
   label: string;
-  /** Explanation: "Waiting for buyer to send AED payment" */
   sublabel: string;
-  /** Short status badge text */
   badgeText: string;
-  /** Badge styling variant */
   badgeVariant: 'action' | 'waiting' | 'done' | 'error';
-  /** Whether this merchant needs to press a button */
   actionRequired: boolean;
-  /** Which handler to invoke (maps to existing merchant page functions) */
   actionType:
     | 'accept'
     | 'lock_escrow'
@@ -41,6 +31,7 @@ export interface OrderContext {
   expiresIn: number;
   escrowTradeId?: number | null;
   orderType?: 'buy' | 'sell' | null;
+  acceptedAt?: string | null;
 }
 
 export function getNextStep(
@@ -55,54 +46,58 @@ export function getNextStep(
     orderMerchantId,
     buyerMerchantId,
     acceptorWallet,
-    isMyOrder,
     expiresIn,
     escrowTradeId,
     orderType,
+    acceptedAt,
   } = order;
 
-  // Determine my role
-  const iAmOrderCreator = orderMerchantId === myMerchantId;
-  const iAmBuyerMerchant = buyerMerchantId === myMerchantId;
+  const role: MyRole = computeMyRole({
+    merchant_id: orderMerchantId,
+    buyer_merchant_id: buyerMerchantId,
+    type: orderType,
+    escrow_debited_entity_type: undefined,
+    escrow_debited_entity_id: undefined,
+  }, myMerchantId);
+
+  const iAmBuyer = role === 'buyer';
+  const iAmSeller = role === 'seller';
+
   const hasEscrow = !!escrowTxHash;
 
-  // Determine if I'm the escrow creator (seller)
-  // Primary: wallet address comparison (production mode with connected wallet)
-  // Fallback: merchant_id is always the seller/escrow-creator in M2M trades
-  //           (covers mock mode where walletAddress is null, and pre-connect states)
   const iAmEscrowCreator = myWalletAddress
     ? !!(escrowCreatorWallet && escrowCreatorWallet === myWalletAddress)
     : !!(hasEscrow && orderMerchantId && myMerchantId === orderMerchantId);
 
-  // If escrow exists and I didn't create it, I'm on the other side
-  const iAmBuyer = hasEscrow && !iAmEscrowCreator;
   const isExpired = expiresIn <= 0;
+
+  const minimal = normalizeStatus(dbStatus as OrderStatus);
 
   // --- TERMINAL STATES ---
 
-  if (dbStatus === 'completed') {
+  if (minimal === 'completed') {
     return {
       actor: 'none', label: 'Complete', sublabel: 'Trade completed successfully',
       badgeText: 'DONE', badgeVariant: 'done', actionRequired: false, actionType: null,
     };
   }
 
-  if (dbStatus === 'cancelled') {
+  if (minimal === 'cancelled') {
     return {
       actor: 'none', label: 'Cancelled', sublabel: 'This order was cancelled',
       badgeText: 'CANCELLED', badgeVariant: 'error', actionRequired: false, actionType: null,
     };
   }
 
-  if (dbStatus === 'disputed') {
+  if (minimal === 'disputed') {
     return {
       actor: 'system', label: 'Under Dispute', sublabel: 'Dispute is being reviewed',
       badgeText: 'DISPUTED', badgeVariant: 'error', actionRequired: false, actionType: null,
     };
   }
 
-  if (dbStatus === 'expired') {
-    if ((iAmEscrowCreator || iAmOrderCreator) && escrowTradeId != null) {
+  if (minimal === 'expired') {
+    if ((iAmEscrowCreator || iAmSeller) && escrowTradeId != null) {
       return {
         actor: 'me', label: 'Claim Refund', sublabel: 'Order expired — reclaim your escrowed funds',
         badgeText: 'EXPIRED', badgeVariant: 'error', actionRequired: true, actionType: 'refund',
@@ -117,7 +112,7 @@ export function getNextStep(
   // --- EXPIRED CHECK (timer ran out but status not yet updated) ---
 
   if (isExpired && dbStatus !== 'releasing') {
-    if ((iAmEscrowCreator || iAmOrderCreator) && escrowTradeId != null) {
+    if ((iAmEscrowCreator || iAmSeller) && escrowTradeId != null) {
       return {
         actor: 'me', label: 'Claim Refund', sublabel: 'Order expired — reclaim your escrowed funds',
         badgeText: 'EXPIRED', badgeVariant: 'error', actionRequired: true, actionType: 'refund',
@@ -129,10 +124,10 @@ export function getNextStep(
     };
   }
 
-  // --- PENDING ---
+  // --- OPEN (was: pending) ---
 
-  if (dbStatus === 'pending') {
-    if (isMyOrder) {
+  if (minimal === 'open') {
+    if (role !== 'observer') {
       return {
         actor: 'counterparty', label: 'Waiting', sublabel: 'Waiting for another merchant to accept',
         badgeText: 'OPEN', badgeVariant: 'waiting', actionRequired: false, actionType: null,
@@ -144,13 +139,11 @@ export function getNextStep(
     };
   }
 
-  // --- ACCEPTED ---
+  // --- ACCEPTED (was: accepted, escrow_pending) ---
 
-  if (dbStatus === 'accepted') {
-    // BUYER: If escrow is already locked, I can send fiat payment now
-    if (iAmBuyerMerchant) {
+  if (minimal === 'accepted') {
+    if (iAmBuyer) {
       if (hasEscrow) {
-        // Seller locked escrow before I accepted — I can pay now
         return {
           actor: 'me', label: "I've Paid", sublabel: 'Send AED payment, then mark as paid',
           badgeText: 'SEND', badgeVariant: 'action', actionRequired: true, actionType: 'mark_paid',
@@ -162,32 +155,21 @@ export function getNextStep(
       };
     }
 
-    // From here: I'm the SELLER (merchant_id) or a non-buyer party
-    // Who needs to lock escrow?
-    // After acceptance, merchant_id is reassigned to the seller (acceptor).
-    // So iAmOrderCreator = true for the seller after reassignment.
-    const iNeedToLockEscrow =
-      // I'm merchant_id (seller) and NOT the buyer — I need to lock
-      (iAmOrderCreator && !iAmBuyerMerchant && !hasEscrow) ||
-      // I'm the acceptor of a sell-type order and NOT the buyer — I need to lock
-      (!iAmOrderCreator && !iAmBuyerMerchant && orderType === 'sell' && !hasEscrow);
-
-    if (iNeedToLockEscrow) {
-      return {
-        actor: 'me', label: 'Lock Escrow', sublabel: 'Lock your USDC to proceed with this trade',
-        badgeText: 'LOCK', badgeVariant: 'action', actionRequired: true, actionType: 'lock_escrow',
-      };
+    if (iAmSeller) {
+      if (!hasEscrow) {
+        return {
+          actor: 'me', label: 'Lock Escrow', sublabel: 'Lock your USDC to proceed with this trade',
+          badgeText: 'LOCK', badgeVariant: 'action', actionRequired: true, actionType: 'lock_escrow',
+        };
+      }
+      if (hasEscrow && iAmEscrowCreator) {
+        return {
+          actor: 'counterparty', label: 'Awaiting Payment', sublabel: 'Waiting for buyer to send AED payment',
+          badgeText: 'AWAIT PAY', badgeVariant: 'waiting', actionRequired: false, actionType: null,
+        };
+      }
     }
 
-    // Escrow exists and I created it — waiting for buyer to pay
-    if (hasEscrow && iAmEscrowCreator) {
-      return {
-        actor: 'counterparty', label: 'Awaiting Payment', sublabel: 'Waiting for buyer to send AED payment',
-        badgeText: 'AWAIT PAY', badgeVariant: 'waiting', actionRequired: false, actionType: null,
-      };
-    }
-
-    // Escrow exists from other party — I need to sign/claim
     if (hasEscrow && !iAmEscrowCreator) {
       return {
         actor: 'me', label: 'Sign to Claim', sublabel: 'Counterparty locked escrow — sign to proceed',
@@ -195,112 +177,81 @@ export function getNextStep(
       };
     }
 
-    // Catch-all: waiting for counterparty
     return {
       actor: 'counterparty', label: 'Waiting', sublabel: 'Waiting for counterparty to lock escrow',
       badgeText: 'WAITING', badgeVariant: 'waiting', actionRequired: false, actionType: null,
     };
   }
 
-  // --- ESCROWED ---
+  // --- ESCROWED (was: escrowed, payment_pending) ---
 
-  if (dbStatus === 'escrowed') {
-    if (iAmEscrowCreator) {
-      // I locked escrow — waiting for buyer to pay fiat
+  if (minimal === 'escrowed') {
+    const hasBeenAccepted = !!acceptedAt;
+
+    if (!hasBeenAccepted && !iAmEscrowCreator) {
+      return {
+        actor: 'me', label: 'Accept', sublabel: 'User locked escrow — accept to start trading',
+        badgeText: 'NEW', badgeVariant: 'action', actionRequired: true, actionType: 'accept',
+      };
+    }
+
+    if (iAmSeller || iAmEscrowCreator) {
       return {
         actor: 'counterparty', label: 'Awaiting Payment', sublabel: 'Waiting for buyer to send AED payment',
         badgeText: 'AWAIT PAY', badgeVariant: 'waiting', actionRequired: false, actionType: null,
       };
     }
-    if (iAmBuyer || iAmBuyerMerchant) {
-      // I'm the buyer — I need to send fiat and mark as paid
+
+    if (iAmBuyer) {
       return {
         actor: 'me', label: "I've Paid", sublabel: 'Send AED payment, then mark as paid',
         badgeText: 'SEND', badgeVariant: 'action', actionRequired: true, actionType: 'mark_paid',
       };
     }
-    // Fallback: if I'm merchant_id (seller) but wallet detection missed
-    if (iAmOrderCreator) {
-      return {
-        actor: 'counterparty', label: 'Awaiting Payment', sublabel: 'Waiting for buyer to send AED payment',
-        badgeText: 'AWAIT PAY', badgeVariant: 'waiting', actionRequired: false, actionType: null,
-      };
-    }
-    // Last resort: can't determine role — default to buyer action so order isn't stuck
+
     return {
       actor: 'me', label: "I've Paid", sublabel: 'Send AED payment, then mark as paid',
       badgeText: 'SEND', badgeVariant: 'action', actionRequired: true, actionType: 'mark_paid',
     };
   }
 
-  // --- PAYMENT PENDING ---
+  // --- PAYMENT SENT (was: payment_sent, payment_confirmed) ---
 
-  if (dbStatus === 'payment_pending') {
-    if (iAmBuyer || iAmBuyerMerchant) {
-      return {
-        actor: 'me', label: "I've Paid", sublabel: 'Send AED payment, then mark as paid',
-        badgeText: 'SEND', badgeVariant: 'action', actionRequired: true, actionType: 'mark_paid',
-      };
-    }
-    return {
-      actor: 'counterparty', label: 'Awaiting Payment', sublabel: 'Waiting for buyer to send AED payment',
-      badgeText: 'AWAIT PAY', badgeVariant: 'waiting', actionRequired: false, actionType: null,
-    };
-  }
-
-  // --- PAYMENT SENT ---
-
-  if (dbStatus === 'payment_sent') {
-    if (iAmEscrowCreator || iAmOrderCreator) {
-      // I'm the seller — buyer says they paid, I need to verify and confirm
-      return {
-        actor: 'me', label: 'Confirm & Release', sublabel: 'Verify you received AED, then confirm payment',
-        badgeText: 'PAID', badgeVariant: 'action', actionRequired: true, actionType: 'confirm_payment',
-      };
-    }
-    if (iAmBuyer || iAmBuyerMerchant) {
-      // I'm the buyer — waiting for seller to confirm
-      return {
-        actor: 'counterparty', label: 'Waiting', sublabel: 'Waiting for seller to confirm your payment',
-        badgeText: 'CONFIRMING', badgeVariant: 'waiting', actionRequired: false, actionType: null,
-      };
-    }
-    // Last resort: default to seller action so order isn't stuck
-    return {
-      actor: 'me', label: 'Confirm & Release', sublabel: 'Verify you received AED, then confirm payment',
-      badgeText: 'PAID', badgeVariant: 'action', actionRequired: true, actionType: 'confirm_payment',
-    };
-  }
-
-  // --- PAYMENT CONFIRMED ---
-
-  if (dbStatus === 'payment_confirmed') {
-    if (iAmEscrowCreator || iAmOrderCreator) {
-      // I'm the seller — payment confirmed, release escrow to buyer
+  if (minimal === 'payment_sent') {
+    if (dbStatus === 'payment_confirmed') {
+      if (iAmEscrowCreator || iAmSeller) {
+        return {
+          actor: 'me', label: 'Release', sublabel: 'Payment confirmed — release USDC to buyer',
+          badgeText: 'READY', badgeVariant: 'action', actionRequired: true, actionType: 'release_escrow',
+        };
+      }
+      if (iAmBuyer) {
+        return {
+          actor: 'counterparty', label: 'Waiting', sublabel: 'Payment confirmed — waiting for escrow release',
+          badgeText: 'RELEASING', badgeVariant: 'waiting', actionRequired: false, actionType: null,
+        };
+      }
       return {
         actor: 'me', label: 'Release', sublabel: 'Payment confirmed — release USDC to buyer',
         badgeText: 'READY', badgeVariant: 'action', actionRequired: true, actionType: 'release_escrow',
       };
     }
-    if (iAmBuyer || iAmBuyerMerchant) {
+
+    if (iAmEscrowCreator || iAmSeller) {
       return {
-        actor: 'counterparty', label: 'Waiting', sublabel: 'Payment confirmed — waiting for escrow release',
-        badgeText: 'RELEASING', badgeVariant: 'waiting', actionRequired: false, actionType: null,
+        actor: 'me', label: 'Confirm & Release', sublabel: 'Verify you received AED, then confirm payment',
+        badgeText: 'PAID', badgeVariant: 'action', actionRequired: true, actionType: 'confirm_payment',
       };
     }
-    // Last resort: default to seller action so order isn't stuck
+    if (iAmBuyer) {
+      return {
+        actor: 'counterparty', label: 'Waiting', sublabel: 'Waiting for seller to confirm your payment',
+        badgeText: 'CONFIRMING', badgeVariant: 'waiting', actionRequired: false, actionType: null,
+      };
+    }
     return {
-      actor: 'me', label: 'Release', sublabel: 'Payment confirmed — release USDC to buyer',
-      badgeText: 'READY', badgeVariant: 'action', actionRequired: true, actionType: 'release_escrow',
-    };
-  }
-
-  // --- RELEASING ---
-
-  if (dbStatus === 'releasing') {
-    return {
-      actor: 'system', label: 'Releasing...', sublabel: 'Escrow is being released',
-      badgeText: 'RELEASING', badgeVariant: 'waiting', actionRequired: false, actionType: null,
+      actor: 'me', label: 'Confirm & Release', sublabel: 'Verify you received AED, then confirm payment',
+      badgeText: 'PAID', badgeVariant: 'action', actionRequired: true, actionType: 'confirm_payment',
     };
   }
 

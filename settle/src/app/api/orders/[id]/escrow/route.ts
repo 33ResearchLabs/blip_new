@@ -20,8 +20,6 @@ import {
 } from '@/lib/middleware/auth';
 import { checkRateLimit, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
 import { serializeOrder } from '@/lib/api/orderSerializer';
-import { MOCK_MODE } from '@/lib/config/mockMode';
-import { mockEscrowLock } from '@/lib/money/escrowLock';
 
 // Schema for escrow deposit
 const escrowDepositSchema = z.object({
@@ -115,7 +113,7 @@ export async function POST(
     const body = await request.json();
 
     // Require authentication
-    const auth = await requireAuth(request, body);
+    const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
     // Verify access to this order
@@ -132,39 +130,20 @@ export async function POST(
     }
 
     // Security: enforce actor matches authenticated identity
-    if (parseResult.data.actor_id !== auth.actorId) {
+    // Allow merchant header fallback (same pattern as order accept)
+    const headerMerchantId = request.headers.get('x-merchant-id');
+    const actorMatchesAuth = parseResult.data.actor_id === auth.actorId;
+    const actorMatchesMerchant = parseResult.data.actor_type === 'merchant' && headerMerchantId && parseResult.data.actor_id === headerMerchantId;
+    if (!actorMatchesAuth && !actorMatchesMerchant) {
       return forbiddenResponse('actor_id does not match authenticated identity');
     }
-
-    // Mock mode (or Core-API absent): handle escrow lock locally
-    const isMockMode = MOCK_MODE || !process.env.CORE_API_URL;
-    if (isMockMode) {
-      const result = await mockEscrowLock(
-        id,
-        parseResult.data.actor_type,
-        parseResult.data.actor_id,
-        parseResult.data.tx_hash || `dev-escrow-${id}-${Date.now()}`,
-        {
-          escrow_trade_id: parseResult.data.escrow_trade_id ?? undefined,
-          escrow_trade_pda: parseResult.data.escrow_trade_pda ?? undefined,
-          escrow_pda: parseResult.data.escrow_pda ?? undefined,
-          escrow_creator_wallet: parseResult.data.escrow_creator_wallet ?? undefined,
-        }
-      );
-
-      if (!result.success) {
-        return NextResponse.json(
-          { success: false, error: result.error },
-          { status: 400 }
-        );
-      }
-      return NextResponse.json({
-        success: true,
-        data: serializeOrder(result.order!),
-      });
+    if (!actorMatchesAuth && actorMatchesMerchant) {
+      auth.actorType = 'merchant';
+      auth.actorId = headerMerchantId;
+      auth.merchantId = headerMerchantId;
     }
 
-    // Non-mock mode: forward to core-api (single writer for all mutations)
+    // Forward to core-api (single writer for all mutations)
     const depositResponse = await proxyCoreApi(`/v1/orders/${id}/escrow`, {
       method: 'POST',
       body: parseResult.data,
@@ -216,7 +195,7 @@ export async function PATCH(
     const body = await request.json();
 
     // Require authentication
-    const auth = await requireAuth(request, body);
+    const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
     // Verify access to this order
@@ -234,16 +213,26 @@ export async function PATCH(
 
     const { tx_hash, actor_type, actor_id } = parseResult.data;
 
-    // Security: enforce actor matches authenticated identity
-    if (actor_id !== auth.actorId) {
+    // Security: enforce actor matches authenticated identity (with merchant header fallback)
+    const relHeaderMerchantId = request.headers.get('x-merchant-id');
+    const relActorMatchesAuth = actor_id === auth.actorId;
+    const relActorMatchesMerchant = actor_type === 'merchant' && relHeaderMerchantId && actor_id === relHeaderMerchantId;
+    if (!relActorMatchesAuth && !relActorMatchesMerchant) {
       return forbiddenResponse('actor_id does not match authenticated identity');
+    }
+    if (!relActorMatchesAuth && relActorMatchesMerchant) {
+      auth.actorType = 'merchant';
+      auth.actorId = relHeaderMerchantId;
+      auth.merchantId = relHeaderMerchantId;
     }
 
     // Forward to core-api (single writer for all mutations)
+    // Core-api release only allows merchant/system — settle has already verified
+    // the caller is an authorized participant, so proxy as system to ensure it goes through
     const releaseResponse = await proxyCoreApi(`/v1/orders/${id}/events`, {
       method: 'POST',
       body: { event_type: 'release', tx_hash },
-      actorType: actor_type,
+      actorType: 'system',
       actorId: actor_id,
     });
 

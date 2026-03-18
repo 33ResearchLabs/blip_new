@@ -18,21 +18,7 @@ import {
 } from '@/lib/wallet/embeddedWallet';
 import { Keypair } from '@solana/web3.js';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
-
-// Wallet hook — same pattern as merchant page
-const useSolanaWalletHook = () => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { useSolanaWallet } = require('@/context/SolanaWalletContext');
-    return useSolanaWallet();
-  } catch {
-    return {
-      connected: false, publicKey: null, walletAddress: null,
-      solBalance: null, usdtBalance: null, refreshBalances: async () => {},
-      network: 'devnet' as const, programReady: false,
-    };
-  }
-};
+import { useSolanaWallet } from '@/context/SolanaWalletContext';
 
 interface MerchantInfo {
   id: string;
@@ -44,7 +30,7 @@ type WalletView = 'loading' | 'setup' | 'unlock' | 'main';
 
 export default function WalletPage() {
   const router = useRouter();
-  const solanaWallet = useSolanaWalletHook();
+  const solanaWallet = useSolanaWallet();
   const embeddedWallet = (solanaWallet as any)?.embeddedWallet as {
     state: 'none' | 'locked' | 'unlocked';
     unlockWallet: (password: string) => Promise<boolean>;
@@ -265,6 +251,11 @@ export default function WalletPage() {
       }
     }
 
+    if (!solanaWallet.publicKey) {
+      setSendError('Wallet not connected'); return;
+    }
+    const senderPubkey = solanaWallet.publicKey;
+
     setIsSending(true);
     try {
       const connection = new Connection(DEVNET_RPC, 'confirmed');
@@ -274,12 +265,12 @@ export default function WalletPage() {
         const { Transaction, SystemProgram } = await import('@solana/web3.js');
         const tx = new Transaction().add(
           SystemProgram.transfer({
-            fromPubkey: solanaWallet.publicKey,
+            fromPubkey: senderPubkey,
             toPubkey: recipientPubkey,
             lamports: Math.round(amount * LAMPORTS_PER_SOL),
           })
         );
-        tx.feePayer = solanaWallet.publicKey;
+        tx.feePayer = senderPubkey;
         tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
         // Sign with embedded wallet keypair
@@ -298,9 +289,9 @@ export default function WalletPage() {
         const { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createTransferInstruction, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } = await import('@solana/spl-token');
         const { Transaction } = await import('@solana/web3.js');
 
-        const USDT_MINT = new PublicKey('Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr'); // Devnet fake USDT
+        const USDT_MINT = new PublicKey('FT8zRmLcsbNvqjCMSiwQC5GdkZfGtsoj8r5k19H65X9Z'); // Devnet USDT
 
-        const fromAta = await getAssociatedTokenAddress(USDT_MINT, solanaWallet.publicKey);
+        const fromAta = await getAssociatedTokenAddress(USDT_MINT, senderPubkey);
         const toAta = await getAssociatedTokenAddress(USDT_MINT, recipientPubkey);
 
         const tx = new Transaction();
@@ -310,7 +301,7 @@ export default function WalletPage() {
         if (!toAtaInfo) {
           tx.add(
             createAssociatedTokenAccountInstruction(
-              solanaWallet.publicKey, toAta, recipientPubkey, USDT_MINT,
+              senderPubkey, toAta, recipientPubkey, USDT_MINT,
               TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
             )
           );
@@ -318,12 +309,12 @@ export default function WalletPage() {
 
         tx.add(
           createTransferInstruction(
-            fromAta, toAta, solanaWallet.publicKey,
+            fromAta, toAta, senderPubkey,
             Math.round(amount * 1_000_000), // 6 decimals
           )
         );
 
-        tx.feePayer = solanaWallet.publicKey;
+        tx.feePayer = senderPubkey;
         tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
         const encrypted = loadEncryptedWallet();

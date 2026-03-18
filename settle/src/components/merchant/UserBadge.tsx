@@ -1,5 +1,7 @@
 'use client';
 
+import Image from 'next/image';
+
 interface UserBadgeProps {
   name: string;
   avatarUrl?: string;
@@ -15,9 +17,9 @@ export function UserBadge({ name, avatarUrl, emoji, merchantId, size = 'md', sho
 
   return (
     <div className="flex items-center gap-2">
-      <div className={`${sizeMap[size]} rounded-full bg-white/10 flex items-center justify-center font-medium text-white shrink-0 overflow-hidden`}>
+      <div className={`${sizeMap[size]} relative rounded-full bg-white/10 flex items-center justify-center font-medium text-white shrink-0 overflow-hidden`}>
         {avatarUrl ? (
-          <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
+          <Image src={avatarUrl} alt={name} fill className="object-cover" sizes="40px" />
         ) : (
           <span>{initial}</span>
         )}

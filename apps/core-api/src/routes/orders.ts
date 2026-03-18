@@ -275,6 +275,8 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
 
       // General status update with state machine validation
       const result = await transaction(async (client) => {
+        // Fresh reference to avoid TS control-flow narrowing from fast-path early returns above
+        const newStatus: OrderStatus = request.body.status;
         const currentResult = await client.query<OrderRow>(
           'SELECT * FROM orders WHERE id = $1 FOR UPDATE',
           [id]

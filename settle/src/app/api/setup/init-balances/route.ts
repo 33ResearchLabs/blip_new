@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[Init Balances] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to initialize balances', details: (error as Error).message },
+      { error: 'Failed to initialize balances' },
       { status: 500 }
     );
   }

@@ -183,8 +183,13 @@ function csrfCheck(request: NextRequest): NextResponse | null {
     }
   }
 
-  // If neither origin nor referer was present, allow (some clients don't send them)
-  if (!origin && !referer) return null;
+  // Block state-changing requests with no origin AND no referer — prevents CSRF via curl/forms
+  if (!origin && !referer) {
+    return NextResponse.json(
+      { success: false, error: 'CSRF validation failed — missing Origin header' },
+      { status: 403 }
+    );
+  }
 
   // Origin/Referer present but didn't match host → block
   return NextResponse.json(
@@ -204,7 +209,7 @@ const SECURITY_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self)',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com; font-src 'self' data:; connect-src 'self' wss: https://devnet.helius-rpc.com https://*.pusher.com https://api.cloudinary.com; frame-ancestors 'none';",
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com; font-src 'self' data:; connect-src 'self' wss: https://*.helius-rpc.com https://*.pusher.com https://api.cloudinary.com; frame-ancestors 'none';",
 };
 
 function applySecurityHeaders(response: NextResponse): NextResponse {
@@ -245,6 +250,15 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // ── 1b. Body size guard (100KB max for non-upload routes) ────────────
+  const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
+  if (contentLength > 100_000 && !pathname.startsWith('/api/upload')) {
+    return applySecurityHeaders(NextResponse.json(
+      { success: false, error: 'Request body too large' },
+      { status: 413 }
+    ));
+  }
+
   // ── 2. CSRF Protection ────────────────────────────────────────────────
   if (!isMockMode) {
     const csrfResult = csrfCheck(request);
@@ -259,6 +273,14 @@ export function middleware(request: NextRequest) {
   if (isPublicRoute(pathname, method)) {
     const response = NextResponse.next();
     return applySecurityHeaders(response);
+  }
+
+  // Hard-block test/seed routes in production regardless of auth
+  if (process.env.NODE_ENV === 'production' && (pathname.startsWith('/api/test/') || pathname.startsWith('/api/setup/'))) {
+    return applySecurityHeaders(NextResponse.json(
+      { success: false, error: 'Not found' },
+      { status: 404 }
+    ));
   }
 
   // Admin routes — need Bearer token

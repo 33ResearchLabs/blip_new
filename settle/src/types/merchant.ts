@@ -35,6 +35,15 @@ export interface DbOrder {
   merchant_display_name?: string;
   buyer_merchant_username?: string;
   buyer_merchant_display_name?: string;
+  merchant?: {
+    id: string;
+    display_name?: string;
+    business_name?: string;
+    rating?: number;
+    total_trades?: number;
+    is_online?: boolean;
+    wallet_address?: string;
+  };
   buyer_merchant?: {
     id: string;
     display_name: string;

@@ -20,8 +20,6 @@ import {
   errorResponse,
 } from '@/lib/middleware/auth';
 import { proxyCoreApi, signActorHeaders } from '@/lib/proxy/coreApi';
-import { MOCK_MODE } from '@/lib/config/mockMode';
-import { atomicCancelWithRefund } from '@/lib/orders/atomicCancel';
 import { serializeOrder } from '@/lib/api/orderSerializer';
 import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
 
@@ -100,7 +98,7 @@ export async function PATCH(
     const body = await request.json();
 
     // Require authentication
-    const auth = await requireAuth(request, body);
+    const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
     // Verify access to this order
@@ -124,8 +122,40 @@ export async function PATCH(
     const { status, actor_type, actor_id, reason, acceptor_wallet_address, refund_tx_hash } = parseResult.data;
 
     // Security: enforce actor matches authenticated identity
-    if (actor_id !== auth.actorId) {
+    // When both user+merchant headers are present and the route is /api/orders (not /merchant),
+    // auth defaults to user. But a merchant accepting uses actor_type='merchant' + their merchant ID.
+    // Allow if actor_id matches either the resolved auth or the merchant header.
+    const headerMerchantId = request.headers.get('x-merchant-id');
+    const actorMatchesAuth = actor_id === auth.actorId;
+    const actorMatchesMerchantHeader = actor_type === 'merchant' && headerMerchantId && actor_id === headerMerchantId;
+    if (!actorMatchesAuth && !actorMatchesMerchantHeader) {
       return forbiddenResponse('actor_id does not match authenticated identity');
+    }
+    // If merchant is acting, override auth context for downstream
+    if (!actorMatchesAuth && actorMatchesMerchantHeader) {
+      auth.actorType = 'merchant';
+      auth.actorId = headerMerchantId;
+      auth.merchantId = headerMerchantId;
+    }
+
+    // Self-accept guard: prevent same wallet from creating and accepting an order
+    if (isAccepting) {
+      try {
+        const order = await getOrderWithRelations(id);
+        if (order) {
+          const creatorUserId = order.user_id;
+          // Check if the acceptor's wallet matches the creator's wallet
+          const headerUserId = request.headers.get('x-user-id');
+          if (creatorUserId && (creatorUserId === actor_id || creatorUserId === headerUserId || creatorUserId === auth.userId)) {
+            return NextResponse.json(
+              { success: false, error: 'You cannot accept your own order' },
+              { status: 400 }
+            );
+          }
+        }
+      } catch (e) {
+        logger.warn('[PATCH /orders] Self-accept check failed', { orderId: id, error: e });
+      }
     }
 
     // Fetch current order status BEFORE the update so we can send previousStatus in Pusher
@@ -144,48 +174,6 @@ export async function PATCH(
       const { query } = await import('@/lib/db');
       await query(`UPDATE orders SET refund_tx_hash = $1 WHERE id = $2`, [refund_tx_hash, id]);
       logger.info('[PATCH /orders] Saved refund_tx_hash', { orderId: id, refund_tx_hash });
-    }
-
-    // Mock mode (or Core-API absent): handle cancellation locally with escrow refund
-    const isMockMode = MOCK_MODE || !process.env.CORE_API_URL;
-    if (isMockMode && status === 'cancelled') {
-      // Fetch current order to get its status and details
-      const currentOrder = await getOrderWithRelations(id);
-      if (!currentOrder) {
-        return notFoundResponse('Order');
-      }
-
-      // Use atomicCancelWithRefund for deterministic escrow refund
-      const result = await atomicCancelWithRefund(
-        id,
-        currentOrder.status,
-        actor_type,
-        actor_id,
-        reason ?? undefined,
-        {
-          type: currentOrder.type,
-          crypto_amount: currentOrder.crypto_amount,
-          merchant_id: currentOrder.merchant_id,
-          user_id: currentOrder.user_id,
-          buyer_merchant_id: currentOrder.buyer_merchant_id ?? null,
-          order_number: Number(currentOrder.order_number),
-          crypto_currency: currentOrder.crypto_currency,
-          fiat_amount: currentOrder.fiat_amount,
-          fiat_currency: currentOrder.fiat_currency,
-        }
-      );
-
-      if (!result.success) {
-        return NextResponse.json(
-          { success: false, error: result.error },
-          { status: 400 }
-        );
-      }
-
-      return NextResponse.json({
-        success: true,
-        data: serializeOrder(result.order!),
-      });
     }
 
     // Forward to core-api (single writer for all mutations)

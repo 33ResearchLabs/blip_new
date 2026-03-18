@@ -3,6 +3,7 @@ import { query } from '@/lib/db';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import { requireAuth, canAccessOrder, forbiddenResponse } from '@/lib/middleware/auth';
 import { checkRateLimit, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
+import { validateFields } from '@/lib/middleware/validation';
 
 // Create a dispute for an order
 export async function POST(
@@ -18,7 +19,7 @@ export async function POST(
     const body = await request.json();
 
     // Require authentication
-    const auth = await requireAuth(request, body);
+    const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
     // Verify access to this order
@@ -36,6 +37,11 @@ export async function POST(
       );
     }
 
+    const lengthError = validateFields([[reason, 'reason'], [description, 'description']]);
+    if (lengthError) {
+      return NextResponse.json({ success: false, error: lengthError }, { status: 400 });
+    }
+
     if (!initiated_by || !['user', 'merchant'].includes(initiated_by)) {
       return NextResponse.json(
         { success: false, error: 'initiated_by must be user or merchant' },
@@ -47,8 +53,9 @@ export async function POST(
       ? (user_id || '')
       : (merchant_id || '');
 
-    // Security: enforce actor matches authenticated identity
-    if (actorId !== auth.actorId) {
+    // Security: enforce actor matches authenticated identity (with merchant header fallback)
+    const dispHeaderMerchantId = request.headers.get('x-merchant-id');
+    if (actorId !== auth.actorId && !(initiated_by === 'merchant' && dispHeaderMerchantId && actorId === dispHeaderMerchantId)) {
       return forbiddenResponse('actor_id does not match authenticated identity');
     }
 
@@ -59,7 +66,7 @@ export async function POST(
   } catch (error) {
     console.error('Failed to create dispute:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to create dispute', details: error instanceof Error ? error.message : String(error) },
+      { success: false, error: 'Failed to create dispute' },
       { status: 500 }
     );
   }

@@ -135,7 +135,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // Authorization: require authenticated merchant
-    const auth = await requireAuth(request, body);
+    const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
     // Validate request body
@@ -338,7 +338,7 @@ export async function POST(request: NextRequest) {
 
     // Sign price proof (always, even when guardrails disabled — for audit trail)
     let priceProofSig: string | null = null;
-    let priceProofRefPrice: number | null = corridorData?.ref_price ?? null;
+    const priceProofRefPrice: number | null = corridorData?.ref_price ?? null;
     let priceProofExpiresAt: string | null = null;
 
     if (corridorData) {

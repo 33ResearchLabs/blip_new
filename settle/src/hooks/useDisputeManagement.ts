@@ -55,7 +55,7 @@ interface SolanaWalletForDispute {
   walletAddress: string | null;
   resolveDispute: (params: {
     creatorPubkey: string;
-    tradeId: string;
+    tradeId: number;
     resolution: "release_to_buyer" | "refund_to_seller";
   }) => Promise<{ txHash: string; success: boolean }>;
 }

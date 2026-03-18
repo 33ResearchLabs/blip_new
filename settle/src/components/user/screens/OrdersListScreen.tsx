@@ -91,7 +91,7 @@ export const OrdersListScreen = ({
                     <div className="flex-1 text-left min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <p style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.02em' }}>
-                          {order.type === 'buy' ? 'Buying' : 'Selling'} {order.cryptoAmount} USDT
+                          {order.type === 'buy' ? 'Receiving' : 'Sending'} {order.cryptoAmount} USDT
                         </p>
                         <p style={{ fontSize: 15, fontWeight: 900, color: order.type === 'buy' ? '#f97316' : '#fff' }}>
                           {order.type === 'buy' ? '+' : '-'} {'\u062F.\u0625'}{parseFloat(order.fiatAmount).toLocaleString()}
@@ -144,7 +144,7 @@ export const OrdersListScreen = ({
                     <div className="flex-1 text-left min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <p style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.02em' }}>
-                          {order.type === 'buy' ? 'Bought' : 'Sold'} {order.cryptoAmount} USDT
+                          {order.type === 'buy' ? 'Received' : 'Sent'} {order.cryptoAmount} USDT
                         </p>
                         <p style={{ fontSize: 15, fontWeight: 900, color: '#f97316' }}>
                           {order.type === 'buy' ? '+' : '-'} {'\u062F.\u0625'}{parseFloat(order.fiatAmount).toLocaleString()}

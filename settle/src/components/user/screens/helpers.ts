@@ -5,9 +5,11 @@ export function mapDbStatusToUI(dbStatus: string): { status: OrderStatus; step: 
   switch (dbStatus) {
     case 'pending':
       return { status: 'pending', step: 1 };
+    case 'escrowed':
+      // Escrowed = escrow is locked, trade is active — buyer should send payment
+      return { status: 'payment', step: 2 };
     case 'accepted':
     case 'escrow_pending':
-    case 'escrowed':
     case 'payment_pending':
       return { status: 'payment', step: 2 };
     case 'payment_sent':

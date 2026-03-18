@@ -5,18 +5,36 @@ import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rat
 import crypto from 'crypto';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
 
-// Simple password hashing using Node's crypto
+// Password hashing — PBKDF2 with 100k iterations (OWASP minimum for SHA-512)
+const PBKDF2_ITERATIONS = 100_000;
+const LEGACY_ITERATIONS = 1000; // Old hashes used this — auto-upgraded on login
+
 function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
-  return `${salt}:${hash}`;
+  const hash = crypto.pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, 64, 'sha512').toString('hex');
+  // New format: salt:iterations:hash (3 parts)
+  return `${salt}:${PBKDF2_ITERATIONS}:${hash}`;
 }
 
-function verifyPassword(password: string, storedHash: string): boolean {
-  const [salt, hash] = storedHash.split(':');
-  if (!salt || !hash) return false;
-  const verifyHash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
-  return hash === verifyHash;
+function verifyPassword(password: string, storedHash: string): { valid: boolean; needsRehash: boolean } {
+  const parts = storedHash.split(':');
+  let salt: string, hash: string, iterations: number;
+
+  if (parts.length === 3) {
+    // New format: salt:iterations:hash
+    [salt, , hash] = parts;
+    iterations = parseInt(parts[1], 10);
+  } else if (parts.length === 2) {
+    // Legacy format: salt:hash (1000 iterations)
+    [salt, hash] = parts;
+    iterations = LEGACY_ITERATIONS;
+  } else {
+    return { valid: false, needsRehash: false };
+  }
+
+  const verifyHash = crypto.pbkdf2Sync(password, salt, iterations, 64, 'sha512').toString('hex');
+  const valid = crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(verifyHash, 'hex'));
+  return { valid, needsRehash: valid && iterations < PBKDF2_ITERATIONS };
 }
 
 // GET handler - fetch merchant by wallet address or validate session
@@ -173,7 +191,7 @@ export async function POST(request: NextRequest) {
       );
 
       let merchant;
-      let isNewMerchant = false;
+      const isNewMerchant = false;
       let needsUsername = false;
 
       if (rows.length === 0) {
@@ -606,11 +624,24 @@ export async function POST(request: NextRequest) {
       };
 
       // Verify password
-      if (!merchant.password_hash || !verifyPassword(password, merchant.password_hash)) {
+      if (!merchant.password_hash) {
         return NextResponse.json(
           { success: false, error: 'Invalid email or password' },
           { status: 401 }
         );
+      }
+      const pwResult = verifyPassword(password, merchant.password_hash);
+      if (!pwResult.valid) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid email or password' },
+          { status: 401 }
+        );
+      }
+
+      // Auto-upgrade legacy password hash to stronger iterations
+      if (pwResult.needsRehash) {
+        const newHash = hashPassword(password);
+        await query('UPDATE merchants SET password_hash = $1 WHERE id = $2', [newHash, merchant.id]);
       }
 
       // Update online status
@@ -772,7 +803,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Merchant auth error:', error);
     return NextResponse.json(
-      { success: false, error: 'Authentication failed', details: error instanceof Error ? error.message : String(error) },
+      { success: false, error: 'Authentication failed' },
       { status: 500 }
     );
   }
@@ -819,7 +850,7 @@ export async function PATCH(request: NextRequest) {
   } catch (error) {
     console.error('Merchant wallet update error:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to update wallet', details: error instanceof Error ? error.message : String(error) },
+      { success: false, error: 'Failed to update wallet' },
       { status: 500 }
     );
   }

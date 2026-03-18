@@ -112,6 +112,8 @@ const OrderList = memo(function OrderList({
             // Max possible earnings (at premium cap)
             const maxCut = amount * (mOrder.premium_bps_cap / 10000);
 
+            const fiatTotal = Math.round(amount * Number(livePrice));
+
             return (
               <div
                 key={mOrder.id}
@@ -128,86 +130,78 @@ const OrderList = memo(function OrderList({
               >
                 <div
                   onClick={() => onSelectMempoolOrder(mOrder)}
-                  className="p-2.5 rounded-lg border border-orange-500/20 bg-orange-500/[0.02] hover:border-orange-500/30 transition-all cursor-pointer"
+                  className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
+                    isMyMempoolOrder
+                      ? 'bg-white/[0.01] border-white/[0.04] opacity-50'
+                      : 'glass-card border-white/[0.10] hover:border-orange-500/30 ring-1 ring-white/[0.04]'
+                  }`}
                 >
-                  {/* Row 1: Order info + timer + action */}
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-orange-400" />
-                      <span className="text-[10px] font-medium text-white/50 font-mono">#{mOrder.order_number}</span>
-                      {isMyMempoolOrder && (
-                        <span className="text-[9px] px-1 py-0.5 bg-white/[0.04] text-white/40 rounded font-medium">YOURS</span>
-                      )}
+                  {/* Waiting banner for own orders */}
+                  {isMyMempoolOrder && (
+                    <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-white/[0.02] border border-white/[0.04]">
+                      <div className="w-1 h-1 bg-white/20 rounded-full animate-breathe" />
+                      <span className="text-[9px] text-white/30 font-mono font-bold tracking-wider uppercase">Waiting for acceptance</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {/* Compact timer */}
-                      <span className={`text-[10px] font-bold font-mono tabular-nums ${
-                        liveExpiry < 120 ? 'text-red-400' : liveExpiry < 300 ? 'text-orange-400' : 'text-white/30'
-                      }`}>
-                        {Math.floor(liveExpiry / 60)}:{String(liveExpiry % 60).padStart(2, '0')}
+                  )}
+                  {/* Row 1: User + tags on left, timer on right */}
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <div className="w-7 h-7 rounded-lg bg-orange-500/[0.06] flex items-center justify-center shrink-0 text-sm border border-orange-500/20">
+                        <Zap className="w-3.5 h-3.5 text-orange-400" />
+                      </div>
+                      <span className="text-xs font-medium text-white truncate">{mOrder.creator_username || `#${mOrder.order_number}`}</span>
+                      <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-orange-500/10 border-orange-500/20 text-orange-400">
+                        SEND
                       </span>
-                      {isMyMempoolOrder ? (
-                        <span className="px-2 py-0.5 rounded text-[9px] font-mono text-white/20">WAITING</span>
-                      ) : (
-                        <button className="px-3 py-1 bg-orange-500 text-black rounded-lg text-[10px] font-bold hover:bg-orange-400 transition-colors press-effect">
-                          ACCEPT
-                        </button>
+                      <span className="flex items-center gap-0.5 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-orange-500/10 border-orange-500/20 text-orange-400">
+                        <Zap className="w-2.5 h-2.5" />PRIORITY
+                      </span>
+                      {isMyMempoolOrder && (
+                        <span className="px-1 py-0.5 bg-white/[0.04] border border-white/[0.06] rounded text-[9px] font-bold text-white/40">YOURS</span>
                       )}
                     </div>
+                    {/* Timer */}
+                    <span className={`text-xs font-bold font-mono tabular-nums shrink-0 ml-auto px-1.5 py-0.5 rounded ${
+                      liveExpiry < 120
+                        ? 'text-red-400/80 bg-red-500/[0.06]'
+                        : liveExpiry < 300
+                        ? 'text-orange-400/70 bg-orange-500/[0.06]'
+                        : 'text-white/35'
+                    }`}>
+                      {Math.floor(liveExpiry / 60)}m {String(liveExpiry % 60).padStart(2, '0')}s
+                    </span>
                   </div>
 
-                  {/* Row 2: YOUR CUT — hero earnings with decay */}
-                  <div className="mb-2 px-3 py-2 rounded-lg bg-orange-500/[0.06] border border-orange-500/15">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[9px] text-orange-400/50 font-mono font-bold tracking-wider">YOUR CUT</span>
-                      <span className="text-[9px] text-white/20 font-mono">
-                        max ${maxCut.toFixed(2)}
+                  {/* Row 2: Amount + profit */}
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-sm font-bold text-white tabular-nums">
+                      {Math.round(amount).toLocaleString()} USDC
+                    </span>
+                    <ArrowRight className="w-3 h-3 text-white/20" />
+                    <span className="text-sm font-bold text-orange-400 tabular-nums">
+                      {fiatTotal.toLocaleString()} AED
+                    </span>
+                    {yourCut > 0 && (
+                      <span className="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
+                        +${yourCut.toFixed(2)}
                       </span>
-                    </div>
-                    <div className="flex items-baseline gap-2">
-                      <span className={`text-xl font-black tabular-nums font-mono transition-all ${
-                        decayProgress < 0.3 ? 'text-red-400' : 'text-orange-400'
-                      }`}>
-                        ${yourCut.toFixed(2)}
-                      </span>
-                      <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded transition-all ${
-                        decayProgress < 0.3
-                          ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                          : 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
-                      }`}>
+                    )}
+                  </div>
+
+                  {/* Row 3: Rate + action button */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-white/40 font-mono">@ {livePrice}</span>
+                    {livePremiumPct > 0 && (
+                      <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400">
                         +{livePremiumPct.toFixed(2)}%
                       </span>
-                    </div>
-                    {/* Decay bar */}
-                    <div className="mt-1.5 h-[3px] rounded-full bg-white/[0.06] overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-1000 ease-linear"
-                        style={{
-                          width: `${decayProgress * 100}%`,
-                          background: decayProgress < 0.3
-                            ? 'rgb(248, 113, 113)'
-                            : decayProgress < 0.6
-                            ? 'rgb(251, 146, 60)'
-                            : 'rgb(249, 115, 22)',
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Row 3: Deal details — amount, rate, side */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-bold text-white tabular-nums">
-                        {Math.round(amount).toLocaleString()} USDT
-                      </span>
-                      <span className="text-[10px] text-white/15">@</span>
-                      <span className="text-xs font-bold text-white/50 tabular-nums">
-                        {livePrice}
-                      </span>
-                    </div>
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold bg-orange-500/10 text-orange-400 border border-orange-500/20">
-                      PRIORITY
-                    </span>
+                    )}
+                    <div className="flex-1" />
+                    {!isMyMempoolOrder && (
+                      <button className="px-3 py-1 bg-orange-500 text-black rounded-lg text-[10px] font-bold hover:bg-orange-400 transition-all press-effect shrink-0">
+                        ACCEPT
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -267,7 +261,7 @@ const OrderList = memo(function OrderList({
                         ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
                         : 'bg-white/[0.06] border-white/[0.08] text-white/50'
                     }`}>
-                      {order.orderType === 'buy' ? 'SELL' : 'BUY'}
+                      {order.orderType === 'buy' ? 'SEND' : 'RECEIVE'}
                     </span>
                     {order.spreadPreference && (
                       <span className={`flex items-center gap-0.5 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
@@ -377,7 +371,10 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   let displayOrders = [...orders];
 
   if (orderViewFilter === 'new' && mempoolOrders.length > 0) {
-    const mempoolAsOrders = mempoolOrders.map((mo) => ({
+    // Deduplicate: skip mempool orders that already exist in the regular orders list
+    const regularOrderIds = new Set(orders.map((o: any) => o.id));
+    const uniqueMempool = mempoolOrders.filter((mo) => !regularOrderIds.has(mo.id));
+    const mempoolAsOrders = uniqueMempool.map((mo) => ({
       ...mo,
       isMempoolOrder: true,
       isMyMempoolOrder: mo.creator_username === merchantInfo?.username,

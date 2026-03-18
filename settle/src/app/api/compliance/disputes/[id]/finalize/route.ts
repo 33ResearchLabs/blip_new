@@ -269,7 +269,7 @@ export async function POST(
   } catch (error) {
     console.error('Failed to finalize dispute:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to finalize dispute', details: error instanceof Error ? error.message : String(error) },
+      { success: false, error: 'Failed to finalize dispute' },
       { status: 500 }
     );
   }

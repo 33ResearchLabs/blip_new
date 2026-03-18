@@ -91,7 +91,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
                         ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
                         : 'bg-white/[0.06] border-white/[0.08] text-white/50'
                     }`}>
-                      {order.orderType === 'buy' ? 'SELL' : 'BUY'}
+                      {order.orderType === 'buy' ? 'SEND' : 'RECEIVE'}
                     </span>
                   </div>
                   <span className={`text-xs font-bold font-mono tabular-nums shrink-0 px-1.5 py-0.5 rounded ${

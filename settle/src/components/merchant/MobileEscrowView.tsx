@@ -56,9 +56,9 @@ export function MobileEscrowView({
             const mobileRole = order.myRole || 'observer';
             const mobileCanConfirmPayment = mobileDbStatus === "payment_sent" && mobileRole === 'seller';
             const mobileWaitingForUser = false;
+            const mobileHasBeenAccepted = !!order.dbOrder?.accepted_at;
             const mobileCanMarkPaid = mobileRole === 'buyer' && (
-              (mobileDbStatus === "payment_sent") ||
-              ((mobileDbStatus === "accepted" || mobileDbStatus === "escrowed") && order.escrowTxHash)
+              ((mobileDbStatus === "accepted" || (mobileDbStatus === "escrowed" && mobileHasBeenAccepted)) && order.escrowTxHash)
             );
             const mobileNeedsLockEscrow = mobileDbStatus === "accepted" && !order.escrowTxHash && mobileRole === 'seller';
 
@@ -82,7 +82,7 @@ export function MobileEscrowView({
                           ? 'bg-green-500/20 text-green-400'
                           : 'bg-orange-500/20 text-orange-400'
                       }`}>
-                        {order.orderType === 'buy' ? 'SELL' : 'BUY'}
+                        {order.orderType === 'buy' ? 'SEND' : 'RECEIVE'}
                       </span>
                     )}
                     {order.myRole && (
@@ -93,7 +93,7 @@ export function MobileEscrowView({
                           ? 'bg-purple-500/20 text-purple-400'
                           : 'bg-gray-500/20 text-gray-400'
                       }`}>
-                        {order.myRole === 'buyer' ? 'YOU BUY' : order.myRole === 'seller' ? 'YOU SELL' : ''}
+                        {order.myRole === 'buyer' ? 'YOU RECEIVE' : order.myRole === 'seller' ? 'YOU SEND' : ''}
                       </span>
                     )}
                     {order.spreadPreference && (

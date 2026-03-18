@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { Zap, Wallet, Lock, LogOut } from 'lucide-react';
 
 export type NavPage = 'dashboard' | 'wallet' | 'settings';
@@ -88,9 +89,9 @@ export function MerchantNavbar({
 
           {rightActions && <div className="w-px h-6 bg-white/[0.06] mx-0.5" />}
 
-          <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-[12px] overflow-hidden">
+          <div className="relative w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-[12px] overflow-hidden">
             {merchantInfo?.avatar_url ? (
-              <img src={merchantInfo.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+              <Image src={merchantInfo.avatar_url} alt="Profile" fill className="object-cover" sizes="32px" />
             ) : (
               <span className="text-white/60">{initial}</span>
             )}

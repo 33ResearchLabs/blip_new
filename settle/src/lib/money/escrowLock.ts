@@ -9,7 +9,7 @@
 
 import { transaction } from '@/lib/db';
 import { Order, ActorType } from '@/lib/types/database';
-import { validateTransition } from '@/lib/orders/stateMachine';
+import { validateTransition } from '@/lib/orders/stateMachineMinimal';
 import { createTransactionInTx } from '@/lib/db/repositories/transactions';
 import { logger } from '@/lib/logger';
 

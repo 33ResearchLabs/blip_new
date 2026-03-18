@@ -36,7 +36,6 @@ import {
 } from '@solana/spl-token';
 import * as anchor from '@coral-xyz/anchor';
 import { Program, AnchorProvider, BN, Idl } from '@coral-xyz/anchor';
-import { MOCK_MODE } from '@/lib/config/mockMode';
 
 // Import wallet adapter styles
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -856,18 +855,6 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     tradeId: number;
     counterparty: string;
   }): Promise<TradeOperationResult> => {
-    // In mock mode, return instant success
-    if (MOCK_MODE) {
-      console.log('[Mock] releaseEscrow called - returning instant success');
-      return {
-        txHash: `mock_release_${Date.now()}`,
-        success: true,
-        tradePda: 'mock_trade_pda',
-        escrowPda: 'mock_escrow_pda',
-        tradeId: params.tradeId,
-      };
-    }
-
     if (!publicKey || !program || !signTransaction) {
       throw new Error('Wallet not connected');
     }
@@ -1944,13 +1931,46 @@ export const SolanaWalletProvider: FC<{ children: ReactNode }> = ({ children }) 
   );
 };
 
-// Hook to use wallet context
+// Fallback for when no SolanaWalletProvider is mounted (e.g. mock mode)
+const noopResult = async () => ({ txHash: '', success: false as const });
+const noopLane = async () => ({ txHash: '', success: false as const });
+const WALLET_NOOP: SolanaWalletContextType = {
+  connected: false,
+  connecting: false,
+  publicKey: null,
+  walletAddress: null,
+  signMessage: undefined,
+  connect: () => {},
+  disconnect: () => {},
+  openWalletModal: () => {},
+  solBalance: null,
+  usdtBalance: null,
+  refreshBalances: async () => {},
+  createCorridor: noopLane,
+  fundCorridor: noopLane,
+  withdrawCorridor: noopLane,
+  getCorridorInfo: async () => null,
+  createTrade: noopResult,
+  lockEscrow: noopResult,
+  releaseEscrow: noopResult,
+  refundEscrow: noopResult,
+  extendEscrow: noopResult,
+  fundEscrowOnly: noopResult,
+  acceptTrade: noopResult,
+  depositToEscrow: async () => ({ txHash: '', success: false }),
+  depositToEscrowOpen: async () => ({ txHash: '', success: false }),
+  confirmPayment: noopResult,
+  openDispute: noopResult,
+  resolveDispute: noopResult,
+  network: 'devnet',
+  programReady: false,
+  reinitializeProgram: () => {},
+};
+
+// Hook to use wallet context — returns safe no-op defaults when no provider is mounted
 export function useSolanaWallet() {
   const context = useContext(SolanaWalletContext);
-  if (!context) {
-    throw new Error('useSolanaWallet must be used within SolanaWalletProvider');
-  }
-  return context;
+  return context ?? WALLET_NOOP;
 }
 
 // Export the USDT mint for use elsewhere

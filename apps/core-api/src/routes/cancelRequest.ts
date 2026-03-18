@@ -27,6 +27,7 @@ interface OrderRow {
   status: string;
   user_id: string;
   merchant_id: string;
+  buyer_merchant_id: string | null;
   cancel_requested_by: string | null;
   cancel_request_reason: string | null;
   crypto_amount: string;

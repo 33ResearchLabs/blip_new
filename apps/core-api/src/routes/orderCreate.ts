@@ -35,6 +35,7 @@ interface CreateOrderPayload {
   fiat_amount: number;
   rate: number;
   payment_details?: Record<string, unknown>;
+  expiry_minutes?: number;
   buyer_wallet_address?: string;
   buyer_merchant_id?: string;
   spread_preference?: string;

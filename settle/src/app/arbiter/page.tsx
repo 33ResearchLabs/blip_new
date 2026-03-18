@@ -24,21 +24,7 @@ import {
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
-
-// Dynamically import wallet
-const useSolanaWalletHook = () => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { useSolanaWallet } = require("@/context/SolanaWalletContext");
-    return useSolanaWallet();
-  } catch {
-    return {
-      connected: false,
-      walletAddress: null,
-      openWalletModal: () => {},
-    };
-  }
-};
+import { useSolanaWallet } from '@/context/SolanaWalletContext';
 
 const WalletModal = dynamic(() => import("@/components/MerchantWalletModal"), { ssr: false });
 
@@ -121,7 +107,7 @@ export default function ArbiterDashboard() {
     };
   } | null>(null);
 
-  const solanaWallet = useSolanaWalletHook();
+  const solanaWallet = useSolanaWallet();
 
   // Fetch arbiter data
   const fetchArbiterData = useCallback(async () => {

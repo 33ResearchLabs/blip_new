@@ -16,7 +16,8 @@
  * - Legacy machine kept for backwards compatibility only
  */
 
-import { ActorType, MinimalOrderStatus } from '../types/database';
+import { ActorType, MinimalOrderStatus, OrderStatus } from '../types/database';
+import { normalizeStatus } from './statusNormalizer';
 
 // All valid minimal order statuses
 export const MINIMAL_ORDER_STATUSES: readonly MinimalOrderStatus[] = [
@@ -344,4 +345,165 @@ export function getNextExpectedAction(
   }
 
   return 'Unknown';
+}
+
+export type { MinimalTransitionValidation as TransitionValidation };
+
+export function validateTransition(
+  currentStatus: OrderStatus,
+  newStatus: OrderStatus,
+  actorType: ActorType
+): MinimalTransitionValidation {
+  const from = normalizeStatus(currentStatus);
+  const to = normalizeStatus(newStatus);
+  return validateMinimalTransition(from, to, actorType);
+}
+
+export function isTerminalStatus(status: OrderStatus): boolean {
+  return isMinimalTerminalStatus(normalizeStatus(status));
+}
+
+export function isActiveStatus(status: OrderStatus): boolean {
+  return isMinimalActiveStatus(normalizeStatus(status));
+}
+
+export function shouldRestoreLiquidity(
+  fromStatus: OrderStatus,
+  toStatus: OrderStatus
+): boolean {
+  return shouldRestoreMinimalLiquidity(
+    normalizeStatus(fromStatus),
+    normalizeStatus(toStatus)
+  );
+}
+
+export function getTransitionEventType(
+  fromStatus: OrderStatus,
+  toStatus: OrderStatus
+): string {
+  return getMinimalTransitionEventType(
+    normalizeStatus(fromStatus),
+    normalizeStatus(toStatus)
+  );
+}
+
+export function getTimestampField(status: OrderStatus): string | null {
+  const timestampFields: Partial<Record<OrderStatus, string>> = {
+    accepted: 'accepted_at',
+    escrowed: 'escrowed_at',
+    payment_sent: 'payment_sent_at',
+    payment_confirmed: 'payment_confirmed_at',
+    completed: 'completed_at',
+    cancelled: 'cancelled_at',
+  };
+  return timestampFields[status] || null;
+}
+
+export const GLOBAL_ORDER_TIMEOUT_MINUTES = MINIMAL_GLOBAL_ORDER_TIMEOUT_MINUTES;
+
+export const STATUS_TIMEOUTS: Partial<Record<OrderStatus, number>> = {
+  pending: 15,
+  accepted: 15,
+  escrowed: 15,
+  payment_sent: 15,
+  disputed: 1440,
+};
+
+export const INACTIVITY_WARNING_MINUTES = 15;
+export const INACTIVITY_ESCALATION_MINUTES = 60;
+export const DISPUTE_AUTO_RESOLVE_HOURS = 24;
+
+export const MAX_EXTENSIONS = 3;
+
+export const EXTENSION_DURATIONS: Partial<Record<OrderStatus, number>> = {
+  pending: 15,
+  accepted: 30,
+  escrowed: 60,
+  payment_sent: 120,
+};
+
+export const EXTENDABLE_STATUSES: readonly OrderStatus[] = [
+  'pending',
+  'accepted',
+  'escrowed',
+  'payment_sent',
+];
+
+export function canRequestExtension(status: OrderStatus): boolean {
+  return EXTENDABLE_STATUSES.includes(status);
+}
+
+export function canExtendOrder(
+  status: OrderStatus,
+  currentExtensionCount: number,
+  maxExtensions: number = MAX_EXTENSIONS
+): { canExtend: boolean; reason?: string } {
+  if (!canRequestExtension(status)) {
+    return {
+      canExtend: false,
+      reason: `Extensions not allowed in '${status}' status`
+    };
+  }
+  if (currentExtensionCount >= maxExtensions) {
+    return {
+      canExtend: false,
+      reason: `Maximum extensions (${maxExtensions}) reached`
+    };
+  }
+  return { canExtend: true };
+}
+
+export function getExtensionDuration(status: OrderStatus): number {
+  return EXTENSION_DURATIONS[status] || 30;
+}
+
+export function getExpiryOutcome(
+  status: OrderStatus,
+  extensionCount: number,
+  maxExtensions: number = MAX_EXTENSIONS
+): 'disputed' | 'cancelled' {
+  if (
+    extensionCount >= maxExtensions &&
+    ['escrowed', 'payment_sent', 'payment_confirmed'].includes(status)
+  ) {
+    return 'disputed';
+  }
+  return 'cancelled';
+}
+
+export function canRequestCancel(status: OrderStatus): boolean {
+  return ['accepted', 'escrowed', 'payment_pending', 'payment_sent'].includes(status);
+}
+
+export function canUnilateralCancel(status: OrderStatus): boolean {
+  return status === 'pending' || status === 'escrow_pending';
+}
+
+export function isInactivityTracked(status: OrderStatus): boolean {
+  return ['accepted', 'escrowed', 'payment_pending', 'payment_sent'].includes(status);
+}
+
+export function getInactivityOutcome(
+  status: OrderStatus,
+  hasEscrow: boolean,
+): 'disputed' | 'cancelled' {
+  if (hasEscrow && ['escrowed', 'payment_pending', 'payment_sent'].includes(status)) {
+    return 'disputed';
+  }
+  return 'cancelled';
+}
+
+export function getStatusTimeout(status: OrderStatus): number | null {
+  const minutes = STATUS_TIMEOUTS[status];
+  return minutes ? minutes * 60 * 1000 : null;
+}
+
+export function getNextExpiryInterval(status: OrderStatus): string | null {
+  const intervals: Partial<Record<OrderStatus, string>> = {
+    pending: "INTERVAL '15 minutes'",
+    accepted: "INTERVAL '15 minutes'",
+    escrowed: "INTERVAL '15 minutes'",
+    payment_sent: "INTERVAL '15 minutes'",
+  };
+  return intervals[status] || null;
 }

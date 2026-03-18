@@ -418,7 +418,7 @@ export function useRealtimeOrders(
     };
   }, [actorId, actorType, pusher, isConnected, fetchOrders, enqueueEvent, flushBatch]);
 
-  // ── Core-API WebSocket (batched, version gating picks newest) ──
+  // ── Core-API WebSocket (price updates only — order events handled by Pusher) ──
   const wsRef = useRef<WebSocket | null>(null);
   const wsReconnectRef = useRef(0);
 
@@ -442,35 +442,10 @@ export function useRealtimeOrders(
       ws.onmessage = (evt) => {
         try {
           const msg = JSON.parse(evt.data);
-
-          // Handle corridor price updates from price feed worker
+          // Only handle price updates — order events go through Pusher (no duplicate processing)
           if (msg.type === 'price_update') {
             onPriceUpdateRef.current?.(msg as CorridorPriceData);
-            return;
           }
-
-          if (msg.type !== 'order_event') return;
-
-          const { event_type, order_id, status, minimal_status, order_version, previousStatus, buyer_merchant_id, merchant_id } = msg;
-
-          if (event_type === 'ORDER_CREATED') {
-            needsRefetchRef.current = true;
-            if (!batchTimerRef.current) {
-              batchTimerRef.current = setTimeout(flushBatch, BATCH_WINDOW_MS);
-            }
-            return;
-          }
-
-          enqueueEvent({
-            type: 'status',
-            orderId: order_id,
-            status,
-            minimal_status,
-            order_version,
-            previousStatus,
-            buyer_merchant_id,
-            merchant_id,
-          });
         } catch { /* ignore malformed */ }
       };
 
@@ -495,7 +470,7 @@ export function useRealtimeOrders(
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [actorId, actorType, fetchOrders, enqueueEvent, flushBatch]);
+  }, [actorId, actorType]);
 
   return {
     orders,

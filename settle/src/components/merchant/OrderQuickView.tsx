@@ -79,7 +79,7 @@ export function OrderQuickView({
                           ? 'bg-purple-500/20 text-purple-400'
                           : 'bg-gray-500/20 text-gray-400'
                       }`}>
-                        {selectedOrder.myRole === 'buyer' ? 'YOU BUY' : selectedOrder.myRole === 'seller' ? 'YOU SELL' : 'OBSERVER'}
+                        {selectedOrder.myRole === 'buyer' ? 'YOU RECEIVE' : selectedOrder.myRole === 'seller' ? 'YOU SEND' : 'OBSERVER'}
                       </span>
                     )}
                   </div>
@@ -181,6 +181,7 @@ export function OrderQuickView({
               {(() => {
                 const popupSellerRole = selectedOrder.myRole || 'observer';
                 const popupStatus = selectedOrder.dbOrder?.status;
+                const popupAccepted = !!selectedOrder.dbOrder?.accepted_at;
 
                 if (popupSellerRole === 'seller' && (popupStatus === 'escrowed' || popupStatus === 'accepted')) {
                   return (
@@ -188,7 +189,11 @@ export function OrderQuickView({
                       <div className="w-6 h-6 rounded-lg bg-white/[0.04] flex items-center justify-center shrink-0">
                         <span className="text-xs">{'\u231B'}</span>
                       </div>
-                      <p className="text-xs text-white/50">Waiting for buyer to mark payment as sent...</p>
+                      <p className="text-xs text-white/50">
+                        {popupAccepted
+                          ? 'Waiting for buyer to mark payment as sent...'
+                          : 'Escrow locked by user. Waiting for a merchant to accept...'}
+                      </p>
                     </div>
                   );
                 }
@@ -222,7 +227,8 @@ export function OrderQuickView({
               })()}
 
               {/* For escrowed orders not yet accepted - show Go button */}
-              {selectedOrder.dbOrder?.status === 'escrowed' && !selectedOrder.dbOrder?.accepted_at && !selectedOrder.isMyOrder && (
+              {/* Note: don't gate on isMyOrder — user-created orders assign merchant_id before acceptance */}
+              {selectedOrder.dbOrder?.status === 'escrowed' && !selectedOrder.dbOrder?.accepted_at && (
                 <motion.button
                   whileTap={{ scale: 0.98 }}
                   onClick={async () => {
@@ -274,11 +280,12 @@ export function OrderQuickView({
                 );
               })()}
 
-              {/* For accepted/escrowed orders -- buyer needs to mark payment sent */}
+              {/* For accepted/escrowed orders -- buyer needs to mark payment sent (only after merchant accepted) */}
               {(() => {
                 const popupStatus = selectedOrder.dbOrder?.status;
                 const popupPayRole = selectedOrder.myRole || 'observer';
-                const canMarkPaidPopup = (popupStatus === 'accepted' || popupStatus === 'escrowed') && selectedOrder.escrowTxHash && popupPayRole === 'buyer';
+                const hasBeenAccepted = !!selectedOrder.dbOrder?.accepted_at;
+                const canMarkPaidPopup = (popupStatus === 'accepted' || (popupStatus === 'escrowed' && hasBeenAccepted)) && selectedOrder.escrowTxHash && popupPayRole === 'buyer';
 
                 if (canMarkPaidPopup) {
                   return (
@@ -296,7 +303,7 @@ export function OrderQuickView({
                       ) : (
                         <>
                           <Check className="w-4 h-4" />
-                          I've Paid
+                          I&apos;ve Paid
                         </>
                       )}
                     </motion.button>

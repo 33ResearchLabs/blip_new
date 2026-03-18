@@ -101,6 +101,59 @@ export default function WalletModal({
   walletFilter,
   showMobileOptions = true,
 }: WalletModalProps) {
+  // All hooks must be called unconditionally (React rules-of-hooks)
+  const { wallets, connected, wallet, disconnect } = useWallet();
+  const { walletAddress, solBalance, usdtBalance, refreshBalances } = useSolanaWallet();
+  const { isMobile, platform, isInAppBrowser } = useMobileDetect();
+
+  const {
+    isConnecting,
+    connectingWallet,
+    connectionError,
+    connectWallet,
+    resetError,
+    openMobileWalletApp,
+  } = useWalletConnection({ onConnected });
+
+  const themeConfig = THEMES[theme];
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      resetError();
+    }
+  }, [isOpen, resetError]);
+
+  // Filter and deduplicate wallets
+  const filteredWallets = useMemo(() => {
+    const seenNames = new Set<string>();
+    return wallets.filter(w => {
+      if (seenNames.has(w.adapter.name)) return false;
+      seenNames.add(w.adapter.name);
+      if (walletFilter && !walletFilter.includes(w.adapter.name)) return false;
+      return true;
+    });
+  }, [wallets, walletFilter]);
+
+  const installedWallets = useMemo(() =>
+    filteredWallets.filter(w =>
+      w.readyState === 'Installed' || w.readyState === 'Loadable'
+    ),
+    [filteredWallets]
+  );
+
+  const notInstalledWallets = useMemo(() =>
+    filteredWallets.filter(w =>
+      w.readyState !== 'Installed' && w.readyState !== 'Loadable'
+    ),
+    [filteredWallets]
+  );
+
+  const mobileWallets = useMemo(() =>
+    filteredWallets.filter(w => hasMobileDeepLink(w.adapter.name)),
+    [filteredWallets]
+  );
+
   // ============================================================================
   // MOCK MODE: Show simplified "Mock Connected" UI instead of real wallet list
   // ============================================================================
@@ -158,68 +211,6 @@ export default function WalletModal({
       </AnimatePresence>
     );
   }
-
-  // ============================================================================
-  // REAL WALLET MODE (below) - used when MOCK_MODE=false
-  // ============================================================================
-  const { wallets, connected, wallet, disconnect } = useWallet();
-  const { walletAddress, solBalance, usdtBalance, refreshBalances } = useSolanaWallet();
-  const { isMobile, platform, isInAppBrowser } = useMobileDetect();
-
-  const {
-    isConnecting,
-    connectingWallet,
-    connectionError,
-    connectWallet,
-    resetError,
-    openMobileWalletApp,
-  } = useWalletConnection({ onConnected });
-
-  const themeConfig = THEMES[theme];
-
-  // Reset state when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      resetError();
-    }
-  }, [isOpen, resetError]);
-
-  // Filter and deduplicate wallets
-  const filteredWallets = useMemo(() => {
-    const seenNames = new Set<string>();
-    return wallets.filter(w => {
-      if (seenNames.has(w.adapter.name)) return false;
-      seenNames.add(w.adapter.name);
-
-      // Apply custom filter if provided
-      if (walletFilter && !walletFilter.includes(w.adapter.name)) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [wallets, walletFilter]);
-
-  // Separate installed and not-installed wallets
-  const installedWallets = useMemo(() =>
-    filteredWallets.filter(w =>
-      w.readyState === 'Installed' || w.readyState === 'Loadable'
-    ),
-    [filteredWallets]
-  );
-
-  const notInstalledWallets = useMemo(() =>
-    filteredWallets.filter(w =>
-      w.readyState !== 'Installed' && w.readyState !== 'Loadable'
-    ),
-    [filteredWallets]
-  );
-
-  // Mobile-compatible wallets (have deep link support)
-  const mobileWallets = useMemo(() =>
-    filteredWallets.filter(w => hasMobileDeepLink(w.adapter.name)),
-    [filteredWallets]
-  );
 
   // Handle wallet selection
   const handleWalletSelect = async (walletName: string) => {

@@ -128,12 +128,12 @@ export function MobileHistoryView({
                               ? 'bg-blue-500/20 text-blue-400'
                               : 'bg-purple-500/20 text-purple-400'
                           }`}>
-                            {order.myRole === 'buyer' ? 'BUYER' : 'SELLER'}
+                            {order.myRole === 'buyer' ? 'RECEIVER' : 'SENDER'}
                           </span>
                         )}
                       </div>
                       <p className="text-xs text-gray-500">
-                        {didReceive ? 'Bought' : 'Sold'} &bull; {order.timestamp.toLocaleDateString()}
+                        {didReceive ? 'Received' : 'Sent'} &bull; {order.timestamp.toLocaleDateString()}
                       </p>
                     </div>
                     <div className="text-right">
@@ -209,7 +209,7 @@ export function MobileHistoryView({
                         )}
                       </div>
                       <p className="text-xs text-gray-500">
-                        {order.orderType === 'buy' ? 'Sell' : 'Buy'} &bull; {order.timestamp.toLocaleDateString()}
+                        {order.orderType === 'buy' ? 'Send' : 'Receive'} &bull; {order.timestamp.toLocaleDateString()}
                       </p>
                     </div>
                     <div className="text-right">

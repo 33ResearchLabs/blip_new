@@ -2,6 +2,18 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // TypeScript errors MUST be fixed — do not set ignoreBuildErrors: true
+  compress: true,
+  poweredByHeader: false,
+  reactStrictMode: true,
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    remotePatterns: [
+      { protocol: 'https', hostname: 'res.cloudinary.com' },
+    ],
+  },
+  experimental: {
+    optimizePackageImports: ['framer-motion', '@solana/web3.js', 'lucide-react'],
+  },
 };
 
 // Wrap with Sentry if @sentry/nextjs is installed

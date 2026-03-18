@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { copyToClipboard } from '@/lib/clipboard';
 import {
@@ -440,9 +441,9 @@ export default function MerchantSettingsPage() {
               <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5">
                 <label className="text-xs text-white/40 font-mono uppercase tracking-wider mb-3 block">Avatar</label>
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="w-16 h-16 rounded-full border-2 border-white/20 overflow-hidden shrink-0">
+                  <div className="relative w-16 h-16 rounded-full border-2 border-white/20 overflow-hidden shrink-0">
                     {selectedAvatar ? (
-                      <img src={selectedAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                      <Image src={selectedAvatar} alt="Avatar" fill className="object-cover" sizes="64px" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-white/5 text-2xl">
                         {displayName?.charAt(0)?.toUpperCase() || '?'}
@@ -459,13 +460,13 @@ export default function MerchantSettingsPage() {
                     <button
                       key={i}
                       onClick={() => setSelectedAvatar(url)}
-                      className={`aspect-square rounded-full overflow-hidden border-2 transition-all ${
+                      className={`relative aspect-square rounded-full overflow-hidden border-2 transition-all ${
                         selectedAvatar === url
                           ? 'border-orange-500 ring-2 ring-orange-500/30 scale-110'
                           : 'border-white/10 hover:border-white/30'
                       }`}
                     >
-                      <img src={url} alt={`Avatar ${i + 1}`} className="w-full h-full object-cover" />
+                      <Image src={url} alt={`Avatar ${i + 1}`} fill className="object-cover" sizes="48px" />
                     </button>
                   ))}
                 </div>

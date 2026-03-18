@@ -38,34 +38,10 @@ import ResolveModal from "@/components/compliance/ResolveModal";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
 import dynamic from "next/dynamic";
 
+import { useSolanaWallet } from '@/context/SolanaWalletContext';
+
 // Dynamically import wallet components (client-side only)
 const ComplianceWalletModal = dynamic(() => import("@/components/MerchantWalletModal"), { ssr: false });
-const useSolanaWalletHook = () => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { useSolanaWallet } = require("@/context/SolanaWalletContext");
-    return useSolanaWallet();
-  } catch {
-    return {
-      connected: false,
-      connecting: false,
-      publicKey: null,
-      walletAddress: null,
-      connect: () => {},
-      disconnect: () => {},
-      openWalletModal: () => {},
-      solBalance: null,
-      usdtBalance: null,
-      refreshBalances: async () => {},
-      releaseEscrow: async () => ({ txHash: '', success: false }),
-      refundEscrow: async () => ({ txHash: '', success: false }),
-      // V2.3: Dispute resolution (arbiter only)
-      resolveDispute: async () => ({ txHash: '', success: false }),
-      openDispute: async () => ({ txHash: '', success: false }),
-      network: 'devnet' as const,
-    };
-  }
-};
 
 // Quick questions for compliance chat
 const QUICK_QUESTIONS = [
@@ -78,7 +54,7 @@ const QUICK_QUESTIONS = [
 
 export default function ComplianceDashboard() {
   // Solana wallet hook
-  const solanaWallet = useSolanaWalletHook();
+  const solanaWallet = useSolanaWallet();
 
   // Auth hook
   const auth = useComplianceAuth(solanaWallet);

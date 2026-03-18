@@ -99,7 +99,7 @@ export interface AuthContext {
  * In production, this would verify JWT/session tokens
  * For now, we trust the actor_type and actor_id from request
  */
-export function getAuthContext(request: NextRequest, body?: Record<string, unknown>): AuthContext | null {
+export function getAuthContext(request: NextRequest): AuthContext | null {
   // 1. Check headers first (set by middleware, most trusted)
   // Detect merchant context from URL path to resolve correct actor when both headers are present
   const headerUserId = request.headers.get('x-user-id');
@@ -110,12 +110,13 @@ export function getAuthContext(request: NextRequest, body?: Record<string, unkno
   if (headerComplianceId) {
     return { actorType: 'compliance', actorId: headerComplianceId, complianceId: headerComplianceId };
   }
-  // If both user and merchant headers exist, use route context to pick the right one
+  // If both user and merchant headers exist, disambiguate using route context
+  // Also store both IDs so downstream checks can reference either identity
   if (headerMerchantId && headerUserId) {
     if (isMerchantRoute) {
-      return { actorType: 'merchant', actorId: headerMerchantId, merchantId: headerMerchantId };
+      return { actorType: 'merchant', actorId: headerMerchantId, merchantId: headerMerchantId, userId: headerUserId };
     }
-    return { actorType: 'user', actorId: headerUserId, userId: headerUserId };
+    return { actorType: 'user', actorId: headerUserId, userId: headerUserId, merchantId: headerMerchantId };
   }
   if (headerMerchantId) {
     return { actorType: 'merchant', actorId: headerMerchantId, merchantId: headerMerchantId };
@@ -124,51 +125,8 @@ export function getAuthContext(request: NextRequest, body?: Record<string, unkno
     return { actorType: 'user', actorId: headerUserId, userId: headerUserId };
   }
 
-  // 2. Try to get from body (for POST/PATCH requests)
-  if (body) {
-    const actorType = body.actor_type as string;
-    const actorId = body.actor_id as string || body.sender_id as string || body.user_id as string;
-
-    if (actorType && actorId) {
-      return {
-        actorType: actorType as 'user' | 'merchant' | 'system' | 'compliance',
-        actorId,
-        userId: actorType === 'user' ? actorId : undefined,
-        merchantId: actorType === 'merchant' ? actorId : undefined,
-        complianceId: actorType === 'compliance' ? actorId : undefined,
-      };
-    }
-  }
-
-  // Try query params
-  const userId = request.nextUrl.searchParams.get('user_id');
-  const merchantId = request.nextUrl.searchParams.get('merchant_id');
-  const complianceId = request.nextUrl.searchParams.get('compliance_id');
-
-  if (userId) {
-    return {
-      actorType: 'user',
-      actorId: userId,
-      userId,
-    };
-  }
-
-  if (merchantId) {
-    return {
-      actorType: 'merchant',
-      actorId: merchantId,
-      merchantId,
-    };
-  }
-
-  if (complianceId) {
-    return {
-      actorType: 'compliance',
-      actorId: complianceId,
-      complianceId,
-    };
-  }
-
+  // Body and query param fallbacks removed — actor identity must come from headers only.
+  // This prevents actor spoofing via crafted POST bodies.
   return null;
 }
 
@@ -211,6 +169,15 @@ async function actorExistsInDb(auth: AuthContext): Promise<boolean> {
   let exists = false;
   if (auth.actorType === 'user' && auth.userId) {
     exists = await verifyUser(auth.userId);
+    // If user ID is stale but merchant ID is valid, flip to merchant context
+    if (!exists && auth.merchantId) {
+      const merchantExists = await verifyMerchant(auth.merchantId);
+      if (merchantExists) {
+        auth.actorType = 'merchant';
+        auth.actorId = auth.merchantId;
+        exists = true;
+      }
+    }
   } else if (auth.actorType === 'merchant' && auth.merchantId) {
     exists = await verifyMerchant(auth.merchantId);
   } else if (auth.actorType === 'system') {
@@ -231,9 +198,8 @@ async function actorExistsInDb(auth: AuthContext): Promise<boolean> {
  */
 export async function getVerifiedAuthContext(
   request: NextRequest,
-  body?: Record<string, unknown>
 ): Promise<AuthContext | null> {
-  const auth = getAuthContext(request, body);
+  const auth = getAuthContext(request);
   if (!auth) return null;
 
   const exists = await actorExistsInDb(auth);
@@ -251,9 +217,8 @@ export async function getVerifiedAuthContext(
  */
 export async function requireAuth(
   request: NextRequest,
-  body?: Record<string, unknown>
 ): Promise<AuthContext | NextResponse> {
-  const auth = await getVerifiedAuthContext(request, body);
+  const auth = await getVerifiedAuthContext(request);
   if (!auth) return unauthorizedResponse('Authentication required');
   return auth;
 }

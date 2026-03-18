@@ -10,7 +10,6 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 
 interface UseEscrowOperationsParams {
-  isMockMode: boolean;
   solanaWallet: any;
   effectiveBalance: number | null;
   inAppBalance: number | null;
@@ -24,7 +23,6 @@ interface UseEscrowOperationsParams {
 }
 
 export function useEscrowOperations({
-  isMockMode,
   solanaWallet,
   effectiveBalance,
   inAppBalance,
@@ -73,7 +71,7 @@ export function useEscrowOperations({
       return;
     }
 
-    if (!isMockMode && !solanaWallet.connected) {
+    if (!solanaWallet.connected) {
       addNotification('system', 'Please connect your wallet to lock escrow.');
       setShowWalletModal(true);
       return;
@@ -97,7 +95,7 @@ export function useEscrowOperations({
     setEscrowError(null);
     setIsLockingEscrow(false);
     setShowEscrowModal(true);
-  }, [merchantId, isMockMode, solanaWallet.connected, addNotification, setShowWalletModal]);
+  }, [merchantId, solanaWallet.connected, addNotification, setShowWalletModal]);
 
   const executeLockEscrow = useCallback(async () => {
     if (!merchantId || !escrowOrder) return;
@@ -110,7 +108,7 @@ export function useEscrowOperations({
     if (effectiveBalance === null) {
       await refreshBalance();
       await new Promise(r => setTimeout(r, 500));
-      const newBalance = isMockMode ? inAppBalance : solanaWallet.usdtBalance;
+      const newBalance = solanaWallet.usdtBalance;
       if (newBalance !== null && newBalance < escrowOrder.amount) {
         setEscrowError(`Insufficient USDC balance. You need ${escrowOrder.amount} USDC but have ${newBalance.toFixed(2)} USDC.`);
         return;
@@ -120,7 +118,7 @@ export function useEscrowOperations({
     const validWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
     const isValidWallet = (addr: string | undefined | null): boolean => {
       if (!addr) return false;
-      return isMockMode ? addr.length > 0 : validWalletRegex.test(addr);
+      return validWalletRegex.test(addr);
     };
     const myWallet = solanaWallet.walletAddress;
 
@@ -150,7 +148,7 @@ export function useEscrowOperations({
       recipientWallet = isValidWallet(escrowOrder.userWallet) ? escrowOrder.userWallet! : undefined;
     }
 
-    if (!recipientWallet && !canEscrowToTreasury && !isMockMode && !IS_EMBEDDED_WALLET) {
+    if (!recipientWallet && !canEscrowToTreasury && !IS_EMBEDDED_WALLET) {
       setEscrowError(isMerchantTrade
         ? 'The other merchant has not connected their Solana wallet yet.'
         : 'User has not connected their Solana wallet yet. Ask them to connect their wallet in the app first.');
@@ -161,17 +159,10 @@ export function useEscrowOperations({
     setEscrowError(null);
 
     try {
-      let escrowResult: { success: boolean; txHash: string; tradeId?: number; tradePda?: string; escrowPda?: string; error?: string };
-
-      if (isMockMode) {
-        const mockTxHash = `mock-escrow-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        escrowResult = { success: true, txHash: mockTxHash, tradeId: undefined, tradePda: undefined, escrowPda: undefined };
-      } else {
-        escrowResult = await solanaWallet.depositToEscrowOpen({
-          amount: escrowOrder.amount,
-          side: 'sell',
-        });
-      }
+      const escrowResult: { success: boolean; txHash: string; tradeId?: number; tradePda?: string; escrowPda?: string; error?: string } = await solanaWallet.depositToEscrowOpen({
+        amount: escrowOrder.amount,
+        side: 'sell',
+      });
 
       if (!escrowResult.success || !escrowResult.txHash) {
         throw new Error(escrowResult.error || 'Transaction failed');
@@ -299,7 +290,7 @@ export function useEscrowOperations({
       setIsLockingEscrow(false);
       playSound('error');
     }
-  }, [merchantId, escrowOrder, effectiveBalance, inAppBalance, isMockMode, solanaWallet, addNotification, playSound, afterMutationReconcile, refreshBalance]);
+  }, [merchantId, escrowOrder, effectiveBalance, inAppBalance, solanaWallet, addNotification, playSound, afterMutationReconcile, refreshBalance]);
 
   const closeEscrowModal = useCallback(() => {
     setShowEscrowModal(false);
@@ -317,7 +308,7 @@ export function useEscrowOperations({
   const openReleaseModal = useCallback(async (order: Order) => {
     if (!merchantId) return;
 
-    if (!isMockMode && !solanaWallet.connected) {
+    if (!solanaWallet.connected) {
       addNotification('system', 'Please connect your wallet to release escrow.');
       setShowWalletModal(true);
       return;
@@ -358,7 +349,7 @@ export function useEscrowOperations({
     setReleaseError(null);
     setIsReleasingEscrow(false);
     setShowReleaseModal(true);
-  }, [merchantId, isMockMode, solanaWallet.connected, addNotification, setShowWalletModal, fetchOrders]);
+  }, [merchantId, solanaWallet.connected, addNotification, setShowWalletModal, fetchOrders]);
 
   const executeRelease = useCallback(async () => {
     if (!merchantId || !releaseOrder) return;
@@ -369,38 +360,58 @@ export function useEscrowOperations({
     try {
       const { escrowTradeId, escrowCreatorWallet, userWallet } = releaseOrder;
 
-      if (!isMockMode) {
-        const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-        if (!escrowTradeId || !escrowCreatorWallet || !userWallet) {
-          setReleaseError('Missing escrow details. The escrow may not have been locked on-chain.');
-          setIsReleasingEscrow(false);
-          return;
-        }
-        if (!base58Regex.test(userWallet)) {
-          setReleaseError('Invalid user wallet address format.');
-          setIsReleasingEscrow(false);
-          return;
-        }
+      const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+      if (!escrowTradeId || !escrowCreatorWallet || !userWallet) {
+        setReleaseError('Missing escrow details. The escrow may not have been locked on-chain.');
+        setIsReleasingEscrow(false);
+        return;
+      }
+      if (!base58Regex.test(userWallet)) {
+        setReleaseError('Invalid user wallet address format.');
+        setIsReleasingEscrow(false);
+        return;
       }
 
       let releaseResult: { success: boolean; txHash: string; error?: string };
-      if (isMockMode) {
-        releaseResult = { success: true, txHash: `mock-release-${Date.now()}` };
-      } else {
+      {
+        // Ensure acceptTrade is called first (merchant joins escrow as counterparty)
+        // This is required before releaseEscrow — the on-chain trade must be in Locked state
+        try {
+          console.log('[Release] Ensuring acceptTrade before release:', {
+            tradeId: escrowTradeId,
+            creatorWallet: escrowCreatorWallet,
+          });
+          await solanaWallet.acceptTrade({
+            creatorPubkey: escrowCreatorWallet,
+            tradeId: escrowTradeId,
+          });
+          console.log('[Release] acceptTrade succeeded (or was already done)');
+        } catch (acceptErr: any) {
+          // Expected to fail if already accepted — safe to continue
+          console.log('[Release] acceptTrade skipped (likely already done):', acceptErr?.message);
+        }
+
         try {
           releaseResult = await solanaWallet.releaseEscrow({
-            creatorPubkey: escrowCreatorWallet || 'mock',
-            tradeId: escrowTradeId || 0,
-            counterparty: userWallet || 'mock',
+            creatorPubkey: escrowCreatorWallet,
+            tradeId: escrowTradeId,
+            counterparty: userWallet,
           });
         } catch (releaseErr: unknown) {
           const msg = releaseErr instanceof Error ? releaseErr.message : String(releaseErr);
-          if (msg.includes('ConstraintRaw') && msg.includes('counterparty_ata')) {
-            setReleaseError('Buyer has not joined the escrow on-chain yet. Ask the buyer to connect their wallet and view this order first.');
+          console.error('[Release] releaseEscrow failed:', msg);
+
+          // Escrow account gone = already released on-chain, just sync DB
+          if (msg.includes('AccountNotInitialized')) {
+            console.log('[Release] Escrow already released on-chain — syncing backend...');
+            releaseResult = { success: true, txHash: releaseOrder.escrowTxHash || 'already-released' };
+          } else if (msg.includes('ConstraintRaw') || msg.includes('CannotRelease')) {
+            setReleaseError(`Unable to release escrow: ${msg.slice(0, 200)}`);
             setIsReleasingEscrow(false);
             return;
+          } else {
+            throw releaseErr;
           }
-          throw releaseErr;
         }
       }
 
@@ -445,7 +456,7 @@ export function useEscrowOperations({
     } finally {
       setIsReleasingEscrow(false);
     }
-  }, [merchantId, releaseOrder, isMockMode, solanaWallet, addNotification, playSound, afterMutationReconcile, setRatingModalData]);
+  }, [merchantId, releaseOrder, solanaWallet, addNotification, playSound, afterMutationReconcile, setRatingModalData]);
 
   const closeReleaseModal = useCallback(() => {
     setShowReleaseModal(false);
@@ -462,7 +473,7 @@ export function useEscrowOperations({
   const openCancelModal = useCallback(async (order: Order) => {
     if (!merchantId) return;
 
-    if (!isMockMode && !solanaWallet.connected) {
+    if (!solanaWallet.connected) {
       addNotification('system', 'Please connect your wallet to cancel escrow.');
       setShowWalletModal(true);
       return;
@@ -491,7 +502,7 @@ export function useEscrowOperations({
     setCancelError(null);
     setIsCancellingEscrow(false);
     setShowCancelModal(true);
-  }, [merchantId, isMockMode, solanaWallet.connected, addNotification, setShowWalletModal]);
+  }, [merchantId, solanaWallet.connected, addNotification, setShowWalletModal]);
 
   const executeCancelEscrow = useCallback(async () => {
     if (!merchantId || !cancelOrder) return;
@@ -502,21 +513,16 @@ export function useEscrowOperations({
     try {
       const { escrowTradeId, escrowCreatorWallet } = cancelOrder;
 
-      if (!isMockMode && (!escrowTradeId || !escrowCreatorWallet)) {
+      if (!escrowTradeId || !escrowCreatorWallet) {
         setCancelError('Missing escrow details. The escrow may not have been locked on-chain.');
         setIsCancellingEscrow(false);
         return;
       }
 
-      let refundResult: { success: boolean; txHash: string; error?: string };
-      if (isMockMode) {
-        refundResult = { success: true, txHash: `mock-refund-${Date.now()}` };
-      } else {
-        refundResult = await solanaWallet.refundEscrow({
-          creatorPubkey: escrowCreatorWallet || 'mock',
-          tradeId: escrowTradeId || 0,
-        });
-      }
+      const refundResult: { success: boolean; txHash: string; error?: string } = await solanaWallet.refundEscrow({
+        creatorPubkey: escrowCreatorWallet,
+        tradeId: escrowTradeId,
+      });
 
       if (refundResult.success) {
         setCancelTxHash(refundResult.txHash);
@@ -545,7 +551,7 @@ export function useEscrowOperations({
     } finally {
       setIsCancellingEscrow(false);
     }
-  }, [merchantId, cancelOrder, isMockMode, solanaWallet, addNotification, playSound, afterMutationReconcile]);
+  }, [merchantId, cancelOrder, solanaWallet, addNotification, playSound, afterMutationReconcile]);
 
   const closeCancelModal = useCallback(() => {
     setShowCancelModal(false);

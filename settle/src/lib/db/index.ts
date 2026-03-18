@@ -10,9 +10,10 @@ const poolConfig = process.env.DATABASE_URL
   ? {
       connectionString: process.env.DATABASE_URL,
       ssl: isProduction ? { rejectUnauthorized: false } : false,
-      max: 10,
+      max: parseInt(process.env.DB_POOL_MAX || '20'),
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 30000,
     }
   : {
       host: process.env.DB_HOST || 'localhost',
@@ -20,9 +21,10 @@ const poolConfig = process.env.DATABASE_URL
       database: process.env.DB_NAME || 'settle',
       user: process.env.DB_USER || 'zeus',
       password: process.env.DB_PASSWORD || '',
-      max: 10,
+      max: parseInt(process.env.DB_POOL_MAX || '20'),
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 10000,
+      statement_timeout: 30000,
     };
 
 // Prevent pool duplication on HMR reloads in dev
@@ -46,7 +48,10 @@ export async function query<T = unknown>(
   const result = await pool.query(text, params);
   const duration = Date.now() - start;
 
-  if (process.env.NODE_ENV === 'development') {
+  // Log slow queries in all environments (>200ms)
+  if (duration > 200) {
+    console.warn('[SLOW QUERY]', { sql: text.substring(0, 120), duration_ms: duration, rows: result.rowCount });
+  } else if (process.env.NODE_ENV === 'development') {
     console.log('Executed query', { text: text.substring(0, 50), duration, rows: result.rowCount });
   }
 

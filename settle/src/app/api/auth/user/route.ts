@@ -322,7 +322,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[API] POST /api/auth/user error:', error);
     return NextResponse.json(
-      { success: false, error: 'Authentication failed', details: error instanceof Error ? error.message : String(error) },
+      { success: false, error: 'Authentication failed' },
       { status: 500 }
     );
   }
@@ -392,7 +392,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[API] GET /api/auth/user error:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to get user', details: error instanceof Error ? error.message : String(error) },
+      { success: false, error: 'Failed to get user' },
       { status: 500 }
     );
   }

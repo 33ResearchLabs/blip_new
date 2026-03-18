@@ -13,7 +13,8 @@ export async function getOnlineMerchants(): Promise<Merchant[]> {
   return query<Merchant>(
     `SELECT * FROM merchants
      WHERE status = 'active' AND is_online = true
-     ORDER BY rating DESC, total_trades DESC`
+     ORDER BY rating DESC, total_trades DESC
+     LIMIT 100`
   );
 }
 

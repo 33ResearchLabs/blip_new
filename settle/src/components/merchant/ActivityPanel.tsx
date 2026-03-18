@@ -386,7 +386,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                             <span className={`text-[9px] font-bold font-mono uppercase ${
                               order.orderType === 'buy' ? 'text-green-400/60' : 'text-orange-400/60'
                             }`}>
-                              {order.orderType === 'buy' ? 'SELL' : 'BUY'}
+                              {order.orderType === 'buy' ? 'SEND' : 'RECEIVE'}
                             </span>
                           )}
                         </div>

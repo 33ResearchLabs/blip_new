@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: false,
       error: 'Failed to clear orders',
-      details: error instanceof Error ? error.message : String(error),
+      
     }, { status: 500 });
   }
 }

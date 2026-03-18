@@ -9,7 +9,6 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 
 interface UseOrderActionsParams {
-  isMockMode: boolean;
   solanaWallet: any;
   effectiveBalance: number | null;
   addNotification: (type: Notification['type'], message: string, orderId?: string) => void;
@@ -22,7 +21,6 @@ interface UseOrderActionsParams {
 }
 
 export function useOrderActions({
-  isMockMode,
   solanaWallet,
   effectiveBalance,
   addNotification,
@@ -51,21 +49,19 @@ export function useOrderActions({
     const isBuyOrder = order.orderType === 'buy';
     const isSellOrder = order.orderType === 'sell';
 
-    // Check if order is already escrowed by someone else (M2M flow)
-    const isEscrowedByOther = order.escrowTxHash && order.dbOrder?.status === 'escrowed';
+    // Check if escrow exists on-chain (don't gate on status — escrow data may arrive before status updates)
+    const hasOnChainEscrow = !!order.escrowTxHash && !!order.escrowCreatorWallet && order.escrowTradeId != null;
 
-    // For M2M where seller already escrowed: require wallet to receive funds (skip in mock mode)
-    if (!isMockMode && isEscrowedByOther && !solanaWallet.walletAddress) {
-      addNotification('system', 'Please connect your wallet first to receive the USDC.', order.id);
+    // Always require wallet before accepting — you'll need it for escrow lock or release
+    if (!solanaWallet.walletAddress) {
+      addNotification('system', 'Please connect your wallet first to accept orders.', order.id);
       setShowWalletModal(true);
       return;
     }
 
     try {
-      // If escrow is already funded by seller, call acceptTrade on-chain first (skip in mock mode)
-      if (!isMockMode && isEscrowedByOther && order.escrowCreatorWallet && order.escrowTradeId != null) {
-        addNotification('system', 'Joining escrow on-chain... Please approve the transaction.', order.id);
-
+      // If escrow is already funded by seller, call acceptTrade on-chain first
+      if (hasOnChainEscrow) {
         try {
           const acceptResult = await solanaWallet.acceptTrade({
             creatorPubkey: order.escrowCreatorWallet,
@@ -92,7 +88,6 @@ export function useOrderActions({
             return;
           }
         }
-      } else if (isMockMode && isEscrowedByOther) {
       }
 
       // Build the request body
@@ -137,13 +132,13 @@ export function useOrderActions({
       }
 
       const acceptRole = isBuyOrder ? 'seller' : 'buyer';
-      const nextStepMsg = isEscrowedByOther
+      const nextStepMsg = hasOnChainEscrow
         ? 'Order claimed! Send the fiat payment and click "I\'ve Paid".'
         : acceptRole === 'seller'
           ? 'Now lock your USDC in escrow to proceed.'
           : 'Waiting for the seller to lock escrow.';
 
-      const uiStatus = isEscrowedByOther ? "escrow" : "active";
+      const uiStatus = hasOnChainEscrow ? "escrow" : "active";
       playSound('click');
       addNotification('system', `Order accepted! ${nextStepMsg}`, order.id);
       handleOpenChat(order);
@@ -208,36 +203,33 @@ export function useOrderActions({
   const signToClaimOrder = async (order: Order) => {
     if (!merchantId) return;
 
-    if (!isMockMode && !solanaWallet.connected) {
+    if (!solanaWallet.connected) {
       addNotification('system', 'Please connect your wallet to sign.');
       setShowWalletModal(true);
       return;
     }
 
-    if (!isMockMode && (!solanaWallet.walletAddress || !solanaWallet.signMessage)) {
+    if (!solanaWallet.walletAddress || !solanaWallet.signMessage) {
       addNotification('system', 'Wallet not ready. Please reconnect.');
       playSound('error');
       return;
     }
 
     try {
-      const walletAddr = solanaWallet.walletAddress || 'mock-wallet';
+      const walletAddr = solanaWallet.walletAddress;
       const message = `Claim order ${order.id} - I will send fiat payment. Wallet: ${walletAddr}`;
       const messageBytes = new TextEncoder().encode(message);
 
-      addNotification('system', isMockMode ? 'Processing...' : 'Please sign in your wallet to claim this order...', order.id);
-      let signature = 'mock-signature';
-      if (!isMockMode) {
-        const signatureBytes = await solanaWallet.signMessage(messageBytes);
-        signature = Buffer.from(signatureBytes).toString('base64');
-      }
+      addNotification('system', 'Please sign in your wallet to claim this order...', order.id);
+      const signatureBytes = await solanaWallet.signMessage(messageBytes);
+      const signature = Buffer.from(signatureBytes).toString('base64');
 
       const claimBody: Record<string, string> = {
           status: "payment_pending",
           actor_type: "merchant",
           actor_id: merchantId,
       };
-      if (!isMockMode && solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
+      if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
         claimBody.acceptor_wallet_address = solanaWallet.walletAddress;
         claimBody.acceptor_wallet_signature = signature;
       }
@@ -276,36 +268,33 @@ export function useOrderActions({
   const signAndProceed = async (order: Order) => {
     if (!merchantId) return;
 
-    if (!isMockMode && !solanaWallet.connected) {
+    if (!solanaWallet.connected) {
       addNotification('system', 'Please connect your wallet to sign.');
       setShowWalletModal(true);
       return;
     }
 
-    if (!isMockMode && (!solanaWallet.walletAddress || !solanaWallet.signMessage)) {
+    if (!solanaWallet.walletAddress || !solanaWallet.signMessage) {
       addNotification('system', 'Wallet not ready. Please reconnect.');
       playSound('error');
       return;
     }
 
     try {
-      const walletAddr = solanaWallet.walletAddress || 'mock-wallet';
+      const walletAddr = solanaWallet.walletAddress;
       const message = `Confirm order ${order.id} - I will send fiat payment. Wallet: ${walletAddr}`;
       const messageBytes = new TextEncoder().encode(message);
 
-      addNotification('system', isMockMode ? 'Processing...' : 'Please sign in your wallet to proceed...', order.id);
-      let signature = 'mock-signature';
-      if (!isMockMode) {
-        const signatureBytes = await solanaWallet.signMessage(messageBytes);
-        signature = Buffer.from(signatureBytes).toString('base64');
-      }
+      addNotification('system', 'Please sign in your wallet to proceed...', order.id);
+      const signatureBytes = await solanaWallet.signMessage(messageBytes);
+      const signature = Buffer.from(signatureBytes).toString('base64');
 
       const proceedBody: Record<string, string> = {
         status: "payment_sent",
         actor_type: "merchant",
         actor_id: merchantId,
       };
-      if (!isMockMode && solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
+      if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
         proceedBody.acceptor_wallet_address = solanaWallet.walletAddress;
         proceedBody.acceptor_wallet_signature = signature;
       }
@@ -457,9 +446,7 @@ export function useOrderActions({
       let releaseTxHash: string;
 
       if (order.orderType === 'buy' || order.orderType === 'sell') {
-        if (isMockMode) {
-          releaseTxHash = `demo-release-${Date.now()}`;
-        } else if (order.escrowTradeId && order.escrowCreatorWallet && order.userWallet) {
+        if (order.escrowTradeId && order.escrowCreatorWallet && order.userWallet) {
           const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
           const isValidUserWallet = order.userWallet && base58Regex.test(order.userWallet);
 
@@ -576,8 +563,8 @@ export function useOrderActions({
           matchedOffer = offerData.data;
         }
 
-        // Validate counterparty wallet (skip in mock mode and embedded wallet mode)
-        if (!isMockMode && !IS_EMBEDDED_WALLET) {
+        // Validate counterparty wallet (skip in embedded wallet mode)
+        if (!IS_EMBEDDED_WALLET) {
           const counterpartyWallet = matchedOffer?.merchant?.wallet_address;
           const isValidWallet = counterpartyWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(counterpartyWallet);
 
@@ -674,6 +661,56 @@ export function useOrderActions({
     }
   };
 
+  // ═══════════════════════════════════════════════════════════════════
+  // RETRY JOIN ESCROW ON-CHAIN
+  // ═══════════════════════════════════════════════════════════════════
+  const retryJoinEscrow = async (order: Order): Promise<boolean> => {
+    if (!merchantId) return false;
+
+    if (!solanaWallet.connected || !solanaWallet.walletAddress) {
+      addNotification('system', 'Please connect your wallet first.', order.id);
+      setShowWalletModal(true);
+      return false;
+    }
+
+    if (!order.escrowCreatorWallet || order.escrowTradeId == null) {
+      addNotification('system', 'Missing escrow details for on-chain join.', order.id);
+      return false;
+    }
+
+    try {
+      addNotification('system', 'Joining escrow on-chain... Please approve the transaction.', order.id);
+      const result = await solanaWallet.acceptTrade({
+        creatorPubkey: order.escrowCreatorWallet,
+        tradeId: order.escrowTradeId,
+      });
+
+      if (!result.success) {
+        addNotification('system', `Failed to join escrow: ${result.error}`, order.id);
+        playSound('error');
+        return false;
+      }
+
+      addNotification('system', 'Successfully joined escrow on-chain!', order.id);
+      playSound('click');
+      return true;
+    } catch (err: any) {
+      const msg = err?.message || '';
+      if (msg.includes('CannotAccept') || msg.includes('0x177d') || msg.includes('6013')) {
+        addNotification('system', 'Already joined escrow on-chain.', order.id);
+        return true;
+      }
+      if (msg.includes('AccountNotInitialized') || msg.includes('0xbc4') || msg.includes('3012')) {
+        addNotification('system', 'Escrow does not exist on-chain. This order may have used mock escrow.', order.id);
+        playSound('error');
+        return false;
+      }
+      addNotification('system', `Failed to join escrow: ${msg}`, order.id);
+      playSound('error');
+      return false;
+    }
+  };
+
   return {
     // State
     markingDone,
@@ -683,6 +720,7 @@ export function useOrderActions({
     // Actions
     acceptOrder,
     acceptWithSaed,
+    retryJoinEscrow,
     signToClaimOrder,
     signAndProceed,
     markFiatPaymentSent,

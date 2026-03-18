@@ -1,13 +1,10 @@
 /**
- * Order State Machine
- *
- * Defines all valid order statuses and allowed transitions.
- * This is the single source of truth for order state management.
+ * @deprecated Use stateMachineMinimal.ts instead. This legacy 12-status machine is retained for reference only.
  */
 
 import { OrderStatus, ActorType } from '../types/database';
 
-// All valid order statuses
+/** @deprecated Use MINIMAL_ORDER_STATUSES from stateMachineMinimal.ts */
 export const ORDER_STATUSES: readonly OrderStatus[] = [
   'pending',
   'accepted',
@@ -23,11 +20,10 @@ export const ORDER_STATUSES: readonly OrderStatus[] = [
   'expired',
 ] as const;
 
-// Global timeout: ALL orders must complete within 15 minutes
+/** @deprecated Use GLOBAL_ORDER_TIMEOUT_MINUTES from stateMachineMinimal.ts */
 export const GLOBAL_ORDER_TIMEOUT_MINUTES = 15;
 
-// Timeout durations in minutes (legacy per-status - kept for reference)
-// Note: Global 15-minute timeout takes precedence
+/** @deprecated Use STATUS_TIMEOUTS from stateMachineMinimal.ts */
 export const STATUS_TIMEOUTS: Partial<Record<OrderStatus, number>> = {
   pending: 15,
   accepted: 15,
@@ -129,21 +125,21 @@ export const ALLOWED_TRANSITIONS: Record<OrderStatus, TransitionRule[]> = {
   expired: [], // Terminal state - no transitions allowed
 };
 
-// Terminal states that cannot transition
+/** @deprecated Use MINIMAL_TERMINAL_STATUSES from stateMachineMinimal.ts */
 export const TERMINAL_STATUSES: readonly OrderStatus[] = [
   'completed',
   'cancelled',
   'expired',
 ];
 
-// Statuses where liquidity should be restored on exit
+/** @deprecated Use MINIMAL_RESTORE_LIQUIDITY_ON_EXIT from stateMachineMinimal.ts */
 export const RESTORE_LIQUIDITY_ON_EXIT: readonly OrderStatus[] = [
   'pending',
   'accepted',
   'escrow_pending',
 ];
 
-// Statuses where the order is considered "active" (not terminal)
+/** @deprecated Use MINIMAL_ACTIVE_STATUSES from stateMachineMinimal.ts */
 export const ACTIVE_STATUSES: readonly OrderStatus[] = [
   'pending',
   'accepted',
@@ -161,9 +157,7 @@ export interface TransitionValidation {
   error?: string;
 }
 
-/**
- * Validate if a status transition is allowed
- */
+/** @deprecated Use validateTransition from stateMachineMinimal.ts */
 export function validateTransition(
   currentStatus: OrderStatus,
   newStatus: OrderStatus,
@@ -215,31 +209,23 @@ export function validateTransition(
   return { valid: true };
 }
 
-/**
- * Check if a status is terminal (no further transitions possible)
- */
+/** @deprecated Use isTerminalStatus from stateMachineMinimal.ts */
 export function isTerminalStatus(status: OrderStatus): boolean {
   return TERMINAL_STATUSES.includes(status);
 }
 
-/**
- * Check if an order is active (not in terminal state)
- */
+/** @deprecated Use isActiveStatus from stateMachineMinimal.ts */
 export function isActiveStatus(status: OrderStatus): boolean {
   return ACTIVE_STATUSES.includes(status);
 }
 
-/**
- * Get timeout for a status in milliseconds
- */
+/** @deprecated Use getStatusTimeout from stateMachineMinimal.ts */
 export function getStatusTimeout(status: OrderStatus): number | null {
   const minutes = STATUS_TIMEOUTS[status];
   return minutes ? minutes * 60 * 1000 : null;
 }
 
-/**
- * Check if liquidity should be restored when transitioning from a status
- */
+/** @deprecated Use shouldRestoreLiquidity from stateMachineMinimal.ts */
 export function shouldRestoreLiquidity(
   fromStatus: OrderStatus,
   toStatus: OrderStatus
@@ -251,9 +237,7 @@ export function shouldRestoreLiquidity(
   return false;
 }
 
-/**
- * Get the event type string for a transition
- */
+/** @deprecated Use getTransitionEventType from stateMachineMinimal.ts */
 export function getTransitionEventType(
   fromStatus: OrderStatus,
   toStatus: OrderStatus
@@ -261,9 +245,7 @@ export function getTransitionEventType(
   return `status_changed_to_${toStatus}`;
 }
 
-/**
- * Get the timestamp field to update for a given status
- */
+/** @deprecated Use getTimestampField from stateMachineMinimal.ts */
 export function getTimestampField(status: OrderStatus): string | null {
   const timestampFields: Partial<Record<OrderStatus, string>> = {
     accepted: 'accepted_at',
@@ -276,10 +258,7 @@ export function getTimestampField(status: OrderStatus): string | null {
   return timestampFields[status] || null;
 }
 
-/**
- * Get next expiry interval for a given status
- * Note: Global 15-minute timeout - expires_at is set at creation and doesn't change
- */
+/** @deprecated Use getNextExpiryInterval from stateMachineMinimal.ts */
 export function getNextExpiryInterval(status: OrderStatus): string | null {
   // All statuses use the same 15-minute timeout from creation
   // This function is kept for compatibility but expiry is now based on created_at
@@ -315,16 +294,12 @@ export const EXTENDABLE_STATUSES: readonly OrderStatus[] = [
   'payment_sent',
 ];
 
-/**
- * Check if a status allows extension requests
- */
+/** @deprecated Use canRequestExtension from stateMachineMinimal.ts */
 export function canRequestExtension(status: OrderStatus): boolean {
   return EXTENDABLE_STATUSES.includes(status);
 }
 
-/**
- * Check if an order can be extended (has remaining extensions)
- */
+/** @deprecated Use canExtendOrder from stateMachineMinimal.ts */
 export function canExtendOrder(
   status: OrderStatus,
   currentExtensionCount: number,
@@ -347,15 +322,12 @@ export function canExtendOrder(
   return { canExtend: true };
 }
 
-/**
- * Get extension duration for a status in minutes
- */
+/** @deprecated Use getExtensionDuration from stateMachineMinimal.ts */
 export function getExtensionDuration(status: OrderStatus): number {
   return EXTENSION_DURATIONS[status] || 30; // Default 30 minutes
 }
 
-/**
- * Determine what happens when an order expires without extension
+/** @deprecated Use getExpiryOutcome from stateMachineMinimal.ts
  * - If max extensions reached -> disputed
  * - If extension declined -> cancelled
  * - If no response -> cancelled
@@ -382,19 +354,12 @@ export function getExpiryOutcome(
 // CANCEL REQUEST SYSTEM
 // =====================
 
-/**
- * Check if a cancel request can be made in the current status.
- * Before acceptance: unilateral cancel is fine (no request needed).
- * After acceptance: need mutual agreement via cancel request.
- */
+/** @deprecated Use canRequestCancel from stateMachineMinimal.ts */
 export function canRequestCancel(status: OrderStatus): boolean {
   return (CANCEL_REQUEST_STATUSES as readonly string[]).includes(status);
 }
 
-/**
- * Check if unilateral cancel is allowed (no approval needed).
- * Only pending and escrow_pending allow unilateral cancel.
- */
+/** @deprecated Use canUnilateralCancel from stateMachineMinimal.ts */
 export function canUnilateralCancel(status: OrderStatus): boolean {
   return status === 'pending' || status === 'escrow_pending';
 }
@@ -403,19 +368,12 @@ export function canUnilateralCancel(status: OrderStatus): boolean {
 // INACTIVITY SYSTEM
 // =====================
 
-/**
- * Check if inactivity tracking applies to this status
- */
+/** @deprecated Use isInactivityTracked from stateMachineMinimal.ts */
 export function isInactivityTracked(status: OrderStatus): boolean {
   return (INACTIVITY_TRACKED_STATUSES as readonly string[]).includes(status);
 }
 
-/**
- * Determine inactivity escalation outcome for an order.
- * After 1hr of inactivity:
- *   - If escrow exists → ask non-escrow party if tx done → if not, dispute
- *   - If no escrow → cancel
- */
+/** @deprecated Use getInactivityOutcome from stateMachineMinimal.ts */
 export function getInactivityOutcome(
   status: OrderStatus,
   hasEscrow: boolean,

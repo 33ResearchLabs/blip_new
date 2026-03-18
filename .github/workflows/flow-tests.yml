@@ -37,7 +37,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/blip_test
-      NEXT_PUBLIC_MOCK_MODE: true
+      NEXT_PUBLIC_MOCK_MODE: false
       NODE_ENV: development
       PORT: 3000
       CORE_API_PORT: 4010

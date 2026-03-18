@@ -86,7 +86,7 @@ export async function POST(
     const body = await request.json();
 
     // Require authentication
-    const auth = await requireAuth(request, body);
+    const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
     // Validate request body
@@ -182,7 +182,7 @@ export async function PATCH(
     }
 
     // Require authentication
-    const auth = await requireAuth(request, body);
+    const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
     // Authorization check

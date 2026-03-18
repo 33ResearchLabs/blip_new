@@ -36,6 +36,12 @@ const ENV_SCHEMA: EnvVar[] = [
 
   // Solana
   { key: 'NEXT_PUBLIC_SOLANA_RPC_URL', required: true },
+
+  // CORS (required in production — must be set to real domain)
+  { key: 'CORS_ORIGIN', required: true },
+
+  // Telegram (notifications)
+  { key: 'TELEGRAM_BOT_TOKEN', required: false, secret: true },
 ];
 
 export function validateEnv(): { valid: boolean; missing: string[]; warnings: string[] } {
@@ -71,12 +77,19 @@ export function validateEnv(): { valid: boolean; missing: string[]; warnings: st
   };
 }
 
-// Auto-validate on import — warn but don't crash
-if (isProduction) {
-  const result = validateEnv();
-  if (!result.valid) {
-    console.warn(
-      `[env] Missing environment variables: ${result.missing.join(', ')}`
-    );
+// Auto-validate on import — crash in production if critical vars are missing
+const _envResult = validateEnv();
+if (isProduction && !_envResult.valid) {
+  const msg = `[env] FATAL: Missing required environment variables: ${_envResult.missing.join(', ')}`;
+  console.error(msg);
+  console.error('[env] Server cannot start without these.');
+  // Crash server-side only (Edge/Node); on client this is a no-op
+  if (typeof process !== 'undefined' && typeof process.exit === 'function') {
+    process.exit(1);
   }
+  throw new Error(msg);
+} else if (_envResult.warnings.length > 0) {
+  console.warn(
+    `[env] Missing recommended variables: ${_envResult.warnings.join(', ')}`
+  );
 }

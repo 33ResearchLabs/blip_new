@@ -148,7 +148,7 @@ export async function POST(
   } catch (error) {
     console.error('Failed to propose resolution:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to propose resolution', details: error instanceof Error ? error.message : String(error) },
+      { success: false, error: 'Failed to propose resolution' },
       { status: 500 }
     );
   }
@@ -213,7 +213,7 @@ export async function PATCH(
   } catch (error) {
     console.error('Failed to update dispute:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to update dispute', details: error instanceof Error ? error.message : String(error) },
+      { success: false, error: 'Failed to update dispute' },
       { status: 500 }
     );
   }

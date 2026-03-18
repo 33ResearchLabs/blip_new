@@ -5,7 +5,6 @@
  *
  * CRITICAL: This function MUST remain atomic. Do NOT refactor to split apart:
  * - status update to 'cancelled'
- * - balance refund (if MOCK_MODE and escrow exists)
  * - timestamp updates (cancelled_at)
  * - order_events record creation
  * - notification_outbox record creation
@@ -20,10 +19,9 @@
 
 import { transaction } from '@/lib/db';
 import { Order, ActorType } from '@/lib/types/database';
-import { MOCK_MODE } from '@/lib/config/mockMode';
 import { logger } from '@/lib/logger';
-import { validateTransition } from './stateMachine';
-import { createTransactionInTx } from '@/lib/db/repositories/transactions';
+import { validateTransition } from './stateMachineMinimal';
+
 
 export interface AtomicCancelResult {
   success: boolean;
@@ -98,88 +96,10 @@ export async function atomicCancelWithRefund(
         throw new Error('STATUS_CHANGED_INVALID_TRANSITION');
       }
 
-      const amount = parseFloat(String(lockedOrder.crypto_amount));
       const hadEscrow = !!lockedOrder.escrow_tx_hash;
 
-      // Refund escrow if present (MOCK_MODE only)
-      if (MOCK_MODE && hadEscrow) {
-        // Use recorded debit fields — no inference needed
-        const debitType = lockedOrder.escrow_debited_entity_type as 'merchant' | 'user' | null;
-        const debitId = lockedOrder.escrow_debited_entity_id as string | null;
-        const debitAmount = lockedOrder.escrow_debited_amount != null
-          ? parseFloat(String(lockedOrder.escrow_debited_amount))
-          : amount; // fallback for pre-migration orders
-
-        let refundId: string;
-        let refundTable: 'merchants' | 'users';
-        let refundEntityType: 'merchant' | 'user';
-
-        if (debitType && debitId) {
-          // Deterministic refund from recorded fields
-          refundId = debitId;
-          refundTable = debitType === 'merchant' ? 'merchants' : 'users';
-          refundEntityType = debitType;
-        } else {
-          // Legacy fallback for pre-migration orders (infer from order type)
-          const isBuyOrder = lockedOrder.type === 'buy';
-          const isM2M = !!lockedOrder.buyer_merchant_id;
-          if (isM2M) {
-            refundId = lockedOrder.merchant_id;
-            refundTable = 'merchants';
-            refundEntityType = 'merchant';
-          } else {
-            refundId = isBuyOrder ? lockedOrder.merchant_id : lockedOrder.user_id;
-            refundTable = isBuyOrder ? 'merchants' : 'users';
-            refundEntityType = isBuyOrder ? 'merchant' : 'user';
-          }
-          logger.warn('[Atomic] Used legacy inference for refund — order missing escrow_debited fields', { orderId });
-        }
-
-        // Refund exactly the recorded amount
-        await client.query(
-          `UPDATE ${refundTable} SET balance = balance + $1 WHERE id = $2`,
-          [debitAmount, refundId]
-        );
-
-        // Ledger entry for refund
-        await client.query(
-          `INSERT INTO ledger_entries
-           (account_type, account_id, entry_type, amount, asset,
-            related_order_id, description, metadata, balance_before, balance_after)
-           SELECT $1, $2, 'ESCROW_REFUND', $3, 'USDT', $4,
-                  'Escrow refunded for cancelled order #' || $5,
-                  $6::jsonb,
-                  balance - $3, balance
-           FROM ${refundTable} WHERE id = $2`,
-          [
-            refundEntityType,
-            refundId,
-            debitAmount,
-            orderId,
-            lockedOrder.order_number,
-            JSON.stringify({ cancellation_reason: reason || 'Cancelled by ' + actorType }),
-          ]
-        );
-
-        // Transaction log entry for refund
-        await createTransactionInTx(client, {
-          ...(refundEntityType === 'merchant'
-            ? { merchant_id: refundId }
-            : { user_id: refundId }),
-          order_id: orderId,
-          type: 'escrow_refund',
-          amount: debitAmount,
-          description: `Escrow refund for cancelled order #${lockedOrder.order_number}`,
-        });
-
-        logger.info('[Atomic] Refunded escrow on cancellation', {
-          orderId,
-          refundId,
-          refundEntityType,
-          debitAmount,
-          usedRecordedFields: !!(debitType && debitId),
-        });
-      }
+      // In real mode, escrow refunds happen on-chain (not via DB balance).
+      // The on-chain refund is handled by the caller before invoking this function.
 
       // Corridor bridge: refund locked sAED to buyer on cancellation
       if (lockedOrder.payment_via === 'saed_corridor' && lockedOrder.corridor_fulfillment_id) {
@@ -219,17 +139,9 @@ export async function atomicCancelWithRefund(
           JSON.stringify({
             reason: reason || 'Cancelled by ' + actorType,
             had_escrow: hadEscrow,
-            refunded_amount: hadEscrow && MOCK_MODE
-              ? (lockedOrder.escrow_debited_amount != null
-                ? parseFloat(String(lockedOrder.escrow_debited_amount))
-                : amount)
-              : 0,
-            refunded_entity_type: hadEscrow && MOCK_MODE
-              ? (lockedOrder.escrow_debited_entity_type || null)
-              : null,
-            refunded_entity_id: hadEscrow && MOCK_MODE
-              ? (lockedOrder.escrow_debited_entity_id || null)
-              : null,
+            refunded_amount: 0,
+            refunded_entity_type: null,
+            refunded_entity_id: null,
             atomic_cancellation: true,
           }),
         ]

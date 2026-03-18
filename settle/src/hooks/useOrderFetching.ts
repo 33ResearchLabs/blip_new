@@ -271,8 +271,9 @@ export function useOrderFetching({
 
   // ─── Single-order refetch (authoritative, no version check) ───
   const refetchSingleOrder = useCallback(async (orderId: string) => {
+    if (!merchantId) return;
     try {
-      const res = await fetchWithAuth(`/api/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&_t=${Date.now()}`, {
+      const res = await fetchWithAuth(`/api/orders/${orderId}?merchant_id=${merchantId}&_t=${Date.now()}`, {
         cache: 'no-store'
       });
       if (!res.ok) {
@@ -299,8 +300,11 @@ export function useOrderFetching({
         o.id === orderId ? { ...o, ...optimisticUpdate } : o
       ));
     }
-    setTimeout(() => refetchSingleOrder(orderId), 300);
-    await fetchOrders();
+    // Parallel: refetch single order (delayed for DB consistency), full list, and balance
+    await Promise.all([
+      new Promise<void>(resolve => setTimeout(() => { refetchSingleOrder(orderId); resolve(); }, 300)),
+      fetchOrders(),
+    ]);
     refreshBalance();
   }, [refetchSingleOrder, fetchOrders, refreshBalance]);
 
@@ -309,17 +313,8 @@ export function useOrderFetching({
   }, []);
 
   // ═══════════════════════════════════════════════════════════════════
-  // EFFECTS
+  // SINGLE POLLING ORCHESTRATOR (replaces 5 separate intervals)
   // ═══════════════════════════════════════════════════════════════════
-
-  // Balance polling (mock mode)
-  useEffect(() => {
-    if (isMockMode && merchantId) {
-      fetchInAppBalance();
-      const interval = setInterval(fetchInAppBalance, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [isMockMode, merchantId, fetchInAppBalance]);
 
   // Initial fetch on login
   useEffect(() => {
@@ -330,62 +325,56 @@ export function useOrderFetching({
     fetchBigOrders();
     fetchActiveOffers();
     fetchLeaderboard();
-  }, [merchantId, fetchOrders, fetchMempoolOrders, fetchResolvedDisputes, fetchBigOrders, fetchActiveOffers, fetchLeaderboard]);
+    if (isMockMode) fetchInAppBalance();
+  }, [merchantId, fetchOrders, fetchMempoolOrders, fetchResolvedDisputes, fetchBigOrders, fetchActiveOffers, fetchLeaderboard, isMockMode, fetchInAppBalance]);
 
-  // Tier 2: Smart polling
+  // Unified poll: one interval, adaptive rate
   useEffect(() => {
     if (!merchantId) return;
     const pollInterval = isPusherConnected ? 30000 : 5000;
-    const interval = setInterval(() => {
+    let tickCount = 0;
+
+    const tick = () => {
+      tickCount++;
+      // Every tick: orders + mempool (critical path)
       debouncedFetchOrders();
       fetchMempoolOrders();
       lastSyncRef.current = Date.now();
-    }, pollInterval);
-    return () => clearInterval(interval);
-  }, [merchantId, isPusherConnected, debouncedFetchOrders, fetchMempoolOrders]);
 
-  // Tier 3a: Pusher reconnect
+      // Every 3rd tick (~90s with Pusher, ~15s without): expire + balance
+      if (tickCount % 3 === 0) {
+        fetchWithAuth('/api/orders/expire', { method: 'POST' }).catch(() => {});
+        if (isMockMode) fetchInAppBalance();
+      }
+    };
+
+    const interval = setInterval(tick, pollInterval);
+    return () => clearInterval(interval);
+  }, [merchantId, isPusherConnected, debouncedFetchOrders, fetchMempoolOrders, isMockMode, fetchInAppBalance]);
+
+  // Pusher reconnect — single sync
   useEffect(() => {
     if (isPusherConnected && !prevPusherConnected.current) {
       debouncedFetchOrders();
-      fetchMempoolOrders();
       lastSyncRef.current = Date.now();
     }
     prevPusherConnected.current = isPusherConnected;
-  }, [isPusherConnected, debouncedFetchOrders, fetchMempoolOrders]);
+  }, [isPusherConnected, debouncedFetchOrders]);
 
-  // Tier 3b: Page visibility
+  // Page visibility — sync on tab return
   useEffect(() => {
     if (!merchantId) return;
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        const timeSinceSync = Date.now() - lastSyncRef.current;
-        if (timeSinceSync > 3000) {
-          debouncedFetchOrders();
-          lastSyncRef.current = Date.now();
-        }
+      if (document.visibilityState === 'visible' && Date.now() - lastSyncRef.current > 5000) {
+        debouncedFetchOrders();
+        lastSyncRef.current = Date.now();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [merchantId, debouncedFetchOrders]);
 
-  // Auto-expire orders via API
-  useEffect(() => {
-    if (!merchantId) return;
-    const expireOrders = async () => {
-      try {
-        await fetchWithAuth('/api/orders/expire', { method: 'POST' });
-      } catch (error) {
-        console.error('[Merchant] Failed to expire orders:', error);
-      }
-    };
-    expireOrders();
-    const interval = setInterval(expireOrders, 30000);
-    return () => clearInterval(interval);
-  }, [merchantId]);
-
-  // Expiry countdown timer — tick every 10s (UI shows "X min", not seconds)
+  // Expiry countdown — tick every 10s (UI shows "X min")
   useEffect(() => {
     const interval = setInterval(() => {
       setOrders((prev: Order[]) => {

@@ -146,7 +146,7 @@ export function MobileOrdersView({
                           ? 'bg-green-500/20 text-green-400'
                           : 'bg-orange-500/20 text-orange-400'
                       }`}>
-                        {order.orderType === 'buy' ? 'SELL' : 'BUY'}
+                        {order.orderType === 'buy' ? 'SEND' : 'RECEIVE'}
                       </span>
                     )}
                     {order.myRole && (
@@ -157,7 +157,7 @@ export function MobileOrdersView({
                           ? 'bg-purple-500/20 text-purple-400'
                           : 'bg-gray-500/20 text-gray-400'
                       }`}>
-                        {order.myRole === 'buyer' ? 'YOU BUY' : order.myRole === 'seller' ? 'YOU SELL' : ''}
+                        {order.myRole === 'buyer' ? 'YOU RECEIVE' : order.myRole === 'seller' ? 'YOU SEND' : ''}
                       </span>
                     )}
                     {order.spreadPreference && (

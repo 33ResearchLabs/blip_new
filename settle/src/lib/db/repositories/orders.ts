@@ -9,7 +9,6 @@ import {
   OfferType,
   PaymentMethod,
 } from '../../types/database';
-import { MOCK_MODE } from '../../config/mockMode';
 import { updateOfferAvailability, restoreOfferAvailability } from './merchants';
 import { incrementUserStats } from './users';
 import {
@@ -17,7 +16,7 @@ import {
   shouldRestoreLiquidity,
   getTransitionEventType,
   isTerminalStatus,
-} from '../../orders/stateMachine';
+} from '../../orders/stateMachineMinimal';
 import {
   normalizeStatus,
   validateStatusWrite,
@@ -115,31 +114,30 @@ export async function getUserOrders(
            ) as merchant,
            json_build_object(
              'payment_method', mo.payment_method,
-             'location_name', mo.location_name
+             'location_name', mo.location_name,
+             'bank_name', mo.bank_name,
+             'bank_iban', mo.bank_iban,
+             'bank_account_name', mo.bank_account_name,
+             'location_address', mo.location_address,
+             'location_lat', mo.location_lat,
+             'location_lng', mo.location_lng,
+             'meeting_instructions', mo.meeting_instructions
            ) as offer,
-           COALESCE((
-             SELECT COUNT(*)::int FROM chat_messages cm
-             WHERE cm.order_id = o.id
-               AND cm.sender_type = 'merchant'
-               AND cm.message_type != 'system'
-               AND cm.is_read = false
-           ), 0) as unread_count,
-           (
-             SELECT json_build_object(
-               'content', cm.content,
-               'sender_type', cm.sender_type,
-               'created_at', cm.created_at
-             )
-             FROM chat_messages cm
-             WHERE cm.order_id = o.id
-               AND cm.message_type != 'system'
-               AND cm.sender_type != 'system'
-             ORDER BY cm.created_at DESC
-             LIMIT 1
-           ) as last_message
+           COALESCE(chat_agg.unread_count, 0) as unread_count,
+           chat_latest.last_message
     FROM orders o
     JOIN merchants m ON o.merchant_id = m.id
     JOIN merchant_offers mo ON o.offer_id = mo.id
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*) FILTER (WHERE cm.sender_type = 'merchant' AND cm.message_type != 'system' AND cm.is_read = false)::int as unread_count
+      FROM chat_messages cm WHERE cm.order_id = o.id
+    ) chat_agg ON true
+    LEFT JOIN LATERAL (
+      SELECT json_build_object('content', cm.content, 'sender_type', cm.sender_type, 'created_at', cm.created_at) as last_message
+      FROM chat_messages cm
+      WHERE cm.order_id = o.id AND cm.message_type != 'system' AND cm.sender_type != 'system'
+      ORDER BY cm.created_at DESC LIMIT 1
+    ) chat_latest ON true
     WHERE o.user_id = $1
       AND o.status NOT IN ('expired', 'cancelled')
   `;
@@ -282,33 +280,28 @@ export async function getAllPendingOrdersForMerchant(
                'wallet_address', bm.wallet_address
              )
            ELSE NULL END as buyer_merchant,
-           COALESCE((
-             SELECT COUNT(*)::int FROM chat_messages cm
-             WHERE cm.order_id = o.id
-               AND cm.sender_type != 'merchant'
-               AND cm.sender_type != 'system'
-               AND cm.message_type != 'system'
-               AND cm.is_read = false
-           ), 0) as unread_count,
-           (SELECT COUNT(*)::int FROM chat_messages cm WHERE cm.order_id = o.id AND cm.message_type != 'system') as message_count,
-           (SELECT cm.content FROM chat_messages cm
-             WHERE cm.order_id = o.id
-               AND cm.message_type != 'system'
-               AND cm.sender_type != 'system'
-             ORDER BY cm.created_at DESC LIMIT 1
-           ) as last_human_message,
-           (SELECT cm.sender_type FROM chat_messages cm
-             WHERE cm.order_id = o.id
-               AND cm.message_type != 'system'
-               AND cm.sender_type != 'system'
-             ORDER BY cm.created_at DESC LIMIT 1
-           ) as last_human_message_sender
+           COALESCE(chat_agg.unread_count, 0) as unread_count,
+           COALESCE(chat_agg.message_count, 0) as message_count,
+           chat_latest.content as last_human_message,
+           chat_latest.sender_type as last_human_message_sender
     FROM orders o
     JOIN users u ON o.user_id = u.id
     JOIN merchants m ON o.merchant_id = m.id
     JOIN merchant_offers mo ON o.offer_id = mo.id
     LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
     LEFT JOIN merchants current_m ON current_m.id = $1
+    LEFT JOIN LATERAL (
+      SELECT
+        COUNT(*) FILTER (WHERE cm.sender_type != 'merchant' AND cm.sender_type != 'system' AND cm.message_type != 'system' AND cm.is_read = false)::int as unread_count,
+        COUNT(*) FILTER (WHERE cm.message_type != 'system')::int as message_count
+      FROM chat_messages cm WHERE cm.order_id = o.id
+    ) chat_agg ON true
+    LEFT JOIN LATERAL (
+      SELECT cm.content, cm.sender_type
+      FROM chat_messages cm
+      WHERE cm.order_id = o.id AND cm.message_type != 'system' AND cm.sender_type != 'system'
+      ORDER BY cm.created_at DESC LIMIT 1
+    ) chat_latest ON true
     WHERE (
         -- OPEN orders: broadcast pending/escrowed that are NOT yet taken by another merchant
         -- "Taken" = has buyer_merchant_id set to someone else (and merchant_id differs, meaning a seller accepted)
@@ -334,7 +327,7 @@ export async function getAllPendingOrdersForMerchant(
     params.push(status);
   }
 
-  sql += ' ORDER BY o.created_at DESC';
+  sql += ' ORDER BY o.created_at DESC LIMIT 200';
 
   console.log('[DB] getAllPendingOrdersForMerchant for merchant:', merchantId);
   const results = await query<OrderWithRelations>(sql, params);
@@ -674,7 +667,7 @@ export async function updateOrderStatus(
           // Store acceptor's wallet address when accepting (for sell orders with escrow)
           if (metadata?.acceptor_wallet_address) {
             const wallet = String(metadata.acceptor_wallet_address);
-            if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet) || (MOCK_MODE && wallet.length > 0)) {
+            if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
               acceptorWalletUpdate = `, acceptor_wallet_address = $${nextParam}`;
               dynamicParams.push(wallet);
               nextParam++;
@@ -757,7 +750,7 @@ export async function updateOrderStatus(
       // Build parameterized query: $1=status, $2..N=dynamic values, $N+1=orderId
       const updateParams: unknown[] = [effectiveStatus, ...dynamicParams, orderId];
       const whereParam = nextParam;
-      let sql = `UPDATE orders SET status = $1${timestampField}${merchantReassign}${acceptorWalletUpdate}${buyerMerchantUpdate} WHERE id = $${whereParam} RETURNING *`;
+      const sql = `UPDATE orders SET status = $1${timestampField}${merchantReassign}${acceptorWalletUpdate}${buyerMerchantUpdate} WHERE id = $${whereParam} RETURNING *`;
 
       const updateResult = await client.query(sql, updateParams);
       const updatedOrder = updateResult.rows[0] as Order;
@@ -801,26 +794,6 @@ export async function updateOrderStatus(
           `UPDATE merchants SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $2`,
           [currentOrder.fiat_amount, currentOrder.merchant_id]
         );
-
-        // NOTE: Escrow lock/release handle the main balance movements.
-        // Platform fee deduction happens here on completion (MOCK_MODE only).
-        if (MOCK_MODE && currentOrder.escrow_tx_hash) {
-          try {
-            const { deductPlatformFee } = await import('@/lib/money/platformFee');
-            await deductPlatformFee(client, {
-              id: orderId,
-              order_number: currentOrder.order_number,
-              crypto_amount: parseFloat(String(currentOrder.crypto_amount)),
-              protocol_fee_percentage: currentOrder.protocol_fee_percentage,
-              spread_preference: currentOrder.spread_preference,
-              escrow_debited_entity_type: currentOrder.escrow_debited_entity_type,
-              escrow_debited_entity_id: currentOrder.escrow_debited_entity_id,
-              merchant_id: currentOrder.merchant_id,
-            });
-          } catch (feeErr) {
-            logger.error('Failed to deduct platform fee on completion', { orderId, error: feeErr });
-          }
-        }
 
         // Corridor bridge: transfer locked sAED to LP on completion
         if (currentOrder.payment_via === 'saed_corridor' && currentOrder.corridor_fulfillment_id) {
@@ -1034,9 +1007,9 @@ export async function getOrderMessages(orderId: string): Promise<ChatMessage[]> 
         ELSE 'System'
       END as sender_name
     FROM chat_messages cm
-    LEFT JOIN users u ON cm.sender_type = 'user' AND cm.sender_id::uuid = u.id
-    LEFT JOIN merchants m ON cm.sender_type = 'merchant' AND cm.sender_id::uuid = m.id
-    LEFT JOIN compliance_team ct ON cm.sender_type = 'compliance' AND cm.sender_id::uuid = ct.id
+    LEFT JOIN users u ON cm.sender_type = 'user' AND cm.sender_id = u.id::text
+    LEFT JOIN merchants m ON cm.sender_type = 'merchant' AND cm.sender_id = m.id::text
+    LEFT JOIN compliance_team ct ON cm.sender_type = 'compliance' AND cm.sender_id = ct.id::text
     WHERE cm.order_id = $1
       AND cm.sender_type != 'system'
       AND cm.message_type != 'system'
@@ -1180,183 +1153,68 @@ export async function expireOldOrders(): Promise<number> {
     totalExpired += updateResult?.length || 0;
   }
 
-  // Mock mode: refund escrowed amounts back to the recorded escrow payer
-  if (MOCK_MODE) {
+  // Batch insert system messages + reputation events (avoids N+1 per-order DB calls)
+  if (ordersToExpire.length > 0) {
+    const msgValues: string[] = [];
+    const msgParams: unknown[] = [];
+    const repValues: string[] = [];
+    const repParams: unknown[] = [];
+    let msgIdx = 0;
+    let repIdx = 0;
+
     for (const order of ordersToExpire) {
-      if (order.escrow_tx_hash) {
-        // Use recorded debit fields (deterministic); fallback to inference for pre-migration orders
-        const debitType = order.escrow_debited_entity_type;
-        const debitId = order.escrow_debited_entity_id;
-        const debitAmount = order.escrow_debited_amount != null
-          ? parseFloat(String(order.escrow_debited_amount))
-          : parseFloat(String(order.crypto_amount));
-
-        let refundId: string;
-        let refundTable: 'merchants' | 'users';
-        let refundEntityType: 'merchant' | 'user';
-
-        if (debitType && debitId) {
-          refundId = debitId;
-          refundTable = debitType === 'merchant' ? 'merchants' : 'users';
-          refundEntityType = debitType;
-        } else {
-          // Legacy fallback
-          const isBuyOrder = order.type === 'buy';
-          const isM2M = !!order.buyer_merchant_id;
-          if (isM2M) {
-            refundId = order.merchant_id;
-            refundTable = 'merchants';
-            refundEntityType = 'merchant';
-          } else {
-            refundId = isBuyOrder ? order.merchant_id : order.user_id;
-            refundTable = isBuyOrder ? 'merchants' : 'users';
-            refundEntityType = isBuyOrder ? 'merchant' : 'user';
-          }
-          logger.warn('[Expiry] Used legacy inference for refund — order missing escrow_debited fields', { orderId: order.id });
-        }
-
-        try {
-          await query(
-            `UPDATE ${refundTable} SET balance = balance + $1 WHERE id = $2`,
-            [debitAmount, refundId]
-          );
-
-          // Ledger entry for refund
-          await query(
-            `INSERT INTO ledger_entries
-             (account_type, account_id, entry_type, amount, asset,
-              related_order_id, description, metadata, balance_before, balance_after)
-             SELECT $1, $2, 'ESCROW_REFUND', $3, 'USDT', $4,
-                    'Escrow refunded on expiry for order #' || $5,
-                    $6::jsonb,
-                    balance - $3, balance
-             FROM ${refundTable} WHERE id = $2`,
-            [
-              refundEntityType,
-              refundId,
-              debitAmount,
-              order.id,
-              order.order_number,
-              JSON.stringify({ reason: 'Order timeout/expiry' }),
-            ]
-          );
-
-          // Transaction log entry for refund
-          await query(
-            `INSERT INTO merchant_transactions
-             (merchant_id, user_id, order_id, type, amount, balance_before, balance_after, description)
-             SELECT $1, $2, $3, 'escrow_refund', $4,
-                    balance - $4, balance,
-                    'Escrow refund on expiry for order #' || $5
-             FROM ${refundTable} WHERE id = $6`,
-            [
-              refundEntityType === 'merchant' ? refundId : null,
-              refundEntityType === 'user' ? refundId : null,
-              order.id,
-              debitAmount,
-              order.order_number,
-              refundId,
-            ]
-          );
-
-          logger.info('[Mock] Refunded escrow on expiry', {
-            orderId: order.id,
-            refundId,
-            refundEntityType,
-            debitAmount,
-            usedRecordedFields: !!(debitType && debitId),
-          });
-        } catch (refundErr) {
-          logger.error('[Mock] Failed to refund on expiry', { orderId: order.id, error: refundErr });
-        }
-      }
-    }
-  }
-
-  // Record reputation events and send system messages for each expired order
-  for (const order of ordersToExpire) {
-    const isEscrowLocked = ['escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'releasing'].includes(order.status);
-    const isPending = order.status === 'pending';
-    const eventType = isEscrowLocked ? 'order_disputed' : 'order_timeout';
-    const timeout = isPending ? '15 minutes' : '120 minutes';
-    const reason = `Order timeout - not completed within ${timeout} (was in ${order.status} status)`;
-
-    try {
-      // Send system message about expiration
+      const isEscrowLocked = ['escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'releasing'].includes(order.status);
+      const isPending = order.status === 'pending';
+      const eventType = isEscrowLocked ? 'order_disputed' : 'order_timeout';
+      const timeout = isPending ? '15 minutes' : '120 minutes';
+      const reason = `Order timeout - not completed within ${timeout} (was in ${order.status} status)`;
       const expiryMessage = isEscrowLocked
         ? `⏰ Order expired - moved to dispute for resolution (escrow was locked)`
         : isPending
           ? `⏰ Order expired - no one accepted within 15 minutes`
           : `⏰ Order expired - not completed within 120 minutes after acceptance`;
 
-      const savedMessage = await sendMessage({
-        order_id: order.id,
-        sender_type: 'system',
-        sender_id: order.id,
-        content: expiryMessage,
-        message_type: 'system',
-      });
+      // Batch message insert
+      msgValues.push(`($${++msgIdx}, 'system', $${++msgIdx}, $${++msgIdx}, 'system')`);
+      msgParams.push(order.id, order.id, expiryMessage);
 
-      // Send real-time notification for the system message
-      notifyNewMessage({
-        orderId: order.id,
-        messageId: savedMessage.id,
-        senderType: 'system',
-        senderId: order.id,
-        content: expiryMessage,
-        messageType: 'system',
-        createdAt: savedMessage.created_at.toISOString(),
-      });
+      // Batch reputation events (user + merchant per order)
+      const metadata = JSON.stringify({ orderId: order.id, previousStatus: order.status, amount: order.fiat_amount, currency: order.fiat_currency });
+      const scoreChange = eventType === 'order_disputed' ? -15 : -5;
+      repValues.push(`($${++repIdx}, 'user', $${++repIdx}, $${++repIdx}, $${++repIdx}, $${++repIdx})`);
+      repParams.push(order.user_id, eventType, scoreChange, reason, metadata);
+      repValues.push(`($${++repIdx}, 'merchant', $${++repIdx}, $${++repIdx}, $${++repIdx}, $${++repIdx})`);
+      repParams.push(order.merchant_id, eventType, scoreChange, reason, metadata);
 
-      // Notify parties about the status change via Pusher
+      // Fire-and-forget Pusher notifications (no DB call)
       const newStatus = isEscrowLocked ? 'disputed' : 'cancelled';
       notifyOrderStatusUpdated({
-        orderId: order.id,
-        userId: order.user_id,
-        merchantId: order.merchant_id,
-        status: newStatus,
-        previousStatus: order.status,
-        updatedAt: new Date().toISOString(),
+        orderId: order.id, userId: order.user_id, merchantId: order.merchant_id,
+        status: newStatus, previousStatus: order.status, updatedAt: new Date().toISOString(),
       });
-
-      // Also notify the buyer merchant if this is an M2M trade
       if (order.buyer_merchant_id) {
         notifyOrderStatusUpdated({
-          orderId: order.id,
-          userId: order.user_id,
-          merchantId: order.buyer_merchant_id,
-          status: newStatus,
-          previousStatus: order.status,
-          updatedAt: new Date().toISOString(),
+          orderId: order.id, userId: order.user_id, merchantId: order.buyer_merchant_id,
+          status: newStatus, previousStatus: order.status, updatedAt: new Date().toISOString(),
         });
       }
+    }
 
-      // Record event for user
-      await recordReputationEvent(
-        order.user_id,
-        'user',
-        eventType,
-        reason,
-        { orderId: order.id, previousStatus: order.status, amount: order.fiat_amount, currency: order.fiat_currency }
-      );
-
-      // Record event for merchant
-      await recordReputationEvent(
-        order.merchant_id,
-        'merchant',
-        eventType,
-        reason,
-        { orderId: order.id, previousStatus: order.status, amount: order.fiat_amount, currency: order.fiat_currency }
-      );
-
-      logger.info('Recorded reputation events for expired order', {
-        orderId: order.id,
-        eventType,
-        userId: order.user_id,
-        merchantId: order.merchant_id,
-      });
-    } catch (repErr) {
-      logger.warn('Failed to record reputation events for expired order', { orderId: order.id, error: repErr });
+    try {
+      // 2 queries total instead of 3*N
+      await Promise.all([
+        query(
+          `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type) VALUES ${msgValues.join(',')}`,
+          msgParams
+        ),
+        query(
+          `INSERT INTO reputation_events (entity_id, entity_type, event_type, score_change, reason, metadata) VALUES ${repValues.join(',')}`,
+          repParams
+        ),
+      ]);
+      logger.info(`Batch inserted ${ordersToExpire.length} expiry messages + ${repValues.length} reputation events`);
+    } catch (batchErr) {
+      logger.warn('Failed to batch insert expiry messages/reputation events', { error: batchErr });
     }
   }
 
