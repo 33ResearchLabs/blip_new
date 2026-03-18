@@ -12,6 +12,7 @@ import {
   Crown,
   ExternalLink,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 import { UserBadge } from "@/components/merchant/UserBadge";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
@@ -21,6 +22,7 @@ export interface MobileOrdersViewProps {
   pendingOrders: Order[];
   bigOrders: { id: string; user: string; emoji: string; premium: number; message: string; currency: string; amount: number; timestamp: Date }[];
   onAcceptOrder: (order: Order) => void;
+  acceptingOrderId?: string | null;
   onOpenChat: (order: Order) => void;
   onDismissBigOrder: (id: string) => void;
   setMobileView: (view: 'orders' | 'escrow' | 'chat' | 'history' | 'marketplace') => void;
@@ -30,6 +32,7 @@ export function MobileOrdersView({
   pendingOrders,
   bigOrders,
   onAcceptOrder,
+  acceptingOrderId,
   onOpenChat,
   onDismissBigOrder,
   setMobileView,
@@ -233,11 +236,19 @@ export function MobileOrdersView({
                 {!order.isMyOrder && (
                   <motion.button
                     whileTap={{ scale: 0.98 }}
+                    disabled={acceptingOrderId === order.id}
                     onClick={() => onAcceptOrder(order)}
-                    className="flex-1 h-11 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] rounded-lg text-xs font-medium text-white flex items-center justify-center gap-1.5 transition-colors"
+                    className={`flex-1 h-11 border rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                      acceptingOrderId === order.id
+                        ? 'bg-white/[0.03] border-white/[0.06] text-white/50 cursor-wait'
+                        : 'bg-white/[0.06] hover:bg-white/[0.1] border-white/[0.1] text-white'
+                    }`}
                   >
-                    <Check className="w-3.5 h-3.5" />
-                    Go
+                    {acceptingOrderId === order.id ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Accepting...</>
+                    ) : (
+                      <><Check className="w-3.5 h-3.5" /> Go</>
+                    )}
                   </motion.button>
                 )}
                 <button

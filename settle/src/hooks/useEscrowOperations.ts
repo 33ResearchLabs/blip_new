@@ -58,6 +58,9 @@ export function useEscrowOperations({
   const [cancelTxHash, setCancelTxHash] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
 
+  // ─── Cancel without escrow loading ───
+  const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
+
   // ═══════════════════════════════════════════════════════════════════
   // ESCROW LOCK
   // ═══════════════════════════════════════════════════════════════════
@@ -568,6 +571,7 @@ export function useEscrowOperations({
     const confirmed = confirm('Cancel this order? This action cannot be undone.');
     if (!confirmed) return;
 
+    setCancellingOrderId(orderId);
     try {
       const res = await fetchWithAuth(`/api/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&reason=Cancelled by merchant`, {
         method: 'DELETE',
@@ -592,6 +596,8 @@ export function useEscrowOperations({
       console.error('[Cancel] Error cancelling order:', error);
       addNotification('system', 'Failed to cancel order. Please try again.', orderId);
       playSound('error');
+    } finally {
+      setCancellingOrderId(null);
     }
   }, [merchantId, addNotification, playSound, afterMutationReconcile]);
 
@@ -618,6 +624,6 @@ export function useEscrowOperations({
     openCancelModal, executeCancelEscrow, closeCancelModal,
 
     // Simple cancel
-    cancelOrderWithoutEscrow,
+    cancelOrderWithoutEscrow, cancellingOrderId,
   };
 }

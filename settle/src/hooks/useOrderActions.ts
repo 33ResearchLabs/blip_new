@@ -37,6 +37,8 @@ export function useOrderActions({
 
   // ─── Local state ───
   const [markingDone, setMarkingDone] = useState(false);
+  const [acceptingOrderId, setAcceptingOrderId] = useState<string | null>(null);
+  const [confirmingOrderId, setConfirmingOrderId] = useState<string | null>(null);
   const [isCreatingTrade, setIsCreatingTrade] = useState(false);
   const [createTradeError, setCreateTradeError] = useState<string | null>(null);
 
@@ -45,6 +47,7 @@ export function useOrderActions({
   // ═══════════════════════════════════════════════════════════════════
   const acceptOrder = async (order: Order) => {
     if (!merchantId) return;
+    setAcceptingOrderId(order.id);
 
     const isBuyOrder = order.orderType === 'buy';
     const isSellOrder = order.orderType === 'sell';
@@ -146,6 +149,8 @@ export function useOrderActions({
     } catch (error) {
       console.error("Error accepting order:", error);
       playSound('error');
+    } finally {
+      setAcceptingOrderId(null);
     }
   };
 
@@ -435,6 +440,7 @@ export function useOrderActions({
   // ═══════════════════════════════════════════════════════════════════
   const confirmPayment = async (orderId: string) => {
     if (!merchantId) return;
+    setConfirmingOrderId(orderId);
 
     const order = orders.find(o => o.id === orderId);
     if (!order) {
@@ -521,6 +527,8 @@ export function useOrderActions({
       console.error("Error confirming payment:", error);
       addNotification('system', 'Failed to complete order. Please try again.', orderId);
       playSound('error');
+    } finally {
+      setConfirmingOrderId(null);
     }
   };
 
@@ -714,6 +722,8 @@ export function useOrderActions({
   return {
     // State
     markingDone,
+    acceptingOrderId,
+    confirmingOrderId,
     isCreatingTrade, setIsCreatingTrade,
     createTradeError, setCreateTradeError,
 

@@ -19,6 +19,9 @@ export interface OrderQuickViewProps {
   selectedOrder: Order | null;
   merchantId: string | null;
   markingDone: boolean;
+  acceptingOrderId?: string | null;
+  confirmingOrderId?: string | null;
+  cancellingOrderId?: string | null;
   onClose: () => void;
   onAcceptOrder: (order: Order) => void;
   onOpenEscrowModal: (order: Order) => void;
@@ -33,6 +36,9 @@ export function OrderQuickView({
   selectedOrder,
   merchantId,
   markingDone,
+  acceptingOrderId,
+  confirmingOrderId,
+  cancellingOrderId,
   onClose,
   onAcceptOrder,
   onOpenEscrowModal,
@@ -214,14 +220,22 @@ export function OrderQuickView({
                 return canCancelPopup ? (
                   <motion.button
                     whileTap={{ scale: 0.98 }}
+                    disabled={cancellingOrderId === selectedOrder.id}
                     onClick={async () => {
                       await onCancelOrderWithoutEscrow(selectedOrder.id);
                       onClose();
                     }}
-                    className="w-full py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/40 text-red-400 font-semibold flex items-center justify-center gap-2 transition-all"
+                    className={`w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
+                      cancellingOrderId === selectedOrder.id
+                        ? 'bg-red-500/5 border-red-500/20 text-red-400/50 cursor-wait'
+                        : 'bg-red-500/10 hover:bg-red-500/20 border-red-500/30 hover:border-red-500/40 text-red-400'
+                    }`}
                   >
-                    <X className="w-4 h-4" />
-                    Cancel Order
+                    {cancellingOrderId === selectedOrder.id ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Cancelling...</>
+                    ) : (
+                      <><X className="w-4 h-4" /> Cancel Order</>
+                    )}
                   </motion.button>
                 ) : null;
               })()}
@@ -231,14 +245,22 @@ export function OrderQuickView({
               {selectedOrder.dbOrder?.status === 'escrowed' && !selectedOrder.dbOrder?.accepted_at && (
                 <motion.button
                   whileTap={{ scale: 0.98 }}
+                  disabled={acceptingOrderId === selectedOrder.id}
                   onClick={async () => {
                     await onAcceptOrder(selectedOrder);
                     onClose();
                   }}
-                  className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 transition-all"
+                  className={`w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
+                    acceptingOrderId === selectedOrder.id
+                      ? 'bg-white/5 border-white/4 text-white/50 cursor-wait'
+                      : 'bg-white/10 hover:bg-white/20 border-white/6 hover:border-white/12 text-white'
+                  }`}
                 >
-                  <Zap className="w-4 h-4" />
-                  Go
+                  {acceptingOrderId === selectedOrder.id ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Accepting...</>
+                  ) : (
+                    <><Zap className="w-4 h-4" /> Go</>
+                  )}
                 </motion.button>
               )}
 
@@ -247,14 +269,22 @@ export function OrderQuickView({
                 <div className="space-y-2">
                   <motion.button
                     whileTap={{ scale: 0.98 }}
+                    disabled={acceptingOrderId === selectedOrder.id}
                     onClick={() => {
                       onAcceptOrder(selectedOrder);
                       onClose();
                     }}
-                    className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 transition-all"
+                    className={`w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
+                      acceptingOrderId === selectedOrder.id
+                        ? 'bg-white/5 border-white/4 text-white/50 cursor-wait'
+                        : 'bg-white/10 hover:bg-white/20 border-white/6 hover:border-white/12 text-white'
+                    }`}
                   >
-                    <Zap className="w-4 h-4" />
-                    Go
+                    {acceptingOrderId === selectedOrder.id ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Accepting...</>
+                    ) : (
+                      <><Zap className="w-4 h-4" /> Go</>
+                    )}
                   </motion.button>
                 </div>
               )}
@@ -322,14 +352,22 @@ export function OrderQuickView({
                   return (
                     <motion.button
                       whileTap={{ scale: 0.98 }}
+                      disabled={confirmingOrderId === selectedOrder.id}
                       onClick={async () => {
                         await onConfirmPayment(selectedOrder.id);
                         onClose();
                       }}
-                      className="w-full py-3 rounded-xl bg-orange-500/10 hover:bg-orange-500/15 border border-orange-500/20 hover:border-orange-500/30 text-orange-400 font-semibold flex items-center justify-center gap-2 transition-all"
+                      className={`w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
+                        confirmingOrderId === selectedOrder.id
+                          ? 'bg-orange-500/5 border-orange-500/10 text-orange-400/50 cursor-wait'
+                          : 'bg-orange-500/10 hover:bg-orange-500/15 border-orange-500/20 hover:border-orange-500/30 text-orange-400'
+                      }`}
                     >
-                      <Check className="w-4 h-4" />
-                      Confirm Receipt & Release Escrow
+                      {confirmingOrderId === selectedOrder.id ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Accepting...</>
+                      ) : (
+                        <><Check className="w-4 h-4" /> Confirm Receipt & Release Escrow</>
+                      )}
                     </motion.button>
                   );
                 }

@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   Clock,
   RotateCcw,
+  Loader2,
 } from "lucide-react";
 import { UserBadge } from "@/components/merchant/UserBadge";
 import { ActionPulse } from "@/components/NotificationToast";
@@ -163,7 +164,11 @@ export function MobileEscrowView({
                     disabled={markingDone}
                     className="flex-1 h-11 bg-white/5 hover:bg-white/10 border border-white/6 rounded-lg text-xs font-medium text-white/70 flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
                   >
-                    I&apos;ve Paid
+                    {markingDone ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Accepting...</>
+                    ) : (
+                      <>I&apos;ve Paid</>
+                    )}
                   </motion.button>
                 ) : mobileWaitingForUser ? (
                   <span className="flex-1 h-11 bg-white/5 border border-white/6 rounded-lg text-xs font-mono text-white/70 flex items-center justify-center">

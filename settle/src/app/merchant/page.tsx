@@ -167,7 +167,7 @@ export default function MerchantDashboard() {
     openReleaseModal, executeRelease, closeReleaseModal,
     showCancelModal, cancelOrder, isCancellingEscrow, cancelTxHash, cancelError,
     openCancelModal, executeCancelEscrow, closeCancelModal,
-    cancelOrderWithoutEscrow,
+    cancelOrderWithoutEscrow, cancellingOrderId,
   } = escrow;
 
   const dispute = useDisputeHandlers({
@@ -239,7 +239,7 @@ export default function MerchantDashboard() {
     afterMutationReconcile, setShowWalletModal, handleOpenChat, setSelectedOrderPopup, openEscrowModalForSell,
   });
   const {
-    markingDone, isCreatingTrade, setIsCreatingTrade, createTradeError, setCreateTradeError,
+    markingDone, acceptingOrderId, confirmingOrderId, isCreatingTrade, setIsCreatingTrade, createTradeError, setCreateTradeError,
     acceptOrder, acceptWithSaed, retryJoinEscrow, signToClaimOrder, signAndProceed,
     markFiatPaymentSent, markPaymentSent, completeOrder, confirmPayment,
     handleDirectOrderCreation: rawHandleDirectOrderCreation,
@@ -405,12 +405,12 @@ export default function MerchantDashboard() {
           {isWideScreen ? (
             <PendingOrdersPanel orders={pendingOrders} mempoolOrders={mempoolOrders} merchantInfo={merchantInfo}
               onSelectOrder={setSelectedOrderPopup} onSelectMempoolOrder={setSelectedMempoolOrder}
-              onCancelOrder={handleCancelOrder} onOpenChat={handleOpenChat} fetchOrders={fetchOrders} />
+              onAcceptOrder={acceptOrder} acceptingOrderId={acceptingOrderId} onCancelOrder={handleCancelOrder} onOpenChat={handleOpenChat} fetchOrders={fetchOrders} />
           ) : (<>
             <div style={{ height: '60%' }} className="flex flex-col border-b border-white/[0.04]">
               <PendingOrdersPanel orders={pendingOrders} mempoolOrders={mempoolOrders} merchantInfo={merchantInfo}
                 onSelectOrder={setSelectedOrderPopup} onSelectMempoolOrder={setSelectedMempoolOrder}
-                onCancelOrder={handleCancelOrder} onOpenChat={handleOpenChat} fetchOrders={fetchOrders} />
+                onAcceptOrder={acceptOrder} acceptingOrderId={acceptingOrderId} onCancelOrder={handleCancelOrder} onOpenChat={handleOpenChat} fetchOrders={fetchOrders} />
             </div>
             <div className="flex-1 flex flex-col min-h-0">
               <LeaderboardPanel leaderboardData={leaderboardData} leaderboardTab={leaderboardTab} setLeaderboardTab={setLeaderboardTab} />
@@ -478,7 +478,7 @@ export default function MerchantDashboard() {
       {/* Mobile View Content */}
       <div className="md:hidden flex-1 flex flex-col overflow-hidden">
         <main className="flex-1 overflow-auto p-3 pb-20">
-          {mobileView === 'orders' && <MobileOrdersView pendingOrders={pendingOrders} bigOrders={bigOrders} onAcceptOrder={acceptOrder} onOpenChat={handleOpenChat} onDismissBigOrder={dismissBigOrder} setMobileView={setMobileView} />}
+          {mobileView === 'orders' && <MobileOrdersView pendingOrders={pendingOrders} bigOrders={bigOrders} onAcceptOrder={acceptOrder} acceptingOrderId={acceptingOrderId} onOpenChat={handleOpenChat} onDismissBigOrder={dismissBigOrder} setMobileView={setMobileView} />}
           {mobileView === 'escrow' && <MobileEscrowView ongoingOrders={ongoingOrders} markingDone={markingDone} onOpenEscrowModal={openEscrowModal} onMarkFiatPaymentSent={markFiatPaymentSent} onOpenReleaseModal={openReleaseModal} onOpenDisputeModal={(orderId) => openDisputeModal(orderId)} onOpenCancelModal={openCancelModal} onOpenChat={handleOpenChat} setMobileView={setMobileView} />}
           {mobileView === 'chat' && <MobileChatView merchantId={merchantId} directChat={directChat} playSound={playSound} />}
           {mobileView === 'history' && <MobileHistoryView completedOrders={completedOrders} cancelledOrders={cancelledOrders} merchantId={merchantId} merchantInfo={merchantInfo} historyTab={historyTab} setHistoryTab={setHistoryTab} effectiveBalance={effectiveBalance} totalTradedVolume={totalTradedVolume} todayEarnings={todayEarnings} pendingEarnings={pendingEarnings} onShowAnalytics={() => setShowAnalytics(true)} onShowWalletModal={() => setShowWalletModal(true)} onLogout={handleLogout} />}
@@ -565,6 +565,7 @@ export default function MerchantDashboard() {
         setCreateTradeError={setCreateTradeError} onClose={() => setShowOpenTradeModal(false)} onSubmit={handleCreateTrade} />
 
       <OrderQuickView selectedOrder={selectedOrderPopup} merchantId={merchantId} markingDone={markingDone}
+        acceptingOrderId={acceptingOrderId} confirmingOrderId={confirmingOrderId} cancellingOrderId={cancellingOrderId}
         onClose={() => setSelectedOrderPopup(null)} onAcceptOrder={acceptOrder} onOpenEscrowModal={openEscrowModal}
         onMarkFiatPaymentSent={markFiatPaymentSent} onConfirmPayment={confirmPayment}
         onCancelOrderWithoutEscrow={cancelOrderWithoutEscrow} onOpenChat={handleOpenChat}
