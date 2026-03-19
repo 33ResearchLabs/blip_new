@@ -48,6 +48,7 @@ import {
   buildOpenDisputeTx,
   buildResolveDisputeTx,
   fetchLane,
+  fetchTrade,
 } from '@/lib/solana/v2';
 import {
   loadEncryptedWallet,
@@ -440,9 +441,19 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     touchActivity();
 
     const creatorPk = new PublicKey(params.creatorPubkey);
-    const counterpartyPk = new PublicKey(params.counterparty);
     const [tradePda] = findTradePda(creatorPk, params.tradeId);
     const [escrowPda] = findEscrowPda(tradePda);
+
+    // Fetch on-chain trade to get actual counterparty (critical for M2M orders)
+    const onChainTrade = await fetchTrade(program, creatorPk, params.tradeId);
+    let counterpartyPk: PublicKey;
+    if (onChainTrade?.counterparty) {
+      counterpartyPk = onChainTrade.counterparty;
+      console.log('[EmbeddedWallet] releaseEscrow using on-chain counterparty:', counterpartyPk.toString());
+    } else {
+      counterpartyPk = new PublicKey(params.counterparty);
+      console.log('[EmbeddedWallet] releaseEscrow using passed counterparty:', counterpartyPk.toString());
+    }
 
     const tx = await buildReleaseEscrowTx(program, keypair.publicKey, {
       tradePda, counterparty: counterpartyPk, mint: USDT_MINT,
