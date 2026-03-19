@@ -526,8 +526,9 @@ export function useOrderActions({
       addNotification('complete', `Order completed - ${order.amount} USDC released to buyer`, orderId);
       await afterMutationReconcile(orderId, { status: "completed" as const });
     } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
       console.error("Error confirming payment:", error);
-      addNotification('system', 'Failed to complete order. Please try again.', orderId);
+      addNotification('system', `Failed to complete order: ${errMsg}`, orderId);
       playSound('error');
     } finally {
       setConfirmingOrderId(null);
