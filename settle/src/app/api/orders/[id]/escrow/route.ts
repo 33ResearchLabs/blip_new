@@ -116,12 +116,6 @@ export async function POST(
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
-    // Verify access to this order
-    const canAccess = await canAccessOrder(auth, id);
-    if (!canAccess) {
-      return forbiddenResponse('You do not have access to this order');
-    }
-
     // Validate request body
     const parseResult = escrowDepositSchema.safeParse(body);
     if (!parseResult.success) {
@@ -130,7 +124,7 @@ export async function POST(
     }
 
     // Security: enforce actor matches authenticated identity
-    // Allow merchant header fallback (same pattern as order accept)
+    // Must run BEFORE canAccessOrder so auth context is correct
     const headerMerchantId = request.headers.get('x-merchant-id');
     const actorMatchesAuth = parseResult.data.actor_id === auth.actorId;
     const actorMatchesMerchant = parseResult.data.actor_type === 'merchant' && headerMerchantId && parseResult.data.actor_id === headerMerchantId;
@@ -141,6 +135,12 @@ export async function POST(
       auth.actorType = 'merchant';
       auth.actorId = headerMerchantId;
       auth.merchantId = headerMerchantId;
+    }
+
+    // Verify access to this order (after auth context is resolved)
+    const canAccess = await canAccessOrder(auth, id);
+    if (!canAccess) {
+      return forbiddenResponse('You do not have access to this order');
     }
 
     // Forward to core-api (single writer for all mutations)
@@ -198,12 +198,6 @@ export async function PATCH(
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
-    // Verify access to this order
-    const canAccess = await canAccessOrder(auth, id);
-    if (!canAccess) {
-      return forbiddenResponse('You do not have access to this order');
-    }
-
     // Validate request body
     const parseResult = escrowReleaseSchema.safeParse(body);
     if (!parseResult.success) {
@@ -214,6 +208,7 @@ export async function PATCH(
     const { tx_hash, actor_type, actor_id } = parseResult.data;
 
     // Security: enforce actor matches authenticated identity (with merchant header fallback)
+    // Must run BEFORE canAccessOrder so auth context is correct
     const relHeaderMerchantId = request.headers.get('x-merchant-id');
     const relActorMatchesAuth = actor_id === auth.actorId;
     const relActorMatchesMerchant = actor_type === 'merchant' && relHeaderMerchantId && actor_id === relHeaderMerchantId;
@@ -224,6 +219,12 @@ export async function PATCH(
       auth.actorType = 'merchant';
       auth.actorId = relHeaderMerchantId;
       auth.merchantId = relHeaderMerchantId;
+    }
+
+    // Verify access to this order (after auth context is resolved)
+    const canAccess = await canAccessOrder(auth, id);
+    if (!canAccess) {
+      return forbiddenResponse('You do not have access to this order');
     }
 
     // Forward to core-api (single writer for all mutations)
