@@ -137,7 +137,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Ownership check — can only query your own balance
-    if (auth.actorId !== userId) {
+    // Allow merchant header fallback when both user+merchant headers are present
+    const headerMerchantId = request.headers.get('x-merchant-id');
+    const isOwner = auth.actorId === userId || (type === 'merchant' && headerMerchantId === userId);
+    if (!isOwner) {
       return NextResponse.json(
         { success: false, error: 'You can only view your own balance' },
         { status: 403 }
