@@ -588,8 +588,8 @@ export default function WalletPage() {
           {view === 'unlock' && (
             <div className="space-y-6">
               <div className="text-center pt-4">
-                <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-orange-500/20 to-orange-600/5 border border-orange-500/20 flex items-center justify-center mb-4">
-                  <Lock className="w-10 h-10 text-orange-500" />
+                <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-white/10 to-white/[0.02] border border-white/10 flex items-center justify-center mb-4">
+                  <Lock className="w-10 h-10 text-white" />
                 </div>
                 <h1 className="text-2xl font-bold text-white font-mono">Unlock Wallet</h1>
                 <p className="text-sm text-white/40 font-mono mt-2">
@@ -615,15 +615,15 @@ export default function WalletPage() {
                     autoFocus
                     className="w-full px-3 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl
                                text-sm text-white font-mono placeholder:text-white/20
-                               focus:outline-none focus:border-orange-500/50 transition-colors"
+                               focus:outline-none focus:border-white/20 transition-colors"
                   />
                 </div>
 
                 <button
                   onClick={handleUnlock}
                   disabled={unlockLoading || !unlockPassword}
-                  className="w-full py-3.5 rounded-xl bg-orange-500 text-black font-bold font-mono text-sm
-                             hover:bg-orange-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-3.5 rounded-xl bg-white text-black font-bold font-mono text-sm
+                             hover:bg-white/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {unlockLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Unlocking...</> : <><Unlock className="w-4 h-4" /> Unlock</>}
                 </button>
@@ -634,7 +634,7 @@ export default function WalletPage() {
                       embeddedWallet?.deleteWallet();
                       setSetupTab('import');
                     }}
-                    className="text-[10px] text-orange-500/60 hover:text-orange-500 font-mono transition-colors flex items-center gap-1"
+                    className="text-[10px] text-white/40 hover:text-white/70 font-mono transition-colors flex items-center gap-1"
                   >
                     <Key className="w-3 h-3" />
                     Import with private key

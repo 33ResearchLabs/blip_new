@@ -27,6 +27,7 @@
     "workers": "npm run worker:autobump & npm run worker:refprice & npm run worker:outbox"
   },
   "dependencies": {
+    "@aws-sdk/client-ses": "^3.1012.0",
     "@coral-xyz/anchor": "^0.29.0",
     "@sentry/nextjs": "^9.47.1",
     "@solana/spl-token": "^0.4.14",

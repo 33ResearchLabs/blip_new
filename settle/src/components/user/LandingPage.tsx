@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Zap, Loader2 } from "lucide-react";
+import { Zap, Loader2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 
 interface LandingPageProps {
@@ -20,6 +21,7 @@ export function LandingPage({
   loginForm, setLoginForm, authMode, setAuthMode,
   handleUserLogin, handleUserRegister, isLoggingIn, loginError, setLoginError,
 }: LandingPageProps) {
+  const [showPassword, setShowPassword] = useState(false);
   const submit = () => authMode === 'login' ? handleUserLogin() : handleUserRegister();
 
   return (
@@ -86,14 +88,23 @@ export function LandingPage({
 
           <div>
             <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Password</label>
-            <input
-              type="password"
-              value={loginForm.password}
-              onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
-              placeholder={authMode === 'register' ? 'Min. 6 characters' : '••••••••'}
-              className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
-              onKeyDown={e => e.key === 'Enter' && submit()}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={loginForm.password}
+                onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
+                placeholder={authMode === 'register' ? 'Min. 6 characters' : '••••••••'}
+                className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pr-11 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
+                onKeyDown={e => e.key === 'Enter' && submit()}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <motion.button
