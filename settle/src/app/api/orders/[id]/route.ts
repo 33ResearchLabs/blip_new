@@ -237,7 +237,11 @@ export async function DELETE(
     const reason = searchParams.get('reason');
 
     // Security: enforce actor matches authenticated identity
-    if (actorId && actorId !== auth.actorId) {
+    // Allow if actor_id matches either the resolved auth or the merchant header
+    const headerMerchantId = request.headers.get('x-merchant-id');
+    const actorMatchesAuth = !actorId || actorId === auth.actorId;
+    const actorMatchesMerchantHeader = actorType === 'merchant' && headerMerchantId && actorId === headerMerchantId;
+    if (!actorMatchesAuth && !actorMatchesMerchantHeader) {
       return forbiddenResponse('actor_id does not match authenticated identity');
     }
 
