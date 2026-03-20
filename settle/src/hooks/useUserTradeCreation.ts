@@ -122,6 +122,13 @@ export function useUserTradeCreation({
         return;
       }
 
+      // Buy orders require a connected wallet so the merchant can release escrow to the buyer
+      if (!solanaWallet.walletAddress) {
+        alert('Please connect your Solana wallet before creating a buy order. The merchant needs your wallet address to release crypto to you.');
+        setIsLoading(false);
+        return;
+      }
+
       const orderRes = await fetchWithAuth('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -132,7 +139,7 @@ export function useUserTradeCreation({
           type: 'buy',
           payment_method: paymentMethod,
           preference: tradePreference,
-          buyer_wallet_address: solanaWallet.walletAddress ?? undefined,
+          buyer_wallet_address: solanaWallet.walletAddress,
         }),
       });
       if (!orderRes.ok) {
@@ -212,6 +219,13 @@ export function useUserTradeCreation({
 
     setIsLoading(true);
 
+    // Cash buy orders also require a connected wallet for escrow release
+    if (tradeType === 'buy' && !solanaWallet.walletAddress) {
+      alert('Please connect your Solana wallet before creating a buy order. The merchant needs your wallet address to release crypto to you.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const orderRes = await fetchWithAuth('/api/orders', {
         method: 'POST',
@@ -223,7 +237,7 @@ export function useUserTradeCreation({
           type: tradeType,
           payment_method: 'cash',
           preference: tradePreference,
-          buyer_wallet_address: tradeType === 'buy' ? (solanaWallet.walletAddress ?? undefined) : undefined,
+          buyer_wallet_address: tradeType === 'buy' ? solanaWallet.walletAddress : undefined,
         }),
       });
       if (!orderRes.ok) {

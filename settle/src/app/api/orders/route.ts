@@ -108,6 +108,11 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(['User not found']);
     }
 
+    // Buy orders require buyer_wallet_address so merchant can release escrow
+    if (type === 'buy' && !buyer_wallet_address) {
+      return validationErrorResponse(['buyer_wallet_address is required for buy orders. Please connect your wallet.']);
+    }
+
     let offer;
 
     // If offer_id provided, use that offer
