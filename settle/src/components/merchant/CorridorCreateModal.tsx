@@ -12,6 +12,7 @@ import {
   Plus,
 } from "lucide-react";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { showAlert } from '@/context/ModalContext';
 
 export interface CorridorFormState {
   fromCurrency: string;
@@ -277,11 +278,11 @@ export function CorridorCreateModal({
                     if (!merchantId) return;
                     const availableAmount = parseFloat(corridorForm.availableAmount || "0");
                     if (availableAmount > (effectiveBalance || 0)) {
-                      alert("Amount exceeds your wallet balance");
+                      showAlert('Invalid Amount', 'Amount exceeds your wallet balance', 'warning');
                       return;
                     }
                     if (availableAmount <= 0) {
-                      alert("Please enter a valid amount");
+                      showAlert('Invalid Amount', 'Please enter a valid amount', 'warning');
                       return;
                     }
                     try {

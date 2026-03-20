@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, ArrowUpCircle, CheckCircle, Clock, TrendingUp, Activity, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { showAlert } from '@/context/ModalContext';
 
 interface MempoolOrder {
   id: string;
@@ -98,12 +99,12 @@ export function OrderInspector({
           onBump?.(order.id);
           await fetchEvents();
         } else {
-          alert(data.error || 'Failed to bump order');
+          showAlert('Error', data.error || 'Failed to bump order', 'error');
         }
       }
     } catch (error) {
       console.error('Failed to bump order:', error);
-      alert('Failed to bump order');
+      showAlert('Error', 'Failed to bump order', 'error');
     } finally {
       setIsBumping(false);
     }
@@ -128,15 +129,15 @@ export function OrderInspector({
         const data = await res.json();
         if (data.success) {
           onAccept?.(order.id);
-          alert('Order accepted successfully!');
+          showAlert('Success', 'Order accepted successfully!', 'success');
           onClose();
         } else {
-          alert(data.error || 'Failed to accept order');
+          showAlert('Error', data.error || 'Failed to accept order', 'error');
         }
       }
     } catch (error) {
       console.error('Failed to accept order:', error);
-      alert('Failed to accept order');
+      showAlert('Error', 'Failed to accept order', 'error');
     } finally {
       setIsAccepting(false);
     }

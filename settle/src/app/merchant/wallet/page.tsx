@@ -19,6 +19,7 @@ import {
 import { Keypair } from '@solana/web3.js';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useSolanaWallet } from '@/context/SolanaWalletContext';
+import { showAlert } from '@/context/ModalContext';
 
 interface MerchantInfo {
   id: string;
@@ -346,7 +347,7 @@ export default function WalletPage() {
     if (!pw) return;
 
     const encrypted = loadEncryptedWallet();
-    if (!encrypted) { alert('No wallet found'); return; }
+    if (!encrypted) { showAlert('Error', 'No wallet found', 'error'); return; }
 
     decryptWallet(encrypted, pw).then(kp => {
       const key = exportPrivateKey(kp);
@@ -361,7 +362,7 @@ export default function WalletPage() {
       a.click();
       URL.revokeObjectURL(url);
     }).catch(() => {
-      alert('Wrong password');
+      showAlert('Error', 'Wrong password', 'error');
     });
   };
 

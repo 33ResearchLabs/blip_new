@@ -27,6 +27,7 @@ import type { Screen, Order } from "./types";
 import { type RefObject, useState as useLocalState, useRef as useLocalRef, useCallback as useLocalCallback, useEffect as useLocalEffect } from "react";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import dynamic from 'next/dynamic';
+import { showAlert } from '@/context/ModalContext';
 
 const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 
@@ -789,14 +790,14 @@ export const OrderDetailScreen = ({
                             return;
                           }
                           if (!solanaWallet.programReady) {
-                            alert('Wallet not ready. Please reconnect your wallet.');
+                            showAlert('Wallet Error', 'Wallet not ready. Please reconnect your wallet.', 'error');
                             return;
                           }
                           setIsLoading(true);
                           try {
                             const merchantWallet = activeOrder.acceptorWalletAddress || activeOrder.merchant.walletAddress;
                             if (!merchantWallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet)) {
-                              alert('Merchant wallet not available. Please wait for merchant to accept the order with their wallet.');
+                              showAlert('Wallet Error', 'Merchant wallet not available. Please wait for merchant to accept the order with their wallet.', 'warning');
                               setIsLoading(false);
                               return;
                             }
@@ -826,7 +827,7 @@ export const OrderDetailScreen = ({
                             }
                           } catch (err: any) {
                             console.error('Escrow failed:', err);
-                            alert(err?.message || 'Failed to lock escrow. Please try again.');
+                            showAlert('Escrow Failed', err?.message || 'Failed to lock escrow. Please try again.', 'error');
                             playSound('error');
                           } finally {
                             setIsLoading(false);

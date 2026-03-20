@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Star, X, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { showAlert } from '@/context/ModalContext';
 
 interface RatingModalProps {
   orderId: string;
@@ -37,7 +38,7 @@ export function RatingModal({
       onClose();
     } catch (error) {
       console.error('Failed to submit rating:', error);
-      alert('Failed to submit rating. Please try again.');
+      showAlert('Error', 'Failed to submit rating. Please try again.', 'error');
     } finally {
       setIsSubmitting(false);
     }

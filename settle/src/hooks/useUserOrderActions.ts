@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import type { Order, OrderStatus, OrderStep, BankAccount } from "@/components/user/screens/types";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { showAlert } from '@/context/ModalContext';
 
 interface UseUserOrderActionsParams {
   userId: string | null;
@@ -116,7 +117,7 @@ export function useUserOrderActions({
       if (!res.ok || !data.success) {
         const errorMsg = data.error || 'Failed to update order. The order may have expired.';
         console.error('Failed to mark payment sent:', errorMsg);
-        alert(errorMsg);
+        showAlert('Error', errorMsg, 'error');
         setIsLoading(false);
         return;
       }
@@ -126,7 +127,7 @@ export function useUserOrderActions({
       ));
     } catch (err) {
       console.error('Failed to mark payment sent:', err);
-      alert('Network error. Please try again.');
+      showAlert('Network Error', 'Network error. Please try again.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -143,7 +144,7 @@ export function useUserOrderActions({
         const isValidSolanaAddress = merchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
 
         if (!solanaWallet.connected) {
-          alert('Please connect your wallet to release the escrow.');
+          showAlert('Wallet Required', 'Please connect your wallet to release the escrow.', 'warning');
           setIsLoading(false);
           return;
         }
@@ -153,7 +154,7 @@ export function useUserOrderActions({
             acceptorWallet: activeOrder.acceptorWalletAddress,
             merchantProfileWallet: activeOrder.merchant.walletAddress,
           });
-          alert('Merchant wallet address is invalid or missing. Please contact support.');
+          showAlert('Invalid Wallet', 'Merchant wallet address is invalid or missing. Please contact support.', 'error');
           setIsLoading(false);
           return;
         }
@@ -231,7 +232,7 @@ export function useUserOrderActions({
           }
 
           if (msg.includes('ConstraintRaw') || msg.includes('CannotRelease')) {
-            alert(`Unable to release escrow: ${msg.slice(0, 200)}`);
+            showAlert('Escrow Error', `Unable to release escrow: ${msg.slice(0, 200)}`, 'error');
             setIsLoading(false);
             return;
           }
@@ -240,7 +241,7 @@ export function useUserOrderActions({
 
         if (!releaseResult.success) {
           console.error('[Release] Escrow release failed:', releaseResult.error);
-          alert(`Failed to release escrow: ${releaseResult.error || 'Unknown error'}`);
+          showAlert('Escrow Failed', `Failed to release escrow: ${releaseResult.error || 'Unknown error'}`, 'error');
           setIsLoading(false);
           return;
         }
@@ -301,7 +302,7 @@ export function useUserOrderActions({
           return;
         }
         console.error('Failed to confirm payment:', errorMsg);
-        alert(errorMsg);
+        showAlert('Error', errorMsg, 'error');
         setIsLoading(false);
         return;
       }
@@ -315,7 +316,7 @@ export function useUserOrderActions({
       }
     } catch (err) {
       console.error('Failed to confirm payment:', err);
-      alert('Failed to release escrow. Please try again.');
+      showAlert('Error', 'Failed to release escrow. Please try again.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -535,7 +536,7 @@ export function useUserOrderActions({
         fetchOrders(userId);
       } else {
         playSound('error');
-        alert(data.error || 'Failed to request cancel');
+        showAlert('Error', data.error || 'Failed to request cancel', 'error');
       }
     } catch (err) {
       console.error('Failed to request cancel:', err);
@@ -564,7 +565,7 @@ export function useUserOrderActions({
         fetchOrders(userId);
       } else {
         playSound('error');
-        alert(data.error || 'Failed to respond to cancel');
+        showAlert('Error', data.error || 'Failed to respond to cancel', 'error');
       }
     } catch (err) {
       console.error('Failed to respond to cancel request:', err);

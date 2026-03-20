@@ -27,7 +27,7 @@ export interface OrderQuickViewProps {
   onOpenEscrowModal: (order: Order) => void;
   onMarkFiatPaymentSent: (order: Order) => void;
   onConfirmPayment: (orderId: string) => Promise<void>;
-  onCancelOrderWithoutEscrow: (orderId: string) => Promise<void>;
+  onCancelOrderWithoutEscrow: (orderId: string) => void;
   onOpenChat: (order: Order) => void;
   onViewFullDetails: (orderId: string) => void;
 }

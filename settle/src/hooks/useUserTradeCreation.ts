@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Screen, TradeType, TradePreference, PaymentMethod, Order, Offer, DbOrder } from "@/components/user/screens/types";
 import { mapDbOrderToUI } from "@/components/user/screens/helpers";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { showAlert } from '@/context/ModalContext';
 
 interface UseUserTradeCreationParams {
   userId: string | null;
@@ -46,12 +47,12 @@ export function useUserTradeCreation({
 
   const startTrade = async () => {
     if (!amount || parseFloat(amount) <= 0) {
-      alert('Please enter a valid amount');
+      showAlert('Invalid Amount', 'Please enter a valid amount', 'warning');
       return;
     }
 
     if (!userId) {
-      alert('Please connect your wallet first');
+      showAlert('Wallet Required', 'Please connect your wallet first', 'warning');
       console.error('[Order] No userId - user not authenticated');
       return;
     }
@@ -59,7 +60,7 @@ export function useUserTradeCreation({
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(userId)) {
       console.error('[Order] Invalid userId format:', userId);
-      alert('Session error. Please reconnect your wallet.');
+      showAlert('Session Error', 'Session error. Please reconnect your wallet.', 'error');
       localStorage.removeItem('blip_user');
       setUserId(null);
       setScreen('welcome');
@@ -80,7 +81,7 @@ export function useUserTradeCreation({
       if (!offerRes.ok) {
         const errorMsg = `Server error (${offerRes.status})`;
         console.error('Failed to fetch offers:', errorMsg);
-        alert('No offers available for this amount and payment method');
+        showAlert('No Offers', 'No offers available for this amount and payment method', 'warning');
         setIsLoading(false);
         return;
       }
@@ -89,7 +90,7 @@ export function useUserTradeCreation({
       if (!offerData.success || !offerData.data) {
         const errorMsg = offerData.error || 'No offers available for this amount and payment method';
         console.error('Failed to fetch offers:', errorMsg);
-        alert(errorMsg);
+        showAlert('Error', errorMsg, 'error');
         setIsLoading(false);
         return;
       }
@@ -109,7 +110,7 @@ export function useUserTradeCreation({
         const isValidSolanaAddress = merchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
         if (!isValidSolanaAddress) {
           console.error('[Trade] Merchant has no wallet address:', offer?.merchant?.display_name);
-          alert('This merchant has not linked their Solana wallet yet. Please try again later or choose a different amount to match with another merchant.');
+          showAlert('Wallet Not Linked', 'This merchant has not linked their Solana wallet yet. Please try again later or choose a different amount to match with another merchant.', 'warning');
           setIsLoading(false);
           return;
         }
@@ -124,7 +125,7 @@ export function useUserTradeCreation({
 
       // Buy orders require a connected wallet so the merchant can release escrow to the buyer
       if (!solanaWallet.walletAddress) {
-        alert('Please connect your Solana wallet before creating a buy order. The merchant needs your wallet address to release crypto to you.');
+        showAlert('Wallet Required', 'Please connect your Solana wallet before creating a buy order. The merchant needs your wallet address to release crypto to you.', 'warning');
         setIsLoading(false);
         return;
       }
@@ -149,7 +150,7 @@ export function useUserTradeCreation({
         console.error('Failed to create order:', errorMsg, orderData);
 
         if (orderData.details?.includes('User not found')) {
-          alert('Your session has expired. Please reconnect your wallet.');
+          showAlert('Session Expired', 'Your session has expired. Please reconnect your wallet.', 'error');
           localStorage.removeItem('blip_user');
           localStorage.removeItem('blip_wallet');
           setUserId(null);
@@ -159,7 +160,7 @@ export function useUserTradeCreation({
           return;
         }
 
-        alert(errorMsg);
+        showAlert('Order Failed', errorMsg, 'error');
         playSound('error');
         setIsLoading(false);
         return;
@@ -169,7 +170,7 @@ export function useUserTradeCreation({
       if (!orderData.success) {
         const errorMsg = orderData.error || 'Failed to create order';
         console.error('Failed to create order:', errorMsg);
-        alert(errorMsg);
+        showAlert('Order Failed', errorMsg, 'error');
         playSound('error');
         setIsLoading(false);
         return;
@@ -184,12 +185,12 @@ export function useUserTradeCreation({
         setAmount("");
         playSound('trade_start');
       } else {
-        alert('Failed to process order data');
+        showAlert('Error', 'Failed to process order data', 'error');
         playSound('error');
       }
     } catch (err) {
       console.error('Failed to start trade:', err);
-      alert('Failed to create order');
+      showAlert('Error', 'Failed to create order', 'error');
       playSound('error');
     }
 
@@ -198,19 +199,19 @@ export function useUserTradeCreation({
 
   const confirmCashOrder = async () => {
     if (!selectedOffer || !amount) {
-      alert('Missing order details');
+      showAlert('Error', 'Missing order details', 'error');
       return;
     }
 
     if (!userId) {
-      alert('Please connect your wallet first');
+      showAlert('Wallet Required', 'Please connect your wallet first', 'warning');
       return;
     }
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(userId)) {
       console.error('[Order] Invalid userId format:', userId);
-      alert('Session error. Please reconnect your wallet.');
+      showAlert('Session Error', 'Session error. Please reconnect your wallet.', 'error');
       localStorage.removeItem('blip_user');
       setUserId(null);
       setScreen('welcome');
@@ -221,7 +222,7 @@ export function useUserTradeCreation({
 
     // Cash buy orders also require a connected wallet for escrow release
     if (tradeType === 'buy' && !solanaWallet.walletAddress) {
-      alert('Please connect your Solana wallet before creating a buy order. The merchant needs your wallet address to release crypto to you.');
+      showAlert('Wallet Required', 'Please connect your Solana wallet before creating a buy order. The merchant needs your wallet address to release crypto to you.', 'warning');
       setIsLoading(false);
       return;
     }
@@ -247,7 +248,7 @@ export function useUserTradeCreation({
         console.error('Failed to create cash order:', errorMsg, orderData);
 
         if (orderData.details?.includes('User not found')) {
-          alert('Your session has expired. Please reconnect your wallet.');
+          showAlert('Session Expired', 'Your session has expired. Please reconnect your wallet.', 'error');
           localStorage.removeItem('blip_user');
           localStorage.removeItem('blip_wallet');
           setUserId(null);
@@ -256,7 +257,7 @@ export function useUserTradeCreation({
           return;
         }
 
-        alert(errorMsg);
+        showAlert('Order Failed', errorMsg, 'error');
         setIsLoading(false);
         return;
       }
@@ -265,7 +266,7 @@ export function useUserTradeCreation({
       if (!orderData.success) {
         const errorMsg = orderData.error || 'Failed to create order';
         console.error('Failed to create cash order:', errorMsg);
-        alert(errorMsg);
+        showAlert('Order Failed', errorMsg, 'error');
         setIsLoading(false);
         return;
       }
@@ -278,11 +279,11 @@ export function useUserTradeCreation({
         setSelectedOffer(null);
         setScreen("order");
       } else {
-        alert('Failed to process order data');
+        showAlert('Error', 'Failed to process order data', 'error');
       }
     } catch (err) {
       console.error('Failed to create cash order:', err);
-      alert('Network error. Please try again.');
+      showAlert('Network Error', 'Network error. Please try again.', 'error');
     }
 
     setIsLoading(false);
@@ -292,20 +293,20 @@ export function useUserTradeCreation({
     console.log('[Escrow] confirmEscrow called', { selectedOffer, amount, userId });
     if (!selectedOffer || !amount) {
       console.log('[Escrow] Missing required data:', { selectedOffer: !!selectedOffer, amount: !!amount });
-      alert('Missing order details');
+      showAlert('Error', 'Missing order details', 'error');
       return;
     }
 
     if (!userId) {
       console.log('[Escrow] No userId - user not authenticated');
-      alert('Please connect your wallet first');
+      showAlert('Wallet Required', 'Please connect your wallet first', 'warning');
       return;
     }
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(userId)) {
       console.error('[Escrow] Invalid userId format:', userId);
-      alert('Session error. Please reconnect your wallet.');
+      showAlert('Session Error', 'Session error. Please reconnect your wallet.', 'error');
       localStorage.removeItem('blip_user');
       setUserId(null);
       setScreen('welcome');

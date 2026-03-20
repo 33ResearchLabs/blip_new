@@ -6,6 +6,7 @@ import type { Order, DbOrder, Notification } from "@/types/merchant";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
 import { computeMyRole } from "@/lib/orders/statusResolver";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { showConfirm } from '@/context/ModalContext';
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 
@@ -565,40 +566,39 @@ export function useEscrowOperations({
   }, []);
 
   // Cancel without escrow (pending/accepted orders)
-  const cancelOrderWithoutEscrow = useCallback(async (orderId: string) => {
+  const cancelOrderWithoutEscrow = useCallback((orderId: string) => {
     if (!merchantId) return;
 
-    const confirmed = confirm('Cancel this order? This action cannot be undone.');
-    if (!confirmed) return;
+    showConfirm('Cancel Order', 'Cancel this order? This action cannot be undone.', async () => {
+      setCancellingOrderId(orderId);
+      try {
+        const res = await fetchWithAuth(`/api/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&reason=Cancelled by merchant`, {
+          method: 'DELETE',
+        });
 
-    setCancellingOrderId(orderId);
-    try {
-      const res = await fetchWithAuth(`/api/orders/${orderId}?actor_type=merchant&actor_id=${merchantId}&reason=Cancelled by merchant`, {
-        method: 'DELETE',
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          playSound('click');
-          addNotification('system', 'Order cancelled successfully.', orderId);
-          await afterMutationReconcile(orderId, { status: "cancelled" as const });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            playSound('click');
+            addNotification('system', 'Order cancelled successfully.', orderId);
+            await afterMutationReconcile(orderId, { status: "cancelled" as const });
+          } else {
+            addNotification('system', data.error || 'Failed to cancel order', orderId);
+            playSound('error');
+          }
         } else {
+          const data = await res.json();
           addNotification('system', data.error || 'Failed to cancel order', orderId);
           playSound('error');
         }
-      } else {
-        const data = await res.json();
-        addNotification('system', data.error || 'Failed to cancel order', orderId);
+      } catch (error) {
+        console.error('[Cancel] Error cancelling order:', error);
+        addNotification('system', 'Failed to cancel order. Please try again.', orderId);
         playSound('error');
+      } finally {
+        setCancellingOrderId(null);
       }
-    } catch (error) {
-      console.error('[Cancel] Error cancelling order:', error);
-      addNotification('system', 'Failed to cancel order. Please try again.', orderId);
-      playSound('error');
-    } finally {
-      setCancellingOrderId(null);
-    }
+    }, { variant: 'warning', confirmLabel: 'Cancel Order' });
   }, [merchantId, addNotification, playSound, afterMutationReconcile]);
 
   // Open escrow modal for a fresh sell order (used by handleDirectOrderCreation)

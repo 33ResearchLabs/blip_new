@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Settings, Save, Loader2, Power, DollarSign, Package } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { showAlert } from '@/context/ModalContext';
 
 interface MerchantQuote {
   id: string;
@@ -91,14 +92,14 @@ export function MerchantQuoteControl({
         const data = await res.json();
         if (data.success) {
           setQuote(data.data);
-          alert('Quote saved successfully!');
+          showAlert('Success', 'Quote saved successfully!', 'success');
         } else {
-          alert(data.error || 'Failed to save quote');
+          showAlert('Error', data.error || 'Failed to save quote', 'error');
         }
       }
     } catch (error) {
       console.error('Failed to save quote:', error);
-      alert('Failed to save quote');
+      showAlert('Error', 'Failed to save quote', 'error');
     } finally {
       setIsSaving(false);
     }

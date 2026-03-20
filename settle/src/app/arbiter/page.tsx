@@ -25,6 +25,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useSolanaWallet } from '@/context/SolanaWalletContext';
+import { showAlert } from '@/context/ModalContext';
 
 const WalletModal = dynamic(() => import("@/components/MerchantWalletModal"), { ssr: false });
 
@@ -182,11 +183,11 @@ export default function ArbiterDashboard() {
         setVoteForm({ vote: '', reasoning: '' });
         fetchArbiterData(); // Refresh
       } else {
-        alert(data.error || 'Failed to submit vote');
+        showAlert('Error', data.error || 'Failed to submit vote', 'error');
       }
     } catch (error) {
       console.error('Vote submission error:', error);
-      alert('Failed to submit vote');
+      showAlert('Error', 'Failed to submit vote', 'error');
     } finally {
       setIsSubmitting(false);
     }

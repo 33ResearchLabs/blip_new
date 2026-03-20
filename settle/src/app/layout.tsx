@@ -5,6 +5,7 @@ import { AppProvider } from "@/context/AppContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { PusherProvider } from "@/context/PusherContext";
 import { WebSocketChatProvider } from "@/context/WebSocketChatContext";
+import { ModalProvider } from "@/context/ModalContext";
 import ClientWalletProvider from "@/components/ClientWalletProvider";
 
 const inter = Inter({
@@ -79,9 +80,11 @@ export default function RootLayout({
           <ClientWalletProvider>
             <PusherProvider>
               <WebSocketChatProvider>
-                <AppProvider>
-                  {children}
-                </AppProvider>
+                <ModalProvider>
+                  <AppProvider>
+                    {children}
+                  </AppProvider>
+                </ModalProvider>
               </WebSocketChatProvider>
             </PusherProvider>
           </ClientWalletProvider>
