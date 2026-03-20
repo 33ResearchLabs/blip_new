@@ -34,22 +34,21 @@ function getAuthHeaders(): Record<string, string> {
     }
   }
 
-  // 3. User ID from localStorage (user-facing app, not merchant portal)
-  // Only send x-user-id if NO merchant identity is present — prevents
-  // stale blip_user in localStorage from overriding merchant auth on
-  // non-/merchant routes (e.g. /api/orders/[id])
-  if (!headers['x-merchant-id']) {
-    try {
-      const saved = localStorage.getItem('blip_user');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.id) {
-          headers['x-user-id'] = parsed.id;
-        }
+  // 3. User ID from localStorage (user-facing app)
+  // Always send x-user-id when available — the server disambiguates
+  // using the route path (/merchant routes → merchant actor, else → user).
+  // Both headers must be present so users logged into merchant + user
+  // in the same browser can still create orders from the user side.
+  try {
+    const saved = localStorage.getItem('blip_user');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed?.id) {
+        headers['x-user-id'] = parsed.id;
       }
-    } catch {
-      // SSR or corrupt — skip
     }
+  } catch {
+    // SSR or corrupt — skip
   }
 
   return headers;
