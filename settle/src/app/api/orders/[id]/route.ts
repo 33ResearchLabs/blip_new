@@ -101,17 +101,6 @@ export async function PATCH(
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
-    // Verify access to this order
-    // Skip access check for 'accepted' status — merchant is joining, not yet a participant
-    const isAccepting = body.status === 'accepted';
-    if (!isAccepting) {
-      const canAccess = await canAccessOrder(auth, id);
-      if (!canAccess) {
-        logger.auth.forbidden(`PATCH /api/orders/${id}`, auth.actorId, 'Not order participant');
-        return forbiddenResponse('You do not have access to this order');
-      }
-    }
-
     // Validate request body
     const parseResult = updateOrderStatusSchema.safeParse(body);
     if (!parseResult.success) {
@@ -123,7 +112,8 @@ export async function PATCH(
 
     // Security: enforce actor matches authenticated identity
     // When both user+merchant headers are present and the route is /api/orders (not /merchant),
-    // auth defaults to user. But a merchant accepting uses actor_type='merchant' + their merchant ID.
+    // auth defaults to user. But a merchant acting (e.g. sending fiat, confirming payment)
+    // uses actor_type='merchant' + their merchant ID.
     // Allow if actor_id matches either the resolved auth or the merchant header.
     const headerMerchantId = request.headers.get('x-merchant-id');
     const actorMatchesAuth = actor_id === auth.actorId;
@@ -131,11 +121,23 @@ export async function PATCH(
     if (!actorMatchesAuth && !actorMatchesMerchantHeader) {
       return forbiddenResponse('actor_id does not match authenticated identity');
     }
-    // If merchant is acting, override auth context for downstream
+    // If merchant is acting, override auth context so canAccessOrder checks
+    // the merchant identity (covers both User↔Merchant and M2M trades)
     if (!actorMatchesAuth && actorMatchesMerchantHeader) {
       auth.actorType = 'merchant';
       auth.actorId = headerMerchantId;
       auth.merchantId = headerMerchantId;
+    }
+
+    // Verify access to this order (now with correct actor identity resolved above)
+    // Skip access check for 'accepted' status — merchant is joining, not yet a participant
+    const isAccepting = body.status === 'accepted';
+    if (!isAccepting) {
+      const canAccess = await canAccessOrder(auth, id);
+      if (!canAccess) {
+        logger.auth.forbidden(`PATCH /api/orders/${id}`, auth.actorId, 'Not order participant');
+        return forbiddenResponse('You do not have access to this order');
+      }
     }
 
     // Self-accept guard: prevent same wallet from creating and accepting an order
