@@ -306,6 +306,8 @@ export default function MerchantDashboard() {
 
   const pendingOrders = useMemo(() => orders.filter(o => {
     if (isOrderExpired(o)) return false;
+    // Merchant's own orders should not appear in the pending marketplace
+    if (o.isMyOrder) return false;
     const status = getEffectiveStatus(o);
     if (status === "pending") return true;
     if (status === "escrow" && isSelfUnaccepted(o)) return true;
@@ -369,6 +371,7 @@ export default function MerchantDashboard() {
       <MerchantNavbar
         activePage="dashboard" merchantInfo={merchantInfo}
         embeddedWalletState={embeddedWallet?.state} onLogout={handleLogout}
+        onOpenProfile={() => setShowProfileModal(true)}
         rightActions={<>
           <motion.button whileTap={{ scale: 0.95 }} onClick={() => setShowTransactionHistory(true)}
             className="p-2 rounded-lg transition-all bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.05]" title="Transaction History">

@@ -1,8 +1,9 @@
 'use client';
 
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Zap, Wallet, Lock, LogOut } from 'lucide-react';
+import { Zap, Wallet, Lock, LogOut, User, Settings, ChevronDown } from 'lucide-react';
 
 export type NavPage = 'dashboard' | 'wallet' | 'settings';
 
@@ -18,6 +19,7 @@ interface MerchantNavbarProps {
   /** Extra buttons rendered before the profile section (e.g. tx history, payment methods) */
   rightActions?: React.ReactNode;
   onLogout?: () => void;
+  onOpenProfile?: () => void;
 }
 
 const pill = (active: boolean) =>
@@ -31,8 +33,25 @@ export function MerchantNavbar({
   embeddedWalletState,
   rightActions,
   onLogout,
+  onOpenProfile,
 }: MerchantNavbarProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
+
   const handleLogout = () => {
+    setMenuOpen(false);
     if (onLogout) {
       onLogout();
     } else {
@@ -43,6 +62,7 @@ export function MerchantNavbar({
   };
 
   const initial = (merchantInfo?.username || merchantInfo?.display_name)?.charAt(0)?.toUpperCase() || '?';
+  const displayName = merchantInfo?.username || merchantInfo?.display_name || merchantInfo?.business_name || 'Merchant';
 
   return (
     <header className="sticky top-0 z-50 bg-black/60 backdrop-blur-2xl border-b border-white/[0.05]">
@@ -83,29 +103,97 @@ export function MerchantNavbar({
           </nav>
         </div>
 
-        {/* Right: Actions + Profile + Logout */}
+        {/* Right: Actions + Avatar dropdown */}
         <div className="flex items-center gap-2 shrink-0">
           {rightActions}
 
           {rightActions && <div className="w-px h-6 bg-white/[0.06] mx-0.5" />}
 
-          <div className="relative w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-[12px] overflow-hidden">
-            {merchantInfo?.avatar_url ? (
-              <Image src={merchantInfo.avatar_url} alt="Profile" fill className="object-cover" sizes="32px" />
-            ) : (
-              <span className="text-white/60">{initial}</span>
+          {/* Avatar button with dropdown */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen(prev => !prev)}
+              className={`flex items-center gap-1.5 p-1 pr-2 rounded-full transition-colors ${
+                menuOpen
+                  ? 'bg-white/[0.08] ring-1 ring-white/[0.12]'
+                  : 'hover:bg-white/[0.06]'
+              }`}
+            >
+              <div className="relative w-7 h-7 rounded-full border border-white/10 flex items-center justify-center text-[11px] overflow-hidden bg-white/[0.04]">
+                {merchantInfo?.avatar_url ? (
+                  <Image src={merchantInfo.avatar_url} alt="Profile" fill className="object-cover" sizes="28px" />
+                ) : (
+                  <span className="font-semibold text-white/70">{initial}</span>
+                )}
+              </div>
+              <ChevronDown className={`w-3 h-3 text-white/30 transition-transform hidden sm:block ${menuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown menu */}
+            {menuOpen && (
+              <div className="absolute right-0 top-full mt-1.5 w-52 rounded-xl border border-white/[0.08] bg-[#111] shadow-2xl shadow-black/60 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150 z-[60]">
+                {/* User info header */}
+                <div className="px-3 py-2.5 border-b border-white/[0.06]">
+                  <div className="flex items-center gap-2.5">
+                    <div className="relative w-9 h-9 rounded-full border border-white/10 flex items-center justify-center text-[13px] overflow-hidden bg-white/[0.04] shrink-0">
+                      {merchantInfo?.avatar_url ? (
+                        <Image src={merchantInfo.avatar_url} alt="Profile" fill className="object-cover" sizes="36px" />
+                      ) : (
+                        <span className="font-semibold text-white/70">{initial}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-medium text-white truncate">{displayName}</p>
+                      {merchantInfo?.business_name && merchantInfo.business_name !== displayName && (
+                        <p className="text-[10px] text-white/40 truncate">{merchantInfo.business_name}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Menu items */}
+                <div className="py-1">
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onOpenProfile?.();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-white/60 hover:text-white hover:bg-white/[0.06] transition-colors"
+                  >
+                    <User className="w-4 h-4" />
+                    Edit Profile
+                  </button>
+                  <Link
+                    href="/merchant/wallet"
+                    onClick={() => setMenuOpen(false)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-white/60 hover:text-white hover:bg-white/[0.06] transition-colors"
+                  >
+                    <Wallet className="w-4 h-4" />
+                    Wallet
+                  </Link>
+                  <Link
+                    href="/merchant/settings"
+                    onClick={() => setMenuOpen(false)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-white/60 hover:text-white hover:bg-white/[0.06] transition-colors"
+                  >
+                    <Settings className="w-4 h-4" />
+                    Settings
+                  </Link>
+                </div>
+
+                {/* Logout */}
+                <div className="border-t border-white/[0.06] py-1">
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-red-400/70 hover:text-red-400 hover:bg-red-500/[0.06] transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Logout
+                  </button>
+                </div>
+              </div>
             )}
           </div>
-          <span className="hidden sm:block text-[12px] font-medium text-white/60">
-            {merchantInfo?.username || merchantInfo?.display_name || merchantInfo?.business_name || 'Merchant'}
-          </span>
-          <button
-            onClick={handleLogout}
-            className="p-2 rounded-lg hover:bg-red-500/10 transition-colors"
-            title="Logout"
-          >
-            <LogOut className="w-[18px] h-[18px] text-white/30 hover:text-red-400" />
-          </button>
         </div>
       </div>
     </header>

@@ -233,7 +233,17 @@ export async function getMerchantDirectConversations(merchantId: string): Promis
       END as username,
       mc.nickname,
       mc.is_favorite,
-      mc.trades_count,
+      COALESCE((
+        SELECT COUNT(*)::int FROM orders o
+        WHERE o.status = 'completed'
+          AND (
+            (mc.contact_type = 'user' AND o.merchant_id = $1 AND o.user_id = mc.user_id)
+            OR (mc.contact_type = 'merchant' AND (
+              (o.merchant_id = $1 AND o.buyer_merchant_id = mc.contact_merchant_id)
+              OR (o.merchant_id = mc.contact_merchant_id AND o.buyer_merchant_id = $1)
+            ))
+          )
+      ), 0) as trades_count,
       (
         SELECT json_build_object(
           'content', dm.content,

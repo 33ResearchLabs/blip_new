@@ -133,14 +133,25 @@ export function useOrderFetching({
   }, [merchantId]);
 
   // Debounced fetch: coalesces multiple fetchOrders() calls within 150ms
+  // If a fetch is already in-flight, schedules another fetch after it completes
+  const needsRefetchAfterRef = useRef(false);
   const debouncedFetchOrders = useCallback(() => {
-    if (fetchPendingRef.current) return;
+    if (fetchPendingRef.current) {
+      // A fetch is in progress — schedule a follow-up instead of dropping
+      needsRefetchAfterRef.current = true;
+      return;
+    }
     fetchPendingRef.current = true;
     if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current);
     fetchTimerRef.current = setTimeout(() => {
       fetchOrders().finally(() => {
         fetchPendingRef.current = false;
         fetchTimerRef.current = null;
+        // If events arrived while fetching, do one more fetch
+        if (needsRefetchAfterRef.current) {
+          needsRefetchAfterRef.current = false;
+          debouncedFetchOrders();
+        }
       });
     }, 150);
   }, [fetchOrders]);

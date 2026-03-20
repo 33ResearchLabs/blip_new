@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { copyToClipboard } from '@/lib/clipboard';
 import {
@@ -443,7 +442,7 @@ export default function MerchantSettingsPage() {
                 <div className="flex items-center gap-4 mb-4">
                   <div className="relative w-16 h-16 rounded-full border-2 border-white/20 overflow-hidden shrink-0">
                     {selectedAvatar ? (
-                      <Image src={selectedAvatar} alt="Avatar" fill className="object-cover" sizes="64px" />
+                      <img src={selectedAvatar} alt="Avatar" className="absolute inset-0 w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-white/5 text-2xl">
                         {displayName?.charAt(0)?.toUpperCase() || '?'}
@@ -466,7 +465,7 @@ export default function MerchantSettingsPage() {
                           : 'border-white/10 hover:border-white/30'
                       }`}
                     >
-                      <Image src={url} alt={`Avatar ${i + 1}`} fill className="object-cover" sizes="48px" />
+                      <img src={url} alt={`Avatar ${i + 1}`} className="absolute inset-0 w-full h-full object-cover" />
                     </button>
                   ))}
                 </div>

@@ -1,9 +1,8 @@
 'use client';
 
-import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Loader2, Check, AlertCircle, Shield, Star } from 'lucide-react';
+import { X, Loader2, Check, AlertCircle, Shield } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 // 50 pre-made avatar options using DiceBear API and other sources
@@ -195,7 +194,7 @@ export function MerchantProfileModal({
             <div className="flex items-center gap-4">
               <div className="relative shrink-0">
                 {previewUrl ? (
-                  <Image src={previewUrl} alt="Profile" width={64} height={64} className="rounded-full object-cover border-2 border-white/20" />
+                  <img src={previewUrl} alt="Profile" width={64} height={64} className="rounded-full object-cover border-2 border-white/20" />
                 ) : (
                   <div className="w-16 h-16 rounded-full border-2 border-white/20 flex items-center justify-center text-2xl bg-white/5">
                     {currentDisplayName?.charAt(0)?.toUpperCase() || '?'}
@@ -288,7 +287,7 @@ export function MerchantProfileModal({
                       : 'border-white/10 hover:border-white/30'
                   } ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
-                  <Image src={avatarUrl} alt={`Avatar ${index + 1}`} fill className="object-cover" sizes="48px" />
+                  <img src={avatarUrl} alt={`Avatar ${index + 1}`} className="absolute inset-0 w-full h-full object-cover" />
                   {selectedPreset === avatarUrl && !success && (
                     <div className="absolute inset-0 bg-orange-500/20 flex items-center justify-center">
                       {isUploading && <Loader2 className="w-6 h-6 text-white animate-spin" />}
