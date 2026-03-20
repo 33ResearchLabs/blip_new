@@ -254,6 +254,26 @@ export default function MerchantDashboard() {
     else cancelOrderWithoutEscrow(order.id);
   }, [openCancelModal, cancelOrderWithoutEscrow]);
 
+  // Direct action handler for in-progress order cards
+  const handleOrderAction = useCallback((order: any, action: string) => {
+    switch (action) {
+      case 'Lock Escrow':
+        openEscrowModal(order);
+        break;
+      case 'Send Fiat Payment':
+        markFiatPaymentSent(order);
+        break;
+      case 'Confirm Receipt':
+      case 'Confirm & Release':
+        openReleaseModal(order);
+        break;
+      default:
+        // For unknown actions, fall back to opening the detail popup
+        setSelectedOrderPopup(order);
+        break;
+    }
+  }, [openEscrowModal, markFiatPaymentSent, openReleaseModal, setSelectedOrderPopup]);
+
   // Fetch dispute info when viewing a chat for a disputed order
   useEffect(() => {
     const activeChat = chatWindows.find(c => c.id === activeChatId || c.orderId === activeChatId);
@@ -422,7 +442,7 @@ export default function MerchantDashboard() {
         <Panel defaultSize={isWideScreen ? "20%" : "27%"} minSize={isWideScreen ? "14%" : "18%"} maxSize={isWideScreen ? "32%" : "40%"} id="center-right">
         <div className="flex flex-col h-full bg-black">
           <div style={{ height: '50%' }} className="flex flex-col border-b border-white/[0.04]">
-            <InProgressPanel orders={ongoingOrders} onSelectOrder={setSelectedOrderPopup} onOpenChat={handleOpenChat}
+            <InProgressPanel orders={ongoingOrders} onSelectOrder={setSelectedOrderPopup} onAction={handleOrderAction} onOpenChat={handleOpenChat}
               onOpenDispute={(order) => openDisputeModal(order.id)} />
           </div>
           <div style={{ height: '50%' }} className="flex flex-col border-b border-white/[0.04]">

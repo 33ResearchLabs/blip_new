@@ -8,6 +8,7 @@ import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextA
 interface InProgressPanelProps {
   orders: any[];
   onSelectOrder: (order: any) => void;
+  onAction?: (order: any, action: string) => void;
   onOpenChat?: (order: any) => void;
   onOpenDispute?: (order: any) => void;
 }
@@ -19,12 +20,14 @@ const IP_ITEM_HEIGHT = 210; // Estimated row height for in-progress orders (incl
 const InProgressOrderList = memo(function InProgressOrderList({
   orders,
   onSelectOrder,
+  onAction,
   formatTimeRemaining,
   getStatusBadge,
   getNextAction,
 }: {
   orders: any[];
   onSelectOrder: (order: any) => void;
+  onAction?: (order: any, action: string) => void;
   formatTimeRemaining: (seconds: number) => string;
   getStatusBadge: (order: any) => React.ReactNode;
   getNextAction: (order: any) => string;
@@ -203,7 +206,11 @@ const InProgressOrderList = memo(function InProgressOrderList({
                     data-testid="order-primary-action"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onSelectOrder(order);
+                      if (onAction) {
+                        onAction(order, nextAction);
+                      } else {
+                        onSelectOrder(order);
+                      }
                     }}
                     className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-orange-500/10 border border-orange-500/20 rounded-lg text-[11px] text-orange-400 font-bold hover:bg-orange-500/15 transition-colors"
                   >
@@ -229,7 +236,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
   );
 });
 
-export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder }: InProgressPanelProps) {
+export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction }: InProgressPanelProps) {
   const formatTimeRemaining = (seconds: number): string => {
     if (seconds <= 0) return 'Expired';
     const hours = Math.floor(seconds / 3600);
@@ -280,6 +287,7 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
       <InProgressOrderList
         orders={orders}
         onSelectOrder={onSelectOrder}
+        onAction={onAction}
         formatTimeRemaining={formatTimeRemaining}
         getStatusBadge={getStatusBadge}
         getNextAction={getNextAction}
