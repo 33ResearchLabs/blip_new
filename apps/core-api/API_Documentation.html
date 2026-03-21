@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blip Core API — Developer Documentation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.6; }
+
+        .sidebar {
+            position: fixed; top: 0; left: 0; width: 290px; height: 100vh;
+            background: #1e293b; border-right: 1px solid #334155;
+            overflow-y: auto; padding: 20px 0; z-index: 10;
+        }
+        .sidebar h2 { padding: 0 20px 16px; font-size: 18px; color: #38bdf8; border-bottom: 1px solid #334155; margin-bottom: 12px; }
+        .sidebar .nav-group { margin-bottom: 4px; }
+        .sidebar .nav-group-title {
+            padding: 10px 20px 4px; font-size: 10px; text-transform: uppercase;
+            letter-spacing: 1.5px; color: #64748b; font-weight: 700;
+        }
+        .sidebar a {
+            display: flex; align-items: center; gap: 8px;
+            padding: 5px 20px; color: #94a3b8; text-decoration: none;
+            font-size: 12px; transition: all 0.2s;
+        }
+        .sidebar a:hover { background: #334155; color: #f1f5f9; }
+        .method-badge {
+            font-size: 9px; font-weight: 700; padding: 2px 5px;
+            border-radius: 3px; min-width: 40px; text-align: center; font-family: monospace;
+        }
+        .badge-get { background: #065f46; color: #6ee7b7; }
+        .badge-post { background: #1e3a5f; color: #60a5fa; }
+        .badge-patch { background: #713f12; color: #fbbf24; }
+        .badge-put { background: #4c1d95; color: #c4b5fd; }
+        .badge-delete { background: #7f1d1d; color: #fca5a5; }
+
+        .main { margin-left: 290px; padding: 40px 60px; max-width: 1100px; }
+        .main h1 { font-size: 32px; color: #f1f5f9; margin-bottom: 8px; }
+        .subtitle { color: #64748b; font-size: 14px; margin-bottom: 40px; }
+
+        .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 40px; }
+        .overview-card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 20px; text-align: center; }
+        .overview-card .count { font-size: 32px; font-weight: 800; color: #38bdf8; }
+        .overview-card .label { font-size: 12px; color: #64748b; margin-top: 4px; }
+
+        .endpoint-card {
+            background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+            margin-bottom: 28px; overflow: hidden;
+        }
+        .endpoint-header {
+            display: flex; align-items: center; gap: 12px;
+            padding: 16px 24px; border-bottom: 1px solid #334155;
+        }
+        .endpoint-header .method {
+            font-size: 12px; font-weight: 800; padding: 4px 10px;
+            border-radius: 6px; letter-spacing: 0.5px; font-family: monospace;
+        }
+        .endpoint-header .path { font-size: 15px; font-weight: 600; color: #f1f5f9; font-family: 'Fira Code', monospace; }
+        .endpoint-header .title { margin-left: auto; color: #94a3b8; font-size: 12px; }
+        .endpoint-body { padding: 24px; }
+        .endpoint-body > p { color: #94a3b8; margin-bottom: 16px; font-size: 14px; }
+
+        .section-title {
+            font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+            color: #64748b; font-weight: 700; margin: 20px 0 10px; display: flex; align-items: center; gap: 8px;
+        }
+        .section-title::after { content: ''; flex: 1; height: 1px; background: #334155; }
+
+        pre {
+            background: #0f172a; border: 1px solid #334155; border-radius: 8px;
+            padding: 16px; overflow-x: auto; font-size: 12px;
+            font-family: 'Fira Code', monospace; line-height: 1.7; margin-bottom: 16px;
+        }
+        .key { color: #7dd3fc; }
+        .str { color: #86efac; }
+        .num { color: #fbbf24; }
+        .typ { color: #c4b5fd; }
+        .cmt { color: #64748b; font-style: italic; }
+
+        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 13px; }
+        th { text-align: left; padding: 8px 12px; background: #0f172a; color: #94a3b8; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+        td { padding: 8px 12px; border-top: 1px solid #1e293b; color: #cbd5e1; }
+        tr:hover td { background: rgba(56, 189, 248, 0.03); }
+        .pn { font-family: monospace; color: #7dd3fc; font-weight: 600; font-size: 12px; }
+        .pt { font-family: monospace; color: #c4b5fd; font-size: 11px; }
+        .tag { font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+        .tag-req { background: #7f1d1d; color: #fca5a5; }
+        .tag-opt { background: #1e3a5f; color: #60a5fa; }
+
+        .info-box { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; display: flex; align-items: flex-start; gap: 10px; }
+        .info-box.note { background: #1e3a5f; border: 1px solid #2563eb; color: #93c5fd; }
+        .info-box.warn { background: #451a03; border: 1px solid #d97706; color: #fcd34d; }
+        .info-box.ok { background: #052e16; border: 1px solid #16a34a; color: #86efac; }
+        .info-box .icon { font-size: 16px; flex-shrink: 0; }
+
+        .status-row { display: flex; gap: 12px; margin-bottom: 6px; align-items: center; font-size: 13px; }
+        .sc { font-family: monospace; font-weight: 700; font-size: 14px; min-width: 36px; }
+        .s2 { color: #4ade80; } .s4 { color: #fbbf24; } .s5 { color: #f87171; }
+
+        .gateway-section { margin: 48px 0 20px; padding-bottom: 12px; border-bottom: 2px solid #334155; }
+        .gateway-section h2 { font-size: 22px; color: #f1f5f9; display: flex; align-items: center; gap: 12px; }
+        .gi { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; }
+
+        .flow { display: flex; align-items: center; gap: 0; margin: 20px 0; flex-wrap: wrap; justify-content: center; }
+        .flow-step { background: #1e3a5f; border: 1px solid #2563eb; border-radius: 8px; padding: 8px 14px; font-size: 11px; color: #93c5fd; text-align: center; min-width: 100px; }
+        .flow-arrow { color: #475569; font-size: 18px; padding: 0 3px; }
+
+        .pre-wrapper { position: relative; }
+        .copy-btn {
+            position: absolute; top: 8px; right: 8px; background: #334155;
+            border: none; color: #94a3b8; padding: 4px 10px; border-radius: 4px;
+            cursor: pointer; font-size: 11px; opacity: 0; transition: opacity 0.2s;
+        }
+        .pre-wrapper:hover .copy-btn { opacity: 1; }
+        .copy-btn:hover { background: #475569; color: #f1f5f9; }
+
+        .auth-badge { display: inline-block; background: #7f1d1d; color: #fca5a5; font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 600; margin-left: 8px; }
+
+        @media (max-width: 900px) { .sidebar { display: none; } .main { margin-left: 0; padding: 20px; } }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #0f172a; } ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+        /* Print styles */
+        @media print {
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+            body { background: #fff !important; color: #1a1a1a !important; font-size: 11px; line-height: 1.5; }
+            .sidebar { display: none !important; }
+            .main { margin-left: 0 !important; padding: 20px !important; max-width: 100% !important; }
+            .main h1 { font-size: 22px; color: #111 !important; }
+            .subtitle { color: #666 !important; font-size: 11px; }
+            .endpoint-card { background: #fff !important; border: 1px solid #ccc !important; break-inside: avoid; page-break-inside: avoid; margin-bottom: 16px; }
+            .endpoint-header { background: #f5f5f5 !important; border-bottom: 1px solid #ccc !important; padding: 10px 16px; }
+            .endpoint-header .path { color: #111 !important; font-size: 13px; }
+            .endpoint-header .title { color: #666 !important; }
+            .endpoint-body { padding: 16px; }
+            .endpoint-body > p { color: #444 !important; }
+            pre { background: #f8f8f8 !important; border: 1px solid #ddd !important; color: #333 !important; font-size: 10px; padding: 10px; }
+            .key { color: #0550ae !important; } .str { color: #0a3069 !important; } .num { color: #953800 !important; } .cmt { color: #6e7781 !important; } .typ { color: #6639ba !important; }
+            table { font-size: 10px; }
+            th { background: #f0f0f0 !important; color: #333 !important; }
+            td { color: #333 !important; border-top: 1px solid #ddd !important; }
+            .pn { color: #0550ae !important; } .pt { color: #6639ba !important; }
+            .tag-req { background: #fdd !important; color: #a00 !important; } .tag-opt { background: #ddf !important; color: #006 !important; }
+            .info-box { border: 1px solid #ccc !important; background: #f9f9f9 !important; color: #333 !important; }
+            .info-box.note { border-color: #99c !important; } .info-box.warn { border-color: #ca6 !important; } .info-box.ok { border-color: #6a6 !important; }
+            .overview-grid { gap: 8px; }
+            .overview-card { background: #f5f5f5 !important; border: 1px solid #ccc !important; }
+            .overview-card .count { color: #0550ae !important; font-size: 24px; }
+            .overview-card .label { color: #666 !important; }
+            .gateway-section { border-bottom: 2px solid #999 !important; }
+            .gateway-section h2 { color: #111 !important; font-size: 18px; }
+            .gi { background: #666 !important; color: #fff !important; }
+            .section-title { color: #666 !important; }
+            .section-title::after { background: #ccc !important; }
+            .sc { font-size: 12px; }
+            .s2 { color: #1a7f37 !important; } .s4 { color: #9a6700 !important; } .s5 { color: #cf222e !important; }
+            .flow { gap: 4px; }
+            .flow-step { background: #eef !important; border-color: #99c !important; color: #333 !important; font-size: 10px; padding: 6px 10px; min-width: 80px; }
+            .flow-arrow { color: #999 !important; font-size: 14px; }
+            .method-badge, .method { font-size: 8px !important; padding: 1px 4px !important; }
+            .badge-get { background: #d4edda !important; color: #155724 !important; }
+            .badge-post { background: #cce5ff !important; color: #004085 !important; }
+            .badge-patch { background: #fff3cd !important; color: #856404 !important; }
+            .badge-put { background: #e8daef !important; color: #4a235a !important; }
+            .badge-delete { background: #f8d7da !important; color: #721c24 !important; }
+            .copy-btn { display: none !important; }
+            .auth-badge { background: #fdd !important; color: #a00 !important; }
+            .ws-badge { background: #e8daef !important; color: #4a235a !important; }
+            .sf-item { background: #f5f5f5 !important; border-color: #ccc !important; color: #333 !important; }
+            .status-row { font-size: 11px; }
+            @page { margin: 1.5cm; size: A4; }
+            h1, h2, h3 { page-break-after: avoid; }
+        }
+
+        .print-btn {
+            position: fixed; bottom: 24px; right: 24px; z-index: 100;
+            background: #38bdf8; color: #0f172a; border: none; padding: 12px 24px;
+            border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3); transition: all 0.2s;
+        }
+        .print-btn:hover { background: #7dd3fc; transform: translateY(-1px); }
+        @media print { .print-btn { display: none !important; } }
+
+        .ws-badge { display: inline-block; background: #4c1d95; color: #c4b5fd; font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+        .status-flow { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+        .sf-item { background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-family: monospace; color: #94a3b8; }
+        .sf-arrow { color: #475569; align-self: center; }
+    </style>
+</head>
+<body>
+
+<nav class="sidebar">
+    <h2>Blip Core API</h2>
+
+    <div class="nav-group">
+        <div class="nav-group-title">Overview</div>
+        <a href="#overview">Dashboard</a>
+        <a href="#auth">Authentication</a>
+        <a href="#order-flow">Order Lifecycle</a>
+        <a href="#ws">WebSocket Events</a>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-group-title">Health</div>
+        <a href="#health"><span class="method-badge badge-get">GET</span> /health</a>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-group-title">Orders</div>
+        <a href="#order-create"><span class="method-badge badge-post">POST</span> /v1/orders</a>
+        <a href="#merchant-order"><span class="method-badge badge-post">POST</span> /v1/merchant/orders</a>
+        <a href="#order-get"><span class="method-badge badge-get">GET</span> /v1/orders/:id</a>
+        <a href="#order-patch"><span class="method-badge badge-patch">PATCH</span> /v1/orders/:id</a>
+        <a href="#order-delete"><span class="method-badge badge-delete">DEL</span> /v1/orders/:id</a>
+        <a href="#order-events"><span class="method-badge badge-post">POST</span> /v1/orders/:id/events</a>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-group-title">Escrow</div>
+        <a href="#escrow-lock"><span class="method-badge badge-post">POST</span> /v1/orders/:id/escrow</a>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-group-title">Extensions</div>
+        <a href="#ext-request"><span class="method-badge badge-post">POST</span> /v1/orders/:id/extension</a>
+        <a href="#ext-respond"><span class="method-badge badge-put">PUT</span> /v1/orders/:id/extension</a>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-group-title">Cancel Requests</div>
+        <a href="#cancel-request"><span class="method-badge badge-post">POST</span> /v1/orders/:id/cancel-request</a>
+        <a href="#cancel-respond"><span class="method-badge badge-put">PUT</span> /v1/orders/:id/cancel-request</a>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-group-title">Disputes</div>
+        <a href="#dispute-open"><span class="method-badge badge-post">POST</span> /v1/orders/:id/dispute</a>
+        <a href="#dispute-confirm"><span class="method-badge badge-post">POST</span> .../dispute/confirm</a>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-group-title">Conversions</div>
+        <a href="#conv-usdt-sinr"><span class="method-badge badge-post">POST</span> /v1/convert/usdt-to-sinr</a>
+        <a href="#conv-sinr-usdt"><span class="method-badge badge-post">POST</span> /v1/convert/sinr-to-usdt</a>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-group-title">Corridor (LP)</div>
+        <a href="#corridor-match"><span class="method-badge badge-post">POST</span> /v1/corridor/match</a>
+        <a href="#corridor-ff-patch"><span class="method-badge badge-patch">PATCH</span> .../fulfillments/:id</a>
+        <a href="#corridor-ff-get"><span class="method-badge badge-get">GET</span> .../fulfillments</a>
+        <a href="#corridor-providers-get"><span class="method-badge badge-get">GET</span> .../providers</a>
+        <a href="#corridor-providers-post"><span class="method-badge badge-post">POST</span> .../providers</a>
+        <a href="#corridor-avail"><span class="method-badge badge-get">GET</span> .../availability</a>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-group-title">System</div>
+        <a href="#expire"><span class="method-badge badge-post">POST</span> /v1/orders/expire</a>
+        <a href="#debug">Debug endpoints</a>
+    </div>
+</nav>
+
+<div class="main">
+
+<h1>Blip Core API Documentation</h1>
+<p class="subtitle">P2P Settlement Engine &bull; Fastify + PostgreSQL &bull; Base URL: <code style="color:#38bdf8">http://localhost:4010</code> &bull; All routes prefixed with <code>/v1</code></p>
+
+<!-- Overview -->
+<div id="overview" class="overview-grid">
+    <div class="overview-card"><div class="count">22</div><div class="label">Total Endpoints</div></div>
+    <div class="overview-card"><div class="count">7</div><div class="label">Route Modules</div></div>
+    <div class="overview-card"><div class="count">HMAC</div><div class="label">Auth: Shared Secret</div></div>
+    <div class="overview-card"><div class="count">WS</div><div class="label">Real-time Events</div></div>
+</div>
+
+<!-- Authentication -->
+<div class="gateway-section" id="auth">
+    <h2><span class="gi" style="background:#7f1d1d;">A</span> Authentication</h2>
+</div>
+
+<div class="endpoint-card">
+    <div class="endpoint-body">
+        <p>All endpoints except <code>/health</code> and <code>/debug/*</code> require authentication via shared secret header. Actor identity headers provide HMAC-signed authorization.</p>
+
+        <div class="section-title">Required Headers</div>
+        <table>
+            <thead><tr><th>Header</th><th>Type</th><th>Required</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td class="pn">x-core-api-secret</td><td class="pt">string</td><td><span class="tag tag-req">Required</span></td><td>Shared secret matching <code>CORE_API_SECRET</code> env var</td></tr>
+                <tr><td class="pn">x-actor-type</td><td class="pt">string</td><td><span class="tag tag-opt">Optional</span></td><td><code>user</code> | <code>merchant</code> | <code>system</code></td></tr>
+                <tr><td class="pn">x-actor-id</td><td class="pt">string</td><td><span class="tag tag-opt">Optional</span></td><td>UUID of the acting entity</td></tr>
+                <tr><td class="pn">x-actor-signature</td><td class="pt">string</td><td><span class="tag tag-req">If actor headers</span></td><td>HMAC-SHA256 of <code>{actor_type}:{actor_id}</code> using the shared secret</td></tr>
+            </tbody>
+        </table>
+
+        <div class="info-box note">
+            <span class="icon">&#9432;</span>
+            <div><strong>Dev mode:</strong> If <code>CORE_API_SECRET</code> is not set and <code>NODE_ENV != production</code>, auth is disabled entirely.</div>
+        </div>
+
+        <div class="section-title">Error Responses</div>
+        <div class="pre-wrapper"><pre>{ <span class="key">"success"</span>: <span class="num">false</span>, <span class="key">"error"</span>: <span class="str">"Unauthorized: invalid or missing x-core-api-secret"</span> }  <span class="cmt">// 401</span>
+{ <span class="key">"success"</span>: <span class="num">false</span>, <span class="key">"error"</span>: <span class="str">"Unauthorized: missing actor signature"</span> }                <span class="cmt">// 401</span>
+{ <span class="key">"success"</span>: <span class="num">false</span>, <span class="key">"error"</span>: <span class="str">"Unauthorized: invalid actor signature"</span> }                 <span class="cmt">// 401</span></pre></div>
+    </div>
+</div>
+
+<!-- Order Lifecycle -->
+<div class="gateway-section" id="order-flow">
+    <h2><span class="gi" style="background:#0369a1;">L</span> Order Lifecycle</h2>
+</div>
+
+<div class="endpoint-card">
+    <div class="endpoint-body">
+        <p>The order state machine governs all transitions. Settle proxy handles user-facing validation; core-api handles DB writes and broadcasts.</p>
+
+        <div class="section-title">Status Flow</div>
+        <div class="flow">
+            <div class="flow-step"><strong>pending</strong><br><span style="font-size:10px">created, waiting for merchant</span></div>
+            <span class="flow-arrow">&#10148;</span>
+            <div class="flow-step"><strong>accepted</strong><br><span style="font-size:10px">merchant claims order</span></div>
+            <span class="flow-arrow">&#10148;</span>
+            <div class="flow-step"><strong>escrowed</strong><br><span style="font-size:10px">crypto locked on-chain</span></div>
+            <span class="flow-arrow">&#10148;</span>
+            <div class="flow-step"><strong>payment_sent</strong><br><span style="font-size:10px">fiat sent by buyer</span></div>
+            <span class="flow-arrow">&#10148;</span>
+            <div class="flow-step"><strong>payment_confirmed</strong><br><span style="font-size:10px">seller confirms receipt</span></div>
+            <span class="flow-arrow">&#10148;</span>
+            <div class="flow-step"><strong>completed</strong><br><span style="font-size:10px">escrow released</span></div>
+        </div>
+        <div style="text-align:center; color:#64748b; font-size:12px; margin-bottom:16px;">
+            Side paths: <code style="color:#fca5a5">cancelled</code> &bull; <code style="color:#fbbf24">expired</code> &bull; <code style="color:#f87171">disputed</code>
+        </div>
+
+        <div class="section-title">Standard Response Envelope</div>
+        <div class="pre-wrapper"><pre>{
+  <span class="key">"success"</span>: <span class="num">true</span>,
+  <span class="key">"data"</span>: {
+    <span class="key">"id"</span>: <span class="str">"uuid"</span>,
+    <span class="key">"status"</span>: <span class="str">"escrowed"</span>,
+    <span class="key">"minimal_status"</span>: <span class="str">"escrowed"</span>,   <span class="cmt">// normalized for frontend</span>
+    <span class="key">"order_version"</span>: <span class="num">3</span>,              <span class="cmt">// for optimistic concurrency</span>
+    ...
+  }
+}</pre></div>
+    </div>
+</div>
+
+<!-- ==================== ORDERS ==================== -->
+<div class="gateway-section">
+    <h2><span class="gi" style="background:#0369a1;">O</span> Order Endpoints</h2>
+</div>
+
+<!-- POST /v1/orders -->
+<div class="endpoint-card" id="order-create">
+    <div class="endpoint-header">
+        <span class="method badge-post">POST</span>
+        <span class="path">/v1/orders</span>
+        <span class="title">Create Order (user flow)</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Creates a new trade order. Deducts offer liquidity atomically. Broadcasts <code>ORDER_CREATED</code> via WebSocket.</p>
+
+        <div class="section-title">Request Body</div>
+        <table>
+            <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td class="pn">user_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td><td>Buyer/seller user ID</td></tr>
+                <tr><td class="pn">merchant_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td><td>Merchant who owns the offer</td></tr>
+                <tr><td class="pn">offer_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td><td>Merchant offer being taken</td></tr>
+                <tr><td class="pn">type</td><td class="pt">"buy" | "sell"</td><td><span class="tag tag-req">Req</span></td><td>Trade direction</td></tr>
+                <tr><td class="pn">payment_method</td><td class="pt">string</td><td><span class="tag tag-req">Req</span></td><td>e.g. "bank_transfer", "upi"</td></tr>
+                <tr><td class="pn">crypto_amount</td><td class="pt">number</td><td><span class="tag tag-req">Req</span></td><td>USDC amount</td></tr>
+                <tr><td class="pn">fiat_amount</td><td class="pt">number</td><td><span class="tag tag-req">Req</span></td><td>AED amount</td></tr>
+                <tr><td class="pn">rate</td><td class="pt">number</td><td><span class="tag tag-req">Req</span></td><td>Exchange rate</td></tr>
+                <tr><td class="pn">payment_details</td><td class="pt">object</td><td><span class="tag tag-opt">Opt</span></td><td>Bank/payment info JSON</td></tr>
+                <tr><td class="pn">expiry_minutes</td><td class="pt">number</td><td><span class="tag tag-opt">Opt</span></td><td>1-1440, default 15</td></tr>
+                <tr><td class="pn">buyer_wallet_address</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Solana wallet for crypto</td></tr>
+                <tr><td class="pn">escrow_tx_hash</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>If pre-locked escrow (status starts as "escrowed")</td></tr>
+                <tr><td class="pn">escrow_trade_id</td><td class="pt">number</td><td><span class="tag tag-opt">Opt</span></td><td>On-chain trade ID</td></tr>
+                <tr><td class="pn">escrow_trade_pda</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Solana PDA for trade</td></tr>
+                <tr><td class="pn">escrow_pda</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Solana escrow PDA</td></tr>
+                <tr><td class="pn">escrow_creator_wallet</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Wallet that created escrow</td></tr>
+                <tr><td class="pn">spread_preference</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Spread preference</td></tr>
+                <tr><td class="pn">protocol_fee_percentage</td><td class="pt">number</td><td><span class="tag tag-opt">Opt</span></td><td>Protocol fee %</td></tr>
+                <tr><td class="pn">protocol_fee_amount</td><td class="pt">number</td><td><span class="tag tag-opt">Opt</span></td><td>Protocol fee absolute</td></tr>
+                <tr><td class="pn">ref_price_at_create</td><td class="pt">number</td><td><span class="tag tag-opt">Opt</span></td><td>Reference price for auto-bump</td></tr>
+                <tr><td class="pn">premium_bps_current</td><td class="pt">number</td><td><span class="tag tag-opt">Opt</span></td><td>Current premium in basis points</td></tr>
+                <tr><td class="pn">premium_bps_cap</td><td class="pt">number</td><td><span class="tag tag-opt">Opt</span></td><td>Max premium cap (bps)</td></tr>
+                <tr><td class="pn">bump_step_bps</td><td class="pt">number</td><td><span class="tag tag-opt">Opt</span></td><td>Bump increment (bps)</td></tr>
+                <tr><td class="pn">bump_interval_sec</td><td class="pt">number</td><td><span class="tag tag-opt">Opt</span></td><td>Seconds between bumps</td></tr>
+                <tr><td class="pn">auto_bump_enabled</td><td class="pt">boolean</td><td><span class="tag tag-opt">Opt</span></td><td>Enable auto-bump</td></tr>
+                <tr><td class="pn">price_proof_sig</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Price engine proof signature</td></tr>
+                <tr><td class="pn">price_proof_ref_price</td><td class="pt">number</td><td><span class="tag tag-opt">Opt</span></td><td>Signed reference price</td></tr>
+                <tr><td class="pn">price_proof_expires_at</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Proof expiry timestamp</td></tr>
+            </tbody>
+        </table>
+
+        <div class="section-title">Response &mdash; 201 Created</div>
+        <div class="pre-wrapper"><pre>{
+  <span class="key">"success"</span>: <span class="num">true</span>,
+  <span class="key">"data"</span>: {
+    <span class="key">"id"</span>: <span class="str">"uuid"</span>,
+    <span class="key">"status"</span>: <span class="str">"pending"</span>,          <span class="cmt">// or "escrowed" if escrow_tx_hash provided</span>
+    <span class="key">"minimal_status"</span>: <span class="str">"pending"</span>,
+    <span class="key">"order_version"</span>: <span class="num">1</span>,
+    <span class="key">"user_id"</span>: <span class="str">"uuid"</span>,
+    <span class="key">"merchant_id"</span>: <span class="str">"uuid"</span>,
+    <span class="key">"crypto_amount"</span>: <span class="num">100</span>,
+    <span class="key">"fiat_amount"</span>: <span class="num">367</span>,
+    <span class="key">"rate"</span>: <span class="num">3.67</span>,
+    <span class="key">"expires_at"</span>: <span class="str">"ISO timestamp"</span>,
+    ...                            <span class="cmt">// all order columns</span>
+  }
+}</pre></div>
+
+        <div class="section-title">Error Responses</div>
+        <div class="status-row"><span class="sc s4">400</span> Missing required fields</div>
+        <div class="status-row"><span class="sc s4">409</span> <code>Insufficient offer liquidity</code> — another order claimed the last available amount</div>
+        <div class="status-row"><span class="sc s5">500</span> Internal server error</div>
+    </div>
+</div>
+
+<!-- POST /v1/merchant/orders -->
+<div class="endpoint-card" id="merchant-order">
+    <div class="endpoint-header">
+        <span class="method badge-post">POST</span>
+        <span class="path">/v1/merchant/orders</span>
+        <span class="title">Create Merchant-Initiated Order (incl. M2M)</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Same as <code>POST /v1/orders</code> but for merchant-initiated flows. Accepts optional <code>is_m2m: boolean</code> in body. Same request/response schema.</p>
+    </div>
+</div>
+
+<!-- GET /v1/orders/:id -->
+<div class="endpoint-card" id="order-get">
+    <div class="endpoint-header">
+        <span class="method badge-get">GET</span>
+        <span class="path">/v1/orders/:id</span>
+        <span class="title">Get Order Details</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Returns full order object with <code>minimal_status</code> normalized field.</p>
+        <div class="section-title">Path Params</div>
+        <table><thead><tr><th>Param</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody><tr><td class="pn">id</td><td class="pt">uuid</td><td>Order ID</td></tr></tbody></table>
+
+        <div class="section-title">Response &mdash; 200</div>
+        <div class="pre-wrapper"><pre>{
+  <span class="key">"success"</span>: <span class="num">true</span>,
+  <span class="key">"data"</span>: {
+    <span class="key">"id"</span>: <span class="str">"uuid"</span>, <span class="key">"order_number"</span>: <span class="str">"12345"</span>,
+    <span class="key">"user_id"</span>: <span class="str">"uuid"</span>, <span class="key">"merchant_id"</span>: <span class="str">"uuid"</span>,
+    <span class="key">"type"</span>: <span class="str">"buy"</span>, <span class="key">"status"</span>: <span class="str">"escrowed"</span>, <span class="key">"minimal_status"</span>: <span class="str">"escrowed"</span>,
+    <span class="key">"crypto_amount"</span>: <span class="str">"100.000000"</span>, <span class="key">"crypto_currency"</span>: <span class="str">"USDC"</span>,
+    <span class="key">"fiat_amount"</span>: <span class="str">"367.00"</span>, <span class="key">"fiat_currency"</span>: <span class="str">"AED"</span>,
+    <span class="key">"rate"</span>: <span class="str">"3.67"</span>,
+    <span class="key">"escrow_tx_hash"</span>: <span class="str">"0xabc..."</span>, <span class="key">"release_tx_hash"</span>: <span class="num">null</span>,
+    <span class="key">"payment_details"</span>: { ... },
+    <span class="key">"order_version"</span>: <span class="num">3</span>,
+    <span class="key">"expires_at"</span>: <span class="str">"2026-03-21T12:00:00Z"</span>,
+    <span class="key">"extension_count"</span>: <span class="num">0</span>, <span class="key">"max_extensions"</span>: <span class="num">2</span>,
+    <span class="key">"cancel_requested_by"</span>: <span class="num">null</span>,
+    <span class="key">"payment_via"</span>: <span class="str">"direct"</span>,
+    ...
+  }
+}</pre></div>
+        <div class="status-row"><span class="sc s4">404</span> Order not found</div>
+    </div>
+</div>
+
+<!-- PATCH /v1/orders/:id -->
+<div class="endpoint-card" id="order-patch">
+    <div class="endpoint-header">
+        <span class="method badge-patch">PATCH</span>
+        <span class="path">/v1/orders/:id</span>
+        <span class="title">Transition Order Status</span>
+    </div>
+    <div class="endpoint-body">
+        <p>The main status transition endpoint. Handles the full order state machine including accept, escrow, payment flow, completion, and cancellation. Validates transitions, prevents self-acceptance, handles escrow refunds atomically.</p>
+
+        <div class="section-title">Request Body</div>
+        <table>
+            <thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td class="pn">status</td><td class="pt">OrderStatus</td><td><span class="tag tag-req">Req</span></td><td>Target status: <code>accepted</code>, <code>escrowed</code>, <code>payment_pending</code>, <code>payment_sent</code>, <code>payment_confirmed</code>, <code>completed</code>, <code>cancelled</code></td></tr>
+                <tr><td class="pn">actor_type</td><td class="pt">"user" | "merchant"</td><td><span class="tag tag-req">Req</span></td><td>Who is performing the action</td></tr>
+                <tr><td class="pn">actor_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td><td>UUID of actor</td></tr>
+                <tr><td class="pn">reason</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Cancellation reason</td></tr>
+                <tr><td class="pn">acceptor_wallet_address</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Wallet address when accepting</td></tr>
+                <tr><td class="pn">metadata</td><td class="pt">object</td><td><span class="tag tag-opt">Opt</span></td><td>Extra data (e.g. <code>is_m2m</code>)</td></tr>
+            </tbody>
+        </table>
+
+        <div class="section-title">Key Behaviors</div>
+        <div class="info-box note"><span class="icon">&#9432;</span><div>
+            <strong>accepted:</strong> Merchant claims order. If merchant != original merchant_id, becomes the new merchant. Sets <code>expires_at = NOW() + 120 min</code>. Acceptor wallet stored if provided.
+        </div></div>
+        <div class="info-box note"><span class="icon">&#9432;</span><div>
+            <strong>payment_sent:</strong> Fast path &mdash; simple status flip from <code>escrowed</code> only, no transaction needed.
+        </div></div>
+        <div class="info-box warn"><span class="icon">&#9888;</span><div>
+            <strong>cancelled with escrow:</strong> Triggers <code>atomicCancelWithRefund</code> &mdash; restores balance, restores offer liquidity, verifies refund invariants.
+        </div></div>
+        <div class="info-box warn"><span class="icon">&#9888;</span><div>
+            <strong>completed:</strong> Cannot complete if <code>escrow_tx_hash</code> exists but <code>release_tx_hash</code> is missing. Use <code>POST /v1/orders/:id/events</code> with <code>event_type: "release"</code> instead.
+        </div></div>
+
+        <div class="section-title">Response &mdash; 200</div>
+        <div class="pre-wrapper"><pre>{ <span class="key">"success"</span>: <span class="num">true</span>, <span class="key">"data"</span>: { <span class="cmt">/* full order with minimal_status */</span> } }</pre></div>
+
+        <div class="section-title">Error Responses</div>
+        <div class="status-row"><span class="sc s4">400</span> Invalid transition, self-acceptance blocked, transient status, missing fields</div>
+        <div class="status-row"><span class="sc s4">404</span> Order not found</div>
+        <div class="status-row"><span class="sc s5">500</span> Refund invariant failed (critical)</div>
+    </div>
+</div>
+
+<!-- DELETE /v1/orders/:id -->
+<div class="endpoint-card" id="order-delete">
+    <div class="endpoint-header">
+        <span class="method badge-delete">DELETE</span>
+        <span class="path">/v1/orders/:id</span>
+        <span class="title">Cancel Order</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Cancels an order. If escrow is locked, performs atomic cancel with refund.</p>
+        <div class="section-title">Query Params</div>
+        <table><thead><tr><th>Param</th><th>Type</th><th>Req</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">actor_type</td><td class="pt">string</td><td><span class="tag tag-req">Req</span></td><td><code>user</code> | <code>merchant</code></td></tr>
+            <tr><td class="pn">actor_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td><td>Actor UUID</td></tr>
+            <tr><td class="pn">reason</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Cancellation reason</td></tr>
+        </tbody></table>
+        <div class="status-row"><span class="sc s4">400</span> Invalid state transition</div>
+        <div class="status-row"><span class="sc s4">404</span> Order not found</div>
+    </div>
+</div>
+
+<!-- POST /v1/orders/:id/events -->
+<div class="endpoint-card" id="order-events">
+    <div class="endpoint-header">
+        <span class="method badge-post">POST</span>
+        <span class="path">/v1/orders/:id/events</span>
+        <span class="title">Release / Refund Escrow</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Finalizes an escrowed order by releasing crypto to buyer or refunding to seller. Requires actor identity headers.</p>
+
+        <div class="section-title">Headers Required</div>
+        <table><thead><tr><th>Header</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">x-actor-type</td><td><code>user</code> | <code>merchant</code> | <code>system</code></td></tr>
+            <tr><td class="pn">x-actor-id</td><td>UUID of the actor</td></tr>
+        </tbody></table>
+
+        <div class="section-title">Request Body</div>
+        <table><thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">event_type</td><td class="pt">"release" | "refund"</td><td><span class="tag tag-req">Req</span></td><td>Release (complete) or refund (cancel)</td></tr>
+            <tr><td class="pn">tx_hash</td><td class="pt">string</td><td><span class="tag tag-req">For release</span></td><td>On-chain release transaction hash</td></tr>
+            <tr><td class="pn">reason</td><td class="pt">string</td><td><span class="tag tag-opt">For refund</span></td><td>Reason for refund</td></tr>
+        </tbody></table>
+
+        <div class="info-box ok"><span class="icon">&#10004;</span><div>
+            <strong>Release:</strong> Sets <code>status = completed</code>, stores <code>release_tx_hash</code>, credits buyer balance (mock mode). Runs invariant verification. Only allowed from <code>payment_confirmed</code>, <code>releasing</code>, <code>escrowed</code>, <code>payment_sent</code>, <code>payment_pending</code>.
+        </div></div>
+        <div class="info-box warn"><span class="icon">&#9888;</span><div>
+            <strong>Refund:</strong> Atomic cancel with escrow refund. Restores balance and offer liquidity.
+        </div></div>
+
+        <div class="status-row"><span class="sc s4">400</span> Already released, invalid status, missing tx_hash</div>
+        <div class="status-row"><span class="sc s4">401</span> Missing actor headers</div>
+        <div class="status-row"><span class="sc s4">403</span> Not authorized to release</div>
+    </div>
+</div>
+
+<!-- ==================== ESCROW ==================== -->
+<div class="gateway-section">
+    <h2><span class="gi" style="background:#047857;">E</span> Escrow</h2>
+</div>
+
+<div class="endpoint-card" id="escrow-lock">
+    <div class="endpoint-header">
+        <span class="method badge-post">POST</span>
+        <span class="path">/v1/orders/:id/escrow</span>
+        <span class="title">Lock Escrow Deposit</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Locks escrow for an order. On-chain verification is done by settle proxy before calling this endpoint. Uses stored procedure for atomic validation + update.</p>
+
+        <div class="section-title">Request Body</div>
+        <table><thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">tx_hash</td><td class="pt">string</td><td><span class="tag tag-req">Req</span></td><td>On-chain escrow transaction hash</td></tr>
+            <tr><td class="pn">actor_type</td><td class="pt">"user" | "merchant"</td><td><span class="tag tag-req">Req</span></td><td>Who locked escrow</td></tr>
+            <tr><td class="pn">actor_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td><td>Actor UUID</td></tr>
+            <tr><td class="pn">escrow_address</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>On-chain escrow address</td></tr>
+            <tr><td class="pn">escrow_trade_id</td><td class="pt">number</td><td><span class="tag tag-opt">Opt</span></td><td>On-chain trade ID</td></tr>
+            <tr><td class="pn">escrow_trade_pda</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Trade PDA</td></tr>
+            <tr><td class="pn">escrow_pda</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Escrow PDA</td></tr>
+            <tr><td class="pn">escrow_creator_wallet</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Creator wallet address</td></tr>
+        </tbody></table>
+
+        <div class="section-title">Error Responses</div>
+        <div class="status-row"><span class="sc s4">400</span> <code>INSUFFICIENT_BALANCE</code></div>
+        <div class="status-row"><span class="sc s4">404</span> <code>ORDER_NOT_FOUND</code></div>
+        <div class="status-row"><span class="sc s4">409</span> <code>ALREADY_ESCROWED</code> or <code>ORDER_STATUS_CHANGED</code></div>
+    </div>
+</div>
+
+<!-- ==================== EXTENSIONS ==================== -->
+<div class="gateway-section">
+    <h2><span class="gi" style="background:#4c1d95;">T</span> Time Extensions</h2>
+</div>
+
+<div class="endpoint-card" id="ext-request">
+    <div class="endpoint-header">
+        <span class="method badge-post">POST</span>
+        <span class="path">/v1/orders/:id/extension</span>
+        <span class="title">Request Time Extension</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Either party requests more time. The other party must accept/decline. Limited by <code>max_extensions</code>.</p>
+        <div class="section-title">Request Body</div>
+        <table><thead><tr><th>Field</th><th>Type</th><th>Req</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">actor_type</td><td class="pt">"user" | "merchant"</td><td><span class="tag tag-req">Req</span></td></tr>
+            <tr><td class="pn">actor_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td></tr>
+        </tbody></table>
+        <div class="status-row"><span class="sc s4">400</span> Max extensions reached, already pending, status doesn't allow extensions</div>
+    </div>
+</div>
+
+<div class="endpoint-card" id="ext-respond">
+    <div class="endpoint-header">
+        <span class="method badge-put">PUT</span>
+        <span class="path">/v1/orders/:id/extension</span>
+        <span class="title">Accept / Decline Extension</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Counterparty responds. <strong>Accept:</strong> extends <code>expires_at</code>. <strong>Decline:</strong> order gets cancelled or disputed depending on extension count.</p>
+        <div class="section-title">Request Body</div>
+        <table><thead><tr><th>Field</th><th>Type</th><th>Req</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">actor_type</td><td class="pt">"user" | "merchant"</td><td><span class="tag tag-req">Req</span></td></tr>
+            <tr><td class="pn">actor_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td></tr>
+            <tr><td class="pn">accept</td><td class="pt">boolean</td><td><span class="tag tag-req">Req</span></td></tr>
+        </tbody></table>
+        <div class="info-box warn"><span class="icon">&#9888;</span><div><strong>Decline outcome:</strong> If max extensions reached &rarr; <code>disputed</code>. Otherwise &rarr; <code>cancelled</code>.</div></div>
+    </div>
+</div>
+
+<!-- ==================== CANCEL REQUESTS ==================== -->
+<div class="gateway-section">
+    <h2><span class="gi" style="background:#7f1d1d;">C</span> Mutual Cancel Requests</h2>
+</div>
+
+<div class="endpoint-card" id="cancel-request">
+    <div class="endpoint-header">
+        <span class="method badge-post">POST</span>
+        <span class="path">/v1/orders/:id/cancel-request</span>
+        <span class="title">Request Mutual Cancellation</span>
+    </div>
+    <div class="endpoint-body">
+        <p>One party requests cancellation. Only allowed after acceptance (post-escrow states). Pre-acceptance orders can be cancelled directly via PATCH.</p>
+        <div class="section-title">Request Body</div>
+        <table><thead><tr><th>Field</th><th>Type</th><th>Req</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">actor_type</td><td class="pt">"user" | "merchant"</td><td><span class="tag tag-req">Req</span></td></tr>
+            <tr><td class="pn">actor_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td></tr>
+            <tr><td class="pn">reason</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td></tr>
+        </tbody></table>
+        <div class="status-row"><span class="sc s4">400</span> Already pending, pre-acceptance (use PATCH), status doesn't allow</div>
+        <div class="status-row"><span class="sc s4">403</span> Not a participant</div>
+    </div>
+</div>
+
+<div class="endpoint-card" id="cancel-respond">
+    <div class="endpoint-header">
+        <span class="method badge-put">PUT</span>
+        <span class="path">/v1/orders/:id/cancel-request</span>
+        <span class="title">Accept / Decline Cancel Request</span>
+    </div>
+    <div class="endpoint-body">
+        <p><strong>Accept:</strong> Atomic cancel + escrow refund + offer liquidity restore. <strong>Decline:</strong> Clears request, order continues.</p>
+        <div class="section-title">Request Body</div>
+        <table><thead><tr><th>Field</th><th>Type</th><th>Req</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">actor_type</td><td class="pt">"user" | "merchant"</td><td><span class="tag tag-req">Req</span></td></tr>
+            <tr><td class="pn">actor_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td></tr>
+            <tr><td class="pn">accept</td><td class="pt">boolean</td><td><span class="tag tag-req">Req</span></td></tr>
+        </tbody></table>
+        <div class="section-title">Response (Accepted)</div>
+        <div class="pre-wrapper"><pre>{ <span class="key">"success"</span>: <span class="num">true</span>, <span class="key">"data"</span>: { <span class="cmt">/* order with status: cancelled */</span> }, <span class="key">"cancelled"</span>: <span class="num">true</span> }</pre></div>
+        <div class="section-title">Response (Declined)</div>
+        <div class="pre-wrapper"><pre>{ <span class="key">"success"</span>: <span class="num">true</span>, <span class="key">"data"</span>: { <span class="cmt">/* order unchanged */</span> }, <span class="key">"declined"</span>: <span class="num">true</span> }</pre></div>
+    </div>
+</div>
+
+<!-- ==================== DISPUTES ==================== -->
+<div class="gateway-section">
+    <h2><span class="gi" style="background:#dc2626;">D</span> Disputes</h2>
+</div>
+
+<div class="endpoint-card" id="dispute-open">
+    <div class="endpoint-header">
+        <span class="method badge-post">POST</span>
+        <span class="path">/v1/orders/:id/dispute</span>
+        <span class="title">Open Dispute</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Opens a dispute on an order. Sets order status to <code>disputed</code>.</p>
+        <div class="section-title">Request Body</div>
+        <table><thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">reason</td><td class="pt">string (enum)</td><td><span class="tag tag-req">Req</span></td><td>Dispute reason (DB enum <code>dispute_reason</code>)</td></tr>
+            <tr><td class="pn">description</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Detailed description</td></tr>
+            <tr><td class="pn">initiated_by</td><td class="pt">"user" | "merchant"</td><td><span class="tag tag-req">Req</span></td><td>Who raised the dispute</td></tr>
+            <tr><td class="pn">actor_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td><td>Actor UUID</td></tr>
+        </tbody></table>
+        <div class="status-row"><span class="sc s4">400</span> Already disputed, dispute already exists</div>
+        <div class="status-row"><span class="sc s4">404</span> Order not found</div>
+    </div>
+</div>
+
+<div class="endpoint-card" id="dispute-confirm">
+    <div class="endpoint-header">
+        <span class="method badge-post">POST</span>
+        <span class="path">/v1/orders/:id/dispute/confirm</span>
+        <span class="title">Confirm / Reject Dispute Resolution</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Both parties must confirm proposed resolution. When both accept, funds are distributed based on resolution type.</p>
+        <div class="section-title">Request Body</div>
+        <table><thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">party</td><td class="pt">"user" | "merchant"</td><td><span class="tag tag-req">Req</span></td><td>Confirming party</td></tr>
+            <tr><td class="pn">action</td><td class="pt">"accept" | "reject"</td><td><span class="tag tag-req">Req</span></td><td>Accept or reject resolution</td></tr>
+            <tr><td class="pn">partyId</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td><td>Party's UUID (verified against order)</td></tr>
+        </tbody></table>
+
+        <div class="section-title">Resolution Types</div>
+        <table><thead><tr><th>Resolution</th><th>Outcome</th><th>Order Status</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">user</td><td>Full amount to user</td><td><code>cancelled</code></td></tr>
+            <tr><td class="pn">merchant</td><td>Full amount to merchant</td><td><code>completed</code></td></tr>
+            <tr><td class="pn">split</td><td>Split by <code>split_percentage</code> (default 50/50)</td><td><code>completed</code></td></tr>
+        </tbody></table>
+
+        <div class="section-title">Response (Both Confirmed)</div>
+        <div class="pre-wrapper"><pre>{
+  <span class="key">"success"</span>: <span class="num">true</span>,
+  <span class="key">"data"</span>: {
+    <span class="key">"status"</span>: <span class="str">"resolved_split"</span>,
+    <span class="key">"orderStatus"</span>: <span class="str">"completed"</span>,
+    <span class="key">"finalized"</span>: <span class="num">true</span>,
+    <span class="key">"moneyReleased"</span>: { <span class="key">"user"</span>: <span class="num">50</span>, <span class="key">"merchant"</span>: <span class="num">50</span>, <span class="key">"total"</span>: <span class="num">100</span> }
+  }
+}</pre></div>
+        <div class="status-row"><span class="sc s4">400</span> No pending resolution</div>
+        <div class="status-row"><span class="sc s4">403</span> Unauthorized (party mismatch)</div>
+    </div>
+</div>
+
+<!-- ==================== CONVERSIONS ==================== -->
+<div class="gateway-section">
+    <h2><span class="gi" style="background:#d97706;">$</span> Currency Conversions</h2>
+</div>
+
+<div class="endpoint-card" id="conv-usdt-sinr">
+    <div class="endpoint-header">
+        <span class="method badge-post">POST</span>
+        <span class="path">/v1/convert/usdt-to-sinr</span>
+        <span class="title">Convert USDT to Synthetic INR</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Atomic conversion with balance updates, ledger logging, and idempotency support. Floor rounding prevents value creation.</p>
+        <div class="section-title">Request Body</div>
+        <table><thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">account_type</td><td class="pt">"merchant" | "user"</td><td><span class="tag tag-req">Req</span></td><td>Account type</td></tr>
+            <tr><td class="pn">account_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td><td>Account UUID</td></tr>
+            <tr><td class="pn">amount</td><td class="pt">number</td><td><span class="tag tag-req">Req</span></td><td>Amount in micro-USDT (1,000,000 = 1 USDT)</td></tr>
+            <tr><td class="pn">idempotency_key</td><td class="pt">string</td><td><span class="tag tag-opt">Opt</span></td><td>Prevents duplicate conversions</td></tr>
+        </tbody></table>
+        <div class="section-title">Response &mdash; 200</div>
+        <div class="pre-wrapper"><pre>{
+  <span class="key">"success"</span>: <span class="num">true</span>,
+  <span class="key">"data"</span>: {
+    <span class="key">"conversion_id"</span>: <span class="str">"uuid"</span>,
+    <span class="key">"amount_in"</span>: <span class="num">1000000</span>,     <span class="cmt">// micro-USDT</span>
+    <span class="key">"amount_out"</span>: <span class="num">367</span>,         <span class="cmt">// fils (100 fils = 1 AED)</span>
+    <span class="key">"rate"</span>: <span class="num">3.67</span>,
+    <span class="key">"usdt_balance_after"</span>: <span class="num">99.0</span>,
+    <span class="key">"sinr_balance_after"</span>: <span class="num">367</span>
+  }
+}</pre></div>
+        <div class="status-row"><span class="sc s4">400</span> <code>Insufficient USDT balance</code> or <code>Exposure limit exceeded</code></div>
+        <div class="status-row"><span class="sc s4">404</span> Account not found</div>
+    </div>
+</div>
+
+<div class="endpoint-card" id="conv-sinr-usdt">
+    <div class="endpoint-header">
+        <span class="method badge-post">POST</span>
+        <span class="path">/v1/convert/sinr-to-usdt</span>
+        <span class="title">Convert Synthetic INR to USDT</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Reverse conversion. Same schema as above. Amount is in <strong>fils</strong> (100 fils = 1 AED).</p>
+        <div class="status-row"><span class="sc s4">400</span> <code>Insufficient sINR balance</code></div>
+    </div>
+</div>
+
+<!-- ==================== CORRIDOR ==================== -->
+<div class="gateway-section">
+    <h2><span class="gi" style="background:#059669;">R</span> Corridor (Liquidity Provider)</h2>
+</div>
+
+<div class="endpoint-card" id="corridor-match">
+    <div class="endpoint-header">
+        <span class="method badge-post">POST</span>
+        <span class="path">/v1/corridor/match</span>
+        <span class="title">Auto-Match LP + Lock sAED</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Finds cheapest available LP, locks buyer's sAED (fiat + fee), creates fulfillment record, links to order.</p>
+        <div class="section-title">Request Body</div>
+        <table><thead><tr><th>Field</th><th>Type</th><th>Req</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">order_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td></tr>
+            <tr><td class="pn">buyer_merchant_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td></tr>
+            <tr><td class="pn">seller_merchant_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td></tr>
+            <tr><td class="pn">fiat_amount</td><td class="pt">number</td><td><span class="tag tag-req">Req</span></td></tr>
+            <tr><td class="pn">bank_details</td><td class="pt">object</td><td><span class="tag tag-opt">Opt</span></td></tr>
+        </tbody></table>
+        <div class="section-title">Response &mdash; 200</div>
+        <div class="pre-wrapper"><pre>{
+  <span class="key">"success"</span>: <span class="num">true</span>,
+  <span class="key">"data"</span>: {
+    <span class="key">"fulfillment_id"</span>: <span class="str">"uuid"</span>,
+    <span class="key">"provider_merchant_id"</span>: <span class="str">"uuid"</span>,
+    <span class="key">"provider_name"</span>: <span class="str">"LP Store"</span>,
+    <span class="key">"fee_percentage"</span>: <span class="num">0.5</span>,
+    <span class="key">"corridor_fee_fils"</span>: <span class="num">184</span>,
+    <span class="key">"saed_locked"</span>: <span class="num">36884</span>,
+    <span class="key">"fiat_amount"</span>: <span class="num">367</span>,
+    <span class="key">"send_deadline"</span>: <span class="str">"ISO timestamp (30 min)"</span>
+  }
+}</pre></div>
+        <div class="status-row"><span class="sc s4">400</span> Insufficient sAED</div>
+        <div class="status-row"><span class="sc s4">404</span> No LP available, buyer not found</div>
+    </div>
+</div>
+
+<div class="endpoint-card" id="corridor-ff-patch">
+    <div class="endpoint-header">
+        <span class="method badge-patch">PATCH</span>
+        <span class="path">/v1/corridor/fulfillments/:id</span>
+        <span class="title">LP Marks Payment Sent</span>
+    </div>
+    <div class="endpoint-body">
+        <table><thead><tr><th>Field</th><th>Type</th><th>Req</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">provider_status</td><td class="pt">"payment_sent"</td><td><span class="tag tag-req">Req</span></td></tr>
+            <tr><td class="pn">actor_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td></tr>
+        </tbody></table>
+        <div class="status-row"><span class="sc s4">403</span> Not your fulfillment</div>
+    </div>
+</div>
+
+<div class="endpoint-card" id="corridor-ff-get">
+    <div class="endpoint-header">
+        <span class="method badge-get">GET</span>
+        <span class="path">/v1/corridor/fulfillments?provider_merchant_id=uuid</span>
+        <span class="title">LP's Active Assignments</span>
+    </div>
+    <div class="endpoint-body"><p>Returns pending/payment_sent fulfillments for the given LP merchant.</p></div>
+</div>
+
+<div class="endpoint-card" id="corridor-providers-get">
+    <div class="endpoint-header">
+        <span class="method badge-get">GET</span>
+        <span class="path">/v1/corridor/providers?merchant_id=uuid</span>
+        <span class="title">Get Provider Config</span>
+    </div>
+    <div class="endpoint-body"><p>Returns the corridor provider config for a specific merchant, or <code>null</code> if not registered.</p></div>
+</div>
+
+<div class="endpoint-card" id="corridor-providers-post">
+    <div class="endpoint-header">
+        <span class="method badge-post">POST</span>
+        <span class="path">/v1/corridor/providers</span>
+        <span class="title">Register / Update as LP</span>
+    </div>
+    <div class="endpoint-body">
+        <table><thead><tr><th>Field</th><th>Type</th><th>Req</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">merchant_id</td><td class="pt">uuid</td><td><span class="tag tag-req">Req</span></td><td>Merchant UUID</td></tr>
+            <tr><td class="pn">is_active</td><td class="pt">boolean</td><td><span class="tag tag-req">Req</span></td><td>Enable/disable</td></tr>
+            <tr><td class="pn">fee_percentage</td><td class="pt">number</td><td><span class="tag tag-req">Req</span></td><td>0-10%</td></tr>
+            <tr><td class="pn">min_amount</td><td class="pt">number</td><td><span class="tag tag-req">Req</span></td><td>Min fiat amount</td></tr>
+            <tr><td class="pn">max_amount</td><td class="pt">number</td><td><span class="tag tag-req">Req</span></td><td>Max fiat amount</td></tr>
+            <tr><td class="pn">auto_accept</td><td class="pt">boolean</td><td><span class="tag tag-opt">Opt</span></td><td>Default: true</td></tr>
+        </tbody></table>
+        <p style="margin-top:8px;">Uses upsert (INSERT ... ON CONFLICT DO UPDATE).</p>
+    </div>
+</div>
+
+<div class="endpoint-card" id="corridor-avail">
+    <div class="endpoint-header">
+        <span class="method badge-get">GET</span>
+        <span class="path">/v1/corridor/availability?fiat_amount=367&exclude=uuid1,uuid2</span>
+        <span class="title">Check LP Availability</span>
+    </div>
+    <div class="endpoint-body">
+        <div class="pre-wrapper"><pre>{
+  <span class="key">"success"</span>: <span class="num">true</span>,
+  <span class="key">"data"</span>: {
+    <span class="key">"available"</span>: <span class="num">true</span>,
+    <span class="key">"cheapest_fee"</span>: <span class="num">0.5</span>,
+    <span class="key">"provider_count"</span>: <span class="num">3</span>
+  }
+}</pre></div>
+    </div>
+</div>
+
+<!-- ==================== SYSTEM ==================== -->
+<div class="gateway-section">
+    <h2><span class="gi" style="background:#475569;">S</span> System Endpoints</h2>
+</div>
+
+<div class="endpoint-card" id="health">
+    <div class="endpoint-header">
+        <span class="method badge-get">GET</span>
+        <span class="path">/health</span>
+        <span class="title">Health Check (no auth)</span>
+    </div>
+    <div class="endpoint-body">
+        <div class="pre-wrapper"><pre>{ <span class="key">"ok"</span>: <span class="num">true</span>, <span class="key">"service"</span>: <span class="str">"core-api"</span>, <span class="key">"timestamp"</span>: <span class="str">"2026-03-21T10:30:00.000Z"</span> }</pre></div>
+    </div>
+</div>
+
+<div class="endpoint-card" id="expire">
+    <div class="endpoint-header">
+        <span class="method badge-post">POST</span>
+        <span class="path">/v1/orders/expire</span>
+        <span class="title">Batch Expire Orders</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Expires orders past their deadline. <strong>Pending</strong> orders expire after 15 min. <strong>Post-acceptance</strong> orders after 120 min. Escrowed expired orders go to <code>disputed</code>; non-escrowed go to <code>cancelled</code>.</p>
+        <div class="pre-wrapper"><pre>{ <span class="key">"success"</span>: <span class="num">true</span>, <span class="key">"message"</span>: <span class="str">"Expired 5 orders"</span>, <span class="key">"expiredCount"</span>: <span class="num">5</span> }</pre></div>
+    </div>
+</div>
+
+<div class="endpoint-card" id="debug">
+    <div class="endpoint-header">
+        <span class="method badge-get">GET</span>
+        <span class="path">/debug/*</span>
+        <span class="title">Debug Endpoints (dev only, no auth)</span>
+    </div>
+    <div class="endpoint-body">
+        <p>Returns 404 in production.</p>
+        <table><thead><tr><th>Endpoint</th><th>Description</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">GET /debug/ws</td><td>WebSocket connection stats</td></tr>
+            <tr><td class="pn">GET /debug/workers</td><td>Worker heartbeat timestamps</td></tr>
+            <tr><td class="pn">GET /debug/outbox?status=pending&limit=50</td><td>Notification outbox rows + counts</td></tr>
+        </tbody></table>
+    </div>
+</div>
+
+<!-- ==================== WEBSOCKET ==================== -->
+<div class="gateway-section" id="ws">
+    <h2><span class="gi" style="background:#4c1d95;">W</span> WebSocket Events</h2>
+</div>
+
+<div class="endpoint-card">
+    <div class="endpoint-body">
+        <p>Real-time order events are broadcast via WebSocket. Connect to <code>ws://localhost:4010</code> (same port as HTTP).</p>
+
+        <div class="section-title">Broadcast Event Payload</div>
+        <div class="pre-wrapper"><pre>{
+  <span class="key">"event_type"</span>: <span class="str">"ORDER_ESCROWED"</span>,
+  <span class="key">"order_id"</span>: <span class="str">"uuid"</span>,
+  <span class="key">"status"</span>: <span class="str">"escrowed"</span>,
+  <span class="key">"minimal_status"</span>: <span class="str">"escrowed"</span>,
+  <span class="key">"order_version"</span>: <span class="num">3</span>,
+  <span class="key">"userId"</span>: <span class="str">"uuid"</span>,
+  <span class="key">"merchantId"</span>: <span class="str">"uuid"</span>,
+  <span class="key">"buyerMerchantId"</span>: <span class="str">"uuid"</span>,    <span class="cmt">// only for M2M</span>
+  <span class="key">"previousStatus"</span>: <span class="str">"accepted"</span>
+}</pre></div>
+
+        <div class="section-title">Event Types</div>
+        <table><thead><tr><th>Event</th><th>Trigger</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">ORDER_CREATED</td><td>New order inserted</td></tr>
+            <tr><td class="pn">ORDER_ACCEPTED</td><td>Merchant accepted order</td></tr>
+            <tr><td class="pn">ORDER_ESCROWED</td><td>Escrow locked on-chain</td></tr>
+            <tr><td class="pn">ORDER_PAYMENT_SENT</td><td>Buyer sent fiat payment</td></tr>
+            <tr><td class="pn">ORDER_PAYMENT_CONFIRMED</td><td>Seller confirmed receipt</td></tr>
+            <tr><td class="pn">ORDER_COMPLETED</td><td>Escrow released, trade done</td></tr>
+            <tr><td class="pn">ORDER_CANCELLED</td><td>Order cancelled (with/without escrow refund)</td></tr>
+            <tr><td class="pn">ORDER_EXPIRED</td><td>Order timed out</td></tr>
+            <tr><td class="pn">ORDER_DISPUTED</td><td>Dispute opened</td></tr>
+            <tr><td class="pn">EXTENSION_REQUESTED</td><td>Time extension requested</td></tr>
+            <tr><td class="pn">EXTENSION_ACCEPTED</td><td>Extension accepted</td></tr>
+            <tr><td class="pn">CANCEL_REQUESTED</td><td>Mutual cancel requested</td></tr>
+            <tr><td class="pn">CANCEL_DECLINED</td><td>Cancel request declined</td></tr>
+            <tr><td class="pn">CORRIDOR_ASSIGNMENT</td><td>LP matched to order</td></tr>
+            <tr><td class="pn">CORRIDOR_PAYMENT_SENT</td><td>LP sent fiat payment</td></tr>
+        </tbody></table>
+    </div>
+</div>
+
+<!-- ==================== BACKGROUND WORKERS ==================== -->
+<div class="gateway-section">
+    <h2><span class="gi" style="background:#475569;">B</span> Background Workers</h2>
+</div>
+
+<div class="endpoint-card">
+    <div class="endpoint-body">
+        <p>The primary (non-worker) process runs these background workers:</p>
+        <table><thead><tr><th>Worker</th><th>Purpose</th></tr></thead>
+        <tbody>
+            <tr><td class="pn">notificationOutbox</td><td>Flushes notification_outbox table to downstream services</td></tr>
+            <tr><td class="pn">corridorTimeoutWorker</td><td>Cancels corridor fulfillments past send_deadline</td></tr>
+            <tr><td class="pn">autoBumpWorker</td><td>Auto-bumps order premiums at configured intervals</td></tr>
+            <tr><td class="pn">priceFeedWorker</td><td>Fetches and caches latest price feeds</td></tr>
+            <tr><td class="pn">unhappyPathWorker</td><td>Handles stuck/unhappy-path order cleanup</td></tr>
+            <tr><td class="pn">expiryWorker</td><td>Standalone worker for order expiry (also runs via <code>POST /v1/orders/expire</code>)</td></tr>
+        </tbody></table>
+    </div>
+</div>
+
+<div style="text-align:center; padding:40px 0 60px; color:#475569; font-size:12px;">
+    Generated on March 21, 2026 &bull; Blip Core API v1.0 &bull; @bm/core-api
+</div>
+
+</div>
+
+<button class="print-btn" onclick="window.print()">&#128424; Print / Save as PDF</button>
+
+<script>
+document.querySelectorAll('.sidebar a').forEach(link => {
+    link.addEventListener('click', e => {
+        e.preventDefault();
+        const target = document.querySelector(link.getAttribute('href'));
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+document.querySelectorAll('.pre-wrapper').forEach(wrapper => {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn'; btn.textContent = 'Copy';
+    btn.addEventListener('click', () => {
+        navigator.clipboard.writeText(wrapper.querySelector('pre').textContent).then(() => {
+            btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1500);
+        });
+    });
+    wrapper.appendChild(btn);
+});
+</script>
+
+</body>
+</html>

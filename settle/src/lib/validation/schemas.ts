@@ -169,7 +169,7 @@ export const createOrderSchema = z.object({
   type: offerTypeSchema,
   payment_method: paymentMethodSchema.optional(),
   preference: tradePreferenceSchema.optional(),
-  user_bank_account: z.string().max(50).optional(), // User's bank IBAN for receiving fiat (sell orders)
+  user_bank_account: z.string().max(500).optional(), // User's bank details JSON or plain text for receiving fiat (sell orders)
   buyer_wallet_address: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'Invalid Solana wallet address').optional(), // Buyer's Solana wallet for receiving crypto (buy orders)
   buyer_merchant_id: uuidSchema.optional(), // For M2M trades: merchant acting as buyer
 });

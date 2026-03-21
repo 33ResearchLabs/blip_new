@@ -10,10 +10,13 @@ import {
   Zap,
   ExternalLink,
   Loader2,
+  Copy,
 } from "lucide-react";
+import { useState as useLocalState } from "react";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
 import { getAuthoritativeStatus, computeMyRole } from "@/lib/orders/statusResolver";
 import type { Order } from "@/types/merchant";
+import { CopyableBankDetails } from "@/components/shared/CopyableBankDetails";
 
 export interface OrderQuickViewProps {
   selectedOrder: Order | null;
@@ -161,26 +164,41 @@ export function OrderQuickView({
               {(() => {
                 const popupBankRole = selectedOrder.myRole || 'observer';
                 const iAmBuyerInPopup = popupBankRole === 'buyer';
+                if (!iAmBuyerInPopup) return null;
 
-                if (iAmBuyerInPopup && selectedOrder.userBankAccount) {
+                // For M2M or any order: buyer needs seller's bank details (from offer)
+                if (selectedOrder.sellerBankDetails) {
                   return (
-                    <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4">
-                      <p className="text-xs text-white/40 uppercase tracking-wide mb-2">Send AED to this account:</p>
-                      <p className="text-sm font-mono text-white mb-1">{selectedOrder.userBankAccount}</p>
-                      <p className="text-xs text-white/40">Amount: {'\u062F.\u0625'} {Math.round(selectedOrder.total).toLocaleString()}</p>
-                    </div>
+                    <CopyableBankDetails
+                      title="Send AED to this account"
+                      bankName={selectedOrder.sellerBankDetails.bank_name}
+                      accountName={selectedOrder.sellerBankDetails.account_name}
+                      iban={selectedOrder.sellerBankDetails.iban}
+                      amount={Math.round(selectedOrder.total)}
+                    />
                   );
                 }
 
-                if (iAmBuyerInPopup && !selectedOrder.userBankAccount) {
+                // Fallback: user's bank details (for user sell orders where user provided bank)
+                if (selectedOrder.userBankDetails || selectedOrder.userBankAccount) {
+                  const details = selectedOrder.userBankDetails;
                   return (
-                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-                      <p className="text-xs text-red-400">No payment details provided. Chat to get bank details.</p>
-                    </div>
+                    <CopyableBankDetails
+                      title="Send AED to this account"
+                      bankName={details?.bank_name}
+                      accountName={details?.account_name}
+                      iban={details?.iban}
+                      fallbackText={!details ? selectedOrder.userBankAccount : undefined}
+                      amount={Math.round(selectedOrder.total)}
+                    />
                   );
                 }
 
-                return null;
+                return (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                    <p className="text-xs text-red-400">No payment details provided. Chat to get bank details.</p>
+                  </div>
+                );
               })()}
 
               {/* Status message for SELLER waiting for buyer */}

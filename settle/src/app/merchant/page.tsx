@@ -596,7 +596,16 @@ export default function MerchantDashboard() {
 
       {selectedOrderId && merchantId && (
         <OrderDetailsPanel orderId={selectedOrderId} merchantId={merchantId} onClose={() => setSelectedOrderId(null)}
-          onOpenChat={(orderId) => { const order = orders.find(o => o.id === orderId); if (order) handleOpenChat(order); setSelectedOrderId(null); }}
+          onOpenChat={(orderId, targetId, targetType, targetName) => {
+            if (targetId && targetType && targetName) {
+              directChat.addContact(targetId, targetType);
+              directChat.openChat(targetId, targetType, targetName);
+            } else {
+              const order = orders.find(o => o.id === orderId);
+              if (order) handleOpenChat(order);
+            }
+            setSelectedOrderId(null);
+          }}
           onConfirmPayment={confirmPayment}
           onMarkPaymentSent={(orderId) => { const order = orders.find(o => o.id === orderId); if (order) markFiatPaymentSent(order); }}
           onAcceptOrder={(orderId) => { const order = orders.find(o => o.id === orderId); if (order) acceptOrder(order); }}

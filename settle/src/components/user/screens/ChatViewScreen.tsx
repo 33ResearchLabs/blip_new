@@ -1,14 +1,21 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   ChevronLeft,
   MessageCircle,
   ArrowUpRight,
   AlertTriangle,
+  Paperclip,
+  Loader2,
+  X,
+  Send,
 } from "lucide-react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
 import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
+import { ImageMessage } from "@/components/chat/ImageMessage";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import type { Screen, Order } from "./types";
 import type { RefObject } from "react";
 
@@ -25,11 +32,12 @@ export interface ChatViewScreenProps {
       timestamp: Date;
       senderName?: string;
       messageType?: string;
+      imageUrl?: string | null;
     }>;
   } | null;
   chatMessage: string;
   setChatMessage: (m: string) => void;
-  sendChatMessage: (orderId: string, msg: string) => void;
+  sendChatMessage: (chatId: string, msg: string, imageUrl?: string) => void;
   chatMessagesRef: RefObject<HTMLDivElement | null>;
 }
 
@@ -42,6 +50,83 @@ export const ChatViewScreen = ({
   sendChatMessage,
   chatMessagesRef,
 }: ChatViewScreenProps) => {
+  const [isUploading, setIsUploading] = useState(false);
+  const [pendingImage, setPendingImage] = useState<{ file: File; previewUrl: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) return;
+    if (!file.type.startsWith('image/')) return;
+    const previewUrl = URL.createObjectURL(file);
+    setPendingImage({ file, previewUrl });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const clearPendingImage = () => {
+    if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
+    setPendingImage(null);
+  };
+
+  const uploadAndSend = async () => {
+    if (!pendingImage || !activeChat) return;
+    setIsUploading(true);
+    try {
+      const sigRes = await fetchWithAuth('/api/upload/signature', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: activeOrder.id }),
+      });
+      if (!sigRes.ok) { setIsUploading(false); return; }
+      const sigData = await sigRes.json();
+      if (!sigData.success) { setIsUploading(false); return; }
+      const sig = sigData.data;
+
+      const formData = new FormData();
+      formData.append('file', pendingImage.file);
+      formData.append('signature', sig.signature);
+      formData.append('timestamp', sig.timestamp.toString());
+      formData.append('api_key', sig.apiKey);
+      formData.append('folder', sig.folder);
+
+      const uploadRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`,
+        { method: 'POST', body: formData }
+      );
+      if (uploadRes.ok) {
+        const result = await uploadRes.json();
+        const text = chatMessage.trim() || 'Photo';
+        sendChatMessage(activeChat.id, text, result.secure_url);
+        setChatMessage('');
+      } else {
+        console.error('[ChatViewScreen] Cloudinary upload failed:', uploadRes.status, await uploadRes.text().catch(() => ''));
+      }
+    } catch (err) {
+      console.error('[ChatViewScreen] Image upload error:', err);
+    } finally {
+      setIsUploading(false);
+      clearPendingImage();
+    }
+  };
+
+  // Cleanup preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
+    };
+  }, [pendingImage]);
+
+  const handleSend = () => {
+    if (!activeChat) return;
+    if (pendingImage) {
+      uploadAndSend();
+    } else if (chatMessage.trim()) {
+      sendChatMessage(activeChat.id, chatMessage.trim());
+      setChatMessage('');
+    }
+  };
+
   return (
     <>
       {/* Chat Header */}
@@ -133,7 +218,7 @@ export const ChatViewScreen = ({
                 if (parsed.type === 'order_receipt' && parsed.data) {
                   return (
                     <div key={msg.id} className="max-w-[90%] mx-auto">
-                      <ReceiptCard data={parsed.data} />
+                      <ReceiptCard data={parsed.data} currentStatus={activeOrder?.status} />
                       <p className="text-[10px] text-neutral-500 mt-1 text-center">
                         {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -144,6 +229,8 @@ export const ChatViewScreen = ({
             } catch { /* not JSON */ }
 
             const isMe = msg.from === "me";
+            const isImageMsg = msg.messageType === 'image' && msg.imageUrl;
+
             return (
               <div
                 key={msg.id}
@@ -156,7 +243,16 @@ export const ChatViewScreen = ({
                       : "bg-neutral-800 text-white rounded-bl-md"
                   }`}
                 >
-                  <p className="text-[15px] leading-relaxed">{msg.text}</p>
+                  {isImageMsg && (
+                    <ImageMessage
+                      imageUrl={msg.imageUrl!}
+                      caption={msg.text !== 'Photo' ? msg.text : undefined}
+                      isOwn={isMe}
+                    />
+                  )}
+                  {!isImageMsg && (
+                    <p className="text-[15px] leading-relaxed">{msg.text}</p>
+                  )}
                   <p className={`text-[10px] mt-1 ${isMe ? 'text-white/70' : 'text-neutral-500'}`}>
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
@@ -175,35 +271,73 @@ export const ChatViewScreen = ({
         )}
       </div>
 
+      {/* Image preview bar */}
+      {pendingImage && (
+        <div className="bg-neutral-900 border-t border-neutral-800 px-4 py-2 flex items-center gap-3">
+          <div className="relative">
+            <img
+              src={pendingImage.previewUrl}
+              alt="Preview"
+              className="w-14 h-14 rounded-xl object-cover border border-white/10"
+            />
+            <button
+              onClick={clearPendingImage}
+              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-neutral-700 flex items-center justify-center"
+            >
+              <X className="w-3 h-3 text-white" />
+            </button>
+          </div>
+          <span className="text-[13px] text-neutral-400 flex-1">Ready to send</span>
+        </div>
+      )}
+
       {/* Message Input */}
       <div className="bg-neutral-900 border-t border-neutral-800 px-4 py-3 pb-8">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="w-12 h-12 rounded-full flex items-center justify-center bg-neutral-800 disabled:opacity-50"
+          >
+            {isUploading ? (
+              <Loader2 className="w-5 h-5 text-neutral-400 animate-spin" />
+            ) : (
+              <Paperclip className="w-5 h-5 text-neutral-400" />
+            )}
+          </button>
           <input
             type="text"
-            placeholder="Type a message..."
+            placeholder={pendingImage ? "Add a caption..." : "Type a message..."}
             className="flex-1 bg-neutral-800 rounded-full px-5 py-3 text-[15px] text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-orange-500/30"
             value={chatMessage}
             onChange={(e) => setChatMessage(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && chatMessage.trim()) {
-                sendChatMessage(activeOrder.id, chatMessage.trim());
-                setChatMessage('');
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSend();
               }
             }}
           />
           <motion.button
             whileTap={{ scale: 0.95 }}
-            onClick={() => {
-              if (chatMessage.trim()) {
-                sendChatMessage(activeOrder.id, chatMessage.trim());
-                setChatMessage('');
-              }
-            }}
+            onClick={handleSend}
+            disabled={!chatMessage.trim() && !pendingImage}
             className={`w-12 h-12 rounded-full flex items-center justify-center ${
-              chatMessage.trim() ? 'bg-white/10' : 'bg-neutral-800'
-            }`}
+              chatMessage.trim() || pendingImage ? 'bg-white/10' : 'bg-neutral-800'
+            } disabled:opacity-50`}
           >
-            <ArrowUpRight className={`w-5 h-5 ${chatMessage.trim() ? 'text-white' : 'text-neutral-500'}`} />
+            {isUploading ? (
+              <Loader2 className="w-5 h-5 text-white animate-spin" />
+            ) : (
+              <Send className={`w-5 h-5 ${chatMessage.trim() || pendingImage ? 'text-white' : 'text-neutral-500'}`} />
+            )}
           </motion.button>
         </div>
       </div>

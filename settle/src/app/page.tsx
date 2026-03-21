@@ -244,8 +244,9 @@ export default function Home() {
               setEscrowError={tradeCreation.setEscrowError}
               isLoading={tradeCreation.isLoading}
               confirmEscrow={tradeCreation.confirmEscrow}
-              userBankAccount={tradeCreation.userBankAccount}
-              setUserBankAccount={tradeCreation.setUserBankAccount}
+              selectedBankDetails={tradeCreation.selectedBankDetails}
+              setSelectedBankDetails={tradeCreation.setSelectedBankDetails}
+              userId={auth.userId}
               setShowWalletModal={auth.setShowWalletModal}
               onConnectWallet={() => {
                 if (embeddedWallet) {

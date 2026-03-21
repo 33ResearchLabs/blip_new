@@ -169,6 +169,15 @@ export const OrderDetailScreen = ({
 }: OrderDetailScreenProps) => {
   const [showEmojiPicker, setShowEmojiPicker] = useLocalState(false);
   const [isUploading, setIsUploading] = useLocalState(false);
+  const [copiedField, setCopiedField] = useLocalState<string | null>(null);
+
+  const copyField = useLocalCallback((field: string, text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field);
+      handleCopy(text);
+      setTimeout(() => setCopiedField(null), 1500);
+    });
+  }, [handleCopy]);
   const [pendingImage, setPendingImage] = useLocalState<{ file: File; previewUrl: string } | null>(null);
   const fileInputRef = useLocalRef<HTMLInputElement>(null);
   const typingTimeoutRef = useLocalRef<NodeJS.Timeout | null>(null);
@@ -227,9 +236,11 @@ export const OrderDetailScreen = ({
         sendChatMessage(activeChat.id, text, result.secure_url);
         setChatMessage('');
         playSound('send');
+      } else {
+        console.error('[OrderDetailScreen] Cloudinary upload failed:', uploadRes.status, await uploadRes.text().catch(() => ''));
       }
-    } catch {
-      // Upload failed silently
+    } catch (err) {
+      console.error('[OrderDetailScreen] Image upload error:', err);
     } finally {
       setIsUploading(false);
       clearPendingImage();
@@ -718,29 +729,50 @@ export const OrderDetailScreen = ({
                     ) : (
                       <>
                         <div className="bg-neutral-800 rounded-xl p-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[13px] text-neutral-500">Bank</span>
-                            <span className="text-[13px] text-white">{activeOrder.merchant.bank}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[13px] text-neutral-500">IBAN</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[13px] text-white font-mono">{activeOrder.merchant.iban}</span>
-                              <button onClick={() => handleCopy(activeOrder.merchant.iban || '')}>
-                                {copied ? <Check className="w-4 h-4 text-white" /> : <Copy className="w-4 h-4 text-neutral-500" />}
-                              </button>
+                          {activeOrder.merchant.bank && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-[13px] text-neutral-500">Bank</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[13px] text-white">{activeOrder.merchant.bank}</span>
+                                <button onClick={() => copyField('bank', activeOrder.merchant.bank || '')} className="p-0.5 rounded hover:bg-white/10">
+                                  {copiedField === 'bank' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[13px] text-neutral-500">Name</span>
-                            <span className="text-[13px] text-white">{activeOrder.merchant.accountName}</span>
-                          </div>
+                          )}
+                          {activeOrder.merchant.iban && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-[13px] text-neutral-500">IBAN</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[13px] text-white font-mono">{activeOrder.merchant.iban}</span>
+                                <button onClick={() => copyField('iban', activeOrder.merchant.iban || '')} className="p-0.5 rounded hover:bg-white/10">
+                                  {copiedField === 'iban' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          {activeOrder.merchant.accountName && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-[13px] text-neutral-500">Name</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[13px] text-white">{activeOrder.merchant.accountName}</span>
+                                <button onClick={() => copyField('name', activeOrder.merchant.accountName || '')} className="p-0.5 rounded hover:bg-white/10">
+                                  {copiedField === 'name' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                           <div className="pt-2 border-t border-neutral-700">
                             <div className="flex items-center justify-between">
                               <span className="text-[13px] text-neutral-500">Amount</span>
-                              <span className="text-[17px] font-semibold text-white">
-                                {'\u062F.\u0625'} {parseFloat(activeOrder.fiatAmount).toLocaleString()}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[17px] font-semibold text-white">
+                                  {'\u062F.\u0625'} {parseFloat(activeOrder.fiatAmount).toLocaleString()}
+                                </span>
+                                <button onClick={() => copyField('amount', parseFloat(activeOrder.fiatAmount).toString())} className="p-0.5 rounded hover:bg-white/10">
+                                  {copiedField === 'amount' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1353,7 +1385,7 @@ export const OrderDetailScreen = ({
                         if (parsed.type === 'order_receipt' && parsed.data) {
                           return (
                             <div key={msg.id} className="max-w-[90%] mx-auto">
-                              <ReceiptCard data={parsed.data} />
+                              <ReceiptCard data={parsed.data} currentStatus={activeOrder?.status} />
                               <p className="text-[10px] text-neutral-500 mt-1 text-center">
                                 {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </p>

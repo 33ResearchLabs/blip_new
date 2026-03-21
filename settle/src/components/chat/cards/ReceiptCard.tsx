@@ -23,6 +23,7 @@ interface ReceiptData {
 
 interface ReceiptCardProps {
   data: ReceiptData;
+  currentStatus?: string;
 }
 
 function formatAmount(value: string | number | undefined, decimals = 2): string {
@@ -42,23 +43,33 @@ function formatDateTime(dateStr: string | undefined): string {
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   pending: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Pending' },
   accepted: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Accepted' },
+  escrow_pending: { bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Escrow Pending' },
   escrowed: { bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Escrowed' },
+  payment_pending: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', label: 'Payment Pending' },
   payment_sent: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', label: 'Payment Sent' },
   payment_confirmed: { bg: 'bg-teal-500/20', text: 'text-teal-400', label: 'Payment Confirmed' },
+  releasing: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Releasing' },
   completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Completed' },
   cancelled: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Cancelled' },
   disputed: { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'Disputed' },
   expired: { bg: 'bg-zinc-500/20', text: 'text-zinc-400', label: 'Expired' },
 };
 
-export function ReceiptCard({ data }: ReceiptCardProps) {
+export function ReceiptCard({ data, currentStatus }: ReceiptCardProps) {
   const isBuy = data.order_type === 'buy';
-  const statusStyle = STATUS_STYLES[data.status || ''] || STATUS_STYLES.pending;
+  const effectiveStatus = currentStatus || data.status || '';
+  const statusStyle = STATUS_STYLES[effectiveStatus] || STATUS_STYLES.pending;
+  const isCompleted = effectiveStatus === 'completed';
+  const isCancelled = effectiveStatus === 'cancelled';
 
   return (
     <div className="bg-white/5 border border-white/6 rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 bg-white/[0.02] border-b border-white/[0.06] flex items-center justify-between">
+      <div className={`px-4 py-3 border-b flex items-center justify-between ${
+        isCompleted ? 'bg-emerald-500/10 border-emerald-500/20' :
+        isCancelled ? 'bg-red-500/10 border-red-500/20' :
+        'bg-white/[0.02] border-white/[0.06]'
+      }`}>
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/6 flex items-center justify-center">
             <Receipt className="w-4 h-4 text-white/70" />

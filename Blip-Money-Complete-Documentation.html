@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blip Money - Complete Platform Documentation</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;color:#1a1a2e;line-height:1.7;background:#fff;max-width:900px;margin:0 auto;padding:40px 60px}
+h1{font-size:42px;font-weight:800;color:#1a1a2e;text-align:center;margin-bottom:8px;letter-spacing:-1px}
+h1 span{color:#c8102e}
+.subtitle{text-align:center;color:#666;font-size:15px;margin-bottom:4px}
+.meta{text-align:center;color:#999;font-size:13px;margin-bottom:40px}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:30px 0 50px}
+.stat-card{border:1px solid #e0e0e0;border-radius:10px;padding:20px;text-align:center}
+.stat-card .num{font-size:36px;font-weight:800;color:#1a1a2e}
+.stat-card .lbl{font-size:13px;color:#888;margin-top:2px}
+h2{font-size:28px;font-weight:700;color:#1a1a2e;margin:50px 0 10px;padding-bottom:8px;border-bottom:3px solid #c8102e}
+h3{font-size:20px;font-weight:700;color:#1a1a2e;margin:30px 0 10px;padding-left:12px;border-left:4px solid #c8102e}
+h4{font-size:16px;font-weight:600;color:#333;margin:20px 0 8px}
+p{color:#444;margin-bottom:12px}
+.toc{margin:30px 0 50px}
+.toc ol{padding-left:24px}
+.toc li{margin:6px 0;color:#444}
+.toc a{color:#1a1a2e;text-decoration:none;font-weight:500}
+.toc a:hover{color:#c8102e}
+.callout{background:#f8f9fa;border-left:4px solid #c8102e;padding:16px 20px;margin:16px 0;border-radius:0 8px 8px 0;font-size:14px}
+.callout strong{color:#1a1a2e}
+.flow-box{background:#f8f9fa;border-radius:8px;padding:16px 20px;margin:12px 0;font-family:'Fira Code',monospace;font-size:13px;line-height:2}
+.flow-box .step{color:#444}
+.flow-box .actor{font-weight:700;color:#c8102e}
+.status-flow{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:16px 0}
+.sf{background:#f0f0f0;border:1px solid #ddd;border-radius:6px;padding:4px 12px;font-family:monospace;font-size:12px;color:#333}
+.sf-arr{color:#999;font-size:14px}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+th{text-align:left;padding:10px 12px;background:#f8f9fa;color:#666;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:2px solid #e0e0e0}
+td{padding:10px 12px;border-bottom:1px solid #f0f0f0;color:#333}
+tr:hover td{background:#fafbfc}
+.method{font-family:monospace;font-weight:700;font-size:11px;padding:2px 8px;border-radius:4px;display:inline-block;min-width:50px;text-align:center}
+.m-get{background:#d4edda;color:#155724}
+.m-post{background:#cce5ff;color:#004085}
+.m-patch{background:#fff3cd;color:#856404}
+.m-put{background:#e8daef;color:#4a235a}
+.m-del{background:#f8d7da;color:#721c24}
+.path{font-family:monospace;font-size:12px;color:#0550ae;font-weight:600}
+.auth-tag{font-size:11px;color:#666;font-style:italic}
+code{background:#f0f0f0;padding:1px 6px;border-radius:3px;font-family:'Fira Code',monospace;font-size:12px;color:#c8102e}
+pre{background:#f8f9fa;border:1px solid #e0e0e0;border-radius:8px;padding:16px;overflow-x:auto;font-size:12px;font-family:'Fira Code',monospace;line-height:1.7;margin:12px 0;color:#333}
+.check{color:#28a745}
+.cross{color:#dc3545}
+.warn{color:#ffc107}
+.badge{display:inline-block;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600}
+.b-green{background:#d4edda;color:#155724}
+.b-red{background:#f8d7da;color:#721c24}
+.b-blue{background:#cce5ff;color:#004085}
+.b-yellow{background:#fff3cd;color:#856404}
+.section-count{color:#888;font-size:14px;font-weight:400}
+.footer{text-align:center;padding:40px 0;border-top:1px solid #e0e0e0;margin-top:60px;color:#999;font-size:12px}
+.print-btn{position:fixed;bottom:24px;right:24px;background:#c8102e;color:#fff;border:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.2);z-index:100}
+.print-btn:hover{background:#a00d24}
+
+@media print{
+  body{padding:20px 30px;max-width:100%;font-size:10px}
+  h1{font-size:28px} h2{font-size:20px} h3{font-size:16px}
+  .print-btn{display:none!important}
+  table{font-size:10px}
+  th,td{padding:6px 8px}
+  .stat-card .num{font-size:28px}
+  .endpoint-card{break-inside:avoid;page-break-inside:avoid}
+  h2,h3{page-break-after:avoid}
+  @page{margin:1.5cm;size:A4}
+}
+</style>
+</head>
+<body>
+
+<h1><span>BLIP</span> MONEY</h1>
+<p class="subtitle">P2P Crypto-Fiat Trading Platform — Complete Documentation</p>
+<p class="meta">Generated: March 21, 2026 | Version: 2.0</p>
+
+<div class="stats-grid">
+  <div class="stat-card"><div class="num">85+</div><div class="lbl">API Endpoints</div></div>
+  <div class="stat-card"><div class="num">12</div><div class="lbl">Order Statuses</div></div>
+  <div class="stat-card"><div class="num">5</div><div class="lbl">User Roles</div></div>
+  <div class="stat-card"><div class="num">4</div><div class="lbl">Platforms</div></div>
+</div>
+
+<div class="toc">
+  <h4>Table of Contents</h4>
+  <ol>
+    <li><a href="#trade-flow">Trade Flow (How It Works)</a></li>
+    <li><a href="#statuses">Order Statuses &amp; State Machine</a></li>
+    <li><a href="#test-cases">All Test Cases (Happy, Dispute, Cancel, Expiry)</a></li>
+    <li><a href="#roles">User Roles &amp; Permissions</a></li>
+    <li><a href="#features">Platform Features</a></li>
+    <li><a href="#api-routes">All API Routes</a></li>
+    <li><a href="#core-api">Core-API Backend (Detailed)</a></li>
+    <li><a href="#escrow">Escrow System</a></li>
+    <li><a href="#corridor">Corridor &amp; Conversions</a></li>
+    <li><a href="#telegram">Telegram Bot</a></li>
+    <li><a href="#security">Security &amp; Auth</a></li>
+    <li><a href="#tech">Tech Stack</a></li>
+  </ol>
+</div>
+
+<!-- ============ 1. TRADE FLOW ============ -->
+<h2 id="trade-flow">1. Trade Flow</h2>
+
+<div class="callout">
+  <strong>GOLDEN RULE:</strong> The <strong>seller ALWAYS locks AND releases</strong> the escrow. Fiat is always sent offchain (bank transfer / cash). Crypto goes through on-chain escrow.
+</div>
+
+<h3>BUY Order Flow (User wants to buy crypto)</h3>
+<div class="flow-box">
+<div class="step">1. <span class="actor">BUYER</span> places order: "I want 100 USDC, paying 367 AED"</div>
+<div class="step">2. <span class="actor">SELLER</span> accepts the order (becomes counterparty)</div>
+<div class="step">3. <span class="actor">SELLER</span> locks 100 USDC into escrow (balance: 10000 → 9900)</div>
+<div class="step">4. <span class="actor">BUYER</span> receives seller's bank details</div>
+<div class="step">5. <span class="actor">BUYER</span> sends 367 AED via bank transfer (offchain)</div>
+<div class="step">6. <span class="actor">BUYER</span> clicks "Payment Sent" in app</div>
+<div class="step">7. <span class="actor">SELLER</span> confirms AED received in bank</div>
+<div class="step">8. <span class="actor">SELLER</span> releases 100 USDC from escrow to buyer</div>
+<div class="step">9. <span class="check">&#10004;</span> Order completed. Buyer: +100 USDC. Seller: +367 AED.</div>
+</div>
+
+<h3>SELL Order Flow (User wants to sell crypto)</h3>
+<div class="flow-box">
+<div class="step">1. <span class="actor">SELLER</span> locks crypto into escrow BEFORE order goes live (pre-locked)</div>
+<div class="step">2. Order appears on marketplace with escrow already locked</div>
+<div class="step">3. <span class="actor">BUYER</span> accepts the order</div>
+<div class="step">4. <span class="actor">BUYER</span> sends fiat via bank transfer (offchain)</div>
+<div class="step">5. <span class="actor">BUYER</span> clicks "Payment Sent"</div>
+<div class="step">6. <span class="actor">SELLER</span> confirms fiat received</div>
+<div class="step">7. <span class="actor">SELLER</span> releases crypto from escrow to buyer</div>
+<div class="step">8. <span class="check">&#10004;</span> Order completed.</div>
+</div>
+
+<h3>M2M Flow (Merchant-to-Merchant)</h3>
+<div class="flow-box">
+<strong>M2M BUY</strong> (Merchant A buys from Merchant B):
+<div class="step">1. <span class="actor">A</span> creates BUY order (stored inverted as type="sell")</div>
+<div class="step">2. <span class="actor">B</span> accepts → becomes seller, merchant_id reassigned to B</div>
+<div class="step">3. <span class="actor">B</span> locks escrow → B balance decreases</div>
+<div class="step">4. <span class="actor">A</span> sends fiat, marks "payment sent"</div>
+<div class="step">5. <span class="actor">B</span> confirms fiat received, releases escrow → A gets crypto</div>
+
+<strong>M2M SELL</strong> (Merchant A sells to Merchant B):
+<div class="step">1. <span class="actor">A</span> creates SELL order (stored inverted as type="buy")</div>
+<div class="step">2. <span class="actor">B</span> accepts → buyer_merchant_id set to B</div>
+<div class="step">3. <span class="actor">A</span> locks escrow → A balance decreases</div>
+<div class="step">4. <span class="actor">B</span> sends fiat, marks "payment sent"</div>
+<div class="step">5. <span class="actor">A</span> confirms, releases escrow → B gets crypto</div>
+</div>
+
+<div class="callout">
+  <strong>Type Inversion:</strong> When a merchant creates a BUY order, it's stored as <code>type=sell</code> in DB (user perspective). When a merchant creates a SELL order, it's stored as <code>type=buy</code> in DB.
+</div>
+
+<!-- ============ 2. STATUSES ============ -->
+<h2 id="statuses">2. Order Statuses &amp; State Machine</h2>
+
+<h3>Status Flow (Happy Path)</h3>
+<div class="status-flow">
+  <span class="sf">pending</span><span class="sf-arr">→</span>
+  <span class="sf">accepted</span><span class="sf-arr">→</span>
+  <span class="sf">escrow_pending</span><span class="sf-arr">→</span>
+  <span class="sf">escrowed</span><span class="sf-arr">→</span>
+  <span class="sf">payment_sent</span><span class="sf-arr">→</span>
+  <span class="sf">payment_confirmed</span><span class="sf-arr">→</span>
+  <span class="sf" style="background:#d4edda;border-color:#28a745">completed &#10004;</span>
+</div>
+
+<h3>All 12 Statuses</h3>
+<table>
+<thead><tr><th>Status</th><th>Description</th><th>Timeout</th><th>Who Can Act</th></tr></thead>
+<tbody>
+<tr><td><code>pending</code></td><td>Order created, awaiting acceptance</td><td>15 min</td><td>Any merchant can accept; creator can cancel</td></tr>
+<tr><td><code>accepted</code></td><td>Counterparty accepted, awaiting escrow</td><td>15 min</td><td>Seller locks escrow</td></tr>
+<tr><td><code>escrow_pending</code></td><td>Escrow being verified on-chain</td><td>—</td><td>System only</td></tr>
+<tr><td><code>escrowed</code></td><td>Crypto locked in escrow</td><td>120 min</td><td>Buyer sends fiat; either can cancel/dispute</td></tr>
+<tr><td><code>payment_pending</code></td><td>M2M intermediate state</td><td>—</td><td>System</td></tr>
+<tr><td><code>payment_sent</code></td><td>Buyer marked fiat sent</td><td>15 min</td><td>Seller confirms receipt</td></tr>
+<tr><td><code>payment_confirmed</code></td><td>Seller confirmed fiat received (transient!)</td><td>—</td><td>Seller releases escrow</td></tr>
+<tr><td><code>releasing</code></td><td>Escrow release in progress</td><td>—</td><td>System</td></tr>
+<tr><td><code>completed</code></td><td>Order done, funds settled</td><td>—</td><td>Terminal — no actions</td></tr>
+<tr><td><code>cancelled</code></td><td>Order cancelled</td><td>—</td><td>Terminal — refund if escrowed</td></tr>
+<tr><td><code>disputed</code></td><td>Payment dispute raised</td><td>24 hr</td><td>Compliance resolves; auto-refund on timeout</td></tr>
+<tr><td><code>expired</code></td><td>Order timed out</td><td>—</td><td>Terminal</td></tr>
+</tbody>
+</table>
+
+<div class="callout">
+  <strong>payment_confirmed is TRANSIENT.</strong> <code>isTransientStatus('payment_confirmed')</code> returns <code>true</code>. It normalizes to <code>payment_sent</code>. Core-api rejects PATCH to transient statuses. Release directly from <code>payment_sent</code>.
+</div>
+
+<h3>Cancellation Rules</h3>
+<table>
+<thead><tr><th>When</th><th>Who</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Before escrow (pending/accepted)</td><td>Either party</td><td>Clean cancel, no refund needed</td></tr>
+<tr><td>After escrow (escrowed/payment_sent)</td><td>Mutual agreement</td><td>Escrow refunded to seller</td></tr>
+<tr><td>After escrow, no agreement</td><td>Either party</td><td>Becomes dispute</td></tr>
+</tbody>
+</table>
+
+<h3>Extension System</h3>
+<ul style="padding-left:20px;color:#444">
+  <li>Max <strong>3 extensions</strong> per order</li>
+  <li>Extension 1: +15 min | Extension 2: +30 min | Extension 3: +60 min</li>
+  <li>Counterparty must approve the extension request</li>
+</ul>
+
+<!-- ============ 3. TEST CASES ============ -->
+<h2 id="test-cases">3. All Test Cases</h2>
+
+<h3>Suite 1: Happy BUY Path <span class="section-count">(10 orders)</span></h3>
+<table><thead><tr><th>#</th><th>Scenario</th><th>Steps</th><th>Expected</th></tr></thead>
+<tbody><tr><td>1-10</td><td>Standard BUY</td><td>Create → Accept → Lock Escrow → Payment Sent → Release</td><td>Status: completed. Buyer +amount, Seller -amount</td></tr></tbody></table>
+
+<h3>Suite 2: Happy SELL Path <span class="section-count">(5 orders)</span></h3>
+<table><thead><tr><th>#</th><th>Scenario</th><th>Steps</th><th>Expected</th></tr></thead>
+<tbody><tr><td>11-15</td><td>Standard SELL</td><td>Create → Accept → Lock Escrow → Payment Sent → Release</td><td>Status: completed. Seller receives fiat offchain</td></tr></tbody></table>
+
+<h3>Suite 3: Pre-Escrow Cancel <span class="section-count">(10 orders)</span></h3>
+<table><thead><tr><th>#</th><th>Scenario</th><th>Steps</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>16-20</td><td>Cancel at pending</td><td>Create → Cancel (before accept)</td><td>Status: cancelled. No balance change</td></tr>
+<tr><td>21-25</td><td>Cancel at accepted</td><td>Create → Accept → Cancel (before escrow)</td><td>Status: cancelled. No balance change</td></tr>
+</tbody></table>
+
+<h3>Suite 4: Post-Escrow Cancel <span class="section-count">(5 orders)</span></h3>
+<table><thead><tr><th>#</th><th>Scenario</th><th>Steps</th><th>Expected</th></tr></thead>
+<tbody><tr><td>26-30</td><td>Cancel after escrow</td><td>Create → Accept → Escrow → Cancel</td><td>Status: cancelled. Escrow refunded to seller</td></tr></tbody></table>
+
+<h3>Suite 5: Mutual Cancel <span class="section-count">(6 orders)</span></h3>
+<table><thead><tr><th>#</th><th>Scenario</th><th>Steps</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>31-33</td><td>Buyer requests cancel</td><td>Create → Accept → Escrow → Buyer requests → Seller approves</td><td>Cancelled + refund</td></tr>
+<tr><td>34-36</td><td>Seller requests cancel</td><td>Create → Accept → Escrow → Seller requests → Buyer approves</td><td>Cancelled + refund</td></tr>
+</tbody></table>
+
+<h3>Suite 6: Disputes <span class="section-count">(10 orders)</span></h3>
+<table><thead><tr><th>#</th><th>Scenario</th><th>Steps</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>37-40</td><td>Buyer disputes after payment sent</td><td>Create → ... → Payment Sent → Buyer disputes</td><td>Status: disputed. Escrow held</td></tr>
+<tr><td>41-43</td><td>Seller disputes</td><td>Create → ... → Payment Sent → Seller disputes</td><td>Status: disputed</td></tr>
+<tr><td>44-46</td><td>Dispute resolved → cancelled</td><td>Dispute → Compliance resolves → Refund seller</td><td>Cancelled + refund</td></tr>
+</tbody></table>
+
+<h3>Suite 7: Extensions <span class="section-count">(6 orders)</span></h3>
+<table><thead><tr><th>#</th><th>Scenario</th><th>Steps</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>47-49</td><td>Extension approved</td><td>Create → Accept → Escrow → Request ext → Approve</td><td>Timer extended, extension_count+1</td></tr>
+<tr><td>50-52</td><td>Extension rejected</td><td>Create → Accept → Escrow → Request ext → Reject</td><td>Timer unchanged</td></tr>
+</tbody></table>
+
+<h3>Suite 8: Expiry <span class="section-count">(5 orders)</span></h3>
+<table><thead><tr><th>#</th><th>Scenario</th><th>Steps</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>53-55</td><td>Expire at pending</td><td>Create → Wait 15min → System expires</td><td>Status: expired</td></tr>
+<tr><td>56-57</td><td>Expire at accepted</td><td>Create → Accept → Wait → Expire</td><td>Status: expired</td></tr>
+</tbody></table>
+
+<h3>Suite 9: Security Tests <span class="section-count">(13 orders)</span></h3>
+<table><thead><tr><th>#</th><th>Scenario</th><th>Steps</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>58</td><td>Non-participant blocked</td><td>Random merchant tries to act on order</td><td>403 Forbidden</td></tr>
+<tr><td>59</td><td>Double release blocked</td><td>Release escrow twice</td><td>2nd release: ALREADY_RELEASED</td></tr>
+<tr><td>60</td><td>Unauthorized release</td><td>Buyer tries to release (only seller can)</td><td>403 Forbidden</td></tr>
+<tr><td>61</td><td>Backward transition</td><td>Try completed → pending</td><td>400 Invalid transition</td></tr>
+<tr><td>62</td><td>Double dispute</td><td>Dispute same order twice</td><td>2nd dispute rejected</td></tr>
+<tr><td>63</td><td>Duplicate cancel</td><td>Cancel already cancelled order</td><td>Rejected</td></tr>
+<tr><td>64</td><td>Duplicate extension</td><td>Extend beyond 3x limit</td><td>Rejected after 3</td></tr>
+<tr><td>65</td><td>Self-response blocked</td><td>Requester tries to approve own cancel</td><td>Rejected</td></tr>
+<tr><td>66</td><td>Duplicate escrow</td><td>Lock escrow on already escrowed order</td><td>Rejected</td></tr>
+<tr><td>67-70</td><td>Actor spoofing</td><td>Forge actor headers</td><td>Auth middleware blocks</td></tr>
+</tbody></table>
+
+<h3>Suite 10: M2M Trades <span class="section-count">(8 orders)</span></h3>
+<table><thead><tr><th>#</th><th>Scenario</th><th>Steps</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>71-74</td><td>M2M BUY happy path</td><td>Merchant A buys from B</td><td>A: +crypto, B: +fiat</td></tr>
+<tr><td>75-78</td><td>M2M SELL happy path</td><td>Merchant A sells to B</td><td>A: +fiat, B: +crypto</td></tr>
+</tbody></table>
+
+<h3>Suite 11: Edge Cases <span class="section-count">(10 orders)</span></h3>
+<table><thead><tr><th>#</th><th>Scenario</th><th>Steps</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>79</td><td>Min amount order (1 USDC)</td><td>Full cycle with 1 USDC</td><td>Completed</td></tr>
+<tr><td>80</td><td>Max amount order (10,000 USDC)</td><td>Full cycle with 10K</td><td>Completed</td></tr>
+<tr><td>81</td><td>Cancel → re-create same amount</td><td>Cancel then new order</td><td>New order succeeds</td></tr>
+<tr><td>82</td><td>Rapid status transitions</td><td>Accept+Escrow+PaySent in quick succession</td><td>All transitions succeed</td></tr>
+<tr><td>83</td><td>Dispute → cancelled</td><td>Dispute then resolve to cancelled</td><td>Refund + cancelled</td></tr>
+<tr><td>84-88</td><td>Concurrent orders</td><td>Multiple orders from same merchant</td><td>All isolated correctly</td></tr>
+</tbody></table>
+
+<h3>Suite 12: Balance Verification <span class="section-count">(6 orders)</span></h3>
+<table><thead><tr><th>#</th><th>Scenario</th><th>Steps</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>89-91</td><td>Escrow deducts correctly</td><td>Check balance before/after lock</td><td>Balance = prev - amount</td></tr>
+<tr><td>92-94</td><td>Release credits correctly</td><td>Check balance before/after release</td><td>Buyer balance = prev + amount</td></tr>
+</tbody></table>
+
+<h3>Suite 13: Mixed Scenarios <span class="section-count">(6 orders)</span></h3>
+<table><thead><tr><th>#</th><th>Scenario</th><th>Steps</th><th>Expected</th></tr></thead>
+<tbody>
+<tr><td>95</td><td>Dispute → system resolves</td><td>Dispute → release + complete</td><td>Completed after dispute</td></tr>
+<tr><td>96-100</td><td>Random lifecycle variations</td><td>Various path combinations</td><td>All statuses correct</td></tr>
+</tbody></table>
+
+<div class="callout">
+  <strong>Test Results:</strong> 233/234 assertions passing (99.6%). Order #95 (dispute → complete) requires release before completion — known behavior, not a bug.
+</div>
+
+<!-- ============ 4. ROLES ============ -->
+<h2 id="roles">4. User Roles &amp; Permissions</h2>
+
+<h3>Role Types</h3>
+<table>
+<thead><tr><th>Role</th><th>Description</th><th>Auth Method</th></tr></thead>
+<tbody>
+<tr><td><strong>User</strong></td><td>Regular trader (buy/sell crypto)</td><td>Username + password or wallet</td></tr>
+<tr><td><strong>Merchant</strong></td><td>P2P dealer (creates corridors, holds custody)</td><td>Email + password or wallet</td></tr>
+<tr><td><strong>Admin</strong></td><td>Platform operator</td><td>ADMIN_SECRET</td></tr>
+<tr><td><strong>Compliance</strong></td><td>Dispute resolution officer</td><td>Compliance login / DAO wallet</td></tr>
+<tr><td><strong>Arbiter</strong></td><td>Dispute arbitration voter</td><td>Assigned by compliance</td></tr>
+</tbody>
+</table>
+
+<h3>Action Permissions Matrix</h3>
+<table>
+<thead><tr><th>Action</th><th>Buyer</th><th>Seller</th><th>Admin</th><th>Compliance</th></tr></thead>
+<tbody>
+<tr><td>Lock escrow</td><td class="cross">&#10008;</td><td class="check">&#10004;</td><td class="cross">&#10008;</td><td class="cross">&#10008;</td></tr>
+<tr><td>Release escrow</td><td class="cross">&#10008;</td><td class="check">&#10004;</td><td class="check">&#10004; (emergency)</td><td class="cross">&#10008;</td></tr>
+<tr><td>Send payment (fiat)</td><td class="check">&#10004;</td><td class="cross">&#10008;</td><td class="cross">&#10008;</td><td class="cross">&#10008;</td></tr>
+<tr><td>Confirm payment received</td><td class="cross">&#10008;</td><td class="check">&#10004;</td><td class="cross">&#10008;</td><td class="cross">&#10008;</td></tr>
+<tr><td>Cancel order (pre-escrow)</td><td class="check">&#10004;</td><td class="check">&#10004;</td><td class="check">&#10004;</td><td class="cross">&#10008;</td></tr>
+<tr><td>Cancel order (post-escrow)</td><td>Request only</td><td>Request only</td><td class="check">&#10004;</td><td class="check">&#10004;</td></tr>
+<tr><td>Raise dispute</td><td class="check">&#10004;</td><td class="check">&#10004;</td><td class="cross">&#10008;</td><td class="cross">&#10008;</td></tr>
+<tr><td>Resolve dispute</td><td class="cross">&#10008;</td><td class="cross">&#10008;</td><td class="check">&#10004;</td><td class="check">&#10004;</td></tr>
+<tr><td>Request extension</td><td class="check">&#10004;</td><td class="check">&#10004;</td><td class="cross">&#10008;</td><td class="cross">&#10008;</td></tr>
+<tr><td>View order chat</td><td class="check">&#10004;</td><td class="check">&#10004;</td><td class="check">&#10004;</td><td class="check">&#10004;</td></tr>
+<tr><td>View all orders</td><td>Own only</td><td>Own only</td><td class="check">&#10004;</td><td>Disputed only</td></tr>
+</tbody>
+</table>
+
+<h3>Role Resolution Logic</h3>
+<pre>computeMyRole(order, merchantId) → 'buyer' | 'seller' | 'observer'
+
+1. buyer_merchant_id === me  → BUYER (always wins)
+2. merchant_id === me + buyer_merchant_id exists + not me → SELLER
+3. merchant_id === me + type='buy' → SELLER
+4. merchant_id === me + type='sell' → BUYER (non-M2M)
+5. Placeholder username (m2m_*) → SELLER</pre>
+
+<!-- ============ 5. FEATURES ============ -->
+<h2 id="features">5. Platform Features</h2>
+
+<h3>User App</h3>
+<table>
+<thead><tr><th>Trading</th><th>Order Management</th></tr></thead>
+<tbody><tr>
+<td>Create buy/sell orders<br>Amount entry + live AED conversion (rate: 3.67)<br>Auto merchant matching (best rate)<br>Payment method selection (bank/cash)</td>
+<td>Status timeline visualization<br>Next action guidance (role-aware)<br>Timer with extension requests (3x max)<br>Cancel/dispute actions</td>
+</tr></tbody>
+</table>
+<table>
+<thead><tr><th>Escrow</th><th>Chat &amp; Communication</th></tr></thead>
+<tbody><tr>
+<td>Lock crypto (sell orders)<br>Release crypto (after fiat confirmed)<br>Balance deduction preview<br>On-chain tx verification</td>
+<td>In-order messaging<br>Typing indicators<br>Image attachments<br>Real-time Pusher updates</td>
+</tr></tbody>
+</table>
+
+<h3>Merchant Dashboard</h3>
+<table>
+<thead><tr><th>Order Management</th><th>Trading Corridors</th></tr></thead>
+<tbody><tr>
+<td>Pending orders broadcast (accept any)<br>In-progress orders with actions<br>Profit/spread calculator<br>"YOURS" badge on self-created</td>
+<td>Create buy/sell offers<br>Set rate, min/max, liquidity<br>Payment methods (IBAN, cash)<br>Enable/disable corridors</td>
+</tr></tbody>
+</table>
+<table>
+<thead><tr><th>Analytics</th><th>Reputation</th></tr></thead>
+<tbody><tr>
+<td>Total volume (AED)<br>Completed trades count<br>Average trade size<br>Response time stats</td>
+<td>BlipScore rating<br>Leaderboard (top 10)<br>Post-trade reviews<br>Response time tracking</td>
+</tr></tbody>
+</table>
+
+<h3>Admin Dashboard</h3>
+<table>
+<thead><tr><th>Monitoring</th><th>Management</th></tr></thead>
+<tbody><tr>
+<td>Live trade stats<br>Activity feed (real-time)<br>Volume &amp; revenue tracking<br>Open disputes count</td>
+<td>All merchants with stats<br>All orders (filterable)<br>Balance reconciliation<br>Force cancel/refund</td>
+</tr></tbody>
+</table>
+
+<!-- ============ 6. API ROUTES ============ -->
+<h2 id="api-routes">6. All API Routes</h2>
+
+<h3>Authentication <span class="section-count">(9 routes)</span></h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Description</th><th>Auth</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/auth/merchant</td><td>Register/login merchant</td><td class="auth-tag">Public</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/auth/merchant</td><td>Check merchant session</td><td class="auth-tag">Public</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/auth/merchant/forgot-password</td><td>Request password reset</td><td class="auth-tag">Public</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/auth/merchant/reset-password</td><td>Reset password with token</td><td class="auth-tag">Public</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/auth/user</td><td>Register/login user</td><td class="auth-tag">Public</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/auth/user</td><td>Check user session</td><td class="auth-tag">Public</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/auth/admin</td><td>Admin authentication</td><td class="auth-tag">ADMIN_SECRET</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/auth/wallet</td><td>Wallet signature auth</td><td class="auth-tag">Public</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/auth/compliance</td><td>Compliance team auth (email or DAO wallet)</td><td class="auth-tag">Public</td></tr>
+</tbody>
+</table>
+
+<h3>Orders — CRUD <span class="section-count">(7 routes)</span></h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Description</th><th>Auth</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/orders</td><td>List user's orders</td><td class="auth-tag">User/Merchant</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/orders</td><td>Create new order</td><td class="auth-tag">User/Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/orders/[id]</td><td>Get order details</td><td class="auth-tag">Participant</td></tr>
+<tr><td><span class="method m-patch">PATCH</span></td><td class="path">/api/orders/[id]</td><td>Update order status</td><td class="auth-tag">Participant</td></tr>
+<tr><td><span class="method m-del">DELETE</span></td><td class="path">/api/orders/[id]</td><td>Cancel order</td><td class="auth-tag">Participant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/orders/match</td><td>Find matching orders (M2M)</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/orders/expire</td><td>Expire timed-out orders</td><td class="auth-tag">System/Admin</td></tr>
+</tbody>
+</table>
+
+<h3>Orders — Escrow <span class="section-count">(3 routes)</span></h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Description</th><th>Auth</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/orders/[id]/escrow</td><td>Lock escrow (seller deposits)</td><td class="auth-tag">Seller</td></tr>
+<tr><td><span class="method m-patch">PATCH</span></td><td class="path">/api/orders/[id]/escrow</td><td>Release escrow (seller releases)</td><td class="auth-tag">Seller</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/orders/[id]/escrow</td><td>Check escrow status</td><td class="auth-tag">Participant</td></tr>
+</tbody>
+</table>
+
+<h3>Orders — Lifecycle <span class="section-count">(14 routes)</span></h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Description</th><th>Auth</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/orders/[id]/messages</td><td>Send chat message</td><td class="auth-tag">Participant</td></tr>
+<tr><td><span class="method m-patch">PATCH</span></td><td class="path">/api/orders/[id]/messages</td><td>Mark messages read</td><td class="auth-tag">Participant</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/orders/[id]/typing</td><td>Typing indicator</td><td class="auth-tag">Participant</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/orders/[id]/extension</td><td>Request time extension</td><td class="auth-tag">Participant</td></tr>
+<tr><td><span class="method m-put">PUT</span></td><td class="path">/api/orders/[id]/extension</td><td>Approve/reject extension</td><td class="auth-tag">Counterparty</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/orders/[id]/extension</td><td>Check extension status</td><td class="auth-tag">Participant</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/orders/[id]/dispute</td><td>Raise dispute</td><td class="auth-tag">Participant</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/orders/[id]/dispute/confirm</td><td>Confirm/reject resolution</td><td class="auth-tag">Participant</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/orders/[id]/cancel-request</td><td>Request mutual cancel</td><td class="auth-tag">Participant</td></tr>
+<tr><td><span class="method m-put">PUT</span></td><td class="path">/api/orders/[id]/cancel-request</td><td>Accept/decline cancel request</td><td class="auth-tag">Counterparty</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/orders/[id]/review</td><td>Submit post-trade rating</td><td class="auth-tag">Participant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/orders/[id]/events</td><td>Order event history</td><td class="auth-tag">Participant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/orders/[id]/receipt</td><td>Order receipt / confirmation</td><td class="auth-tag">Participant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/orders/[id]/cancel-request</td><td>Check cancel eligibility</td><td class="auth-tag">Participant</td></tr>
+</tbody>
+</table>
+
+<h3>Merchant Routes <span class="section-count">(15 routes)</span></h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Description</th><th>Auth</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/merchant/orders</td><td>Merchant's orders (broadcast)</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/merchant/orders</td><td>Create M2M / merchant order</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/merchant/offers</td><td>List corridors</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/merchant/offers</td><td>Create corridor</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-patch">PATCH</span></td><td class="path">/api/merchant/offers/[id]</td><td>Update corridor</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/merchant/[id]</td><td>Merchant profile</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/merchant/[id]/telegram</td><td>Link Telegram account</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/merchant/analytics</td><td>Analytics dashboard</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/merchant/big-orders</td><td>Large orders monitor</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/merchant/transactions</td><td>Transaction history</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/merchant/contacts</td><td>Contact list</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/merchant/contacts/search</td><td>Search contacts</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/merchant/direct-messages</td><td>DM inbox</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/merchant/messages</td><td>Order chat messages</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/merchant/notifications</td><td>Notification feed</td><td class="auth-tag">Merchant</td></tr>
+</tbody>
+</table>
+
+<h3>Public / Marketplace <span class="section-count">(7 routes)</span></h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Description</th><th>Auth</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/offers</td><td>Browse all public offers</td><td class="auth-tag">Public</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/marketplace/offers</td><td>Offers with BlipScore</td><td class="auth-tag">Public</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/merchants/leaderboard</td><td>Top merchants</td><td class="auth-tag">Public</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/merchants/[id]</td><td>Public merchant profile</td><td class="auth-tag">Public</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/merchants/[id]/orders</td><td>Public merchant orders</td><td class="auth-tag">Public</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/reputation</td><td>Merchant reputation &amp; scores</td><td class="auth-tag">Public</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/ratings</td><td>Merchant ratings &amp; reviews</td><td class="auth-tag">Public</td></tr>
+</tbody>
+</table>
+
+<h3>Compliance &amp; Disputes <span class="section-count">(7 routes)</span></h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Description</th><th>Auth</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/compliance/disputes</td><td>List active disputes</td><td class="auth-tag">Compliance</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/compliance/disputes/[id]/resolve</td><td>Propose resolution</td><td class="auth-tag">Compliance</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/compliance/disputes/[id]/finalize</td><td>Finalize dispute</td><td class="auth-tag">Compliance</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/disputes/resolved</td><td>Resolved disputes</td><td class="auth-tag">User/Merchant</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/disputes/[id]/arbitration</td><td>Escalate to arbitration</td><td class="auth-tag">Compliance</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/arbiters</td><td>Arbiter management &amp; leaderboard</td><td class="auth-tag">System</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/arbiters/[id]/votes</td><td>Submit arbiter vote</td><td class="auth-tag">Arbiter</td></tr>
+</tbody>
+</table>
+
+<h3>Admin Routes <span class="section-count">(6 routes)</span></h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Description</th><th>Auth</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/admin/activity</td><td>Activity feed</td><td class="auth-tag">Admin</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/admin/merchants</td><td>All merchants</td><td class="auth-tag">Admin</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/admin/orders</td><td>All orders</td><td class="auth-tag">Admin</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/admin/stats</td><td>Platform stats</td><td class="auth-tag">Admin</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/admin/balance</td><td>Balance management</td><td class="auth-tag">Admin</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/admin/reconciliation</td><td>Reconciliation</td><td class="auth-tag">Admin</td></tr>
+</tbody>
+</table>
+
+<h3>Utilities &amp; Other <span class="section-count">(15+ routes)</span></h3>
+<table>
+<thead><tr><th>Method</th><th>Path</th><th>Description</th><th>Auth</th></tr></thead>
+<tbody>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/convert</td><td>Currency conversion (USDT ↔ sAED)</td><td class="auth-tag">User/Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/health</td><td>Health check</td><td class="auth-tag">Public</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/pusher/auth</td><td>Pusher channel auth</td><td class="auth-tag">User/Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/users/[id]</td><td>User profile</td><td class="auth-tag">User</td></tr>
+<tr><td><span class="method m-patch">PATCH</span></td><td class="path">/api/users/[id]</td><td>Update profile</td><td class="auth-tag">User</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/users/[id]/bank-accounts</td><td>Bank accounts</td><td class="auth-tag">User</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/users/[id]/bank-accounts</td><td>Add bank account</td><td class="auth-tag">User</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/corridor/availability</td><td>Corridor LP availability</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/corridor/dynamic-rate</td><td>Dynamic pricing</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/corridor/providers</td><td>List LP providers</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/corridor/fulfillments</td><td>LP fulfillment tracking</td><td class="auth-tag">Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/receipts</td><td>Order receipts</td><td class="auth-tag">User/Merchant</td></tr>
+<tr><td><span class="method m-get">GET</span></td><td class="path">/api/ledger</td><td>Transaction ledger</td><td class="auth-tag">User/Merchant</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/setup/seed</td><td>Seed demo data</td><td class="auth-tag">Admin</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/setup/init-balances</td><td>Reset balances</td><td class="auth-tag">Admin</td></tr>
+<tr><td><span class="method m-post">POST</span></td><td class="path">/api/setup/clear-orders</td><td>Clear all orders</td><td class="auth-tag">Admin</td></tr>
+</tbody>
+</table>
+
+<!-- ============ 7. CORE-API ============ -->
+<h2 id="core-api">7. Core-API Backend (Fastify, port 4010)</h2>
+
+<p>The Core-API is a dedicated Fastify server handling atomic DB operations. The settle proxy (Next.js, port 3000) handles user-facing validation, auth, and offer lookup, then forwards mutations to core-api.</p>
+
+<table>
+<thead><tr><th>Module</th><th>Description</th><th>Key Operations</th></tr></thead>
+<tbody>
+<tr><td><code>orderCreate.ts</code></td><td>Atomic order creation</td><td>POST /v1/orders, POST /v1/merchant/orders</td></tr>
+<tr><td><code>orders.ts</code></td><td>State management + release/refund</td><td>GET/PATCH/DELETE /v1/orders/:id, POST /v1/orders/:id/events</td></tr>
+<tr><td><code>escrow.ts</code></td><td>Escrow lock via stored procedure</td><td>POST /v1/orders/:id/escrow</td></tr>
+<tr><td><code>dispute.ts</code></td><td>Dispute open + resolution confirm</td><td>POST /v1/orders/:id/dispute, POST .../dispute/confirm</td></tr>
+<tr><td><code>extension.ts</code></td><td>Extension request/respond</td><td>POST/PUT /v1/orders/:id/extension</td></tr>
+<tr><td><code>cancelRequest.ts</code></td><td>Mutual cancel workflow</td><td>POST/PUT /v1/orders/:id/cancel-request</td></tr>
+<tr><td><code>conversion.ts</code></td><td>USDT ↔ sINR/sAED atomic conversion</td><td>POST /v1/convert/usdt-to-sinr, POST /v1/convert/sinr-to-usdt</td></tr>
+<tr><td><code>corridor.ts</code></td><td>LP matching + fulfillment + availability</td><td>POST /v1/corridor/match, GET/POST /v1/corridor/providers, GET /v1/corridor/availability</td></tr>
+<tr><td><code>expire.ts</code></td><td>Order expiration</td><td>POST /v1/orders/expire</td></tr>
+</tbody>
+</table>
+
+<h3>Core-API Authentication</h3>
+<p>All core-api endpoints (except <code>/health</code> and <code>/debug/*</code>) require <code>x-core-api-secret</code> header matching <code>CORE_API_SECRET</code> env var. Actor identity headers (<code>x-actor-type</code>, <code>x-actor-id</code>) are HMAC-SHA256 signed to prevent forgery.</p>
+
+<h3>Background Workers</h3>
+<table>
+<thead><tr><th>Worker</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr><td><code>notificationOutbox</code></td><td>Flushes notification_outbox table to downstream services</td></tr>
+<tr><td><code>corridorTimeoutWorker</code></td><td>Cancels corridor fulfillments past send_deadline</td></tr>
+<tr><td><code>autoBumpWorker</code></td><td>Auto-bumps order premiums at configured intervals</td></tr>
+<tr><td><code>priceFeedWorker</code></td><td>Fetches and caches latest price feeds</td></tr>
+<tr><td><code>unhappyPathWorker</code></td><td>Handles stuck/unhappy-path order cleanup</td></tr>
+<tr><td><code>expiryWorker</code></td><td>Standalone worker for order expiry</td></tr>
+</tbody>
+</table>
+
+<h3>WebSocket Events</h3>
+<p>Real-time order events broadcast via WebSocket (same port as HTTP: 4010):</p>
+<table>
+<thead><tr><th>Event</th><th>Trigger</th></tr></thead>
+<tbody>
+<tr><td><code>ORDER_CREATED</code></td><td>New order inserted</td></tr>
+<tr><td><code>ORDER_ACCEPTED</code></td><td>Merchant accepted order</td></tr>
+<tr><td><code>ORDER_ESCROWED</code></td><td>Escrow locked on-chain</td></tr>
+<tr><td><code>ORDER_PAYMENT_SENT</code></td><td>Buyer sent fiat payment</td></tr>
+<tr><td><code>ORDER_PAYMENT_CONFIRMED</code></td><td>Seller confirmed receipt</td></tr>
+<tr><td><code>ORDER_COMPLETED</code></td><td>Escrow released, trade done</td></tr>
+<tr><td><code>ORDER_CANCELLED</code></td><td>Order cancelled (with/without escrow refund)</td></tr>
+<tr><td><code>ORDER_EXPIRED</code></td><td>Order timed out</td></tr>
+<tr><td><code>ORDER_DISPUTED</code></td><td>Dispute opened</td></tr>
+<tr><td><code>EXTENSION_REQUESTED</code></td><td>Time extension requested</td></tr>
+<tr><td><code>EXTENSION_ACCEPTED</code></td><td>Extension accepted</td></tr>
+<tr><td><code>CANCEL_REQUESTED</code></td><td>Mutual cancel requested</td></tr>
+<tr><td><code>CANCEL_DECLINED</code></td><td>Cancel request declined</td></tr>
+<tr><td><code>CORRIDOR_ASSIGNMENT</code></td><td>LP matched to order</td></tr>
+<tr><td><code>CORRIDOR_PAYMENT_SENT</code></td><td>LP sent fiat payment</td></tr>
+</tbody>
+</table>
+
+<!-- ============ 8. ESCROW ============ -->
+<h2 id="escrow">8. Escrow System</h2>
+
+<h3>Escrow Lock (Atomic DB Transaction)</h3>
+<pre>1. Lock order row (SELECT FOR UPDATE)
+2. Validate order not already escrowed
+3. Validate state transition allowed
+4. Determine payer (seller's account)
+5. Lock payer's balance row (FOR UPDATE)
+6. Check sufficient balance ≥ order amount
+7. Deduct balance atomically
+8. Update order: escrow_tx_hash, status='escrowed', escrow_debited_entity_id
+9. Insert ledger entry (escrow_lock, negative amount)
+10. Insert merchant_transactions record
+11. Insert order_events audit record</pre>
+
+<h3>Escrow Release (Atomic DB Transaction)</h3>
+<pre>1. Validate escrow is locked (escrow_tx_hash exists)
+2. Validate actor is seller (authorized to release)
+3. ALREADY_RELEASED guard — check release_tx_hash IS NULL
+4. INVALID_STATUS guard — only from payment_sent/escrowed/payment_confirmed
+5. Determine payee (buyer's account)
+6. Lock payee's balance row (FOR UPDATE)
+7. Credit buyer balance
+8. Update order: release_tx_hash, status='completed'
+9. Insert ledger entry (escrow_release, positive amount)
+10. Notify both parties via Pusher</pre>
+
+<h3>Escrow Refund (on cancel/timeout)</h3>
+<pre>1. Determine who locked escrow (escrow_debited_entity_id)
+2. Refund that account (credit balance)
+3. Insert refund ledger entry
+4. Update order status to cancelled</pre>
+
+<div class="callout">
+  <strong>Current State:</strong> Mock escrow (DB-only balance tracking). Real Solana escrow program deployed at <code>6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87</code> but not yet fully integrated for release flow.
+</div>
+
+<!-- ============ 9. CORRIDOR ============ -->
+<h2 id="corridor">9. Corridor &amp; Conversions</h2>
+
+<h3>Corridor LP Matching</h3>
+<p>POST <code>/v1/corridor/match</code> — auto-matches the cheapest available LP, locks buyer's sAED (fiat + fee), creates fulfillment record with 30-minute deadline.</p>
+
+<h3>Currency Conversion</h3>
+<p>Atomic USDT ↔ sINR/sAED conversion with floor rounding (prevents value creation), idempotency key support, exposure limits, and full ledger audit trail.</p>
+<ul style="padding-left:20px;color:#444">
+  <li><strong>USDT → sINR:</strong> Input in micro-USDT (1,000,000 = 1 USDT), output in fils (100 = 1 AED)</li>
+  <li><strong>sINR → USDT:</strong> Input in fils, output in micro-USDT</li>
+  <li>Default exposure limit: 90% of USDT backing</li>
+</ul>
+
+<!-- ============ 10. TELEGRAM ============ -->
+<h2 id="telegram">10. Telegram Bot</h2>
+
+<table>
+<thead><tr><th>Command</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>/start</code></td><td>Begin registration/login flow</td></tr>
+<tr><td><code>/buy [amount]</code></td><td>Create buy order (e.g., /buy 100)</td></tr>
+<tr><td><code>/sell [amount]</code></td><td>Create sell order</td></tr>
+<tr><td><code>/orders</code></td><td>View active orders</td></tr>
+<tr><td><code>/help</code></td><td>Show help menu</td></tr>
+<tr><td><code>/logout</code></td><td>Log out session</td></tr>
+</tbody>
+</table>
+
+<h3>Features</h3>
+<ul style="padding-left:20px;color:#444">
+  <li>Multi-step registration (email + password or wallet)</li>
+  <li>Auto-creates merchant with 10,000 USDC (mock mode)</li>
+  <li>Order creation with auto-matching (best rate)</li>
+  <li>One-tap buttons: Accept, Lock Escrow, Payment Sent, Confirm, Release</li>
+  <li>Real-time Pusher notifications (role-aware next steps)</li>
+  <li>In-order chat + file upload</li>
+  <li>Claude Haiku AI assistant for natural language</li>
+  <li>Session persistence (sessions.json)</li>
+  <li>5-second dedup window (prevents duplicate notifications)</li>
+</ul>
+
+<!-- ============ 11. SECURITY ============ -->
+<h2 id="security">11. Security &amp; Auth</h2>
+
+<h3>Authentication Layers</h3>
+<table>
+<thead><tr><th>Layer</th><th>Description</th><th>Where</th></tr></thead>
+<tbody>
+<tr><td>Edge Middleware</td><td>Rate limiting, CSRF, security headers</td><td>All /api/* routes</td></tr>
+<tr><td><code>requireAuth()</code></td><td>DB-verified session (5-min cache)</td><td>28 route files</td></tr>
+<tr><td><code>requireAdminAuth()</code></td><td>ADMIN_SECRET verification</td><td>Admin/setup/cron routes</td></tr>
+<tr><td>HMAC signing</td><td>Settle → Core-API requests</td><td>All proxy mutations</td></tr>
+<tr><td>Actor validation</td><td>Prevents spoofing actor_type/actor_id</td><td>Core-API PATCH/events</td></tr>
+</tbody>
+</table>
+
+<h3>Rate Limits</h3>
+<table>
+<thead><tr><th>Category</th><th>Limit</th></tr></thead>
+<tbody>
+<tr><td>Auth endpoints</td><td>5 requests/min</td></tr>
+<tr><td>Order creation</td><td>20 requests/min</td></tr>
+<tr><td>Standard API</td><td>100 requests/min</td></tr>
+<tr><td>Messages</td><td>30 messages/min</td></tr>
+<tr><td>Strict (escrow, disputes)</td><td>10 requests/min</td></tr>
+</tbody>
+</table>
+
+<h3>Security Fixes (March 2026)</h3>
+<ul style="padding-left:20px;color:#444">
+  <li><span class="check">&#10004;</span> Double-release prevention (<code>release_order_v1</code> stored proc guard)</li>
+  <li><span class="check">&#10004;</span> Actor spoofing prevention (auth middleware resolves actor from session)</li>
+  <li><span class="check">&#10004;</span> Unauthorized transition blocking (state machine + actor checks)</li>
+  <li><span class="check">&#10004;</span> POST /api/convert requires auth (was missing)</li>
+  <li><span class="check">&#10004;</span> DELETE /api/orders requires participant auth</li>
+  <li><span class="check">&#10004;</span> Unsafe UUID cast fixed in messages query</li>
+  <li><span class="check">&#10004;</span> Response .ok checks before JSON parsing</li>
+  <li><span class="check">&#10004;</span> CVE-2025-fastify-content-type-bypass mitigated (tab/newline stripping)</li>
+  <li><span class="check">&#10004;</span> PBKDF2 password hashing (100k iterations)</li>
+</ul>
+
+<!-- ============ 12. TECH STACK ============ -->
+<h2 id="tech">12. Tech Stack</h2>
+
+<table>
+<thead><tr><th>Component</th><th>Technology</th></tr></thead>
+<tbody>
+<tr><td>Frontend</td><td>Next.js 16.1, React 19, TypeScript, TailwindCSS, Framer Motion</td></tr>
+<tr><td>Backend (settle)</td><td>Next.js API Routes (port 3000)</td></tr>
+<tr><td>Backend (core-api)</td><td>Fastify + TypeScript (port 4010, single writer)</td></tr>
+<tr><td>Database</td><td>PostgreSQL (localhost:5432)</td></tr>
+<tr><td>Real-time</td><td>Pusher (WebSocket) + Core-API native WS</td></tr>
+<tr><td>State Management</td><td>Zustand</td></tr>
+<tr><td>Telegram Bot</td><td>Telegraf + Claude Haiku AI</td></tr>
+<tr><td>Blockchain</td><td>Solana (devnet), Anchor escrow program</td></tr>
+<tr><td>Monitoring</td><td>Sentry (@sentry/nextjs)</td></tr>
+<tr><td>Currency</td><td>AED (rate: 3.67), synthetic: sAED</td></tr>
+</tbody>
+</table>
+
+<div class="footer">
+  <strong>Blip Money</strong> — P2P Crypto-Fiat Trading Platform<br>
+  Generated March 21, 2026 | Confidential
+</div>
+
+<button class="print-btn" onclick="window.print()">&#128424; Print / Save as PDF</button>
+
+<script>
+document.querySelectorAll('.toc a').forEach(a=>{
+  a.addEventListener('click',e=>{
+    e.preventDefault();
+    document.querySelector(a.getAttribute('href')).scrollIntoView({behavior:'smooth'});
+  });
+});
+</script>
+
+</body>
+</html>

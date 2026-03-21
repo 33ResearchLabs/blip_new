@@ -21,6 +21,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
   orders,
   onSelectOrder,
   onAction,
+  onOpenChat,
   formatTimeRemaining,
   getStatusBadge,
   getNextAction,
@@ -28,6 +29,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
   orders: any[];
   onSelectOrder: (order: any) => void;
   onAction?: (order: any, action: string) => void;
+  onOpenChat?: (order: any) => void;
   formatTimeRemaining: (seconds: number) => string;
   getStatusBadge: (order: any) => React.ReactNode;
   getNextAction: (order: any) => string;
@@ -222,10 +224,17 @@ const InProgressOrderList = memo(function InProgressOrderList({
 
                 {/* Unread Messages */}
                 {order.hasMessages && order.unreadCount > 0 && (
-                  <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-orange-400/80 font-medium">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onOpenChat) onOpenChat(order);
+                      else onSelectOrder(order);
+                    }}
+                    className="mt-1.5 flex items-center gap-1.5 text-[10px] text-orange-400/80 font-medium hover:text-orange-300 transition-colors w-full"
+                  >
                     <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-live-dot" />
                     {order.unreadCount} new message{order.unreadCount > 1 ? 's' : ''}
-                  </div>
+                  </button>
                 )}
               </div>
             </div>
@@ -236,7 +245,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
   );
 });
 
-export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction }: InProgressPanelProps) {
+export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction, onOpenChat }: InProgressPanelProps) {
   const formatTimeRemaining = (seconds: number): string => {
     if (seconds <= 0) return 'Expired';
     const hours = Math.floor(seconds / 3600);
@@ -288,6 +297,7 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
         orders={orders}
         onSelectOrder={onSelectOrder}
         onAction={onAction}
+        onOpenChat={onOpenChat}
         formatTimeRemaining={formatTimeRemaining}
         getStatusBadge={getStatusBadge}
         getNextAction={getNextAction}

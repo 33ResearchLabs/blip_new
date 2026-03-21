@@ -26,6 +26,7 @@ interface DirectChatViewProps {
   isTyping?: boolean;
   onSendMessage: (text: string, imageUrl?: string) => void;
   onBack: () => void;
+  orderStatus?: string;
 }
 
 function getUserEmoji(username: string): string {
@@ -56,6 +57,7 @@ export function DirectChatView({
   isTyping,
   onSendMessage,
   onBack,
+  orderStatus,
 }: DirectChatViewProps) {
   const [inputText, setInputText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -133,9 +135,11 @@ export function DirectChatView({
         const text = inputText.trim() || 'Photo';
         onSendMessage(text, result.secure_url);
         setInputText('');
+      } else {
+        console.error('[DirectChatView] Cloudinary upload failed:', uploadRes.status, await uploadRes.text().catch(() => ''));
       }
-    } catch {
-      // Upload failed silently
+    } catch (err) {
+      console.error('[DirectChatView] Image upload error:', err);
     } finally {
       setIsUploading(false);
       clearPendingImage();
@@ -225,7 +229,7 @@ export function DirectChatView({
                   {receiptData ? (
                     /* Receipt card — shown centered for both parties */
                     <div className="max-w-[90%] mx-auto my-2">
-                      <ReceiptCard data={receiptData} />
+                      <ReceiptCard data={receiptData} currentStatus={orderStatus} />
                       <span className="text-[9px] text-white/20 mt-1 block text-center font-mono">
                         {formatTime(msg.timestamp)}
                       </span>
@@ -358,15 +362,15 @@ export function DirectChatView({
           {/* Emoji button */}
           <button
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className="p-1.5 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] transition-colors"
+            className="w-7 h-7 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] transition-colors flex items-center justify-center"
             title="Emoji"
           >
-            <span className="text-xs">😊</span>
+            <span className="text-xs leading-none">😊</span>
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="p-1.5 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] transition-colors disabled:opacity-50"
+            className="w-7 h-7 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] transition-colors disabled:opacity-50 flex items-center justify-center"
             title="Attach image"
           >
             {isUploading ? (
@@ -397,7 +401,7 @@ export function DirectChatView({
               setShowEmojiPicker(false);
             }}
             disabled={!inputText.trim() && !pendingImage}
-            className={`p-1.5 rounded-lg border transition-colors disabled:opacity-20 ${
+            className={`w-7 h-7 rounded-lg border transition-colors disabled:opacity-20 flex items-center justify-center ${
               pendingImage
                 ? 'bg-orange-500/30 border-orange-500/40 text-orange-300 hover:bg-orange-500/40'
                 : 'bg-orange-500/20 border-orange-500/30 text-orange-400 hover:bg-orange-500/30'

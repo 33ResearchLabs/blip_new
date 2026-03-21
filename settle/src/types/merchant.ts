@@ -52,10 +52,12 @@ export interface DbOrder {
   is_my_order?: boolean;
   my_role?: 'buyer' | 'seller' | 'observer';
   payment_details?: {
-    user_bank_account?: string;
+    user_bank_account?: string | { bank_name: string; account_name: string; iban: string };
     bank_account_name?: string;
+    account_name?: string;
     bank_name?: string;
     bank_iban?: string;
+    iban?: string;
   };
   user?: {
     id: string;
@@ -67,7 +69,11 @@ export interface DbOrder {
   };
   offer?: {
     payment_method: string;
+    bank_name?: string;
+    bank_account_name?: string;
+    bank_iban?: string;
     location_name?: string;
+    location_address?: string;
   };
   cancellation_reason?: string;
   unread_count?: number;
@@ -106,6 +112,8 @@ export interface Order {
   userWallet?: string;
   orderType?: "buy" | "sell";
   userBankAccount?: string;
+  userBankDetails?: { bank_name: string; account_name: string; iban: string };
+  sellerBankDetails?: { bank_name: string; account_name: string; iban: string };
   isM2M?: boolean;
   buyerMerchantId?: string;
   buyerMerchantWallet?: string;

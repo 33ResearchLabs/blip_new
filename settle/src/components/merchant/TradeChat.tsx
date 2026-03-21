@@ -18,9 +18,12 @@ import {
   Timer,
   Loader2,
   MessageSquare,
-  Users
+  Users,
+  Paperclip,
+  X
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { BankInfoCard, EscrowCard, ReceiptCard, StatusEventCard, detectEventType } from '../chat/cards';
 
 // Message type from the chat system
@@ -254,16 +257,84 @@ export function TradeChat({
 }: TradeChatProps) {
   const [messageText, setMessageText] = useState('');
   const [activeChatTab, setActiveChatTab] = useState<'order' | 'direct'>('order');
+  const [isUploading, setIsUploading] = useState(false);
+  const [pendingImage, setPendingImage] = useState<{ file: File; previewUrl: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) return;
+    if (!file.type.startsWith('image/')) return;
+    const previewUrl = URL.createObjectURL(file);
+    setPendingImage({ file, previewUrl });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const clearPendingImage = () => {
+    if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
+    setPendingImage(null);
+  };
+
+  const uploadAndSend = async () => {
+    if (!pendingImage || !tradeInfo) return;
+    setIsUploading(true);
+    try {
+      const sigRes = await fetchWithAuth('/api/upload/signature', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: tradeInfo.orderId }),
+      });
+      if (!sigRes.ok) { setIsUploading(false); return; }
+      const sigData = await sigRes.json();
+      if (!sigData.success) { setIsUploading(false); return; }
+      const sig = sigData.data;
+
+      const formData = new FormData();
+      formData.append('file', pendingImage.file);
+      formData.append('signature', sig.signature);
+      formData.append('timestamp', sig.timestamp.toString());
+      formData.append('api_key', sig.apiKey);
+      formData.append('folder', sig.folder);
+
+      const uploadRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`,
+        { method: 'POST', body: formData }
+      );
+      if (uploadRes.ok) {
+        const result = await uploadRes.json();
+        const text = messageText.trim() || 'Photo';
+        onSendMessage(text, result.secure_url);
+        setMessageText('');
+      } else {
+        console.error('[TradeChat] Cloudinary upload failed:', uploadRes.status, await uploadRes.text().catch(() => ''));
+      }
+    } catch (err) {
+      console.error('[TradeChat] Image upload error:', err);
+    } finally {
+      setIsUploading(false);
+      clearPendingImage();
+    }
+  };
+
+  // Cleanup preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
+    };
+  }, [pendingImage]);
+
   const handleSend = () => {
-    if (messageText.trim()) {
+    if (pendingImage) {
+      uploadAndSend();
+    } else if (messageText.trim()) {
       onSendMessage(messageText.trim());
       setMessageText('');
     }
@@ -651,7 +722,7 @@ export function TradeChat({
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: index * 0.05 }}
                       >
-                        <ReceiptCard data={structuredData.data as Record<string, unknown>} />
+                        <ReceiptCard data={structuredData.data as Record<string, unknown>} currentStatus={tradeInfo?.status} />
                       </motion.div>
                     );
                   }
@@ -773,7 +844,7 @@ export function TradeChat({
                             transition={{ delay: msgIndex * 0.02 }}
                             className="max-w-[90%]"
                           >
-                            <ReceiptCard data={receiptData} />
+                            <ReceiptCard data={receiptData} currentStatus={tradeInfo?.status} />
                             <span className="text-[10px] text-gray-500 mt-1 block">
                               {formatTime(msg.timestamp)}
                             </span>
@@ -867,9 +938,49 @@ export function TradeChat({
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Image preview bar */}
+          {pendingImage && (
+            <div className="px-3 py-2 bg-[#0d0d0d] border-t border-white/[0.04] flex items-center gap-2">
+              <div className="relative">
+                <img
+                  src={pendingImage.previewUrl}
+                  alt="Preview"
+                  className="w-12 h-12 rounded-lg object-cover border border-white/[0.06]"
+                />
+                <button
+                  onClick={clearPendingImage}
+                  className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-neutral-700 flex items-center justify-center"
+                >
+                  <X className="w-2.5 h-2.5 text-white" />
+                </button>
+              </div>
+              <span className="text-[11px] text-white/30">Ready to send</span>
+            </div>
+          )}
+
           {/* Input area */}
           <div className="p-3 bg-[#0d0d0d] border-t border-white/[0.04]">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
             <div className="flex gap-2">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="w-12 h-12 rounded-xl bg-[#1f1f1f] flex items-center justify-center
+                           disabled:opacity-50 transition-opacity hover:bg-[#2a2a2a]"
+                title="Attach image"
+              >
+                {isUploading ? (
+                  <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                ) : (
+                  <Paperclip className="w-5 h-5 text-gray-400" />
+                )}
+              </button>
               <input
                 ref={inputRef}
                 data-testid="chat-input"
@@ -877,7 +988,7 @@ export function TradeChat({
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type a message..."
+                placeholder={pendingImage ? "Add a caption..." : "Type a message..."}
                 className="flex-1 bg-[#1f1f1f] rounded-xl px-4 py-3 outline-none text-sm
                            text-white placeholder:text-gray-500 focus:ring-1 focus:ring-orange-500/50"
               />
@@ -885,11 +996,17 @@ export function TradeChat({
                 data-testid="chat-send"
                 whileTap={{ scale: 0.95 }}
                 onClick={handleSend}
-                disabled={!messageText.trim()}
-                className="w-12 h-12 rounded-xl bg-orange-500 flex items-center justify-center
-                           disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                disabled={!messageText.trim() && !pendingImage}
+                className={`w-12 h-12 rounded-xl flex items-center justify-center
+                           disabled:opacity-50 disabled:cursor-not-allowed transition-opacity ${
+                             pendingImage ? 'bg-orange-600' : 'bg-orange-500'
+                           }`}
               >
-                <Send className="w-5 h-5 text-black" />
+                {isUploading ? (
+                  <Loader2 className="w-5 h-5 text-black animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5 text-black" />
+                )}
               </motion.button>
             </div>
           </div>

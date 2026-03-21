@@ -95,8 +95,38 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
           : (dbOrder.acceptor_wallet_address || dbOrder.buyer_wallet_address || dbOrder.user?.wallet_address)),
     orderType: dbOrder.type,
     userBankAccount: dbOrder.payment_details
-      ? `${dbOrder.payment_details.user_bank_account || dbOrder.payment_details.bank_account_name || 'Unknown'} - ${dbOrder.payment_details.bank_name || 'Unknown Bank'} (${dbOrder.payment_details.bank_iban || 'No IBAN'})`
+      ? (() => {
+          const uba = dbOrder.payment_details.user_bank_account;
+          // Structured bank details (new format)
+          if (uba && typeof uba === 'object' && (uba as Record<string, unknown>).bank_name) {
+            const structured = uba as Record<string, string>;
+            return `${structured.account_name || 'Unknown'} - ${structured.bank_name || 'Unknown Bank'} (${structured.iban || 'No IBAN'})`;
+          }
+          // Plain string (legacy format)
+          if (uba && typeof uba === 'string') {
+            return uba;
+          }
+          // Fallback to merchant bank details
+          return `${dbOrder.payment_details.bank_account_name || 'Unknown'} - ${dbOrder.payment_details.bank_name || 'Unknown Bank'} (${dbOrder.payment_details.bank_iban || 'No IBAN'})`;
+        })()
       : undefined,
+    userBankDetails: dbOrder.payment_details?.user_bank_account && typeof dbOrder.payment_details.user_bank_account === 'object'
+      ? dbOrder.payment_details.user_bank_account as { bank_name: string; account_name: string; iban: string }
+      : undefined,
+    // Seller/merchant's bank details from the offer (for buyer to send fiat)
+    sellerBankDetails: dbOrder.payment_details && dbOrder.payment_details.bank_name
+      ? {
+          bank_name: dbOrder.payment_details.bank_name as string,
+          account_name: (dbOrder.payment_details.bank_account_name || dbOrder.payment_details.account_name) as string,
+          iban: (dbOrder.payment_details.bank_iban || dbOrder.payment_details.iban) as string,
+        }
+      : (dbOrder.offer?.bank_name
+        ? {
+            bank_name: dbOrder.offer.bank_name as string,
+            account_name: dbOrder.offer.bank_account_name as string,
+            iban: dbOrder.offer.bank_iban as string,
+          }
+        : undefined),
     isM2M,
     buyerMerchantId: dbOrder.buyer_merchant_id,
     buyerMerchantWallet: dbOrder.buyer_merchant?.wallet_address,

@@ -5,6 +5,7 @@ import type { Screen, TradeType, TradePreference, PaymentMethod, Order, Offer, D
 import { mapDbOrderToUI } from "@/components/user/screens/helpers";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { showAlert } from '@/context/ModalContext';
+import type { SelectedBankDetails } from '@/components/user/BankAccountSelector';
 
 interface UseUserTradeCreationParams {
   userId: string | null;
@@ -43,7 +44,7 @@ export function useUserTradeCreation({
   const [escrowTxStatus, setEscrowTxStatus] = useState<'idle' | 'connecting' | 'signing' | 'confirming' | 'recording' | 'success' | 'error'>('idle');
   const [escrowTxHash, setEscrowTxHash] = useState<string | null>(null);
   const [escrowError, setEscrowError] = useState<string | null>(null);
-  const [userBankAccount, setUserBankAccount] = useState('');
+  const [selectedBankDetails, setSelectedBankDetails] = useState<SelectedBankDetails | null>(null);
 
   const startTrade = async () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -420,7 +421,7 @@ export function useUserTradeCreation({
           escrow_trade_pda: escrowResult.tradePda,
           escrow_pda: escrowResult.escrowPda,
           escrow_trade_id: escrowResult.tradeId,
-          user_bank_account: userBankAccount,
+          user_bank_account: selectedBankDetails ? JSON.stringify(selectedBankDetails) : undefined,
         }),
       });
       const orderData = await orderRes.json();
@@ -495,7 +496,7 @@ export function useUserTradeCreation({
     escrowTxStatus, setEscrowTxStatus,
     escrowTxHash,
     escrowError, setEscrowError,
-    userBankAccount, setUserBankAccount,
+    selectedBankDetails, setSelectedBankDetails,
     startTrade,
     confirmCashOrder,
     confirmEscrow,

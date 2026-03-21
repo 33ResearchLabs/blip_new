@@ -14,6 +14,7 @@ import {
 import { UserBadge } from "@/components/merchant/UserBadge";
 import { ActionPulse } from "@/components/NotificationToast";
 import type { Order } from "@/types/merchant";
+import { CopyableBankDetails } from "@/components/shared/CopyableBankDetails";
 
 export interface MobileEscrowViewProps {
   ongoingOrders: Order[];
@@ -116,11 +117,27 @@ export function MobileEscrowView({
                       {order.total.toLocaleString()} <span className="text-gray-600">AED</span>
                     </span>
                   </div>
-                  {mobileCanMarkPaid && order.userBankAccount && (
-                    <div className="mt-1 text-[10px] text-white/50 font-mono truncate">
-                      &rarr; {order.userBankAccount}
-                    </div>
-                  )}
+                  {mobileCanMarkPaid && (() => {
+                    // Show seller's bank details (from offer) for M2M, or user's bank for U2M
+                    const bankDetails = order.sellerBankDetails || order.userBankDetails;
+                    if (bankDetails) {
+                      return (
+                        <div className="mt-1.5 text-[10px] text-white/50 font-mono space-y-0.5">
+                          <div className="truncate">&rarr; {bankDetails.bank_name}</div>
+                          <div className="truncate">{bankDetails.account_name}</div>
+                          <div className="truncate">{bankDetails.iban}</div>
+                        </div>
+                      );
+                    }
+                    if (order.userBankAccount) {
+                      return (
+                        <div className="mt-1 text-[10px] text-white/50 font-mono truncate">
+                          &rarr; {order.userBankAccount}
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
                 <div className="flex items-center gap-1.5 text-white/70">

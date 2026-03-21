@@ -25,9 +25,12 @@ interface OrderDetails {
   payment_details?: {
     bank_name?: string;
     account_name?: string;
+    bank_account_name?: string;
     iban?: string;
+    bank_iban?: string;
     location_name?: string;
     location_address?: string;
+    user_bank_account?: string | { bank_name: string; account_name: string; iban: string };
   };
   escrow_tx_hash?: string;
   escrow_address?: string;
@@ -112,7 +115,7 @@ interface OrderDetails {
 interface OrderDetailsPanelProps {
   orderId: string;
   onClose: () => void;
-  onOpenChat?: (orderId: string, username: string, emoji: string) => void;
+  onOpenChat?: (orderId: string, targetId?: string, targetType?: 'user' | 'merchant', targetName?: string) => void;
   onConfirmPayment?: (orderId: string) => void;
   onMarkPaymentSent?: (orderId: string) => void;
   onAcceptOrder?: (orderId: string) => void;
@@ -233,8 +236,28 @@ export function OrderDetailsPanel({
 
   const handleOpenChat = () => {
     if (order && onOpenChat) {
-      const username = order.user?.username || order.user?.name || 'User';
-      onOpenChat(order.id, username, '🦊');
+      const isM2M = !!order.buyer_merchant;
+      const isBuyer = order.merchant_id === merchantId && order.type === 'sell';
+      let targetId: string | undefined;
+      let targetType: 'user' | 'merchant' = 'user';
+      let targetName = order.user?.name || order.user?.username || 'User';
+
+      if (isM2M) {
+        if (isBuyer && order.buyer_merchant) {
+          targetId = order.buyer_merchant.id;
+          targetType = 'merchant';
+          targetName = order.buyer_merchant.display_name || order.buyer_merchant.business_name || 'Merchant';
+        } else if (order.merchant) {
+          targetId = order.merchant.id;
+          targetType = 'merchant';
+          targetName = order.merchant.display_name || order.merchant.business_name || 'Merchant';
+        }
+      } else {
+        targetId = order.user?.id;
+        targetType = 'user';
+      }
+
+      onOpenChat(order.id, targetId, targetType, targetName);
     }
   };
 
@@ -267,7 +290,7 @@ export function OrderDetailsPanel({
 
   const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
   const StatusIcon = statusConfig.icon;
-  const username = order.user?.username || order.user?.name || 'User';
+  const username = order.user?.name || order.user?.username || 'User';
 
   // Determine buyer and seller based on order type and M2M status
   const isBuyOrder = order.type === 'buy';
@@ -278,14 +301,14 @@ export function OrderDetailsPanel({
   const buyerName = isM2M
     ? (order.buyer_merchant?.display_name || order.buyer_merchant?.business_name || 'Merchant')
     : (isBuyOrder
-        ? (order.user?.username || order.user?.name || 'User')
+        ? (order.user?.name || order.user?.username || 'User')
         : (order.merchant?.display_name || order.merchant?.business_name || 'Merchant'));
 
   const sellerName = isM2M
     ? (order.merchant?.display_name || order.merchant?.business_name || 'Merchant')
     : (isBuyOrder
         ? (order.merchant?.display_name || order.merchant?.business_name || 'Merchant')
-        : (order.user?.username || order.user?.name || 'User'));
+        : (order.user?.name || order.user?.username || 'User'));
 
   const buyerWallet = isM2M
     ? order.buyer_merchant?.wallet_address
@@ -472,30 +495,80 @@ export function OrderDetailsPanel({
             </button>
             {showBankDetails && (
               order.payment_method === 'bank' ? (
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-white/50">Bank</span>
-                    <span className="text-white">{order.offer?.bank_name || order.payment_details?.bank_name || '-'}</span>
+                <div className="space-y-3">
+                  {/* Merchant/Offer Bank Details */}
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-white/30 uppercase tracking-wide font-medium">Merchant Bank</p>
+                    {[
+                      { label: 'Bank', value: order.offer?.bank_name || order.payment_details?.bank_name, key: 'merchant_bank' },
+                      { label: 'Account Name', value: order.offer?.bank_account_name || order.payment_details?.bank_account_name || order.payment_details?.account_name, key: 'merchant_name' },
+                      { label: 'IBAN', value: order.offer?.bank_iban || order.payment_details?.bank_iban || order.payment_details?.iban, key: 'merchant_iban', mono: true },
+                    ].map(({ label, value, key, mono }) => (
+                      <div key={key} className="flex justify-between items-center">
+                        <span className="text-white/50">{label}</span>
+                        {value ? (
+                          <button
+                            onClick={() => handleCopy(value, key)}
+                            className="flex items-center gap-1 text-white hover:text-white/70 transition-colors"
+                          >
+                            <span className={mono ? 'font-mono' : ''}>{value}</span>
+                            {copiedField === key ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-white/30" />}
+                          </button>
+                        ) : (
+                          <span className="text-white/30">-</span>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/50">Account Name</span>
-                    <span className="text-white">{order.offer?.bank_account_name || order.payment_details?.account_name || '-'}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-white/50">IBAN</span>
-                    <button
-                      onClick={() => {
-                        const iban = order.offer?.bank_iban || order.payment_details?.iban;
-                        if (iban) handleCopy(iban, 'iban');
-                      }}
-                      className="flex items-center gap-1 text-white hover:text-white/70 transition-colors"
-                    >
-                      {order.offer?.bank_iban || order.payment_details?.iban || '-'}
-                      {(order.offer?.bank_iban || order.payment_details?.iban) && (
-                        copiedField === 'iban' ? <Check className="w-3 h-3 text-white/70" /> : <Copy className="w-3 h-3" />
-                      )}
-                    </button>
-                  </div>
+
+                  {/* User Bank Details (for sell orders — where merchant sends fiat) */}
+                  {order.payment_details?.user_bank_account && (() => {
+                    const uba = order.payment_details!.user_bank_account!;
+                    const isStructured = typeof uba === 'object' && 'bank_name' in uba;
+                    if (isStructured) {
+                      const details = uba as { bank_name: string; account_name: string; iban: string };
+                      return (
+                        <div className="space-y-2 pt-3 border-t border-white/[0.06]">
+                          <p className="text-[11px] text-white/30 uppercase tracking-wide font-medium">User Bank (Send AED here)</p>
+                          {[
+                            { label: 'Bank', value: details.bank_name, key: 'user_bank' },
+                            { label: 'Account Name', value: details.account_name, key: 'user_name' },
+                            { label: 'IBAN', value: details.iban, key: 'user_iban', mono: true },
+                          ].map(({ label, value, key, mono }) => (
+                            <div key={key} className="flex justify-between items-center">
+                              <span className="text-white/50">{label}</span>
+                              {value ? (
+                                <button
+                                  onClick={() => handleCopy(value, key)}
+                                  className="flex items-center gap-1 text-white hover:text-white/70 transition-colors"
+                                >
+                                  <span className={mono ? 'font-mono' : ''}>{value}</span>
+                                  {copiedField === key ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-white/30" />}
+                                </button>
+                              ) : (
+                                <span className="text-white/30">-</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
+                    // Legacy plain string
+                    return (
+                      <div className="pt-3 border-t border-white/[0.06]">
+                        <p className="text-[11px] text-white/30 uppercase tracking-wide font-medium mb-2">User Bank (Send AED here)</p>
+                        <div className="flex justify-between items-center">
+                          <span className="text-white font-mono text-sm">{uba as string}</span>
+                          <button
+                            onClick={() => handleCopy(uba as string, 'user_bank_legacy')}
+                            className="p-1 rounded hover:bg-white/10"
+                          >
+                            {copiedField === 'user_bank_legacy' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-white/30" />}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="space-y-2">

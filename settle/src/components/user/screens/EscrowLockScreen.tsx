@@ -9,9 +9,9 @@ import {
   Lock,
   Clock,
   ExternalLink,
-  Banknote,
 } from "lucide-react";
 import type { Screen } from "./types";
+import { BankAccountSelector, type SelectedBankDetails } from "@/components/user/BankAccountSelector";
 
 export interface EscrowLockScreenProps {
   setScreen: (s: Screen) => void;
@@ -25,8 +25,9 @@ export interface EscrowLockScreenProps {
   setEscrowError: (e: string | null) => void;
   isLoading: boolean;
   confirmEscrow: () => void;
-  userBankAccount: string;
-  setUserBankAccount: (v: string) => void;
+  selectedBankDetails: SelectedBankDetails | null;
+  setSelectedBankDetails: (v: SelectedBankDetails | null) => void;
+  userId: string | null;
   setShowWalletModal: (v: boolean) => void;
   onConnectWallet?: () => void;
   solanaWallet: {
@@ -51,8 +52,9 @@ export const EscrowLockScreen = ({
   setEscrowError,
   isLoading,
   confirmEscrow,
-  userBankAccount,
-  setUserBankAccount,
+  selectedBankDetails,
+  setSelectedBankDetails,
+  userId,
   setShowWalletModal,
   onConnectWallet,
   solanaWallet,
@@ -133,18 +135,12 @@ export const EscrowLockScreen = ({
             </div>
           </div>
 
-          {/* Bank Account Note */}
-          <div className="w-full bg-neutral-900 rounded-2xl p-3">
-            <div className="flex items-center gap-2 mb-2">
-              <Banknote className="w-4 h-4 text-neutral-500" />
-              <span className="text-[12px] text-neutral-500">Payment details for merchant</span>
-            </div>
-            <textarea
-              value={userBankAccount}
-              onChange={(e) => setUserBankAccount(e.target.value)}
-              placeholder="Enter your bank IBAN or payment details..."
-              rows={2}
-              className="w-full bg-neutral-800 rounded-lg px-3 py-2 text-[13px] text-white placeholder:text-neutral-600 outline-none focus:ring-1 focus:ring-orange-500 resize-none"
+          {/* Bank Account Selector */}
+          <div className="w-full mt-2">
+            <BankAccountSelector
+              userId={userId}
+              selected={selectedBankDetails}
+              onSelect={setSelectedBankDetails}
             />
           </div>
 

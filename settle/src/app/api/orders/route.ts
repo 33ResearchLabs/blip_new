@@ -162,14 +162,28 @@ export async function POST(request: NextRequest) {
 
     // Build payment details snapshot
     // For sell orders, include user's bank account where merchant will send fiat
+    // user_bank_account may be a JSON string with structured details or a plain text string
+    let parsedUserBank: Record<string, string> | string | undefined;
+    if (type === 'sell' && user_bank_account) {
+      try {
+        const parsed = JSON.parse(user_bank_account);
+        if (parsed && typeof parsed === 'object' && parsed.bank_name) {
+          parsedUserBank = parsed;
+        } else {
+          parsedUserBank = user_bank_account;
+        }
+      } catch {
+        parsedUserBank = user_bank_account;
+      }
+    }
+
     const paymentDetails =
       offer.payment_method === 'bank'
         ? {
             bank_name: offer.bank_name,
             bank_account_name: offer.bank_account_name,
             bank_iban: offer.bank_iban,
-            // User's bank for sell orders (where merchant sends fiat)
-            user_bank_account: type === 'sell' ? user_bank_account : undefined,
+            user_bank_account: parsedUserBank,
           }
         : {
             location_name: offer.location_name,
@@ -177,7 +191,7 @@ export async function POST(request: NextRequest) {
             location_lat: offer.location_lat,
             location_lng: offer.location_lng,
             meeting_instructions: offer.meeting_instructions,
-            user_bank_account: type === 'sell' ? user_bank_account : undefined,
+            user_bank_account: parsedUserBank,
           };
 
     // Forward to core-api (single writer for all mutations)

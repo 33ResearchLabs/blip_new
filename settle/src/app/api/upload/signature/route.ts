@@ -25,7 +25,8 @@ export async function POST(request: NextRequest) {
     const { folder = 'blip/chat', orderId } = body;
 
     // Validate Cloudinary is configured
-    if (!process.env.CLOUDINARY_API_SECRET || !process.env.CLOUDINARY_API_KEY) {
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME;
+    if (!process.env.CLOUDINARY_API_SECRET || !process.env.CLOUDINARY_API_KEY || !cloudName) {
       return NextResponse.json(
         { success: false, error: 'Cloudinary not configured' },
         { status: 500 }
@@ -38,11 +39,10 @@ export async function POST(request: NextRequest) {
     // Build folder path with order ID if provided
     const uploadFolder = orderId ? `${folder}/${orderId}` : folder;
 
-    // Parameters to sign
-    const params = {
+    // Parameters to sign — must match exactly what the client sends in the upload FormData
+    const params: Record<string, string | number> = {
       timestamp,
       folder: uploadFolder,
-      upload_preset: 'blip_chat', // Optional: create this preset in Cloudinary dashboard
     };
 
     // Generate signature
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       data: {
         signature,
         timestamp,
-        cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+        cloudName,
         apiKey: process.env.CLOUDINARY_API_KEY,
         folder: uploadFolder,
       },
