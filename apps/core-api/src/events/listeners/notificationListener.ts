@@ -6,7 +6,7 @@
  */
 import { orderBus, ORDER_EVENT, type OrderEventPayload } from '../orderEvents';
 import { bufferEvent, bufferNotification, bufferReputation } from '../../batchWriter';
-import { getTransitionEventType, normalizeStatus, logger } from 'settlement-core';
+import { getTransitionEventType, normalizeStatus, logger, query as dbQuery } from 'settlement-core';
 
 export function registerNotificationListener(): void {
   // Buffer event + notification on every status change
@@ -67,12 +67,13 @@ export function registerNotificationListener(): void {
 
   // Stats update on completion
   orderBus.safeOn(ORDER_EVENT.COMPLETED, (p: OrderEventPayload) => {
-    const { query: dbQuery } = require('settlement-core');
     dbQuery(
       `WITH u AS (UPDATE users SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $2 RETURNING 1)
        UPDATE merchants SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $3`,
       [p.order.fiat_amount, p.userId, p.merchantId]
-    ).catch(() => {});
+    ).catch((err) => {
+      logger.error('[NotificationListener] Stats update failed', { orderId: p.orderId, error: String(err) });
+    });
   });
 
   logger.info('[NotificationListener] Registered');

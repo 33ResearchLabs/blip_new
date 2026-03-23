@@ -40,7 +40,8 @@ export function registerReceiptListener(): void {
 
   // Update receipt on payment_sent
   orderBus.safeOn(ORDER_EVENT.PAYMENT_SENT, (p: OrderEventPayload) => {
-    enqueueUpdateReceipt(p.orderId, 'payment_sent', { payment_sent_at: true });
+    enqueueUpdateReceipt(p.orderId, 'payment_sent', { payment_sent_at: true })
+      ?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue payment_sent update', { orderId: p.orderId, error: String(err) }));
   });
 
   // Update receipt on completed (with release tx hash)
@@ -48,7 +49,7 @@ export function registerReceiptListener(): void {
     enqueueUpdateReceipt(p.orderId, 'completed', {
       release_tx_hash: p.txHash ?? null,
       completed_at: true,
-    });
+    })?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue completed update', { orderId: p.orderId, error: String(err) }));
   });
 
   // Update receipt on cancelled (with optional refund tx hash)
@@ -56,21 +57,23 @@ export function registerReceiptListener(): void {
     enqueueUpdateReceipt(p.orderId, 'cancelled', {
       refund_tx_hash: p.refundTxHash ?? null,
       cancelled_at: true,
-    });
+    })?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue cancelled update', { orderId: p.orderId, error: String(err) }));
   });
 
   // Update receipt on expired
   orderBus.safeOn(ORDER_EVENT.EXPIRED, (p: OrderEventPayload) => {
     // Only accepted+ orders have receipts; pending orders do not
     if (p.previousStatus !== 'pending') {
-      enqueueUpdateReceipt(p.orderId, 'expired', { expired_at: true });
+      enqueueUpdateReceipt(p.orderId, 'expired', { expired_at: true })
+        ?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue expired update', { orderId: p.orderId, error: String(err) }));
     }
   });
 
   // Generic handler for transitions handled by the general TX path
   // (escrowed, etc. — anything not caught by a specific listener above)
   orderBus.safeOn(ORDER_EVENT.ESCROWED, (p: OrderEventPayload) => {
-    enqueueUpdateReceipt(p.orderId, 'escrowed', { escrowed_at: true });
+    enqueueUpdateReceipt(p.orderId, 'escrowed', { escrowed_at: true })
+      ?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue escrowed update', { orderId: p.orderId, error: String(err) }));
   });
 
   logger.info('[ReceiptListener] Registered');
