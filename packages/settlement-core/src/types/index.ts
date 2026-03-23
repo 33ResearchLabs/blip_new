@@ -5,6 +5,7 @@ export type KycStatus = 'none' | 'pending' | 'verified' | 'rejected';
 export type MerchantStatus = 'pending' | 'active' | 'suspended' | 'banned';
 export type OfferType = 'buy' | 'sell';
 export type PaymentMethod = 'bank' | 'cash';
+export type PaymentMethodType = 'bank' | 'upi' | 'cash' | 'other';
 export type RateType = 'fixed' | 'market_margin';
 export type OrderStatus =
   | 'pending'
@@ -165,6 +166,8 @@ export interface Order {
   protocol_fee_amount: number | null;
   // Optimistic locking / versioning
   order_version: number;
+  // Payment method (fiat receiver's selected method)
+  payment_method_id: string | null;
   // API minimal status (derived)
   minimal_status?: MinimalOrderStatus;
 }
@@ -203,6 +206,17 @@ export interface UserBankAccount {
   is_default: boolean;
   is_verified: boolean;
   created_at: Date;
+}
+
+export interface UserPaymentMethod {
+  id: string;
+  user_id: string;
+  type: PaymentMethodType;
+  label: string;
+  details: Record<string, string>;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
 }
 
 export interface Review {

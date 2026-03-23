@@ -441,7 +441,7 @@ export function useUserOrderActions({
     }
   }, [activeOrder?.id, activeOrder?.status, activeOrder?.dbStatus, fetchDisputeInfo]);
 
-  const requestExtension = async () => {
+  const requestExtension = async (durationMinutes?: number) => {
     if (!activeOrder || !userId) return;
 
     setRequestingExtension(true);
@@ -452,6 +452,7 @@ export function useUserOrderActions({
         body: JSON.stringify({
           actor_type: 'user',
           actor_id: userId,
+          ...(durationMinutes ? { duration_minutes: durationMinutes } : {}),
         }),
       });
 

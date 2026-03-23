@@ -226,6 +226,8 @@ export default function Home() {
               userId={auth.userId}
               startTrade={tradeCreation.startTrade}
               solanaWallet={solanaWallet}
+              selectedPaymentMethodId={tradeCreation.selectedPaymentMethod?.id || null}
+              onSelectPaymentMethod={tradeCreation.setSelectedPaymentMethod}
             />
           </Panel>
         )}

@@ -11,6 +11,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { useMerchantStore } from '@/stores/merchantStore';
+import { MerchantNavbar } from '@/components/merchant/MerchantNavbar';
 
 type Tab = 'outbox' | 'stuck' | 'workers' | 'search';
 
@@ -24,6 +26,32 @@ export default function OpsPage() {
   const [adminSecret, setAdminSecret] = useState('');
   const [needsAuth, setNeedsAuth] = useState(false);
   const [secretInput, setSecretInput] = useState('');
+
+  const storeMerchantInfo = useMerchantStore(s => s.merchantInfo);
+  const setMerchantInfo = useMerchantStore(s => s.setMerchantInfo);
+  const [localMerchantInfo, setLocalMerchantInfo] = useState<any>(null);
+
+  // Restore merchant info from localStorage (store may be empty if navigated directly to /ops)
+  useEffect(() => {
+    if (storeMerchantInfo) {
+      setLocalMerchantInfo(storeMerchantInfo);
+      return;
+    }
+    try {
+      const saved = localStorage.getItem('blip_merchant');
+      if (saved) {
+        const merchant = JSON.parse(saved);
+        if (merchant?.id) {
+          setLocalMerchantInfo(merchant);
+          setMerchantInfo(merchant);
+        }
+      }
+    } catch {}
+  }, [storeMerchantInfo, setMerchantInfo]);
+
+  const merchantInfo = localMerchantInfo || storeMerchantInfo;
+  // If a merchant is logged in and on the ops page, they have access — show navbar
+  const isMerchant = !!merchantInfo?.id;
 
   // Restore admin secret from sessionStorage
   useEffect(() => {
@@ -40,9 +68,11 @@ export default function OpsPage() {
       if (currentTab === 'search' && orderId) {
         params.set('order_id', orderId);
       }
-      const res = await fetchWithAuth(`/api/ops?${params}`, {
-        headers: { 'x-admin-secret': secret },
-      });
+      // fetchWithAuth injects x-merchant-id automatically if merchant is logged in.
+      // Also send admin secret header if available (admin flow).
+      const headers: Record<string, string> = {};
+      if (secret) headers['x-admin-secret'] = secret;
+      const res = await fetchWithAuth(`/api/ops?${params}`, { headers });
       if (res.status === 404) {
         setNeedsAuth(true);
         setBlocked(true);
@@ -124,6 +154,11 @@ export default function OpsPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
+      {/* Merchant Navbar (only if merchant with ops access) */}
+      {isMerchant && (
+        <MerchantNavbar activePage="ops" merchantInfo={merchantInfo} />
+      )}
+
       {/* Header */}
       <div className="border-b border-white/10 px-6 py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">

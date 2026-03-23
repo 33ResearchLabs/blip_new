@@ -87,6 +87,7 @@ export interface Merchant {
   sinr_balance: number; // Synthetic INR balance in paisa (100 paisa = 1 INR)
   max_sinr_exposure: number | null; // Maximum sINR allowed (NULL = unlimited)
   synthetic_rate: number; // Conversion rate: 1 USDT = X INR
+  has_ops_access: boolean; // Whether merchant can access /ops debug page
   created_at: Date;
   updated_at: Date;
 }

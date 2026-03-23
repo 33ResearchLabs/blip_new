@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Clock, Check } from "lucide-react";
+import { Clock, Check, Flame } from "lucide-react";
 import { HomeAmbientGlow } from "./HomeDecorations";
 import { BottomNav } from "./BottomNav";
 import type { Screen, Order } from "./types";
@@ -100,8 +100,9 @@ export const OrdersListScreen = ({
                       <div className="flex items-center gap-2">
                         <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 99, background: order.type === 'buy' ? 'rgba(249,115,22,0.1)' : 'rgba(255,255,255,0.05)', color: order.type === 'buy' ? '#f97316' : '#fff' }}>Step {order.step}/4</span>
                         {order.dbStatus === 'pending' && order.expiresAt ? (
-                          <span style={{ fontSize: 9, fontWeight: 700, fontFamily: 'monospace', color: Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)) < 60 ? '#f87171' : 'rgba(255,255,255,0.25)' }}>
-                            {(() => { const s = Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)); return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`; })()}
+                          <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 3, color: (() => { const s = Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)); return s <= 120 ? '#f87171' : '#fb923c'; })() }}>
+                            {(() => { const s = Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)); if (s <= 0) return 'Expired'; if (s >= 3600) return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`; if (s >= 60) return `${Math.floor(s / 60)}m ${s % 60}s`; return `${s}s`; })()}
+                            <span style={{ fontSize: 12, filter: (() => { const s = Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)); return s <= 120 ? 'drop-shadow(0 0 6px #ef4444)' : 'drop-shadow(0 0 4px #f97316)'; })() }}>🔥</span>
                           </span>
                         ) : (
                           <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.2)' }}>{order.createdAt.toLocaleDateString()}</span>

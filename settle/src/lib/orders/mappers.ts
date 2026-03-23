@@ -127,6 +127,7 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
             iban: dbOrder.offer.bank_iban as string,
           }
         : undefined),
+    lockedPaymentMethod: (dbOrder as any).locked_payment_method || null,
     isM2M,
     buyerMerchantId: dbOrder.buyer_merchant_id,
     buyerMerchantWallet: dbOrder.buyer_merchant?.wallet_address,
@@ -141,6 +142,8 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
     spreadPreference: dbOrder.spread_preference as Order['spreadPreference'],
     protocolFeePercent: dbOrder.protocol_fee_percentage ? parseFloat(String(dbOrder.protocol_fee_percentage)) : undefined,
     protocolFeeAmount: dbOrder.protocol_fee_amount ? parseFloat(String(dbOrder.protocol_fee_amount)) : undefined,
+    cancelRequestedBy: dbOrder.cancel_requested_by || null,
+    cancelRequestReason: dbOrder.cancel_request_reason || null,
   };
 };
 

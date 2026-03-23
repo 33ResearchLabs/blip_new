@@ -27,6 +27,8 @@ export interface DirectConversation {
   last_message: {
     content: string;
     sender_type: string;
+    message_type?: string;
+    image_url?: string | null;
     created_at: string;
     is_read: boolean;
   } | null;

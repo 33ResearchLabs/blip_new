@@ -16,6 +16,7 @@ export interface Merchant {
   is_online: boolean;
   avg_response_time_mins: number;
   wallet_address?: string;
+  last_seen_at?: string | null;
 }
 
 // Offer type from DB
@@ -81,6 +82,9 @@ export interface DbOrder {
   inactivity_warned_at?: string | null;
   disputed_at?: string | null;
   dispute_auto_resolve_at?: string | null;
+  // Locked payment method (fiat receiver's selected method)
+  payment_method_id?: string | null;
+  locked_payment_method?: LockedPaymentMethod | null;
 }
 
 // UI Order type (maps DB order to UI)
@@ -107,6 +111,8 @@ export interface Order {
     lng?: number;
     meetingSpot?: string;
     walletAddress?: string;
+    isOnline?: boolean;
+    lastSeenAt?: Date | null;
   };
   status: OrderStatus;
   step: OrderStep;
@@ -136,6 +142,8 @@ export interface Order {
   lastActivityAt?: Date | null;
   disputedAt?: Date | null;
   disputeAutoResolveAt?: Date | null;
+  // Locked payment method for this order (fiat receiver's chosen method)
+  lockedPaymentMethod?: LockedPaymentMethod | null;
 }
 
 export interface BankAccount {
@@ -144,4 +152,12 @@ export interface BankAccount {
   iban: string;
   name: string;
   isDefault: boolean;
+}
+
+// Locked payment method attached to an order (from user_payment_methods table)
+export interface LockedPaymentMethod {
+  id: string;
+  type: "bank" | "upi" | "cash" | "other";
+  label: string;
+  details: Record<string, string>;
 }

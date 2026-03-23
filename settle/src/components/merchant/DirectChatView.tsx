@@ -68,6 +68,41 @@ export function DirectChatView({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emoji = getUserEmoji(contactName);
 
+  // Fetch live order statuses for receipt cards — poll every 10s to track status changes
+  const [receiptStatuses, setReceiptStatuses] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const orderNumbers: string[] = [];
+    for (const msg of messages) {
+      try {
+        if (msg.text.startsWith('{')) {
+          const parsed = JSON.parse(msg.text);
+          if (parsed.type === 'order_receipt' && parsed.data?.order_number) {
+            orderNumbers.push(parsed.data.order_number);
+          }
+        }
+      } catch { /* not JSON */ }
+    }
+
+    if (orderNumbers.length === 0) return;
+
+    const unique = [...new Set(orderNumbers)];
+    const fetchStatuses = () => {
+      fetchWithAuth(`/api/orders/status?order_numbers=${encodeURIComponent(unique.join(','))}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.data) {
+            setReceiptStatuses(data.data);
+          }
+        })
+        .catch(() => { /* ignore */ });
+    };
+
+    fetchStatuses();
+    const interval = setInterval(fetchStatuses, 10000);
+    return () => clearInterval(interval);
+  }, [messages.length]);
+
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -229,7 +264,7 @@ export function DirectChatView({
                   {receiptData ? (
                     /* Receipt card — shown centered for both parties */
                     <div className="max-w-[90%] mx-auto my-2">
-                      <ReceiptCard data={receiptData} currentStatus={orderStatus} />
+                      <ReceiptCard data={receiptData} currentStatus={receiptStatuses[(receiptData as any).order_number] || orderStatus} />
                       <span className="text-[9px] text-white/20 mt-1 block text-center font-mono">
                         {formatTime(msg.timestamp)}
                       </span>

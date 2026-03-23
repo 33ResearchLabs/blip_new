@@ -11,6 +11,17 @@
 import React, { FC, ReactNode, useState, useCallback, useEffect } from 'react';
 import { SolanaWalletContext } from './SolanaWalletContext';
 
+// Generate a deterministic valid Solana-like base58 address from an ID
+function mockBase58Address(seed: string): string {
+  const base58Chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  let result = '';
+  for (let i = 0; i < 44; i++) {
+    const charCode = seed.charCodeAt(i % seed.length) + i;
+    result += base58Chars[charCode % base58Chars.length];
+  }
+  return result;
+}
+
 // Mock provider that provides values into the same SolanaWalletContext
 const MockWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [usdtBalance, setUsdtBalance] = useState<number | null>(null);
@@ -46,11 +57,11 @@ const MockWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) => {
             const id = user.id || userRaw;
             setMockUserId(id);
             setMockUserType('user');
-            setMockWalletAddress(user.wallet_address || wallet || `MOCK_USER_${id.slice(0, 8)}`);
+            setMockWalletAddress(user.wallet_address || wallet || mockBase58Address(id));
           } catch {
             setMockUserId(userRaw);
             setMockUserType('user');
-            setMockWalletAddress(wallet || `MOCK_USER_${userRaw.slice(0, 8)}`);
+            setMockWalletAddress(wallet || mockBase58Address(userRaw));
           }
         } else {
           setMockUserId(null);

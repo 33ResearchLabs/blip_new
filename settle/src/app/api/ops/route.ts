@@ -1,5 +1,5 @@
 /**
- * Ops API Route (localhost-only)
+ * Ops API Route
  *
  * Provides combined ops data for the /ops debug page:
  * - Outbox pending list (oldest first)
@@ -7,22 +7,40 @@
  * - Worker heartbeat status
  * - Order search by ID with event timeline
  *
- * Protected by ADMIN_SECRET in production.
+ * Access: admin secret OR merchant with has_ops_access flag.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
 import { readFileSync } from 'fs';
 
 export const dynamic = 'force-dynamic';
 
+async function hasOpsAccess(request: NextRequest): Promise<boolean> {
+  // Path 1: Admin secret (header or query param)
+  const secret = request.headers.get('x-admin-secret') || request.nextUrl.searchParams.get('secret');
+  if (process.env.ADMIN_SECRET && secret === process.env.ADMIN_SECRET) {
+    return true;
+  }
+
+  // Path 2: Merchant with has_ops_access flag
+  const merchantId = request.headers.get('x-merchant-id');
+  if (merchantId) {
+    const merchant = await queryOne<{ has_ops_access: boolean }>(
+      `SELECT has_ops_access FROM merchants WHERE id = $1 AND status = 'active'`,
+      [merchantId]
+    );
+    if (merchant?.has_ops_access) return true;
+  }
+
+  return false;
+}
+
 export async function GET(request: NextRequest) {
-  // In production, require admin secret via header or query param
-  if (process.env.NODE_ENV === 'production') {
-    const secret = request.headers.get('x-admin-secret') || request.nextUrl.searchParams.get('secret');
-    if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
+  // Always require admin secret or merchant ops access
+  const allowed = await hasOpsAccess(request);
+  if (!allowed) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   const tab = request.nextUrl.searchParams.get('tab') || 'outbox';

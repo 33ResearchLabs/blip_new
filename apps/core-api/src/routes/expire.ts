@@ -17,6 +17,7 @@ export const expireRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/orders/expire', async (_request, reply) => {
     try {
       // Find expired orders
+      // payment_sent orders never expire — they can only be completed or disputed
       const ordersToExpire = await dbQuery<{
         id: string; status: string; user_id: string; merchant_id: string;
         buyer_merchant_id: string | null; type: string; crypto_amount: string;
@@ -24,7 +25,7 @@ export const expireRoutes: FastifyPluginAsync = async (fastify) => {
       }>(
         `SELECT id, status, user_id, merchant_id, buyer_merchant_id, type, crypto_amount, escrow_tx_hash, accepted_at
          FROM orders
-         WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed')
+         WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed', 'payment_sent', 'payment_confirmed')
            AND (
              (status = 'pending' AND created_at < NOW() - INTERVAL '15 minutes')
              OR (status NOT IN ('pending') AND COALESCE(accepted_at, created_at) < NOW() - INTERVAL '120 minutes')

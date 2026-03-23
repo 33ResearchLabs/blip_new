@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { HomeAmbientGlow } from "./HomeDecorations";
 import type { Screen, TradeType, TradePreference, PaymentMethod } from "./types";
+import { PaymentMethodSelector, type PaymentMethodItem } from "../PaymentMethodSelector";
 
 export interface TradeCreationScreenProps {
   screen: Screen;
@@ -30,6 +31,8 @@ export interface TradeCreationScreenProps {
   userId: string | null;
   startTrade: () => void;
   solanaWallet: { connected: boolean; usdtBalance: number | null };
+  selectedPaymentMethodId: string | null;
+  onSelectPaymentMethod: (method: PaymentMethodItem | null) => void;
 }
 
 export const TradeCreationScreen = ({
@@ -49,6 +52,8 @@ export const TradeCreationScreen = ({
   userId,
   startTrade,
   solanaWallet,
+  selectedPaymentMethodId,
+  onSelectPaymentMethod,
 }: TradeCreationScreenProps) => {
   return (
     <>
@@ -157,6 +162,17 @@ export const TradeCreationScreen = ({
             ))}
           </div>
         </div>
+
+        {/* Payment Method Selector — shown when selling crypto (user receives fiat) */}
+        {tradeType === 'sell' && (
+          <div className="mb-4">
+            <PaymentMethodSelector
+              userId={userId}
+              selectedId={selectedPaymentMethodId}
+              onSelect={onSelectPaymentMethod}
+            />
+          </div>
+        )}
 
         {/* Speed */}
         <div className="mb-6">

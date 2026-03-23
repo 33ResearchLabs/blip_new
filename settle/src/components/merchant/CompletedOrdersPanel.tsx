@@ -81,19 +81,11 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({ orders,
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-medium text-white/80">{order.user || 'Unknown'}</span>
-                        <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
-                          order.orderType === 'buy'
-                            ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
-                            : 'bg-white/[0.06] border-white/[0.08] text-white/50'
-                        }`}>
+                        <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-black border-white/10 text-white">
                           {order.orderType === 'buy' ? 'SEND' : 'RECEIVE'}
                         </span>
                         {order.myRole && (
-                          <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
-                            order.myRole === 'buyer'
-                              ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                              : 'bg-purple-500/10 border-purple-500/20 text-purple-400'
-                          }`}>
+                          <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-black border-white/10 text-white">
                             {order.myRole === 'buyer' ? 'RECEIVED' : 'SENT'}
                           </span>
                         )}

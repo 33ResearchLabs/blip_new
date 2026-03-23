@@ -179,7 +179,7 @@ export default function MerchantDashboard() {
     disputeInfo, setDisputeInfo, extensionRequests, setExtensionRequests,
     openDisputeModal, closeDisputeModal, submitDispute, fetchDisputeInfo,
     requestExtension, respondToExtension, respondToResolution,
-    requestCancelOrder, respondToCancelRequest,
+    requestCancelOrder, respondToCancelRequest, isRequestingCancel,
   } = dispute;
 
   const { autoRefundEscrow } = useAutoRefund({ solanaWallet, addNotification, playSound, debouncedFetchOrders });
@@ -360,6 +360,12 @@ export default function MerchantDashboard() {
     );
   }
 
+  // Find the latest order status for the active DM contact (for ReceiptCard)
+  const activeContactOrder = directChat.activeContactId
+    ? orders.find(o => o.dbOrder?.user_id === directChat.activeContactId || o.buyerMerchantId === directChat.activeContactId)
+    : undefined;
+  const activeContactOrderStatus = activeContactOrder?.dbOrder?.status || activeContactOrder?.status;
+
   return (
     <div data-testid="merchant-dashboard" className="h-screen bg-[#060606] text-white flex flex-col overflow-hidden">
       <NotificationToastContainer position="top-right" />
@@ -486,7 +492,8 @@ export default function MerchantDashboard() {
               <DirectChatView contactName={directChat.activeContactName} contactType={directChat.activeContactType}
                 messages={directChat.messages} isLoading={directChat.isLoadingMessages}
                 onSendMessage={(text, imageUrl) => { directChat.sendMessage(text, imageUrl); playSound('send'); }}
-                onBack={() => directChat.closeChat()} />
+                onBack={() => directChat.closeChat()}
+                orderStatus={activeContactOrderStatus} />
             ) : (
               <MerchantChatTabs merchantId={merchantId || ''} conversations={directChat.conversations}
                 totalUnread={directChat.totalUnread} isLoading={directChat.isLoadingConversations}
@@ -503,7 +510,7 @@ export default function MerchantDashboard() {
         <main className="flex-1 overflow-auto p-3 pb-20">
           {mobileView === 'orders' && <MobileOrdersView pendingOrders={pendingOrders} bigOrders={bigOrders} onAcceptOrder={acceptOrder} acceptingOrderId={acceptingOrderId} onOpenChat={handleOpenChat} onDismissBigOrder={dismissBigOrder} setMobileView={setMobileView} />}
           {mobileView === 'escrow' && <MobileEscrowView ongoingOrders={ongoingOrders} markingDone={markingDone} onOpenEscrowModal={openEscrowModal} onMarkFiatPaymentSent={markFiatPaymentSent} onOpenReleaseModal={openReleaseModal} onOpenDisputeModal={(orderId) => openDisputeModal(orderId)} onOpenCancelModal={openCancelModal} onOpenChat={handleOpenChat} setMobileView={setMobileView} />}
-          {mobileView === 'chat' && <MobileChatView merchantId={merchantId} directChat={directChat} playSound={playSound} />}
+          {mobileView === 'chat' && <MobileChatView merchantId={merchantId} directChat={directChat} orderStatus={activeContactOrderStatus} playSound={playSound} />}
           {mobileView === 'history' && <MobileHistoryView completedOrders={completedOrders} cancelledOrders={cancelledOrders} merchantId={merchantId} merchantInfo={merchantInfo} historyTab={historyTab} setHistoryTab={setHistoryTab} effectiveBalance={effectiveBalance} totalTradedVolume={totalTradedVolume} todayEarnings={todayEarnings} pendingEarnings={pendingEarnings} onShowAnalytics={() => setShowAnalytics(true)} onShowWalletModal={() => setShowWalletModal(true)} onLogout={handleLogout} />}
           {mobileView === 'marketplace' && merchantId && <MobileMarketplaceView merchantId={merchantId} marketSubTab={marketSubTab} setMarketSubTab={setMarketSubTab} onTakeOffer={(offer) => { setOpenTradeForm({ tradeType: offer.type === 'buy' ? 'sell' : 'buy', cryptoAmount: '', paymentMethod: offer.payment_method as 'bank' | 'cash', spreadPreference: 'fastest', expiryMinutes: 15 }); setShowOpenTradeModal(true); }} onCreateOffer={() => setShowCreateModal(true)} />}
         </main>
@@ -612,7 +619,7 @@ export default function MerchantDashboard() {
           onCancelOrder={(orderId) => { const order = orders.find(o => o.id === orderId); if (order) { if (order.escrowTxHash) openCancelModal(order); else cancelOrderWithoutEscrow(order.id); } }}
           onLockEscrow={(orderId) => { const order = orders.find(o => o.id === orderId); if (order) openEscrowModal(order); }}
           onReleaseEscrow={(orderId) => { const order = orders.find(o => o.id === orderId); if (order) openReleaseModal(order); }}
-          onOpenDispute={openDisputeModal} onRequestCancel={requestCancelOrder} onRespondToCancel={respondToCancelRequest} />
+          onOpenDispute={openDisputeModal} onRequestCancel={requestCancelOrder} onRespondToCancel={respondToCancelRequest} isRequestingCancel={isRequestingCancel} />
       )}
 
       {/* Message History Panel (Desktop) */}
@@ -624,7 +631,8 @@ export default function MerchantDashboard() {
               <DirectChatView contactName={directChat.activeContactName} contactType={directChat.activeContactType}
                 messages={directChat.messages} isLoading={directChat.isLoadingMessages}
                 onSendMessage={(text, imageUrl) => { directChat.sendMessage(text, imageUrl); playSound('send'); }}
-                onBack={() => directChat.closeChat()} />
+                onBack={() => directChat.closeChat()}
+                orderStatus={activeContactOrderStatus} />
             ) : (
               <MerchantChatTabs merchantId={merchantId} conversations={directChat.conversations}
                 totalUnread={directChat.totalUnread} isLoading={directChat.isLoadingConversations}

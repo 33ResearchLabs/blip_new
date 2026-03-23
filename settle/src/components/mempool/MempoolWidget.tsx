@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Zap, Clock, TrendingUp, ArrowRight, Loader2, RotateCcw } from 'lucide-react';
+import { Zap, Clock, TrendingUp, ArrowRight, Loader2, RotateCcw, Flame } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
@@ -61,10 +61,13 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
   };
 
   const formatTimeRemaining = (seconds: number): string => {
-    if (seconds < 0) return 'EXPIRED';
-    const mins = Math.floor(seconds / 60);
+    if (seconds <= 0) return 'Expired';
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    if (mins > 0) return `${mins}m ${secs}s`;
+    return `${secs}s`;
   };
 
   const getPriorityColor = (premiumBps: number): string => {
@@ -162,9 +165,11 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
                       )}
                     </div>
 
-                    <div className="flex items-center gap-1 text-[10px] font-mono text-white/40">
-                      <Clock className="w-3 h-3" />
+                    <div className={`flex items-center gap-1 text-sm font-mono font-bold ${
+                      order.seconds_until_expiry <= 120 ? 'text-red-400' : 'text-orange-400'
+                    }`}>
                       {formatTimeRemaining(order.seconds_until_expiry)}
+                      <span className="animate-pulse" style={{ filter: order.seconds_until_expiry <= 120 ? 'drop-shadow(0 0 6px #ef4444)' : 'drop-shadow(0 0 4px #f97316)' }}>🔥</span>
                     </div>
                   </div>
 

@@ -59,6 +59,8 @@ interface CreateOrderPayload {
   price_proof_sig?: string | null;
   price_proof_ref_price?: number | null;
   price_proof_expires_at?: string | null;
+  // Payment method (fiat receiver's selected method)
+  payment_method_id?: string;
 }
 
 export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
@@ -114,6 +116,8 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         ['price_proof_sig', data.price_proof_sig],
         ['price_proof_ref_price', data.price_proof_ref_price],
         ['price_proof_expires_at', data.price_proof_expires_at],
+        // Payment method
+        ['payment_method_id', data.payment_method_id],
       ];
       for (const [field, value] of optionals) {
         if (value !== undefined && value !== null) {
@@ -228,6 +232,8 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
           ['price_proof_sig', data.price_proof_sig],
           ['price_proof_ref_price', data.price_proof_ref_price],
           ['price_proof_expires_at', data.price_proof_expires_at],
+          // Payment method
+          ['payment_method_id', data.payment_method_id],
         ];
 
         for (const [field, value] of optionalFields) {

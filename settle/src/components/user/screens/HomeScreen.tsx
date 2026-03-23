@@ -397,7 +397,7 @@ export const HomeScreen = ({
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '1px 7px', borderRadius: 99, background: `${catColor}1a`, color: catColor, border: `1px solid ${catColor}40` }}>
+                        <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', padding: '1px 7px', borderRadius: 99, background: '#000', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }}>
                           {catLabel}
                         </span>
                         <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.25)' }}>

@@ -248,6 +248,8 @@ export async function getMerchantDirectConversations(merchantId: string): Promis
         SELECT json_build_object(
           'content', dm.content,
           'sender_type', dm.sender_type,
+          'message_type', dm.message_type,
+          'image_url', dm.image_url,
           'created_at', dm.created_at,
           'is_read', dm.is_read
         )

@@ -123,11 +123,7 @@ export function MobileHistoryView({
                           <span className="px-1.5 py-0.5 bg-white/5 text-white/70 text-[10px] rounded">M2M</span>
                         )}
                         {order.myRole && (
-                          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
-                            order.myRole === 'buyer'
-                              ? 'bg-blue-500/20 text-blue-400'
-                              : 'bg-purple-500/20 text-purple-400'
-                          }`}>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded font-medium bg-black text-white border border-white/10">
                             {order.myRole === 'buyer' ? 'RECEIVER' : 'SENDER'}
                           </span>
                         )}

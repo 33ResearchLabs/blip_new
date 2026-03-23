@@ -51,7 +51,7 @@ export interface OrderDetailScreenProps {
     extensionCount: number;
     maxExtensions: number;
   } | null;
-  requestExtension: () => void;
+  requestExtension: (durationMinutes?: number) => void;
   respondToExtension: (accept: boolean) => void;
   requestingExtension: boolean;
   // Chat modal
@@ -380,7 +380,9 @@ export const OrderDetailScreen = ({
               <div className="flex-1">
                 <p className="text-[15px] font-semibold text-white">Extension Requested</p>
                 <p className="text-[13px] text-neutral-400">
-                  Merchant wants +{extensionRequest.extensionMinutes} minutes
+                  Merchant wants +{extensionRequest.extensionMinutes >= 60
+                    ? `${Math.round(extensionRequest.extensionMinutes / 60)} hour${Math.round(extensionRequest.extensionMinutes / 60) > 1 ? 's' : ''}`
+                    : `${extensionRequest.extensionMinutes} minutes`}
                 </p>
               </div>
             </div>
@@ -511,23 +513,55 @@ export const OrderDetailScreen = ({
           </motion.div>
         )}
 
-        {/* Request Extension Button - shown when user wants to extend */}
+        {/* Request Extension — duration picker for payment_sent, simple button otherwise */}
         {activeOrder.step >= 2 && activeOrder.step < 4 && !extensionRequest && (
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={requestExtension}
-            disabled={requestingExtension}
-            className="w-full py-3 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 text-[13px] font-medium mb-4 flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {requestingExtension ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <>
-                <Clock className="w-4 h-4" />
+          activeOrder.step === 3 ? (
+            /* Payment sent: fiat sender picks duration */
+            <div className="mb-4">
+              <p className="text-[12px] text-neutral-500 font-medium mb-2 flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5" />
                 Request Time Extension
-              </>
-            )}
-          </motion.button>
+              </p>
+              <div className="flex gap-2">
+                {[
+                  { minutes: 15, label: '15 min' },
+                  { minutes: 60, label: '1 hour' },
+                  { minutes: 720, label: '12 hours' },
+                ].map((opt) => (
+                  <motion.button
+                    key={opt.minutes}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => requestExtension(opt.minutes)}
+                    disabled={requestingExtension}
+                    className="flex-1 py-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 text-[13px] font-medium flex items-center justify-center gap-1 disabled:opacity-50 hover:border-amber-500/30 hover:text-amber-400 transition-colors"
+                  >
+                    {requestingExtension ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      opt.label
+                    )}
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* Pre-payment: simple extension request */
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => requestExtension()}
+              disabled={requestingExtension}
+              className="w-full py-3 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-400 text-[13px] font-medium mb-4 flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {requestingExtension ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <Clock className="w-4 h-4" />
+                  Request Time Extension
+                </>
+              )}
+            </motion.button>
+          )
         )}
 
         {/* Steps */}
@@ -729,38 +763,99 @@ export const OrderDetailScreen = ({
                     ) : (
                       <>
                         <div className="bg-neutral-800 rounded-xl p-3 space-y-2">
-                          {activeOrder.merchant.bank && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-[13px] text-neutral-500">Bank</span>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[13px] text-white">{activeOrder.merchant.bank}</span>
-                                <button onClick={() => copyField('bank', activeOrder.merchant.bank || '')} className="p-0.5 rounded hover:bg-white/10">
-                                  {copiedField === 'bank' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
-                                </button>
-                              </div>
+                          {/* Locked payment method header */}
+                          {activeOrder.lockedPaymentMethod && (
+                            <div className="flex items-center gap-1.5 pb-2 border-b border-neutral-700">
+                              <Lock className="w-3 h-3 text-orange-400" />
+                              <span className="text-[10px] text-orange-400 font-bold uppercase tracking-wide">
+                                Send payment to this method only
+                              </span>
                             </div>
                           )}
-                          {activeOrder.merchant.iban && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-[13px] text-neutral-500">IBAN</span>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[13px] text-white font-mono">{activeOrder.merchant.iban}</span>
-                                <button onClick={() => copyField('iban', activeOrder.merchant.iban || '')} className="p-0.5 rounded hover:bg-white/10">
-                                  {copiedField === 'iban' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                          {activeOrder.merchant.accountName && (
-                            <div className="flex items-center justify-between">
-                              <span className="text-[13px] text-neutral-500">Name</span>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[13px] text-white">{activeOrder.merchant.accountName}</span>
-                                <button onClick={() => copyField('name', activeOrder.merchant.accountName || '')} className="p-0.5 rounded hover:bg-white/10">
-                                  {copiedField === 'name' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
-                                </button>
-                              </div>
-                            </div>
+                          {/* Show locked payment method details if available, otherwise fall back to merchant offer details */}
+                          {activeOrder.lockedPaymentMethod ? (
+                            <>
+                              {activeOrder.lockedPaymentMethod.details.bank_name && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[13px] text-neutral-500">Bank</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[13px] text-white">{activeOrder.lockedPaymentMethod.details.bank_name}</span>
+                                    <button onClick={() => copyField('bank', activeOrder.lockedPaymentMethod!.details.bank_name || '')} className="p-0.5 rounded hover:bg-white/10">
+                                      {copiedField === 'bank' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              {activeOrder.lockedPaymentMethod.details.iban && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[13px] text-neutral-500">IBAN</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[13px] text-white font-mono">{activeOrder.lockedPaymentMethod.details.iban}</span>
+                                    <button onClick={() => copyField('iban', activeOrder.lockedPaymentMethod!.details.iban || '')} className="p-0.5 rounded hover:bg-white/10">
+                                      {copiedField === 'iban' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              {activeOrder.lockedPaymentMethod.details.account_name && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[13px] text-neutral-500">Name</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[13px] text-white">{activeOrder.lockedPaymentMethod.details.account_name}</span>
+                                    <button onClick={() => copyField('name', activeOrder.lockedPaymentMethod!.details.account_name || '')} className="p-0.5 rounded hover:bg-white/10">
+                                      {copiedField === 'name' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              {activeOrder.lockedPaymentMethod.details.upi_id && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[13px] text-neutral-500">UPI</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[13px] text-white font-mono">{activeOrder.lockedPaymentMethod.details.upi_id}</span>
+                                    <button onClick={() => copyField('upi', activeOrder.lockedPaymentMethod!.details.upi_id || '')} className="p-0.5 rounded hover:bg-white/10">
+                                      {copiedField === 'upi' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              {activeOrder.merchant.bank && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[13px] text-neutral-500">Bank</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[13px] text-white">{activeOrder.merchant.bank}</span>
+                                    <button onClick={() => copyField('bank', activeOrder.merchant.bank || '')} className="p-0.5 rounded hover:bg-white/10">
+                                      {copiedField === 'bank' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              {activeOrder.merchant.iban && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[13px] text-neutral-500">IBAN</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[13px] text-white font-mono">{activeOrder.merchant.iban}</span>
+                                    <button onClick={() => copyField('iban', activeOrder.merchant.iban || '')} className="p-0.5 rounded hover:bg-white/10">
+                                      {copiedField === 'iban' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                              {activeOrder.merchant.accountName && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[13px] text-neutral-500">Name</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[13px] text-white">{activeOrder.merchant.accountName}</span>
+                                    <button onClick={() => copyField('name', activeOrder.merchant.accountName || '')} className="p-0.5 rounded hover:bg-white/10">
+                                      {copiedField === 'name' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
                           )}
                           <div className="pt-2 border-t border-neutral-700">
                             <div className="flex items-center justify-between">
@@ -910,9 +1005,33 @@ export const OrderDetailScreen = ({
                           {'\u062F.\u0625'} {parseFloat(activeOrder.fiatAmount).toLocaleString()}
                         </span>
                       </div>
-                      <p className="text-[11px] text-neutral-600">
-                        Merchant will send this amount to your bank account
-                      </p>
+                      {activeOrder.lockedPaymentMethod ? (
+                        <div className="pt-2 border-t border-neutral-700 space-y-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <Lock className="w-3 h-3 text-orange-400" />
+                            <span className="text-[11px] text-orange-400 font-semibold uppercase tracking-wide">Locked Payment Method</span>
+                          </div>
+                          <p className="text-[13px] text-white font-medium">{activeOrder.lockedPaymentMethod.label}</p>
+                          {activeOrder.lockedPaymentMethod.type === 'bank' && (
+                            <div className="space-y-1 text-[12px]">
+                              {activeOrder.lockedPaymentMethod.details.bank_name && (
+                                <p className="text-neutral-400">{activeOrder.lockedPaymentMethod.details.bank_name}</p>
+                              )}
+                              {activeOrder.lockedPaymentMethod.details.iban && (
+                                <p className="text-neutral-400 font-mono">{activeOrder.lockedPaymentMethod.details.iban}</p>
+                              )}
+                            </div>
+                          )}
+                          {activeOrder.lockedPaymentMethod.type === 'upi' && activeOrder.lockedPaymentMethod.details.upi_id && (
+                            <p className="text-[12px] text-neutral-400 font-mono">{activeOrder.lockedPaymentMethod.details.upi_id}</p>
+                          )}
+                          <p className="text-[10px] text-neutral-600">Merchant will send payment to this method</p>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-neutral-600">
+                          Merchant will send this amount to your bank account
+                        </p>
+                      )}
                     </div>
 
                     <div className="mt-3 h-1 bg-neutral-800 rounded-full overflow-hidden">
@@ -1385,7 +1504,7 @@ export const OrderDetailScreen = ({
                         if (parsed.type === 'order_receipt' && parsed.data) {
                           return (
                             <div key={msg.id} className="max-w-[90%] mx-auto">
-                              <ReceiptCard data={parsed.data} currentStatus={activeOrder?.status} />
+                              <ReceiptCard data={parsed.data} currentStatus={activeOrder?.dbStatus || activeOrder?.status} />
                               <p className="text-[10px] text-neutral-500 mt-1 text-center">
                                 {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               </p>

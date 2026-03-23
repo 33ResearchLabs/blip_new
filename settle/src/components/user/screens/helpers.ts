@@ -68,6 +68,8 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
       lng: offer?.location_lng || undefined,
       meetingSpot: offer?.meeting_instructions || undefined,
       walletAddress: merchant.wallet_address || undefined,
+      isOnline: merchant.is_online ?? false,
+      lastSeenAt: merchant.last_seen_at ? new Date(merchant.last_seen_at) : null,
     },
     status,
     step,
@@ -97,6 +99,8 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
     lastActivityAt: dbOrder.last_activity_at ? new Date(dbOrder.last_activity_at) : null,
     disputedAt: dbOrder.disputed_at ? new Date(dbOrder.disputed_at) : null,
     disputeAutoResolveAt: dbOrder.dispute_auto_resolve_at ? new Date(dbOrder.dispute_auto_resolve_at) : null,
+    // Locked payment method (fiat receiver's chosen method for this order)
+    lockedPaymentMethod: dbOrder.locked_payment_method || null,
   };
 }
 
@@ -106,3 +110,27 @@ export const FEE_CONFIG = {
   best: { totalFee: 0.025, traderCut: 0.005 },  // 2.5% total, 0.5% to trader
   cheap: { totalFee: 0.015, traderCut: 0.0025 }, // 1.5% total, 0.25% to trader
 } as const;
+
+// Format merchant last seen status
+export function formatLastSeen(isOnline?: boolean, lastSeenAt?: Date | null): string {
+  if (isOnline) return 'Online';
+  if (!lastSeenAt) return 'Offline';
+
+  const now = new Date();
+  const diffMs = now.getTime() - lastSeenAt.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+
+  if (diffMins < 1) return 'Last seen just now';
+  if (diffMins < 60) return `Last seen ${diffMins}m ago`;
+
+  const isToday = lastSeenAt.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = lastSeenAt.toDateString() === yesterday.toDateString();
+
+  if (isToday) {
+    return `Last seen at ${lastSeenAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  }
+  if (isYesterday) return 'Last seen yesterday';
+  return `Last seen ${lastSeenAt.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
+}

@@ -18,15 +18,19 @@ import { broadcastOrderEvent } from '../ws/broadcast';
 
 export const extensionRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /v1/orders/:id/extension - Request extension
+  // Allowed durations for payment_sent extensions (fiat sender picks one)
+  const PAYMENT_SENT_EXTENSION_OPTIONS = [15, 60, 720]; // 15min, 60min, 12hr
+
   fastify.post<{
     Params: { id: string };
     Body: {
       actor_type: 'user' | 'merchant';
       actor_id: string;
+      duration_minutes?: number; // optional: fiat sender picks from 15, 60, 720
     };
   }>('/orders/:id/extension', async (request, reply) => {
     const { id } = request.params;
-    const { actor_type, actor_id } = request.body;
+    const { actor_type, actor_id, duration_minutes } = request.body;
 
     if (!actor_type || !actor_id) {
       return reply.status(400).send({ success: false, error: 'actor_type and actor_id required' });
@@ -54,7 +58,19 @@ export const extensionRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ success: false, error: 'Extension request already pending' });
       }
 
-      const duration = getExtensionDuration(order.status as any);
+      // For payment_sent orders, fiat sender can pick from preset durations
+      let duration: number;
+      if (order.status === 'payment_sent' && duration_minutes) {
+        if (!PAYMENT_SENT_EXTENSION_OPTIONS.includes(duration_minutes)) {
+          return reply.status(400).send({
+            success: false,
+            error: `Invalid duration. Allowed: ${PAYMENT_SENT_EXTENSION_OPTIONS.join(', ')} minutes`,
+          });
+        }
+        duration = duration_minutes;
+      } else {
+        duration = getExtensionDuration(order.status as any);
+      }
 
       const updatedOrder = await queryOne(
         `UPDATE orders

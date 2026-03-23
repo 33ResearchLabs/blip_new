@@ -87,7 +87,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   // Convert DB message to UI message
   const mapDbMessageToUI = useCallback(
     (dbMsg: DbMessage, myActorType: string): ChatMessage => {
-      const isSystemMessage = SYSTEM_MESSAGE_TYPES.includes(dbMsg.message_type);
+      const isSystemMessage = dbMsg.sender_type === 'system' || SYSTEM_MESSAGE_TYPES.includes(dbMsg.message_type);
       return {
         id: dbMsg.id,
         from: isSystemMessage ? 'system' : (dbMsg.sender_type === myActorType ? 'me' : 'them'),
@@ -106,7 +106,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   const mapWSMessageToUI = useCallback(
     (event: WSNewMessageEvent, myActorType: string): ChatMessage => {
       const { data } = event;
-      const isSystemMessage = SYSTEM_MESSAGE_TYPES.includes(data.messageType);
+      const isSystemMessage = data.senderType === 'system' || SYSTEM_MESSAGE_TYPES.includes(data.messageType);
       return {
         id: data.messageId,
         from: isSystemMessage ? 'system' : (data.senderType === myActorType ? 'me' : 'them'),

@@ -506,6 +506,12 @@ export default function AdminConsolePage() {
                 Live Feed
               </Link>
               <Link
+                href="/admin/ops-access"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-white/40 hover:text-white/70 hover:bg-white/[0.04] transition-colors"
+              >
+                Ops Access
+              </Link>
+              <Link
                 href="/merchant"
                 className="px-3 py-[5px] rounded-md text-[12px] font-medium text-white/40 hover:text-white/70 hover:bg-white/[0.04] transition-colors"
               >

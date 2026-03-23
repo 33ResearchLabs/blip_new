@@ -41,6 +41,7 @@ function formatDateTime(dateStr: string | undefined): string {
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  // DB status names
   pending: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'Pending' },
   accepted: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Accepted' },
   escrow_pending: { bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Escrow Pending' },
@@ -53,6 +54,13 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   cancelled: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Cancelled' },
   disputed: { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'Disputed' },
   expired: { bg: 'bg-zinc-500/20', text: 'text-zinc-400', label: 'Expired' },
+  // UI-mapped aliases (user side: mapDbStatusToUI)
+  payment: { bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Escrowed' },
+  waiting: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', label: 'Payment Sent' },
+  complete: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Completed' },
+  // UI-mapped aliases (merchant side: mapDbOrderToUI)
+  active: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Accepted' },
+  escrow: { bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Escrowed' },
 };
 
 export function ReceiptCard({ data, currentStatus }: ReceiptCardProps) {

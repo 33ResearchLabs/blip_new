@@ -118,7 +118,18 @@ export function MobileEscrowView({
                     </span>
                   </div>
                   {mobileCanMarkPaid && (() => {
-                    // Show seller's bank details (from offer) for M2M, or user's bank for U2M
+                    // Priority 1: Locked payment method (new system)
+                    if (order.lockedPaymentMethod) {
+                      const lpm = order.lockedPaymentMethod;
+                      return (
+                        <div className="mt-1.5 text-[10px] text-white/50 font-mono space-y-0.5">
+                          <div className="truncate text-orange-400">&rarr; {lpm.label} ({lpm.type.toUpperCase()})</div>
+                          {lpm.type === 'bank' && lpm.details.iban && <div className="truncate">{lpm.details.iban}</div>}
+                          {lpm.type === 'upi' && lpm.details.upi_id && <div className="truncate">{lpm.details.upi_id}</div>}
+                        </div>
+                      );
+                    }
+                    // Fallback: seller's bank details (from offer) for M2M, or user's bank for U2M
                     const bankDetails = order.sellerBankDetails || order.userBankDetails;
                     if (bankDetails) {
                       return (

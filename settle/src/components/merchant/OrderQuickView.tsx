@@ -7,6 +7,9 @@ import {
   Shield,
   Lock,
   MessageCircle,
+  Smartphone,
+  Building2,
+  CreditCard,
   Zap,
   ExternalLink,
   Loader2,
@@ -17,6 +20,68 @@ import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
 import { getAuthoritativeStatus, computeMyRole } from "@/lib/orders/statusResolver";
 import type { Order } from "@/types/merchant";
 import { CopyableBankDetails } from "@/components/shared/CopyableBankDetails";
+
+// Inline component for non-bank locked payment methods (UPI, Cash, Other)
+function LockedPaymentMethodCard({
+  lpm,
+  amount,
+  typeIcon,
+}: {
+  lpm: { type: string; label: string; details: Record<string, string> };
+  amount: number;
+  typeIcon: React.ReactNode;
+}) {
+  const [copiedKey, setCopiedKey] = useLocalState<string | null>(null);
+  const copyField = (value: string, key: string) => {
+    navigator.clipboard.writeText(value);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const fields: { label: string; value: string; key: string; mono?: boolean }[] = [];
+  if (lpm.type === 'upi') {
+    if (lpm.details.upi_id) fields.push({ label: 'UPI ID', value: lpm.details.upi_id, key: 'upi_id', mono: true });
+    if (lpm.details.provider) fields.push({ label: 'Provider', value: lpm.details.provider, key: 'provider' });
+  } else if (lpm.type === 'cash') {
+    if (lpm.details.location_name) fields.push({ label: 'Location', value: lpm.details.location_name, key: 'location' });
+    if (lpm.details.location_address) fields.push({ label: 'Address', value: lpm.details.location_address, key: 'address' });
+    if (lpm.details.meeting_instructions) fields.push({ label: 'Instructions', value: lpm.details.meeting_instructions, key: 'instructions' });
+  } else {
+    if (lpm.details.method_name) fields.push({ label: 'Method', value: lpm.details.method_name, key: 'method' });
+    if (lpm.details.account_identifier) fields.push({ label: 'Account', value: lpm.details.account_identifier, key: 'account', mono: true });
+    if (lpm.details.instructions) fields.push({ label: 'Instructions', value: lpm.details.instructions, key: 'instructions' });
+  }
+
+  return (
+    <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Lock className="w-3.5 h-3.5 text-orange-400" />
+        <span className="text-[11px] text-orange-400 uppercase tracking-wide font-bold">Send AED Here</span>
+      </div>
+      <div className="flex items-center gap-2">
+        {typeIcon}
+        <span className="text-sm text-white font-medium">{lpm.label}</span>
+        <span className="text-[10px] text-white/30 uppercase">{lpm.type}</span>
+      </div>
+      {fields.map(({ label, value, key, mono }) => (
+        <div key={key} className="flex justify-between items-center">
+          <span className="text-white/50 text-sm">{label}</span>
+          <button
+            onClick={() => copyField(value, key)}
+            className="flex items-center gap-1 text-white hover:text-white/70 transition-colors"
+          >
+            <span className={`text-sm ${mono ? 'font-mono' : ''}`}>{value}</span>
+            {copiedKey === key ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-white/30" />}
+          </button>
+        </div>
+      ))}
+      <div className="flex justify-between items-center pt-2 border-t border-white/[0.04]">
+        <span className="text-white/50 text-sm">Amount</span>
+        <span className="text-base font-semibold text-white">{'\u062F.\u0625'} {amount.toLocaleString()}</span>
+      </div>
+    </div>
+  );
+}
 
 export interface OrderQuickViewProps {
   selectedOrder: Order | null;
@@ -160,13 +225,42 @@ export function OrderQuickView({
                 )}
               </div>
 
-              {/* Bank Account - Show to BUYER only */}
+              {/* Payment Method - Show to BUYER (fiat sender) only */}
               {(() => {
                 const popupBankRole = selectedOrder.myRole || 'observer';
                 const iAmBuyerInPopup = popupBankRole === 'buyer';
                 if (!iAmBuyerInPopup) return null;
 
-                // For M2M or any order: buyer needs seller's bank details (from offer)
+                // Priority 1: Locked payment method (new system)
+                if (selectedOrder.lockedPaymentMethod) {
+                  const lpm = selectedOrder.lockedPaymentMethod;
+                  const typeIcon = lpm.type === 'upi' ? <Smartphone className="w-4 h-4 text-green-400" />
+                    : lpm.type === 'bank' ? <Building2 className="w-4 h-4 text-blue-400" />
+                    : <CreditCard className="w-4 h-4 text-purple-400" />;
+
+                  if (lpm.type === 'bank') {
+                    return (
+                      <CopyableBankDetails
+                        title={`Send AED to this account`}
+                        bankName={lpm.details.bank_name}
+                        accountName={lpm.details.account_name}
+                        iban={lpm.details.iban}
+                        amount={Math.round(selectedOrder.total)}
+                      />
+                    );
+                  }
+
+                  // UPI / Cash / Other — custom display
+                  return (
+                    <LockedPaymentMethodCard
+                      lpm={lpm}
+                      amount={Math.round(selectedOrder.total)}
+                      typeIcon={typeIcon}
+                    />
+                  );
+                }
+
+                // Priority 2: Seller bank details from offer (legacy)
                 if (selectedOrder.sellerBankDetails) {
                   return (
                     <CopyableBankDetails
@@ -179,7 +273,7 @@ export function OrderQuickView({
                   );
                 }
 
-                // Fallback: user's bank details (for user sell orders where user provided bank)
+                // Priority 3: User bank details from payment_details (legacy)
                 if (selectedOrder.userBankDetails || selectedOrder.userBankAccount) {
                   const details = selectedOrder.userBankDetails;
                   return (

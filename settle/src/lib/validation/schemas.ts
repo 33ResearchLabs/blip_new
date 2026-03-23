@@ -47,6 +47,8 @@ export const offerTypeSchema = z.enum(['buy', 'sell']);
 
 export const paymentMethodSchema = z.enum(['bank', 'cash']);
 
+export const paymentMethodTypeSchema = z.enum(['bank', 'upi', 'cash', 'other']);
+
 export const tradePreferenceSchema = z.enum(['fast', 'cheap', 'best']);
 
 export const disputeReasonSchema = z.enum([
@@ -172,6 +174,7 @@ export const createOrderSchema = z.object({
   user_bank_account: z.string().max(500).optional(), // User's bank details JSON or plain text for receiving fiat (sell orders)
   buyer_wallet_address: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'Invalid Solana wallet address').optional(), // Buyer's Solana wallet for receiving crypto (buy orders)
   buyer_merchant_id: uuidSchema.optional(), // For M2M trades: merchant acting as buyer
+  payment_method_id: uuidSchema.optional(), // Fiat receiver's selected payment method
 });
 
 export const updateOrderStatusSchema = z.object({
@@ -267,6 +270,38 @@ export const merchantCreateOrderSchema = z.object({
   matched_offer_id: uuidSchema.nullish(), // Matched offer for M2M
   expiry_minutes: z.number().int().positive().optional(),
 });
+
+// Payment method schemas
+export const createPaymentMethodSchema = z.object({
+  type: paymentMethodTypeSchema,
+  label: z.string().min(1, 'Label required').max(100),
+  details: z.record(z.string()).refine((d) => Object.keys(d).length > 0, 'Details are required'),
+}).refine(
+  (data) => {
+    if (data.type === 'bank') {
+      return data.details.bank_name && data.details.account_name && data.details.iban;
+    }
+    return true;
+  },
+  { message: 'Bank details require bank_name, account_name, and iban' }
+).refine(
+  (data) => {
+    if (data.type === 'upi') {
+      return data.details.upi_id;
+    }
+    return true;
+  },
+  { message: 'UPI details require upi_id' }
+);
+
+export const updatePaymentMethodSchema = z.object({
+  label: z.string().min(1).max(100).optional(),
+  details: z.record(z.string()).optional(),
+  is_active: z.boolean().optional(),
+});
+
+export type CreatePaymentMethodInput = z.infer<typeof createPaymentMethodSchema>;
+export type UpdatePaymentMethodInput = z.infer<typeof updatePaymentMethodSchema>;
 
 // Corridor Bridge schemas
 export const corridorProviderSchema = z.object({

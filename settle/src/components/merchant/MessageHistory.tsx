@@ -122,6 +122,14 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
     fetchConversations();
   }, [fetchConversations]);
 
+  // Poll for status updates every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchConversations();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [fetchConversations]);
+
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -172,7 +180,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
           />
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {['', 'pending', 'escrowed', 'completed', 'disputed'].map((status) => (
+          {['', 'pending', 'accepted', 'escrowed', 'payment_sent', 'payment_confirmed', 'completed', 'cancelled', 'disputed', 'expired'].map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
@@ -182,7 +190,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
                   : 'bg-white/5 text-white/60 hover:bg-white/10 border border-transparent'
                 }`}
             >
-              {status || 'All'}
+              {status ? status.replace('_', ' ') : 'All'}
             </button>
           ))}
         </div>

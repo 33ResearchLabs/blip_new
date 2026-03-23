@@ -11,11 +11,14 @@ import {
   Loader2,
   X,
   Send,
+  CheckCheck,
+  Clock,
 } from "lucide-react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
 import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
 import { ImageMessage } from "@/components/chat/ImageMessage";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { formatLastSeen } from "./helpers";
 import type { Screen, Order } from "./types";
 import type { RefObject } from "react";
 
@@ -33,6 +36,8 @@ export interface ChatViewScreenProps {
       senderName?: string;
       messageType?: string;
       imageUrl?: string | null;
+      isRead?: boolean;
+      status?: 'sending' | 'sent' | 'read';
     }>;
   } | null;
   chatMessage: string;
@@ -53,6 +58,35 @@ export const ChatViewScreen = ({
   const [isUploading, setIsUploading] = useState(false);
   const [pendingImage, setPendingImage] = useState<{ file: File; previewUrl: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch live order statuses for receipt cards — poll every 10s to track status changes
+  const [receiptStatuses, setReceiptStatuses] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!activeChat?.messages) return;
+    const orderNumbers: string[] = [];
+    for (const msg of activeChat.messages) {
+      try {
+        if (msg.text.startsWith('{')) {
+          const parsed = JSON.parse(msg.text);
+          if (parsed.type === 'order_receipt' && parsed.data?.order_number) {
+            orderNumbers.push(parsed.data.order_number);
+          }
+        }
+      } catch { /* not JSON */ }
+    }
+    if (orderNumbers.length === 0) return;
+    const unique = [...new Set(orderNumbers)];
+    const fetchStatuses = () => {
+      fetchWithAuth(`/api/orders/status?order_numbers=${encodeURIComponent(unique.join(','))}`)
+        .then(res => res.json())
+        .then(data => { if (data.success && data.data) setReceiptStatuses(data.data); })
+        .catch(() => {});
+    };
+    fetchStatuses();
+    const interval = setInterval(fetchStatuses, 10000);
+    return () => clearInterval(interval);
+  }, [activeChat?.messages?.length]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -141,8 +175,10 @@ export const ChatViewScreen = ({
           <div className="flex-1">
             <p className="text-[15px] font-semibold text-white">{activeOrder.merchant.name}</p>
             <div className="flex items-center gap-1.5">
-              <ConnectionIndicator isConnected={true} />
-              <p className="text-[12px] text-orange-400/80">Online</p>
+              <ConnectionIndicator isConnected={activeOrder.merchant.isOnline ?? false} />
+              <p className={`text-[12px] ${activeOrder.merchant.isOnline ? 'text-emerald-400/80' : 'text-neutral-500'}`}>
+                {formatLastSeen(activeOrder.merchant.isOnline, activeOrder.merchant.lastSeenAt)}
+              </p>
             </div>
           </div>
           <button
@@ -218,7 +254,7 @@ export const ChatViewScreen = ({
                 if (parsed.type === 'order_receipt' && parsed.data) {
                   return (
                     <div key={msg.id} className="max-w-[90%] mx-auto">
-                      <ReceiptCard data={parsed.data} currentStatus={activeOrder?.status} />
+                      <ReceiptCard data={parsed.data} currentStatus={receiptStatuses[parsed.data.order_number] || activeOrder?.dbStatus || activeOrder?.status} />
                       <p className="text-[10px] text-neutral-500 mt-1 text-center">
                         {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -227,6 +263,20 @@ export const ChatViewScreen = ({
                 }
               }
             } catch { /* not JSON */ }
+
+            // System guidance messages (default status messages)
+            if (msg.from === 'system' && msg.messageType !== 'system') {
+              return (
+                <div key={msg.id} className="flex justify-center">
+                  <div className="w-full max-w-[90%] bg-blue-500/5 border border-blue-500/10 rounded-2xl px-4 py-3">
+                    <p className="text-[13px] text-neutral-300 whitespace-pre-line leading-relaxed">{msg.text}</p>
+                    <p className="text-[10px] text-neutral-500 mt-1.5">
+                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              );
+            }
 
             const isMe = msg.from === "me";
             const isImageMsg = msg.messageType === 'image' && msg.imageUrl;
@@ -253,9 +303,20 @@ export const ChatViewScreen = ({
                   {!isImageMsg && (
                     <p className="text-[15px] leading-relaxed">{msg.text}</p>
                   )}
-                  <p className={`text-[10px] mt-1 ${isMe ? 'text-white/70' : 'text-neutral-500'}`}>
-                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
+                  <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : ''}`}>
+                    <span className={`text-[10px] ${isMe ? 'text-white/70' : 'text-neutral-500'}`}>
+                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {isMe && (
+                      msg.status === 'sending' ? (
+                        <Clock className="w-3 h-3 text-white/40" />
+                      ) : msg.status === 'read' || msg.isRead ? (
+                        <CheckCheck className="w-3.5 h-3.5 text-blue-400" />
+                      ) : (
+                        <CheckCheck className="w-3.5 h-3.5 text-white/40" />
+                      )
+                    )}
+                  </div>
                 </div>
               </div>
             );

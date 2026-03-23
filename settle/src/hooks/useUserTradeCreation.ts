@@ -6,6 +6,7 @@ import { mapDbOrderToUI } from "@/components/user/screens/helpers";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { showAlert } from '@/context/ModalContext';
 import type { SelectedBankDetails } from '@/components/user/BankAccountSelector';
+import type { PaymentMethodItem } from '@/components/user/PaymentMethodSelector';
 
 interface UseUserTradeCreationParams {
   userId: string | null;
@@ -45,6 +46,7 @@ export function useUserTradeCreation({
   const [escrowTxHash, setEscrowTxHash] = useState<string | null>(null);
   const [escrowError, setEscrowError] = useState<string | null>(null);
   const [selectedBankDetails, setSelectedBankDetails] = useState<SelectedBankDetails | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethodItem | null>(null);
 
   const startTrade = async () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -65,6 +67,12 @@ export function useUserTradeCreation({
       localStorage.removeItem('blip_user');
       setUserId(null);
       setScreen('welcome');
+      return;
+    }
+
+    // Sell orders (user receives fiat) require a selected payment method
+    if (tradeType === 'sell' && !selectedPaymentMethod) {
+      showAlert('Payment Method Required', 'Please select a payment method where you want to receive fiat.', 'warning');
       return;
     }
 
@@ -422,6 +430,7 @@ export function useUserTradeCreation({
           escrow_pda: escrowResult.escrowPda,
           escrow_trade_id: escrowResult.tradeId,
           user_bank_account: selectedBankDetails ? JSON.stringify(selectedBankDetails) : undefined,
+          payment_method_id: selectedPaymentMethod?.id,
         }),
       });
       const orderData = await orderRes.json();
@@ -497,6 +506,7 @@ export function useUserTradeCreation({
     escrowTxHash,
     escrowError, setEscrowError,
     selectedBankDetails, setSelectedBankDetails,
+    selectedPaymentMethod, setSelectedPaymentMethod,
     startTrade,
     confirmCashOrder,
     confirmEscrow,

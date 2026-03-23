@@ -459,8 +459,11 @@ export function TradeChat({
   const statusInfo = STATUS_COLORS[tradeInfo?.status || 'pending'] || STATUS_COLORS.pending;
 
   // Separate system messages (timeline events) from regular chat messages
-  const systemMessages = messages.filter(msg => msg.from === 'system');
-  const chatMessages = messages.filter(msg => msg.from !== 'system');
+  // Guidance messages (from system but messageType='text') stay in the main chat
+  const isTimelineEvent = (msg: ChatMessage) =>
+    msg.from === 'system' && msg.messageType !== 'text';
+  const systemMessages = messages.filter(isTimelineEvent);
+  const chatMessages = messages.filter(msg => !isTimelineEvent(msg));
 
   // Group chat messages by date
   const groupedChatMessages: { date: string; messages: ChatMessage[] }[] = [];
@@ -848,6 +851,31 @@ export function TradeChat({
                             <span className="text-[10px] text-gray-500 mt-1 block">
                               {formatTime(msg.timestamp)}
                             </span>
+                          </motion.div>
+                        );
+                      }
+
+                      // System guidance messages (default order status messages)
+                      if (msg.from === 'system' && msg.messageType !== 'system') {
+                        return (
+                          <motion.div
+                            key={msg.id}
+                            data-testid={`chat-msg-${msg.id}`}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: msgIndex * 0.02 }}
+                            className="flex justify-center"
+                          >
+                            <div className="w-full max-w-[90%] bg-amber-500/5 border border-amber-500/10 rounded-2xl px-4 py-3">
+                              <div className="flex items-center gap-1.5 mb-1.5">
+                                <Bot className="w-3.5 h-3.5 text-amber-400" />
+                                <span className="text-[10px] text-amber-400 font-medium">Trade Bot</span>
+                              </div>
+                              <p className="text-[13px] text-gray-300 whitespace-pre-line leading-relaxed">{msg.text}</p>
+                              <span className="text-[10px] text-gray-600 mt-1.5 block">
+                                {formatTime(msg.timestamp)}
+                              </span>
+                            </div>
                           </motion.div>
                         );
                       }

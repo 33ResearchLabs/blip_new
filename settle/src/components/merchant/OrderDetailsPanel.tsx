@@ -5,7 +5,7 @@ import {
   X, ExternalLink, Clock, User, Wallet, Building2, MapPin,
   Copy, Check, AlertTriangle, CheckCircle, XCircle, Shield,
   ArrowRight, ChevronDown, ChevronUp, MessageCircle, Store,
-  Hash, Link as LinkIcon, Zap, Star
+  Hash, Link as LinkIcon, Zap, Star, Lock, Smartphone, CreditCard
 } from 'lucide-react';
 import { getAuthoritativeStatus, getNextAction, deriveOrderUI } from '@/lib/orders/statusResolver';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -32,6 +32,13 @@ interface OrderDetails {
     location_address?: string;
     user_bank_account?: string | { bank_name: string; account_name: string; iban: string };
   };
+  // Locked payment method (user's selected method for receiving fiat)
+  locked_payment_method?: {
+    id: string;
+    type: 'bank' | 'upi' | 'cash' | 'other';
+    label: string;
+    details: Record<string, string>;
+  } | null;
   escrow_tx_hash?: string;
   escrow_address?: string;
   escrow_pda?: string;
@@ -56,6 +63,9 @@ interface OrderDetails {
   cancellation_reason?: string;
   extension_count?: number;
   max_extensions?: number;
+  extension_requested_by?: string | null;
+  extension_requested_at?: string | null;
+  extension_minutes?: number | null;
   // Unhappy path fields
   cancel_requested_by?: string | null;
   cancel_requested_at?: string | null;
@@ -123,9 +133,11 @@ interface OrderDetailsPanelProps {
   onOpenDispute?: (orderId: string) => void;
   onRequestCancel?: (orderId: string) => void;
   onRespondToCancel?: (orderId: string, accept: boolean) => void;
+  onRespondToExtension?: (orderId: string, accept: boolean) => void;
   onLockEscrow?: (orderId: string) => void;
   onReleaseEscrow?: (orderId: string) => void;
   merchantId?: string;
+  isRequestingCancel?: boolean;
 }
 
 // Status configuration — uses minimal 8-state system
@@ -198,9 +210,11 @@ export function OrderDetailsPanel({
   onOpenDispute,
   onRequestCancel,
   onRespondToCancel,
+  onRespondToExtension,
   onLockEscrow,
   onReleaseEscrow,
   merchantId,
+  isRequestingCancel,
 }: OrderDetailsPanelProps) {
   const [order, setOrder] = useState<OrderDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -521,8 +535,63 @@ export function OrderDetailsPanel({
                     ))}
                   </div>
 
-                  {/* User Bank Details (for sell orders — where merchant sends fiat) */}
-                  {order.payment_details?.user_bank_account && (() => {
+                  {/* User's Locked Payment Method (where merchant sends fiat) */}
+                  {order.locked_payment_method ? (() => {
+                    const lpm = order.locked_payment_method!;
+                    const typeIcon = lpm.type === 'upi' ? <Smartphone className="w-3.5 h-3.5 text-green-400" />
+                      : lpm.type === 'bank' ? <Building2 className="w-3.5 h-3.5 text-blue-400" />
+                      : <CreditCard className="w-3.5 h-3.5 text-purple-400" />;
+
+                    // Build display fields based on type
+                    const fields: { label: string; value: string; key: string; mono?: boolean }[] = [];
+                    if (lpm.type === 'bank') {
+                      if (lpm.details.bank_name) fields.push({ label: 'Bank', value: lpm.details.bank_name, key: 'lpm_bank' });
+                      if (lpm.details.account_name) fields.push({ label: 'Account Name', value: lpm.details.account_name, key: 'lpm_name' });
+                      if (lpm.details.iban) fields.push({ label: 'IBAN', value: lpm.details.iban, key: 'lpm_iban', mono: true });
+                    } else if (lpm.type === 'upi') {
+                      if (lpm.details.upi_id) fields.push({ label: 'UPI ID', value: lpm.details.upi_id, key: 'lpm_upi', mono: true });
+                      if (lpm.details.provider) fields.push({ label: 'Provider', value: lpm.details.provider, key: 'lpm_provider' });
+                    } else if (lpm.type === 'cash') {
+                      if (lpm.details.location_name) fields.push({ label: 'Location', value: lpm.details.location_name, key: 'lpm_location' });
+                      if (lpm.details.location_address) fields.push({ label: 'Address', value: lpm.details.location_address, key: 'lpm_address' });
+                      if (lpm.details.meeting_instructions) fields.push({ label: 'Instructions', value: lpm.details.meeting_instructions, key: 'lpm_instructions' });
+                    } else {
+                      if (lpm.details.method_name) fields.push({ label: 'Method', value: lpm.details.method_name, key: 'lpm_method' });
+                      if (lpm.details.account_identifier) fields.push({ label: 'Account', value: lpm.details.account_identifier, key: 'lpm_account', mono: true });
+                      if (lpm.details.instructions) fields.push({ label: 'Instructions', value: lpm.details.instructions, key: 'lpm_instructions' });
+                    }
+
+                    return (
+                      <div className="space-y-2 pt-3 border-t border-white/[0.06]">
+                        <div className="flex items-center gap-1.5">
+                          <Lock className="w-3 h-3 text-orange-400" />
+                          <p className="text-[11px] text-orange-400 uppercase tracking-wide font-bold">Send AED Here</p>
+                        </div>
+                        <div className="flex items-center gap-2 mb-1">
+                          {typeIcon}
+                          <span className="text-[13px] text-white font-medium">{lpm.label}</span>
+                          <span className="text-[10px] text-white/30 uppercase">{lpm.type}</span>
+                        </div>
+                        {fields.map(({ label, value, key, mono }) => (
+                          <div key={key} className="flex justify-between items-center">
+                            <span className="text-white/50">{label}</span>
+                            {value ? (
+                              <button
+                                onClick={() => handleCopy(value, key)}
+                                className="flex items-center gap-1 text-white hover:text-white/70 transition-colors"
+                              >
+                                <span className={mono ? 'font-mono' : ''}>{value}</span>
+                                {copiedField === key ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-white/30" />}
+                              </button>
+                            ) : (
+                              <span className="text-white/30">-</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })() : order.payment_details?.user_bank_account ? (() => {
+                    // Legacy fallback: user_bank_account from payment_details
                     const uba = order.payment_details!.user_bank_account!;
                     const isStructured = typeof uba === 'object' && 'bank_name' in uba;
                     if (isStructured) {
@@ -568,7 +637,7 @@ export function OrderDetailsPanel({
                         </div>
                       </div>
                     );
-                  })()}
+                  })() : null}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -829,45 +898,110 @@ export function OrderDetailsPanel({
             </div>
           )}
 
-          {/* Cancel Request Banner */}
-          {order.cancel_requested_by === 'user' && (
-            <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-3">
-                <XCircle className="w-5 h-5 text-orange-400" />
+          {/* Pending Extension Request Banner */}
+          {order.extension_requested_by && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-white">Cancel Requested by User</p>
-                  <p className="text-xs text-white/50">{order.cancel_request_reason || 'User requested cancellation'}</p>
+                  <p className="text-sm font-semibold text-white">Time Extension Requested</p>
+                  <p className="text-xs text-white/50">
+                    {order.extension_requested_by === 'user' ? 'Buyer' : 'Seller'} wants +{(order.extension_minutes || 0) >= 60
+                      ? `${Math.round((order.extension_minutes || 0) / 60)} hour${Math.round((order.extension_minutes || 0) / 60) > 1 ? 's' : ''}`
+                      : `${order.extension_minutes || 0} minutes`}
+                  </p>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => onRespondToCancel?.(order.id, true)}
-                  className="flex-1 py-2.5 rounded-xl bg-orange-500/20 text-orange-300 text-sm font-semibold hover:bg-orange-500/30"
-                >
-                  Agree to Cancel
-                </button>
-                <button
-                  onClick={() => onRespondToCancel?.(order.id, false)}
-                  className="flex-1 py-2.5 rounded-xl bg-white/[0.06] text-white/70 text-sm font-semibold hover:bg-white/[0.10]"
-                >
-                  Continue Order
-                </button>
-              </div>
+              {onRespondToExtension && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onRespondToExtension(order.id, true)}
+                    className="flex-1 py-2 rounded-xl bg-amber-500/20 text-amber-300 text-sm font-semibold hover:bg-amber-500/30"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => onRespondToExtension(order.id, false)}
+                    className="flex-1 py-2 rounded-xl bg-white/[0.06] text-white/70 text-sm font-semibold hover:bg-white/[0.10]"
+                  >
+                    Decline
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Cancel Request Pending — merchant requested, waiting for user */}
-          {order.cancel_requested_by === 'merchant' && (
-            <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-orange-400 animate-pulse" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-white">Cancel Request Sent</p>
-                  <p className="text-xs text-white/50">Waiting for user to approve cancellation</p>
+          {/* Cancel Request Banner */}
+          {order.cancel_requested_by && (() => {
+            // Determine if the current merchant is the one who requested cancellation
+            const isM2M = !!order.buyer_merchant;
+            const iRequestedIt = order.cancel_requested_by === 'merchant' && !isM2M;
+            // In M2M: if cancel_requested_by is 'merchant', the OTHER merchant requested it
+            // (because the requester sees success feedback from the API, not this banner)
+            // We need to check: am I the buyer or seller? The requester's actor_id isn't stored
+            // in cancel_requested_by, so for M2M we assume the counterparty requested it
+            const counterpartyRequested = order.cancel_requested_by === 'user' ||
+              (order.cancel_requested_by === 'merchant' && isM2M);
+
+            if (counterpartyRequested) {
+              const requesterLabel = order.cancel_requested_by === 'user'
+                ? 'User'
+                : (order.buyer_merchant?.display_name || order.buyer_merchant?.business_name || 'Counterparty');
+              return (
+                <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <XCircle className="w-5 h-5 text-orange-400" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-white">Cancel Requested by {requesterLabel}</p>
+                      <p className="text-xs text-white/50">{order.cancel_request_reason || 'Requested cancellation'}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        await onRespondToCancel?.(order.id, true);
+                        onClose();
+                      }}
+                      disabled={isRequestingCancel}
+                      className="flex-1 py-2.5 rounded-xl bg-orange-500/20 text-orange-300 text-sm font-semibold hover:bg-orange-500/30 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {isRequestingCancel ? (
+                        <div className="w-4 h-4 border-2 border-orange-300/30 border-t-orange-300 rounded-full animate-spin" />
+                      ) : null}
+                      Agree to Cancel
+                    </button>
+                    <button
+                      onClick={async () => {
+                        await onRespondToCancel?.(order.id, false);
+                        onClose();
+                      }}
+                      disabled={isRequestingCancel}
+                      className="flex-1 py-2.5 rounded-xl bg-white/[0.06] text-white/70 text-sm font-semibold hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Continue Order
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            // I requested it — show waiting state
+            return (
+              <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
+                <div className="flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-orange-400 animate-pulse" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-white">Cancel Request Sent</p>
+                    <p className="text-xs text-white/50">
+                      {isM2M ? 'Waiting for counterparty to approve cancellation' : 'Waiting for user to approve cancellation'}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Inactivity Warning */}
           {order.inactivity_warned_at && order.status !== 'disputed' && !['completed', 'cancelled', 'expired'].includes(order.status) && (
@@ -905,12 +1039,25 @@ export function OrderDetailsPanel({
           {/* Request Cancel Button — for merchant to initiate */}
           {!order.cancel_requested_by && !['completed', 'cancelled', 'expired', 'disputed', 'pending'].includes(order.status) && (
             <button
-              onClick={() => onRequestCancel?.(order.id)}
+              onClick={async () => {
+                await onRequestCancel?.(order.id);
+                onClose();
+              }}
+              disabled={isRequestingCancel}
               className="w-full py-2.5 rounded-xl bg-orange-500/10 text-orange-400 text-sm font-medium flex items-center justify-center gap-2
-                         hover:bg-orange-500/20 transition-colors border border-orange-500/20"
+                         hover:bg-orange-500/20 transition-colors border border-orange-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <XCircle className="w-4 h-4" />
-              Request Cancellation
+              {isRequestingCancel ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+                  Requesting...
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-4 h-4" />
+                  Request Cancellation
+                </>
+              )}
             </button>
           )}
 

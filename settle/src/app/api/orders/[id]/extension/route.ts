@@ -20,6 +20,7 @@ import {
 const requestExtensionSchema = z.object({
   actor_type: z.enum(['user', 'merchant']),
   actor_id: z.string().uuid(),
+  duration_minutes: z.number().optional(), // fiat sender picks from 15, 60, 720 for payment_sent orders
 });
 
 const respondExtensionSchema = z.object({
@@ -47,7 +48,7 @@ export async function POST(
       return validationErrorResponse(errors);
     }
 
-    const { actor_type, actor_id } = parseResult.data;
+    const { actor_type, actor_id, duration_minutes } = parseResult.data;
 
     // Security: enforce actor matches authenticated identity (with merchant header fallback)
     const extHeaderMerchantId = request.headers.get('x-merchant-id');
@@ -57,7 +58,7 @@ export async function POST(
 
     return proxyCoreApi(`/v1/orders/${id}/extension`, {
       method: 'POST',
-      body: { actor_type, actor_id },
+      body: { actor_type, actor_id, ...(duration_minutes ? { duration_minutes } : {}) },
     });
   } catch (error) {
     logger.api.error('POST', '/api/orders/[id]/extension', error as Error);
@@ -129,6 +130,10 @@ export async function GET(
       order.max_extensions
     );
 
+    // For payment_sent orders, provide selectable duration options
+    const isPaymentSent = ['payment_sent', 'payment_confirmed'].includes(order.status);
+    const durationOptions = isPaymentSent ? [15, 60, 720] : null; // 15min, 60min, 12hr
+
     return successResponse({
       canExtend: extensionCheck.canExtend,
       reason: extensionCheck.reason,
@@ -141,6 +146,7 @@ export async function GET(
         extensionMinutes: order.extension_minutes,
       } : null,
       extensionDuration: getExtensionDuration(order.status),
+      durationOptions, // null for non-payment_sent, [15, 60, 720] for payment_sent
     });
   } catch (error) {
     logger.api.error('GET', '/api/orders/[id]/extension', error as Error);

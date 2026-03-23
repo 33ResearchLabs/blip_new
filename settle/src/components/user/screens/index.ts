@@ -25,4 +25,5 @@ export type {
   DbOrder,
   Order,
   BankAccount,
+  LockedPaymentMethod,
 } from './types';

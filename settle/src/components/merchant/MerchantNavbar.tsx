@@ -2,10 +2,9 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
-import { Zap, Wallet, Lock, LogOut, User, Settings, ChevronDown } from 'lucide-react';
+import { Zap, Wallet, Lock, LogOut, User, Settings, ChevronDown, Activity } from 'lucide-react';
 
-export type NavPage = 'dashboard' | 'wallet' | 'settings';
+export type NavPage = 'dashboard' | 'wallet' | 'settings' | 'ops';
 
 interface MerchantNavbarProps {
   activePage: NavPage;
@@ -14,6 +13,7 @@ interface MerchantNavbarProps {
     display_name?: string;
     business_name?: string;
     avatar_url?: string | null;
+    has_ops_access?: boolean;
   } | null;
   embeddedWalletState?: 'none' | 'locked' | 'unlocked';
   /** Extra buttons rendered before the profile section (e.g. tx history, payment methods) */
@@ -100,6 +100,15 @@ export function MerchantNavbar({
             <Link href="/merchant/settings" className={pill(activePage === 'settings')}>
               Settings
             </Link>
+            {merchantInfo?.has_ops_access && (
+              <Link
+                href="/ops"
+                className={`${pill(activePage === 'ops')} flex items-center gap-1.5`}
+              >
+                <Activity className="w-3.5 h-3.5 text-orange-400" />
+                Ops
+              </Link>
+            )}
           </nav>
         </div>
 
@@ -121,7 +130,7 @@ export function MerchantNavbar({
             >
               <div className="relative w-7 h-7 rounded-full border border-white/10 flex items-center justify-center text-[11px] overflow-hidden bg-white/[0.04]">
                 {merchantInfo?.avatar_url ? (
-                  <Image src={merchantInfo.avatar_url} alt="Profile" fill className="object-cover" sizes="28px" />
+                  <img src={merchantInfo.avatar_url} alt="Profile" className="w-full h-full object-cover" />
                 ) : (
                   <span className="font-semibold text-white/70">{initial}</span>
                 )}
@@ -137,7 +146,7 @@ export function MerchantNavbar({
                   <div className="flex items-center gap-2.5">
                     <div className="relative w-9 h-9 rounded-full border border-white/10 flex items-center justify-center text-[13px] overflow-hidden bg-white/[0.04] shrink-0">
                       {merchantInfo?.avatar_url ? (
-                        <Image src={merchantInfo.avatar_url} alt="Profile" fill className="object-cover" sizes="36px" />
+                        <img src={merchantInfo.avatar_url} alt="Profile" className="w-full h-full object-cover" />
                       ) : (
                         <span className="font-semibold text-white/70">{initial}</span>
                       )}
@@ -179,6 +188,16 @@ export function MerchantNavbar({
                     <Settings className="w-4 h-4" />
                     Settings
                   </Link>
+                  {merchantInfo?.has_ops_access && (
+                    <Link
+                      href="/ops"
+                      onClick={() => setMenuOpen(false)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-orange-400/70 hover:text-orange-400 hover:bg-orange-500/[0.06] transition-colors"
+                    >
+                      <Activity className="w-4 h-4" />
+                      Ops Panel
+                    </Link>
+                  )}
                 </div>
 
                 {/* Logout */}

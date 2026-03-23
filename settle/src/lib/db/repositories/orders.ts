@@ -88,12 +88,22 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
               'location_lat', mo.location_lat,
               'location_lng', mo.location_lng,
               'meeting_instructions', mo.meeting_instructions
-            ) as offer
+            ) as offer,
+            CASE
+              WHEN upm.id IS NOT NULL THEN json_build_object(
+                'id', upm.id,
+                'type', upm.type,
+                'label', upm.label,
+                'details', upm.details
+              )
+              ELSE NULL
+            END as locked_payment_method
      FROM orders o
      JOIN users u ON o.user_id = u.id
      JOIN merchants m ON o.merchant_id = m.id
      JOIN merchant_offers mo ON o.offer_id = mo.id
      LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
+     LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
      WHERE o.id = $1`,
     [id]
   );
@@ -110,7 +120,9 @@ export async function getUserOrders(
              'display_name', m.display_name,
              'rating', m.rating,
              'total_trades', m.total_trades,
-             'wallet_address', m.wallet_address
+             'wallet_address', m.wallet_address,
+             'is_online', m.is_online,
+             'last_seen_at', m.last_seen_at
            ) as merchant,
            json_build_object(
              'payment_method', mo.payment_method,
@@ -123,11 +135,21 @@ export async function getUserOrders(
              'location_lng', mo.location_lng,
              'meeting_instructions', mo.meeting_instructions
            ) as offer,
+           CASE
+             WHEN upm.id IS NOT NULL THEN json_build_object(
+               'id', upm.id,
+               'type', upm.type,
+               'label', upm.label,
+               'details', upm.details
+             )
+             ELSE NULL
+           END as locked_payment_method,
            COALESCE(chat_agg.unread_count, 0) as unread_count,
            chat_latest.last_message
     FROM orders o
     JOIN merchants m ON o.merchant_id = m.id
     JOIN merchant_offers mo ON o.offer_id = mo.id
+    LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
     LEFT JOIN LATERAL (
       SELECT COUNT(*) FILTER (WHERE cm.sender_type = 'merchant' AND cm.message_type != 'system' AND cm.is_read = false)::int as unread_count
       FROM chat_messages cm WHERE cm.order_id = o.id
@@ -182,11 +204,21 @@ export async function getMerchantOrders(
            json_build_object(
              'payment_method', mo.payment_method,
              'location_name', mo.location_name
-           ) as offer
+           ) as offer,
+           CASE
+             WHEN upm.id IS NOT NULL THEN json_build_object(
+               'id', upm.id,
+               'type', upm.type,
+               'label', upm.label,
+               'details', upm.details
+             )
+             ELSE NULL
+           END as locked_payment_method
     FROM orders o
     JOIN users u ON o.user_id = u.id
     JOIN merchants m ON o.merchant_id = m.id
     JOIN merchant_offers mo ON o.offer_id = mo.id
+    LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
     WHERE (o.merchant_id = $1 OR o.buyer_merchant_id = $1)
       AND o.status NOT IN ('expired', 'cancelled')
   `;
@@ -517,6 +549,86 @@ function getStatusChangeMessage(
       return `⚠️ Order is now under dispute`;
     default:
       return null;
+  }
+}
+
+/**
+ * Generate default guidance messages for merchant and user based on order status.
+ * Returns an array of messages to insert as system messages in the chat,
+ * giving both parties clear next-step instructions.
+ */
+function getStatusGuidanceMessages(
+  newStatus: OrderStatus,
+  order: Order,
+  actorType: ActorType,
+): string[] {
+  const isBuyOrder = order.type === 'buy'; // user is buying crypto from merchant
+  const fiat = `${order.fiat_amount.toLocaleString()} ${order.fiat_currency}`;
+  const crypto = `${order.crypto_amount} USDC`;
+  const paymentMethod = order.payment_method === 'cash' ? 'cash' : 'bank transfer';
+
+  switch (newStatus) {
+    case 'accepted':
+      if (isBuyOrder) {
+        return [
+          `📋 Next steps:\n• Merchant: Please lock ${crypto} in escrow to secure the trade.\n• Buyer: Once escrow is locked, send ${fiat} via ${paymentMethod} using the payment details provided.`,
+        ];
+      } else {
+        return [
+          `📋 Next steps:\n• Seller: Please lock ${crypto} in escrow to secure the trade.\n• Merchant: Once escrow is locked, send ${fiat} via ${paymentMethod} to the seller.`,
+        ];
+      }
+
+    case 'escrowed':
+      if (isBuyOrder) {
+        return [
+          `📋 Escrow is locked! Next steps:\n• Buyer: Please send ${fiat} via ${paymentMethod} to the merchant using the payment details above.\n• Merchant: Wait for the buyer to send payment, then confirm receipt.`,
+        ];
+      } else {
+        return [
+          `📋 Escrow is locked! Next steps:\n• Merchant: Please send ${fiat} via ${paymentMethod} to the seller.\n• Seller: Wait for the merchant to send payment, then confirm receipt.`,
+        ];
+      }
+
+    case 'payment_sent':
+      if (isBuyOrder) {
+        return [
+          `📋 Payment marked as sent!\n• Merchant: Please verify you have received ${fiat} in your account and confirm the payment.\n• Buyer: Waiting for merchant to confirm receipt of your payment.`,
+        ];
+      } else {
+        return [
+          `📋 Payment marked as sent!\n• Seller: Please verify you have received ${fiat} in your account and confirm the payment.\n• Merchant: Waiting for seller to confirm receipt of your payment.`,
+        ];
+      }
+
+    case 'completed':
+      if (isBuyOrder) {
+        return [
+          `🎉 Trade complete!\n• Buyer: ${crypto} has been released to your wallet.\n• Merchant: ${fiat} payment received. Thank you for trading!`,
+        ];
+      } else {
+        return [
+          `🎉 Trade complete!\n• Seller: ${fiat} payment received and ${crypto} released to the merchant.\n• Merchant: Thank you for trading!`,
+        ];
+      }
+
+    case 'cancelled':
+      return [
+        `ℹ️ This order has been cancelled. If crypto was locked in escrow, it will be returned to the original wallet. If you believe this was a mistake, please contact support.`,
+      ];
+
+    case 'disputed':
+      return [
+        `⚠️ A dispute has been raised on this order.\n• Both parties: Please provide any evidence (screenshots, transaction receipts) in this chat.\n• A compliance officer will review and resolve the dispute. Do not send or release any funds until the dispute is resolved.`,
+      ];
+
+    case 'expired':
+      return [
+        `ℹ️ This order expired because it was not completed within the time limit. If crypto was locked in escrow, it will be returned. You can create a new order to try again.`,
+      ];
+
+    default:
+      return [];
   }
 }
 
@@ -880,6 +992,17 @@ export async function updateOrderStatus(
           );
         }
 
+        // Auto-send default guidance messages for merchant and user
+        // Uses message_type='text' so they appear in the main chat (not filtered as system-only)
+        const guidanceMessages = getStatusGuidanceMessages(effectiveStatus, updatedOrder, actorType);
+        for (const guidanceMsg of guidanceMessages) {
+          await client.query(
+            `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
+             VALUES ($1, 'system', $2, $3, 'text')`,
+            [orderId, orderId, guidanceMsg]
+          );
+        }
+
         // Auto-send bank info message when order is accepted (for bank payment method)
         if (effectiveStatus === 'accepted' && updatedOrder.payment_method === 'bank') {
           const paymentDetails = updatedOrder.payment_details as Record<string, unknown> | null;
@@ -1010,8 +1133,7 @@ export async function getOrderMessages(orderId: string): Promise<ChatMessage[]> 
     LEFT JOIN merchants m ON cm.sender_type = 'merchant' AND cm.sender_id = m.id
     LEFT JOIN compliance_team ct ON cm.sender_type = 'compliance' AND cm.sender_id = ct.id
     WHERE cm.order_id = $1
-      AND cm.sender_type != 'system'
-      AND cm.message_type != 'system'
+      AND NOT (cm.sender_type = 'system' AND cm.message_type = 'system')
     ORDER BY cm.created_at ASC`,
     [orderId]
   );

@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Sparkles,
   Loader2,
+  Flame,
 } from "lucide-react";
 import { UserBadge } from "@/components/merchant/UserBadge";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
@@ -144,22 +145,12 @@ export function MobileOrdersView({
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-white truncate">{order.user}</span>
                     {order.orderType && (
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
-                        order.orderType === 'buy'
-                          ? 'bg-green-500/20 text-green-400'
-                          : 'bg-orange-500/20 text-orange-400'
-                      }`}>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded font-medium bg-black text-white border border-white/10">
                         {order.orderType === 'buy' ? 'SEND' : 'RECEIVE'}
                       </span>
                     )}
                     {order.myRole && (
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
-                        order.myRole === 'buyer'
-                          ? 'bg-blue-500/20 text-blue-400'
-                          : order.myRole === 'seller'
-                          ? 'bg-purple-500/20 text-purple-400'
-                          : 'bg-gray-500/20 text-gray-400'
-                      }`}>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded font-medium bg-black text-white border border-white/10">
                         {order.myRole === 'buyer' ? 'YOU RECEIVE' : order.myRole === 'seller' ? 'YOU SEND' : ''}
                       </span>
                     )}
@@ -194,8 +185,9 @@ export function MobileOrdersView({
                   ) : (
                     <>
                       <div className="text-[10px] font-mono text-white">+${Math.round(order.amount * 0.005)}</div>
-                      <div className={`text-xs font-mono ${order.expiresIn < 30 ? "text-red-400" : "text-gray-500"}`}>
-                        {Math.floor(order.expiresIn / 60)}:{(order.expiresIn % 60).toString().padStart(2, "0")}
+                      <div className={`flex items-center gap-1 text-sm font-mono font-bold ${order.expiresIn <= 120 ? "text-red-400" : "text-orange-400"}`}>
+                        {order.expiresIn <= 0 ? "Expired" : order.expiresIn >= 3600 ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m` : order.expiresIn >= 60 ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s` : `${order.expiresIn}s`}
+                        <span className="animate-pulse" style={{ filter: order.expiresIn <= 120 ? 'drop-shadow(0 0 6px #ef4444)' : 'drop-shadow(0 0 4px #f97316)' }}>🔥</span>
                       </div>
                     </>
                   )}

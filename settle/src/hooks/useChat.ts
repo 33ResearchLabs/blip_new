@@ -5,7 +5,7 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 export interface ChatMessage {
   id: string;
-  from: "me" | "them";
+  from: "me" | "them" | "system";
   text: string;
   timestamp: Date;
 }
@@ -49,9 +49,10 @@ export function useChat(options: UseChatOptions = {}) {
 
   // Convert DB message to UI message
   const mapDbMessageToUI = useCallback((dbMsg: DbMessage, myActorType: string): ChatMessage => {
+    const isSystem = dbMsg.sender_type === 'system' || dbMsg.message_type === 'system';
     return {
       id: dbMsg.id,
-      from: dbMsg.sender_type === myActorType ? "me" : "them",
+      from: isSystem ? 'system' : (dbMsg.sender_type === myActorType ? "me" : "them"),
       text: dbMsg.content,
       timestamp: new Date(dbMsg.created_at),
     };

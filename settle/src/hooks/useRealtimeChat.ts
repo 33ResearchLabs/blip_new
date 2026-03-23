@@ -21,6 +21,8 @@ export interface ChatMessage {
   imageUrl?: string | null;
   senderType?: 'user' | 'merchant' | 'compliance' | 'system';
   senderName?: string;
+  isRead?: boolean;
+  status?: 'sending' | 'sent' | 'read';
 }
 
 export interface ChatWindow {
@@ -86,22 +88,26 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   const mapDbMessageToUI = useCallback(
     (dbMsg: DbMessage, myActorType: string): ChatMessage => {
       // System messages (dispute, resolution, etc.) are always from 'system'
-      const isSystemMessage = dbMsg.message_type === 'dispute' ||
+      const isSystemMessage = dbMsg.sender_type === 'system' ||
+        dbMsg.message_type === 'dispute' ||
         dbMsg.message_type === 'resolution' ||
         dbMsg.message_type === 'resolution_proposed' ||
         dbMsg.message_type === 'resolution_rejected' ||
         dbMsg.message_type === 'resolution_accepted' ||
         dbMsg.message_type === 'resolution_finalized' ||
         dbMsg.message_type === 'system';
+      const from = isSystemMessage ? 'system' : (dbMsg.sender_type === myActorType ? 'me' : 'them');
       return {
         id: dbMsg.id,
-        from: isSystemMessage ? 'system' : (dbMsg.sender_type === myActorType ? 'me' : 'them'),
+        from,
         text: dbMsg.content,
         timestamp: new Date(dbMsg.created_at),
         messageType: dbMsg.message_type,
         imageUrl: dbMsg.image_url,
         senderType: dbMsg.sender_type,
         senderName: dbMsg.sender_name,
+        isRead: dbMsg.is_read,
+        status: from === 'me' ? (dbMsg.is_read ? 'read' : 'sent') : undefined,
       };
     },
     []
@@ -111,22 +117,26 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   const mapPusherMessageToUI = useCallback(
     (event: PusherMessageEvent, myActorType: string): ChatMessage => {
       // System messages (dispute, resolution, etc.) are always from 'system'
-      const isSystemMessage = event.messageType === 'dispute' ||
+      const isSystemMessage = event.senderType === 'system' ||
+        event.messageType === 'dispute' ||
         event.messageType === 'resolution' ||
         event.messageType === 'resolution_proposed' ||
         event.messageType === 'resolution_rejected' ||
         event.messageType === 'resolution_accepted' ||
         event.messageType === 'resolution_finalized' ||
         event.messageType === 'system';
+      const from = isSystemMessage ? 'system' : (event.senderType === myActorType ? 'me' : 'them');
       return {
         id: event.messageId,
-        from: isSystemMessage ? 'system' : (event.senderType === myActorType ? 'me' : 'them'),
+        from,
         text: event.content,
         timestamp: new Date(event.createdAt),
         messageType: event.messageType,
         imageUrl: event.imageUrl,
         senderType: event.senderType,
         senderName: event.senderName,
+        isRead: false,
+        status: from === 'me' ? 'sent' : undefined,
       };
     },
     []
@@ -260,9 +270,28 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         );
       };
 
+      // Handle messages read by the other party
+      const handleMessagesRead = (rawData: unknown) => {
+        const data = rawData as { orderId: string; readerType: string; readAt: string };
+        if (data.orderId !== orderId || data.readerType === actorType) return;
+
+        setChatWindows((prev) =>
+          prev.map((w) => {
+            if (w.orderId !== orderId) return w;
+            return {
+              ...w,
+              messages: w.messages.map((m) =>
+                m.from === 'me' ? { ...m, isRead: true, status: 'read' as const } : m
+              ),
+            };
+          })
+        );
+      };
+
       channel.bind(CHAT_EVENTS.MESSAGE_NEW, handleNewMessage);
       channel.bind(CHAT_EVENTS.TYPING_START, handleTypingStart);
       channel.bind(CHAT_EVENTS.TYPING_STOP, handleTypingStop);
+      channel.bind(CHAT_EVENTS.MESSAGES_READ, handleMessagesRead);
 
       // Fetch initial messages
       fetchMessages(orderId, chatId);
@@ -438,6 +467,8 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         timestamp: new Date(),
         messageType: imageUrl ? 'image' : 'text',
         imageUrl,
+        isRead: false,
+        status: 'sending',
       };
 
       setChatWindows((prev) =>

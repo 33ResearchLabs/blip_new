@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
             'content', cm.content,
             'sender_type', cm.sender_type,
             'message_type', cm.message_type,
+            'image_url', cm.image_url,
             'created_at', cm.created_at,
             'is_read', cm.is_read
           )

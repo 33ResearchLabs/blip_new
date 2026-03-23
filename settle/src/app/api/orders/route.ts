@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserOrders } from '@/lib/db/repositories/orders';
 import { findBestOffer, getOfferWithMerchant } from '@/lib/db/repositories/merchants';
+import { verifyPaymentMethodOwnership } from '@/lib/db/repositories/paymentMethods';
 import { OfferType, PaymentMethod, logger, normalizeStatus } from 'settlement-core';
 import {
   createOrderSchema,
@@ -91,6 +92,7 @@ export async function POST(request: NextRequest) {
       user_bank_account,
       buyer_wallet_address,
       buyer_merchant_id,
+      payment_method_id,
     } = parseResult.data;
 
     // Authorization: require authenticated user creating order for themselves
@@ -111,6 +113,16 @@ export async function POST(request: NextRequest) {
     // Buy orders require buyer_wallet_address so merchant can release escrow
     if (type === 'buy' && !buyer_wallet_address) {
       return validationErrorResponse(['buyer_wallet_address is required for buy orders. Please connect your wallet.']);
+    }
+
+    // Sell orders (user receives fiat): validate payment_method_id if provided
+    let verifiedPaymentMethodId: string | undefined;
+    if (payment_method_id) {
+      const pm = await verifyPaymentMethodOwnership(payment_method_id, user_id);
+      if (!pm) {
+        return validationErrorResponse(['Invalid or inactive payment method']);
+      }
+      verifiedPaymentMethodId = pm.id;
     }
 
     let offer;
@@ -210,6 +222,7 @@ export async function POST(request: NextRequest) {
         buyer_wallet_address: type === 'buy' ? buyer_wallet_address : undefined,
         buyer_merchant_id,
         ref_price_at_create: offer.rate,
+        payment_method_id: verifiedPaymentMethodId,
       },
     });
   } catch (error) {

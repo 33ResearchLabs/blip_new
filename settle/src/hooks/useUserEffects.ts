@@ -101,6 +101,7 @@ export function useUserEffects({
     openChat,
     sendMessage: sendChatMessage,
     sendTypingIndicator,
+    markAsRead,
   } = useRealtimeChat({
     actorType: "user",
     actorId: userId || undefined,
@@ -109,7 +110,15 @@ export function useUserEffects({
 
       setOrders(prev => prev.map(o => {
         if (o.id === chatId && message.from === 'them') {
-          return { ...o, unreadCount: (o.unreadCount || 0) + 1 };
+          return {
+            ...o,
+            unreadCount: (o.unreadCount || 0) + 1,
+            lastMessage: {
+              content: message.text,
+              fromMerchant: true,
+              createdAt: message.timestamp,
+            },
+          };
         }
         return o;
       }));
@@ -392,24 +401,54 @@ export function useUserEffects({
         "\uD83C\uDFEA",
         activeOrder.id
       );
+      // Mark merchant's messages as read when user views the chat
+      const chat = chatWindows.find(w => w.orderId === activeOrder.id);
+      if (chat) markAsRead(chat.id);
     }
-  }, [screen, activeOrder, openChat]);
+  }, [screen, activeOrder, openChat, chatWindows, markAsRead]);
 
   // Scroll to bottom when chat messages change
   const activeChat = activeOrder ? chatWindows.find(w => w.orderId === activeOrder.id) : null;
 
   useEffect(() => {
     if ((showChat || screen === "chat-view") && chatMessagesRef.current) {
-      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+      // Use requestAnimationFrame to ensure DOM has painted before scrolling
+      requestAnimationFrame(() => {
+        if (chatMessagesRef.current) {
+          chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+        }
+      });
     }
-  }, [showChat, screen, activeChat?.messages]);
+  }, [showChat, screen, activeChat?.messages?.length]);
 
   const handleSendMessage = useCallback(() => {
     if (!activeChat || !chatMessage.trim()) return;
     sendChatMessage(activeChat.id, chatMessage);
+    // Update lastMessage on the order for chat list preview
+    if (activeOrderId) {
+      setOrders(prev => prev.map(o => {
+        if (o.id === activeOrderId) {
+          return {
+            ...o,
+            lastMessage: {
+              content: chatMessage.trim(),
+              fromMerchant: false,
+              createdAt: new Date(),
+            },
+          };
+        }
+        return o;
+      }));
+    }
     setChatMessage("");
     playSound('send');
-  }, [activeChat, chatMessage, sendChatMessage, playSound]);
+    // Scroll to bottom after sending
+    requestAnimationFrame(() => {
+      if (chatMessagesRef.current) {
+        chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+      }
+    });
+  }, [activeChat, chatMessage, sendChatMessage, playSound, activeOrderId, setOrders]);
 
   // Debug logging for chat issues
   useEffect(() => {

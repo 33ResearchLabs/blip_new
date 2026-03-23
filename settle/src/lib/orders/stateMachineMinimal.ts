@@ -66,7 +66,7 @@ export const MINIMAL_ALLOWED_TRANSITIONS: Record<MinimalOrderStatus, MinimalTran
   payment_sent: [
     { to: 'completed', allowedActors: ['user', 'merchant', 'system'], description: 'Confirm payment and release' },
     { to: 'disputed', allowedActors: ['user', 'merchant'], description: 'Payment dispute' },
-    { to: 'expired', allowedActors: ['system'], description: 'Payment not confirmed in time' },
+    // No expiry — once fiat is paid, order can only be completed or disputed
   ],
   completed: [], // Terminal state - no transitions allowed
   cancelled: [], // Terminal state - no transitions allowed
@@ -205,9 +205,14 @@ export function getMinimalExpiryTimeout(status: MinimalOrderStatus): number | nu
     return MINIMAL_GLOBAL_ORDER_TIMEOUT_MINUTES;
   }
 
-  // Accepted+ orders: 120 minutes
-  if (['accepted', 'escrowed', 'payment_sent'].includes(status)) {
+  // Accepted/escrowed orders: 120 minutes
+  if (['accepted', 'escrowed'].includes(status)) {
     return MINIMAL_ACCEPTED_ORDER_TIMEOUT_MINUTES;
+  }
+
+  // payment_sent: no expiry — fiat is already sent
+  if (status === 'payment_sent') {
+    return null;
   }
 
   // Disputed: 72 hours
@@ -405,7 +410,7 @@ export const STATUS_TIMEOUTS: Partial<Record<OrderStatus, number>> = {
   pending: 15,
   accepted: 15,
   escrowed: 15,
-  payment_sent: 15,
+  // payment_sent: no expiry — fiat already sent, only completed or disputed
   disputed: 1440,
 };
 
@@ -419,8 +424,11 @@ export const EXTENSION_DURATIONS: Partial<Record<OrderStatus, number>> = {
   pending: 15,
   accepted: 30,
   escrowed: 60,
-  payment_sent: 120,
+  payment_sent: 60, // default; fiat sender can pick from 15, 60, 720 (12hr)
 };
+
+// Selectable extension durations for payment_sent (fiat sender picks)
+export const PAYMENT_SENT_EXTENSION_OPTIONS = [15, 60, 720] as const; // minutes
 
 export const EXTENDABLE_STATUSES: readonly OrderStatus[] = [
   'pending',
@@ -503,7 +511,7 @@ export function getNextExpiryInterval(status: OrderStatus): string | null {
     pending: "INTERVAL '15 minutes'",
     accepted: "INTERVAL '15 minutes'",
     escrowed: "INTERVAL '15 minutes'",
-    payment_sent: "INTERVAL '15 minutes'",
+    // payment_sent: no expiry interval — fiat already sent
   };
   return intervals[status] || null;
 }

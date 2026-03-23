@@ -203,19 +203,27 @@ const OrderList = memo(function OrderList({
                       )}
                     </div>
                     {/* Timer */}
-                    <span
-                      className={`text-xs font-bold font-mono tabular-nums shrink-0 ml-auto px-1.5 py-0.5 rounded ${
-                        liveExpiry < 120
-                          ? "text-red-400/80 bg-red-500/[0.06]"
-                          : liveExpiry < 300
-                            ? "text-orange-400/70 bg-orange-500/[0.06]"
-                            : "text-white/35"
+                    <div
+                      className={`flex items-center gap-1 text-sm font-bold font-mono tabular-nums shrink-0 ml-auto ${
+                        liveExpiry <= 120 ? "text-red-400" : "text-orange-400"
                       }`}
                     >
-                      {Math.floor(liveExpiry / 60)}m{" "}
-                      {String(liveExpiry % 60).padStart(2, "0")}s
-                    </span>
+                      {liveExpiry <= 0 ? "Expired" : liveExpiry >= 3600 ? `${Math.floor(liveExpiry / 3600)}h ${Math.floor((liveExpiry % 3600) / 60)}m` : liveExpiry >= 60 ? `${Math.floor(liveExpiry / 60)}m ${liveExpiry % 60}s` : `${liveExpiry}s`}
+                      <span className="animate-pulse" style={{ filter: liveExpiry <= 120 ? 'drop-shadow(0 0 6px #ef4444)' : 'drop-shadow(0 0 4px #f97316)' }}>🔥</span>
+                    </div>
                   </div>
+
+                  {/* Warning banner when under 5 minutes */}
+                  {liveExpiry > 0 && liveExpiry <= 300 && (
+                    <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-1 ${
+                      liveExpiry <= 120 ? 'bg-red-500/10 border border-red-500/20' : 'bg-orange-500/10 border border-orange-500/20'
+                    }`}>
+                      <span className="text-xs shrink-0">🔥</span>
+                      <span className={`text-[10px] font-bold ${liveExpiry <= 120 ? 'text-red-400' : 'text-orange-400'}`}>
+                        {liveExpiry <= 120 ? 'Expiring soon! Act now' : `Expires in ${Math.floor(liveExpiry / 60)}m ${liveExpiry % 60}s`}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Row 2: Amount + profit */}
                   <div className="flex items-center gap-1.5 mb-1">
@@ -391,21 +399,14 @@ const OrderList = memo(function OrderList({
                     )}
                   </div>
                   {/* Timer */}
-                  <span
-                    className={`text-xs font-bold font-mono tabular-nums shrink-0 ml-auto px-1.5 py-0.5 rounded ${
-                      order.expiresIn <= 0
-                        ? "text-red-400/80 bg-red-500/[0.06]"
-                        : order.expiresIn < 120
-                          ? "text-red-400/80 bg-red-500/[0.06]"
-                          : order.expiresIn < 300
-                            ? "text-orange-400/70 bg-orange-500/[0.06]"
-                            : "text-white/35"
+                  <div
+                    className={`flex items-center gap-1 text-sm font-bold font-mono tabular-nums shrink-0 ml-auto ${
+                      order.expiresIn <= 120 ? "text-red-400" : "text-orange-400"
                     }`}
                   >
-                    {order.expiresIn > 0
-                      ? `${Math.floor(order.expiresIn / 60)}m ${String(order.expiresIn % 60).padStart(2, "0")}s`
-                      : "0:00"}
-                  </span>
+                    {order.expiresIn <= 0 ? "Expired" : order.expiresIn >= 3600 ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m` : order.expiresIn >= 60 ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s` : `${order.expiresIn}s`}
+                    <span className="animate-pulse" style={{ filter: order.expiresIn <= 120 ? 'drop-shadow(0 0 6px #ef4444)' : 'drop-shadow(0 0 4px #f97316)' }}>🔥</span>
+                  </div>
                 </div>
 
                 {/* Row 2: Amount + profit */}

@@ -75,6 +75,13 @@ export interface DbOrder {
     location_name?: string;
     location_address?: string;
   };
+  // Locked payment method (user's selected method for receiving fiat)
+  locked_payment_method?: {
+    id: string;
+    type: 'bank' | 'upi' | 'cash' | 'other';
+    label: string;
+    details: Record<string, string>;
+  } | null;
   cancellation_reason?: string;
   unread_count?: number;
   has_manual_message?: boolean;
@@ -114,6 +121,12 @@ export interface Order {
   userBankAccount?: string;
   userBankDetails?: { bank_name: string; account_name: string; iban: string };
   sellerBankDetails?: { bank_name: string; account_name: string; iban: string };
+  lockedPaymentMethod?: {
+    id: string;
+    type: 'bank' | 'upi' | 'cash' | 'other';
+    label: string;
+    details: Record<string, string>;
+  } | null;
   isM2M?: boolean;
   buyerMerchantId?: string;
   buyerMerchantWallet?: string;
@@ -128,6 +141,8 @@ export interface Order {
   spreadPreference?: 'best' | 'fastest' | 'cheap';
   protocolFeePercent?: number;
   protocolFeeAmount?: number;
+  cancelRequestedBy?: string | null;
+  cancelRequestReason?: string | null;
 }
 
 export interface LeaderboardEntry {

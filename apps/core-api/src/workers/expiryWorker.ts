@@ -143,10 +143,11 @@ async function expireOrder(order: ExpiredOrder): Promise<void> {
 async function processBatch(): Promise<void> {
   try {
     // Find orders that have expired
+    // payment_sent orders never expire — they can only be completed or disputed
     const expiredOrders = await query<ExpiredOrder>(
       `SELECT id, order_number, status, user_id, merchant_id, crypto_amount, type, escrow_tx_hash, created_at, expires_at
        FROM orders
-       WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed')
+       WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed', 'payment_sent', 'payment_confirmed')
        AND expires_at < NOW()
        ORDER BY expires_at ASC
        LIMIT $1

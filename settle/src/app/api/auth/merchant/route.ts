@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     // Check session validity
     if (action === 'check_session' && merchant_id) {
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, rating, total_trades, balance
+        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, balance, has_ops_access
          FROM merchants
          WHERE id = $1 AND status = 'active'`,
         [merchant_id]
@@ -71,9 +71,12 @@ export async function GET(request: NextRequest) {
         display_name: string;
         business_name: string;
         wallet_address: string;
+        avatar_url: string | null;
+        bio: string | null;
         rating: number;
         total_trades: number;
         balance: number;
+        has_ops_access: boolean;
       };
 
       // Set merchant online when session is validated (critical for order matching!)
@@ -93,9 +96,12 @@ export async function GET(request: NextRequest) {
             display_name: merchant.display_name,
             business_name: merchant.business_name,
             wallet_address: merchant.wallet_address,
+            avatar_url: merchant.avatar_url,
+            bio: merchant.bio,
             rating: parseFloat(String(merchant.rating)) || 5,
             total_trades: merchant.total_trades || 0,
             balance: parseFloat(String(merchant.balance)) || 0,
+            has_ops_access: merchant.has_ops_access || false,
           },
         },
       });
@@ -104,7 +110,7 @@ export async function GET(request: NextRequest) {
     if (action === 'wallet_login' && wallet_address) {
       // Query merchant by wallet address
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, rating, total_trades, is_online
+        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, is_online, has_ops_access
          FROM merchants
          WHERE wallet_address = $1 AND status = 'active'`,
         [wallet_address]
@@ -184,7 +190,7 @@ export async function POST(request: NextRequest) {
 
       // Query merchant by wallet address
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, rating, total_trades, is_online, balance
+        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, is_online, balance, has_ops_access
          FROM merchants
          WHERE wallet_address = $1 AND status = 'active'`,
         [wallet_address]
@@ -211,10 +217,13 @@ export async function POST(request: NextRequest) {
           display_name: string;
           business_name: string;
           wallet_address: string;
+          avatar_url: string | null;
+          bio: string | null;
           rating: number;
           total_trades: number;
           is_online: boolean;
           balance: number;
+          has_ops_access: boolean;
         };
 
         // Check if username needs to be set
@@ -269,9 +278,12 @@ export async function POST(request: NextRequest) {
               display_name: merchant.display_name,
               business_name: merchant.business_name,
               wallet_address: merchant.wallet_address,
+              avatar_url: merchant.avatar_url,
+              bio: merchant.bio,
               rating: parseFloat(String(merchant.rating)) || 5,
               total_trades: merchant.total_trades || 0,
               balance: parseFloat(String(merchant.balance)) || 0,
+              has_ops_access: merchant.has_ops_access || false,
             },
             isNewMerchant,
             needsUsername,
@@ -596,7 +608,7 @@ export async function POST(request: NextRequest) {
 
       // Find merchant by email
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, email, password_hash, rating, total_trades, is_online, balance
+        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, email, password_hash, rating, total_trades, is_online, balance, has_ops_access
          FROM merchants
          WHERE email = $1 AND status = 'active'`,
         [email.toLowerCase()]
@@ -615,12 +627,15 @@ export async function POST(request: NextRequest) {
         display_name: string;
         business_name: string;
         wallet_address: string | null;
+        avatar_url: string | null;
+        bio: string | null;
         email: string;
         password_hash: string | null;
         rating: number;
         total_trades: number;
         is_online: boolean;
         balance: number;
+        has_ops_access: boolean;
       };
 
       // Verify password
@@ -661,10 +676,13 @@ export async function POST(request: NextRequest) {
             display_name: merchant.display_name,
             business_name: merchant.business_name,
             wallet_address: merchant.wallet_address,
+            avatar_url: merchant.avatar_url,
+            bio: merchant.bio,
             email: merchant.email,
             rating: parseFloat(String(merchant.rating)) || 5,
             total_trades: merchant.total_trades || 0,
             balance: parseFloat(String(merchant.balance)) || 0,
+            has_ops_access: merchant.has_ops_access || false,
           },
         },
       });

@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useRef } from 'react';
-import { Shield, Zap, ChevronRight, Target, TrendingDown, Flame, ArrowRight } from 'lucide-react';
+import { Shield, Zap, ChevronRight, Flame, ArrowRight, Clock, XCircle } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextActionFromStatus } from '@/lib/orders/statusResolver';
 
@@ -91,26 +91,68 @@ const InProgressOrderList = memo(function InProgressOrderList({
                   <div className="flex items-center gap-2">
                     <div className="text-base">{order.emoji}</div>
                     <span className="text-xs font-medium text-white/80">{order.user}</span>
-                    <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
-                      order.orderType === 'buy'
-                        ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
-                        : 'bg-white/[0.06] border-white/[0.08] text-white/50'
-                    }`}>
-                      {order.orderType === 'buy' ? 'SEND' : 'RECEIVE'}
+                    {order.spreadPreference && (
+                      <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
+                        order.spreadPreference === 'fastest'
+                          ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
+                          : order.spreadPreference === 'cheap'
+                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                          : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                      }`}>
+                        {order.spreadPreference === 'fastest' && <Zap className="w-2.5 h-2.5" />}
+                        {order.spreadPreference === 'fastest' ? 'FAST' : order.spreadPreference === 'best' ? 'BEST' : 'CHEAP'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {order.spreadPreference && (
+                      <div className="flex items-center gap-0.5">
+                        <Flame className="w-2.5 h-2.5 text-orange-500/60 animate-pulse" />
+                        <span className="text-[9px] font-bold text-white/40 font-mono">
+                          {order.spreadPreference === 'fastest' ? '5m' : order.spreadPreference === 'best' ? '15m' : '60m'}
+                        </span>
+                      </div>
+                    )}
+                    {/* payment_sent orders don't expire */}
+                    {order.minimalStatus === 'payment_sent' || order.dbOrder?.status === 'payment_sent' || order.dbOrder?.status === 'payment_confirmed' ? (
+                      <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/[0.06]">
+                        <Shield className="w-3 h-3 text-emerald-400/60" />
+                        <span className="text-[10px] font-bold font-mono text-emerald-400/60">No expiry</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <span className={`text-sm font-bold font-mono tabular-nums ${
+                          order.expiresIn <= 120 ? 'text-red-400' : 'text-orange-400'
+                        }`}>
+                          {order.expiresIn > 0 ? formatTimeRemaining(order.expiresIn) : 'Expired'}
+                        </span>
+                        <span className="animate-pulse" style={{ filter: order.expiresIn <= 120 ? 'drop-shadow(0 0 6px #ef4444)' : 'drop-shadow(0 0 4px #f97316)' }}>🔥</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Warning banner when under 5 minutes */}
+                {order.expiresIn > 0 && order.expiresIn <= 300 && order.minimalStatus !== 'payment_sent' && order.dbOrder?.status !== 'payment_sent' && order.dbOrder?.status !== 'payment_confirmed' && (
+                  <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-2 ${
+                    order.expiresIn <= 120 ? 'bg-red-500/10 border border-red-500/20' : 'bg-orange-500/10 border border-orange-500/20'
+                  }`}>
+                    <span className="text-xs shrink-0">🔥</span>
+                    <span className={`text-[10px] font-bold ${order.expiresIn <= 120 ? 'text-red-400' : 'text-orange-400'}`}>
+                      {order.expiresIn <= 120 ? 'Order expiring soon! Complete action now' : `Order expires in ${formatTimeRemaining(order.expiresIn)}`}
                     </span>
                   </div>
-                  <span className={`text-xs font-bold font-mono tabular-nums shrink-0 px-1.5 py-0.5 rounded ${
-                    order.expiresIn <= 0
-                      ? 'text-red-400/80 bg-red-500/[0.06]'
-                      : order.expiresIn < 120
-                      ? 'text-red-400/80 bg-red-500/[0.06]'
-                      : order.expiresIn < 300
-                      ? 'text-orange-400/70 bg-orange-500/[0.06]'
-                      : 'text-white/35'
-                  }`}>
-                    {order.expiresIn > 0 ? formatTimeRemaining(order.expiresIn) : '0:00'}
-                  </span>
-                </div>
+                )}
+
+                {/* Cancel Request Banner on order card */}
+                {order.cancelRequestedBy && (
+                  <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-2 bg-orange-500/10 border border-orange-500/20`}>
+                    <XCircle className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                    <span className="text-[10px] font-bold text-orange-400">
+                      Cancel requested — tap to respond
+                    </span>
+                  </div>
+                )}
 
                 {/* Row 2: Amount + rate */}
                 <div className="flex items-center justify-between mb-1.5">
@@ -153,48 +195,6 @@ const InProgressOrderList = memo(function InProgressOrderList({
                   {order.expiresIn > 0 && getStatusBadge(order)}
                 </div>
 
-                {/* Pricing strip */}
-                {(order.spreadPreference || order.protocolFeePercent) && (
-                  <div className="flex items-center gap-2 mb-2 px-2 py-1.5 bg-white/[0.02] border border-white/[0.05] rounded-md">
-                    {order.spreadPreference && (
-                      <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border ${
-                        order.spreadPreference === 'fastest'
-                          ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
-                          : order.spreadPreference === 'cheap'
-                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                          : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                      }`}>
-                        {order.spreadPreference === 'fastest' && <Zap className="w-3 h-3" />}
-                        {order.spreadPreference === 'best' && <Target className="w-3 h-3" />}
-                        {order.spreadPreference === 'cheap' && <TrendingDown className="w-3 h-3" />}
-                        <span className="text-[10px] font-bold">
-                          {order.spreadPreference === 'fastest' ? 'FAST' : order.spreadPreference === 'best' ? 'BEST' : 'CHEAP'}
-                        </span>
-                      </div>
-                    )}
-                    {order.protocolFeePercent != null && order.protocolFeePercent > (order.spreadPreference === 'fastest' ? 2.5 : order.spreadPreference === 'best' ? 2.0 : 1.5) && (
-                      <div className="flex items-center gap-1">
-                        <span className="text-[9px] text-white/30 font-mono">PRIORITY</span>
-                        <span className="text-sm font-bold text-white/70 tabular-nums font-mono">
-                          +{(order.protocolFeePercent - (order.spreadPreference === 'fastest' ? 2.5 : order.spreadPreference === 'best' ? 2.0 : 1.5)).toFixed(1)}%
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex-1" />
-                    <div className="flex items-center gap-1">
-                      <Flame className="w-3 h-3 text-orange-500/60 animate-pulse" />
-                      <span className="text-[10px] font-bold text-white/50 font-mono">
-                        {order.spreadPreference === 'fastest'
-                          ? '5m'
-                          : order.spreadPreference === 'best'
-                          ? '15m'
-                          : '60m'}
-                      </span>
-                      <span className="text-[9px] text-white/25 font-mono">decay</span>
-                    </div>
-                  </div>
-                )}
-
                 {/* Bottom: Action button or waiting */}
                 {isWaiting ? (
                   <div className="flex items-center gap-1.5 px-1 py-1">
@@ -214,12 +214,22 @@ const InProgressOrderList = memo(function InProgressOrderList({
                         onSelectOrder(order);
                       }
                     }}
-                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-orange-500/10 border border-orange-500/20 rounded-lg text-[11px] text-orange-400 font-bold hover:bg-orange-500/15 transition-colors"
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-orange-500 rounded-lg text-[11px] text-white font-bold hover:bg-orange-600 transition-colors"
                   >
                     <Zap className="w-3.5 h-3.5" />
                     {nextAction}
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
+                )}
+
+                {/* Extension Request Banner */}
+                {order.dbOrder?.extension_requested_by && (
+                  <div className="mt-1.5 flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-amber-500/[0.08] border border-amber-500/[0.12]">
+                    <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                    <span className="text-[10px] text-amber-400/90 font-medium truncate">
+                      {order.dbOrder.extension_requested_by === 'user' ? 'Buyer' : 'Seller'} requested +{order.dbOrder.extension_minutes >= 60 ? `${Math.round(order.dbOrder.extension_minutes / 60)}hr` : `${order.dbOrder.extension_minutes}min`} extension
+                    </span>
+                  </div>
                 )}
 
                 {/* Unread Messages */}
