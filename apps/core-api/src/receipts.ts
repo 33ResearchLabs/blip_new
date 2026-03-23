@@ -234,6 +234,7 @@ export async function createOrderReceipt(orderId: string, order: OrderForReceipt
     logger.info('[Receipt] Created order receipt', { orderId, orderNumber: order.order_number });
   } catch (err) {
     logger.error('[Receipt] Failed to create order receipt', { orderId, error: err });
+    throw err; // Re-throw so BullMQ can retry
   }
 }
 
