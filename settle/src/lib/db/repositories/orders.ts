@@ -359,6 +359,13 @@ export async function getAllPendingOrdersForMerchant(
                'wallet_address', bm.wallet_address
              )
            ELSE NULL END as buyer_merchant,
+           CASE WHEN seller_offer.id IS NOT NULL THEN
+             json_build_object(
+               'bank_name', seller_offer.bank_name,
+               'bank_account_name', seller_offer.bank_account_name,
+               'bank_iban', seller_offer.bank_iban
+             )
+           ELSE NULL END as seller_bank,
            COALESCE(chat_agg.unread_count, 0) as unread_count,
            COALESCE(chat_agg.message_count, 0) as message_count,
            chat_latest.content as last_human_message,
@@ -369,6 +376,12 @@ export async function getAllPendingOrdersForMerchant(
     JOIN merchant_offers mo ON o.offer_id = mo.id
     LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
     LEFT JOIN merchants current_m ON current_m.id = $1
+    LEFT JOIN LATERAL (
+      SELECT smo.id, smo.bank_name, smo.bank_account_name, smo.bank_iban
+      FROM merchant_offers smo
+      WHERE smo.merchant_id = o.merchant_id AND smo.is_active = true AND smo.payment_method = 'bank'
+      ORDER BY smo.created_at DESC LIMIT 1
+    ) seller_offer ON o.buyer_merchant_id IS NOT NULL
     LEFT JOIN LATERAL (
       SELECT
         COUNT(*) FILTER (WHERE cm.sender_type != 'merchant' AND cm.sender_type != 'system' AND cm.message_type != 'system' AND cm.is_read = false)::int as unread_count,

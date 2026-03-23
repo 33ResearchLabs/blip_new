@@ -115,20 +115,37 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
     userBankDetails: dbOrder.payment_details?.user_bank_account && typeof dbOrder.payment_details.user_bank_account === 'object'
       ? dbOrder.payment_details.user_bank_account as { bank_name: string; account_name: string; iban: string }
       : undefined,
-    // Seller/merchant's bank details from the offer (for buyer to send fiat)
-    sellerBankDetails: dbOrder.payment_details && dbOrder.payment_details.bank_name
-      ? {
+    // Seller/merchant's bank details (for buyer to send fiat)
+    // For M2M: payment_details may have the offer owner's bank (could be buyer's offer).
+    // Use seller_bank (seller's active offer bank) when available for M2M.
+    sellerBankDetails: (() => {
+      // Priority 1: Seller's offer bank (from seller_bank lateral join, M2M only)
+      const sellerBank = (dbOrder as any).seller_bank;
+      if (sellerBank && sellerBank.bank_name) {
+        return {
+          bank_name: sellerBank.bank_name as string,
+          account_name: (sellerBank.bank_account_name || '') as string,
+          iban: (sellerBank.bank_iban || '') as string,
+        };
+      }
+      // Priority 2: payment_details (offer bank — correct for non-M2M)
+      if (dbOrder.payment_details && dbOrder.payment_details.bank_name) {
+        return {
           bank_name: dbOrder.payment_details.bank_name as string,
           account_name: (dbOrder.payment_details.bank_account_name || dbOrder.payment_details.account_name) as string,
           iban: (dbOrder.payment_details.bank_iban || dbOrder.payment_details.iban) as string,
-        }
-      : (dbOrder.offer?.bank_name
-        ? {
-            bank_name: dbOrder.offer.bank_name as string,
-            account_name: dbOrder.offer.bank_account_name as string,
-            iban: dbOrder.offer.bank_iban as string,
-          }
-        : undefined),
+        };
+      }
+      // Priority 3: Offer bank details
+      if (dbOrder.offer?.bank_name) {
+        return {
+          bank_name: dbOrder.offer.bank_name as string,
+          account_name: dbOrder.offer.bank_account_name as string,
+          iban: dbOrder.offer.bank_iban as string,
+        };
+      }
+      return undefined;
+    })(),
     lockedPaymentMethod: (dbOrder as any).locked_payment_method || null,
     isM2M,
     buyerMerchantId: dbOrder.buyer_merchant_id,
