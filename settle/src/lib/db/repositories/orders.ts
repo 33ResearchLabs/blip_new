@@ -218,7 +218,14 @@ export async function getMerchantOrders(
            END as my_role,
            json_build_object(
              'id', u.id,
-             'name', CASE WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN m.display_name ELSE COALESCE(u.name, u.username) END,
+             'name', CASE
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN
+                 CASE
+                   WHEN o.buyer_merchant_id IS NOT NULL AND o.buyer_merchant_id != o.merchant_id THEN COALESCE(bm.display_name, m.display_name)
+                   ELSE m.display_name
+                 END
+               ELSE COALESCE(u.name, u.username)
+             END,
              'username', u.username,
              'rating', u.rating,
              'total_trades', u.total_trades
@@ -250,6 +257,7 @@ export async function getMerchantOrders(
     JOIN users u ON o.user_id = u.id
     JOIN merchants m ON o.merchant_id = m.id
     JOIN merchant_offers mo ON o.offer_id = mo.id
+    LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
     LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
     LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
     WHERE (o.merchant_id = $1 OR o.buyer_merchant_id = $1)
@@ -319,7 +327,14 @@ export async function getAllPendingOrdersForMerchant(
            END as is_my_order,
            json_build_object(
              'id', u.id,
-             'name', CASE WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN m.display_name ELSE COALESCE(u.name, u.username) END,
+             'name', CASE
+               WHEN u.username LIKE 'open_order_%' OR u.username LIKE 'm2m_%' THEN
+                 CASE
+                   WHEN o.buyer_merchant_id IS NOT NULL AND o.buyer_merchant_id != o.merchant_id THEN COALESCE(bm.display_name, m.display_name)
+                   ELSE m.display_name
+                 END
+               ELSE COALESCE(u.name, u.username)
+             END,
              'username', u.username,
              'rating', u.rating,
              'total_trades', u.total_trades,
