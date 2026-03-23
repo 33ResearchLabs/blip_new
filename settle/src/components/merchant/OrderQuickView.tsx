@@ -251,12 +251,17 @@ export function OrderQuickView({
                   }
 
                   // Card / UPI / Cash / Other
+                  const detailStr = typeof spm.details === 'string' ? spm.details : JSON.stringify(spm.details);
                   return (
-                    <LockedPaymentMethodCard
-                      lpm={spm}
-                      amount={Math.round(selectedOrder.total)}
-                      typeIcon={typeIcon}
-                    />
+                    <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center gap-2 text-xs text-zinc-400 uppercase tracking-wide">
+                        {typeIcon}
+                        <span>Seller&apos;s Payment Method</span>
+                      </div>
+                      <div className="text-sm text-white font-medium">{spm.name}</div>
+                      <div className="text-xs text-zinc-400">{detailStr}</div>
+                      <div className="text-right text-sm font-semibold text-green-400">{Math.round(selectedOrder.total)} د.إ</div>
+                    </div>
                   );
                 }
 

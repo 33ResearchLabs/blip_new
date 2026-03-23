@@ -129,6 +129,13 @@ export interface Order {
     label: string;
     details: Record<string, string>;
   } | null;
+  sellerPaymentMethod?: {
+    id: string;
+    type: string;
+    name: string;
+    details: Record<string, string> | string;
+    is_default?: boolean;
+  } | null;
   isM2M?: boolean;
   buyerMerchantId?: string;
   buyerMerchantWallet?: string;
