@@ -231,7 +231,36 @@ export function OrderQuickView({
                 const iAmBuyerInPopup = popupBankRole === 'buyer';
                 if (!iAmBuyerInPopup) return null;
 
-                // Priority 1: Locked payment method (new system)
+                // Priority 1: Seller's merchant payment method (explicitly added by seller)
+                if (selectedOrder.sellerPaymentMethod) {
+                  const spm = selectedOrder.sellerPaymentMethod;
+                  const typeIcon = spm.type === 'upi' ? <Smartphone className="w-4 h-4 text-green-400" />
+                    : spm.type === 'bank' ? <Building2 className="w-4 h-4 text-blue-400" />
+                    : <CreditCard className="w-4 h-4 text-purple-400" />;
+
+                  if (spm.type === 'bank' && spm.details && typeof spm.details === 'object') {
+                    return (
+                      <CopyableBankDetails
+                        title="Send AED to this account"
+                        bankName={spm.details.bank_name}
+                        accountName={spm.details.account_name}
+                        iban={spm.details.iban}
+                        amount={Math.round(selectedOrder.total)}
+                      />
+                    );
+                  }
+
+                  // Card / UPI / Cash / Other
+                  return (
+                    <LockedPaymentMethodCard
+                      lpm={spm}
+                      amount={Math.round(selectedOrder.total)}
+                      typeIcon={typeIcon}
+                    />
+                  );
+                }
+
+                // Priority 2: Locked payment method (user payment method system)
                 if (selectedOrder.lockedPaymentMethod) {
                   const lpm = selectedOrder.lockedPaymentMethod;
                   const typeIcon = lpm.type === 'upi' ? <Smartphone className="w-4 h-4 text-green-400" />
@@ -260,7 +289,7 @@ export function OrderQuickView({
                   );
                 }
 
-                // Priority 2: Seller bank details from offer (legacy)
+                // Priority 3: Seller bank details from offer (legacy)
                 if (selectedOrder.sellerBankDetails) {
                   return (
                     <CopyableBankDetails

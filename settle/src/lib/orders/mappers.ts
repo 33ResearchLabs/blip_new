@@ -147,6 +147,7 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
       return undefined;
     })(),
     lockedPaymentMethod: (dbOrder as any).locked_payment_method || null,
+    sellerPaymentMethod: (dbOrder as any).merchant_payment_method || null,
     isM2M,
     buyerMerchantId: dbOrder.buyer_merchant_id,
     buyerMerchantWallet: dbOrder.buyer_merchant?.wallet_address,
