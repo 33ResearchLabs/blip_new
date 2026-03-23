@@ -19,39 +19,28 @@ let pusherLoadAttempted = false;
 
 async function getPusherServer(): Promise<PusherLike> {
   if (pusherServer) {
-    console.log('[Pusher Server] Using existing Pusher instance');
     return pusherServer;
   }
 
   // Mock pusher that does nothing - used when pusher isn't configured or available
   const mockPusher: PusherLike = {
     trigger: async (...args) => {
-      console.log('[Pusher Server] MOCK trigger called (Pusher not configured):', args);
+      console.log('[Pusher Server] MOCK trigger called (Pusher not configured):', JSON.stringify(args[0]));
       return {};
     },
     triggerBatch: async () => ({}),
   };
-
-  if (pusherLoadAttempted) {
-    console.log('[Pusher Server] Load already attempted, returning mock');
-    return mockPusher;
-  }
-  pusherLoadAttempted = true;
 
   const appId = process.env.PUSHER_APP_ID;
   const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
   const secret = process.env.PUSHER_SECRET;
   const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
 
-  console.log('[Pusher Server] Credentials check:', {
-    hasAppId: !!appId,
-    hasKey: !!key,
-    hasSecret: !!secret,
-    hasCluster: !!cluster
-  });
-
   if (!appId || !key || !secret || !cluster) {
-    console.warn('[Pusher Server] Credentials not configured. Real-time features disabled.');
+    if (!pusherLoadAttempted) {
+      console.warn('[Pusher Server] Credentials not configured. Real-time features disabled.');
+      pusherLoadAttempted = true;
+    }
     return mockPusher;
   }
 
