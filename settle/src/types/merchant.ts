@@ -83,6 +83,8 @@ export interface DbOrder {
     details: Record<string, string>;
   } | null;
   cancellation_reason?: string;
+  cancel_requested_by?: string | null;
+  cancel_request_reason?: string | null;
   unread_count?: number;
   has_manual_message?: boolean;
   message_count?: number;
