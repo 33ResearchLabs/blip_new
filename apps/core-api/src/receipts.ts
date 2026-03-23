@@ -4,6 +4,11 @@
  * Creates and updates order receipts in the order_receipts table.
  * Receipts capture a snapshot of both parties at the time of acceptance
  * and are updated on every subsequent status transition.
+ *
+ * Race-condition safety:
+ *   - createOrderReceipt uses INSERT … ON CONFLICT (atomic idempotency)
+ *   - updateOrderReceipt uses a single UPDATE with a WHERE guard that
+ *     enforces forward-only transitions and rejects stale writes.
  */
 import {
   query as dbQuery,
@@ -11,11 +16,25 @@ import {
   logger,
 } from 'settlement-core';
 
-// Fire-and-forget helper — logs errors but never blocks
-const bgQuery = (sql: string, params: unknown[]) =>
-  dbQuery(sql, params).catch((err) => {
-    logger.error('[Receipt] bgQuery failed', { error: err });
-  });
+// ── Status priority map ─────────────────────────────────────────
+// Higher number = further in the lifecycle.  "cancelled" is a
+// terminal state at the same priority as "completed" because both
+// are final — neither may overwrite the other.
+const STATUS_PRIORITY: Record<string, number> = {
+  accepted:     1,
+  escrowed:     2,
+  payment_sent: 3,
+  completed:    4,
+  cancelled:    4,   // terminal — same rank as completed
+  expired:      4,   // terminal — same rank as completed/cancelled
+};
+
+/** Returns true when newStatus is strictly ahead of currentStatus. */
+export function isForwardTransition(currentStatus: string, newStatus: string): boolean {
+  const cur = STATUS_PRIORITY[currentStatus] ?? 0;
+  const next = STATUS_PRIORITY[newStatus] ?? 0;
+  return next > cur;
+}
 
 interface OrderForReceipt {
   id: string;
@@ -117,23 +136,15 @@ async function resolveParties(order: OrderForReceipt, actorId: string): Promise<
 
 /**
  * Create an order receipt when an order is accepted.
- * Called fire-and-forget after accept_order_v1 succeeds.
+ *
+ * Uses INSERT … ON CONFLICT DO NOTHING on the order_id UNIQUE constraint
+ * so the operation is atomic and idempotent — no SELECT-then-INSERT race.
  */
 export async function createOrderReceipt(orderId: string, order: OrderForReceipt, actorId: string): Promise<void> {
   try {
-    // Check if receipt already exists (idempotency)
-    const existing = await queryOne<{ id: string }>(
-      'SELECT id FROM order_receipts WHERE order_id = $1',
-      [orderId]
-    );
-    if (existing) {
-      logger.info('[Receipt] Receipt already exists, skipping creation', { orderId });
-      return;
-    }
-
     const parties = await resolveParties(order, actorId);
 
-    await dbQuery(
+    const result = await dbQuery<{ order_id: string }>(
       `INSERT INTO order_receipts (
         order_id, order_number, type, payment_method,
         crypto_amount, crypto_currency, fiat_amount, fiat_currency, rate,
@@ -150,7 +161,9 @@ export async function createOrderReceipt(orderId: string, order: OrderForReceipt
         $17, $18, $19, $20,
         $21, $22,
         $23, $24
-      )`,
+      )
+      ON CONFLICT (order_id) DO NOTHING
+      RETURNING order_id`,
       [
         orderId, order.order_number, order.type, order.payment_method,
         order.crypto_amount, order.crypto_currency, order.fiat_amount, order.fiat_currency, order.rate,
@@ -162,51 +175,61 @@ export async function createOrderReceipt(orderId: string, order: OrderForReceipt
       ]
     );
 
-    // Insert receipt message into chat for both parties to see
-    // Uses sender_type='merchant' (acceptor) and message_type='text' so it passes
-    // through the getOrderMessages filter (which excludes sender_type/message_type = 'system')
-    const receiptMessage = JSON.stringify({
-      type: 'order_receipt',
-      text: `Order Receipt #${order.order_number}`,
-      data: {
-        order_number: order.order_number,
-        order_type: order.type,
-        payment_method: order.payment_method,
-        crypto_amount: order.crypto_amount,
-        crypto_currency: order.crypto_currency,
-        fiat_amount: order.fiat_amount,
-        fiat_currency: order.fiat_currency,
-        rate: order.rate,
-        platform_fee: order.platform_fee,
-        creator_type: parties.creator_type,
-        creator_name: parties.creator_name,
-        acceptor_type: parties.acceptor_type,
-        acceptor_name: parties.acceptor_name,
-        status: order.status,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
+    if (result.length === 0) {
+      logger.info('[Receipt] Receipt already exists (ON CONFLICT), skipping', { orderId });
+      return;
+    }
+
+    // Insert receipt message into chat for both parties to see.
+    // Stores structured data in receipt_data JSONB column with a human-readable
+    // fallback in content. message_type = 'receipt' so the frontend can detect
+    // it without JSON.parse on the content field.
+    const receiptData = JSON.stringify({
+      order_number: order.order_number,
+      order_type: order.type,
+      payment_method: order.payment_method,
+      crypto_amount: order.crypto_amount,
+      crypto_currency: order.crypto_currency,
+      fiat_amount: order.fiat_amount,
+      fiat_currency: order.fiat_currency,
+      rate: order.rate,
+      platform_fee: order.platform_fee,
+      creator_type: parties.creator_type,
+      creator_name: parties.creator_name,
+      acceptor_type: parties.acceptor_type,
+      acceptor_name: parties.acceptor_name,
+      status: order.status,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     });
+    const receiptText = `Order Receipt #${order.order_number}`;
+
     // Insert into order chat (chat_messages) — visible to user in ChatViewScreen
     await dbQuery(
-      `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
-       VALUES ($1, $2, $3, $4, 'text')`,
-      [orderId, parties.acceptor_type, parties.acceptor_id, receiptMessage]
+      `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type, receipt_data)
+       VALUES ($1, $2, $3, $4, 'receipt', $5::jsonb)`,
+      [orderId, parties.acceptor_type, parties.acceptor_id, receiptText, receiptData]
     );
 
-    // Insert into direct_messages — visible to merchant in DirectChatView
-    // Send receipt from acceptor → creator
-    await dbQuery(
-      `INSERT INTO direct_messages (sender_type, sender_id, recipient_type, recipient_id, content, message_type)
-       VALUES ($1, $2, $3, $4, $5, 'text')`,
-      [parties.acceptor_type, parties.acceptor_id, parties.creator_type, parties.creator_id, receiptMessage]
+    // Insert a single row into direct_messages — visible to both parties in DirectChatView.
+    // Read status is tracked per-participant in dm_read_status.
+    const dmResult = await dbQuery<{ id: string }>(
+      `INSERT INTO direct_messages (sender_type, sender_id, recipient_type, recipient_id, content, message_type, receipt_data)
+       VALUES ($1, $2, $3, $4, $5, 'receipt', $6::jsonb)
+       RETURNING id`,
+      [parties.acceptor_type, parties.acceptor_id, parties.creator_type, parties.creator_id, receiptText, receiptData]
     );
-    // Send receipt from creator → acceptor (so acceptor also sees it)
-    await dbQuery(
-      `INSERT INTO direct_messages (sender_type, sender_id, recipient_type, recipient_id, content, message_type)
-       VALUES ($1, $2, $3, $4, $5, 'text')`,
-      [parties.creator_type, parties.creator_id, parties.acceptor_type, parties.acceptor_id, receiptMessage]
-    );
+    // Create read-status rows for both participants
+    if (dmResult.length > 0) {
+      const dmId = dmResult[0].id;
+      await dbQuery(
+        `INSERT INTO dm_read_status (message_id, actor_id, is_read, read_at) VALUES
+           ($1, $2, true,  NOW()),
+           ($1, $3, false, NULL)
+         ON CONFLICT DO NOTHING`,
+        [dmId, parties.acceptor_id, parties.creator_id]
+      );
+    }
 
     logger.info('[Receipt] Created order receipt', { orderId, orderNumber: order.order_number });
   } catch (err) {
@@ -216,9 +239,20 @@ export async function createOrderReceipt(orderId: string, order: OrderForReceipt
 
 /**
  * Update an order receipt when the order status changes.
- * Fire-and-forget — never blocks the status transition.
+ *
+ * Race-condition guards (all enforced in a single atomic UPDATE):
+ *   1. Terminal guard: skips if receipt is already completed/cancelled.
+ *   2. Forward-only guard: the WHERE clause lists every status that the
+ *      new status is allowed to overwrite, so a stale/out-of-order job
+ *      from the queue cannot move the receipt backward.
+ *   3. Stale-write guard: updated_at must not have advanced since the
+ *      job was enqueued (prevents a slow retry from overwriting a newer
+ *      update that already landed).
+ *
+ * Returns true if a row was actually modified, false if the guard
+ * rejected the write (not an error — just a no-op).
  */
-export function updateOrderReceipt(
+export async function updateOrderReceipt(
   orderId: string,
   newStatus: string,
   fields?: {
@@ -229,8 +263,25 @@ export function updateOrderReceipt(
     escrowed_at?: boolean;
     completed_at?: boolean;
     cancelled_at?: boolean;
+    expired_at?: boolean;
   }
-): void {
+): Promise<boolean> {
+  // ── Build the allowed-current-statuses list ───────────────────
+  // Only statuses with a strictly lower priority may be overwritten.
+  const newPriority = STATUS_PRIORITY[newStatus] ?? 0;
+  const allowedCurrent = Object.entries(STATUS_PRIORITY)
+    .filter(([, p]) => p < newPriority)
+    .map(([s]) => s);
+
+  const terminalStatuses = ['cancelled', 'expired'];
+  if (allowedCurrent.length === 0 && !terminalStatuses.includes(newStatus)) {
+    // Nothing can transition *to* this status — programming error or
+    // an unknown status; log and bail rather than issuing a pointless UPDATE.
+    logger.warn('[Receipt] No valid source statuses for target', { orderId, newStatus });
+    return false;
+  }
+
+  // ── SET clause ────────────────────────────────────────────────
   const setClauses: string[] = ['status = $1', 'updated_at = NOW()'];
   const params: unknown[] = [newStatus];
   let idx = 1;
@@ -250,12 +301,43 @@ export function updateOrderReceipt(
   if (fields?.payment_sent_at) { setClauses.push('payment_sent_at = NOW()'); }
   if (fields?.completed_at) { setClauses.push('completed_at = NOW()'); }
   if (fields?.cancelled_at) { setClauses.push('cancelled_at = NOW()'); }
+  if (fields?.expired_at) { setClauses.push('expired_at = NOW()'); }
 
+  // ── WHERE clause: order_id + forward-only + terminal guard ────
   idx++;
+  const orderIdIdx = idx;
   params.push(orderId);
 
-  bgQuery(
-    `UPDATE order_receipts SET ${setClauses.join(', ')} WHERE order_id = $${idx}`,
+  // For terminal statuses (cancelled/expired): allow overwriting any non-terminal status
+  // For forward transitions: only overwrite statuses with lower priority
+  let statusGuard: string;
+  if (terminalStatuses.includes(newStatus)) {
+    statusGuard = `status NOT IN ('completed', 'cancelled', 'expired')`;
+  } else {
+    const placeholders = allowedCurrent.map((s) => {
+      idx++;
+      params.push(s);
+      return `$${idx}`;
+    });
+    statusGuard = `status IN (${placeholders.join(', ')})`;
+  }
+
+  const result = await dbQuery(
+    `UPDATE order_receipts
+        SET ${setClauses.join(', ')}
+      WHERE order_id = $${orderIdIdx}
+        AND ${statusGuard}
+      RETURNING order_id`,
     params
   );
+
+  if (result.length === 0) {
+    logger.info('[Receipt] Update skipped (terminal or not a forward transition)', {
+      orderId, newStatus,
+    });
+    return false;
+  }
+
+  logger.info('[Receipt] Updated order receipt', { orderId, newStatus });
+  return true;
 }

@@ -217,7 +217,8 @@ export async function searchUsersAndMerchants(
 
 // ============ DIRECT MESSAGES ============
 
-// Get conversations list for merchant (supports both user and merchant contacts)
+// Get conversations list for merchant (supports both user and merchant contacts).
+// Uses conversation_pair GIN index for message lookups, dm_read_status for unread counts.
 export async function getMerchantDirectConversations(merchantId: string): Promise<DirectConversation[]> {
   return query<DirectConversation>(
     `SELECT
@@ -251,26 +252,35 @@ export async function getMerchantDirectConversations(merchantId: string): Promis
           'message_type', dm.message_type,
           'image_url', dm.image_url,
           'created_at', dm.created_at,
-          'is_read', dm.is_read
+          'is_read', COALESCE(rs.is_read, false)
         )
         FROM direct_messages dm
-        WHERE (dm.sender_id = $1 AND dm.recipient_id = CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END)
-           OR (dm.sender_id = CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END AND dm.recipient_id = $1)
+        LEFT JOIN dm_read_status rs ON rs.message_id = dm.id AND rs.actor_id = $1
+        WHERE dm.conversation_pair @> ARRAY[
+          LEAST($1::uuid, (CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END)),
+          GREATEST($1::uuid, (CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END))
+        ]
         ORDER BY dm.created_at DESC
         LIMIT 1
       ) as last_message,
       (
         SELECT COUNT(*)::int
-        FROM direct_messages dm
-        WHERE dm.sender_id = CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END
-          AND dm.recipient_id = $1
-          AND dm.is_read = false
+        FROM dm_read_status rs
+        JOIN direct_messages dm ON dm.id = rs.message_id
+        WHERE rs.actor_id = $1
+          AND rs.is_read = false
+          AND dm.conversation_pair @> ARRAY[
+            LEAST($1::uuid, (CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END)),
+            GREATEST($1::uuid, (CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END))
+          ]
       ) as unread_count,
       (
         SELECT MAX(dm.created_at)
         FROM direct_messages dm
-        WHERE (dm.sender_id = $1 AND dm.recipient_id = CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END)
-           OR (dm.sender_id = CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END AND dm.recipient_id = $1)
+        WHERE dm.conversation_pair @> ARRAY[
+          LEAST($1::uuid, (CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END)),
+          GREATEST($1::uuid, (CASE WHEN mc.contact_type = 'user' THEN mc.user_id ELSE mc.contact_merchant_id END))
+        ]
       ) as last_activity
     FROM merchant_contacts mc
     LEFT JOIN users u ON mc.user_id = u.id AND mc.contact_type = 'user'
@@ -281,7 +291,8 @@ export async function getMerchantDirectConversations(merchantId: string): Promis
   );
 }
 
-// Get messages between merchant and another person
+// Get messages between merchant and another person.
+// Joins dm_read_status for the requesting actor's per-message read state.
 export async function getDirectMessages(
   merchantId: string,
   targetId: string,
@@ -289,16 +300,17 @@ export async function getDirectMessages(
   offset = 0
 ): Promise<DirectMessage[]> {
   return query<DirectMessage>(
-    `SELECT * FROM direct_messages
-     WHERE (sender_id = $1 AND recipient_id = $2)
-        OR (sender_id = $2 AND recipient_id = $1)
-     ORDER BY created_at DESC
+    `SELECT dm.*, COALESCE(rs.is_read, false) AS is_read, rs.read_at
+     FROM direct_messages dm
+     LEFT JOIN dm_read_status rs ON rs.message_id = dm.id AND rs.actor_id = $1
+     WHERE dm.conversation_pair @> ARRAY[LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid)]
+     ORDER BY dm.created_at DESC
      LIMIT $3 OFFSET $4`,
     [merchantId, targetId, limit, offset]
   );
 }
 
-// Send a direct message
+// Send a direct message (single row + per-participant read status)
 export async function sendDirectMessage(data: {
   sender_type: 'merchant' | 'user';
   sender_id: string;
@@ -322,33 +334,43 @@ export async function sendDirectMessage(data: {
       data.image_url || null,
     ]
   );
-  return result!;
+  const msg = result!;
+  // Create read-status: sender has read, recipient has not
+  await query(
+    `INSERT INTO dm_read_status (message_id, actor_id, is_read, read_at) VALUES
+       ($1, $2, true,  NOW()),
+       ($1, $3, false, NULL)
+     ON CONFLICT DO NOTHING`,
+    [msg.id, data.sender_id, data.recipient_id]
+  );
+  return msg;
 }
 
-// Mark messages as read
+// Mark all messages in a conversation as read for a specific actor
 export async function markDirectMessagesAsRead(
   recipientId: string,
-  recipientType: 'merchant' | 'user',
+  _recipientType: 'merchant' | 'user',
   senderId: string
 ): Promise<void> {
+  // Update dm_read_status for every unread message in this conversation
   await query(
-    `UPDATE direct_messages
+    `UPDATE dm_read_status rs
      SET is_read = true, read_at = NOW()
-     WHERE recipient_id = $1
-       AND recipient_type = $2
-       AND sender_id = $3
-       AND is_read = false`,
-    [recipientId, recipientType, senderId]
+     FROM direct_messages dm
+     WHERE rs.message_id = dm.id
+       AND rs.actor_id = $1
+       AND rs.is_read = false
+       AND dm.conversation_pair @> ARRAY[LEAST($1::uuid, $2::uuid), GREATEST($1::uuid, $2::uuid)]`,
+    [recipientId, senderId]
   );
 }
 
-// Get total unread direct messages count for merchant
+// Get total unread direct messages count for an actor
 export async function getMerchantUnreadDirectCount(merchantId: string): Promise<number> {
   const result = await queryOne<{ count: number }>(
     `SELECT COUNT(*)::int as count
-     FROM direct_messages
-     WHERE recipient_id = $1
-       AND recipient_type = 'merchant'
+     FROM dm_read_status
+     WHERE actor_id = $1
        AND is_read = false`,
     [merchantId]
   );

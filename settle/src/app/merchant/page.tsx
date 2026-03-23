@@ -101,6 +101,9 @@ export default function MerchantDashboard() {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [isMerchantOnline, setIsMerchantOnline] = useState(true);
   const [activityCollapsed, setActivityCollapsed] = useState(false);
+  const [inProgressCollapsed, setInProgressCollapsed] = useState(false);
+  const [completedCollapsed, setCompletedCollapsed] = useState(false);
+  const [leaderboardCollapsed, setLeaderboardCollapsed] = useState(false);
   const [mobileView, setMobileView] = useState<'orders' | 'escrow' | 'chat' | 'history' | 'marketplace'>('orders');
   const [marketSubTab, setMarketSubTab] = useState<'browse' | 'offers'>('browse');
   const [leaderboardTab, setLeaderboardTab] = useState<'traders' | 'rated' | 'reputation'>('traders');
@@ -450,12 +453,12 @@ export default function MerchantDashboard() {
         <PanelResizeHandle className="w-[3px]" />
         <Panel defaultSize={isWideScreen ? "20%" : "27%"} minSize={isWideScreen ? "14%" : "18%"} maxSize={isWideScreen ? "32%" : "40%"} id="center-right">
         <div className="flex flex-col h-full bg-black">
-          <div style={{ height: '50%' }} className="flex flex-col border-b border-white/[0.04]">
+          <div className={`flex flex-col border-b border-white/[0.04] transition-all duration-200 ${inProgressCollapsed ? '' : 'flex-1 min-h-0'}`}>
             <InProgressPanel orders={ongoingOrders} onSelectOrder={setSelectedOrderPopup} onAction={handleOrderAction} onOpenChat={handleOpenChat}
-              onOpenDispute={(order) => openDisputeModal(order.id)} />
+              onOpenDispute={(order) => openDisputeModal(order.id)} collapsed={inProgressCollapsed} onCollapseChange={setInProgressCollapsed} />
           </div>
-          <div style={{ height: '50%' }} className="flex flex-col border-b border-white/[0.04]">
-            <CompletedOrdersPanel orders={completedOrders} onSelectOrder={setSelectedOrderPopup} />
+          <div className={`flex flex-col border-b border-white/[0.04] transition-all duration-200 ${completedCollapsed ? '' : 'flex-1 min-h-0'}`}>
+            <CompletedOrdersPanel orders={completedOrders} onSelectOrder={setSelectedOrderPopup} collapsed={completedCollapsed} onCollapseChange={setCompletedCollapsed} />
           </div>
           {!isWideScreen && (
             <div className="flex-1 flex flex-col min-h-0">
@@ -471,10 +474,10 @@ export default function MerchantDashboard() {
           <PanelResizeHandle className="w-[3px]" />
           <Panel defaultSize="18%" minSize="12%" maxSize="30%" id="transactions">
           <div className="flex flex-col h-full bg-black">
-            <div style={{ height: activityCollapsed ? '100%' : '50%' }} className="flex flex-col min-h-0 border-b border-white/[0.04] transition-all duration-200">
-              <LeaderboardPanel leaderboardData={leaderboardData} leaderboardTab={leaderboardTab} setLeaderboardTab={setLeaderboardTab} />
+            <div className={`flex flex-col border-b border-white/[0.04] transition-all duration-200 ${leaderboardCollapsed ? '' : 'flex-1 min-h-0'}`}>
+              <LeaderboardPanel leaderboardData={leaderboardData} leaderboardTab={leaderboardTab} setLeaderboardTab={setLeaderboardTab} onCollapseChange={setLeaderboardCollapsed} />
             </div>
-            <div style={{ height: activityCollapsed ? 'auto' : '50%' }} className="flex flex-col transition-all duration-200">
+            <div className={`flex flex-col transition-all duration-200 ${activityCollapsed ? '' : 'flex-1 min-h-0'}`}>
               <ActivityPanel merchantId={merchantId} completedOrders={completedOrders} cancelledOrders={cancelledOrders}
                 ongoingOrders={ongoingOrders} pendingOrders={pendingOrders}
                 onRateOrder={(order) => setRatingModalData({ orderId: order.id, counterpartyName: order.user || 'User', counterpartyType: order.isM2M ? 'merchant' : 'user' })}

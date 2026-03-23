@@ -45,6 +45,10 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
     wallet_address: undefined,
   } as Merchant;
 
+  // If merchant has a payment method locked into the order, use its details
+  // instead of the offer's hardcoded bank fields
+  const mpm = dbOrder.merchant_payment_method;
+
   return {
     id: dbOrder.id,
     type: dbOrder.type as TradeType,
@@ -101,6 +105,8 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
     disputeAutoResolveAt: dbOrder.dispute_auto_resolve_at ? new Date(dbOrder.dispute_auto_resolve_at) : null,
     // Locked payment method (fiat receiver's chosen method for this order)
     lockedPaymentMethod: dbOrder.locked_payment_method || null,
+    // Merchant's payment method (where buyer sends fiat to merchant)
+    merchantPaymentMethod: mpm || null,
   };
 }
 

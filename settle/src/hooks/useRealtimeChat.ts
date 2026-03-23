@@ -17,7 +17,8 @@ export interface ChatMessage {
   from: 'me' | 'them' | 'system';
   text: string;
   timestamp: Date;
-  messageType?: 'text' | 'image' | 'system' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
+  messageType?: 'text' | 'image' | 'system' | 'receipt' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
+  receiptData?: Record<string, unknown> | null;
   imageUrl?: string | null;
   senderType?: 'user' | 'merchant' | 'compliance' | 'system';
   senderName?: string;
@@ -44,7 +45,8 @@ interface DbMessage {
   sender_id: string;
   sender_name?: string;
   content: string;
-  message_type: 'text' | 'image' | 'system' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
+  message_type: 'text' | 'image' | 'system' | 'receipt' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
+  receipt_data?: Record<string, unknown> | null;
   image_url?: string | null;
   created_at: string;
   is_read: boolean;
@@ -103,6 +105,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         text: dbMsg.content,
         timestamp: new Date(dbMsg.created_at),
         messageType: dbMsg.message_type,
+        receiptData: dbMsg.receipt_data ?? null,
         imageUrl: dbMsg.image_url,
         senderType: dbMsg.sender_type,
         senderName: dbMsg.sender_name,

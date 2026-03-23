@@ -28,7 +28,8 @@ interface DbMessage {
   sender_type: "user" | "merchant" | "system";
   sender_id: string;
   content: string;
-  message_type: "text" | "image" | "system";
+  message_type: "text" | "image" | "system" | "receipt";
+  receipt_data?: Record<string, unknown> | null;
   created_at: string;
   is_read: boolean;
 }

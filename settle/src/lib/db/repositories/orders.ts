@@ -97,13 +97,24 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
                 'details', upm.details
               )
               ELSE NULL
-            END as locked_payment_method
+            END as locked_payment_method,
+            CASE
+              WHEN mpm.id IS NOT NULL THEN json_build_object(
+                'id', mpm.id,
+                'type', mpm.type,
+                'name', mpm.name,
+                'details', mpm.details,
+                'is_default', mpm.is_default
+              )
+              ELSE NULL
+            END as merchant_payment_method
      FROM orders o
      JOIN users u ON o.user_id = u.id
      JOIN merchants m ON o.merchant_id = m.id
      JOIN merchant_offers mo ON o.offer_id = mo.id
      LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
      LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
+     LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
      WHERE o.id = $1`,
     [id]
   );
@@ -144,12 +155,23 @@ export async function getUserOrders(
              )
              ELSE NULL
            END as locked_payment_method,
+           CASE
+             WHEN mpm.id IS NOT NULL THEN json_build_object(
+               'id', mpm.id,
+               'type', mpm.type,
+               'name', mpm.name,
+               'details', mpm.details,
+               'is_default', mpm.is_default
+             )
+             ELSE NULL
+           END as merchant_payment_method,
            COALESCE(chat_agg.unread_count, 0) as unread_count,
            chat_latest.last_message
     FROM orders o
     JOIN merchants m ON o.merchant_id = m.id
     JOIN merchant_offers mo ON o.offer_id = mo.id
     LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
+    LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
     LEFT JOIN LATERAL (
       SELECT COUNT(*) FILTER (WHERE cm.sender_type = 'merchant' AND cm.message_type != 'system' AND cm.is_read = false)::int as unread_count
       FROM chat_messages cm WHERE cm.order_id = o.id
@@ -213,12 +235,23 @@ export async function getMerchantOrders(
                'details', upm.details
              )
              ELSE NULL
-           END as locked_payment_method
+           END as locked_payment_method,
+           CASE
+             WHEN mpm.id IS NOT NULL THEN json_build_object(
+               'id', mpm.id,
+               'type', mpm.type,
+               'name', mpm.name,
+               'details', mpm.details,
+               'is_default', mpm.is_default
+             )
+             ELSE NULL
+           END as merchant_payment_method
     FROM orders o
     JOIN users u ON o.user_id = u.id
     JOIN merchants m ON o.merchant_id = m.id
     JOIN merchant_offers mo ON o.offer_id = mo.id
     LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
+    LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
     WHERE (o.merchant_id = $1 OR o.buyer_merchant_id = $1)
       AND o.status NOT IN ('expired', 'cancelled')
   `;

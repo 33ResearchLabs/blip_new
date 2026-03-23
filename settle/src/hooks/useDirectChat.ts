@@ -11,7 +11,8 @@ export interface DirectChatMessage {
   from: 'me' | 'them';
   text: string;
   timestamp: Date;
-  messageType: 'text' | 'image';
+  messageType: 'text' | 'image' | 'receipt';
+  receiptData?: Record<string, unknown> | null;
   imageUrl?: string | null;
   isRead: boolean;
 }
@@ -92,7 +93,8 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
           sender_id: string;
           content: string;
           created_at: string;
-          message_type: 'text' | 'image';
+          message_type: 'text' | 'image' | 'receipt';
+          receipt_data?: Record<string, unknown> | null;
           image_url?: string | null;
           is_read: boolean;
         }) => ({
@@ -101,6 +103,7 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
           text: m.content,
           timestamp: new Date(m.created_at),
           messageType: m.message_type || 'text',
+          receiptData: m.receipt_data ?? null,
           imageUrl: m.image_url,
           isRead: m.is_read,
         }));

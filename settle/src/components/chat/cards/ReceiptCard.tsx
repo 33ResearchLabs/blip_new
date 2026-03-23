@@ -69,6 +69,7 @@ export function ReceiptCard({ data, currentStatus }: ReceiptCardProps) {
   const statusStyle = STATUS_STYLES[effectiveStatus] || STATUS_STYLES.pending;
   const isCompleted = effectiveStatus === 'completed';
   const isCancelled = effectiveStatus === 'cancelled';
+  const isExpired = effectiveStatus === 'expired';
 
   return (
     <div className="bg-white/5 border border-white/6 rounded-xl overflow-hidden">
@@ -76,6 +77,7 @@ export function ReceiptCard({ data, currentStatus }: ReceiptCardProps) {
       <div className={`px-4 py-3 border-b flex items-center justify-between ${
         isCompleted ? 'bg-emerald-500/10 border-emerald-500/20' :
         isCancelled ? 'bg-red-500/10 border-red-500/20' :
+        isExpired ? 'bg-zinc-500/10 border-zinc-500/20' :
         'bg-white/[0.02] border-white/[0.06]'
       }`}>
         <div className="flex items-center gap-3">
@@ -83,17 +85,17 @@ export function ReceiptCard({ data, currentStatus }: ReceiptCardProps) {
             <Receipt className="w-4 h-4 text-white/70" />
           </div>
           <div>
-            <h4 className="text-sm font-medium text-white">
-              Receipt #{data.order_number}
+            <h4 className="text-[15px] font-bold text-white font-mono tracking-tight">
+              #{data.order_number}
             </h4>
-            <p className="text-xs text-white/50">
+            <p className="text-[11px] text-white/50">
               {isBuy ? 'Buy' : 'Sell'} Order
               {data.payment_method && ` via ${data.payment_method}`}
             </p>
           </div>
         </div>
         {/* Status badge */}
-        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
+        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
           {statusStyle.label}
         </span>
       </div>
@@ -131,21 +133,21 @@ export function ReceiptCard({ data, currentStatus }: ReceiptCardProps) {
       <div className="px-4 py-3 space-y-2.5 border-b border-white/[0.04]">
         <div className="flex justify-between items-center">
           <span className="text-xs text-white/50">Crypto</span>
-          <span className="text-sm text-white font-medium">
+          <span className="text-[15px] text-white font-bold font-mono tabular-nums">
             {formatAmount(data.crypto_amount, 6)} {data.crypto_currency || 'USDC'}
           </span>
         </div>
 
         <div className="flex justify-between items-center">
           <span className="text-xs text-white/50">Fiat</span>
-          <span className="text-sm text-white font-medium">
+          <span className="text-[15px] text-orange-400 font-bold font-mono tabular-nums">
             {formatAmount(data.fiat_amount)} {data.fiat_currency || ''}
           </span>
         </div>
 
         <div className="flex justify-between items-center">
           <span className="text-xs text-white/50">Rate</span>
-          <span className="text-sm text-white/70">
+          <span className="text-sm text-white/70 font-mono">
             {formatAmount(data.rate, 4)}
           </span>
         </div>

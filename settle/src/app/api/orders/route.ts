@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserOrders } from '@/lib/db/repositories/orders';
 import { findBestOffer, getOfferWithMerchant } from '@/lib/db/repositories/merchants';
 import { verifyPaymentMethodOwnership } from '@/lib/db/repositories/paymentMethods';
+import { getMerchantDefaultPaymentMethod } from '@/lib/db/repositories/merchantPaymentMethods';
 import { OfferType, PaymentMethod, logger, normalizeStatus } from 'settlement-core';
 import {
   createOrderSchema,
@@ -172,6 +173,13 @@ export async function POST(request: NextRequest) {
     // Calculate fiat amount
     const fiatAmount = crypto_amount * offer.rate;
 
+    // Look up merchant's default payment method (where buyer should send fiat)
+    let merchantPaymentMethodId: string | undefined;
+    const merchantPm = await getMerchantDefaultPaymentMethod(offer.merchant_id);
+    if (merchantPm) {
+      merchantPaymentMethodId = merchantPm.id;
+    }
+
     // Build payment details snapshot
     // For sell orders, include user's bank account where merchant will send fiat
     // user_bank_account may be a JSON string with structured details or a plain text string
@@ -223,6 +231,7 @@ export async function POST(request: NextRequest) {
         buyer_merchant_id,
         ref_price_at_create: offer.rate,
         payment_method_id: verifiedPaymentMethodId,
+        merchant_payment_method_id: merchantPaymentMethodId,
       },
     });
   } catch (error) {

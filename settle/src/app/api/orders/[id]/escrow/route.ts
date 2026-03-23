@@ -3,9 +3,8 @@ import { z } from 'zod';
 import {
   getOrderWithRelations,
 } from '@/lib/db/repositories/orders';
-import { logger, normalizeStatus } from 'settlement-core';
+import { logger } from 'settlement-core';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
-import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
 import {
   uuidSchema,
 } from '@/lib/validation/schemas';
@@ -149,28 +148,7 @@ export async function POST(
       body: parseResult.data,
     });
 
-    // Fire Pusher notification for escrow deposit
-    if (depositResponse.status >= 200 && depositResponse.status < 300) {
-      try {
-        const resBody = await depositResponse.json();
-        const order = resBody?.data;
-        if (order?.id) {
-          notifyOrderStatusUpdated({
-            orderId: order.id,
-            userId: order.user_id || '',
-            merchantId: order.merchant_id || '',
-            status: order.status || 'escrowed',
-            minimal_status: normalizeStatus(order.status || 'escrowed'),
-            order_version: order.order_version,
-            updatedAt: new Date().toISOString(),
-          }).catch(err => logger.error('[Pusher] Failed to notify escrow deposit', { error: err }));
-        }
-        return NextResponse.json(resBody, { status: depositResponse.status });
-      } catch {
-        return depositResponse;
-      }
-    }
-
+    // Pusher notifications are now triggered by Core API directly
     return depositResponse;
   } catch (error) {
     logger.api.error('POST', '/api/orders/[id]/escrow', error as Error);
@@ -237,28 +215,7 @@ export async function PATCH(
       actorId: actor_id,
     });
 
-    // Fire Pusher notification for escrow release
-    if (releaseResponse.status >= 200 && releaseResponse.status < 300) {
-      try {
-        const resBody = await releaseResponse.json();
-        const order = resBody?.data;
-        if (order?.id) {
-          notifyOrderStatusUpdated({
-            orderId: order.id,
-            userId: order.user_id || '',
-            merchantId: order.merchant_id || '',
-            status: order.status || 'completed',
-            minimal_status: normalizeStatus(order.status || 'completed'),
-            order_version: order.order_version,
-            updatedAt: new Date().toISOString(),
-          }).catch(err => logger.error('[Pusher] Failed to notify escrow release', { error: err }));
-        }
-        return NextResponse.json(resBody, { status: releaseResponse.status });
-      } catch {
-        return releaseResponse;
-      }
-    }
-
+    // Pusher notifications are now triggered by Core API directly
     return releaseResponse;
   } catch (error) {
     logger.api.error('PATCH', '/api/orders/[id]/escrow', error as Error);

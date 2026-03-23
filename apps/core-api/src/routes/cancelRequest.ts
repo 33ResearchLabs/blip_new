@@ -20,7 +20,7 @@ import {
   logger,
   MOCK_MODE,
 } from 'settlement-core';
-import { broadcastOrderEvent } from '../ws/broadcast';
+import { orderBus, ORDER_EVENT } from '../events';
 
 interface OrderRow {
   id: string;
@@ -137,14 +137,14 @@ export const cancelRequestRoutes: FastifyPluginAsync = async (fastify) => {
 
       logger.info('[core-api] Cancel requested', { orderId: id, by: actor_type });
 
-      broadcastOrderEvent({
-        event_type: 'CANCEL_REQUESTED',
-        order_id: id,
-        status: order.status,
-        minimal_status: normalizeStatus(order.status as any),
-        order_version: (updated as any).order_version,
-        userId: order.user_id,
-        merchantId: order.merchant_id,
+      orderBus.emitOrderEvent({
+        event: ORDER_EVENT.STATUS_CHANGED,
+        orderId: id, previousStatus: order.status, newStatus: order.status,
+        actorType: actor_type, actorId: actor_id,
+        userId: order.user_id, merchantId: order.merchant_id,
+        order: updated as unknown as Record<string, unknown>,
+        orderVersion: (updated as any).order_version, minimalStatus: normalizeStatus(order.status as any),
+        metadata: { cancel_requested: true, reason },
       });
 
       return reply.send({ success: true, data: updated });
@@ -228,14 +228,14 @@ export const cancelRequestRoutes: FastifyPluginAsync = async (fastify) => {
           [id, actor_type, actor_id, JSON.stringify({ reason: 'Cancel request declined' })]
         );
 
-        broadcastOrderEvent({
-          event_type: 'CANCEL_DECLINED',
-          order_id: id,
-          status: order.status,
-          minimal_status: normalizeStatus(order.status as any),
-          order_version: (updated as any).order_version,
-          userId: order.user_id,
-          merchantId: order.merchant_id,
+        orderBus.emitOrderEvent({
+          event: ORDER_EVENT.STATUS_CHANGED,
+          orderId: id, previousStatus: order.status, newStatus: order.status,
+          actorType: actor_type, actorId: actor_id,
+          userId: order.user_id, merchantId: order.merchant_id,
+          order: updated as unknown as Record<string, unknown>,
+          orderVersion: (updated as any).order_version, minimalStatus: normalizeStatus(order.status as any),
+          metadata: { cancel_declined: true },
         });
 
         logger.info('[core-api] Cancel declined', { orderId: id, by: actor_type });
@@ -328,15 +328,13 @@ export const cancelRequestRoutes: FastifyPluginAsync = async (fastify) => {
 
       logger.info('[core-api] Mutual cancel completed', { orderId: id });
 
-      broadcastOrderEvent({
-        event_type: 'ORDER_CANCELLED',
-        order_id: id,
-        status: 'cancelled',
-        minimal_status: normalizeStatus('cancelled' as any),
-        order_version: (updated as any).order_version,
-        userId: order.user_id,
-        merchantId: order.merchant_id,
-        previousStatus: order.status,
+      orderBus.emitOrderEvent({
+        event: ORDER_EVENT.CANCELLED,
+        orderId: id, previousStatus: order.status, newStatus: 'cancelled',
+        actorType: actor_type, actorId: actor_id,
+        userId: order.user_id, merchantId: order.merchant_id,
+        order: updated as unknown as Record<string, unknown>,
+        orderVersion: (updated as any).order_version, minimalStatus: normalizeStatus('cancelled' as any),
       });
 
       return reply.send({ success: true, data: updated, cancelled: true });

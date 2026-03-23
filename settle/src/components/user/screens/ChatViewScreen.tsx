@@ -18,6 +18,9 @@ import { ConnectionIndicator } from "@/components/NotificationToast";
 import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
 import { ImageMessage } from "@/components/chat/ImageMessage";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { usePusherOptional } from "@/context/PusherContext";
+import { getOrderChannel } from "@/lib/pusher/channels";
+import { ORDER_EVENTS } from "@/lib/pusher/events";
 import { formatLastSeen } from "./helpers";
 import type { Screen, Order } from "./types";
 import type { RefObject } from "react";
@@ -35,6 +38,7 @@ export interface ChatViewScreenProps {
       timestamp: Date;
       senderName?: string;
       messageType?: string;
+      receiptData?: Record<string, unknown> | null;
       imageUrl?: string | null;
       isRead?: boolean;
       status?: 'sending' | 'sent' | 'read';
@@ -59,34 +63,78 @@ export const ChatViewScreen = ({
   const [pendingImage, setPendingImage] = useState<{ file: File; previewUrl: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch live order statuses for receipt cards — poll every 10s to track status changes
+  // Live order statuses for receipt cards — Pusher with initial fetch fallback
   const [receiptStatuses, setReceiptStatuses] = useState<Record<string, string>>({});
+  const pusher = usePusherOptional();
 
+  // Extract order numbers from receipt messages for status lookups + Pusher subscriptions
+  const receiptOrderIds = useRef<string[]>([]);
   useEffect(() => {
     if (!activeChat?.messages) return;
     const orderNumbers: string[] = [];
+    const orderIds: string[] = [];
     for (const msg of activeChat.messages) {
+      // New structured format
+      if (msg.messageType === 'receipt' && msg.receiptData) {
+        const num = msg.receiptData.order_number as string | undefined;
+        if (num) orderNumbers.push(num);
+        if (activeChat.orderId) orderIds.push(activeChat.orderId);
+        continue;
+      }
+      // Backward compat: old JSON-in-content format
       try {
         if (msg.text.startsWith('{')) {
           const parsed = JSON.parse(msg.text);
           if (parsed.type === 'order_receipt' && parsed.data?.order_number) {
             orderNumbers.push(parsed.data.order_number);
+            if (activeChat.orderId) orderIds.push(activeChat.orderId);
           }
         }
       } catch { /* not JSON */ }
     }
+    receiptOrderIds.current = [...new Set(orderIds)];
     if (orderNumbers.length === 0) return;
     const unique = [...new Set(orderNumbers)];
-    const fetchStatuses = () => {
-      fetchWithAuth(`/api/orders/status?order_numbers=${encodeURIComponent(unique.join(','))}`)
-        .then(res => res.json())
-        .then(data => { if (data.success && data.data) setReceiptStatuses(data.data); })
-        .catch(() => {});
-    };
-    fetchStatuses();
-    const interval = setInterval(fetchStatuses, 10000);
-    return () => clearInterval(interval);
+    // Initial fetch — single request to seed statuses
+    fetchWithAuth(`/api/orders/status?order_numbers=${encodeURIComponent(unique.join(','))}`)
+      .then(res => res.json())
+      .then(data => { if (data.success && data.data) setReceiptStatuses(data.data); })
+      .catch(() => {});
   }, [activeChat?.messages?.length]);
+
+  // Subscribe to Pusher for real-time receipt status updates
+  useEffect(() => {
+    if (!pusher || receiptOrderIds.current.length === 0) return;
+
+    const channels: ReturnType<typeof pusher.subscribe>[] = [];
+    const handleStatusUpdate = (rawData: unknown) => {
+      const data = rawData as { orderId: string; status: string };
+      if (data.orderId && data.status) {
+        setReceiptStatuses(prev => ({ ...prev, [data.orderId]: data.status }));
+      }
+    };
+
+    for (const orderId of receiptOrderIds.current) {
+      const channel = pusher.subscribe(getOrderChannel(orderId));
+      if (channel) {
+        channel.bind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdate);
+        channel.bind(ORDER_EVENTS.CANCELLED, handleStatusUpdate);
+        channels.push(channel);
+      }
+    }
+
+    return () => {
+      for (const channel of channels) {
+        if (channel) {
+          channel.unbind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdate);
+          channel.unbind(ORDER_EVENTS.CANCELLED, handleStatusUpdate);
+        }
+      }
+      for (const orderId of receiptOrderIds.current) {
+        pusher.unsubscribe(getOrderChannel(orderId));
+      }
+    };
+  }, [pusher, activeChat?.messages?.length]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -247,22 +295,35 @@ export const ChatViewScreen = ({
               );
             }
 
-            // Detect receipt card messages
-            try {
-              if (msg.text.startsWith('{')) {
-                const parsed = JSON.parse(msg.text);
-                if (parsed.type === 'order_receipt' && parsed.data) {
-                  return (
-                    <div key={msg.id} className="max-w-[90%] mx-auto">
-                      <ReceiptCard data={parsed.data} currentStatus={receiptStatuses[parsed.data.order_number] || activeOrder?.dbStatus || activeOrder?.status} />
-                      <p className="text-[10px] text-neutral-500 mt-1 text-center">
-                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  );
-                }
+            // Receipt card messages — structured (new) or JSON fallback (old)
+            {
+              let receiptPayload: Record<string, unknown> | null = null;
+              if (msg.messageType === 'receipt' && msg.receiptData) {
+                // New structured format
+                receiptPayload = msg.receiptData;
+              } else {
+                // Backward compat: old messages stored as JSON in content
+                try {
+                  if (msg.text.startsWith('{')) {
+                    const parsed = JSON.parse(msg.text);
+                    if (parsed.type === 'order_receipt' && parsed.data) {
+                      receiptPayload = parsed.data;
+                    }
+                  }
+                } catch { /* not JSON */ }
               }
-            } catch { /* not JSON */ }
+              if (receiptPayload) {
+                const orderNum = receiptPayload.order_number as string | undefined;
+                return (
+                  <div key={msg.id} className="max-w-[90%] mx-auto">
+                    <ReceiptCard data={receiptPayload as any} currentStatus={(orderNum ? receiptStatuses[orderNum] : undefined) || activeOrder?.dbStatus || activeOrder?.status} />
+                    <p className="text-[10px] text-neutral-500 mt-1 text-center">
+                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                );
+              }
+            }
 
             // System guidance messages (default status messages)
             if (msg.from === 'system' && msg.messageType !== 'system') {

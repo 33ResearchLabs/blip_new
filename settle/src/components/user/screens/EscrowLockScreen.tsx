@@ -9,9 +9,12 @@ import {
   Lock,
   Clock,
   ExternalLink,
+  Building2,
+  Smartphone,
 } from "lucide-react";
 import type { Screen } from "./types";
 import { BankAccountSelector, type SelectedBankDetails } from "@/components/user/BankAccountSelector";
+import type { PaymentMethodItem } from "@/components/user/PaymentMethodSelector";
 
 export interface EscrowLockScreenProps {
   setScreen: (s: Screen) => void;
@@ -27,6 +30,7 @@ export interface EscrowLockScreenProps {
   confirmEscrow: () => void;
   selectedBankDetails: SelectedBankDetails | null;
   setSelectedBankDetails: (v: SelectedBankDetails | null) => void;
+  selectedPaymentMethod?: PaymentMethodItem | null;
   userId: string | null;
   setShowWalletModal: (v: boolean) => void;
   onConnectWallet?: () => void;
@@ -54,6 +58,7 @@ export const EscrowLockScreen = ({
   confirmEscrow,
   selectedBankDetails,
   setSelectedBankDetails,
+  selectedPaymentMethod,
   userId,
   setShowWalletModal,
   onConnectWallet,
@@ -135,13 +140,46 @@ export const EscrowLockScreen = ({
             </div>
           </div>
 
-          {/* Bank Account Selector */}
+          {/* Payment Method Display */}
           <div className="w-full mt-2">
-            <BankAccountSelector
-              userId={userId}
-              selected={selectedBankDetails}
-              onSelect={setSelectedBankDetails}
-            />
+            {selectedPaymentMethod ? (
+              <div className="w-full">
+                <div className="flex items-center gap-2 mb-2">
+                  <Building2 className="w-4 h-4 text-neutral-500" />
+                  <span className="text-[12px] text-neutral-500 uppercase tracking-wide font-semibold">
+                    Your Payment Method
+                  </span>
+                </div>
+                <div className="w-full bg-neutral-900 rounded-xl p-3 flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                    {selectedPaymentMethod.type === 'upi' ? (
+                      <Smartphone className="w-4 h-4 text-white/40" />
+                    ) : (
+                      <Building2 className="w-4 h-4 text-white/40" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-medium text-white truncate">
+                      {selectedPaymentMethod.label}
+                    </p>
+                    <p className="text-[12px] text-neutral-500 truncate">
+                      {selectedPaymentMethod.type === 'bank'
+                        ? `${selectedPaymentMethod.details.account_name || ''} · ${selectedPaymentMethod.details.iban ? selectedPaymentMethod.details.iban.slice(0, 4) + '...' + selectedPaymentMethod.details.iban.slice(-4) : ''}`
+                        : selectedPaymentMethod.type === 'upi'
+                        ? selectedPaymentMethod.details.upi_id || ''
+                        : Object.values(selectedPaymentMethod.details).filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                  <Lock className="w-4 h-4 text-neutral-600 shrink-0" />
+                </div>
+              </div>
+            ) : (
+              <BankAccountSelector
+                userId={userId}
+                selected={selectedBankDetails}
+                onSelect={setSelectedBankDetails}
+              />
+            )}
           </div>
 
           {/* Program Not Ready Warning */}

@@ -13,9 +13,8 @@ import { usePusherOptional } from '@/context/PusherContext';
 import { getOrderChannel } from '@/lib/pusher/channels';
 import { ORDER_EVENTS } from '@/lib/pusher/events';
 
-// Polling intervals
-const POLLING_INTERVAL_FAST = 3000;  // When Pusher is unavailable
-const POLLING_INTERVAL_SLOW = 8000;  // Safety net when Pusher is connected
+// Polling interval — only used when Pusher is unavailable
+const POLLING_INTERVAL_FALLBACK = 3000;
 
 interface OrderData {
   id: string;
@@ -145,16 +144,14 @@ export function useRealtimeOrder(
     }
   }, [orderId, initialData, fetchOrder]);
 
-  // Polling — always active as safety net, faster when Pusher is unavailable
+  // Polling fallback — only active when Pusher is NOT connected
   useEffect(() => {
     if (!orderId || !enablePolling) return;
-
-    const pusherConnected = pusher?.isConnected;
-    const interval = pusherConnected ? POLLING_INTERVAL_SLOW : POLLING_INTERVAL_FAST;
+    if (pusher?.isConnected) return; // Pusher handles updates — no polling needed
 
     const intervalId = setInterval(() => {
       fetchOrder(true); // silent fetch
-    }, interval);
+    }, POLLING_INTERVAL_FALLBACK);
 
     return () => {
       clearInterval(intervalId);

@@ -22,6 +22,9 @@ import { startCorridorTimeoutWorker, stopCorridorTimeoutWorker } from './workers
 import { startAutoBumpWorker, stopAutoBumpWorker } from './workers/autoBumpWorker';
 import { startPriceFeedWorker, stopPriceFeedWorker } from './workers/priceFeedWorker';
 import { startUnhappyPathWorker, stopUnhappyPathWorker } from './workers/unhappyPathWorker';
+import { startReceiptWorker, stopReceiptWorker } from './workers/receiptWorker';
+import { closeReceiptQueue } from './queues/receiptQueue';
+import { registerAllListeners } from './events';
 import { closePool } from 'settlement-core';
 
 const PORT = parseInt(process.env.CORE_API_PORT || '4010', 10);
@@ -48,6 +51,9 @@ fastify.addHook('onRequest', async (request) => {
     request.headers['content-type'] = ct.replace(/[\t\r\n]/g, '');
   }
 });
+
+// Register event listeners (before routes so they're ready when first request arrives)
+registerAllListeners();
 
 // Register auth hook (before routes)
 await fastify.register(authHook);
@@ -78,6 +84,7 @@ try {
     startAutoBumpWorker();
     startPriceFeedWorker();
     startUnhappyPathWorker();
+    await startReceiptWorker();
   }
 } catch (err) {
   fastify.log.error(err);
@@ -92,6 +99,8 @@ const shutdown = async (signal: string) => {
     stopAutoBumpWorker();
     stopPriceFeedWorker();
     stopUnhappyPathWorker();
+    await stopReceiptWorker();
+    await closeReceiptQueue();
     closeWebSocketServer();
   }
   await fastify.close();

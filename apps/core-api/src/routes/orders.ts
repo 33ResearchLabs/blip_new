@@ -18,7 +18,6 @@ import {
   validateTransition,
   normalizeStatus,
   isTransientStatus,
-  getTransitionEventType,
   shouldRestoreLiquidity,
   logger,
   MOCK_MODE,
@@ -26,9 +25,7 @@ import {
 
 // Fire-and-forget helper — logs errors but never blocks
 const bgQuery = (sql: string, params: unknown[]) => dbQuery(sql, params).catch(() => {});
-import { broadcastOrderEvent } from '../ws/broadcast';
-import { bufferEvent, bufferNotification, bufferReputation } from '../batchWriter';
-import { createOrderReceipt, updateOrderReceipt } from '../receipts';
+import { orderBus, ORDER_EVENT, type OrderEventPayload } from '../events';
 
 interface OrderRow {
   id: string;
@@ -200,12 +197,15 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             logger.error('[CRITICAL] Refund invariant FAILED (PATCH cancel)', { orderId: id, error: invariantError });
             return reply.status(500).send({ success: false, error: 'ORDER_REFUND_INVARIANT_FAILED' });
           }
-          broadcastOrderEvent({
-            event_type: 'ORDER_CANCELLED', order_id: id, status: 'cancelled', minimal_status: 'cancelled',
-            order_version: cancelResult.order!.order_version, userId: order.user_id, merchantId: order.merchant_id, buyerMerchantId: order.buyer_merchant_id ?? undefined, previousStatus: order.status,
+          orderBus.emitOrderEvent({
+            event: ORDER_EVENT.CANCELLED,
+            orderId: id, previousStatus: order.status, newStatus: 'cancelled',
+            actorType: actor_type, actorId: actor_id,
+            userId: order.user_id, merchantId: order.merchant_id, buyerMerchantId: order.buyer_merchant_id ?? undefined,
+            order: cancelResult.order as unknown as Record<string, unknown>,
+            orderVersion: cancelResult.order!.order_version, minimalStatus: 'cancelled',
+            refundTxHash: cancelResult.order?.refund_tx_hash ?? undefined,
           });
-          // Fire-and-forget: update receipt on cancel
-          updateOrderReceipt(id, 'cancelled', { refund_tx_hash: cancelResult.order?.refund_tx_hash, cancelled_at: true });
           return reply.send({ success: true, data: { ...cancelResult.order, minimal_status: normalizeStatus(cancelResult.order!.status) } });
         }
         // Non-escrow cancel falls through to general TX path
@@ -237,20 +237,38 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         }
         const order = data.order as OrderRow;
         const oldStatus = data.old_status;
-        bufferEvent({ order_id: id, event_type: getTransitionEventType(oldStatus, newStatus), actor_type, actor_id, old_status: oldStatus, new_status: newStatus, metadata: JSON.stringify(request.body.metadata || {}) });
-        bufferNotification({ order_id: id, event_type: `ORDER_${newStatus.toUpperCase()}`, payload: JSON.stringify({
-          orderId: id, userId: order.user_id, merchantId: order.merchant_id,
-          status: order.status, minimal_status: normalizeStatus(order.status as OrderStatus),
-          order_version: order.order_version, previousStatus: oldStatus, updatedAt: new Date().toISOString(),
-        })});
-        broadcastOrderEvent({
-          event_type: `ORDER_${newStatus.toUpperCase()}`, order_id: id, status: order.status,
-          minimal_status: normalizeStatus(order.status as OrderStatus), order_version: order.order_version,
-          userId: order.user_id, merchantId: order.merchant_id, buyerMerchantId: order.buyer_merchant_id ?? undefined, previousStatus: oldStatus,
-        });
-        // Fire-and-forget: create order receipt on acceptance
-        createOrderReceipt(id, order as any, actor_id).catch((err) => {
-          fastify.log.error({ error: err, orderId: id }, '[Receipt] Failed to create order receipt');
+
+        // Attach accepting merchant's default payment method to the order
+        // so the counterparty knows where to send fiat
+        if (actor_type === 'merchant' && actor_id && !order.merchant_payment_method_id) {
+          try {
+            const mpm = await queryOne<{ id: string }>(
+              `SELECT id FROM merchant_payment_methods
+               WHERE merchant_id = $1 AND is_active = true
+               ORDER BY is_default DESC, created_at DESC LIMIT 1`,
+              [actor_id]
+            );
+            if (mpm) {
+              await dbQuery(
+                'UPDATE orders SET merchant_payment_method_id = $1 WHERE id = $2',
+                [mpm.id, id]
+              );
+              (order as any).merchant_payment_method_id = mpm.id;
+            }
+          } catch (e) {
+            logger.warn('[core-api] Failed to attach merchant payment method on accept', { orderId: id, error: e });
+          }
+        }
+
+        orderBus.emitOrderEvent({
+          event: ORDER_EVENT.ACCEPTED,
+          orderId: id, orderNumber: order.order_number,
+          previousStatus: oldStatus, newStatus: order.status,
+          actorType: actor_type, actorId: actor_id,
+          userId: order.user_id, merchantId: order.merchant_id, buyerMerchantId: order.buyer_merchant_id ?? undefined,
+          order: order as unknown as Record<string, unknown>,
+          orderVersion: order.order_version, minimalStatus: normalizeStatus(order.status as OrderStatus),
+          metadata: request.body.metadata,
         });
         return reply.send({ success: true, data: { ...order, minimal_status: normalizeStatus(order.status as OrderStatus) } });
       }
@@ -266,19 +284,14 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         if (!updated) {
           return reply.status(400).send({ success: false, error: 'Order not found or cannot transition to payment_sent' });
         }
-        bufferEvent({ order_id: id, event_type: 'status_changed_to_payment_sent', actor_type, actor_id, old_status: 'escrowed', new_status: 'payment_sent', metadata: '{}' });
-        bufferNotification({ order_id: id, event_type: 'ORDER_PAYMENT_SENT', payload: JSON.stringify({
-          orderId: id, userId: updated.user_id, merchantId: updated.merchant_id,
-          status: 'payment_sent', minimal_status: 'payment_sent',
-          order_version: updated.order_version, previousStatus: 'escrowed', updatedAt: new Date().toISOString(),
-        })});
-        broadcastOrderEvent({
-          event_type: 'ORDER_PAYMENT_SENT', order_id: id, status: 'payment_sent',
-          minimal_status: 'payment_sent', order_version: updated.order_version,
-          userId: updated.user_id, merchantId: updated.merchant_id, buyerMerchantId: updated.buyer_merchant_id ?? undefined, previousStatus: 'escrowed',
+        orderBus.emitOrderEvent({
+          event: ORDER_EVENT.PAYMENT_SENT,
+          orderId: id, previousStatus: 'escrowed', newStatus: 'payment_sent',
+          actorType: actor_type, actorId: actor_id,
+          userId: updated.user_id, merchantId: updated.merchant_id, buyerMerchantId: updated.buyer_merchant_id ?? undefined,
+          order: updated as unknown as Record<string, unknown>,
+          orderVersion: updated.order_version, minimalStatus: 'payment_sent',
         });
-        // Fire-and-forget: update receipt status
-        updateOrderReceipt(id, 'payment_sent', { payment_sent_at: true });
         return reply.send({ success: true, data: { ...updated, minimal_status: normalizeStatus(updated.status) } });
       }
 
@@ -485,59 +498,24 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ success: false, error: result.error });
       }
 
-      // --- Batched fire-and-forget: zero SQL round-trips (flushed every 50ms) ---
+      // --- All side-effects via event bus ---
       const txOldStatus = result.oldStatus!;
-      const txOrder = result.currentOrder!;
+      const statusToEvent: Record<string, OrderEventPayload['event']> = {
+        escrowed: ORDER_EVENT.ESCROWED, payment_sent: ORDER_EVENT.PAYMENT_SENT,
+        completed: ORDER_EVENT.COMPLETED, cancelled: ORDER_EVENT.CANCELLED,
+        expired: ORDER_EVENT.EXPIRED, disputed: ORDER_EVENT.DISPUTED,
+      };
 
-      bufferEvent({ order_id: id, event_type: getTransitionEventType(txOldStatus, newStatus), actor_type, actor_id, old_status: txOldStatus, new_status: newStatus, metadata: JSON.stringify(request.body.metadata || {}) });
-      bufferNotification({ order_id: id, event_type: `ORDER_${newStatus.toUpperCase()}`, payload: JSON.stringify({
-        orderId: id, userId: result.order!.user_id, merchantId: result.order!.merchant_id,
-        status: result.order!.status, minimal_status: normalizeStatus(result.order!.status),
-        order_version: result.order!.order_version, previousStatus: txOldStatus, updatedAt: new Date().toISOString(),
-      })});
-
-      // Fire-and-forget: update receipt on status transition
-      updateOrderReceipt(id, newStatus, {
-        escrowed_at: newStatus === 'escrowed' || undefined,
-        completed_at: newStatus === 'completed' || undefined,
-        cancelled_at: newStatus === 'cancelled' || newStatus === 'expired' || undefined,
-      });
-
-      // Stats (completion) — single CTE round-trip (can't batch UPDATEs)
-      if (newStatus === 'completed') {
-        bgQuery(
-          `WITH u AS (UPDATE users SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $2 RETURNING 1)
-           UPDATE merchants SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $3`,
-          [txOrder.fiat_amount, txOrder.user_id, txOrder.merchant_id]
-        );
-      }
-
-      // Reputation (terminal states) — batched
-      if (['completed', 'cancelled', 'disputed', 'expired'].includes(newStatus)) {
-        const repType = newStatus === 'completed' ? 'order_completed' : newStatus === 'disputed' ? 'order_disputed' : newStatus === 'expired' ? 'order_timeout' : 'order_cancelled';
-        const repScore = newStatus === 'completed' ? 5 : newStatus === 'disputed' ? -5 : newStatus === 'expired' ? -5 : -2;
-        const repReason = `Order ${txOrder.order_number} ${newStatus}`;
-        const repMeta = JSON.stringify({ order_id: id });
-        bufferReputation({ entity_id: txOrder.merchant_id, entity_type: 'merchant', event_type: repType, score_change: repScore, reason: repReason, metadata: repMeta });
-        bufferReputation({ entity_id: txOrder.user_id, entity_type: 'user', event_type: repType, score_change: repScore, reason: repReason, metadata: repMeta });
-
-        const settleUrl = process.env.SETTLE_URL || 'http://localhost:3000';
-        Promise.allSettled([
-          fetch(`${settleUrl}/api/reputation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entityId: result.order!.merchant_id, entityType: 'merchant' }) }),
-          fetch(`${settleUrl}/api/reputation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entityId: result.order!.user_id, entityType: 'user' }) }),
-        ]).catch(() => {});
-      }
-
-      broadcastOrderEvent({
-        event_type: `ORDER_${newStatus.toUpperCase()}`,
-        order_id: id,
-        status: result.order!.status,
-        minimal_status: normalizeStatus(result.order!.status),
-        order_version: result.order!.order_version,
-        userId: result.order!.user_id,
-        merchantId: result.order!.merchant_id,
+      orderBus.emitOrderEvent({
+        event: statusToEvent[newStatus] || ORDER_EVENT.STATUS_CHANGED,
+        orderId: id, orderNumber: result.currentOrder!.order_number,
+        previousStatus: txOldStatus, newStatus: result.order!.status,
+        actorType: actor_type, actorId: actor_id,
+        userId: result.order!.user_id, merchantId: result.order!.merchant_id,
         buyerMerchantId: result.order!.buyer_merchant_id ?? undefined,
-        previousStatus: txOldStatus,
+        order: result.order as unknown as Record<string, unknown>,
+        orderVersion: result.order!.order_version, minimalStatus: normalizeStatus(result.order!.status),
+        metadata: request.body.metadata,
       });
 
       return reply.send({
@@ -615,19 +593,15 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.status(500).send({ success: false, error: 'ORDER_REFUND_INVARIANT_FAILED' });
         }
 
-        broadcastOrderEvent({
-          event_type: 'ORDER_CANCELLED',
-          order_id: id,
-          status: 'cancelled',
-          minimal_status: 'cancelled',
-          order_version: result.order!.order_version,
-          userId: order.user_id,
-          merchantId: order.merchant_id,
-          buyerMerchantId: order.buyer_merchant_id ?? undefined,
-          previousStatus: order.status,
+        orderBus.emitOrderEvent({
+          event: ORDER_EVENT.CANCELLED,
+          orderId: id, previousStatus: order.status, newStatus: 'cancelled',
+          actorType: actor_type, actorId: actor_id,
+          userId: order.user_id, merchantId: order.merchant_id, buyerMerchantId: order.buyer_merchant_id ?? undefined,
+          order: result.order as unknown as Record<string, unknown>,
+          orderVersion: result.order!.order_version, minimalStatus: 'cancelled',
+          refundTxHash: result.order?.refund_tx_hash ?? undefined,
         });
-        // Fire-and-forget: update receipt on DELETE cancel (with escrow)
-        updateOrderReceipt(id, 'cancelled', { refund_tx_hash: result.order?.refund_tx_hash, cancelled_at: true });
 
         return reply.send({
           success: true,
@@ -701,19 +675,15 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.status(400).send({ success: false, error: result.error });
         }
 
-        broadcastOrderEvent({
-          event_type: 'ORDER_CANCELLED',
-          order_id: id,
-          status: 'cancelled',
-          minimal_status: 'cancelled',
-          order_version: result.order!.order_version,
-          userId: result.order!.user_id,
-          merchantId: result.order!.merchant_id,
+        orderBus.emitOrderEvent({
+          event: ORDER_EVENT.CANCELLED,
+          orderId: id, previousStatus: order.status, newStatus: 'cancelled',
+          actorType: actor_type, actorId: actor_id,
+          userId: result.order!.user_id, merchantId: result.order!.merchant_id,
           buyerMerchantId: result.order!.buyer_merchant_id ?? undefined,
-          previousStatus: order.status,
+          order: result.order as unknown as Record<string, unknown>,
+          orderVersion: result.order!.order_version, minimalStatus: 'cancelled',
         });
-        // Fire-and-forget: update receipt on DELETE cancel (simple)
-        updateOrderReceipt(id, 'cancelled', { cancelled_at: true });
 
         return reply.send({
           success: true,
@@ -791,17 +761,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         }
         const result = { updated: releaseData.order as OrderRow, oldOrder: { ...releaseData.order, status: releaseData.old_status } as OrderRow };
 
-        // Batched fire-and-forget (zero round-trips)
-        bufferEvent({ order_id: id, event_type: 'status_changed_to_completed', actor_type: actorType!, actor_id: actorId!, old_status: result.oldOrder.status, new_status: 'completed', metadata: JSON.stringify({ tx_hash }) });
-        bufferNotification({ order_id: id, event_type: 'ORDER_COMPLETED', payload: JSON.stringify({
-          orderId: id, userId: result.oldOrder.user_id, merchantId: result.oldOrder.merchant_id,
-          status: 'completed', minimal_status: normalizeStatus('completed'),
-          order_version: result.updated.order_version, previousStatus: result.oldOrder.status,
-          updatedAt: new Date().toISOString(),
-        })});
-
         // Invariant check — fire-and-forget (don't block response)
-        // result.updated.order_version is already post-increment, so use it directly
         verifyReleaseInvariants({
           orderId: id,
           expectedStatus: 'completed',
@@ -811,19 +771,17 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           logger.error('[CRITICAL] Release invariant FAILED', { orderId: id, error: invariantError });
         });
 
-        broadcastOrderEvent({
-          event_type: 'ORDER_COMPLETED',
-          order_id: id,
-          status: 'completed',
-          minimal_status: 'completed',
-          order_version: result.updated.order_version,
-          userId: result.oldOrder.user_id,
-          merchantId: result.oldOrder.merchant_id,
+        orderBus.emitOrderEvent({
+          event: ORDER_EVENT.COMPLETED,
+          orderId: id, orderNumber: result.oldOrder.order_number,
+          previousStatus: result.oldOrder.status, newStatus: 'completed',
+          actorType: actorType!, actorId: actorId!,
+          userId: result.oldOrder.user_id, merchantId: result.oldOrder.merchant_id,
           buyerMerchantId: result.oldOrder.buyer_merchant_id ?? undefined,
-          previousStatus: result.oldOrder.status,
+          order: result.updated as unknown as Record<string, unknown>,
+          orderVersion: result.updated.order_version, minimalStatus: 'completed',
+          txHash: tx_hash, metadata: { tx_hash },
         });
-        // Fire-and-forget: update receipt with release info
-        updateOrderReceipt(id, 'completed', { release_tx_hash: tx_hash, completed_at: true });
 
         return reply.send({
           success: true,
@@ -869,19 +827,15 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.status(500).send({ success: false, error: 'ORDER_REFUND_INVARIANT_FAILED' });
         }
 
-        broadcastOrderEvent({
-          event_type: 'ORDER_CANCELLED',
-          order_id: id,
-          status: 'cancelled',
-          minimal_status: 'cancelled',
-          order_version: refundResult.order!.order_version,
-          userId: order.user_id,
-          merchantId: order.merchant_id,
-          buyerMerchantId: order.buyer_merchant_id ?? undefined,
-          previousStatus: order.status,
+        orderBus.emitOrderEvent({
+          event: ORDER_EVENT.CANCELLED,
+          orderId: id, previousStatus: order.status, newStatus: 'cancelled',
+          actorType: actorType!, actorId: actorId!,
+          userId: order.user_id, merchantId: order.merchant_id, buyerMerchantId: order.buyer_merchant_id ?? undefined,
+          order: refundResult.order as unknown as Record<string, unknown>,
+          orderVersion: refundResult.order!.order_version, minimalStatus: 'cancelled',
+          refundTxHash: refundResult.order?.refund_tx_hash ?? undefined,
         });
-        // Fire-and-forget: update receipt on refund
-        updateOrderReceipt(id, 'cancelled', { refund_tx_hash: refundResult.order?.refund_tx_hash, cancelled_at: true });
 
         return reply.send({
           success: true,

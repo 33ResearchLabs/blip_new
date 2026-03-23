@@ -10,7 +10,7 @@ import {
   logger,
   MOCK_MODE,
 } from 'settlement-core';
-import { broadcastOrderEvent } from '../ws/broadcast';
+import { orderBus, ORDER_EVENT } from '../events';
 
 export const expireRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /v1/orders/expire - Batch expire
@@ -56,15 +56,13 @@ export const expireRoutes: FastifyPluginAsync = async (fastify) => {
         totalExpired += pendingIds.length;
 
         for (const o of pendingExpired) {
-          broadcastOrderEvent({
-            event_type: 'ORDER_EXPIRED',
-            order_id: o.id,
-            status: 'expired',
-            minimal_status: normalizeStatus('expired' as any),
-            order_version: 0,
-            userId: o.user_id,
-            merchantId: o.merchant_id,
-            previousStatus: o.status,
+          orderBus.emitOrderEvent({
+            event: ORDER_EVENT.EXPIRED,
+            orderId: o.id, previousStatus: o.status, newStatus: 'expired',
+            actorType: 'system', actorId: 'expiry-endpoint',
+            userId: o.user_id, merchantId: o.merchant_id, buyerMerchantId: o.buyer_merchant_id ?? undefined,
+            order: o as unknown as Record<string, unknown>,
+            orderVersion: 0, minimalStatus: normalizeStatus('expired' as any),
           });
         }
       }
@@ -128,15 +126,16 @@ export const expireRoutes: FastifyPluginAsync = async (fastify) => {
           ]
         );
 
-        broadcastOrderEvent({
-          event_type: `ORDER_${newStatus.toUpperCase()}`,
-          order_id: order.id,
-          status: newStatus,
-          minimal_status: normalizeStatus(newStatus as any),
-          order_version: 0,
-          userId: order.user_id,
-          merchantId: order.merchant_id,
-          previousStatus: order.status,
+        const eventName = newStatus === 'cancelled' ? ORDER_EVENT.CANCELLED
+          : newStatus === 'disputed' ? ORDER_EVENT.DISPUTED
+          : ORDER_EVENT.EXPIRED;
+        orderBus.emitOrderEvent({
+          event: eventName,
+          orderId: order.id, previousStatus: order.status, newStatus,
+          actorType: 'system', actorId: 'expiry-endpoint',
+          userId: order.user_id, merchantId: order.merchant_id, buyerMerchantId: order.buyer_merchant_id ?? undefined,
+          order: order as unknown as Record<string, unknown>,
+          orderVersion: 0, minimalStatus: normalizeStatus(newStatus as any),
         });
 
         totalExpired++;

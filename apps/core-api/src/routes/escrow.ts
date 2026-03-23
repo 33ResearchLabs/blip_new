@@ -12,8 +12,7 @@ import {
   MOCK_MODE,
   normalizeStatus,
 } from 'settlement-core';
-import { broadcastOrderEvent } from '../ws/broadcast';
-import { bufferEvent, bufferNotification } from '../batchWriter';
+import { orderBus, ORDER_EVENT } from '../events';
 
 interface EscrowDepositPayload {
   tx_hash: string;
@@ -85,20 +84,14 @@ export const escrowRoutes: FastifyPluginAsync = async (fastify) => {
       const userId = updatedOrder.user_id;
       const merchantId = updatedOrder.merchant_id;
 
-      // Batched fire-and-forget (zero round-trips, flushed every 50ms)
-      bufferEvent({ order_id: id, event_type: 'status_changed_to_escrowed', actor_type, actor_id, old_status: oldStatus, new_status: 'escrowed', metadata: JSON.stringify({ tx_hash }) });
-      bufferNotification({ order_id: id, event_type: 'ORDER_ESCROWED', payload: JSON.stringify({ orderId: id, status: 'escrowed', previousStatus: oldStatus, escrowTxHash: tx_hash, updatedAt: new Date().toISOString() }) });
-
-      broadcastOrderEvent({
-        event_type: 'ORDER_ESCROWED',
-        order_id: id,
-        status: 'escrowed',
-        minimal_status: normalizeStatus('escrowed' as any),
-        order_version: updatedOrder!.order_version,
-        userId,
-        merchantId,
-        buyerMerchantId: updatedOrder.buyer_merchant_id ?? undefined,
-        previousStatus: oldStatus,
+      orderBus.emitOrderEvent({
+        event: ORDER_EVENT.ESCROWED,
+        orderId: id, previousStatus: oldStatus, newStatus: 'escrowed',
+        actorType: actor_type, actorId: actor_id,
+        userId, merchantId, buyerMerchantId: updatedOrder.buyer_merchant_id ?? undefined,
+        order: updatedOrder as unknown as Record<string, unknown>,
+        orderVersion: updatedOrder!.order_version, minimalStatus: normalizeStatus('escrowed' as any),
+        metadata: { tx_hash },
       });
 
       return reply.send({

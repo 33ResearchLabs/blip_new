@@ -21,7 +21,6 @@ import {
 } from '@/lib/middleware/auth';
 import { proxyCoreApi, signActorHeaders } from '@/lib/proxy/coreApi';
 import { serializeOrder } from '@/lib/api/orderSerializer';
-import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
 
 // Prevent Next.js from caching this route
 export const dynamic = 'force-dynamic';
@@ -184,30 +183,7 @@ export async function PATCH(
       body: { status, actor_type, actor_id, reason, acceptor_wallet_address },
     });
 
-    // Fire Pusher notification so all parties see the update in realtime
-    if (response.status >= 200 && response.status < 300) {
-      try {
-        const resBody = await response.json();
-        const order = resBody?.data;
-        if (order?.id) {
-          notifyOrderStatusUpdated({
-            orderId: order.id,
-            userId: order.user_id || '',
-            merchantId: order.merchant_id || '',
-            status: order.status || status,
-            minimal_status: normalizeStatus(order.status || status),
-            order_version: order.order_version,
-            previousStatus,
-            updatedAt: new Date().toISOString(),
-            data: order,
-          }).catch(err => logger.error('[Pusher] Failed to notify status update', { error: err }));
-        }
-        return NextResponse.json(resBody, { status: response.status });
-      } catch {
-        return response;
-      }
-    }
-
+    // Pusher notifications are now triggered by Core API directly
     return response;
   } catch (error) {
     logger.api.error('PATCH', '/api/orders/[id]', error as Error);

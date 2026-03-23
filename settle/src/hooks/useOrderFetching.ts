@@ -339,28 +339,40 @@ export function useOrderFetching({
     if (isMockMode) fetchInAppBalance();
   }, [merchantId, fetchOrders, fetchMempoolOrders, fetchResolvedDisputes, fetchBigOrders, fetchActiveOffers, fetchLeaderboard, isMockMode, fetchInAppBalance]);
 
-  // Unified poll: one interval, adaptive rate
+  // Unified poll: skip order polling when Pusher handles it, keep mempool/expiry
   useEffect(() => {
     if (!merchantId) return;
-    const pollInterval = isPusherConnected ? 30000 : 5000;
     let tickCount = 0;
 
-    const tick = () => {
-      tickCount++;
-      // Every tick: orders + mempool (critical path)
-      debouncedFetchOrders();
-      fetchMempoolOrders();
-      lastSyncRef.current = Date.now();
-
-      // Every 3rd tick (~90s with Pusher, ~15s without): expire + balance
-      if (tickCount % 3 === 0) {
-        fetchWithAuth('/api/orders/expire', { method: 'POST' }).catch(() => {});
-        if (isMockMode) fetchInAppBalance();
-      }
-    };
-
-    const interval = setInterval(tick, pollInterval);
-    return () => clearInterval(interval);
+    if (isPusherConnected) {
+      // Pusher handles order updates — only poll mempool + periodic expiry/balance
+      const tick = () => {
+        tickCount++;
+        fetchMempoolOrders();
+        lastSyncRef.current = Date.now();
+        // Every 3rd tick (~90s): expire + balance
+        if (tickCount % 3 === 0) {
+          fetchWithAuth('/api/orders/expire', { method: 'POST' }).catch(() => {});
+          if (isMockMode) fetchInAppBalance();
+        }
+      };
+      const interval = setInterval(tick, 30000);
+      return () => clearInterval(interval);
+    } else {
+      // No Pusher — poll everything at 5s
+      const tick = () => {
+        tickCount++;
+        debouncedFetchOrders();
+        fetchMempoolOrders();
+        lastSyncRef.current = Date.now();
+        if (tickCount % 3 === 0) {
+          fetchWithAuth('/api/orders/expire', { method: 'POST' }).catch(() => {});
+          if (isMockMode) fetchInAppBalance();
+        }
+      };
+      const interval = setInterval(tick, 5000);
+      return () => clearInterval(interval);
+    }
   }, [merchantId, isPusherConnected, debouncedFetchOrders, fetchMempoolOrders, isMockMode, fetchInAppBalance]);
 
   // Pusher reconnect — single sync

@@ -1,15 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Building2, Wallet, CreditCard, DollarSign, Check, Loader2, AlertCircle, Trash2, Star, Smartphone } from 'lucide-react';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 interface PaymentMethod {
   id: string;
   type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile';
   name: string;
   details: string;
-  isDefault: boolean;
+  is_default: boolean;
 }
 
 interface PaymentMethodModalProps {
@@ -33,6 +34,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
   const [selectedType, setSelectedType] = useState<'bank' | 'cash' | 'crypto' | 'card' | 'mobile'>('bank');
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
@@ -48,6 +50,36 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
     mobileNumber: '',
     mobileProvider: '',
   });
+
+  // Fetch existing payment methods from API
+  const fetchMethods = useCallback(async () => {
+    if (!merchantId) return;
+    setIsFetching(true);
+    try {
+      const res = await fetchWithAuth(`/api/merchant/${merchantId}/payment-methods`);
+      const json = await res.json();
+      if (json.success && json.data) {
+        setPaymentMethods(json.data.map((m: any) => ({
+          id: m.id,
+          type: m.type,
+          name: m.name,
+          details: m.details,
+          is_default: m.is_default,
+        })));
+      }
+    } catch {
+      // Silent fail on load — user will see empty list
+    } finally {
+      setIsFetching(false);
+    }
+  }, [merchantId]);
+
+  // Load methods when modal opens
+  useEffect(() => {
+    if (isOpen && merchantId) {
+      fetchMethods();
+    }
+  }, [isOpen, merchantId, fetchMethods]);
 
   const resetForm = () => {
     setFormData({
@@ -97,15 +129,31 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
           break;
       }
 
-      const newMethod: PaymentMethod = {
-        id: Date.now().toString(),
-        type: selectedType,
-        name,
-        details,
-        isDefault: paymentMethods.length === 0,
-      };
+      // Persist to API
+      const res = await fetchWithAuth(`/api/merchant/${merchantId}/payment-methods`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: selectedType,
+          name,
+          details,
+          is_default: paymentMethods.length === 0,
+        }),
+      });
 
-      setPaymentMethods([...paymentMethods, newMethod]);
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || 'Failed to save payment method');
+      }
+
+      const saved = json.data;
+      setPaymentMethods([...paymentMethods, {
+        id: saved.id,
+        type: saved.type,
+        name: saved.name,
+        details: saved.details,
+        is_default: saved.is_default,
+      }]);
       resetForm();
       setShowAddForm(false);
     } catch (err) {
@@ -115,12 +163,34 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
     }
   };
 
-  const handleRemoveMethod = (id: string) => {
-    setPaymentMethods(paymentMethods.filter(m => m.id !== id));
+  const handleRemoveMethod = async (id: string) => {
+    try {
+      const res = await fetchWithAuth(`/api/merchant/${merchantId}/payment-methods?method_id=${id}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setPaymentMethods(paymentMethods.filter(m => m.id !== id));
+      }
+    } catch {
+      // Silent fail — method stays in UI
+    }
   };
 
-  const handleSetDefault = (id: string) => {
-    setPaymentMethods(paymentMethods.map(m => ({ ...m, isDefault: m.id === id })));
+  const handleSetDefault = async (id: string) => {
+    try {
+      const res = await fetchWithAuth(`/api/merchant/${merchantId}/payment-methods`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method_id: id }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setPaymentMethods(paymentMethods.map(m => ({ ...m, is_default: m.id === id })));
+      }
+    } catch {
+      // Silent fail
+    }
   };
 
   const selectedTypeInfo = PAYMENT_METHOD_TYPES.find(t => t.type === selectedType)!;
@@ -209,7 +279,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                 <div>
                   <h2 className="text-[15px] font-bold text-white">Payment Methods</h2>
                   <p className="text-[11px] text-white/30 font-mono mt-0.5">
-                    {paymentMethods.length} method{paymentMethods.length !== 1 ? 's' : ''} configured
+                    {isFetching ? 'Loading...' : `${paymentMethods.length} method${paymentMethods.length !== 1 ? 's' : ''} configured`}
                   </p>
                 </div>
               </div>
@@ -233,7 +303,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                   exit={{ opacity: 0, x: -10 }}
                   className="space-y-3"
                 >
-                  {paymentMethods.length === 0 ? (
+                  {paymentMethods.length === 0 && !isFetching ? (
                     <div className="text-center py-10">
                       <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mx-auto mb-4">
                         <CreditCard className="w-6 h-6 text-white/15" />
@@ -253,7 +323,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: i * 0.05 }}
                           className={`group relative p-3.5 rounded-xl border transition-all ${
-                            method.isDefault
+                            method.is_default
                               ? 'bg-gradient-to-r from-orange-500/[0.06] to-transparent border-orange-500/20'
                               : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.10]'
                           }`}
@@ -265,7 +335,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <p className="text-[13px] font-semibold text-white">{method.name}</p>
-                                {method.isDefault && (
+                                {method.is_default && (
                                   <span className="flex items-center gap-1 px-1.5 py-0.5 bg-orange-500/10 border border-orange-500/20 rounded-md">
                                     <Star className="w-2.5 h-2.5 text-orange-400 fill-orange-400" />
                                     <span className="text-[9px] text-orange-400 font-bold uppercase tracking-wider">Default</span>
@@ -275,7 +345,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                               <p className="text-[11px] text-white/30 mt-0.5 truncate font-mono">{method.details}</p>
                             </div>
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                              {!method.isDefault && (
+                              {!method.is_default && (
                                 <button
                                   onClick={() => handleSetDefault(method.id)}
                                   className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors"

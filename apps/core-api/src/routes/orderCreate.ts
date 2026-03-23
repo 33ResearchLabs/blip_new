@@ -15,8 +15,7 @@ import {
   logger,
   MOCK_MODE,
 } from 'settlement-core';
-import { broadcastOrderEvent } from '../ws/broadcast';
-import { bufferNotification } from '../batchWriter';
+import { orderBus, ORDER_EVENT } from '../events';
 
 interface OrderRow {
   id: string;
@@ -61,6 +60,8 @@ interface CreateOrderPayload {
   price_proof_expires_at?: string | null;
   // Payment method (fiat receiver's selected method)
   payment_method_id?: string;
+  // Merchant's payment method (where buyer sends fiat)
+  merchant_payment_method_id?: string;
 }
 
 export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
@@ -118,6 +119,8 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         ['price_proof_expires_at', data.price_proof_expires_at],
         // Payment method
         ['payment_method_id', data.payment_method_id],
+        // Merchant's payment method (where buyer sends fiat)
+        ['merchant_payment_method_id', data.merchant_payment_method_id],
       ];
       for (const [field, value] of optionals) {
         if (value !== undefined && value !== null) {
@@ -145,24 +148,15 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
       const rows = await dbQuery(`INSERT INTO orders (${allFields.join(', ')}) VALUES (${allPlaceholders}) RETURNING *`, values);
       const order = rows[0] as OrderRow;
 
-      // Batched notification (zero round-trips, flushed every 50ms)
-      bufferNotification({ order_id: order.id, event_type: 'ORDER_CREATED', payload: JSON.stringify({
-        orderId: order.id, userId: data.user_id, merchantId: data.merchant_id,
-        status: order.status, minimal_status: normalizeStatus(order.status as any),
-        order_version: order.order_version || 1, updatedAt: new Date().toISOString(),
-      })});
-
       logger.info('[core-api] Order created', { orderId: order.id, type: data.type });
 
-      broadcastOrderEvent({
-        event_type: 'ORDER_CREATED',
-        order_id: order.id,
-        status: String(order.status),
-        minimal_status: normalizeStatus(order.status as any),
-        order_version: order.order_version || 1,
-        userId: data.user_id,
-        merchantId: data.merchant_id,
-        buyerMerchantId: data.buyer_merchant_id,
+      orderBus.emitOrderEvent({
+        event: ORDER_EVENT.CREATED,
+        orderId: order.id, previousStatus: '', newStatus: String(order.status),
+        actorType: 'system', actorId: data.merchant_id,
+        userId: data.user_id, merchantId: data.merchant_id, buyerMerchantId: data.buyer_merchant_id,
+        order: order as unknown as Record<string, unknown>,
+        orderVersion: order.order_version || 1, minimalStatus: normalizeStatus(order.status as any),
       });
 
       return reply.status(201).send({
@@ -256,14 +250,6 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         const rows = await dbQuery(sql, values);
         const order = rows[0] as OrderRow;
 
-        // Batched notification (zero round-trips, flushed every 50ms)
-        bufferNotification({ order_id: order.id, event_type: 'ORDER_CREATED', payload: JSON.stringify({
-          orderId: order.id, userId: data.user_id, merchantId: data.merchant_id,
-          buyerMerchantId: data.buyer_merchant_id, status: order.status,
-          minimal_status: normalizeStatus(order.status as any),
-          order_version: order.order_version || 1, updatedAt: new Date().toISOString(),
-        })});
-
         logger.info('[core-api] Merchant order created', {
           orderId: order.id,
           merchantId: data.merchant_id,
@@ -271,15 +257,13 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
           isM2M: data.is_m2m,
         });
 
-        broadcastOrderEvent({
-          event_type: 'ORDER_CREATED',
-          order_id: order.id,
-          status: String(order.status),
-          minimal_status: normalizeStatus(order.status as any),
-          order_version: order.order_version || 1,
-          userId: data.user_id,
-          merchantId: data.merchant_id,
-          buyerMerchantId: data.buyer_merchant_id,
+        orderBus.emitOrderEvent({
+          event: ORDER_EVENT.CREATED,
+          orderId: order.id, previousStatus: '', newStatus: String(order.status),
+          actorType: 'merchant', actorId: data.merchant_id,
+          userId: data.user_id, merchantId: data.merchant_id, buyerMerchantId: data.buyer_merchant_id,
+          order: order as unknown as Record<string, unknown>,
+          orderVersion: order.order_version || 1, minimalStatus: normalizeStatus(order.status as any),
         });
 
         return reply.status(201).send({

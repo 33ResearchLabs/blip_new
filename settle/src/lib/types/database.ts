@@ -33,7 +33,7 @@ export type MinimalOrderStatus =
   | 'disputed';     // disputed
 
 export type ActorType = 'user' | 'merchant' | 'system' | 'compliance';
-export type MessageType = 'text' | 'image' | 'system';
+export type MessageType = 'text' | 'image' | 'system' | 'receipt';
 export type DisputeReason =
   | 'payment_not_received'
   | 'crypto_not_received'
@@ -207,6 +207,7 @@ export interface ChatMessage {
   sender_id: string | null;
   message_type: MessageType;
   content: string;
+  receipt_data: Record<string, unknown> | null;
   image_url: string | null;
   is_read: boolean;
   read_at: Date | null;

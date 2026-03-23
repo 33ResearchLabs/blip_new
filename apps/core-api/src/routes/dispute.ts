@@ -11,7 +11,7 @@ import {
   normalizeStatus,
   logger,
 } from 'settlement-core';
-import { broadcastOrderEvent } from '../ws/broadcast';
+import { orderBus, ORDER_EVENT } from '../events';
 
 export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /v1/orders/:id/dispute - Open dispute
@@ -114,15 +114,14 @@ export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
 
       logger.info('[core-api] Dispute created', { orderId: id, reason });
 
-      broadcastOrderEvent({
-        event_type: 'ORDER_DISPUTED',
-        order_id: id,
-        status: 'disputed',
-        minimal_status: normalizeStatus('disputed' as any),
-        order_version: 0, // version already incremented in DB
-        userId: order.user_id,
-        merchantId: order.merchant_id,
-        previousStatus: order.status,
+      orderBus.emitOrderEvent({
+        event: ORDER_EVENT.DISPUTED,
+        orderId: id, previousStatus: order.status, newStatus: 'disputed',
+        actorType: initiated_by, actorId: actor_id,
+        userId: order.user_id, merchantId: order.merchant_id,
+        order: order as unknown as Record<string, unknown>,
+        orderVersion: 0, minimalStatus: normalizeStatus('disputed' as any),
+        metadata: { reason, description },
       });
 
       return reply.send({ success: true, data: disputeResult[0] });
@@ -266,15 +265,17 @@ export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
 
         logger.info('[core-api] Dispute resolved', { orderId: id, resolution, orderStatus });
 
-        broadcastOrderEvent({
-          event_type: `ORDER_${orderStatus.toUpperCase()}`,
-          order_id: id,
-          status: orderStatus,
-          minimal_status: normalizeStatus(orderStatus as any),
-          order_version: 0,
-          userId: order.user_id,
-          merchantId: order.merchant_id,
-          previousStatus: 'disputed',
+        const resolvedEvent = orderStatus === 'completed' ? ORDER_EVENT.COMPLETED
+          : orderStatus === 'cancelled' ? ORDER_EVENT.CANCELLED
+          : ORDER_EVENT.STATUS_CHANGED;
+        orderBus.emitOrderEvent({
+          event: resolvedEvent,
+          orderId: id, previousStatus: 'disputed', newStatus: orderStatus,
+          actorType: 'system', actorId: actor_id,
+          userId: order.user_id, merchantId: order.merchant_id,
+          order: order as unknown as Record<string, unknown>,
+          orderVersion: 0, minimalStatus: normalizeStatus(orderStatus as any),
+          metadata: { resolution },
         });
 
         return reply.send({

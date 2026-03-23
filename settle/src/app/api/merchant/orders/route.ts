@@ -22,7 +22,6 @@ import {
 } from '@/lib/middleware/auth';
 import { checkRateLimit, ORDER_LIMIT } from '@/lib/middleware/rateLimit';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
-import { notifyOrderCreated } from '@/lib/pusher/server';
 import { query } from '@/lib/db';
 import { signPriceProof } from '@/lib/price/priceProof';
 
@@ -448,32 +447,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Fire Pusher notification so all merchants see the new order in realtime
-    if (response.status >= 200 && response.status < 300) {
-      try {
-        const resBody = await response.json();
-        const order = resBody?.data;
-        if (order?.id) {
-          notifyOrderCreated({
-            orderId: order.id,
-            userId: user.id,
-            merchantId: orderMerchantId || merchant_id,
-            buyerMerchantId: buyerMerchantId,
-            creatorMerchantId: merchant_id,
-            status: order.status || 'pending',
-            minimal_status: normalizeStatus(order.status || 'pending'),
-            order_version: order.order_version || 1,
-            updatedAt: new Date().toISOString(),
-          }).catch(err => logger.error('[Pusher] Failed to notify order created', { error: err }));
-        }
-        // Re-wrap response since we consumed the body
-        return NextResponse.json(resBody, { status: response.status });
-      } catch {
-        // If JSON parse fails, return original response
-        return response;
-      }
-    }
-
+    // Pusher notifications are now triggered by Core API directly
     return response;
   } catch (error) {
     const err = error as Error;

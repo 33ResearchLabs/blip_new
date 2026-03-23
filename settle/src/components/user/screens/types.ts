@@ -85,6 +85,8 @@ export interface DbOrder {
   // Locked payment method (fiat receiver's selected method)
   payment_method_id?: string | null;
   locked_payment_method?: LockedPaymentMethod | null;
+  // Merchant's payment method (where buyer sends fiat)
+  merchant_payment_method?: MerchantPaymentMethod | null;
 }
 
 // UI Order type (maps DB order to UI)
@@ -144,6 +146,8 @@ export interface Order {
   disputeAutoResolveAt?: Date | null;
   // Locked payment method for this order (fiat receiver's chosen method)
   lockedPaymentMethod?: LockedPaymentMethod | null;
+  // Merchant's payment method (where buyer sends fiat to merchant)
+  merchantPaymentMethod?: MerchantPaymentMethod | null;
 }
 
 export interface BankAccount {
@@ -160,4 +164,13 @@ export interface LockedPaymentMethod {
   type: "bank" | "upi" | "cash" | "other";
   label: string;
   details: Record<string, string>;
+}
+
+// Merchant's payment method locked into an order (from merchant_payment_methods table)
+export interface MerchantPaymentMethod {
+  id: string;
+  type: "bank" | "cash" | "crypto" | "card" | "mobile";
+  name: string;
+  details: string;
+  is_default: boolean;
 }

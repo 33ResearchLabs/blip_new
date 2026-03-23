@@ -9,6 +9,7 @@ import { query, logger, MOCK_MODE } from 'settlement-core';
 import { config } from 'dotenv';
 import { writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
+import { orderBus, ORDER_EVENT } from '../events';
 
 config({ path: '../../settle/.env.local' });
 config({ path: '../../settle/.env' });
@@ -123,6 +124,16 @@ async function expireOrder(order: ExpiredOrder): Promise<void> {
         'pending',
       ]
     );
+
+    orderBus.emitOrderEvent({
+      event: ORDER_EVENT.EXPIRED,
+      orderId: order.id, orderNumber: order.order_number,
+      previousStatus: order.status, newStatus: 'expired',
+      actorType: 'system', actorId: 'expiry-worker',
+      userId: order.user_id, merchantId: order.merchant_id,
+      order: order as unknown as Record<string, unknown>,
+      orderVersion: 0, minimalStatus: 'expired',
+    });
 
     logger.info('[Expiry] Order expired successfully', {
       orderId: order.id,

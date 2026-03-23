@@ -112,6 +112,14 @@ interface OrderDetails {
     location_name?: string;
     location_address?: string;
   };
+  // Merchant's payment method locked into this order
+  merchant_payment_method?: {
+    id: string;
+    type: string;
+    name: string;
+    details: string;
+    is_default: boolean;
+  } | null;
   dispute?: {
     id: string;
     reason: string;
@@ -513,7 +521,27 @@ export function OrderDetailsPanel({
                   {/* Merchant/Offer Bank Details */}
                   <div className="space-y-2">
                     <p className="text-[11px] text-white/30 uppercase tracking-wide font-medium">Merchant Bank</p>
-                    {[
+                    {order.merchant_payment_method ? (
+                      [
+                        { label: 'Method', value: order.merchant_payment_method.name, key: 'merchant_method' },
+                        { label: 'Details', value: order.merchant_payment_method.details, key: 'merchant_details', mono: true },
+                      ].map(({ label, value, key, mono }) => (
+                        <div key={key} className="flex justify-between items-center">
+                          <span className="text-white/50">{label}</span>
+                          {value ? (
+                            <button
+                              onClick={() => handleCopy(value, key)}
+                              className="flex items-center gap-1 text-white hover:text-white/70 transition-colors"
+                            >
+                              <span className={mono ? 'font-mono' : ''}>{value}</span>
+                              {copiedField === key ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-white/30" />}
+                            </button>
+                          ) : (
+                            <span className="text-white/30">-</span>
+                          )}
+                        </div>
+                      ))
+                    ) : [
                       { label: 'Bank', value: order.offer?.bank_name || order.payment_details?.bank_name, key: 'merchant_bank' },
                       { label: 'Account Name', value: order.offer?.bank_account_name || order.payment_details?.bank_account_name || order.payment_details?.account_name, key: 'merchant_name' },
                       { label: 'IBAN', value: order.offer?.bank_iban || order.payment_details?.bank_iban || order.payment_details?.iban, key: 'merchant_iban', mono: true },

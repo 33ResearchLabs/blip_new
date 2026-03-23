@@ -161,11 +161,22 @@ export async function POST(
             : row.user_id;
 
           if (recipientId && recipientId !== sender_id) {
-            await query(
+            const dmRows = await query<{ id: string }>(
               `INSERT INTO direct_messages (sender_type, sender_id, recipient_type, recipient_id, content, message_type, image_url)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
+               RETURNING id`,
               [sender_type, sender_id, recipientType, recipientId, content, message_type || 'text', image_url || null]
             );
+            // Create per-participant read status
+            if (dmRows.length > 0) {
+              await query(
+                `INSERT INTO dm_read_status (message_id, actor_id, is_read, read_at) VALUES
+                   ($1, $2, true,  NOW()),
+                   ($1, $3, false, NULL)
+                 ON CONFLICT DO NOTHING`,
+                [dmRows[0].id, sender_id, recipientId]
+              );
+            }
             // Notify recipient via Pusher DM channel
             notifyNewDirectMessage({
               messageId: message.id,

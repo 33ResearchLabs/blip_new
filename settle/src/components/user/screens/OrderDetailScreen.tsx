@@ -72,6 +72,7 @@ export interface OrderDetailScreenProps {
       timestamp: Date;
       senderName?: string;
       messageType?: string;
+      receiptData?: Record<string, unknown> | null;
       imageUrl?: string;
     }>;
   } | null;
@@ -772,8 +773,31 @@ export const OrderDetailScreen = ({
                               </span>
                             </div>
                           )}
-                          {/* Show locked payment method details if available, otherwise fall back to merchant offer details */}
-                          {activeOrder.lockedPaymentMethod ? (
+                          {/* Show merchant's payment method if available, then locked payment method, then fall back to offer details */}
+                          {activeOrder.merchantPaymentMethod ? (
+                            <>
+                              <div className="flex items-center justify-between">
+                                <span className="text-[13px] text-neutral-500">Method</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[13px] text-white font-medium">{activeOrder.merchantPaymentMethod.name}</span>
+                                  <button onClick={() => copyField('method', activeOrder.merchantPaymentMethod!.name)} className="p-0.5 rounded hover:bg-white/10">
+                                    {copiedField === 'method' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
+                                  </button>
+                                </div>
+                              </div>
+                              {activeOrder.merchantPaymentMethod.details && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[13px] text-neutral-500">Details</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[13px] text-white font-mono">{activeOrder.merchantPaymentMethod.details}</span>
+                                    <button onClick={() => copyField('details', activeOrder.merchantPaymentMethod!.details)} className="p-0.5 rounded hover:bg-white/10">
+                                      {copiedField === 'details' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-500" />}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : activeOrder.lockedPaymentMethod ? (
                             <>
                               {activeOrder.lockedPaymentMethod.details.bank_name && (
                                 <div className="flex items-center justify-between">
@@ -1497,22 +1521,32 @@ export const OrderDetailScreen = ({
                       }
                     }
 
-                    // Detect receipt card messages
-                    try {
-                      if (msg.text.startsWith('{')) {
-                        const parsed = JSON.parse(msg.text);
-                        if (parsed.type === 'order_receipt' && parsed.data) {
-                          return (
-                            <div key={msg.id} className="max-w-[90%] mx-auto">
-                              <ReceiptCard data={parsed.data} currentStatus={activeOrder?.dbStatus || activeOrder?.status} />
-                              <p className="text-[10px] text-neutral-500 mt-1 text-center">
-                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                            </div>
-                          );
-                        }
+                    // Receipt card messages — structured (new) or JSON fallback (old)
+                    {
+                      let receiptPayload: Record<string, unknown> | null = null;
+                      if (msg.messageType === 'receipt' && msg.receiptData) {
+                        receiptPayload = msg.receiptData;
+                      } else {
+                        try {
+                          if (msg.text.startsWith('{')) {
+                            const parsed = JSON.parse(msg.text);
+                            if (parsed.type === 'order_receipt' && parsed.data) {
+                              receiptPayload = parsed.data;
+                            }
+                          }
+                        } catch { /* not JSON */ }
                       }
-                    } catch { /* not JSON */ }
+                      if (receiptPayload) {
+                        return (
+                          <div key={msg.id} className="max-w-[90%] mx-auto">
+                            <ReceiptCard data={receiptPayload as any} currentStatus={activeOrder?.dbStatus || activeOrder?.status} />
+                            <p className="text-[10px] text-neutral-500 mt-1 text-center">
+                              {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                        );
+                      }
+                    }
 
                     // Regular messages
                     return (

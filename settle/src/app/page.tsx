@@ -248,6 +248,7 @@ export default function Home() {
               confirmEscrow={tradeCreation.confirmEscrow}
               selectedBankDetails={tradeCreation.selectedBankDetails}
               setSelectedBankDetails={tradeCreation.setSelectedBankDetails}
+              selectedPaymentMethod={tradeCreation.selectedPaymentMethod}
               userId={auth.userId}
               setShowWalletModal={auth.setShowWalletModal}
               onConnectWallet={() => {

@@ -14,7 +14,7 @@ import {
   normalizeStatus,
   logger,
 } from 'settlement-core';
-import { broadcastOrderEvent } from '../ws/broadcast';
+import { orderBus, ORDER_EVENT } from '../events';
 
 export const extensionRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /v1/orders/:id/extension - Request extension
@@ -91,14 +91,14 @@ export const extensionRoutes: FastifyPluginAsync = async (fastify) => {
 
       logger.info('[core-api] Extension requested', { orderId: id, actor: actor_type });
 
-      broadcastOrderEvent({
-        event_type: 'EXTENSION_REQUESTED',
-        order_id: id,
-        status: order.status,
-        minimal_status: normalizeStatus(order.status as any),
-        order_version: (updatedOrder as any).order_version,
-        userId: order.user_id,
-        merchantId: order.merchant_id,
+      orderBus.emitOrderEvent({
+        event: ORDER_EVENT.STATUS_CHANGED,
+        orderId: id, previousStatus: order.status, newStatus: order.status,
+        actorType: actor_type, actorId: actor_id,
+        userId: order.user_id, merchantId: order.merchant_id,
+        order: updatedOrder as unknown as Record<string, unknown>,
+        orderVersion: (updatedOrder as any).order_version, minimalStatus: normalizeStatus(order.status as any),
+        metadata: { extension_requested: true },
       });
 
       return reply.send({ success: true, data: updatedOrder });
@@ -222,15 +222,17 @@ export const extensionRoutes: FastifyPluginAsync = async (fastify) => {
       logger.info('[core-api] Extension response', { orderId: id, accepted: accept });
 
       const finalStatus = (updatedOrder as any).status || order.status;
-      broadcastOrderEvent({
-        event_type: accept ? 'EXTENSION_ACCEPTED' : `ORDER_${finalStatus.toUpperCase()}`,
-        order_id: id,
-        status: finalStatus,
-        minimal_status: normalizeStatus(finalStatus as any),
-        order_version: (updatedOrder as any).order_version,
-        userId: order.user_id,
-        merchantId: order.merchant_id,
-        previousStatus: order.status,
+      const extEvent = finalStatus === 'cancelled' ? ORDER_EVENT.CANCELLED
+        : finalStatus === 'expired' ? ORDER_EVENT.EXPIRED
+        : ORDER_EVENT.STATUS_CHANGED;
+      orderBus.emitOrderEvent({
+        event: extEvent,
+        orderId: id, previousStatus: order.status, newStatus: finalStatus,
+        actorType: actor_type, actorId: actor_id,
+        userId: order.user_id, merchantId: order.merchant_id,
+        order: updatedOrder as unknown as Record<string, unknown>,
+        orderVersion: (updatedOrder as any).order_version, minimalStatus: normalizeStatus(finalStatus as any),
+        metadata: { extension_accepted: accept },
       });
 
       return reply.send({

@@ -13,7 +13,8 @@ interface DirectChatMessage {
   from: 'me' | 'them';
   text: string;
   timestamp: Date;
-  messageType: 'text' | 'image';
+  messageType: 'text' | 'image' | 'receipt';
+  receiptData?: Record<string, unknown> | null;
   imageUrl?: string | null;
   isRead: boolean;
 }
@@ -74,6 +75,13 @@ export function DirectChatView({
   useEffect(() => {
     const orderNumbers: string[] = [];
     for (const msg of messages) {
+      // New structured format
+      if (msg.messageType === 'receipt' && msg.receiptData) {
+        const num = msg.receiptData.order_number as string | undefined;
+        if (num) orderNumbers.push(num);
+        continue;
+      }
+      // Backward compat: old JSON-in-content format
       try {
         if (msg.text.startsWith('{')) {
           const parsed = JSON.parse(msg.text);
@@ -240,16 +248,20 @@ export function DirectChatView({
               const isFirstInGroup = !prevMsg || prevMsg.from !== msg.from ||
                 (msg.timestamp.getTime() - prevMsg.timestamp.getTime() > 120000); // 2 min gap = new group
 
-              // Detect receipt card messages
-              let receiptData: Record<string, unknown> | null = null;
-              try {
-                if (msg.text.startsWith('{')) {
-                  const parsed = JSON.parse(msg.text);
-                  if (parsed.type === 'order_receipt' && parsed.data) {
-                    receiptData = parsed.data;
+              // Detect receipt card messages — structured (new) or JSON fallback (old)
+              let receiptPayload: Record<string, unknown> | null = null;
+              if (msg.messageType === 'receipt' && msg.receiptData) {
+                receiptPayload = msg.receiptData;
+              } else {
+                try {
+                  if (msg.text.startsWith('{')) {
+                    const parsed = JSON.parse(msg.text);
+                    if (parsed.type === 'order_receipt' && parsed.data) {
+                      receiptPayload = parsed.data;
+                    }
                   }
-                }
-              } catch { /* not JSON */ }
+                } catch { /* not JSON */ }
+              }
 
               return (
                 <div key={msg.id}>
@@ -261,10 +273,10 @@ export function DirectChatView({
                     </div>
                   )}
 
-                  {receiptData ? (
+                  {receiptPayload ? (
                     /* Receipt card — shown centered for both parties */
                     <div className="max-w-[90%] mx-auto my-2">
-                      <ReceiptCard data={receiptData} currentStatus={receiptStatuses[(receiptData as any).order_number] || orderStatus} />
+                      <ReceiptCard data={receiptPayload as any} currentStatus={receiptStatuses[(receiptPayload as any).order_number] || orderStatus} />
                       <span className="text-[9px] text-white/20 mt-1 block text-center font-mono">
                         {formatTime(msg.timestamp)}
                       </span>

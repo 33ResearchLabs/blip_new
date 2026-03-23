@@ -1,9 +1,9 @@
 'use client';
 
-import { memo, useRef } from 'react';
-import { Shield, Zap, ChevronRight, Flame, ArrowRight, Clock, XCircle } from 'lucide-react';
+import { memo, useRef, useState, useMemo } from 'react';
+import { Shield, Zap, ChevronRight, ChevronDown, Flame, ArrowRight, Clock, XCircle, Filter } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextActionFromStatus } from '@/lib/orders/statusResolver';
+import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextActionFromStatus, MinimalStatus } from '@/lib/orders/statusResolver';
 
 interface InProgressPanelProps {
   orders: any[];
@@ -11,6 +11,8 @@ interface InProgressPanelProps {
   onAction?: (order: any, action: string) => void;
   onOpenChat?: (order: any) => void;
   onOpenDispute?: (order: any) => void;
+  collapsed?: boolean;
+  onCollapseChange?: (collapsed: boolean) => void;
 }
 
 const WAITING_ACTIONS = ['Wait for Acceptance', 'Wait for Payment', 'Wait for Escrow', 'Wait for Confirmation', 'Waiting for Acceptor', 'Waiting for Confirmation'];
@@ -255,7 +257,25 @@ const InProgressOrderList = memo(function InProgressOrderList({
   );
 });
 
-export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction, onOpenChat }: InProgressPanelProps) {
+type FilterValue = MinimalStatus | 'all' | 'cancel_requested';
+
+const STATUS_FILTERS: { value: FilterValue; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'accepted', label: 'Accepted' },
+  { value: 'escrowed', label: 'Escrowed' },
+  { value: 'payment_sent', label: 'Paid' },
+  { value: 'cancel_requested', label: 'Cancel Req' },
+];
+
+export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction, onOpenChat, collapsed = false, onCollapseChange }: InProgressPanelProps) {
+  const [statusFilter, setStatusFilter] = useState<FilterValue>('all');
+
+  const filteredOrders = useMemo(() => {
+    if (statusFilter === 'all') return orders;
+    if (statusFilter === 'cancel_requested') return orders.filter((order) => !!order.cancelRequestedBy);
+    return orders.filter((order) => getAuthoritativeStatus(order) === statusFilter);
+  }, [orders, statusFilter]);
+
   const formatTimeRemaining = (seconds: number): string => {
     if (seconds <= 0) return 'Expired';
     const hours = Math.floor(seconds / 3600);
@@ -286,32 +306,64 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className={`flex flex-col ${collapsed ? '' : 'h-full'}`}>
       {/* Header */}
-      <div className="px-3 py-2 border-b border-white/[0.04]">
-        <div className="flex items-center justify-between">
+      <div
+        className="px-3 py-2 border-b border-white/[0.04] cursor-pointer select-none hover:bg-white/[0.02] transition-colors"
+        onClick={() => onCollapseChange?.(!collapsed)}
+      >
+        <div className="flex items-center justify-between mb-1.5">
           <div className="flex items-center gap-2">
+            <ChevronDown className={`w-3 h-3 text-white/30 transition-transform duration-200 ${collapsed ? '-rotate-90' : ''}`} />
             <Shield className="w-3.5 h-3.5 text-white/30" />
             <h2 className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">
               In Progress
             </h2>
           </div>
           <span className="text-[10px] border border-white/[0.08] text-white/50 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
-            {orders.length}
+            {filteredOrders.length}{statusFilter !== 'all' ? `/${orders.length}` : ''}
           </span>
         </div>
+        {/* Status Filter Pills */}
+        {!collapsed && (
+          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            {STATUS_FILTERS.map((f) => {
+              const isActive = statusFilter === f.value;
+              const count = f.value === 'all'
+                ? orders.length
+                : f.value === 'cancel_requested'
+                ? orders.filter((o) => !!o.cancelRequestedBy).length
+                : orders.filter((o) => getAuthoritativeStatus(o) === f.value).length;
+              return (
+                <button
+                  key={f.value}
+                  onClick={() => setStatusFilter(f.value)}
+                  className={`text-[9px] font-mono font-medium px-1.5 py-0.5 rounded-full border transition-colors ${
+                    isActive
+                      ? 'bg-orange-500/15 border-orange-500/30 text-orange-400'
+                      : 'bg-white/[0.02] border-white/[0.06] text-white/30 hover:text-white/50 hover:border-white/[0.10]'
+                  }`}
+                >
+                  {f.label}{count > 0 ? ` ${count}` : ''}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Orders List — Virtualized */}
-      <InProgressOrderList
-        orders={orders}
-        onSelectOrder={onSelectOrder}
-        onAction={onAction}
-        onOpenChat={onOpenChat}
-        formatTimeRemaining={formatTimeRemaining}
-        getStatusBadge={getStatusBadge}
-        getNextAction={getNextAction}
-      />
+      {!collapsed && (
+        <InProgressOrderList
+          orders={filteredOrders}
+          onSelectOrder={onSelectOrder}
+          onAction={onAction}
+          onOpenChat={onOpenChat}
+          formatTimeRemaining={formatTimeRemaining}
+          getStatusBadge={getStatusBadge}
+          getNextAction={getNextAction}
+        />
+      )}
     </div>
   );
 });
