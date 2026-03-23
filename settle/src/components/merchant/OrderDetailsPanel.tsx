@@ -14,6 +14,7 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 interface OrderDetails {
   id: string;
   order_number: string;
+  merchant_id: string;
   status: string;
   type: 'buy' | 'sell';
   crypto_amount: number;
