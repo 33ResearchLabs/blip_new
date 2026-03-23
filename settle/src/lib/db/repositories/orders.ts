@@ -952,6 +952,77 @@ export async function updateOrderStatus(
 
         logger.order.completed(orderId, currentOrder.crypto_amount, currentOrder.fiat_amount);
 
+        // Create order receipt snapshot
+        try {
+          // Fetch creator (user) and acceptor (merchant) names
+          const creatorRow = await client.query(
+            'SELECT name, username FROM users WHERE id = $1',
+            [updatedOrder.user_id]
+          );
+          const acceptorRow = await client.query(
+            'SELECT display_name, wallet_address FROM merchants WHERE id = $1',
+            [updatedOrder.merchant_id]
+          );
+          const creatorName = creatorRow.rows[0]?.name || creatorRow.rows[0]?.username || null;
+          const acceptorName = acceptorRow.rows[0]?.display_name || null;
+          const acceptorWallet = acceptorRow.rows[0]?.wallet_address || updatedOrder.acceptor_wallet_address || null;
+
+          await client.query(
+            `INSERT INTO order_receipts (
+              order_id, order_number, type, payment_method,
+              crypto_amount, crypto_currency, fiat_amount, fiat_currency, rate,
+              platform_fee, protocol_fee_amount, status,
+              creator_type, creator_id, creator_name, creator_wallet_address,
+              acceptor_type, acceptor_id, acceptor_name, acceptor_wallet_address,
+              payment_details, escrow_tx_hash, release_tx_hash,
+              accepted_at, escrowed_at, payment_sent_at, completed_at
+            ) VALUES (
+              $1, $2, $3, $4,
+              $5, $6, $7, $8, $9,
+              $10, $11, $12,
+              $13, $14, $15, $16,
+              $17, $18, $19, $20,
+              $21, $22, $23,
+              $24, $25, $26, NOW()
+            ) ON CONFLICT (order_id) DO UPDATE SET
+              status = EXCLUDED.status,
+              release_tx_hash = EXCLUDED.release_tx_hash,
+              completed_at = NOW(),
+              updated_at = NOW()`,
+            [
+              orderId,
+              updatedOrder.order_number,
+              updatedOrder.type,
+              updatedOrder.payment_method,
+              updatedOrder.crypto_amount,
+              updatedOrder.crypto_currency,
+              updatedOrder.fiat_amount,
+              updatedOrder.fiat_currency,
+              updatedOrder.rate,
+              updatedOrder.platform_fee || 0,
+              updatedOrder.protocol_fee_amount || null,
+              'completed',
+              updatedOrder.buyer_merchant_id ? 'merchant' : 'user',
+              updatedOrder.buyer_merchant_id || updatedOrder.user_id,
+              creatorName,
+              updatedOrder.buyer_wallet_address || null,
+              'merchant',
+              updatedOrder.merchant_id,
+              acceptorName,
+              acceptorWallet,
+              JSON.stringify(updatedOrder.payment_details || {}),
+              updatedOrder.escrow_tx_hash || null,
+              updatedOrder.release_tx_hash || null,
+              updatedOrder.accepted_at,
+              updatedOrder.escrowed_at,
+              updatedOrder.payment_sent_at,
+            ]
+          );
+          logger.info('Order receipt created', { orderId, orderNumber: updatedOrder.order_number });
+        } catch (receiptErr) {
+          logger.warn('Failed to create order receipt', { orderId, error: receiptErr });
+        }
+
         // Record reputation events for order completion
         try {
           await recordReputationEvent(
