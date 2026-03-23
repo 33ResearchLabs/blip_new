@@ -140,7 +140,7 @@ export function enqueueCreateReceipt(
   return q.add(
     'CREATE_RECEIPT',
     { type: 'CREATE_RECEIPT', orderId, order, actorId },
-    { jobId: `create-receipt-${orderId}` },
+    { jobId: `create-receipt-${orderId}`, delay: 2000 },
   );
 }
 
