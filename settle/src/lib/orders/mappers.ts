@@ -42,6 +42,8 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
     expiresIn = Math.max(0, Math.floor((createdAt.getTime() + globalTimeoutSec * 1000 - now.getTime()) / 1000));
   }
   const userName = dbOrder.user?.name || "Unknown User";
+  const userUsername = dbOrder.user?.username || '';
+  const isPlaceholderUser = userUsername.startsWith('open_order_') || userUsername.startsWith('m2m_');
 
   const cryptoAmount = typeof dbOrder.crypto_amount === 'string'
     ? parseFloat(dbOrder.crypto_amount)
@@ -53,7 +55,7 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
     ? parseFloat(dbOrder.rate)
     : dbOrder.rate;
 
-  const isM2M = !!dbOrder.buyer_merchant_id;
+  const isM2M = !!dbOrder.buyer_merchant_id && isPlaceholderUser;
 
   const minimalStatus = dbOrder.minimal_status || normalizeLegacyStatus(dbOrder.status);
   let uiStatus = mapMinimalStatusToUIStatus(minimalStatus as any, dbOrder.is_my_order);
