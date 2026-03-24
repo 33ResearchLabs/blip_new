@@ -23,5 +23,8 @@
     "demo:m2m:sell": "tsx scripts/demo/runner.ts m2m:sell",
     "qa:robot": "bash scripts/qa-robot.sh",
     "qa:robot:headless": "bash scripts/qa-robot.sh --headed=false"
+  },
+  "dependencies": {
+    "uuid": "^13.0.0"
   }
 }
