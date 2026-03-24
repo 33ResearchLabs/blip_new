@@ -645,15 +645,16 @@ export const HomeScreen = ({
           {(() => {
             const DUMMY: {
               id: string; type: 'buy' | 'sell'; cryptoAmount: string; fiatAmount: string;
+              cryptoCode: string; fiatCode: string;
               merchant: { id: string; name: string; rating: number; trades: number; rate: number; paymentMethod: 'bank' | 'cash' };
               status: 'complete'; step: 4; createdAt: Date; expiresAt: Date;
               avatar: string;
             }[] = [
-              { id: 'd1', type: 'buy',  cryptoAmount: '120',  fiatAmount: '440.64',  merchant: { id: 'm1', name: 'AlphaTrader',  rating: 4.9, trades: 312, rate: 3.672, paymentMethod: 'bank' }, status: 'complete', step: 4, createdAt: new Date('2024-03-18'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=11' },
-              { id: 'd2', type: 'sell', cryptoAmount: '85',   fiatAmount: '312.12',  merchant: { id: 'm2', name: 'FastMerchant', rating: 4.7, trades: 198, rate: 3.672, paymentMethod: 'bank' }, status: 'complete', step: 4, createdAt: new Date('2024-03-16'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=32' },
-              { id: 'd3', type: 'buy',  cryptoAmount: '200',  fiatAmount: '734.40',  merchant: { id: 'm3', name: 'VaultFX',      rating: 5.0, trades: 540, rate: 3.672, paymentMethod: 'bank' }, status: 'complete', step: 4, createdAt: new Date('2024-03-14'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=47' },
-              { id: 'd4', type: 'sell', cryptoAmount: '50',   fiatAmount: '183.60',  merchant: { id: 'm4', name: 'SwiftPay',     rating: 4.8, trades: 87,  rate: 3.672, paymentMethod: 'cash' }, status: 'complete', step: 4, createdAt: new Date('2024-03-11'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=23' },
-              { id: 'd5', type: 'buy',  cryptoAmount: '300',  fiatAmount: '1101.60', merchant: { id: 'm5', name: 'NovaTrade',    rating: 4.6, trades: 231, rate: 3.672, paymentMethod: 'bank' }, status: 'complete', step: 4, createdAt: new Date('2024-03-09'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=58' },
+              { id: 'd1', type: 'buy',  cryptoAmount: '120',  fiatAmount: '440.64',  cryptoCode: 'USDC', fiatCode: 'KES', merchant: { id: 'm1', name: 'AlphaTrader',  rating: 4.9, trades: 312, rate: 3.672, paymentMethod: 'bank' }, status: 'complete', step: 4, createdAt: new Date('2024-03-18'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=11' },
+              { id: 'd2', type: 'sell', cryptoAmount: '85',   fiatAmount: '312.12',  cryptoCode: 'USDC', fiatCode: 'KES', merchant: { id: 'm2', name: 'FastMerchant', rating: 4.7, trades: 198, rate: 3.672, paymentMethod: 'bank' }, status: 'complete', step: 4, createdAt: new Date('2024-03-16'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=32' },
+              { id: 'd3', type: 'buy',  cryptoAmount: '200',  fiatAmount: '734.40',  cryptoCode: 'USDC', fiatCode: 'KES', merchant: { id: 'm3', name: 'VaultFX',      rating: 5.0, trades: 540, rate: 3.672, paymentMethod: 'bank' }, status: 'complete', step: 4, createdAt: new Date('2024-03-14'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=47' },
+              { id: 'd4', type: 'sell', cryptoAmount: '50',   fiatAmount: '183.60',  cryptoCode: 'USDC', fiatCode: 'KES', merchant: { id: 'm4', name: 'SwiftPay',     rating: 4.8, trades: 87,  rate: 3.672, paymentMethod: 'cash' }, status: 'complete', step: 4, createdAt: new Date('2024-03-11'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=23' },
+              { id: 'd5', type: 'buy',  cryptoAmount: '300',  fiatAmount: '1101.60', cryptoCode: 'USDC', fiatCode: 'KES', merchant: { id: 'm5', name: 'NovaTrade',    rating: 4.6, trades: 231, rate: 3.672, paymentMethod: 'bank' }, status: 'complete', step: 4, createdAt: new Date('2024-03-09'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=58' },
             ];
 
             const rows = orders.length > 0
