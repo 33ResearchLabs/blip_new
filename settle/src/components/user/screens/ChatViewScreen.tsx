@@ -45,40 +45,44 @@ export const ChatViewScreen = ({
   return (
     <>
       {/* Chat Header */}
-      <div className="bg-neutral-900 border-b border-neutral-800 pt-12 pb-3 px-4">
+      <div className="pt-12 pb-3 px-4" style={{ background: '#ffffff', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
         <div className="flex items-center gap-3">
-          <button onClick={() => setScreen("chats")} className="p-2 -ml-2">
-            <ChevronLeft className="w-6 h-6 text-white" />
+          <button onClick={() => setScreen("chats")}
+            className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1"
+            style={{ background: '#f4f4f4', border: '1px solid rgba(0,0,0,0.06)' }}>
+            <ChevronLeft className="w-5 h-5" style={{ color: 'rgba(0,0,0,0.6)' }} />
           </button>
-          <div className="w-10 h-10 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white font-semibold">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold"
+            style={{ background: '#000', color: '#fff' }}>
             {activeOrder.merchant.name.charAt(0)}
           </div>
           <div className="flex-1">
-            <p className="text-[15px] font-semibold text-white">{activeOrder.merchant.name}</p>
+            <p className="text-[15px] font-semibold" style={{ color: '#000' }}>{activeOrder.merchant.name}</p>
             <div className="flex items-center gap-1.5">
               <ConnectionIndicator isConnected={true} />
-              <p className="text-[12px] text-orange-400/80">Online</p>
+              <p className="text-[12px] text-orange-500">Online</p>
             </div>
           </div>
           <button
             onClick={() => setScreen("order")}
-            className="p-2 bg-neutral-800 rounded-full"
+            className="p-2 rounded-full"
+            style={{ background: '#f4f4f4' }}
           >
-            <ArrowUpRight className="w-4 h-4 text-neutral-400" />
+            <ArrowUpRight className="w-4 h-4" style={{ color: 'rgba(0,0,0,0.5)' }} />
           </button>
         </div>
         {/* Order summary bar */}
-        <div className="mt-3 bg-neutral-800/50 rounded-xl px-3 py-2 flex items-center justify-between">
+        <div className="mt-3 rounded-xl px-3 py-2 flex items-center justify-between"
+          style={{ background: '#f4f4f4' }}>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${
-              activeOrder.status === 'complete' ? 'bg-white/10' :
-              activeOrder.status === 'disputed' ? 'bg-red-400' : 'bg-white/10'
-            }`} />
-            <span className="text-[12px] text-neutral-400">
+            <div className="w-2 h-2 rounded-full" style={{
+              background: activeOrder.status === 'disputed' ? '#dc2626' : 'rgba(0,0,0,0.2)'
+            }} />
+            <span className="text-[12px]" style={{ color: 'rgba(0,0,0,0.5)' }}>
               {activeOrder.type === "buy" ? "Buying" : "Selling"} {activeOrder.cryptoAmount} USDC
             </span>
           </div>
-          <span className="text-[12px] text-neutral-500">
+          <span className="text-[12px]" style={{ color: 'rgba(0,0,0,0.4)' }}>
             {'\u062F.\u0625'} {parseFloat(activeOrder.fiatAmount).toLocaleString()}
           </span>
         </div>
@@ -88,7 +92,7 @@ export const ChatViewScreen = ({
       <div
         ref={chatMessagesRef}
         className="flex-1 overflow-y-auto px-4 py-4 space-y-3"
-        style={{ background: 'linear-gradient(to bottom, #0a0a0a, #111)' }}
+        style={{ background: '#f8f8f8' }}
       >
         {activeChat && activeChat.messages.length > 0 ? (
           activeChat.messages.map((msg) => {
@@ -99,14 +103,14 @@ export const ChatViewScreen = ({
                   <div key={msg.id} className="flex justify-center">
                     <div className="w-full max-w-[90%] bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
                       <div className="flex items-center gap-2 mb-2">
-                        <AlertTriangle className="w-4 h-4 text-red-400" />
-                        <span className="text-[13px] font-semibold text-red-400">Dispute Opened</span>
+                        <AlertTriangle className="w-4 h-4 text-red-500" />
+                        <span className="text-[13px] font-semibold text-red-600">Dispute Opened</span>
                       </div>
-                      <p className="text-[14px] text-white mb-1">
-                        <span className="text-neutral-400">Reason:</span> {data.reason?.replace(/_/g, ' ')}
+                      <p className="text-[14px] mb-1" style={{ color: '#000' }}>
+                        <span style={{ color: 'rgba(0,0,0,0.4)' }}>Reason:</span> {data.reason?.replace(/_/g, ' ')}
                       </p>
                       {data.description && (
-                        <p className="text-[13px] text-neutral-400">{data.description}</p>
+                        <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.5)' }}>{data.description}</p>
                       )}
                     </div>
                   </div>
@@ -119,8 +123,8 @@ export const ChatViewScreen = ({
             if (msg.messageType === 'system') {
               return (
                 <div key={msg.id} className="flex justify-center">
-                  <div className="bg-neutral-800/50 px-4 py-1.5 rounded-full">
-                    <p className="text-[12px] text-neutral-400">{msg.text}</p>
+                  <div className="px-4 py-1.5 rounded-full" style={{ background: 'rgba(0,0,0,0.06)' }}>
+                    <p className="text-[12px]" style={{ color: 'rgba(0,0,0,0.45)' }}>{msg.text}</p>
                   </div>
                 </div>
               );
@@ -134,7 +138,7 @@ export const ChatViewScreen = ({
                   return (
                     <div key={msg.id} className="max-w-[90%] mx-auto">
                       <ReceiptCard data={parsed.data} />
-                      <p className="text-[10px] text-neutral-500 mt-1 text-center">
+                      <p className="text-[10px] mt-1 text-center" style={{ color: 'rgba(0,0,0,0.4)' }}>
                         {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
@@ -150,14 +154,14 @@ export const ChatViewScreen = ({
                 className={`flex ${isMe ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${
-                    isMe
-                      ? "bg-white/10 text-white rounded-br-md"
-                      : "bg-neutral-800 text-white rounded-bl-md"
-                  }`}
+                  className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${isMe ? "rounded-br-md" : "rounded-bl-md"}`}
+                  style={isMe
+                    ? { background: '#000', color: '#fff' }
+                    : { background: '#ffffff', color: '#000', border: '1px solid rgba(0,0,0,0.06)' }
+                  }
                 >
                   <p className="text-[15px] leading-relaxed">{msg.text}</p>
-                  <p className={`text-[10px] mt-1 ${isMe ? 'text-white/70' : 'text-neutral-500'}`}>
+                  <p className="text-[10px] mt-1" style={{ color: isMe ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.35)' }}>
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
@@ -166,22 +170,24 @@ export const ChatViewScreen = ({
           })
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center py-20">
-            <div className="w-16 h-16 rounded-full bg-neutral-800 flex items-center justify-center mb-4">
-              <MessageCircle className="w-8 h-8 text-neutral-600" />
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
+              style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
+              <MessageCircle className="w-8 h-8" style={{ color: 'rgba(0,0,0,0.2)' }} />
             </div>
-            <p className="text-[15px] text-neutral-500">No messages yet</p>
-            <p className="text-[13px] text-neutral-600 mt-1">Send a message to start the conversation</p>
+            <p className="text-[15px]" style={{ color: 'rgba(0,0,0,0.45)' }}>No messages yet</p>
+            <p className="text-[13px] mt-1" style={{ color: 'rgba(0,0,0,0.3)' }}>Send a message to start the conversation</p>
           </div>
         )}
       </div>
 
       {/* Message Input */}
-      <div className="bg-neutral-900 border-t border-neutral-800 px-4 py-3 pb-8">
+      <div className="px-4 py-3 pb-8" style={{ background: '#ffffff', borderTop: '1px solid rgba(0,0,0,0.08)' }}>
         <div className="flex items-center gap-3">
           <input
             type="text"
             placeholder="Type a message..."
-            className="flex-1 bg-neutral-800 rounded-full px-5 py-3 text-[15px] text-white placeholder:text-neutral-500 outline-none focus:ring-2 focus:ring-orange-500/30"
+            className="flex-1 rounded-full px-5 py-3 text-[15px] outline-none"
+            style={{ background: '#f4f4f4', color: '#000' }}
             value={chatMessage}
             onChange={(e) => setChatMessage(e.target.value)}
             onKeyDown={(e) => {
@@ -199,11 +205,10 @@ export const ChatViewScreen = ({
                 setChatMessage('');
               }
             }}
-            className={`w-12 h-12 rounded-full flex items-center justify-center ${
-              chatMessage.trim() ? 'bg-white/10' : 'bg-neutral-800'
-            }`}
+            className="w-12 h-12 rounded-full flex items-center justify-center"
+            style={{ background: chatMessage.trim() ? '#000' : '#f4f4f4' }}
           >
-            <ArrowUpRight className={`w-5 h-5 ${chatMessage.trim() ? 'text-white' : 'text-neutral-500'}`} />
+            <ArrowUpRight className="w-5 h-5" style={{ color: chatMessage.trim() ? '#fff' : 'rgba(0,0,0,0.3)' }} />
           </motion.button>
         </div>
       </div>

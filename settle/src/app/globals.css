@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
 /* ==========================================
-   2026 DARK GLASS — Enterprise Terminal
-   Orange reserved for CTAs + key accents only
+   2026 DARK GLASS — Premium Monochrome
+   Apple-inspired: white CTAs, semantic colors
+   Black & white base — colors used purposefully
    ========================================== */
 
 :root {
@@ -19,29 +20,29 @@
   --color-text-tertiary: rgba(255, 255, 255, 0.30);
   --color-text-quaternary: rgba(255, 255, 255, 0.15);
 
-  /* Borders — neutral, NO orange by default */
-  --border: rgba(255, 255, 255, 0.05);
-  --color-border-subtle: rgba(255, 255, 255, 0.04);
-  --color-border-medium: rgba(255, 255, 255, 0.08);
+  /* Borders — neutral */
+  --border: rgba(255, 255, 255, 0.06);
+  --color-border-subtle: rgba(255, 255, 255, 0.05);
+  --color-border-medium: rgba(255, 255, 255, 0.09);
 
   /* Glass card base — neutral */
-  --card: rgba(255, 255, 255, 0.025);
+  --card: rgba(255, 255, 255, 0.03);
   --card-solid: #0c0c0c;
-  --glass-blur: blur(16px);
+  --glass-blur: blur(20px);
 
-  /* Orange accent — used ONLY for CTAs, key values, active indicators */
-  --accent: #f97316;
-  --accent-bright: #fb923c;
-  --accent-dark: #ea580c;
-  --accent-dim: #c2410c;
-  --accent-subtle: rgba(249, 115, 22, 0.06);
-  --accent-glow: rgba(249, 115, 22, 0.08);
+  /* White accent — primary CTA color (Apple style) */
+  --accent: #ffffff;
+  --accent-bright: #f5f5f5;
+  --accent-dark: #e5e5e5;
+  --accent-dim: #d4d4d4;
+  --accent-subtle: rgba(255, 255, 255, 0.06);
+  --accent-glow: rgba(255, 255, 255, 0.04);
 
-  /* Functional */
-  --color-success: #f97316;
-  --color-warning: #fb923c;
-  --color-error: #dc2626;
-  --color-info: #f97316;
+  /* Semantic — used for financial meaning */
+  --color-success: #10b981;   /* green  — positive / buy  */
+  --color-warning: #f59e0b;   /* amber  — pending / caution */
+  --color-error: #ef4444;     /* red    — negative / sell  */
+  --color-info: #60a5fa;      /* blue   — informational   */
 
   /* Legacy */
   --muted: #525252;
@@ -52,16 +53,20 @@
 :root.light {
   --background: #fafafa;
   --foreground: #0a0a0a;
-  --card: rgba(0, 0, 0, 0.02);
-  --card-solid: rgba(255, 255, 255, 0.8);
-  --border: rgba(0, 0, 0, 0.06);
+  --card: rgba(0, 0, 0, 0.025);
+  --card-solid: rgba(255, 255, 255, 0.9);
+  --border: rgba(0, 0, 0, 0.07);
   --muted: #71717a;
   --muted-bg: #f5f5f5;
-  --accent: #ea580c;
-  --accent-bright: #f97316;
-  --accent-dark: #c2410c;
-  --accent-subtle: rgba(234, 88, 12, 0.06);
-  --accent-glow: rgba(234, 88, 12, 0.08);
+  --accent: #0a0a0a;
+  --accent-bright: #171717;
+  --accent-dark: #262626;
+  --accent-subtle: rgba(0, 0, 0, 0.05);
+  --accent-glow: rgba(0, 0, 0, 0.04);
+  --color-success: #059669;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+  --color-info: #2563eb;
 }
 
 @theme inline {
@@ -92,10 +97,13 @@ html, body {
 
 body {
   color: var(--foreground);
-  font-family: var(--font-sans), -apple-system, system-ui, sans-serif;
+  /* SF Pro on Apple, Segoe UI on Windows, Roboto on Android — "system Apple font" */
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+    'Helvetica Neue', 'Inter', Arial, sans-serif;
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body.dashboard-layout {
@@ -244,10 +252,10 @@ button, a, input, select, textarea,
   transition: background 150ms ease;
 }
 [data-separator]:hover {
-  background: rgba(249, 115, 22, 0.3);
+  background: rgba(255, 255, 255, 0.12);
 }
 [data-separator][data-state="dragging"] {
-  background: rgba(249, 115, 22, 0.6);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 /* Orange accent card — used only for highlighted/active items */
@@ -272,26 +280,26 @@ button, a, input, select, textarea,
 
 .degen-bg {
   background:
-    radial-gradient(ellipse at 30% -10%, rgba(249, 115, 22, 0.02) 0%, transparent 50%),
+    radial-gradient(ellipse at 30% -10%, rgba(255, 255, 255, 0.01) 0%, transparent 50%),
     var(--background);
 }
 
-/* Orange glow — very subtle, CTA only */
+/* Subtle white glow — for elevated elements */
 .glow-accent {
   box-shadow:
-    0 0 15px rgba(249, 115, 22, 0.06),
-    0 0 40px rgba(249, 115, 22, 0.02);
+    0 0 20px rgba(255, 255, 255, 0.04),
+    0 0 60px rgba(255, 255, 255, 0.015);
 }
 
 .glow-lime {
   box-shadow:
-    0 0 15px rgba(249, 115, 22, 0.06),
-    0 0 40px rgba(249, 115, 22, 0.02);
+    0 0 15px rgba(16, 185, 129, 0.08),
+    0 0 40px rgba(16, 185, 129, 0.03);
 }
 
-/* Gradient text — reserved for key values */
+/* Gradient text — white shimmer for key values */
 .gradient-text-accent {
-  background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);
+  background: linear-gradient(135deg, #ffffff 0%, rgba(255,255,255,0.7) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -447,9 +455,9 @@ input[type="number"] { -moz-appearance: textfield; }
 .snap-y { scroll-snap-type: y mandatory; }
 .snap-start { scroll-snap-align: start; }
 
-/* Focus ring — subtle orange only on focus */
+/* Focus ring — subtle white on focus */
 *:focus-visible {
-  outline: 2px solid rgba(249, 115, 22, 0.3);
+  outline: 2px solid rgba(255, 255, 255, 0.2);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -458,12 +466,12 @@ input[type="number"] { -moz-appearance: textfield; }
 
 .focus-glow:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
 }
 
 /* Ring pulse — for notifications */
 @keyframes ring-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.12); }
+  0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.1); }
   70% { box-shadow: 0 0 0 6px transparent; }
   100% { box-shadow: 0 0 0 0 transparent; }
 }
@@ -521,19 +529,21 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 
 .wallet-adapter-button {
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;
+  background: #ffffff !important;
+  color: #000000 !important;
   border-radius: 0.75rem !important;
-  font-weight: 500 !important;
+  font-weight: 600 !important;
   transition: all 0.15s ease !important;
 }
 
 .wallet-adapter-button:hover {
-  opacity: 0.9 !important;
+  background: #f5f5f5 !important;
   transform: translateY(-1px) !important;
 }
 
 .wallet-adapter-button-trigger {
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;
+  background: #ffffff !important;
+  color: #000000 !important;
 }
 
 .wallet-adapter-dropdown-list {
@@ -595,8 +605,8 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 
 @keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 8px rgba(249, 115, 22, 0.05); }
-  50% { box-shadow: 0 0 20px rgba(249, 115, 22, 0.12); }
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 255, 255, 0.04); }
+  50% { box-shadow: 0 0 24px rgba(255, 255, 255, 0.09); }
 }
 
 .animate-glow-pulse {

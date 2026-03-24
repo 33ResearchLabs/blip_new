@@ -355,6 +355,9 @@ export default function Home() {
               timedOutOrders={timedOutOrders}
               solanaWallet={solanaWallet}
               setShowWalletModal={auth.setShowWalletModal}
+              setShowWalletSetup={auth.setShowWalletSetup}
+              setShowWalletUnlock={auth.setShowWalletUnlock}
+              embeddedWallet={embeddedWallet}
               copied={copied}
               setCopied={setCopied}
               bankAccounts={bankAccounts}

@@ -102,7 +102,7 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
 
 // Fee structure based on trade preference
 export const FEE_CONFIG = {
-  fast: { totalFee: 0.03, traderCut: 0.01 },    // 3% total, 1% to trader
-  best: { totalFee: 0.025, traderCut: 0.005 },  // 2.5% total, 0.5% to trader
+  fast: { totalFee: 0.025, traderCut: 0.01 },    // 2.5% total, 1% to trader
+  best: { totalFee: 0.02, traderCut: 0.005 },    // 2% total, 0.5% to trader
   cheap: { totalFee: 0.015, traderCut: 0.0025 }, // 1.5% total, 0.25% to trader
 } as const;

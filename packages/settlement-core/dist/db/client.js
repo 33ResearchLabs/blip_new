@@ -7,9 +7,10 @@ const poolConfig = process.env.DATABASE_URL
     ? {
         connectionString: process.env.DATABASE_URL,
         ssl: isProduction ? { rejectUnauthorized: false } : false,
-        max: parseInt(process.env.DB_POOL_MAX || '10'),
-        idleTimeoutMillis: 10000,
-        connectionTimeoutMillis: 5000,
+        max: parseInt(process.env.DB_POOL_MAX || '20'),
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
+        statement_timeout: 30000,
     }
     : {
         host: process.env.DB_HOST || 'localhost',
@@ -17,9 +18,10 @@ const poolConfig = process.env.DATABASE_URL
         database: process.env.DB_NAME || 'settle',
         user: process.env.DB_USER || 'zeus',
         password: process.env.DB_PASSWORD || '',
-        max: parseInt(process.env.DB_POOL_MAX || '10'),
-        idleTimeoutMillis: 10000,
-        connectionTimeoutMillis: 5000,
+        max: parseInt(process.env.DB_POOL_MAX || '20'),
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
+        statement_timeout: 30000,
     };
 const pool = new Pool(poolConfig);
 // Test connection on startup
@@ -34,7 +36,10 @@ export async function query(text, params) {
     const start = Date.now();
     const result = await pool.query(text, params);
     const duration = Date.now() - start;
-    if (process.env.DB_DEBUG === '1') {
+    if (duration > 200) {
+        console.warn('[SLOW QUERY]', { sql: text.substring(0, 120), duration_ms: duration, rows: result.rowCount });
+    }
+    else if (process.env.DB_DEBUG === '1') {
         console.log('Executed query', { text: text.substring(0, 50), duration, rows: result.rowCount });
     }
     return result.rows;

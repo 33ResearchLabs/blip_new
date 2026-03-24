@@ -15,112 +15,126 @@ export const CreateOfferScreen = ({
   tradeType,
   setTradeType,
 }: CreateOfferScreenProps) => {
-  return (
-    <>
-      <div className="h-12" />
+  const card = { background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' };
+  const fieldLabel = { fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' as const };
 
-      <div className="px-5 py-4 flex items-center">
-        <button onClick={() => setScreen("home")} className="p-2 -ml-2">
-          <ChevronLeft className="w-6 h-6 text-white" />
+  return (
+    <div className="flex flex-col h-dvh overflow-hidden" style={{ background: '#060606' }}>
+      <div className="h-12 shrink-0" />
+
+      {/* Header */}
+      <div className="px-5 py-4 flex items-center shrink-0">
+        <button onClick={() => setScreen("home")}
+          className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1"
+          style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
+          <ChevronLeft className="w-5 h-5" style={{ color: 'rgba(0,0,0,0.6)' }} />
         </button>
-        <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">Create Offer</h1>
+        <h1 className="flex-1 text-center pr-8"
+          style={{ fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>
+          Create Offer
+        </h1>
       </div>
 
-      <div className="flex-1 px-5">
-        <p className="text-[15px] text-neutral-500 mb-6">
+      <div className="flex-1 px-5 overflow-y-auto pb-6" style={{ scrollbarWidth: 'none' }}>
+        <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)', marginBottom: 20, lineHeight: 1.5 }}>
           Post an offer for others to accept. Great for large amounts or custom rates.
         </p>
 
         {/* Offer Type */}
         <div className="mb-5">
-          <p className="text-[13px] text-neutral-500 mb-3">I want to</p>
+          <p style={{ ...fieldLabel, marginBottom: 10, display: 'block' }}>I want to</p>
           <div className="flex gap-2">
-            {(["buy", "sell"] as const).map(type => (
-              <button
-                key={type}
-                onClick={() => setTradeType(type)}
-                className={`flex-1 py-3 rounded-xl text-[15px] font-medium transition-all ${
-                  tradeType === type
-                    ? "bg-white/10 text-white"
-                    : "bg-neutral-900 text-neutral-400"
-                }`}
-              >
-                {type === "buy" ? "Buy USDC" : "Sell USDC"}
-              </button>
-            ))}
+            {(["buy", "sell"] as const).map((type) => {
+              const on = tradeType === type;
+              const accent = type === "buy" ? "#059669" : "#dc2626";
+              return (
+                <button key={type} onClick={() => setTradeType(type)}
+                  className="flex-1 py-3 rounded-xl"
+                  style={{
+                    background: '#ffffff',
+                    border: on ? `1.5px solid ${accent}` : '1px solid rgba(0,0,0,0.06)',
+                    fontSize: 14, fontWeight: 700, color: on ? accent : 'rgba(0,0,0,0.4)',
+                    boxShadow: on ? `0 2px 10px ${accent}22` : 'none',
+                  }}>
+                  {type === "buy" ? "Buy USDC" : "Sell USDC"}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Amount */}
-        <div className="mb-5">
-          <p className="text-[13px] text-neutral-500 mb-2">Amount</p>
-          <div className="bg-neutral-900 rounded-xl p-4">
-            <div className="flex items-center gap-3">
+        <div className="mb-4">
+          <p style={{ ...fieldLabel, marginBottom: 8, display: 'block' }}>Amount</p>
+          <div className="rounded-[18px] p-4" style={card}>
+            <div className="relative">
               <input
                 type="text"
                 inputMode="decimal"
                 placeholder="0"
-                className="flex-1 text-[24px] font-semibold text-white bg-transparent outline-none placeholder:text-neutral-700"
+                style={{
+                  width: '100%', paddingRight: 52, fontSize: 28, fontWeight: 800,
+                  letterSpacing: '-0.03em', color: '#000', background: 'transparent',
+                  border: 'none', outline: 'none',
+                }}
               />
-              <span className="text-[15px] font-medium text-neutral-400">USDC</span>
+              <span className="absolute right-0 top-1/2 -translate-y-1/2"
+                style={{ fontSize: 14, fontWeight: 600, color: 'rgba(0,0,0,0.3)' }}>
+                USDC
+              </span>
             </div>
           </div>
         </div>
 
         {/* Rate */}
-        <div className="mb-5">
-          <p className="text-[13px] text-neutral-500 mb-2">Your rate (AED per USDC)</p>
-          <div className="bg-neutral-900 rounded-xl p-4">
+        <div className="mb-4">
+          <p style={{ ...fieldLabel, marginBottom: 8, display: 'block' }}>Your rate (AED per USDC)</p>
+          <div className="rounded-[18px] p-4" style={card}>
             <div className="flex items-center gap-3">
               <input
                 type="text"
                 inputMode="decimal"
                 placeholder="3.67"
-                className="flex-1 text-[24px] font-semibold text-white bg-transparent outline-none placeholder:text-neutral-700"
+                style={{
+                  flex: 1, fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em',
+                  color: '#000', background: 'transparent', border: 'none', outline: 'none',
+                }}
               />
-              <span className="text-[15px] font-medium text-neutral-400">AED</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(0,0,0,0.3)' }}>AED</span>
             </div>
           </div>
-          <p className="text-[13px] text-neutral-600 mt-2">Market rate: 3.67 AED</p>
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>Market rate: 3.67 AED</p>
         </div>
 
         {/* Min/Max */}
         <div className="mb-5">
-          <p className="text-[13px] text-neutral-500 mb-2">Order limits (optional)</p>
+          <p style={{ ...fieldLabel, marginBottom: 8, display: 'block' }}>Order limits (optional)</p>
           <div className="flex gap-3">
-            <div className="flex-1 bg-neutral-900 rounded-xl p-3">
-              <p className="text-[11px] text-neutral-600 mb-1">Min</p>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="100"
-                className="w-full text-[17px] font-medium text-white bg-transparent outline-none placeholder:text-neutral-700"
-              />
-            </div>
-            <div className="flex-1 bg-neutral-900 rounded-xl p-3">
-              <p className="text-[11px] text-neutral-600 mb-1">Max</p>
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="10,000"
-                className="w-full text-[17px] font-medium text-white bg-transparent outline-none placeholder:text-neutral-700"
-              />
-            </div>
+            {[{ placeholder: '100', label: 'Min' }, { placeholder: '10,000', label: 'Max' }].map(f => (
+              <div key={f.label} className="flex-1 rounded-[18px] p-3" style={card}>
+                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(0,0,0,0.35)', marginBottom: 4 }}>{f.label}</p>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder={f.placeholder}
+                  style={{ width: '100%', fontSize: 17, fontWeight: 700, color: '#000', background: 'transparent', border: 'none', outline: 'none' }}
+                />
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      <div className="px-5 pb-10">
-        <motion.button
-          whileTap={{ scale: 0.98 }}
-          className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-white/10 text-white"
-        >
+      <div className="px-5 pb-10 shrink-0">
+        <motion.button whileTap={{ scale: 0.98 }}
+          className="w-full py-4 rounded-2xl"
+          style={{ fontSize: 15, fontWeight: 800, background: '#ffffff', color: '#000', letterSpacing: '-0.01em' }}>
           Post Offer
         </motion.button>
-        <p className="text-[13px] text-neutral-600 text-center mt-3">
+        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10 }}>
           Your offer will be visible to all traders
         </p>
       </div>
-    </>
+    </div>
   );
 };

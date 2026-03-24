@@ -1,8 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Clock, Check } from "lucide-react";
-import { HomeAmbientGlow } from "./HomeDecorations";
+import { Clock, Check, TrendingUp, TrendingDown } from "lucide-react";
 import { BottomNav } from "./BottomNav";
 import type { Screen, Order } from "./types";
 
@@ -10,8 +9,8 @@ export interface OrdersListScreenProps {
   screen: Screen;
   setScreen: (s: Screen) => void;
   setActiveOrderId: (id: string) => void;
-  activityTab: 'active' | 'completed';
-  setActivityTab: (t: 'active' | 'completed') => void;
+  activityTab: "active" | "completed";
+  setActivityTab: (t: "active" | "completed") => void;
   pendingOrders: Order[];
   completedOrders: Order[];
   maxW: string;
@@ -27,143 +26,165 @@ export const OrdersListScreen = ({
   completedOrders,
   maxW,
 }: OrdersListScreenProps) => {
+  const card = { background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' };
+  const sectionLabel = { fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' as const };
+
   return (
-    <>
-      <HomeAmbientGlow />
-      <div className="h-12" />
+    <div className="flex flex-col h-dvh overflow-hidden" style={{ background: '#060606' }}>
 
-      <div className="px-5 pt-2 pb-4 z-10">
-        <p style={{ fontSize: 9, fontWeight: 900, letterSpacing: '0.38em', color: 'rgba(255,255,255,0.22)', textTransform: 'uppercase', marginBottom: 3 }}>Overview</p>
-        <p style={{ fontSize: 26, fontWeight: 900, letterSpacing: '-0.04em', color: '#fff' }}>Activity</p>
-      </div>
+      {/* ── Header ── */}
+      <header className="px-5 pt-10 pb-4 shrink-0">
+        <p style={{ ...sectionLabel, marginBottom: 4 }}>Overview</p>
+        <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', color: '#fff', lineHeight: 1, marginBottom: 16 }}>Activity</p>
 
-      {/* Activity Tabs */}
-      <div className="px-5 mb-5">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+        {/* Tabs */}
+        <div className="flex gap-2">
           {([
-            { tab: 'active' as const, label: 'Active', count: pendingOrders.length },
-            { tab: 'completed' as const, label: 'Completed', count: completedOrders.length },
-          ] as const).map(({ tab, label, count }) => (
-            <motion.button key={tab} whileTap={{ scale: 0.94 }} onClick={() => setActivityTab(tab)}
-              className="shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full"
-              style={activityTab === tab
-                ? { background: '#fff', color: '#000' }
-                : { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.07)' }}>
-              {tab === 'active' && activityTab === 'active' && (
-                <motion.div className="w-1.5 h-1.5 rounded-full bg-[#f97316]" animate={{ scale: [1, 1.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
-              )}
-              <span style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</span>
-              {count > 0 && (
-                <span style={{ fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: 99, background: activityTab === tab ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.08)', color: activityTab === tab ? '#000' : 'rgba(255,255,255,0.4)' }}>{count}</span>
-              )}
-            </motion.button>
-          ))}
+            { tab: "active" as const, label: "Active", count: pendingOrders.length },
+            { tab: "completed" as const, label: "Completed", count: completedOrders.length },
+          ]).map(({ tab, label, count }) => {
+            const on = activityTab === tab;
+            return (
+              <motion.button key={tab} whileTap={{ scale: 0.94 }}
+                onClick={() => setActivityTab(tab)}
+                className="shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full"
+                style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+                  background: on ? '#fff' : 'rgba(255,255,255,0.06)',
+                  color: on ? '#000' : 'rgba(255,255,255,0.4)',
+                  border: on ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                }}>
+                {tab === "active" && on && (
+                  <motion.div style={{ width: 6, height: 6, borderRadius: '50%', background: '#000' }}
+                    animate={{ scale: [1, 1.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
+                )}
+                {label}
+                {count > 0 && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 800, padding: '1px 5px', borderRadius: 99,
+                    background: on ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)',
+                    color: on ? '#000' : 'rgba(255,255,255,0.4)',
+                  }}>{count}</span>
+                )}
+              </motion.button>
+            );
+          })}
         </div>
-      </div>
+      </header>
 
-      <div className="flex-1 px-5 pb-28 overflow-y-auto relative z-10">
-        {/* Active Orders Tab */}
-        {activityTab === 'active' && (
-          <>
-            {pendingOrders.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="w-16 h-16 rounded-[20px] flex items-center justify-center mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <Clock className="w-7 h-7" style={{ color: 'rgba(255,255,255,0.2)' }} />
-                </div>
-                <p style={{ fontSize: 20, fontWeight: 900, letterSpacing: '-0.03em', marginBottom: 6 }}>No active trades</p>
-                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', fontWeight: 600 }}>Start a new trade from the home screen</p>
+      {/* ── List ── */}
+      <div className="flex-1 px-5 pt-2 pb-24 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+
+        {/* Active Orders */}
+        {activityTab === "active" && (
+          pendingOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4"
+                style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
+                <Clock size={22} color="rgba(0,0,0,0.2)" />
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {pendingOrders.map((order, i) => (
-                  <motion.button
-                    key={order.id}
+              <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: '#fff', marginBottom: 6 }}>No active trades</p>
+              <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>Start a new trade from the home screen</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {pendingOrders.map((order, i) => {
+                const isBuy = order.type === "buy";
+                const secs = order.expiresAt
+                  ? Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000))
+                  : null;
+                const timeStr = secs !== null
+                  ? `${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, "0")}`
+                  : null;
+                return (
+                  <motion.button key={order.id}
                     initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => { setActiveOrderId(order.id); setScreen("order"); }}
-                    className="w-full flex items-center gap-3 rounded-[22px]"
-                    style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
-                  >
-                    <div className="w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0"
-                      style={{ background: order.type === 'buy' ? 'rgba(249,115,22,0.1)' : 'rgba(255,255,255,0.05)', border: `1px solid ${order.type === 'buy' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.1)'}` }}>
-                      <motion.div className="w-2 h-2 rounded-full" style={{ background: order.type === 'buy' ? '#f97316' : '#fff', boxShadow: `0 0 8px ${order.type === 'buy' ? '#f97316' : '#fff'}` }} animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
+                    className="w-full flex items-center gap-3 rounded-[18px] p-3.5 text-left"
+                    style={card}>
+                    <div className="w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0"
+                      style={{ background: isBuy ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${isBuy ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}` }}>
+                      {isBuy
+                        ? <TrendingUp size={17} color="#059669" />
+                        : <TrendingDown size={17} color="#dc2626" />}
                     </div>
-                    <div className="flex-1 text-left min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <p style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.02em' }}>
-                          {order.type === 'buy' ? 'Receiving' : 'Sending'} {order.cryptoAmount} USDT
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p style={{ fontSize: 14, fontWeight: 700, color: '#000', letterSpacing: '-0.01em' }}>
+                          {isBuy ? "Receiving" : "Sending"} {parseFloat(order.cryptoAmount).toFixed(2)} USDT
                         </p>
-                        <p style={{ fontSize: 15, fontWeight: 900, color: order.type === 'buy' ? '#f97316' : '#fff' }}>
-                          {order.type === 'buy' ? '+' : '-'} {'\u062F.\u0625'}{parseFloat(order.fiatAmount).toLocaleString()}
+                        <p style={{ fontSize: 14, fontWeight: 800, letterSpacing: '-0.01em', color: isBuy ? '#059669' : '#dc2626' }}>
+                          {isBuy ? "+" : "-"}{"\u062F.\u0625"}{parseFloat(order.fiatAmount).toLocaleString()}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 99, background: order.type === 'buy' ? 'rgba(249,115,22,0.1)' : 'rgba(255,255,255,0.05)', color: order.type === 'buy' ? '#f97316' : '#fff' }}>Step {order.step}/4</span>
-                        {order.dbStatus === 'pending' && order.expiresAt ? (
-                          <span style={{ fontSize: 9, fontWeight: 700, fontFamily: 'monospace', color: Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)) < 60 ? '#f87171' : 'rgba(255,255,255,0.25)' }}>
-                            {(() => { const s = Math.max(0, Math.floor((order.expiresAt.getTime() - Date.now()) / 1000)); return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`; })()}
+                        <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 99, background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.5)' }}>
+                          Step {order.step}/4
+                        </span>
+                        {timeStr && (
+                          <span style={{ fontSize: 9, fontWeight: 700, fontFamily: 'monospace', color: secs !== null && secs < 60 ? '#dc2626' : 'rgba(0,0,0,0.35)' }}>
+                            {timeStr}
                           </span>
-                        ) : (
-                          <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.2)' }}>{order.createdAt.toLocaleDateString()}</span>
                         )}
                       </div>
                     </div>
                   </motion.button>
-                ))}
-              </div>
-            )}
-          </>
+                );
+              })}
+            </div>
+          )
         )}
 
-        {/* Completed Orders Tab */}
-        {activityTab === 'completed' && (
-          <>
-            {completedOrders.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="w-16 h-16 rounded-[20px] flex items-center justify-center mb-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <Check className="w-7 h-7" style={{ color: 'rgba(255,255,255,0.2)' }} />
-                </div>
-                <p style={{ fontSize: 20, fontWeight: 900, letterSpacing: '-0.03em', marginBottom: 6 }}>No completed trades</p>
-                <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', fontWeight: 600 }}>Completed transactions appear here</p>
+        {/* Completed Orders */}
+        {activityTab === "completed" && (
+          completedOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4"
+                style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
+                <Check size={22} color="rgba(0,0,0,0.2)" />
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {completedOrders.map((order, i) => (
-                  <motion.button
-                    key={order.id}
+              <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: '#fff', marginBottom: 6 }}>No completed trades</p>
+              <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>Completed transactions appear here</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {completedOrders.map((order, i) => {
+                const isBuy = order.type === "buy";
+                return (
+                  <motion.button key={order.id}
                     initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => { setActiveOrderId(order.id); setScreen("order"); }}
-                    className="w-full flex items-center gap-3 rounded-[22px]"
-                    style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.05)' }}
-                  >
-                    <div className="w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0"
-                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
-                      <Check className="w-5 h-5" style={{ color: '#f97316' }} />
+                    className="w-full flex items-center gap-3 rounded-[18px] p-3.5 text-left"
+                    style={card}>
+                    <div className="w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0"
+                      style={{ background: 'rgba(0,0,0,0.05)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                      <Check size={17} color="rgba(0,0,0,0.4)" />
                     </div>
-                    <div className="flex-1 text-left min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <p style={{ fontSize: 15, fontWeight: 900, letterSpacing: '-0.02em' }}>
-                          {order.type === 'buy' ? 'Received' : 'Sent'} {order.cryptoAmount} USDT
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p style={{ fontSize: 14, fontWeight: 700, color: '#000', letterSpacing: '-0.01em' }}>
+                          {isBuy ? "Received" : "Sent"} {parseFloat(order.cryptoAmount).toFixed(2)} USDT
                         </p>
-                        <p style={{ fontSize: 15, fontWeight: 900, color: '#f97316' }}>
-                          {order.type === 'buy' ? '+' : '-'} {'\u062F.\u0625'}{parseFloat(order.fiatAmount).toLocaleString()}
+                        <p style={{ fontSize: 14, fontWeight: 800, letterSpacing: '-0.01em', color: isBuy ? '#059669' : '#dc2626' }}>
+                          {isBuy ? "+" : "-"}{"\u062F.\u0625"}{parseFloat(order.fiatAmount).toLocaleString()}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span style={{ fontSize: 8, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 7px', borderRadius: 99, background: 'rgba(249,115,22,0.1)', color: '#f97316' }}>Done</span>
-                        <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.2)' }}>{order.createdAt.toLocaleDateString()}</span>
+                        <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 99, background: 'rgba(0,0,0,0.05)', color: 'rgba(0,0,0,0.35)' }}>Done</span>
+                        <span style={{ fontSize: 10, fontWeight: 500, color: 'rgba(0,0,0,0.35)' }}>{order.createdAt.toLocaleDateString()}</span>
                       </div>
                     </div>
                   </motion.button>
-                ))}
-              </div>
-            )}
-          </>
+                );
+              })}
+            </div>
+          )
         )}
       </div>
 
       <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />
-    </>
+    </div>
   );
 };

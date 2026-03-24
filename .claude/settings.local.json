@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep:*)",
+      "Bash(npm --version)",
+      "Bash(pnpm --version)",
+      "Bash(pnpm -C packages/settlement-core build)",
+      "Bash(npx next:*)",
+      "Bash(curl -s http://localhost:3000/api/health)",
+      "Bash(ipconfig)",
+      "Bash(findstr \"IPv4\")",
+      "Bash(grep -r \"dashboard\\\\|/admin\\\\|/merchant\\\\|/compliance\\\\|/ops\\\\|/arbiter\" /c/Projects/blip_new/settle/*.md)"
+    ]
+  }
+}

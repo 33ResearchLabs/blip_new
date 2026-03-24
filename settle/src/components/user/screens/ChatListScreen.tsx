@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ChevronLeft, MessageCircle } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { BottomNav } from "./BottomNav";
 import type { Screen, Order } from "./types";
 
@@ -22,80 +22,89 @@ export const ChatListScreen = ({
   setOrders,
   maxW,
 }: ChatListScreenProps) => {
+  const card = { background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' };
+
   return (
-    <>
-      <div className="h-12" />
+    <div className="flex flex-col h-dvh overflow-hidden" style={{ background: '#060606' }}>
 
-      <div className="px-5 py-4 flex items-center">
-        <button onClick={() => setScreen("home")} className="p-2 -ml-2">
-          <ChevronLeft className="w-6 h-6 text-white" />
-        </button>
-        <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">Messages</h1>
-      </div>
+      {/* ── Header ── */}
+      <header className="px-5 pt-10 pb-4 shrink-0">
+        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', marginBottom: 4 }}>Inbox</p>
+        <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', color: '#fff', lineHeight: 1 }}>Messages</p>
+      </header>
 
-      <div className="flex-1 px-5 pb-28 overflow-y-auto">
+      {/* ── List ── */}
+      <div className="flex-1 px-5 pt-2 pb-24 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
         {orders.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center py-20">
-            <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center mb-4">
-              <MessageCircle className="w-8 h-8 text-neutral-600" />
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4"
+              style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
+              <MessageCircle size={22} color="rgba(0,0,0,0.2)" />
             </div>
-            <p className="text-[17px] font-medium text-white mb-1">No messages</p>
-            <p className="text-[15px] text-neutral-500">Start a trade to chat with merchants</p>
+            <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: '#fff', marginBottom: 6 }}>No messages</p>
+            <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>Start a trade to chat with merchants</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {orders.map(order => (
-              <motion.button
-                key={order.id}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => {
-                  setActiveOrderId(order.id);
-                  setScreen("chat-view");
-                  setOrders(prev => prev.map(o => o.id === order.id ? { ...o, unreadCount: 0 } : o));
-                }}
-                className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center gap-3"
-              >
-                <div className="relative">
-                  <div className="w-12 h-12 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white font-semibold">
-                    {order.merchant.name.charAt(0)}
-                  </div>
-                  {(order.unreadCount || 0) > 0 && (
-                    <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-white/10 flex items-center justify-center">
-                      <span className="text-[10px] font-bold text-white">{order.unreadCount}</span>
+          <div className="flex flex-col gap-2">
+            {orders.map((order, i) => {
+              const hasUnread = (order.unreadCount || 0) > 0;
+              const initial = order.merchant.name.charAt(0).toUpperCase();
+              return (
+                <motion.button key={order.id}
+                  initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    setActiveOrderId(order.id);
+                    setScreen("chat-view");
+                    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, unreadCount: 0 } : o));
+                  }}
+                  className="w-full rounded-[18px] p-3.5 flex items-center gap-3 text-left"
+                  style={hasUnread ? { background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.15)' } : card}>
+                  {/* Avatar */}
+                  <div className="relative shrink-0">
+                    <div className="w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0"
+                      style={{ background: hasUnread ? '#000' : 'rgba(0,0,0,0.07)' }}>
+                      <span style={{ fontSize: 17, fontWeight: 800, color: hasUnread ? '#fff' : 'rgba(0,0,0,0.5)' }}>{initial}</span>
                     </div>
-                  )}
-                </div>
-                <div className="flex-1 text-left min-w-0">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <p className={`text-[15px] font-medium ${(order.unreadCount || 0) > 0 ? 'text-white' : 'text-neutral-300'}`}>
-                      {order.merchant.name}
-                    </p>
-                    <p className="text-[11px] text-neutral-600">
+                    {hasUnread && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
+                        style={{ background: '#000', border: '2px solid #ffffff' }}>
+                        <span style={{ fontSize: 8, fontWeight: 800, color: '#fff' }}>{order.unreadCount}</span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Text */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <p style={{ fontSize: 14, fontWeight: hasUnread ? 800 : 600, color: '#000', letterSpacing: '-0.01em' }}>
+                        {order.merchant.name}
+                      </p>
+                      <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(0,0,0,0.35)' }}>
+                        {order.lastMessage
+                          ? order.lastMessage.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : order.createdAt.toLocaleDateString()}
+                      </p>
+                    </div>
+                    <p style={{ fontSize: 12, fontWeight: hasUnread ? 600 : 400, color: hasUnread ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {order.lastMessage
-                        ? order.lastMessage.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                        : order.createdAt.toLocaleDateString()
-                      }
+                        ? (order.lastMessage.fromMerchant ? '' : 'You: ') + order.lastMessage.content
+                        : order.status === 'complete'
+                          ? 'Trade completed'
+                          : `${order.type === 'buy' ? 'Buying' : 'Selling'} ${parseFloat(order.cryptoAmount).toFixed(2)} USDC`}
                     </p>
                   </div>
-                  <p className={`text-[13px] truncate ${(order.unreadCount || 0) > 0 ? 'text-neutral-300 font-medium' : 'text-neutral-500'}`}>
-                    {order.lastMessage
-                      ? (order.lastMessage.fromMerchant ? '' : 'You: ') + order.lastMessage.content
-                      : order.status === "complete"
-                        ? "Trade completed"
-                        : `${order.type === "buy" ? "Buying" : "Selling"} ${order.cryptoAmount} USDC`
-                    }
-                  </p>
-                </div>
-                {order.status !== "complete" && !(order.unreadCount || 0) && (
-                  <div className="w-2 h-2 rounded-full bg-neutral-700" />
-                )}
-              </motion.button>
-            ))}
+                  {/* Active indicator */}
+                  {!hasUnread && order.status !== 'complete' && (
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'rgba(0,0,0,0.2)' }} />
+                  )}
+                </motion.button>
+              );
+            })}
           </div>
         )}
       </div>
 
       <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />
-    </>
+    </div>
   );
 };
