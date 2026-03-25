@@ -306,7 +306,7 @@ export function useUserAuth({
         localStorage.removeItem('blip_wallet');
       }
 
-      setScreen('welcome');
+      setScreen('splash');
       setIsInitializing(false);
     };
 
