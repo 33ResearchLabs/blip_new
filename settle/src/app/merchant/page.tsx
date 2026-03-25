@@ -390,13 +390,13 @@ export default function MerchantDashboard() {
             <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.36, duration: 0.55, ease: [0.22, 1, 0.36, 1] }} className="w-full space-y-3">
               <motion.button
                 whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
-                onClick={() => { setAuthTab('register'); setShowSplash(false); }}
+                onClick={() => { setAuthTab('create'); setShowSplash(false); }}
                 className="w-full py-4 rounded-2xl text-[15px] font-bold flex items-center justify-center gap-2 bg-white text-black"
               >
                 Get Started
                 <ArrowRight className="w-4 h-4" />
               </motion.button>
-              <button onClick={() => { setAuthTab('login'); setShowSplash(false); }} className="block w-full text-[13px] text-white/40 hover:text-white/70 transition-colors">
+              <button onClick={() => { setAuthTab('signin'); setShowSplash(false); }} className="block w-full text-[13px] text-white/40 hover:text-white/70 transition-colors">
                 Already have an account? <span className="text-white/70 font-medium underline underline-offset-2">Sign in</span>
               </button>
             </motion.div>
