@@ -225,9 +225,14 @@ export default function Home() {
                   Get Started
                   <ArrowRight className="w-4 h-4" />
                 </motion.button>
-                <button onClick={() => { auth.setAuthMode('login'); setScreen('welcome'); }} className="block w-full text-[13px] text-white/40 hover:text-white/70 transition-colors">
-                  Already have an account? <span className="text-white/70 font-medium underline underline-offset-2">Sign in</span>
-                </button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
+                  onClick={() => { auth.setAuthMode('login'); setScreen('welcome'); }}
+                  className="w-full py-4 rounded-2xl text-[15px] font-semibold flex items-center justify-center gap-2 text-white"
+                  style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)' }}
+                >
+                  Sign In
+                </motion.button>
               </motion.div>
               {/* Footer */}
               <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.48 }} className="text-[10px] text-white/20 font-mono">
