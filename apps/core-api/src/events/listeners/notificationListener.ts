@@ -7,6 +7,7 @@
 import { orderBus, ORDER_EVENT, type OrderEventPayload } from '../orderEvents';
 import { bufferEvent, bufferNotification, bufferReputation } from '../../batchWriter';
 import { getTransitionEventType, normalizeStatus, logger, query as dbQuery } from 'settlement-core';
+import { withCircuitBreaker, CircuitBreakerError } from '../../circuitBreaker';
 
 export function registerNotificationListener(): void {
   // Buffer event + notification on every status change
@@ -57,12 +58,19 @@ export function registerNotificationListener(): void {
     bufferReputation({ entity_id: p.merchantId, entity_type: 'merchant', event_type: repType, score_change: repScore, reason: repReason, metadata: repMeta });
     bufferReputation({ entity_id: p.userId, entity_type: 'user', event_type: repType, score_change: repScore, reason: repReason, metadata: repMeta });
 
-    // Fire reputation recalculation
+    // Fire reputation recalculation (circuit-breaker-protected)
     const settleUrl = process.env.SETTLE_URL || 'http://localhost:3000';
-    Promise.allSettled([
-      fetch(`${settleUrl}/api/reputation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entityId: p.merchantId, entityType: 'merchant' }) }),
-      fetch(`${settleUrl}/api/reputation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entityId: p.userId, entityType: 'user' }) }),
-    ]).catch(() => {});
+    withCircuitBreaker('reputation_api', async () => {
+      await Promise.allSettled([
+        fetch(`${settleUrl}/api/reputation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entityId: p.merchantId, entityType: 'merchant' }) }),
+        fetch(`${settleUrl}/api/reputation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entityId: p.userId, entityType: 'user' }) }),
+      ]);
+    }).catch((err) => {
+      if (err instanceof CircuitBreakerError) {
+        logger.warn('[NotificationListener] Reputation API circuit open — skipping', { orderId: p.orderId });
+      }
+      // Silently ignore other errors (fire-and-forget)
+    });
   });
 
   // Stats update on completion

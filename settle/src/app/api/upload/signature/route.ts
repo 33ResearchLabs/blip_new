@@ -12,7 +12,7 @@ cloudinary.config({
 
 export async function POST(request: NextRequest) {
   // Rate limit upload signatures
-  const rl = checkRateLimit(request, 'upload:signature', STANDARD_LIMIT);
+  const rl = await checkRateLimit(request, 'upload:signature', STANDARD_LIMIT);
   if (rl) return rl;
 
   // Require authenticated user/merchant

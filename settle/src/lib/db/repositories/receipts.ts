@@ -1,4 +1,5 @@
 import { query, queryOne } from '../index';
+import { getCachedReceipt } from '@/lib/cache';
 
 export interface OrderReceipt {
   id: string;
@@ -37,12 +38,11 @@ export interface OrderReceipt {
 
 /**
  * Get receipt by order ID.
- * Uses the UNIQUE index on order_id — O(1) lookup.
+ * Uses Redis cache with DB fallback. UNIQUE index on order_id — O(1) lookup.
  */
 export async function getReceiptByOrderId(orderId: string): Promise<OrderReceipt | null> {
-  return queryOne<OrderReceipt>(
-    'SELECT * FROM order_receipts WHERE order_id = $1',
-    [orderId]
+  return getCachedReceipt<OrderReceipt>(orderId, (id) =>
+    queryOne<OrderReceipt>('SELECT * FROM order_receipts WHERE order_id = $1', [id])
   );
 }
 

@@ -29,7 +29,7 @@ async function processOverdueFulfillments(): Promise<number> {
          JOIN orders o ON cf.order_id = o.id
          WHERE cf.provider_status = 'pending'
            AND cf.send_deadline < NOW()
-         FOR UPDATE OF cf
+         FOR UPDATE OF cf SKIP LOCKED
          LIMIT 10`
       );
 
@@ -45,13 +45,18 @@ async function processOverdueFulfillments(): Promise<number> {
         const buyerMerchantId = ff.buyer_merchant_id as string;
         const saedAmount = parseInt(String(ff.saed_amount_locked));
 
-        // Mark fulfillment as failed
-        await client.query(
+        // Mark fulfillment as failed (status guard prevents double-processing)
+        const failResult = await client.query(
           `UPDATE corridor_fulfillments
            SET provider_status = 'failed', failed_at = NOW(), updated_at = NOW()
-           WHERE id = $1`,
+           WHERE id = $1 AND provider_status = 'pending'
+           RETURNING id`,
           [fulfillmentId]
         );
+        if (failResult.rows.length === 0) {
+          logger.warn('[CorridorTimeout] Skipped fulfillment (already processed)', { fulfillmentId });
+          continue;
+        }
 
         // Refund buyer's sAED
         if (buyerMerchantId && saedAmount > 0) {
@@ -79,10 +84,12 @@ async function processOverdueFulfillments(): Promise<number> {
         }
 
         // Clear corridor link on order (revert to bank payment)
+        // Guard: never modify terminal-state orders
         await client.query(
           `UPDATE orders
            SET payment_via = 'bank', corridor_fulfillment_id = NULL
-           WHERE id = $1 AND corridor_fulfillment_id = $2`,
+           WHERE id = $1 AND corridor_fulfillment_id = $2
+             AND status NOT IN ('completed', 'cancelled', 'expired')`,
           [orderId, fulfillmentId]
         );
 

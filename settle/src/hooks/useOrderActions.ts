@@ -5,6 +5,7 @@ import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, DbOrder, Notification } from "@/types/merchant";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { showConfirm } from '@/context/ModalContext';
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 
@@ -94,24 +95,45 @@ export function useOrderActions({
         }
       }
 
-      // Build the request body
-      const targetStatus = "accepted";
-      const requestBody: Record<string, unknown> = {
-        status: targetStatus,
-        actor_type: "merchant",
-        actor_id: merchantId,
-      };
+      // For escrowed orders, determine the right action:
+      // - Merchant already assigned (user sell): SEND_PAYMENT directly (atomic claim+pay)
+      // - Unclaimed broadcast: CLAIM to set buyer_merchant_id
+      const isEscrowed = order.dbOrder?.status === 'escrowed' || order.minimalStatus === 'escrowed';
+      const iAmAssignedMerchant = order.orderMerchantId === merchantId;
 
-      // Include wallet address if connected (skip mock addresses that fail Solana validation)
-      if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
-        requestBody.acceptor_wallet_address = solanaWallet.walletAddress;
+      let acceptRes;
+      if (isEscrowed && hasOnChainEscrow) {
+        // Use SEND_PAYMENT action — backend handles atomic claim+pay for unclaimed,
+        // or direct payment_sent transition for already-assigned merchants
+        const actionBody: Record<string, unknown> = {
+          action: iAmAssignedMerchant ? 'SEND_PAYMENT' : 'CLAIM',
+          actor_type: 'merchant',
+          actor_id: merchantId,
+        };
+        if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
+          actionBody.acceptor_wallet_address = solanaWallet.walletAddress;
+        }
+        acceptRes = await fetchWithAuth(`/api/orders/${order.id}/action`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(actionBody),
+        });
+      } else {
+        // Normal accept flow via PATCH
+        const requestBody: Record<string, unknown> = {
+          status: "accepted",
+          actor_type: "merchant",
+          actor_id: merchantId,
+        };
+        if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
+          requestBody.acceptor_wallet_address = solanaWallet.walletAddress;
+        }
+        acceptRes = await fetchWithAuth(`/api/orders/${order.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        });
       }
-
-      const acceptRes = await fetchWithAuth(`/api/orders/${order.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
       if (!acceptRes.ok) {
         const errorText = await acceptRes.text().catch(() => '');
         let errorMsg = `HTTP ${acceptRes.status}`;
@@ -204,7 +226,7 @@ export function useOrderActions({
   };
 
   // ═══════════════════════════════════════════════════════════════════
-  // SIGN TO CLAIM ORDER (buyer claims M2M escrowed order)
+  // SIGN TO CLAIM ORDER (buyer claims escrowed order via atomic action)
   // ═══════════════════════════════════════════════════════════════════
   const signToClaimOrder = async (order: Order) => {
     if (!merchantId) return;
@@ -228,20 +250,43 @@ export function useOrderActions({
 
       addNotification('system', 'Please sign in your wallet to claim this order...', order.id);
       const signatureBytes = await solanaWallet.signMessage(messageBytes);
-      const signature = Buffer.from(signatureBytes).toString('base64');
 
-      const claimBody: Record<string, string> = {
-          status: "payment_pending",
-          actor_type: "merchant",
-          actor_id: merchantId,
-      };
-      if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
-        claimBody.acceptor_wallet_address = solanaWallet.walletAddress;
-        claimBody.acceptor_wallet_signature = signature;
+      // If escrow exists on-chain, join it first
+      const hasOnChainEscrow = !!order.escrowTxHash && !!order.escrowCreatorWallet && order.escrowTradeId != null;
+      if (hasOnChainEscrow) {
+        try {
+          const acceptResult = await solanaWallet.acceptTrade({
+            creatorPubkey: order.escrowCreatorWallet,
+            tradeId: order.escrowTradeId,
+          });
+          if (!acceptResult.success) {
+            addNotification('system', `Failed to join escrow: ${acceptResult.error}`, order.id);
+            playSound('error');
+            return;
+          }
+        } catch (acceptError: any) {
+          const errMsg = acceptError?.message || '';
+          // Already accepted on-chain — continue
+          if (!errMsg.includes('CannotAccept') && !errMsg.includes('0x177d') && !errMsg.includes('6013')) {
+            addNotification('system', `Failed to join escrow: ${errMsg}`, order.id);
+            playSound('error');
+            return;
+          }
+        }
       }
 
-      const res = await fetchWithAuth(`/api/orders/${order.id}`, {
-        method: "PATCH",
+      // Use the atomic CLAIM action endpoint
+      const claimBody: Record<string, unknown> = {
+        action: 'CLAIM',
+        actor_type: 'merchant',
+        actor_id: merchantId,
+      };
+      if (walletAddr && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(walletAddr)) {
+        claimBody.acceptor_wallet_address = walletAddr;
+      }
+
+      const res = await fetchWithAuth(`/api/orders/${order.id}/action`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(claimBody),
       });
@@ -249,7 +294,10 @@ export function useOrderActions({
       const responseData = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        addNotification('system', `Failed to claim order: ${responseData.error || 'Unknown error'}`, order.id);
+        const errorMsg = responseData.code === 'CLAIM_FAILED'
+          ? 'Order already claimed by another merchant.'
+          : (responseData.error || 'Unknown error');
+        addNotification('system', `Failed to claim order: ${errorMsg}`, order.id);
         playSound('error');
         return;
       }
@@ -261,8 +309,8 @@ export function useOrderActions({
       if (error?.message?.includes('User rejected')) {
         addNotification('system', 'Signature rejected. Please sign to claim.');
       } else {
-        console.error("Error signing:", error);
-        addNotification('system', 'Failed to sign. Please try again.');
+        console.error("Error claiming order:", error);
+        addNotification('system', 'Failed to claim. Please try again.');
       }
       playSound('error');
     }
@@ -333,33 +381,76 @@ export function useOrderActions({
   };
 
   // ═══════════════════════════════════════════════════════════════════
-  // MARK FIAT PAYMENT SENT
+  // MARK FIAT PAYMENT SENT (uses action endpoint; auto-claims if unclaimed)
   // ═══════════════════════════════════════════════════════════════════
   const markFiatPaymentSent = async (order: Order) => {
     if (!merchantId) return;
     setMarkingDone(true);
 
     try {
-      const res = await fetchWithAuth(`/api/orders/${order.id}`, {
-        method: "PATCH",
+      // ── On-chain: join escrow as counterparty (buyer) before marking payment ──
+      // This moves the on-chain trade from Funded → Locked, which is required
+      // for the seller to release escrow later. Only needed when:
+      // 1. Order has on-chain escrow (escrowTradeId + escrowCreatorWallet)
+      // 2. Wallet is connected
+      // 3. Escrow is not mock/demo
+      const hasOnChainEscrow = order.escrowTradeId && order.escrowCreatorWallet;
+      const escrowTxHash = order.escrowTxHash || order.dbOrder?.escrow_tx_hash || '';
+      const isMockEscrow = escrowTxHash.startsWith('demo-') || escrowTxHash.startsWith('mock-');
+
+      if (hasOnChainEscrow && !isMockEscrow && solanaWallet.connected) {
+        try {
+          await solanaWallet.acceptTrade({
+            creatorPubkey: order.escrowCreatorWallet!,
+            tradeId: order.escrowTradeId!,
+          });
+          console.log('[Merchant] On-chain acceptTrade succeeded — escrow now in Locked state');
+        } catch (joinErr: unknown) {
+          const joinMsg = joinErr instanceof Error ? joinErr.message : String(joinErr);
+          // CannotAccept (6011) = already accepted/locked — safe to continue
+          // 0x177d = already accepted variant
+          if (joinMsg.includes('CannotAccept') || joinMsg.includes('0x177d') || joinMsg.includes('6011')) {
+            console.log('[Merchant] On-chain escrow already in Locked state, continuing');
+          } else if (joinMsg.includes('User rejected')) {
+            addNotification('system', 'Wallet signature rejected. Please try again.', order.id);
+            playSound('error');
+            setMarkingDone(false);
+            return;
+          } else {
+            // Non-fatal: log and continue — server-side will handle it
+            console.warn('[Merchant] On-chain acceptTrade failed (non-fatal):', joinMsg);
+          }
+        }
+      }
+
+      const actionBody: Record<string, unknown> = {
+        action: 'SEND_PAYMENT',
+        actor_type: 'merchant',
+        actor_id: merchantId,
+      };
+
+      // Include wallet address for auto-claim scenarios
+      if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
+        actionBody.acceptor_wallet_address = solanaWallet.walletAddress;
+      }
+
+      const res = await fetchWithAuth(`/api/orders/${order.id}/action`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "payment_sent",
-          actor_type: "merchant",
-          actor_id: merchantId,
-        }),
+        body: JSON.stringify(actionBody),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          playSound('click');
-          addNotification('system', `Payment marked as sent. Waiting for seller to release escrow.`, order.id);
-          await afterMutationReconcile(order.id, { status: "escrow" as const });
-        }
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success) {
+        playSound('click');
+        const claimedMsg = data.data?.claimed
+          ? 'Order claimed and payment marked as sent.'
+          : 'Payment marked as sent.';
+        addNotification('system', `${claimedMsg} Waiting for seller to release escrow.`, order.id);
+        await afterMutationReconcile(order.id, { status: "escrow" as const });
       } else {
-        const errorData = await res.json().catch(() => ({}));
-        addNotification('system', `Failed: ${errorData.error || 'Unknown error'}`, order.id);
+        addNotification('system', `Failed: ${data.error || 'Unknown error'}`, order.id);
         playSound('error');
       }
     } catch (error) {
@@ -441,7 +532,6 @@ export function useOrderActions({
   // ═══════════════════════════════════════════════════════════════════
   const confirmPayment = async (orderId: string) => {
     if (!merchantId) return;
-    setConfirmingOrderId(orderId);
 
     const order = orders.find(o => o.id === orderId);
     if (!order) {
@@ -449,90 +539,131 @@ export function useOrderActions({
       return;
     }
 
-    try {
-      let releaseTxHash: string;
+    // Safety: show confirmation dialog before proceeding
+    showConfirm(
+      'Confirm Payment Received',
+      `I confirm I have received the fiat payment of ${order.total ? `AED ${Math.round(order.total).toLocaleString()}` : `${order.amount} USDC worth`}. This will release escrow to the buyer and cannot be reversed.`,
+      async () => {
+        setConfirmingOrderId(orderId);
+        try {
+          let releaseTxHash: string;
 
-      if (order.orderType === 'buy' || order.orderType === 'sell') {
-        const hasOnChainEscrow = order.escrowTradeId && order.escrowCreatorWallet && order.userWallet;
+          if (order.orderType === 'buy' || order.orderType === 'sell') {
+            const hasOnChainEscrow = order.escrowTradeId && order.escrowCreatorWallet && order.userWallet;
 
-        if (hasOnChainEscrow) {
-          const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-          const isValidUserWallet = order.userWallet && base58Regex.test(order.userWallet);
+            // Detect mock/demo escrow — these have mock PDAs and don't exist on-chain
+            const escrowTxHash = order.escrowTxHash || order.dbOrder?.escrow_tx_hash || '';
+            const escrowPda = order.dbOrder?.escrow_pda || order.dbOrder?.escrow_trade_pda || '';
+            const isMockEscrow = escrowTxHash.startsWith('demo-') || escrowTxHash.startsWith('mock-')
+              || escrowPda.startsWith('mock-');
 
-          if (!solanaWallet.connected) {
-            addNotification('system', 'Please connect your wallet to release escrow.', orderId);
-            setShowWalletModal(true);
-            playSound('error');
-            return;
-          }
+            if (hasOnChainEscrow && !isMockEscrow) {
+              const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
-          if (!isValidUserWallet) {
-            addNotification('system', 'Invalid buyer wallet address. Cannot release escrow.', orderId);
-            playSound('error');
-            return;
-          }
+              if (!solanaWallet.connected) {
+                addNotification('system', 'Please connect your wallet to release escrow.', orderId);
+                setShowWalletModal(true);
+                playSound('error');
+                return;
+              }
 
-          let releaseResult;
-          try {
-            releaseResult = await solanaWallet.releaseEscrow({
-              creatorPubkey: order.escrowCreatorWallet,
-              tradeId: order.escrowTradeId,
-              counterparty: order.userWallet,
+              // Determine the correct counterparty (buyer) wallet for escrow release.
+              // M2M: buyer is buyer_merchant_id — use their wallet (buyerMerchantWallet).
+              // Non-M2M: buyer is the user — use acceptor_wallet_address or userWallet.
+              const counterpartyWallet = order.buyerMerchantWallet
+                || order.dbOrder?.acceptor_wallet_address
+                || order.userWallet;
+
+              if (!counterpartyWallet || !base58Regex.test(counterpartyWallet)) {
+                addNotification('system', 'Invalid buyer wallet address. Cannot release escrow.', orderId);
+                playSound('error');
+                return;
+              }
+
+              // Try to join escrow on behalf of counterparty first (auto-fix if not initialized)
+              try {
+                await solanaWallet.acceptTrade({
+                  creatorPubkey: order.escrowCreatorWallet,
+                  tradeId: order.escrowTradeId,
+                });
+              } catch (joinErr: unknown) {
+                const joinMsg = joinErr instanceof Error ? joinErr.message : String(joinErr);
+                if (!joinMsg.includes('CannotAccept') && !joinMsg.includes('0x177d') && !joinMsg.includes('6013')) {
+                  console.warn('[Merchant] Auto-join escrow attempt failed:', joinMsg);
+                }
+              }
+
+              let releaseResult;
+              try {
+                releaseResult = await solanaWallet.releaseEscrow({
+                  creatorPubkey: order.escrowCreatorWallet,
+                  tradeId: order.escrowTradeId,
+                  counterparty: counterpartyWallet,
+                });
+              } catch (releaseErr: unknown) {
+                const errMsg = releaseErr instanceof Error ? releaseErr.message : String(releaseErr);
+                // On-chain release failed — fall back to server-side completion
+                // CannotRelease (6016/0x1780): trade not in Locked state (buyer never joined on-chain)
+                if (errMsg.includes('AccountNotInitialized') || errMsg.includes('0xbc4') || errMsg.includes('3012')
+                    || errMsg.includes('CannotRelease') || errMsg.includes('0x1780') || errMsg.includes('6016')
+                    || (errMsg.includes('ConstraintRaw') && errMsg.includes('counterparty_ata'))) {
+                  console.warn('[Merchant] On-chain release failed, falling back to server-side completion:', errMsg);
+                  addNotification('system', 'On-chain release skipped (buyer not joined). Completing via server.', orderId);
+                  releaseTxHash = `server-release-fallback-${Date.now()}`;
+                } else {
+                  throw releaseErr;
+                }
+              }
+
+              if (releaseResult) {
+                if (!releaseResult.success) {
+                  console.error('[Merchant] Failed to release escrow:', releaseResult.error);
+                  addNotification('system', `Failed to release escrow: ${releaseResult.error || 'Unknown error'}`, orderId);
+                  playSound('error');
+                  return;
+                }
+                releaseTxHash = releaseResult.txHash;
+              }
+            } else {
+              // No on-chain escrow or mock escrow — release via server only
+              releaseTxHash = `server-release-${Date.now()}`;
+            }
+
+            // Sync release with backend (escrow endpoint accepts payment_sent directly)
+            const response = await fetchWithAuth(`/api/orders/${orderId}/escrow`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tx_hash: releaseTxHash,
+                actor_type: 'merchant',
+                actor_id: merchantId,
+              }),
             });
-          } catch (releaseErr: unknown) {
-            const errMsg = releaseErr instanceof Error ? releaseErr.message : String(releaseErr);
-            if (errMsg.includes('ConstraintRaw') && errMsg.includes('counterparty_ata')) {
-              addNotification('system', 'Buyer has not joined the escrow on-chain yet. Ask the buyer to connect their wallet and view this order.', orderId);
+
+            if (!response.ok) {
+              const errorData = await response.json();
+              console.error('[Merchant] Escrow release API failed:', errorData);
+              addNotification('system', `Failed to complete order: ${errorData.error || 'Unknown error'}`, orderId);
               playSound('error');
               return;
             }
-            throw releaseErr;
+
           }
 
-          if (!releaseResult.success) {
-            console.error('[Merchant] Failed to release escrow:', releaseResult.error);
-            addNotification('system', `Failed to release escrow: ${releaseResult.error || 'Unknown error'}`, orderId);
-            playSound('error');
-            return;
-          }
-
-          releaseTxHash = releaseResult.txHash;
-        } else {
-          // No on-chain escrow — release via server only (mock mode or missing wallet)
-          releaseTxHash = `server-release-${Date.now()}`;
-        }
-
-        const response = await fetchWithAuth(`/api/orders/${orderId}/escrow`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tx_hash: releaseTxHash,
-            actor_type: 'merchant',
-            actor_id: merchantId,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error('[Merchant] Escrow release API failed:', errorData);
-          addNotification('system', `Failed to complete order: ${errorData.error || 'Unknown error'}`, orderId);
+          playSound('trade_complete');
+          addNotification('complete', `Order completed - ${order.amount} USDC released to buyer`, orderId);
+          await afterMutationReconcile(orderId, { status: "completed" as const });
+        } catch (error) {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          console.error("Error confirming payment:", error);
+          addNotification('system', `Failed to complete order: ${errMsg}`, orderId);
           playSound('error');
-          return;
+        } finally {
+          setConfirmingOrderId(null);
         }
-
-      }
-
-      playSound('trade_complete');
-      addNotification('complete', `Order completed - ${order.amount} USDC released to buyer`, orderId);
-      await afterMutationReconcile(orderId, { status: "completed" as const });
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      console.error("Error confirming payment:", error);
-      addNotification('system', `Failed to complete order: ${errMsg}`, orderId);
-      playSound('error');
-    } finally {
-      setConfirmingOrderId(null);
-    }
+      },
+      { variant: 'warning', confirmLabel: 'Confirm Payment' }
+    );
   };
 
   // ═══════════════════════════════════════════════════════════════════

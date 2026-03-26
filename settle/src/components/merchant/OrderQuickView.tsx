@@ -461,7 +461,7 @@ export function OrderQuickView({
                 const popupStatus = selectedOrder.dbOrder?.status;
                 const popupPayRole = selectedOrder.myRole || 'observer';
                 const hasBeenAccepted = !!selectedOrder.dbOrder?.accepted_at;
-                const canMarkPaidPopup = (popupStatus === 'accepted' || (popupStatus === 'escrowed' && hasBeenAccepted)) && selectedOrder.escrowTxHash && popupPayRole === 'buyer';
+                const canMarkPaidPopup = (popupStatus === 'escrowed' && hasBeenAccepted) && selectedOrder.escrowTxHash && popupPayRole === 'buyer';
 
                 if (canMarkPaidPopup) {
                   return (

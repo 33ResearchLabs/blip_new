@@ -160,15 +160,50 @@ export async function notifyOrderStatusUpdated(data: OrderEventData): Promise<vo
     channels.push(getAllMerchantsChannel());
   }
 
-  await triggerEvent(channels, ORDER_EVENTS.STATUS_UPDATED, {
+  // Minimal payload — client uses order_version to dedup and fetches full details if needed
+  const payload = {
     orderId: data.orderId,
     status: data.status,
     minimal_status: data.minimal_status,
     order_version: data.order_version,
     previousStatus: data.previousStatus,
     updatedAt: data.updatedAt,
-    data: data.data,
-  });
+    // Only include essential data fields, not the full order object
+    data: data.data ? minimalOrderPayload(data.data) : undefined,
+  };
+
+  // Use triggerBatch for efficiency — single HTTP request to Pusher for all channels
+  const batch = channels.map((channel) => ({
+    channel,
+    name: ORDER_EVENTS.STATUS_UPDATED as PusherEvent,
+    data: payload,
+  }));
+
+  await triggerBatch(batch);
+}
+
+/**
+ * Strip large/redundant fields from order payload to reduce Pusher message size.
+ * Client should refetch full order details when needed.
+ */
+function minimalOrderPayload(data: unknown): unknown {
+  if (!data || typeof data !== 'object') return data;
+  const order = data as Record<string, unknown>;
+  // Only include fields the UI needs for instant state update
+  return {
+    id: order.id,
+    status: order.status,
+    order_version: order.order_version,
+    order_number: order.order_number,
+    crypto_amount: order.crypto_amount,
+    crypto_currency: order.crypto_currency,
+    fiat_amount: order.fiat_amount,
+    fiat_currency: order.fiat_currency,
+    completed_at: order.completed_at,
+    cancelled_at: order.cancelled_at,
+    payment_sent_at: order.payment_sent_at,
+    payment_deadline: order.payment_deadline,
+  };
 }
 
 /**
@@ -181,13 +216,19 @@ export async function notifyOrderCancelled(data: OrderEventData): Promise<void> 
     getOrderChannel(data.orderId),
   ];
 
-  await triggerEvent(channels, ORDER_EVENTS.CANCELLED, {
+  const payload = {
     orderId: data.orderId,
     minimal_status: data.minimal_status || 'cancelled',
     order_version: data.order_version,
     cancelledAt: data.updatedAt,
-    data: data.data,
-  });
+    data: data.data ? minimalOrderPayload(data.data) : data.data,
+  };
+
+  await triggerBatch(channels.map((channel) => ({
+    channel,
+    name: ORDER_EVENTS.CANCELLED as PusherEvent,
+    data: payload,
+  })));
 }
 
 // ============================================

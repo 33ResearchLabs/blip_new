@@ -316,12 +316,16 @@ export const OrderDetailScreen = ({
               <div
                 key={step}
                 className={`flex-1 h-1 rounded-full ${
-                  step <= activeOrder.step ? "bg-white/40" : "bg-neutral-800"
+                  (activeOrder.status === 'cancelled' || activeOrder.status === 'expired')
+                    ? "bg-red-500/40"
+                    : step <= activeOrder.step ? "bg-white/40" : "bg-neutral-800"
                 }`}
               />
             ))}
           </div>
-          <p className="text-[13px] text-neutral-500">Step {activeOrder.step} of 4</p>
+          <p className="text-[13px] text-neutral-500">
+            {activeOrder.status === 'cancelled' ? 'Order Cancelled' : activeOrder.status === 'expired' ? 'Order Expired' : `Step ${activeOrder.step} of 4`}
+          </p>
         </div>
 
         {/* Escrow Status Section - Show for sell orders with escrow */}
@@ -563,6 +567,25 @@ export const OrderDetailScreen = ({
               )}
             </motion.button>
           )
+        )}
+
+        {/* Cancelled/Expired Banner */}
+        {(activeOrder.status === 'cancelled' || activeOrder.status === 'expired') && (
+          <div className="mb-4 p-4 rounded-2xl bg-red-500/10 border border-red-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
+                <X className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <p className="text-[15px] font-semibold text-red-400">
+                  {activeOrder.status === 'cancelled' ? 'Order Cancelled' : 'Order Expired'}
+                </p>
+                <p className="text-[13px] text-neutral-500">
+                  {activeOrder.status === 'cancelled' ? 'This trade was cancelled and did not complete.' : 'This order expired before it could be completed.'}
+                </p>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Steps */}
@@ -1161,26 +1184,44 @@ export const OrderDetailScreen = ({
           </div>
 
           {/* Step 4 */}
-          <div className={`p-4 rounded-2xl ${activeOrder.step >= 4 ? "bg-neutral-900" : "bg-neutral-950"}`}>
+          <div className={`p-4 rounded-2xl ${
+            activeOrder.status === 'cancelled' || activeOrder.status === 'expired'
+              ? "bg-red-500/10 border border-red-500/20"
+              : activeOrder.step >= 4 ? "bg-neutral-900" : "bg-neutral-950"
+          }`}>
             <div className="flex items-center gap-3">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold ${
-                activeOrder.step >= 4 ? "bg-white/10 text-black" : "bg-neutral-800 text-neutral-500"
+                activeOrder.status === 'cancelled' || activeOrder.status === 'expired'
+                  ? "bg-red-500/20 text-red-400"
+                  : activeOrder.step >= 4 ? "bg-white/10 text-black" : "bg-neutral-800 text-neutral-500"
               }`}>
-                {activeOrder.step >= 4 ? <Check className="w-4 h-4" /> : "4"}
+                {activeOrder.status === 'cancelled' || activeOrder.status === 'expired'
+                  ? <X className="w-4 h-4" />
+                  : activeOrder.step >= 4 ? <Check className="w-4 h-4" /> : "4"}
               </div>
               <div>
-                <p className={`text-[15px] font-medium ${activeOrder.step >= 4 ? "text-white" : "text-neutral-600"}`}>
-                  Complete
+                <p className={`text-[15px] font-medium ${
+                  activeOrder.status === 'cancelled' || activeOrder.status === 'expired'
+                    ? "text-red-400"
+                    : activeOrder.step >= 4 ? "text-white" : "text-neutral-600"
+                }`}>
+                  {activeOrder.status === 'cancelled' ? 'Cancelled' : activeOrder.status === 'expired' ? 'Expired' : 'Complete'}
                 </p>
-                {activeOrder.step >= 4 && (
+                {activeOrder.status === 'cancelled' && (
+                  <p className="text-[13px] text-red-400/70">This order was cancelled</p>
+                )}
+                {activeOrder.status === 'expired' && (
+                  <p className="text-[13px] text-red-400/70">This order has expired</p>
+                )}
+                {activeOrder.status === 'complete' && activeOrder.step >= 4 && (
                   <p className="text-[13px] text-white">Trade completed successfully</p>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Rating */}
-          {activeOrder.step >= 4 && (
+          {/* Rating - only for completed orders */}
+          {activeOrder.status === 'complete' && activeOrder.step >= 4 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1263,7 +1304,7 @@ export const OrderDetailScreen = ({
           </div>
         )}
 
-        {activeOrder.step >= 4 && (
+        {(activeOrder.step >= 4 || activeOrder.status === 'cancelled' || activeOrder.status === 'expired') && (
           <motion.button
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

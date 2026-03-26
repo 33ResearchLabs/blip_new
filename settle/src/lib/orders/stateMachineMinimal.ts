@@ -51,7 +51,6 @@ export const MINIMAL_ALLOWED_TRANSITIONS: Record<MinimalOrderStatus, MinimalTran
   ],
   accepted: [
     { to: 'escrowed', allowedActors: ['user', 'merchant', 'system'], description: 'Lock escrow after acceptance' },
-    { to: 'payment_sent', allowedActors: ['user', 'merchant'], description: 'Mark fiat payment as sent' },
     { to: 'cancelled', allowedActors: ['user', 'merchant', 'system'], description: 'Cancel after acceptance' },
     { to: 'expired', allowedActors: ['system'], description: 'Timeout after acceptance' },
   ],
@@ -271,6 +270,14 @@ export function getMinimalExpiryOutcome(status: MinimalOrderStatus): 'expired' |
 
   // Escrowed, payment_sent → disputed (escrow locked, needs manual resolution)
   return 'disputed';
+}
+
+/**
+ * Check if payment can be marked as sent for an order.
+ * Enforces the financial invariant: escrow MUST be locked before payment_sent.
+ */
+export function canMarkPaymentSent(order: { status: MinimalOrderStatus; escrow_debited_entity_id?: string | null }): boolean {
+  return order.status === 'escrowed' && order.escrow_debited_entity_id != null;
 }
 
 /**

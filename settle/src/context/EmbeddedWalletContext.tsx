@@ -136,10 +136,10 @@ const PROGRAM_ID = new PublicKey((idlRaw as any).address || (idlRaw as any).meta
 const USDT_MINT = getUsdtMint('devnet');
 const AUTO_LOCK_MS = 15 * 60 * 1000; // 15 minutes
 
-export type EmbeddedWalletState = 'none' | 'locked' | 'unlocked';
+export type EmbeddedWalletState = 'initializing' | 'none' | 'locked' | 'unlocked';
 
 const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) => {
-  const [walletState, setWalletState] = useState<EmbeddedWalletState>('none');
+  const [walletState, setWalletState] = useState<EmbeddedWalletState>('initializing');
   const [keypair, setKeypair] = useState<Keypair | null>(null);
   const [program, setProgram] = useState<Program | null>(null);
   const [solBalance, setSolBalance] = useState<number | null>(null);

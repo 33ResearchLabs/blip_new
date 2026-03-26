@@ -67,6 +67,8 @@ export async function createUser(
   const passwordHash = data.password ? hashPassword(data.password) : null;
   // In mock mode, auto-fund new accounts with initial USDT balance
   const initialBalance = MOCK_MODE ? MOCK_INITIAL_BALANCE : 0;
+  // wallet_address is NOT NULL in DB — generate a placeholder for system-created users
+  const walletAddress = data.wallet_address ?? `placeholder_${crypto.randomUUID()}`;
   const result = await queryOne<User>(
     `
     INSERT INTO users (username, password_hash, wallet_address, name, balance)
@@ -76,7 +78,7 @@ export async function createUser(
     [
       data.username ?? null,
       passwordHash,
-      data.wallet_address ?? null,
+      walletAddress,
       data.name ?? null,
       initialBalance,
     ]

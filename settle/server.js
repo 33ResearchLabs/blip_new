@@ -139,6 +139,14 @@ app.prepare().then(async () => {
   isReady = true;
   console.log(`> Next.js ready — accepting requests`);
 
+  // Start metrics reporter (logs every 60s)
+  try {
+    const { startMetricsReporter } = require('./src/lib/monitoring');
+    startMetricsReporter();
+  } catch (metricsErr) {
+    console.warn('> Metrics reporter not available:', metricsErr.message);
+  }
+
   // Start notification outbox worker
   try {
     const { spawn } = require('child_process');

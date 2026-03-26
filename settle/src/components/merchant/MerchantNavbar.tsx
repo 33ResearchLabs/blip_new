@@ -15,7 +15,7 @@ interface MerchantNavbarProps {
     avatar_url?: string | null;
     has_ops_access?: boolean;
   } | null;
-  embeddedWalletState?: 'none' | 'locked' | 'unlocked';
+  embeddedWalletState?: 'initializing' | 'none' | 'locked' | 'unlocked';
   /** Extra buttons rendered before the profile section (e.g. tx history, payment methods) */
   rightActions?: React.ReactNode;
   onLogout?: () => void;

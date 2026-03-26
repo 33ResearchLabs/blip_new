@@ -8,7 +8,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 // POST - Admin login
 export async function POST(request: NextRequest) {
-  const rateLimitResponse = checkRateLimit(request, 'auth:admin', AUTH_LIMIT);
+  const rateLimitResponse = await checkRateLimit(request, 'auth:admin', AUTH_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 
 // GET - Validate admin session (supports both old query param and new token-based auth)
 export async function GET(request: NextRequest) {
-  const rateLimitResponse = checkRateLimit(request, 'auth:admin:check', { maxRequests: 100, windowSeconds: 60 });
+  const rateLimitResponse = await checkRateLimit(request, 'auth:admin:check', { maxRequests: 100, windowSeconds: 60 });
   if (rateLimitResponse) return rateLimitResponse;
 
   // Check for Bearer token first (new secure method)

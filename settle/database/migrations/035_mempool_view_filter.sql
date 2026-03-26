@@ -1,6 +1,12 @@
 -- Only show orders that opted into the mempool bump system
 -- Normal orders (no bump, no premium) should not appear as mempool orders
-CREATE OR REPLACE VIEW v_mempool_orders AS
+--
+-- Must DROP + CREATE (not CREATE OR REPLACE) because the existing view
+-- may have columns in a different order. PostgreSQL does not allow
+-- CREATE OR REPLACE VIEW to rename or reorder columns.
+DROP VIEW IF EXISTS v_mempool_orders CASCADE;
+
+CREATE VIEW v_mempool_orders AS
 SELECT o.id,
     o.order_number,
     o.corridor_id,

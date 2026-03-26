@@ -451,6 +451,7 @@ export function useUserTradeCreation({
         return;
       }
 
+      // Step 2: Record escrow on the newly created order
       const escrowRes = await fetchWithAuth(`/api/orders/${orderData.data.id}/escrow`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

@@ -58,7 +58,11 @@ export async function GET(
       return forbiddenResponse('You do not have access to this order');
     }
 
-    const messages = await getOrderMessages(id);
+    const limitParam = request.nextUrl.searchParams.get('limit');
+    const before = request.nextUrl.searchParams.get('before') || undefined;
+    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+
+    const messages = await getOrderMessages(id, { limit, before });
     logger.api.request('GET', `/api/orders/${id}/messages`, auth.actorId);
     return successResponse(messages);
   } catch (error) {
@@ -81,7 +85,7 @@ export async function POST(
     }
 
     // Rate limit: 30 messages per minute
-    const rateLimitResponse = checkRateLimit(request, 'messages:send', MESSAGE_LIMIT);
+    const rateLimitResponse = await checkRateLimit(request, 'messages:send', MESSAGE_LIMIT);
     if (rateLimitResponse) return rateLimitResponse;
 
     const body = await request.json();

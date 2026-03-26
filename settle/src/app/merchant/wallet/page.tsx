@@ -20,6 +20,7 @@ import { Keypair } from '@solana/web3.js';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useSolanaWallet } from '@/context/SolanaWalletContext';
 import { showAlert } from '@/context/ModalContext';
+import { MOCK_MODE } from '@/lib/config/mockMode';
 
 interface MerchantInfo {
   id: string;
@@ -33,7 +34,7 @@ export default function WalletPage() {
   const router = useRouter();
   const solanaWallet = useSolanaWallet();
   const embeddedWallet = (solanaWallet as any)?.embeddedWallet as {
-    state: 'none' | 'locked' | 'unlocked';
+    state: 'initializing' | 'none' | 'locked' | 'unlocked';
     unlockWallet: (password: string) => Promise<boolean>;
     lockWallet: () => void;
     deleteWallet: () => void;
@@ -108,14 +109,24 @@ export default function WalletPage() {
   // Determine view based on wallet state
   useEffect(() => {
     if (isLoading) { setView('loading'); return; }
-    if (!embeddedWallet) { setView('setup'); return; }
+
+    // In mock mode, wallet is always "connected" via DB — skip setup/unlock
+    if (MOCK_MODE) {
+      if (solanaWallet.connected) { setView('main'); return; }
+      // Mock wallet auto-connects when merchant session exists, show loading briefly
+      setView('loading');
+      return;
+    }
+
+    // Wait for the embedded wallet provider to finish loading (dynamic import + init)
+    if (!embeddedWallet || embeddedWallet.state === 'initializing') { setView('loading'); return; }
 
     switch (embeddedWallet.state) {
       case 'none': setView('setup'); break;
       case 'locked': setView('unlock'); break;
       case 'unlocked': setView('main'); break;
     }
-  }, [isLoading, embeddedWallet?.state]);
+  }, [isLoading, embeddedWallet?.state, solanaWallet.connected]);
 
   // ---- Handlers ----
 
@@ -394,6 +405,14 @@ export default function WalletPage() {
       {/* Main content — centered card */}
       <div className="flex-1 flex items-start justify-center overflow-y-auto pt-8 pb-8 px-4">
         <div className="w-full max-w-[420px]">
+
+          {/* ========== LOADING VIEW ========== */}
+          {view === 'loading' && (
+            <div className="flex flex-col items-center justify-center pt-24 space-y-4">
+              <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+              <p className="text-sm text-white/40 font-mono">Loading wallet...</p>
+            </div>
+          )}
 
           {/* ========== SETUP VIEW ========== */}
           {(view === 'setup' && !pendingKeypair) && (
@@ -677,7 +696,7 @@ export default function WalletPage() {
                   }
                 </div>
                 <div className="text-xs text-white/30 font-mono">
-                  Fake USDT on Devnet
+                  {MOCK_MODE ? 'Mock USDT' : 'Fake USDT on Devnet'}
                 </div>
 
                 {/* SOL balance mini */}
@@ -722,7 +741,7 @@ export default function WalletPage() {
               </div>
 
               {/* Action buttons */}
-              <div className="grid grid-cols-4 gap-2">
+              <div className={`grid ${MOCK_MODE ? 'grid-cols-2' : 'grid-cols-4'} gap-2`}>
                 <button
                   onClick={() => { setSendError(''); setSendSuccess(''); setShowSendModal(true); }}
                   className="py-3 rounded-xl bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/15 transition-colors
@@ -731,15 +750,17 @@ export default function WalletPage() {
                   <Send className="w-5 h-5 text-orange-400" />
                   <span className="text-[10px] text-orange-400/80 font-mono font-medium">Send</span>
                 </button>
-                <button
-                  onClick={handleAirdropSol}
-                  disabled={isAirdropping}
-                  className="py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-colors
-                             flex flex-col items-center gap-1.5 disabled:opacity-50"
-                >
-                  {isAirdropping ? <Loader2 className="w-5 h-5 text-orange-400 animate-spin" /> : <Droplets className="w-5 h-5 text-orange-400" />}
-                  <span className="text-[10px] text-white/50 font-mono">Airdrop</span>
-                </button>
+                {!MOCK_MODE && (
+                  <button
+                    onClick={handleAirdropSol}
+                    disabled={isAirdropping}
+                    className="py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-colors
+                               flex flex-col items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {isAirdropping ? <Loader2 className="w-5 h-5 text-orange-400 animate-spin" /> : <Droplets className="w-5 h-5 text-orange-400" />}
+                    <span className="text-[10px] text-white/50 font-mono">Airdrop</span>
+                  </button>
+                )}
                 <button
                   onClick={handleRefresh}
                   disabled={isRefreshing}
@@ -749,14 +770,16 @@ export default function WalletPage() {
                   <RefreshCw className={`w-5 h-5 text-orange-400 ${isRefreshing ? 'animate-spin' : ''}`} />
                   <span className="text-[10px] text-white/50 font-mono">Refresh</span>
                 </button>
-                <button
-                  onClick={handleExportKey}
-                  className="py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-colors
-                             flex flex-col items-center gap-1.5"
-                >
-                  <Download className="w-5 h-5 text-orange-400" />
-                  <span className="text-[10px] text-white/50 font-mono">Export Key</span>
-                </button>
+                {!MOCK_MODE && (
+                  <button
+                    onClick={handleExportKey}
+                    className="py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-colors
+                               flex flex-col items-center gap-1.5"
+                  >
+                    <Download className="w-5 h-5 text-orange-400" />
+                    <span className="text-[10px] text-white/50 font-mono">Export Key</span>
+                  </button>
+                )}
               </div>
 
               {airdropMsg && (
@@ -812,36 +835,38 @@ export default function WalletPage() {
                 </div>
               </div>
 
-              {/* Security section */}
-              <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-white/[0.04]">
-                  <span className="text-[10px] font-bold text-white/40 font-mono uppercase tracking-wider">Security</span>
+              {/* Security section — only for embedded wallet mode */}
+              {!MOCK_MODE && (
+                <div className="bg-white/[0.02] border border-white/[0.06] rounded-xl overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-white/[0.04]">
+                    <span className="text-[10px] font-bold text-white/40 font-mono uppercase tracking-wider">Security</span>
+                  </div>
+
+                  <button
+                    onClick={() => embeddedWallet?.lockWallet()}
+                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/[0.02] transition-colors border-b border-white/[0.03]"
+                  >
+                    <Lock className="w-4 h-4 text-white/30" />
+                    <span className="text-sm text-white/60 font-mono">Lock Wallet</span>
+                  </button>
+
+                  <button
+                    onClick={handleExportKey}
+                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/[0.02] transition-colors border-b border-white/[0.03]"
+                  >
+                    <Download className="w-4 h-4 text-white/30" />
+                    <span className="text-sm text-white/60 font-mono">Download Backup</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-red-500/5 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4 text-red-400/50" />
+                    <span className="text-sm text-red-400/60 font-mono">Delete Wallet</span>
+                  </button>
                 </div>
-
-                <button
-                  onClick={() => embeddedWallet?.lockWallet()}
-                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/[0.02] transition-colors border-b border-white/[0.03]"
-                >
-                  <Lock className="w-4 h-4 text-white/30" />
-                  <span className="text-sm text-white/60 font-mono">Lock Wallet</span>
-                </button>
-
-                <button
-                  onClick={handleExportKey}
-                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/[0.02] transition-colors border-b border-white/[0.03]"
-                >
-                  <Download className="w-4 h-4 text-white/30" />
-                  <span className="text-sm text-white/60 font-mono">Download Backup</span>
-                </button>
-
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-red-500/5 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4 text-red-400/50" />
-                  <span className="text-sm text-red-400/60 font-mono">Delete Wallet</span>
-                </button>
-              </div>
+              )}
             </div>
           )}
         </div>

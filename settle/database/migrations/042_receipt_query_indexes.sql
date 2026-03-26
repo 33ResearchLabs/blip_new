@@ -24,10 +24,10 @@ DROP INDEX IF EXISTS idx_order_receipts_created_at;
 --
 --    Column order: participant_id → created_at DESC → status
 --    (equality on participant, sort on created_at, optional filter on status)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_receipts_creator_id_created
+CREATE INDEX IF NOT EXISTS idx_receipts_creator_id_created
   ON order_receipts (creator_id, created_at DESC, status);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_receipts_acceptor_id_created
+CREATE INDEX IF NOT EXISTS idx_receipts_acceptor_id_created
   ON order_receipts (acceptor_id, created_at DESC, status);
 
 -- 3. Covering index for single-receipt lookup (already fast via UNIQUE, but
@@ -37,7 +37,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_receipts_acceptor_id_created
 
 -- 4. Status + created_at for admin/compliance dashboards that filter by status
 --    across all receipts (no participant filter).
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_receipts_status_created
+CREATE INDEX IF NOT EXISTS idx_receipts_status_created
   ON order_receipts (status, created_at DESC);
 
 -- 5. Keyset (cursor) pagination requires a tiebreaker.  The (created_at, id)

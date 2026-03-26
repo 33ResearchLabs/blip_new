@@ -11,10 +11,14 @@ import {
   normalizeStatus,
   logger,
 } from 'settlement-core';
-import { orderBus, ORDER_EVENT } from '../events';
+import { ORDER_EVENT } from '../events';
+import { insertOutboxEventDirect } from '../outbox';
+import { withIdempotency } from '../idempotency';
+import { checkFinancialRateLimit } from '../rateLimit';
 
 export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /v1/orders/:id/dispute - Open dispute
+  // Idempotency-protected: same key returns same response, no duplicate dispute creation
   fastify.post<{
     Params: { id: string };
     Body: {
@@ -34,104 +38,115 @@ export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    try {
-      // Check order exists
-      const order = await queryOne<{ id: string; status: string; user_id: string; merchant_id: string }>(
-        'SELECT id, status, user_id, merchant_id FROM orders WHERE id = $1',
-        [id]
-      );
+    const rl = checkFinancialRateLimit(request, 'open_dispute');
+    if (rl) return reply.status(rl.statusCode).send(rl.body);
 
-      if (!order) {
-        return reply.status(404).send({ success: false, error: 'Order not found' });
-      }
-
-      if (order.status === 'disputed') {
-        return reply.status(400).send({ success: false, error: 'Order is already disputed' });
-      }
-
-      // Check if dispute already exists
-      const existing = await dbQuery('SELECT id FROM disputes WHERE order_id = $1', [id]);
-      if (existing.length > 0) {
-        return reply.status(400).send({ success: false, error: 'Dispute already exists' });
-      }
-
-      // Ensure disputes table has confirmation columns
+    return withIdempotency(request, reply, 'open_dispute', id, async () => {
       try {
-        await dbQuery(`
-          ALTER TABLE disputes
-          ADD COLUMN IF NOT EXISTS proposed_resolution VARCHAR(50),
-          ADD COLUMN IF NOT EXISTS proposed_by UUID,
-          ADD COLUMN IF NOT EXISTS proposed_at TIMESTAMPTZ,
-          ADD COLUMN IF NOT EXISTS resolution_notes TEXT,
-          ADD COLUMN IF NOT EXISTS user_confirmed BOOLEAN DEFAULT false,
-          ADD COLUMN IF NOT EXISTS merchant_confirmed BOOLEAN DEFAULT false,
-          ADD COLUMN IF NOT EXISTS split_percentage JSONB,
-          ADD COLUMN IF NOT EXISTS assigned_to UUID
-        `);
-      } catch (alterErr) {
-        // Columns may already exist
+        // Check order exists (include order_version for safe update)
+        const order = await queryOne<{ id: string; status: string; order_version: number; user_id: string; merchant_id: string }>(
+          'SELECT id, status, order_version, user_id, merchant_id FROM orders WHERE id = $1',
+          [id]
+        );
+
+        if (!order) {
+          return { statusCode: 404, body: { success: false, error: 'Order not found' } };
+        }
+
+        if (order.status === 'disputed') {
+          return { statusCode: 400, body: { success: false, error: 'Order is already disputed' } };
+        }
+
+        // Check if dispute already exists
+        const existing = await dbQuery('SELECT id FROM disputes WHERE order_id = $1', [id]);
+        if (existing.length > 0) {
+          return { statusCode: 400, body: { success: false, error: 'Dispute already exists' } };
+        }
+
+        // Ensure disputes table has confirmation columns
+        try {
+          await dbQuery(`
+            ALTER TABLE disputes
+            ADD COLUMN IF NOT EXISTS proposed_resolution VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS proposed_by UUID,
+            ADD COLUMN IF NOT EXISTS proposed_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS resolution_notes TEXT,
+            ADD COLUMN IF NOT EXISTS user_confirmed BOOLEAN DEFAULT false,
+            ADD COLUMN IF NOT EXISTS merchant_confirmed BOOLEAN DEFAULT false,
+            ADD COLUMN IF NOT EXISTS split_percentage JSONB,
+            ADD COLUMN IF NOT EXISTS assigned_to UUID
+          `);
+        } catch (alterErr) {
+          // Columns may already exist
+        }
+
+        // Insert dispute
+        const disputeResult = await dbQuery(
+          `INSERT INTO disputes (
+            order_id, reason, description, raised_by, raiser_id, status,
+            user_confirmed, merchant_confirmed, created_at
+          )
+           VALUES ($1, $2::dispute_reason, $3, $4::actor_type, $5, 'open'::dispute_status, false, false, NOW())
+           RETURNING *`,
+          [id, reason, description || '', initiated_by, actor_id]
+        );
+
+        // Update order status with version + status guard
+        const disputeUpdate = await dbQuery(
+          `UPDATE orders SET status = 'disputed'::order_status, order_version = order_version + 1
+           WHERE id = $1 AND order_version = $2 AND status = $3::order_status
+           RETURNING id`,
+          [id, order.order_version, order.status]
+        );
+        if (disputeUpdate.length === 0) {
+          return { statusCode: 409, body: { success: false, error: 'Order was modified concurrently. Please retry.' } };
+        }
+
+        // Event
+        await dbQuery(
+          `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
+           VALUES ($1, 'status_changed_to_disputed', $2, $3, $4, 'disputed', $5)`,
+          [id, initiated_by, actor_id, order.status, JSON.stringify({ reason, description })]
+        );
+
+        // Notification outbox
+        await dbQuery(
+          `INSERT INTO notification_outbox (order_id, event_type, payload, status) VALUES ($1, 'ORDER_DISPUTED', $2, 'pending')`,
+          [
+            id,
+            JSON.stringify({
+              orderId: id,
+              userId: order.user_id,
+              merchantId: order.merchant_id,
+              status: 'disputed',
+              previousStatus: order.status,
+              updatedAt: new Date().toISOString(),
+            }),
+          ]
+        );
+
+        logger.info('[core-api] Dispute created', { orderId: id, reason });
+
+        await insertOutboxEventDirect({
+          event: ORDER_EVENT.DISPUTED,
+          orderId: id, previousStatus: order.status, newStatus: 'disputed',
+          actorType: initiated_by, actorId: actor_id,
+          userId: order.user_id, merchantId: order.merchant_id,
+          order: order as unknown as Record<string, unknown>,
+          orderVersion: 0, minimalStatus: normalizeStatus('disputed' as any),
+          metadata: { reason, description },
+        });
+
+        return { statusCode: 200, body: { success: true, data: disputeResult[0] } };
+      } catch (error) {
+        fastify.log.error({ error, id }, 'Error creating dispute');
+        return { statusCode: 500, body: { success: false, error: 'Internal server error' } };
       }
-
-      // Insert dispute
-      const disputeResult = await dbQuery(
-        `INSERT INTO disputes (
-          order_id, reason, description, raised_by, raiser_id, status,
-          user_confirmed, merchant_confirmed, created_at
-        )
-         VALUES ($1, $2::dispute_reason, $3, $4::actor_type, $5, 'open'::dispute_status, false, false, NOW())
-         RETURNING *`,
-        [id, reason, description || '', initiated_by, actor_id]
-      );
-
-      // Update order status
-      await dbQuery(
-        `UPDATE orders SET status = 'disputed'::order_status, order_version = order_version + 1 WHERE id = $1`,
-        [id]
-      );
-
-      // Event
-      await dbQuery(
-        `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
-         VALUES ($1, 'status_changed_to_disputed', $2, $3, $4, 'disputed', $5)`,
-        [id, initiated_by, actor_id, order.status, JSON.stringify({ reason, description })]
-      );
-
-      // Notification outbox
-      await dbQuery(
-        `INSERT INTO notification_outbox (order_id, event_type, payload, status) VALUES ($1, 'ORDER_DISPUTED', $2, 'pending')`,
-        [
-          id,
-          JSON.stringify({
-            orderId: id,
-            userId: order.user_id,
-            merchantId: order.merchant_id,
-            status: 'disputed',
-            previousStatus: order.status,
-            updatedAt: new Date().toISOString(),
-          }),
-        ]
-      );
-
-      logger.info('[core-api] Dispute created', { orderId: id, reason });
-
-      orderBus.emitOrderEvent({
-        event: ORDER_EVENT.DISPUTED,
-        orderId: id, previousStatus: order.status, newStatus: 'disputed',
-        actorType: initiated_by, actorId: actor_id,
-        userId: order.user_id, merchantId: order.merchant_id,
-        order: order as unknown as Record<string, unknown>,
-        orderVersion: 0, minimalStatus: normalizeStatus('disputed' as any),
-        metadata: { reason, description },
-      });
-
-      return reply.send({ success: true, data: disputeResult[0] });
-    } catch (error) {
-      fastify.log.error({ error, id }, 'Error creating dispute');
-      return reply.status(500).send({ success: false, error: 'Internal server error' });
-    }
+    });
   });
 
   // POST /v1/orders/:id/dispute/confirm - Confirm/reject resolution
+  // Idempotency-protected: same key returns same response, no duplicate confirmations
   fastify.post<{
     Params: { id: string };
     Body: {
@@ -147,6 +162,7 @@ export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ success: false, error: 'party, action, and partyId required' });
     }
 
+    return withIdempotency(request, reply, 'confirm_dispute', id, async () => {
     try {
       const disputeResult = await dbQuery(
         `SELECT d.*, o.user_id, o.merchant_id
@@ -156,21 +172,21 @@ export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
       );
 
       if (disputeResult.length === 0) {
-        return reply.status(404).send({ success: false, error: 'Dispute not found' });
+        return { statusCode: 404, body: { success: false, error: 'Dispute not found' } };
       }
 
       const dispute = disputeResult[0] as any;
 
       if (dispute.status !== 'pending_confirmation') {
-        return reply.status(400).send({ success: false, error: 'No pending resolution' });
+        return { statusCode: 400, body: { success: false, error: 'No pending resolution' } };
       }
 
       // Verify party identity
       if (party === 'user' && partyId !== dispute.user_id) {
-        return reply.status(403).send({ success: false, error: 'Unauthorized' });
+        return { statusCode: 403, body: { success: false, error: 'Unauthorized' } };
       }
       if (party === 'merchant' && partyId !== dispute.merchant_id) {
-        return reply.status(403).send({ success: false, error: 'Unauthorized' });
+        return { statusCode: 403, body: { success: false, error: 'Unauthorized' } };
       }
 
       if (action === 'reject') {
@@ -184,10 +200,10 @@ export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
           [id]
         );
 
-        return reply.send({
-          success: true,
-          data: { status: 'investigating', message: 'Resolution rejected' },
-        });
+        return {
+          statusCode: 200,
+          body: { success: true, data: { status: 'investigating', message: 'Resolution rejected' } },
+        };
       }
 
       // Accept
@@ -240,10 +256,15 @@ export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
           [resolution, id]
         );
 
-        await dbQuery(
-          `UPDATE orders SET status = $1::order_status, order_version = order_version + 1 WHERE id = $2`,
+        const resolveUpdate = await dbQuery(
+          `UPDATE orders SET status = $1::order_status, order_version = order_version + 1
+           WHERE id = $2 AND status = 'disputed'
+           RETURNING id`,
           [orderStatus, id]
         );
+        if (resolveUpdate.length === 0) {
+          return { statusCode: 409, body: { success: false, error: 'Order was modified concurrently during dispute resolution' } };
+        }
 
         // Notification outbox
         await dbQuery(
@@ -268,40 +289,47 @@ export const disputeRoutes: FastifyPluginAsync = async (fastify) => {
         const resolvedEvent = orderStatus === 'completed' ? ORDER_EVENT.COMPLETED
           : orderStatus === 'cancelled' ? ORDER_EVENT.CANCELLED
           : ORDER_EVENT.STATUS_CHANGED;
-        orderBus.emitOrderEvent({
+        await insertOutboxEventDirect({
           event: resolvedEvent,
           orderId: id, previousStatus: 'disputed', newStatus: orderStatus,
-          actorType: 'system', actorId: actor_id,
+          actorType: 'system', actorId: partyId,
           userId: order.user_id, merchantId: order.merchant_id,
           order: order as unknown as Record<string, unknown>,
           orderVersion: 0, minimalStatus: normalizeStatus(orderStatus as any),
           metadata: { resolution },
         });
 
-        return reply.send({
-          success: true,
-          data: {
-            status: `resolved_${resolution}`,
-            orderStatus,
-            finalized: true,
-            moneyReleased: { user: userAmount, merchant: merchantAmount, total: amount },
+        return {
+          statusCode: 200,
+          body: {
+            success: true,
+            data: {
+              status: `resolved_${resolution}`,
+              orderStatus,
+              finalized: true,
+              moneyReleased: { user: userAmount, merchant: merchantAmount, total: amount },
+            },
           },
-        });
+        };
       }
 
       // One party confirmed
-      return reply.send({
-        success: true,
-        data: {
-          status: 'pending_confirmation',
-          userConfirmed: party === 'user' ? true : dispute.user_confirmed,
-          merchantConfirmed: party === 'merchant' ? true : dispute.merchant_confirmed,
-          finalized: false,
+      return {
+        statusCode: 200,
+        body: {
+          success: true,
+          data: {
+            status: 'pending_confirmation',
+            userConfirmed: party === 'user' ? true : dispute.user_confirmed,
+            merchantConfirmed: party === 'merchant' ? true : dispute.merchant_confirmed,
+            finalized: false,
+          },
         },
-      });
+      };
     } catch (error) {
       fastify.log.error({ error, id }, 'Error confirming dispute');
-      return reply.status(500).send({ success: false, error: 'Internal server error' });
+      return { statusCode: 500, body: { success: false, error: 'Internal server error' } };
     }
+    });
   });
 };

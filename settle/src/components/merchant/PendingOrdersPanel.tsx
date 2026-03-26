@@ -264,7 +264,7 @@ const OrderList = memo(function OrderList({
                       >
                         {acceptingOrderId === mOrder.id ? (
                           <><Loader2 className="w-3 h-3 animate-spin" /> Accepting...</>
-                        ) : 'ACCEPT'}
+                        ) : (order.orderType === 'sell' || order.dbOrder?.type === 'sell') ? 'MINE' : 'ACCEPT'}
                       </button>
                     )}
                   </div>
@@ -275,14 +275,19 @@ const OrderList = memo(function OrderList({
 
           const premium = ((order.rate - 3.67) / 3.67) * 100;
           const isHighPremium = premium > 0.5;
+          // Mine = escrow already locked (just send fiat)
+          // Accept = no escrow yet (you'll lock escrow next)
           const isMineable = !!order.escrowTxHash;
           const dbUsername = order.dbOrder?.user?.username || "";
           const isPlaceholderUser =
             dbUsername.startsWith("open_order_") ||
             dbUsername.startsWith("m2m_");
-          const isMyOwnOrder =
-            !!order.isMyOrder ||
-            (isPlaceholderUser && order.orderMerchantId === merchantInfo?.id);
+          // For M2M: the placer is buyer_merchant_id — only they should see "YOURS" / hidden button
+          // The counterparty (merchant_id / seller) should see the ACCEPT button
+          const isM2MOrder = !!order.buyerMerchantId && isPlaceholderUser;
+          const isMyOwnOrder = isM2MOrder
+            ? order.buyerMerchantId === merchantInfo?.id
+            : (!!order.isMyOrder || (isPlaceholderUser && order.orderMerchantId === merchantInfo?.id));
 
           return (
             <div

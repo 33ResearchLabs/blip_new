@@ -4,7 +4,7 @@ export type TradeType = "buy" | "sell";
 export type TradePreference = "fast" | "cheap" | "best";
 export type PaymentMethod = "bank" | "cash";
 export type OrderStep = 1 | 2 | 3 | 4;
-export type OrderStatus = "pending" | "payment" | "waiting" | "complete" | "disputed";
+export type OrderStatus = "pending" | "payment" | "waiting" | "complete" | "disputed" | "cancelled" | "expired";
 
 // Merchant type from DB
 export interface Merchant {

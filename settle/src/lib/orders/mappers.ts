@@ -60,18 +60,31 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
   const minimalStatus = dbOrder.minimal_status || normalizeLegacyStatus(dbOrder.status);
   let uiStatus = mapMinimalStatusToUIStatus(minimalStatus as any, dbOrder.is_my_order);
 
-  // Pre-locked SELL order (escrowed but not yet accepted) should show as "pending"
-  // so merchants can accept it. Only the escrow creator (seller) sees it in "escrow" panel.
+  // Pre-locked SELL order (escrowed but not yet claimed by any merchant):
+  // Show as "pending" so all merchants see it in Pending with MINE button.
+  // Only the escrow CREATOR (merchant sell orders) keeps it in "escrow" (In Progress).
+  // For user sell orders, the USER locked escrow — no merchant is the creator.
+  // After a merchant CLAIMs it (buyer_merchant_id set), it stays "escrow" (In Progress).
   const iAmEscrowCreator = merchantId && dbOrder.escrow_creator_wallet && dbOrder.merchant_id === merchantId && !dbOrder.buyer_merchant_id;
+  const isClaimed = !!dbOrder.buyer_merchant_id;
   if (uiStatus === 'escrow' && (minimalStatus === 'escrowed' || dbOrder.status === 'escrowed')
-      && !dbOrder.accepted_at && !iAmEscrowCreator) {
+      && !dbOrder.accepted_at && !iAmEscrowCreator && !isClaimed) {
     uiStatus = 'pending';
   }
 
   return {
     id: dbOrder.id,
-    user: isM2M ? (dbOrder.buyer_merchant?.display_name || 'Merchant') : userName,
-    emoji: getUserEmoji(isM2M ? (dbOrder.buyer_merchant?.display_name || 'M') : userName),
+    user: isM2M
+      // M2M: show counterparty name (buyer sees seller, seller sees buyer)
+      ? (merchantId && dbOrder.buyer_merchant_id === merchantId
+          ? (dbOrder.merchant?.display_name || 'Merchant')   // I'm the buyer/placer → show seller
+          : (dbOrder.buyer_merchant?.display_name || 'Merchant'))  // I'm the seller → show buyer
+      : userName,
+    emoji: getUserEmoji(isM2M
+      ? (merchantId && dbOrder.buyer_merchant_id === merchantId
+          ? (dbOrder.merchant?.display_name || 'M')
+          : (dbOrder.buyer_merchant?.display_name || 'M'))
+      : userName),
     amount: cryptoAmount,
     fromCurrency: "USDC",
     toCurrency: "AED",

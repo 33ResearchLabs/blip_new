@@ -18,7 +18,7 @@ import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rat
  */
 export async function POST(request: NextRequest) {
   // Rate limit: 5 auth attempts per minute (prevents brute force)
-  const rateLimitResponse = checkRateLimit(request, 'auth:user', AUTH_LIMIT);
+  const rateLimitResponse = await checkRateLimit(request, 'auth:user', AUTH_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
   try {
     const body = await request.json();
@@ -334,7 +334,7 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   // Rate limit: 100 requests per minute
-  const rateLimitResponse = checkRateLimit(request, 'auth:user:get', STANDARD_LIMIT);
+  const rateLimitResponse = await checkRateLimit(request, 'auth:user:get', STANDARD_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
 
   try {

@@ -84,7 +84,7 @@ export async function atomicCancelWithRefund(orderId, currentStatus, actorType, 
                     table: refundTable,
                 });
             }
-            // Update order status with version increment
+            // Update order status with version + previous status guard
             const updateResult = await client.query(`UPDATE orders
          SET status = 'cancelled',
              cancelled_at = NOW(),
@@ -92,7 +92,12 @@ export async function atomicCancelWithRefund(orderId, currentStatus, actorType, 
              cancellation_reason = $2,
              order_version = order_version + 1
          WHERE id = $3
-         RETURNING *`, [actorType, reason || 'Cancelled by ' + actorType, orderId]);
+           AND order_version = $4
+           AND status = $5::order_status
+         RETURNING *`, [actorType, reason || 'Cancelled by ' + actorType, orderId, lockedOrder.order_version, lockedOrder.status]);
+            if (updateResult.rows.length === 0) {
+                throw new Error('STATUS_CHANGED_INVALID_TRANSITION');
+            }
             const updatedOrder = updateResult.rows[0];
             // Create order_events record
             await client.query(`INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)

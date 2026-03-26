@@ -23,9 +23,13 @@ import { startAutoBumpWorker, stopAutoBumpWorker } from './workers/autoBumpWorke
 import { startPriceFeedWorker, stopPriceFeedWorker } from './workers/priceFeedWorker';
 import { startUnhappyPathWorker, stopUnhappyPathWorker } from './workers/unhappyPathWorker';
 import { startReceiptWorker, stopReceiptWorker } from './workers/receiptWorker';
+import { startIdempotencyCleanupWorker, stopIdempotencyCleanupWorker } from './workers/idempotencyCleanupWorker';
+import { startOutboxEventWorker, stopOutboxEventWorker } from './workers/outboxEventWorker';
 import { closeReceiptQueue } from './queues/receiptQueue';
 import { registerAllListeners } from './events';
 import { closePool } from 'settlement-core';
+import { runPendingMigrations } from './migrationRunner';
+import { validateSchema } from './schemaValidator';
 
 const PORT = parseInt(process.env.CORE_API_PORT || '4010', 10);
 const HOST = process.env.CORE_API_HOST || '0.0.0.0';
@@ -71,6 +75,28 @@ await fastify.register(conversionRoutes, { prefix: '/v1' });
 await fastify.register(corridorRoutes, { prefix: '/v1' });
 await fastify.register(debugRoutes);
 
+// Pre-flight: log DB target, run migrations, validate schema
+const dbUrl = process.env.DATABASE_URL;
+if (dbUrl) {
+  // Sanitize: show host/db only, mask credentials
+  try {
+    const u = new URL(dbUrl);
+    console.log(`[startup] Connected DB: ${u.hostname}${u.pathname}`);
+  } catch {
+    console.log('[startup] Connected DB: (DATABASE_URL set, unable to parse)');
+  }
+} else {
+  console.log(`[startup] Connected DB: ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || '5432'}/${process.env.DB_NAME || 'settle'}`);
+}
+
+try {
+  await runPendingMigrations();
+  await validateSchema();
+} catch (err) {
+  console.error('[FATAL] Startup pre-flight failed:', err);
+  process.exit(1);
+}
+
 // Start server
 try {
   await fastify.listen({ port: PORT, host: HOST });
@@ -84,6 +110,8 @@ try {
     startAutoBumpWorker();
     startPriceFeedWorker();
     startUnhappyPathWorker();
+    startIdempotencyCleanupWorker();
+    startOutboxEventWorker();
     await startReceiptWorker();
   }
 } catch (err) {
@@ -99,6 +127,8 @@ const shutdown = async (signal: string) => {
     stopAutoBumpWorker();
     stopPriceFeedWorker();
     stopUnhappyPathWorker();
+    stopIdempotencyCleanupWorker();
+    stopOutboxEventWorker();
     await stopReceiptWorker();
     await closeReceiptQueue();
     closeWebSocketServer();

@@ -24,7 +24,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   // Rate limit dispute finalization
-  const rl = checkRateLimit(request, 'dispute:finalize', STRICT_LIMIT);
+  const rl = await checkRateLimit(request, 'dispute:finalize', STRICT_LIMIT);
   if (rl) return rl;
 
   // Require DB-verified compliance auth

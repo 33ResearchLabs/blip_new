@@ -108,7 +108,7 @@ export async function atomicCancelWithRefund(
         let refundTable: string;
 
         if (isM2M) {
-          // M2M: merchant_id is always the seller who locked escrow
+          // M2M: merchant_id is ALWAYS the seller (who locked escrow). Type-agnostic.
           refundId = lockedOrder.merchant_id;
           refundTable = 'merchants';
         } else {
@@ -130,7 +130,7 @@ export async function atomicCancelWithRefund(
         });
       }
 
-      // Update order status with version increment
+      // Update order status with version + previous status guard
       const updateResult = await client.query(
         `UPDATE orders
          SET status = 'cancelled',
@@ -139,9 +139,15 @@ export async function atomicCancelWithRefund(
              cancellation_reason = $2,
              order_version = order_version + 1
          WHERE id = $3
+           AND order_version = $4
+           AND status = $5::order_status
          RETURNING *`,
-        [actorType, reason || 'Cancelled by ' + actorType, orderId]
+        [actorType, reason || 'Cancelled by ' + actorType, orderId, lockedOrder.order_version, lockedOrder.status]
       );
+
+      if (updateResult.rows.length === 0) {
+        throw new Error('STATUS_CHANGED_INVALID_TRANSITION');
+      }
 
       const updatedOrder = updateResult.rows[0] as Order;
 

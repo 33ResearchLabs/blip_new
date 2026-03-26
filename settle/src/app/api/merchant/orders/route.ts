@@ -24,6 +24,7 @@ import { checkRateLimit, ORDER_LIMIT } from '@/lib/middleware/rateLimit';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import { query } from '@/lib/db';
 import { signPriceProof } from '@/lib/price/priceProof';
+import { enrichOrderResponse } from '@/lib/orders/enrichOrderResponse';
 
 // Prevent Next.js from caching this route - orders must always be fresh
 export const dynamic = 'force-dynamic';
@@ -83,14 +84,15 @@ export async function GET(request: NextRequest) {
       console.log('[API] Orders:', orders.map(o => ({ id: o.id, status: o.status, merchant_id: o.merchant_id })));
     }
 
-    // Add minimal_status to each order
-    const ordersWithMinimalStatus = (orders || []).map(order => ({
+    // Enrich each order with backend-driven UI fields
+    const enrichedOrders = (orders || []).map(order => ({
       ...order,
       minimal_status: normalizeStatus(order.status),
+      ...enrichOrderResponse(order, merchant_id),
     }));
 
     logger.api.request('GET', '/api/merchant/orders', merchant_id);
-    const res = NextResponse.json({ success: true, data: ordersWithMinimalStatus });
+    const res = NextResponse.json({ success: true, data: enrichedOrders });
     res.headers.set('Cache-Control', 'private, max-age=1, stale-while-revalidate=3');
     return res;
   } catch (error) {
@@ -127,7 +129,7 @@ async function fetchCorridorRefPrice(corridorId = 'USDT_AED') {
 // Merchant-initiated order creation
 export async function POST(request: NextRequest) {
   // Rate limit: 20 orders per minute
-  const rateLimitResponse = checkRateLimit(request, 'merchant-orders:create', ORDER_LIMIT);
+  const rateLimitResponse = await checkRateLimit(request, 'merchant-orders:create', ORDER_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
@@ -408,13 +410,17 @@ export async function POST(request: NextRequest) {
     // - merchant_id = target merchant (the one fulfilling the order)
     // - buyer_merchant_id = creating merchant (the one placing the order)
     const orderMerchantId = isM2MTrade ? target_merchant_id : merchant_id;
-    const buyerMerchantId = (isM2MTrade || type === 'buy') ? merchant_id : undefined;
+    // buyer_merchant_id is ONLY for M2M trades (merchant-to-merchant).
+    // For user-created orders, buyer_merchant_id must NOT be set —
+    // the user is the buyer (buy orders) or seller (sell orders),
+    // and merchant_id is the counterparty.
+    const buyerMerchantId = isM2MTrade ? merchant_id : undefined;
 
     // Forward to core-api (single writer for all mutations)
     const response = await proxyCoreApi('/v1/merchant/orders', {
       method: 'POST',
       body: {
-        merchant_id,
+        merchant_id: orderMerchantId,
         user_id: user.id,
         offer_id: offer.id,
         type: orderType,

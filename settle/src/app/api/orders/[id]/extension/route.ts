@@ -50,8 +50,13 @@ export async function POST(
 
     const { actor_type, actor_id, duration_minutes } = parseResult.data;
 
-    // Security: enforce actor matches authenticated identity (with merchant header fallback)
+    // Resolve merchant identity from header
     const extHeaderMerchantId = request.headers.get('x-merchant-id');
+    if (extHeaderMerchantId && !auth.merchantId) {
+      auth.merchantId = extHeaderMerchantId;
+    }
+
+    // Security: enforce actor matches authenticated identity (with merchant header fallback)
     if (actor_id !== auth.actorId && !(actor_type === 'merchant' && extHeaderMerchantId && actor_id === extHeaderMerchantId)) {
       return forbiddenResponse('actor_id does not match authenticated identity');
     }
@@ -87,8 +92,13 @@ export async function PUT(
 
     const { actor_type, actor_id, accept } = parseResult.data;
 
-    // Security: enforce actor matches authenticated identity (with merchant header fallback)
+    // Resolve merchant identity from header
     const putHeaderMerchantId = request.headers.get('x-merchant-id');
+    if (putHeaderMerchantId && !authPut.merchantId) {
+      authPut.merchantId = putHeaderMerchantId;
+    }
+
+    // Security: enforce actor matches authenticated identity (with merchant header fallback)
     if (actor_id !== authPut.actorId && !(actor_type === 'merchant' && putHeaderMerchantId && actor_id === putHeaderMerchantId)) {
       return forbiddenResponse('actor_id does not match authenticated identity');
     }

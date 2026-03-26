@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
 // POST /api/mempool - Perform mempool actions (bump, accept)
 export async function POST(request: NextRequest) {
   // Rate limit mutations
-  const rl = checkRateLimit(request, 'mempool:post', STRICT_LIMIT);
+  const rl = await checkRateLimit(request, 'mempool:post', STRICT_LIMIT);
   if (rl) return rl;
 
   // Require auth for all mempool mutations

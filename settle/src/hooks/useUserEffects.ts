@@ -275,11 +275,16 @@ export function useUserEffects({
     },
   });
 
-  // Active order: prefer real-time data if available
+  // Active order: merge real-time data with list data, preserving optimistic updates
   const orderFromList = orders.find(o => o.id === activeOrderId);
   const mappedRealtimeOrder = realtimeOrder ? mapDbOrderToUI(realtimeOrder as unknown as DbOrder) : null;
   const activeOrder = mappedRealtimeOrder
-    ? { ...orderFromList, ...mappedRealtimeOrder }
+    ? {
+        ...orderFromList,
+        ...mappedRealtimeOrder,
+        // Preserve cancelRequest from list if realtime doesn't have it yet (optimistic update)
+        cancelRequest: mappedRealtimeOrder.cancelRequest ?? orderFromList?.cancelRequest ?? null,
+      }
     : orderFromList;
 
   // Recovery: if on order screen but activeOrder is missing, refetch

@@ -199,7 +199,10 @@ export function useMerchantEffects({
         if (acceptTradeFixRef.current.has(order.id)) continue;
         if (order.myRole !== 'buyer') continue;
         if (!order.escrowCreatorWallet || order.escrowTradeId == null) continue;
-        if (['completed', 'cancelled', 'expired', 'pending'].includes(order.status)) continue;
+        // Skip terminal states, pending, and escrowed orders (no backend accept needed)
+        const dbStatus = order.dbOrder?.status || order.minimalStatus || '';
+        if (['completed', 'cancelled', 'expired', 'pending', 'escrow'].includes(order.status)) continue;
+        if (['escrowed', 'payment_sent', 'completed', 'cancelled', 'expired'].includes(dbStatus)) continue;
 
         try {
           await solanaWallet.acceptTrade({

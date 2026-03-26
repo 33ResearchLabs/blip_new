@@ -534,6 +534,17 @@ export function useUserOrderActions({
       const data = await res.json();
       if (data.success) {
         playSound('click');
+        // Optimistic update: immediately show cancel request in UI
+        setOrders(prev => prev.map(o =>
+          o.id === activeOrder.id ? {
+            ...o,
+            cancelRequest: {
+              requestedBy: 'user',
+              requestedAt: new Date(),
+              reason: reason || 'User requested cancellation',
+            },
+          } : o
+        ));
         fetchOrders(userId);
       } else {
         playSound('error');
@@ -563,6 +574,25 @@ export function useUserOrderActions({
       const data = await res.json();
       if (data.success) {
         playSound(accept ? 'click' : 'notification');
+        // Optimistic update: immediately clear cancel request or cancel order
+        if (accept) {
+          setOrders(prev => prev.map(o =>
+            o.id === activeOrder.id ? {
+              ...o,
+              status: 'cancelled' as OrderStatus,
+              step: 1 as OrderStep,
+              dbStatus: 'cancelled',
+              cancelRequest: null,
+            } : o
+          ));
+        } else {
+          setOrders(prev => prev.map(o =>
+            o.id === activeOrder.id ? {
+              ...o,
+              cancelRequest: null,
+            } : o
+          ));
+        }
         fetchOrders(userId);
       } else {
         playSound('error');

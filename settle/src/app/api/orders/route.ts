@@ -18,13 +18,15 @@ import {
 } from '@/lib/middleware/auth';
 import { checkRateLimit, STANDARD_LIMIT, ORDER_LIMIT } from '@/lib/middleware/rateLimit';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
+import { transaction } from '@/lib/db';
+import { enrichOrderResponse } from '@/lib/orders/enrichOrderResponse';
 
 // Prevent Next.js from caching this route
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   // Rate limit: 100 requests per minute
-  const rateLimitResponse = checkRateLimit(request, 'orders:get', STANDARD_LIMIT);
+  const rateLimitResponse = await checkRateLimit(request, 'orders:get', STANDARD_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -54,14 +56,15 @@ export async function GET(request: NextRequest) {
 
     const orders = await getUserOrders(user_id);
 
-    // Add minimal_status to each order
-    const ordersWithMinimalStatus = (orders || []).map(order => ({
+    // Enrich each order with backend-driven UI fields
+    const enrichedOrders = (orders || []).map(order => ({
       ...order,
       minimal_status: normalizeStatus(order.status),
+      ...enrichOrderResponse(order, user_id),
     }));
 
     logger.api.request('GET', '/api/orders', user_id);
-    return successResponse(ordersWithMinimalStatus);
+    return successResponse(enrichedOrders);
   } catch (error) {
     logger.api.error('GET', '/api/orders', error as Error);
     return errorResponse('Internal server error');
@@ -70,7 +73,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   // Rate limit: 20 orders per minute
-  const rateLimitResponse = checkRateLimit(request, 'orders:create', ORDER_LIMIT);
+  const rateLimitResponse = await checkRateLimit(request, 'orders:create', ORDER_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
@@ -92,8 +95,12 @@ export async function POST(request: NextRequest) {
       preference,
       user_bank_account,
       buyer_wallet_address,
-      buyer_merchant_id,
       payment_method_id,
+      escrow_trade_id,
+      escrow_trade_pda,
+      escrow_pda,
+      escrow_creator_wallet,
+      escrow_tx_hash,
     } = parseResult.data;
 
     // Authorization: require authenticated user creating order for themselves
@@ -214,8 +221,59 @@ export async function POST(request: NextRequest) {
             user_bank_account: parsedUserBank,
           };
 
+    // TASK 6: Atomically reserve liquidity before creating order.
+    // Deduct offer available_amount in a transaction, then proxy to core-api.
+    // If core-api fails, roll back the reservation to prevent liquidity leak.
+    let liquidityReserved = false;
+    try {
+      await transaction(async (client) => {
+        // Lock the offer row and re-check liquidity
+        const offerLock = await client.query(
+          `SELECT available_amount FROM merchant_offers WHERE id = $1 FOR UPDATE`,
+          [offer.id]
+        );
+        if (offerLock.rows.length === 0) {
+          throw new Error('OFFER_NOT_FOUND');
+        }
+        const currentAvailable = parseFloat(String(offerLock.rows[0].available_amount));
+        if (currentAvailable < crypto_amount) {
+          throw new Error('INSUFFICIENT_LIQUIDITY');
+        }
+        // Reserve liquidity
+        await client.query(
+          `UPDATE merchant_offers SET available_amount = available_amount - $1 WHERE id = $2`,
+          [crypto_amount, offer.id]
+        );
+      });
+      liquidityReserved = true;
+    } catch (reserveErr) {
+      const errMsg = (reserveErr as Error).message;
+      if (errMsg === 'INSUFFICIENT_LIQUIDITY') {
+        return validationErrorResponse([
+          `Insufficient liquidity. Requested: ${crypto_amount}`,
+        ]);
+      }
+      if (errMsg === 'OFFER_NOT_FOUND') {
+        return NextResponse.json(
+          { success: false, error: 'Offer no longer available' },
+          { status: 404 }
+        );
+      }
+      throw reserveErr;
+    }
+
+    // For sell orders, the user is the seller and may have already locked escrow on-chain.
+    // Forward escrow fields so core-api can set status to 'escrowed' directly.
+    const escrowFields = type === 'sell' && escrow_tx_hash ? {
+      escrow_tx_hash,
+      escrow_trade_id,
+      escrow_trade_pda,
+      escrow_pda,
+      escrow_creator_wallet,
+    } : {};
+
     // Forward to core-api (single writer for all mutations)
-    return proxyCoreApi('/v1/orders', {
+    const createResponse = await proxyCoreApi('/v1/orders', {
       method: 'POST',
       body: {
         user_id,
@@ -228,12 +286,32 @@ export async function POST(request: NextRequest) {
         rate: offer.rate,
         payment_details: paymentDetails,
         buyer_wallet_address: type === 'buy' ? buyer_wallet_address : undefined,
-        buyer_merchant_id,
+        // buyer_merchant_id is NOT set for user-created orders.
+        // It is ONLY for M2M trades (set via /api/merchant/orders).
         ref_price_at_create: offer.rate,
         payment_method_id: verifiedPaymentMethodId,
         merchant_payment_method_id: merchantPaymentMethodId,
+        liquidity_reserved: true, // Signal core-api that liquidity is already deducted
+        ...escrowFields,
       },
     });
+
+    // If core-api failed, roll back the liquidity reservation
+    if (liquidityReserved && createResponse.status >= 400) {
+      try {
+        await transaction(async (client) => {
+          await client.query(
+            `UPDATE merchant_offers SET available_amount = available_amount + $1 WHERE id = $2`,
+            [crypto_amount, offer.id]
+          );
+        });
+        logger.api.request('POST', '/api/orders — liquidity reservation rolled back', user_id);
+      } catch (rollbackErr) {
+        logger.api.error('POST', '/api/orders — CRITICAL: liquidity rollback failed', rollbackErr as Error);
+      }
+    }
+
+    return createResponse;
   } catch (error) {
     const err = error as Error;
     console.error('[API] POST /api/orders error:', {

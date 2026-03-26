@@ -1,10 +1,7 @@
 /**
- * Order State Machine
- *
- * Defines all valid order statuses and allowed transitions.
- * This is the single source of truth for order state management.
+ * @deprecated Use the minimal 8-status machine via normalizer.ts instead. This legacy 12-status machine is retained for reference only.
  */
-// All valid order statuses
+/** @deprecated Use minimal state machine */
 export const ORDER_STATUSES = [
     'pending',
     'accepted',
@@ -134,9 +131,7 @@ export const ACTIVE_STATUSES = [
     'releasing',
     'disputed',
 ];
-/**
- * Validate if a status transition is allowed
- */
+/** @deprecated Use normalizer.ts for minimal state machine */
 export function validateTransition(currentStatus, newStatus, actorType) {
     // Same status is always invalid (no-op)
     if (currentStatus === newStatus) {
@@ -178,28 +173,20 @@ export function validateTransition(currentStatus, newStatus, actorType) {
     }
     return { valid: true };
 }
-/**
- * Check if a status is terminal (no further transitions possible)
- */
+/** @deprecated */
 export function isTerminalStatus(status) {
     return TERMINAL_STATUSES.includes(status);
 }
-/**
- * Check if an order is active (not in terminal state)
- */
+/** @deprecated */
 export function isActiveStatus(status) {
     return ACTIVE_STATUSES.includes(status);
 }
-/**
- * Get timeout for a status in milliseconds
- */
+/** @deprecated */
 export function getStatusTimeout(status) {
     const minutes = STATUS_TIMEOUTS[status];
     return minutes ? minutes * 60 * 1000 : null;
 }
-/**
- * Check if liquidity should be restored when transitioning from a status
- */
+/** @deprecated */
 export function shouldRestoreLiquidity(fromStatus, toStatus) {
     // Restore liquidity when going to cancelled or expired from early stages
     if (toStatus === 'cancelled' || toStatus === 'expired') {
@@ -207,15 +194,11 @@ export function shouldRestoreLiquidity(fromStatus, toStatus) {
     }
     return false;
 }
-/**
- * Get the event type string for a transition
- */
+/** @deprecated */
 export function getTransitionEventType(fromStatus, toStatus) {
     return `status_changed_to_${toStatus}`;
 }
-/**
- * Get the timestamp field to update for a given status
- */
+/** @deprecated */
 export function getTimestampField(status) {
     const timestampFields = {
         accepted: 'accepted_at',
@@ -227,10 +210,7 @@ export function getTimestampField(status) {
     };
     return timestampFields[status] || null;
 }
-/**
- * Get next expiry interval for a given status
- * Note: Global 15-minute timeout - expires_at is set at creation and doesn't change
- */
+/** @deprecated */
 export function getNextExpiryInterval(status) {
     // All statuses use the same 15-minute timeout from creation
     // This function is kept for compatibility but expiry is now based on created_at
@@ -261,15 +241,11 @@ export const EXTENDABLE_STATUSES = [
     'escrowed',
     'payment_sent',
 ];
-/**
- * Check if a status allows extension requests
- */
+/** @deprecated */
 export function canRequestExtension(status) {
     return EXTENDABLE_STATUSES.includes(status);
 }
-/**
- * Check if an order can be extended (has remaining extensions)
- */
+/** @deprecated */
 export function canExtendOrder(status, currentExtensionCount, maxExtensions = MAX_EXTENSIONS) {
     if (!canRequestExtension(status)) {
         return {
@@ -285,18 +261,11 @@ export function canExtendOrder(status, currentExtensionCount, maxExtensions = MA
     }
     return { canExtend: true };
 }
-/**
- * Get extension duration for a status in minutes
- */
+/** @deprecated */
 export function getExtensionDuration(status) {
     return EXTENSION_DURATIONS[status] || 30; // Default 30 minutes
 }
-/**
- * Determine what happens when an order expires without extension
- * - If max extensions reached -> disputed
- * - If extension declined -> cancelled
- * - If no response -> cancelled
- */
+/** @deprecated */
 export function getExpiryOutcome(status, extensionCount, maxExtensions = MAX_EXTENSIONS) {
     // After escrowed status and max extensions reached, go to dispute
     // This protects both parties when money is in escrow
@@ -310,36 +279,22 @@ export function getExpiryOutcome(status, extensionCount, maxExtensions = MAX_EXT
 // =====================
 // CANCEL REQUEST SYSTEM
 // =====================
-/**
- * Check if a cancel request can be made in the current status.
- * Before acceptance: unilateral cancel is fine (no request needed).
- * After acceptance: need mutual agreement via cancel request.
- */
+/** @deprecated */
 export function canRequestCancel(status) {
     return CANCEL_REQUEST_STATUSES.includes(status);
 }
-/**
- * Check if unilateral cancel is allowed (no approval needed).
- * Only pending and escrow_pending allow unilateral cancel.
- */
+/** @deprecated */
 export function canUnilateralCancel(status) {
     return status === 'pending' || status === 'escrow_pending';
 }
 // =====================
 // INACTIVITY SYSTEM
 // =====================
-/**
- * Check if inactivity tracking applies to this status
- */
+/** @deprecated */
 export function isInactivityTracked(status) {
     return INACTIVITY_TRACKED_STATUSES.includes(status);
 }
-/**
- * Determine inactivity escalation outcome for an order.
- * After 1hr of inactivity:
- *   - If escrow exists → ask non-escrow party if tx done → if not, dispute
- *   - If no escrow → cancel
- */
+/** @deprecated */
 export function getInactivityOutcome(status, hasEscrow) {
     if (hasEscrow && ['escrowed', 'payment_pending', 'payment_sent'].includes(status)) {
         return 'disputed';

@@ -10,14 +10,16 @@ import {
   logger,
   MOCK_MODE,
 } from 'settlement-core';
-import { orderBus, ORDER_EVENT } from '../events';
+import { ORDER_EVENT } from '../events';
+import { insertOutboxEventDirect } from '../outbox';
 
 export const expireRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /v1/orders/expire - Batch expire
   fastify.post('/orders/expire', async (_request, reply) => {
     try {
       // Find expired orders
-      // payment_sent orders never expire — they can only be completed or disputed
+      // payment_sent/payment_confirmed orders never expire — they can only be completed or disputed
+      // Edge case: also protect orders where payment_sent_at is set (payment sent at last second before expiry)
       const ordersToExpire = await dbQuery<{
         id: string; status: string; user_id: string; merchant_id: string;
         buyer_merchant_id: string | null; type: string; crypto_amount: string;
@@ -25,7 +27,8 @@ export const expireRoutes: FastifyPluginAsync = async (fastify) => {
       }>(
         `SELECT id, status, user_id, merchant_id, buyer_merchant_id, type, crypto_amount, escrow_tx_hash, accepted_at
          FROM orders
-         WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed', 'payment_sent', 'payment_confirmed')
+         WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed', 'payment_sent', 'payment_confirmed', 'releasing')
+           AND payment_sent_at IS NULL
            AND (
              (status = 'pending' AND created_at < NOW() - INTERVAL '15 minutes')
              OR (status NOT IN ('pending') AND COALESCE(accepted_at, created_at) < NOW() - INTERVAL '120 minutes')
@@ -40,23 +43,24 @@ export const expireRoutes: FastifyPluginAsync = async (fastify) => {
       const acceptedExpired = ordersToExpire.filter(o => o.status !== 'pending');
       let totalExpired = 0;
 
-      // Expire pending orders
+      // Expire pending orders (status guard: only transition from 'pending')
       if (pendingExpired.length > 0) {
         const pendingIds = pendingExpired.map(o => o.id);
-        await dbQuery(
+        const expireResult = await dbQuery(
           `UPDATE orders
            SET status = 'expired'::order_status,
                cancelled_at = NOW(),
                cancelled_by = 'system',
                cancellation_reason = 'Order expired - no one accepted within 15 minutes',
                order_version = order_version + 1
-           WHERE id = ANY($1)`,
+           WHERE id = ANY($1) AND status = 'pending'
+           RETURNING id`,
           [pendingIds]
         );
-        totalExpired += pendingIds.length;
+        totalExpired += expireResult.length;
 
         for (const o of pendingExpired) {
-          orderBus.emitOrderEvent({
+          await insertOutboxEventDirect({
             event: ORDER_EVENT.EXPIRED,
             orderId: o.id, previousStatus: o.status, newStatus: 'expired',
             actorType: 'system', actorId: 'expiry-endpoint',
@@ -72,27 +76,31 @@ export const expireRoutes: FastifyPluginAsync = async (fastify) => {
         const hasEscrow = !!order.escrow_tx_hash;
 
         if (hasEscrow) {
-          // Escrowed orders go to disputed
-          await dbQuery(
+          // Escrowed orders go to disputed (status guard)
+          const disputeResult = await dbQuery(
             `UPDATE orders
              SET status = 'disputed'::order_status,
                  cancellation_reason = 'Order timed out with escrow locked',
                  order_version = order_version + 1
-             WHERE id = $1`,
-            [order.id]
+             WHERE id = $1 AND status = $2::order_status
+             RETURNING id`,
+            [order.id, order.status]
           );
+          if (disputeResult.length === 0) continue; // concurrent update, skip
         } else {
-          // Non-escrowed orders get cancelled
-          await dbQuery(
+          // Non-escrowed orders get cancelled (status guard)
+          const cancelResult = await dbQuery(
             `UPDATE orders
              SET status = 'cancelled'::order_status,
                  cancelled_at = NOW(),
                  cancelled_by = 'system',
                  cancellation_reason = 'Order timed out',
                  order_version = order_version + 1
-             WHERE id = $1`,
-            [order.id]
+             WHERE id = $1 AND status = $2::order_status
+             RETURNING id`,
+            [order.id, order.status]
           );
+          if (cancelResult.length === 0) continue; // concurrent update, skip
         }
 
         // Event
@@ -129,7 +137,7 @@ export const expireRoutes: FastifyPluginAsync = async (fastify) => {
         const eventName = newStatus === 'cancelled' ? ORDER_EVENT.CANCELLED
           : newStatus === 'disputed' ? ORDER_EVENT.DISPUTED
           : ORDER_EVENT.EXPIRED;
-        orderBus.emitOrderEvent({
+        await insertOutboxEventDirect({
           event: eventName,
           orderId: order.id, previousStatus: order.status, newStatus,
           actorType: 'system', actorId: 'expiry-endpoint',

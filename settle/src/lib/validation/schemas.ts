@@ -173,8 +173,15 @@ export const createOrderSchema = z.object({
   preference: tradePreferenceSchema.optional(),
   user_bank_account: z.string().max(500).optional(), // User's bank details JSON or plain text for receiving fiat (sell orders)
   buyer_wallet_address: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'Invalid Solana wallet address').optional(), // Buyer's Solana wallet for receiving crypto (buy orders)
-  buyer_merchant_id: uuidSchema.optional(), // For M2M trades: merchant acting as buyer
+  // buyer_merchant_id removed — user-created orders must NOT set this field.
+  // M2M trades use /api/merchant/orders which has its own schema.
   payment_method_id: uuidSchema.optional(), // Fiat receiver's selected payment method
+  // Escrow fields for sell orders — user locks escrow on-chain before creating order
+  escrow_trade_id: z.number().optional(),
+  escrow_trade_pda: z.string().max(64).optional(),
+  escrow_pda: z.string().max(64).optional(),
+  escrow_creator_wallet: z.string().max(64).optional(),
+  escrow_tx_hash: z.string().max(128).optional(),
 });
 
 export const updateOrderStatusSchema = z.object({

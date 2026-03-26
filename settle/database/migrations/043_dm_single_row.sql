@@ -75,7 +75,7 @@ ALTER TABLE direct_messages
     ARRAY[LEAST(sender_id, recipient_id), GREATEST(sender_id, recipient_id)]
   ) STORED;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_dm_conversation_pair
+CREATE INDEX IF NOT EXISTS idx_dm_conversation_pair
   ON direct_messages USING GIN (conversation_pair);
 
 -- ═══════════════════════════════════════════════════════════════════

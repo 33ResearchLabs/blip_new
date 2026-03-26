@@ -15,7 +15,7 @@ interface InProgressPanelProps {
   onCollapseChange?: (collapsed: boolean) => void;
 }
 
-const WAITING_ACTIONS = ['Wait for Acceptance', 'Wait for Payment', 'Wait for Escrow', 'Wait for Confirmation', 'Waiting for Acceptor', 'Waiting for Confirmation'];
+const WAITING_ACTIONS = ['Wait for Acceptance', 'Wait for Payment', 'Wait for Escrow', 'Wait for Confirmation', 'Waiting for Acceptor', 'Waiting for Confirmation', 'Waiting for Payment', 'Already Claimed'];
 
 const IP_ITEM_HEIGHT = 210; // Estimated row height for in-progress orders (includes hero timer + pricing strip)
 

@@ -13,7 +13,7 @@ interface MerchantRow {
 }
 
 export async function POST(request: NextRequest) {
-  const rl = checkRateLimit(request, 'auth:forgot-password', AUTH_LIMIT);
+  const rl = await checkRateLimit(request, 'auth:forgot-password', AUTH_LIMIT);
   if (rl) return rl;
 
   try {

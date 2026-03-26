@@ -1,8 +1,11 @@
 import { query, queryOne } from '../index';
 import { Merchant, MerchantOffer, MerchantOfferWithMerchant, PaymentMethod, OfferType } from '../../types/database';
+import { getCachedMerchant, invalidateMerchantCache } from '@/lib/cache';
 
 export async function getMerchantById(id: string): Promise<Merchant | null> {
-  return queryOne<Merchant>('SELECT * FROM merchants WHERE id = $1', [id]);
+  return getCachedMerchant<Merchant>(id, (merchantId) =>
+    queryOne<Merchant>('SELECT * FROM merchants WHERE id = $1', [merchantId])
+  );
 }
 
 export async function getMerchantByWallet(walletAddress: string): Promise<Merchant | null> {
@@ -88,10 +91,12 @@ export async function updateMerchant(
 
   fields.push(`updated_at = NOW()`);
   values.push(id);
-  return queryOne<Merchant>(
+  const result = await queryOne<Merchant>(
     `UPDATE merchants SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
     values
   );
+  if (result) invalidateMerchantCache(id);
+  return result;
 }
 
 // Offers
@@ -225,11 +230,19 @@ export async function findBestOffer(
   return result;
 }
 
-export async function updateOfferAvailability(id: string, amount: number): Promise<void> {
-  await query(
-    'UPDATE merchant_offers SET available_amount = available_amount - $1 WHERE id = $2',
+export async function updateOfferAvailability(id: string, amount: number): Promise<MerchantOffer> {
+  const result = await queryOne<MerchantOffer>(
+    `UPDATE merchant_offers
+     SET available_amount = available_amount - $1
+     WHERE id = $2
+       AND available_amount >= $1
+     RETURNING *`,
     [amount, id]
   );
+  if (!result) {
+    throw new Error('INSUFFICIENT_LIQUIDITY');
+  }
+  return result;
 }
 
 export async function restoreOfferAvailability(id: string, amount: number): Promise<void> {

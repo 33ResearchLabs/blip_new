@@ -143,12 +143,6 @@ export function getNextStep(
 
   if (minimal === 'accepted') {
     if (iAmBuyer) {
-      if (hasEscrow) {
-        return {
-          actor: 'me', label: "I've Paid", sublabel: 'Send AED payment, then mark as paid',
-          badgeText: 'SEND', badgeVariant: 'action', actionRequired: true, actionType: 'mark_paid',
-        };
-      }
       return {
         actor: 'counterparty', label: 'Waiting', sublabel: 'Waiting for seller to lock escrow',
         badgeText: 'WAITING', badgeVariant: 'waiting', actionRequired: false, actionType: null,
@@ -218,28 +212,9 @@ export function getNextStep(
   // --- PAYMENT SENT (was: payment_sent, payment_confirmed) ---
 
   if (minimal === 'payment_sent') {
-    if (dbStatus === 'payment_confirmed') {
-      if (iAmEscrowCreator || iAmSeller) {
-        return {
-          actor: 'me', label: 'Release', sublabel: 'Payment confirmed — release USDC to buyer',
-          badgeText: 'READY', badgeVariant: 'action', actionRequired: true, actionType: 'release_escrow',
-        };
-      }
-      if (iAmBuyer) {
-        return {
-          actor: 'counterparty', label: 'Waiting', sublabel: 'Payment confirmed — waiting for escrow release',
-          badgeText: 'RELEASING', badgeVariant: 'waiting', actionRequired: false, actionType: null,
-        };
-      }
-      return {
-        actor: 'me', label: 'Release', sublabel: 'Payment confirmed — release USDC to buyer',
-        badgeText: 'READY', badgeVariant: 'action', actionRequired: true, actionType: 'release_escrow',
-      };
-    }
-
     if (iAmEscrowCreator || iAmSeller) {
       return {
-        actor: 'me', label: 'Confirm & Release', sublabel: 'Verify you received AED, then confirm payment',
+        actor: 'me', label: 'Confirm Payment', sublabel: 'Verify you received AED, then confirm',
         badgeText: 'PAID', badgeVariant: 'action', actionRequired: true, actionType: 'confirm_payment',
       };
     }
@@ -250,7 +225,7 @@ export function getNextStep(
       };
     }
     return {
-      actor: 'me', label: 'Confirm & Release', sublabel: 'Verify you received AED, then confirm payment',
+      actor: 'me', label: 'Confirm Payment', sublabel: 'Verify you received AED, then confirm',
       badgeText: 'PAID', badgeVariant: 'action', actionRequired: true, actionType: 'confirm_payment',
     };
   }

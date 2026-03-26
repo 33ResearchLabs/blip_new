@@ -8,30 +8,56 @@
  */
 
 import { getOrdersReadyForAutoBump, bumpOrderPriority } from '@/lib/db/repositories/mempool';
+import { transaction } from '@/lib/db';
 
 const WORKER_INTERVAL_MS = 10000; // Check every 10 seconds
+const BUMP_BATCH_SIZE = 20; // Max orders per cycle
 
 async function processAutoBumps() {
   try {
-    const orderIds = await getOrdersReadyForAutoBump();
+    // Distribution-safe: claim rows with FOR UPDATE SKIP LOCKED inside a transaction
+    // so multiple worker instances never process the same orders
+    const bumpedOrders = await transaction(async (client) => {
+      const lockResult = await client.query(
+        `SELECT id FROM orders
+         WHERE auto_bump_enabled = TRUE
+           AND status = 'pending'
+           AND next_bump_at IS NOT NULL
+           AND next_bump_at <= NOW()
+           AND premium_bps_current < premium_bps_cap
+         FOR UPDATE SKIP LOCKED
+         LIMIT $1`,
+        [BUMP_BATCH_SIZE]
+      );
 
-    if (orderIds.length === 0) {
+      if (lockResult.rows.length === 0) {
+        return [];
+      }
+
+      const results: { orderId: string; new_premium_bps: number; max_reached: boolean }[] = [];
+
+      for (const row of lockResult.rows) {
+        try {
+          const result = await bumpOrderPriority(row.id, true);
+          results.push({ orderId: row.id, ...result });
+        } catch (error) {
+          console.error(`[auto-bump] Failed to bump order ${row.id}:`, error);
+        }
+      }
+
+      return results;
+    });
+
+    if (bumpedOrders.length === 0) {
       console.log('[auto-bump] No orders ready for auto-bump');
       return;
     }
 
-    console.log(`[auto-bump] Processing ${orderIds.length} orders for auto-bump`);
-
-    for (const orderId of orderIds) {
-      try {
-        const result = await bumpOrderPriority(orderId, true);
-        console.log(
-          `[auto-bump] Order ${orderId} bumped to ${result.new_premium_bps} bps` +
-          (result.max_reached ? ' (max reached)' : '')
-        );
-      } catch (error) {
-        console.error(`[auto-bump] Failed to bump order ${orderId}:`, error);
-      }
+    for (const result of bumpedOrders) {
+      console.log(
+        `[auto-bump] Order ${result.orderId} bumped to ${result.new_premium_bps} bps` +
+        (result.max_reached ? ' (max reached)' : '')
+      );
     }
   } catch (error) {
     console.error('[auto-bump] Worker error:', error);

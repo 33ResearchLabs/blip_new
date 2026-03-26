@@ -1122,11 +1122,8 @@ export function OrderDetailsPanel({
                   onClose();
                   break;
                 case 'confirmPayment':
-                  onConfirmPayment?.(order.id);
-                  onClose();
-                  break;
                 case 'openReleaseModal':
-                  onReleaseEscrow?.(order.id);
+                  onConfirmPayment?.(order.id);
                   onClose();
                   break;
                 case 'openDisputeModal':

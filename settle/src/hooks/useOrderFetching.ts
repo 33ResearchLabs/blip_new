@@ -92,7 +92,10 @@ export function useOrderFetching({
           if (order.minimalStatus === 'completed') {
             return { ...order, status: 'completed' as const };
           }
-          if (order.isMyOrder && order.dbOrder?.status === 'escrowed' && getEffectiveStatus(order) === 'pending') {
+          // Only fix status to 'escrow' if the merchant has CLAIMED the order (buyer_merchant_id set)
+          const isClaimed = !!(order.buyerMerchantId || order.dbOrder?.buyer_merchant_id);
+          const iAmClaimer = isClaimed && (order.buyerMerchantId === merchantId || order.dbOrder?.buyer_merchant_id === merchantId);
+          if (iAmClaimer && order.dbOrder?.status === 'escrowed' && getEffectiveStatus(order) === 'pending') {
             return { ...order, status: 'escrow' as const };
           }
           return order;
@@ -293,8 +296,19 @@ export function useOrderFetching({
       }
       const data = await res.json();
       if (data.success && data.data) {
-        const freshOrder = mapDbOrderToUI(data.data, merchantId);
-        setOrders((prev: Order[]) => prev.map((o: Order) => o.id === orderId ? freshOrder : o));
+        let freshOrder = mapDbOrderToUI(data.data, merchantId);
+        // Apply the same minimalStatus normalization as fetchOrders
+        if (freshOrder.minimalStatus === 'completed') {
+          freshOrder = { ...freshOrder, status: 'completed' as const };
+        }
+        setOrders((prev: Order[]) => prev.map((o: Order) => {
+          if (o.id !== orderId) return o;
+          // Don't overwrite a completed/cancelled optimistic status with a stale refetch
+          if ((o.status === 'completed' || o.status === 'cancelled') && freshOrder.status !== 'completed' && freshOrder.status !== 'cancelled') {
+            return o;
+          }
+          return freshOrder;
+        }));
       }
     } catch (error) {
       console.error('[Merchant] Error refetching single order:', error);
@@ -312,8 +326,9 @@ export function useOrderFetching({
       ));
     }
     // Parallel: refetch single order (delayed for DB consistency), full list, and balance
+    // Use 800ms delay to give core-api time to commit (300ms was causing stale reads)
     await Promise.all([
-      new Promise<void>(resolve => setTimeout(() => { refetchSingleOrder(orderId); resolve(); }, 300)),
+      new Promise<void>(resolve => setTimeout(() => { refetchSingleOrder(orderId); resolve(); }, 800)),
       fetchOrders(),
     ]);
     refreshBalance();

@@ -6,28 +6,28 @@
  */
 
 export type MinimalStatus =
-  | 'open'
-  | 'accepted'
-  | 'escrowed'
-  | 'payment_sent'
-  | 'completed'
-  | 'cancelled'
-  | 'expired'
-  | 'disputed';
+  | "open"
+  | "accepted"
+  | "escrowed"
+  | "payment_sent"
+  | "completed"
+  | "cancelled"
+  | "expired"
+  | "disputed";
 
 export type LegacyStatus =
-  | 'pending'
-  | 'accepted'
-  | 'escrow_pending'
-  | 'escrowed'
-  | 'payment_pending'
-  | 'payment_sent'
-  | 'payment_confirmed'
-  | 'releasing'
-  | 'completed'
-  | 'cancelled'
-  | 'expired'
-  | 'disputed';
+  | "pending"
+  | "accepted"
+  | "escrow_pending"
+  | "escrowed"
+  | "payment_pending"
+  | "payment_sent"
+  | "payment_confirmed"
+  | "releasing"
+  | "completed"
+  | "cancelled"
+  | "expired"
+  | "disputed";
 
 /**
  * Get the authoritative status for an order.
@@ -56,7 +56,7 @@ export function getAuthoritativeStatus(order: any): MinimalStatus {
   }
 
   // Default fallback
-  return 'open';
+  return "open";
 }
 
 /**
@@ -64,23 +64,23 @@ export function getAuthoritativeStatus(order: any): MinimalStatus {
  */
 export function normalizeLegacyStatus(legacyStatus: string): MinimalStatus {
   const mapping: Record<string, MinimalStatus> = {
-    'pending': 'open',
-    'escrow_pending': 'accepted',
-    'payment_pending': 'escrowed',
-    'payment_confirmed': 'payment_sent',
-    'releasing': 'completed',
+    pending: "open",
+    escrow_pending: "accepted",
+    payment_pending: "escrowed",
+    payment_confirmed: "payment_sent",
+    releasing: "completed",
     // Direct mappings
-    'open': 'open',
-    'accepted': 'accepted',
-    'escrowed': 'escrowed',
-    'payment_sent': 'payment_sent',
-    'completed': 'completed',
-    'cancelled': 'cancelled',
-    'expired': 'expired',
-    'disputed': 'disputed',
+    open: "open",
+    accepted: "accepted",
+    escrowed: "escrowed",
+    payment_sent: "payment_sent",
+    completed: "completed",
+    cancelled: "cancelled",
+    expired: "expired",
+    disputed: "disputed",
   };
 
-  return mapping[legacyStatus] || 'open';
+  return mapping[legacyStatus] || "open";
 }
 
 /**
@@ -88,8 +88,14 @@ export function normalizeLegacyStatus(legacyStatus: string): MinimalStatus {
  */
 export function normalizeToMinimalStatus(status: string): MinimalStatus {
   const validStatuses: MinimalStatus[] = [
-    'open', 'accepted', 'escrowed', 'payment_sent',
-    'completed', 'cancelled', 'expired', 'disputed'
+    "open",
+    "accepted",
+    "escrowed",
+    "payment_sent",
+    "completed",
+    "cancelled",
+    "expired",
+    "disputed",
   ];
 
   if (validStatuses.includes(status as MinimalStatus)) {
@@ -103,7 +109,10 @@ export function normalizeToMinimalStatus(status: string): MinimalStatus {
 /**
  * Check if an order version is newer than another
  */
-export function isNewerVersion(incoming: number | undefined, current: number | undefined): boolean {
+export function isNewerVersion(
+  incoming: number | undefined,
+  current: number | undefined,
+): boolean {
   // If either version is missing, can't determine - assume incoming is newer
   if (incoming === undefined || current === undefined) {
     return true;
@@ -117,20 +126,21 @@ export function isNewerVersion(incoming: number | undefined, current: number | u
  */
 export function shouldAcceptUpdate(
   incomingVersion: number | undefined,
-  currentVersion: number | undefined
+  currentVersion: number | undefined,
 ): { accept: boolean; reason: string } {
   // No version info - accept but warn
   if (incomingVersion === undefined) {
     return {
       accept: true,
-      reason: 'No incoming version - accepting update but should add version to websocket events'
+      reason:
+        "No incoming version - accepting update but should add version to websocket events",
     };
   }
 
   if (currentVersion === undefined) {
     return {
       accept: true,
-      reason: 'No current version - accepting update'
+      reason: "No current version - accepting update",
     };
   }
 
@@ -138,7 +148,7 @@ export function shouldAcceptUpdate(
   if (incomingVersion < currentVersion) {
     return {
       accept: false,
-      reason: `Stale update rejected: incoming version ${incomingVersion} < current version ${currentVersion}`
+      reason: `Stale update rejected: incoming version ${incomingVersion} < current version ${currentVersion}`,
     };
   }
 
@@ -146,14 +156,14 @@ export function shouldAcceptUpdate(
   if (incomingVersion === currentVersion) {
     return {
       accept: true,
-      reason: 'Same version - idempotent update'
+      reason: "Same version - idempotent update",
     };
   }
 
   // Newer version - accept
   return {
     accept: true,
-    reason: `Accepting newer version: ${incomingVersion} > ${currentVersion}`
+    reason: `Accepting newer version: ${incomingVersion} > ${currentVersion}`,
   };
 }
 
@@ -162,34 +172,36 @@ export function shouldAcceptUpdate(
  */
 export function mapMinimalStatusToUIStatus(
   minimalStatus: MinimalStatus,
-  isMyOrder?: boolean
-): 'pending' | 'active' | 'escrow' | 'completed' | 'disputed' | 'cancelled' {
+  isMyOrder?: boolean,
+): "pending" | "active" | "escrow" | "completed" | "disputed" | "cancelled" {
   // CRITICAL: If minimal_status is "completed", ALWAYS show as completed
-  if (minimalStatus === 'completed') {
-    return 'completed';
+  if (minimalStatus === "completed") {
+    return "completed";
   }
 
   switch (minimalStatus) {
-    case 'open':
-      return 'pending'; // New Orders
-    case 'accepted':
-      return 'escrow'; // Accepted orders go to In Progress
-    case 'escrowed':
+    case "open":
+      return "pending"; // New Orders
+    case "accepted":
+      return "escrow"; // Accepted orders go to In Progress
+    case "escrowed":
       // Escrowed orders always go to "In Progress" section.
       // Whether it's my order (I locked, waiting for acceptor) or
       // someone else's (escrow locked, I can claim it) — it's active, not pending.
-      return 'escrow';
-    case 'payment_sent':
-      return 'escrow'; // In Progress - payment sent
-    case 'cancelled':
-      return 'cancelled';
-    case 'disputed':
-      return 'disputed';
-    case 'expired':
-      return 'cancelled'; // Show expired as cancelled
+      return "escrow";
+    case "payment_sent":
+      return "escrow"; // In Progress - payment sent
+    case "cancelled":
+      return "cancelled";
+    case "disputed":
+      return "disputed";
+    case "expired":
+      return "cancelled"; // Show expired as cancelled
     default:
-      console.warn(`[UI] Unknown minimal_status: ${minimalStatus}, defaulting to pending`);
-      return 'pending';
+      console.warn(
+        `[UI] Unknown minimal_status: ${minimalStatus}, defaulting to pending`,
+      );
+      return "pending";
   }
 }
 
@@ -204,52 +216,52 @@ export function getStatusBadgeConfig(minimalStatus: MinimalStatus): {
 } {
   const configs = {
     open: {
-      color: 'text-blue-400',
-      label: 'OPEN',
-      bg: 'bg-blue-500/20',
-      border: 'border-blue-500/30',
+      color: "text-blue-400",
+      label: "OPEN",
+      bg: "bg-blue-500/20",
+      border: "border-blue-500/30",
     },
     accepted: {
-      color: 'text-yellow-400',
-      label: 'ACCEPTED',
-      bg: 'bg-yellow-500/20',
-      border: 'border-yellow-500/30',
+      color: "text-yellow-400",
+      label: "ACCEPTED",
+      bg: "bg-yellow-500/20",
+      border: "border-yellow-500/30",
     },
     escrowed: {
-      color: 'text-purple-400',
-      label: 'ESCROWED',
-      bg: 'bg-purple-500/20',
-      border: 'border-purple-500/30',
+      color: "text-purple-400",
+      label: "ESCROWED",
+      bg: "bg-purple-500/20",
+      border: "border-purple-500/30",
     },
     payment_sent: {
-      color: 'text-orange-400',
-      label: 'PAYMENT SENT',
-      bg: 'bg-orange-500/20',
-      border: 'border-orange-500/30',
+      color: "text-orange-400",
+      label: "PAYMENT SENT",
+      bg: "bg-orange-500/20",
+      border: "border-orange-500/30",
     },
     completed: {
-      color: 'text-green-400',
-      label: 'COMPLETED',
-      bg: 'bg-green-500/20',
-      border: 'border-green-500/30',
+      color: "text-green-400",
+      label: "COMPLETED",
+      bg: "bg-green-500/20",
+      border: "border-green-500/30",
     },
     cancelled: {
-      color: 'text-red-400',
-      label: 'CANCELLED',
-      bg: 'bg-red-500/20',
-      border: 'border-red-500/30',
+      color: "text-red-400",
+      label: "CANCELLED",
+      bg: "bg-red-500/20",
+      border: "border-red-500/30",
     },
     expired: {
-      color: 'text-gray-400',
-      label: 'EXPIRED',
-      bg: 'bg-gray-500/20',
-      border: 'border-gray-500/30',
+      color: "text-gray-400",
+      label: "EXPIRED",
+      bg: "bg-gray-500/20",
+      border: "border-gray-500/30",
     },
     disputed: {
-      color: 'text-red-400',
-      label: 'DISPUTED',
-      bg: 'bg-red-500/20',
-      border: 'border-red-500/30',
+      color: "text-red-400",
+      label: "DISPUTED",
+      bg: "bg-red-500/20",
+      border: "border-red-500/30",
     },
   };
 
@@ -259,92 +271,113 @@ export function getStatusBadgeConfig(minimalStatus: MinimalStatus): {
 /**
  * computeMyRole - Determine the current merchant's role in an order.
  *
- * Rules (from FINAL_TRADE_FLOW.md):
+ * Rules:
  *   - Seller ALWAYS locks crypto. Buyer ALWAYS sends fiat. No exceptions.
- *   - buyer_merchant_id is ALWAYS the buyer (when set).
- *   - merchant_id after acceptance is ALWAYS the seller (for M2M).
+ *   - M2M: buyer_merchant_id = ALWAYS buyer, merchant_id = ALWAYS seller.
+ *     Type-agnostic — matches SQL role resolution and field semantics.
  *   - For non-M2M: order.type is the USER's intention:
  *       BUY order (user buys) → merchant = seller
  *       SELL order (user sells) → merchant = buyer
  */
-export type MyRole = 'buyer' | 'seller' | 'observer';
+export type MyRole = "buyer" | "seller" | "observer";
 
 export function computeMyRole(order: any, myMerchantId: string): MyRole {
   // Priority 1: Explicit role from SQL (authoritative)
   const explicitRole = order.my_role || order.myRole;
-  if (explicitRole === 'buyer' || explicitRole === 'seller') return explicitRole;
+  if (explicitRole === "buyer" || explicitRole === "seller")
+    return explicitRole;
 
   const buyerMerchantId = order.buyer_merchant_id || order.buyerMerchantId;
   const merchantId = order.merchant_id || order.orderMerchantId;
   const orderType = order.type || order.orderType;
 
-  // Rule 1: buyer_merchant_id is ALWAYS the buyer
-  if (buyerMerchantId === myMerchantId) return 'buyer';
+  // Rule 1: buyer_merchant_id = creating merchant. Role depends on stored type:
+  // Stored 'sell' = creator buys → buyer
+  // Stored 'buy' = creator sells → seller
+  if (buyerMerchantId === myMerchantId) {
+    return orderType === 'sell' ? 'buyer' : 'seller';
+  }
 
   // Rule 2: merchant_id match
   if (merchantId === myMerchantId) {
-    // M2M: buyer_merchant exists and it's not me → I'm the seller
-    if (buyerMerchantId && buyerMerchantId !== myMerchantId) return 'seller';
+    // M2M: I'm merchant_id (target), role is opposite of buyer_merchant_id
+    if (buyerMerchantId && buyerMerchantId !== myMerchantId) {
+      return orderType === 'sell' ? 'seller' : 'buyer';
+    }
 
     // Check if I locked escrow (strong signal: I'm the seller)
-    const debitedType = order.escrow_debited_entity_type || order.dbOrder?.escrow_debited_entity_type;
-    const debitedId = order.escrow_debited_entity_id || order.dbOrder?.escrow_debited_entity_id;
-    if (debitedType === 'merchant' && debitedId === myMerchantId) return 'seller';
+    const debitedType =
+      order.escrow_debited_entity_type ||
+      order.dbOrder?.escrow_debited_entity_type;
+    const debitedId =
+      order.escrow_debited_entity_id || order.dbOrder?.escrow_debited_entity_id;
+    if (debitedType === "merchant" && debitedId === myMerchantId)
+      return "seller";
 
     // BUY order: merchant fills by selling → seller
-    if (orderType === 'buy') return 'seller';
+    if (orderType === "buy") return "seller";
 
     // SELL order without buyer_merchant: non-M2M (user sells, merchant buys) → buyer
-    return 'buyer';
+    return "buyer";
   }
 
-  return 'observer';
+  return "observer";
 }
 
 /**
  * Get next action label for an order. Uses myRole from order object.
  */
-export function getNextAction(
-  order: any,
-  orderType?: 'buy' | 'sell'
-): string {
+export function getNextAction(order: any, orderType?: "buy" | "sell"): string {
   const status = getAuthoritativeStatus(order);
-  const myRole: MyRole = order.myRole || order.my_role || 'observer';
-  const hasEscrow = !!(order.escrowTxHash || order.escrow_tx_hash || order.dbOrder?.escrow_tx_hash);
+  const myRole: MyRole = order.myRole || order.my_role || "observer";
+  const hasEscrow = !!(
+    order.escrowTxHash ||
+    order.escrow_tx_hash ||
+    order.dbOrder?.escrow_tx_hash
+  );
 
   switch (status) {
-    case 'open':
-      if (myRole !== 'observer') return 'Waiting for Acceptor';
-      return 'Accept Order';
+    case "open":
+      if (myRole !== "observer") return "Waiting for Acceptor";
+      return "Accept Order";
 
-    case 'accepted':
+    case "accepted":
       if (!hasEscrow) {
-        return myRole === 'seller' ? 'Lock Escrow' : 'Wait for Escrow';
+        return myRole === "seller" ? "Lock Escrow" : "Wait for Escrow";
       }
-      return myRole === 'buyer' ? "I've Paid" : 'Wait for Payment';
+      return myRole === "buyer" ? "I've Paid" : "Wait for Payment";
 
-    case 'escrowed':
-      if (myRole === 'seller') return 'Waiting for Payment';
-      if (myRole === 'buyer') return "Send Fiat Payment";
-      return 'Claim Order';
+    case "escrowed": {
+      if (myRole === "seller") return "Waiting for Payment";
+      if (myRole === "buyer") return "Send Fiat Payment";
+      // Observer: check if order is unclaimed or already claimed
+      const buyerMerchant =
+        order.buyer_merchant_id ||
+        order.buyerMerchantId ||
+        order.dbOrder?.buyer_merchant_id;
+      if (buyerMerchant) return "Already Claimed";
+      return "Accept & Mine";
+    }
 
-    case 'payment_sent':
-      return myRole === 'seller' ? 'Confirm Receipt' : 'Waiting for Confirmation';
+    case "payment_sent":
+      return myRole === "seller"
+        ? "Confirm Receipt"
+        : "Waiting for Confirmation";
 
-    case 'completed':
-      return 'View Details';
+    case "completed":
+      return "View Details";
 
-    case 'cancelled':
-      return 'View Details';
+    case "cancelled":
+      return "View Details";
 
-    case 'expired':
-      return 'View Details';
+    case "expired":
+      return "View Details";
 
-    case 'disputed':
-      return 'View Dispute';
+    case "disputed":
+      return "View Dispute";
 
     default:
-      return 'View Order';
+      return "View Order";
   }
 }
 
@@ -352,19 +385,19 @@ export function getNextAction(
  * Handler identifiers for order actions. Maps to actual handler functions in page.tsx.
  */
 export type OrderActionHandler =
-  | 'acceptOrder'
-  | 'lockEscrow'
-  | 'signAndProceed'
-  | 'signToClaimOrder'
-  | 'markFiatPaymentSent'
-  | 'confirmPayment'
-  | 'openReleaseModal'
-  | 'cancelOrder'
-  | 'cancelOrderWithoutEscrow'
-  | 'openCancelModal'
-  | 'openDisputeModal'
-  | 'viewDetails'
-  | 'none';
+  | "acceptOrder"
+  | "lockEscrow"
+  | "signAndProceed"
+  | "signToClaimOrder"
+  | "markFiatPaymentSent"
+  | "confirmPayment"
+  | "openReleaseModal"
+  | "cancelOrder"
+  | "cancelOrderWithoutEscrow"
+  | "openCancelModal"
+  | "openDisputeModal"
+  | "viewDetails"
+  | "none";
 
 /**
  * Derived UI state for a single order. Replaces scattered conditionals
@@ -383,7 +416,7 @@ export interface OrderUIState {
   primaryAction: {
     label: string;
     handler: OrderActionHandler;
-    variant: 'green' | 'blue' | 'red' | 'gold';
+    variant: "green" | "blue" | "red" | "gold";
     disabled: boolean;
     disabledReason?: string;
   } | null;
@@ -408,20 +441,26 @@ export interface OrderUIState {
  *
  * Uses computeMyRole() to determine buyer/seller/observer — NOT isMyOrder.
  */
-export function deriveOrderUI(
-  order: any,
-  myMerchantId: string
-): OrderUIState {
+export function deriveOrderUI(order: any, myMerchantId: string): OrderUIState {
   const status = getAuthoritativeStatus(order);
   const badge = getStatusBadgeConfig(status);
   const myRole = computeMyRole(order, myMerchantId);
-  const hasEscrow = !!(order.escrowTxHash || order.escrow_tx_hash ||
-    order.dbOrder?.escrow_tx_hash);
-  const hasRefund = !!(order.refundTxHash || order.refund_tx_hash || order.dbOrder?.refund_tx_hash);
+  const hasEscrow = !!(
+    order.escrowTxHash ||
+    order.escrow_tx_hash ||
+    order.dbOrder?.escrow_tx_hash
+  );
+  const hasRefund = !!(
+    order.refundTxHash ||
+    order.refund_tx_hash ||
+    order.dbOrder?.refund_tx_hash
+  );
   const buyerMerchantId = order.buyer_merchant_id || order.buyerMerchantId;
   // Not terminal if cancelled/expired with unreturned escrow (seller needs to withdraw)
-  const hasUnreturnedEscrow = hasEscrow && !hasRefund && myRole === 'seller';
-  const isTerminal = ['completed', 'cancelled', 'expired'].includes(status) && !hasUnreturnedEscrow;
+  const hasUnreturnedEscrow = hasEscrow && !hasRefund && myRole === "seller";
+  const isTerminal =
+    ["completed", "cancelled", "expired"].includes(status) &&
+    !hasUnreturnedEscrow;
 
   // Base state
   const result: OrderUIState = {
@@ -431,213 +470,241 @@ export function deriveOrderUI(
     badge: { color: badge.color, bg: badge.bg, border: badge.border },
     primaryAction: null,
     secondaryAction: null,
-    nextStepText: '',
+    nextStepText: "",
     isTerminal,
-    showChat: !isTerminal && status !== 'open',
+    showChat: !isTerminal && status !== "open",
   };
 
   switch (status) {
-    case 'open':
-      if (myRole === 'observer') {
+    case "open":
+      if (myRole === "observer") {
         result.primaryAction = {
-          label: 'Accept Order',
-          handler: 'acceptOrder',
-          variant: 'green',
+          label: "Accept Order",
+          handler: "acceptOrder",
+          variant: "green",
           disabled: false,
         };
-        result.nextStepText = 'Accept this order to start the trade.';
+        result.nextStepText = "Accept this order to start the trade.";
       } else {
         // I created this order, waiting for counterparty
         result.primaryAction = {
-          label: 'Waiting for Acceptor',
-          handler: 'none',
-          variant: 'blue',
+          label: "Waiting for Acceptor",
+          handler: "none",
+          variant: "blue",
           disabled: true,
-          disabledReason: 'Waiting for a counterparty to accept this order.',
+          disabledReason: "Waiting for a counterparty to accept this order.",
         };
-        result.nextStepText = 'Waiting for a counterparty to accept.';
+        result.nextStepText = "Waiting for a counterparty to accept.";
         result.secondaryAction = {
-          label: 'Cancel Order',
-          handler: 'cancelOrderWithoutEscrow',
+          label: "Cancel Order",
+          handler: "cancelOrderWithoutEscrow",
         };
       }
       break;
 
-    case 'accepted': {
+    case "accepted": {
       if (!hasEscrow) {
-        if (myRole === 'seller') {
+        if (myRole === "seller") {
           // I'm the seller — I lock USDC in escrow
           result.primaryAction = {
-            label: 'Lock Escrow',
-            handler: 'lockEscrow',
-            variant: 'blue',
+            label: "Lock Escrow",
+            handler: "lockEscrow",
+            variant: "blue",
             disabled: false,
           };
-          result.nextStepText = 'Lock USDC in escrow to proceed.';
+          result.nextStepText = "Lock USDC in escrow to proceed.";
         } else {
           // I'm the buyer — wait for seller to lock escrow
           result.primaryAction = {
-            label: 'Waiting for Escrow',
-            handler: 'none',
-            variant: 'blue',
+            label: "Waiting for Escrow",
+            handler: "none",
+            variant: "blue",
             disabled: true,
-            disabledReason: 'Waiting for the seller to lock USDC in escrow.',
+            disabledReason: "Waiting for the seller to lock USDC in escrow.",
           };
-          result.nextStepText = 'Waiting for the seller to lock USDC in escrow.';
+          result.nextStepText =
+            "Waiting for the seller to lock USDC in escrow.";
         }
       } else {
         // Escrow already locked
-        if (myRole === 'buyer') {
+        if (myRole === "buyer") {
           // I'm the buyer — mark payment sent
           result.primaryAction = {
             label: "I've Paid",
-            handler: 'markFiatPaymentSent',
-            variant: 'blue',
+            handler: "markFiatPaymentSent",
+            variant: "blue",
             disabled: false,
           };
-          result.nextStepText = 'Send the fiat payment, then click "I\'ve Paid".';
+          result.nextStepText =
+            'Send the fiat payment, then click "I\'ve Paid".';
         } else {
           // I'm the seller — wait for buyer to pay
           result.primaryAction = {
-            label: 'Wait for Payment',
-            handler: 'none',
-            variant: 'blue',
+            label: "Wait for Payment",
+            handler: "none",
+            variant: "blue",
             disabled: true,
-            disabledReason: 'Waiting for the buyer to send fiat payment.',
+            disabledReason: "Waiting for the buyer to send fiat payment.",
           };
-          result.nextStepText = 'Escrow locked. Waiting for the buyer to send payment.';
+          result.nextStepText =
+            "Escrow locked. Waiting for the buyer to send payment.";
         }
       }
       result.secondaryAction = {
-        label: 'Cancel Order',
-        handler: hasEscrow ? 'openCancelModal' : 'cancelOrderWithoutEscrow',
+        label: "Cancel Order",
+        handler: hasEscrow ? "openCancelModal" : "cancelOrderWithoutEscrow",
       };
       result.showChat = true;
       break;
     }
 
-    case 'escrowed': {
-      if (myRole === 'seller') {
+    case "escrowed": {
+      if (myRole === "seller") {
         // I locked escrow. Check if there's a buyer already.
-        const hasBuyer = !!(buyerMerchantId && buyerMerchantId !== myMerchantId);
+        const hasBuyer = !!(
+          buyerMerchantId && buyerMerchantId !== myMerchantId
+        );
         if (hasBuyer) {
           // Buyer exists, waiting for them to send fiat
           result.primaryAction = {
-            label: 'Waiting for Payment',
-            handler: 'none',
-            variant: 'blue',
+            label: "Waiting for Payment",
+            handler: "none",
+            variant: "blue",
             disabled: true,
-            disabledReason: 'Waiting for the buyer to send fiat payment.',
+            disabledReason: "Waiting for the buyer to send fiat payment.",
           };
-          result.nextStepText = 'Your USDC is locked. Waiting for fiat payment.';
+          result.nextStepText =
+            "Your USDC is locked. Waiting for fiat payment.";
         } else {
           // No buyer yet, waiting for someone to accept
           result.primaryAction = {
-            label: 'Waiting for Acceptor',
-            handler: 'none',
-            variant: 'blue',
+            label: "Waiting for Acceptor",
+            handler: "none",
+            variant: "blue",
             disabled: true,
-            disabledReason: 'Waiting for another merchant or user to accept this order.',
+            disabledReason:
+              "Waiting for another merchant or user to accept this order.",
           };
-          result.nextStepText = 'Your USDC is locked. Waiting for a counterparty.';
+          result.nextStepText =
+            "Your USDC is locked. Waiting for a counterparty.";
         }
         result.secondaryAction = {
-          label: 'Cancel & Refund',
-          handler: 'openCancelModal',
+          label: "Cancel & Refund",
+          handler: "openCancelModal",
         };
-      } else if (myRole === 'buyer') {
+      } else if (myRole === "buyer") {
         // Escrow is locked by seller, I need to send fiat
         result.primaryAction = {
           label: "I've Paid",
-          handler: 'markFiatPaymentSent',
-          variant: 'blue',
+          handler: "markFiatPaymentSent",
+          variant: "blue",
           disabled: false,
         };
-        result.nextStepText = 'Escrow is locked. Send fiat payment, then click "I\'ve Paid".';
+        result.nextStepText =
+          'Escrow is locked. Send fiat payment, then click "I\'ve Paid".';
       } else {
-        // Observer: can claim/accept this order
-        result.primaryAction = {
-          label: 'Claim Order',
-          handler: 'signToClaimOrder',
-          variant: 'green',
-          disabled: false,
-        };
-        result.nextStepText = 'Claim this order and send fiat payment.';
+        // Observer: check if order is unclaimed or already claimed by someone else
+        const isUnclaimed = !buyerMerchantId;
+        if (isUnclaimed) {
+          // No one has claimed yet — show "Accept & Mine"
+          result.primaryAction = {
+            label: "Accept & Mine",
+            handler: "signToClaimOrder",
+            variant: "green",
+            disabled: false,
+          };
+          result.nextStepText = "Claim this order and send fiat payment.";
+        } else {
+          // Already claimed by another merchant
+          result.primaryAction = {
+            label: "Already Claimed",
+            handler: "none",
+            variant: "blue",
+            disabled: true,
+            disabledReason: "This order has been claimed by another merchant.",
+          };
+          result.nextStepText = "This order was claimed by another merchant.";
+        }
       }
-      result.showChat = myRole !== 'observer';
+      result.showChat = myRole !== "observer";
       break;
     }
 
-    case 'payment_sent':
-      if (myRole === 'seller') {
-        // Seller: buyer paid fiat, I confirm receipt and release escrow
+    case "payment_sent":
+      if (myRole === "seller") {
+        // Seller: buyer paid fiat, confirm receipt (backend handles escrow release + completion)
         result.primaryAction = {
-          label: 'Confirm Receipt & Release',
-          handler: hasEscrow ? 'openReleaseModal' : 'confirmPayment',
-          variant: 'green',
+          label: "Confirm Payment",
+          handler: "confirmPayment",
+          variant: "green",
           disabled: false,
         };
-        result.nextStepText = 'Verify the fiat payment, then release the escrow.';
+        result.nextStepText =
+          "Verify you received the fiat payment, then confirm.";
       } else {
         // Buyer: I sent payment, waiting for seller to confirm
         result.primaryAction = {
-          label: 'Waiting for Confirmation',
-          handler: 'none',
-          variant: 'blue',
+          label: "Waiting for Confirmation",
+          handler: "none",
+          variant: "blue",
           disabled: true,
-          disabledReason: 'Waiting for the seller to confirm your fiat payment.',
+          disabledReason:
+            "Waiting for the seller to confirm your fiat payment.",
         };
-        result.nextStepText = 'Waiting for the seller to confirm payment receipt.';
+        result.nextStepText =
+          "Waiting for the seller to confirm payment receipt.";
       }
       result.secondaryAction = {
-        label: 'Open Dispute',
-        handler: 'openDisputeModal',
+        label: "Open Dispute",
+        handler: "openDisputeModal",
       };
       result.showChat = true;
       break;
 
-    case 'disputed':
+    case "disputed":
       result.primaryAction = {
-        label: 'View Dispute',
-        handler: 'openDisputeModal',
-        variant: 'red',
+        label: "View Dispute",
+        handler: "openDisputeModal",
+        variant: "red",
         disabled: false,
       };
-      result.nextStepText = 'A dispute is in progress. Check the dispute details.';
+      result.nextStepText =
+        "A dispute is in progress. Check the dispute details.";
       result.showChat = true;
       break;
 
-    case 'completed':
-      result.statusLabel = 'COMPLETED';
-      result.nextStepText = 'This trade has been completed successfully.';
+    case "completed":
+      result.statusLabel = "COMPLETED";
+      result.nextStepText = "This trade has been completed successfully.";
       break;
 
-    case 'cancelled': {
-      result.statusLabel = 'CANCELLED';
-      result.nextStepText = 'This order was cancelled.';
+    case "cancelled": {
+      result.statusLabel = "CANCELLED";
+      result.nextStepText = "This order was cancelled.";
       if (hasUnreturnedEscrow) {
         result.primaryAction = {
-          label: 'Withdraw Escrow',
-          handler: 'openCancelModal',
-          variant: 'gold',
+          label: "Withdraw Escrow",
+          handler: "openCancelModal",
+          variant: "gold",
           disabled: false,
         };
-        result.nextStepText = 'Order cancelled. Withdraw your USDC from escrow.';
+        result.nextStepText =
+          "Order cancelled. Withdraw your USDC from escrow.";
       }
       break;
     }
 
-    case 'expired': {
-      result.statusLabel = 'EXPIRED';
-      result.nextStepText = 'This order has expired.';
+    case "expired": {
+      result.statusLabel = "EXPIRED";
+      result.nextStepText = "This order has expired.";
       if (hasUnreturnedEscrow) {
         result.primaryAction = {
-          label: 'Withdraw Escrow',
-          handler: 'openCancelModal',
-          variant: 'gold',
+          label: "Withdraw Escrow",
+          handler: "openCancelModal",
+          variant: "gold",
           disabled: false,
         };
-        result.nextStepText = 'Order expired. Withdraw your USDC from escrow.';
+        result.nextStepText = "Order expired. Withdraw your USDC from escrow.";
       }
       break;
     }

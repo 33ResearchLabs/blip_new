@@ -40,8 +40,18 @@ export async function deductPlatformFee(
   }
 
   // Determine who pays the fee (seller = whoever locked escrow)
-  const payerType = order.escrow_debited_entity_type || 'merchant';
-  const payerId = order.escrow_debited_entity_id || order.merchant_id;
+  // Fallback uses order structure if escrow tracking fields are missing
+  let fallbackPayerType: 'merchant' | 'user' = 'merchant';
+  let fallbackPayerId = order.merchant_id;
+  if (!order.escrow_debited_entity_id) {
+    if (order.type === 'sell' && !('buyer_merchant_id' in order && (order as any).buyer_merchant_id)) {
+      // User sell: user is the seller
+      fallbackPayerType = 'user';
+      fallbackPayerId = (order as any).user_id || order.merchant_id;
+    }
+  }
+  const payerType = order.escrow_debited_entity_type || fallbackPayerType;
+  const payerId = order.escrow_debited_entity_id || fallbackPayerId;
   const payerTable = payerType === 'merchant' ? 'merchants' : 'users';
 
   // Deduct fee from seller's balance

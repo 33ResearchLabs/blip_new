@@ -30,10 +30,14 @@ DECLARE
   v_order RECORD;
   v_status order_status;
 BEGIN
-  -- Deduct offer liquidity (row lock held until function returns)
+  -- Lock the offer row first to prevent concurrent deductions, then deduct.
+  -- The FOR UPDATE in the subquery serializes competing transactions on the same offer.
   UPDATE merchant_offers
-  SET available_amount = available_amount - p_crypto_amount
-  WHERE id = p_offer_id AND available_amount >= p_crypto_amount;
+  SET available_amount = available_amount - p_crypto_amount,
+      updated_at = NOW()
+  WHERE id = (
+    SELECT id FROM merchant_offers WHERE id = p_offer_id AND available_amount >= p_crypto_amount FOR UPDATE
+  );
 
   IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'INSUFFICIENT_LIQUIDITY');

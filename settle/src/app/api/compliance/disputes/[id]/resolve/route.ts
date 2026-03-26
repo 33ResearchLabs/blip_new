@@ -9,7 +9,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   // Rate limit dispute resolutions
-  const rl = checkRateLimit(request, 'dispute:resolve', STRICT_LIMIT);
+  const rl = await checkRateLimit(request, 'dispute:resolve', STRICT_LIMIT);
   if (rl) return rl;
 
   // Require DB-verified compliance auth

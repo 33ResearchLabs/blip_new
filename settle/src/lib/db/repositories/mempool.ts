@@ -1,4 +1,4 @@
-import { query, queryOne } from '../index';
+import { query, queryOne, transaction } from '../index';
 
 export interface MempoolOrder {
   id: string;
@@ -140,56 +140,58 @@ export async function bumpOrderPriority(
   orderId: string,
   isAuto: boolean = false
 ): Promise<{ success: boolean; new_premium_bps: number; max_reached: boolean }> {
-  const order = await queryOne<{
-    premium_bps_current: number;
-    premium_bps_cap: number;
-    bump_step_bps: number;
-    bump_interval_sec: number;
-    next_bump_at: string | null;
-    status: string;
-  }>(
-    `SELECT premium_bps_current, premium_bps_cap, bump_step_bps, bump_interval_sec, next_bump_at, status
-     FROM orders WHERE id = $1`,
-    [orderId]
-  );
+  return transaction(async (client) => {
+    // Lock the row to prevent duplicate bumps from concurrent workers
+    const orderResult = await client.query(
+      `SELECT premium_bps_current, premium_bps_cap, bump_step_bps, bump_interval_sec, next_bump_at, status
+       FROM orders WHERE id = $1 FOR UPDATE SKIP LOCKED`,
+      [orderId]
+    );
 
-  if (!order) {
-    throw new Error('Order not found');
-  }
+    const order = orderResult.rows[0];
 
-  if (order.status !== 'pending') {
-    throw new Error('Order is not pending');
-  }
+    if (!order) {
+      throw new Error('Order not found or already locked by another worker');
+    }
 
-  const newPremium = Math.min(
-    order.premium_bps_current + order.bump_step_bps,
-    order.premium_bps_cap
-  );
+    if (order.status !== 'pending') {
+      throw new Error('Order is not pending');
+    }
 
-  const maxReached = newPremium >= order.premium_bps_cap;
+    const newPremium = Math.min(
+      order.premium_bps_current + order.bump_step_bps,
+      order.premium_bps_cap
+    );
 
-  // Calculate next bump time
-  const nextBumpAt = !maxReached
-    ? new Date(Date.now() + order.bump_interval_sec * 1000).toISOString()
-    : null;
+    const maxReached = newPremium >= order.premium_bps_cap;
 
-  await query(
-    `UPDATE orders
-     SET premium_bps_current = $1,
-         next_bump_at = $2,
-         updated_at = NOW()
-     WHERE id = $3`,
-    [newPremium, nextBumpAt, orderId]
-  );
+    // Calculate next bump time
+    const nextBumpAt = !maxReached
+      ? new Date(Date.now() + order.bump_interval_sec * 1000).toISOString()
+      : null;
 
-  // Log event
-  await logOrderEvent(orderId, isAuto ? 'AUTO_BUMP' : 'MANUAL_BUMP', {
-    old_premium_bps: order.premium_bps_current,
-    new_premium_bps: newPremium,
-    max_reached: maxReached,
+    await client.query(
+      `UPDATE orders
+       SET premium_bps_current = $1,
+           next_bump_at = $2,
+           updated_at = NOW()
+       WHERE id = $3`,
+      [newPremium, nextBumpAt, orderId]
+    );
+
+    // Log event
+    await client.query(
+      `INSERT INTO order_events (order_id, event_type, metadata)
+       VALUES ($1, $2, $3)`,
+      [orderId, isAuto ? 'AUTO_BUMP' : 'MANUAL_BUMP', JSON.stringify({
+        old_premium_bps: order.premium_bps_current,
+        new_premium_bps: newPremium,
+        max_reached: maxReached,
+      })]
+    );
+
+    return { success: true, new_premium_bps: newPremium, max_reached: maxReached };
   });
-
-  return { success: true, new_premium_bps: newPremium, max_reached: maxReached };
 }
 
 // Accept order (atomic with optimistic locking)

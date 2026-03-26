@@ -60,9 +60,10 @@ export async function createDispute(data: {
 
     const dispute = result.rows[0] as Dispute;
 
-    // Update order status to disputed
+    // Update order status to disputed (with version increment and status guard)
     await client.query(
-      "UPDATE orders SET status = 'disputed' WHERE id = $1",
+      `UPDATE orders SET status = 'disputed', order_version = order_version + 1
+       WHERE id = $1 AND status NOT IN ('disputed', 'completed', 'cancelled', 'expired')`,
       [data.order_id]
     );
 

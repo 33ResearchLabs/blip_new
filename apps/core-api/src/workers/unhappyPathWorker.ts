@@ -46,10 +46,10 @@ let totalDisputeAutoResolves = 0;
 // ────────────────────────────────────────────────
 async function processInactivityWarnings(): Promise<number> {
   const rows = await query<{
-    id: string; order_number: string; status: string;
+    id: string; order_number: string; status: string; order_version: number;
     user_id: string; merchant_id: string; last_activity_at: Date;
   }>(
-    `SELECT id, order_number, status, user_id, merchant_id, last_activity_at
+    `SELECT id, order_number, status, order_version, user_id, merchant_id, last_activity_at
      FROM orders
      WHERE status IN ('accepted', 'escrowed', 'payment_pending', 'payment_sent')
        AND last_activity_at IS NOT NULL
@@ -58,17 +58,24 @@ async function processInactivityWarnings(): Promise<number> {
        AND cancel_requested_by IS NULL
        AND extension_requested_by IS NULL
      ORDER BY last_activity_at ASC
-     LIMIT $1`,
+     LIMIT $1
+     FOR UPDATE SKIP LOCKED`,
     [BATCH_SIZE]
   );
 
   for (const order of rows) {
     try {
-      // Mark warned
-      await query(
-        `UPDATE orders SET inactivity_warned_at = NOW(), order_version = order_version + 1 WHERE id = $1`,
-        [order.id]
+      // Mark warned with version guard
+      const warnResult = await query(
+        `UPDATE orders SET inactivity_warned_at = NOW(), order_version = order_version + 1
+         WHERE id = $1 AND order_version = $2
+         RETURNING id`,
+        [order.id, order.order_version]
       );
+      if (warnResult.length === 0) {
+        logger.warn('[UnhappyPath] Skipped warning (concurrent update)', { orderId: order.id });
+        continue;
+      }
 
       // Notification to both parties
       await query(
@@ -127,7 +134,7 @@ async function processInactivityWarnings(): Promise<number> {
 // ────────────────────────────────────────────────
 async function processInactivityEscalations(): Promise<number> {
   const rows = await query<{
-    id: string; order_number: string; status: string;
+    id: string; order_number: string; status: string; order_version: number;
     user_id: string; merchant_id: string; type: string;
     crypto_amount: string; escrow_tx_hash: string | null;
     escrow_debited_entity_type: string | null;
@@ -135,7 +142,7 @@ async function processInactivityEscalations(): Promise<number> {
     offer_id: string | null;
     last_activity_at: Date;
   }>(
-    `SELECT id, order_number, status, user_id, merchant_id, type,
+    `SELECT id, order_number, status, order_version, user_id, merchant_id, type,
             crypto_amount, escrow_tx_hash, escrow_debited_entity_type,
             escrow_debited_entity_id, offer_id, last_activity_at
      FROM orders
@@ -155,14 +162,19 @@ async function processInactivityEscalations(): Promise<number> {
       const isEscrowedPhase = ['escrowed', 'payment_pending', 'payment_sent'].includes(order.status);
 
       if (hasEscrow && isEscrowedPhase) {
-        // DISPUTE — money is locked, need manual resolution
-        await query(
+        // DISPUTE — money is locked, need manual resolution (version + status guard)
+        const disputeResult = await query(
           `UPDATE orders
            SET status = 'disputed',
                order_version = order_version + 1
-           WHERE id = $1`,
-          [order.id]
+           WHERE id = $1 AND order_version = $2 AND status = $3::order_status
+           RETURNING id`,
+          [order.id, order.order_version, order.status]
         );
+        if (disputeResult.length === 0) {
+          logger.warn('[UnhappyPath] Skipped escalation (concurrent update)', { orderId: order.id });
+          continue;
+        }
 
         await query(
           `INSERT INTO disputes (order_id, reason, description, raised_by, raiser_id, status, user_confirmed, merchant_confirmed, created_at)
@@ -223,16 +235,21 @@ async function processInactivityEscalations(): Promise<number> {
           );
         }
 
-        await query(
+        const cancelResult = await query(
           `UPDATE orders
            SET status = 'cancelled',
                cancelled_at = NOW(),
                cancelled_by = 'system',
                cancellation_reason = 'Auto-cancelled: no activity for 1 hour',
                order_version = order_version + 1
-           WHERE id = $1`,
-          [order.id]
+           WHERE id = $1 AND order_version = $2 AND status = $3::order_status
+           RETURNING id`,
+          [order.id, order.order_version, order.status]
         );
+        if (cancelResult.length === 0) {
+          logger.warn('[UnhappyPath] Skipped cancel (concurrent update)', { orderId: order.id });
+          continue;
+        }
 
         await query(
           `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
@@ -290,7 +307,7 @@ async function processInactivityEscalations(): Promise<number> {
 // ────────────────────────────────────────────────
 async function processDisputeAutoResolves(): Promise<number> {
   const rows = await query<{
-    id: string; order_number: string; status: string;
+    id: string; order_number: string; status: string; order_version: number;
     user_id: string; merchant_id: string; type: string;
     crypto_amount: string; escrow_tx_hash: string | null;
     escrow_debited_entity_type: string | null;
@@ -298,7 +315,7 @@ async function processDisputeAutoResolves(): Promise<number> {
     offer_id: string | null;
     dispute_auto_resolve_at: Date;
   }>(
-    `SELECT id, order_number, status, user_id, merchant_id, type,
+    `SELECT id, order_number, status, order_version, user_id, merchant_id, type,
             crypto_amount, escrow_tx_hash, escrow_debited_entity_type,
             escrow_debited_entity_id, offer_id, dispute_auto_resolve_at
      FROM orders
@@ -351,17 +368,22 @@ async function processDisputeAutoResolves(): Promise<number> {
         );
       }
 
-      // Update order → cancelled (refund to escrow funder)
-      await query(
+      // Update order → cancelled (refund to escrow funder) with version + status guard
+      const resolveResult = await query(
         `UPDATE orders
          SET status = 'cancelled',
              cancelled_at = NOW(),
              cancelled_by = 'system',
              cancellation_reason = 'Dispute auto-resolved: 24hr timeout — refunded to escrow funder',
              order_version = order_version + 1
-         WHERE id = $1`,
-        [order.id]
+         WHERE id = $1 AND order_version = $2 AND status = 'disputed'
+         RETURNING id`,
+        [order.id, order.order_version]
       );
+      if (resolveResult.length === 0) {
+        logger.warn('[UnhappyPath] Skipped dispute auto-resolve (concurrent update)', { orderId: order.id });
+        continue;
+      }
 
       // Resolve dispute
       await query(

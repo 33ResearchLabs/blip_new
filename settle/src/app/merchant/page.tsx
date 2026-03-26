@@ -44,7 +44,7 @@ const TradeFormModal = dynamic(() => import("@/components/merchant/TradeFormModa
 const OrderQuickView = dynamic(() => import("@/components/merchant/OrderQuickView").then(m => ({ default: m.OrderQuickView })), { ssr: false });
 import { LoginScreen } from "@/components/merchant/LoginScreen";
 const EscrowLockModal = dynamic(() => import("@/components/merchant/EscrowLockModal").then(m => ({ default: m.EscrowLockModal })), { ssr: false });
-const EscrowReleaseModal = dynamic(() => import("@/components/merchant/EscrowReleaseModal").then(m => ({ default: m.EscrowReleaseModal })), { ssr: false });
+// EscrowReleaseModal removed — confirm payment now uses showConfirm dialog + automatic escrow release
 const EscrowCancelModal = dynamic(() => import("@/components/merchant/EscrowCancelModal").then(m => ({ default: m.EscrowCancelModal })), { ssr: false });
 const DisputeModal = dynamic(() => import("@/components/merchant/DisputeModal").then(m => ({ default: m.DisputeModal })), { ssr: false });
 const WalletPromptModal = dynamic(() => import("@/components/merchant/WalletPromptModal").then(m => ({ default: m.WalletPromptModal })), { ssr: false });
@@ -266,16 +266,20 @@ export default function MerchantDashboard() {
       case 'Send Fiat Payment':
         markFiatPaymentSent(order);
         break;
+      case 'Accept & Mine':
+        signToClaimOrder(order);
+        break;
       case 'Confirm Receipt':
       case 'Confirm & Release':
-        openReleaseModal(order);
+      case 'Confirm Payment':
+        confirmPayment(order.id);
         break;
       default:
         // For unknown actions, fall back to opening the detail popup
         setSelectedOrderPopup(order);
         break;
     }
-  }, [openEscrowModal, markFiatPaymentSent, openReleaseModal, setSelectedOrderPopup]);
+  }, [openEscrowModal, markFiatPaymentSent, signToClaimOrder, confirmPayment, setSelectedOrderPopup]);
 
   // Fetch dispute info when viewing a chat for a disputed order
   useEffect(() => {
@@ -303,14 +307,17 @@ export default function MerchantDashboard() {
   const isSelfUnaccepted = (o: Order) => {
     const isSelf = o.isMyOrder || o.orderMerchantId === merchantId;
     if (!isSelf) return false;
+    // User sell orders (real user created, merchant assigned via offer) are NOT self-created.
+    // Only merchant-created orders (placeholder users) count as "self".
+    const dbUsername = o.dbOrder?.user?.username || '';
+    const isPlaceholderUser = dbUsername.startsWith('open_order_') || dbUsername.startsWith('m2m_');
+    if (!isPlaceholderUser) return false;
     const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
     return !o.dbOrder?.accepted_at && !(buyerMid && buyerMid !== merchantId);
   };
 
   const pendingOrders = useMemo(() => orders.filter(o => {
     if (isOrderExpired(o)) return false;
-    // Merchant's own orders should not appear in the pending marketplace
-    if (o.isMyOrder) return false;
     const status = getEffectiveStatus(o);
     if (status === "pending") return true;
     if (status === "escrow" && isSelfUnaccepted(o)) return true;
@@ -512,7 +519,7 @@ export default function MerchantDashboard() {
       <div className="md:hidden flex-1 flex flex-col overflow-hidden">
         <main className="flex-1 overflow-auto p-3 pb-20">
           {mobileView === 'orders' && <MobileOrdersView pendingOrders={pendingOrders} bigOrders={bigOrders} onAcceptOrder={acceptOrder} acceptingOrderId={acceptingOrderId} onOpenChat={handleOpenChat} onDismissBigOrder={dismissBigOrder} setMobileView={setMobileView} />}
-          {mobileView === 'escrow' && <MobileEscrowView ongoingOrders={ongoingOrders} markingDone={markingDone} onOpenEscrowModal={openEscrowModal} onMarkFiatPaymentSent={markFiatPaymentSent} onOpenReleaseModal={openReleaseModal} onOpenDisputeModal={(orderId) => openDisputeModal(orderId)} onOpenCancelModal={openCancelModal} onOpenChat={handleOpenChat} setMobileView={setMobileView} />}
+          {mobileView === 'escrow' && <MobileEscrowView ongoingOrders={ongoingOrders} markingDone={markingDone} onOpenEscrowModal={openEscrowModal} onMarkFiatPaymentSent={markFiatPaymentSent} onConfirmPayment={(order) => confirmPayment(order.id)} onOpenDisputeModal={(orderId) => openDisputeModal(orderId)} onOpenCancelModal={openCancelModal} onOpenChat={handleOpenChat} setMobileView={setMobileView} />}
           {mobileView === 'chat' && <MobileChatView merchantId={merchantId} directChat={directChat} orderStatus={activeContactOrderStatus} playSound={playSound} />}
           {mobileView === 'history' && <MobileHistoryView completedOrders={completedOrders} cancelledOrders={cancelledOrders} merchantId={merchantId} merchantInfo={merchantInfo} historyTab={historyTab} setHistoryTab={setHistoryTab} effectiveBalance={effectiveBalance} totalTradedVolume={totalTradedVolume} todayEarnings={todayEarnings} pendingEarnings={pendingEarnings} onShowAnalytics={() => setShowAnalytics(true)} onShowWalletModal={() => setShowWalletModal(true)} onLogout={handleLogout} />}
           {mobileView === 'marketplace' && merchantId && <MobileMarketplaceView merchantId={merchantId} marketSubTab={marketSubTab} setMarketSubTab={setMarketSubTab} onTakeOffer={(offer) => { setOpenTradeForm({ tradeType: offer.type === 'buy' ? 'sell' : 'buy', cryptoAmount: '', paymentMethod: offer.payment_method as 'bank' | 'cash', spreadPreference: 'fastest', expiryMinutes: 15 }); setShowOpenTradeModal(true); }} onCreateOffer={() => setShowCreateModal(true)} />}
@@ -536,9 +543,7 @@ export default function MerchantDashboard() {
         escrowTxHash={escrowTxHash} escrowError={escrowError} effectiveBalance={effectiveBalance}
         onClose={closeEscrowModal} onExecute={executeLockEscrow} />
 
-      <EscrowReleaseModal showReleaseModal={showReleaseModal} releaseOrder={releaseOrder} isReleasingEscrow={isReleasingEscrow}
-        releaseTxHash={releaseTxHash} releaseError={releaseError}
-        onClose={closeReleaseModal} onExecute={executeRelease} />
+      {/* EscrowReleaseModal removed — confirmPayment now handles the full flow with a confirmation dialog */}
 
       <EscrowCancelModal showCancelModal={showCancelModal} cancelOrder={cancelOrder} isCancellingEscrow={isCancellingEscrow}
         cancelTxHash={cancelTxHash} cancelError={cancelError} onClose={closeCancelModal} onExecute={executeCancelEscrow} />
@@ -621,7 +626,7 @@ export default function MerchantDashboard() {
           onAcceptOrder={(orderId) => { const order = orders.find(o => o.id === orderId); if (order) acceptOrder(order); }}
           onCancelOrder={(orderId) => { const order = orders.find(o => o.id === orderId); if (order) { if (order.escrowTxHash) openCancelModal(order); else cancelOrderWithoutEscrow(order.id); } }}
           onLockEscrow={(orderId) => { const order = orders.find(o => o.id === orderId); if (order) openEscrowModal(order); }}
-          onReleaseEscrow={(orderId) => { const order = orders.find(o => o.id === orderId); if (order) openReleaseModal(order); }}
+          onReleaseEscrow={(orderId) => confirmPayment(orderId)}
           onOpenDispute={openDisputeModal} onRequestCancel={requestCancelOrder} onRespondToCancel={respondToCancelRequest} isRequestingCancel={isRequestingCancel} />
       )}
 

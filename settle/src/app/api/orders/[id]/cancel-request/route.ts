@@ -11,6 +11,10 @@ import {
   successResponse,
   errorResponse,
 } from '@/lib/middleware/auth';
+import { getIdempotencyKey, withIdempotency } from '@/lib/idempotency';
+import { getOrderWithRelations } from '@/lib/db/repositories/orders';
+import { resolveTradeRole } from '@/lib/orders/handleOrderAction';
+import { normalizeStatus } from '@/lib/orders/statusNormalizer';
 
 const requestCancelSchema = z.object({
   actor_type: z.enum(['user', 'merchant']),
@@ -33,6 +37,12 @@ export async function POST(
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
+    // Resolve merchant identity from header
+    const postMerchantId = request.headers.get('x-merchant-id');
+    if (postMerchantId && !auth.merchantId) {
+      auth.merchantId = postMerchantId;
+    }
+
     const { id } = await params;
     const body = await request.json();
 
@@ -43,15 +53,64 @@ export async function POST(
     }
 
     // Security: enforce actor matches authenticated identity (with merchant header fallback)
-    const postMerchantId = request.headers.get('x-merchant-id');
     if (parseResult.data.actor_id !== auth.actorId && !(parseResult.data.actor_type === 'merchant' && postMerchantId && parseResult.data.actor_id === postMerchantId)) {
       return forbiddenResponse('actor_id does not match authenticated identity');
     }
 
-    return proxyCoreApi(`/v1/orders/${id}/cancel-request`, {
-      method: 'POST',
-      body: parseResult.data,
-    });
+    // ── STATUS + ROLE VALIDATION ──
+    // Cancel only allowed from open, accepted, or escrowed statuses
+    // and only by a participant (buyer or seller)
+    const cancelOrder = await getOrderWithRelations(id);
+    if (!cancelOrder) {
+      return notFoundResponse('Order');
+    }
+
+    const minimalStatus = normalizeStatus(cancelOrder.status);
+    const allowedCancelStatuses = ['open', 'accepted', 'escrowed'];
+    if (!allowedCancelStatuses.includes(minimalStatus)) {
+      logger.warn('[CancelRequest] Rejected — invalid status for cancellation', {
+        orderId: id,
+        currentStatus: cancelOrder.status,
+        minimalStatus,
+      });
+      return NextResponse.json(
+        { success: false, error: `Cannot cancel from status '${minimalStatus}'. Cancellation is only allowed before payment is sent.`, code: 'INVALID_STATUS_FOR_CANCEL' },
+        { status: 400 }
+      );
+    }
+
+    const role = resolveTradeRole(cancelOrder, parseResult.data.actor_id);
+    if (role !== 'buyer' && role !== 'seller') {
+      logger.warn('[CancelRequest] Rejected — actor is not a participant', {
+        orderId: id,
+        actorId: parseResult.data.actor_id,
+        resolvedRole: role,
+      });
+      return NextResponse.json(
+        { success: false, error: 'Only the buyer or seller can request cancellation.', code: 'NOT_PARTICIPANT' },
+        { status: 403 }
+      );
+    }
+
+    // TASK 10: Enforce idempotency for cancel requests
+    const idempotencyKey = getIdempotencyKey(request);
+    const effectiveKey = idempotencyKey || `cancel:${id}:${parseResult.data.actor_id}:${Date.now()}`;
+
+    const idempotencyResult = await withIdempotency(
+      effectiveKey,
+      'cancel_order',
+      id,
+      async () => {
+        const resp = await proxyCoreApi(`/v1/orders/${id}/cancel-request`, {
+          method: 'POST',
+          body: parseResult.data,
+        });
+        const respData = await resp.json();
+        return { data: respData, statusCode: resp.status };
+      }
+    );
+
+    return NextResponse.json(idempotencyResult.data, { status: idempotencyResult.statusCode });
   } catch (error) {
     logger.api.error('POST', '/api/orders/[id]/cancel-request', error as Error);
     return errorResponse('Internal server error');
@@ -67,6 +126,12 @@ export async function PUT(
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
+    // Resolve merchant identity from header
+    const putMerchantId = request.headers.get('x-merchant-id');
+    if (putMerchantId && !auth.merchantId) {
+      auth.merchantId = putMerchantId;
+    }
+
     const { id } = await params;
     const body = await request.json();
 
@@ -77,7 +142,6 @@ export async function PUT(
     }
 
     // Security: enforce actor matches authenticated identity (with merchant header fallback)
-    const putMerchantId = request.headers.get('x-merchant-id');
     if (parseResult.data.actor_id !== auth.actorId && !(parseResult.data.actor_type === 'merchant' && putMerchantId && parseResult.data.actor_id === putMerchantId)) {
       return forbiddenResponse('actor_id does not match authenticated identity');
     }

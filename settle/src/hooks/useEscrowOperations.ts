@@ -252,6 +252,10 @@ export function useEscrowOperations({
             if (res.ok) {
               const data = await res.json();
               if (data.success) recorded = true;
+              else console.error(`[Escrow] Attempt ${attempt + 1} — server returned success:false`, data);
+            } else {
+              const errData = await res.json().catch(() => ({}));
+              console.error(`[Escrow] Attempt ${attempt + 1} — HTTP ${res.status}`, errData);
             }
           } catch (err) {
             console.error(`[Merchant] Escrow record attempt ${attempt + 1} failed:`, err);
@@ -330,6 +334,14 @@ export function useEscrowOperations({
             fetchOrders();
             return;
           }
+
+          // Pre-flight escrow check: verify escrow is locked before showing release modal
+          if (!data.data.escrow_debited_entity_id && !data.data.escrow_tx_hash) {
+            addNotification('system', 'Please lock escrow before releasing funds. The escrow step has not been completed.', order.id);
+            playSound('error');
+            return;
+          }
+
           setReleaseOrder(freshOrder);
           setReleaseTxHash(null);
           setReleaseError(null);
@@ -353,7 +365,7 @@ export function useEscrowOperations({
     setReleaseError(null);
     setIsReleasingEscrow(false);
     setShowReleaseModal(true);
-  }, [merchantId, solanaWallet.connected, addNotification, setShowWalletModal, fetchOrders]);
+  }, [merchantId, solanaWallet.connected, addNotification, playSound, setShowWalletModal, fetchOrders]);
 
   const executeRelease = useCallback(async () => {
     if (!merchantId || !releaseOrder) return;
@@ -362,11 +374,28 @@ export function useEscrowOperations({
     setReleaseError(null);
 
     try {
+      // Server-side pre-flight validation before on-chain transaction
+      try {
+        const validateRes = await fetchWithAuth(`/api/orders/${releaseOrder.id}/validate-release`);
+        if (validateRes.ok) {
+          const validateData = await validateRes.json();
+          if (validateData.success && validateData.data && !validateData.data.canRelease) {
+            const reasons = validateData.data.reasons as string[];
+            setReleaseError(reasons[0] || 'Release validation failed. Please ensure escrow is locked and payment is confirmed.');
+            setIsReleasingEscrow(false);
+            return;
+          }
+        }
+      } catch (validateErr) {
+        // Non-blocking: if validation endpoint fails, proceed with on-chain checks
+        console.warn('[Release] Pre-flight validation failed (non-blocking):', validateErr);
+      }
+
       const { escrowTradeId, escrowCreatorWallet, userWallet } = releaseOrder;
 
       const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
       if (!escrowTradeId || !escrowCreatorWallet || !userWallet) {
-        setReleaseError('Missing escrow details. The escrow may not have been locked on-chain.');
+        setReleaseError('Missing escrow details. The escrow may not have been locked on-chain. Please lock escrow before releasing funds.');
         setIsReleasingEscrow(false);
         return;
       }

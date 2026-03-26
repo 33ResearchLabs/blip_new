@@ -291,6 +291,15 @@ export function useUserAuth({
               fetchOrders(user.id);
               fetchBankAccounts(user.id);
               fetchResolvedDisputes(user.id);
+              // Fetch fresh balance from DB (mock mode)
+              fetchWithAuth(`/api/mock/balance?userId=${user.id}&type=user`)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                  if (data?.success && data.balance !== undefined) {
+                    setUserBalance(data.balance);
+                  }
+                })
+                .catch(() => {});
               setScreen('home');
               setIsInitializing(false);
               return;

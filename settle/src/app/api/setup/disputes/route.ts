@@ -39,8 +39,10 @@ export async function GET(request: NextRequest) {
       await query(`
         CREATE TABLE IF NOT EXISTS compliance_team (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          email VARCHAR(255) UNIQUE NOT NULL,
+          email VARCHAR(255) UNIQUE,
+          wallet_address VARCHAR(64) UNIQUE,
           name VARCHAR(255) NOT NULL,
+          password_hash TEXT,
           role VARCHAR(50) DEFAULT 'support',
           is_active BOOLEAN DEFAULT true,
           created_at TIMESTAMPTZ DEFAULT NOW(),

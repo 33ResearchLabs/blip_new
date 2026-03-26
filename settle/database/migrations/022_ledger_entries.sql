@@ -185,7 +185,8 @@ CREATE TRIGGER trigger_auto_log_order_ledger
   EXECUTE FUNCTION auto_log_order_ledger();
 
 -- View for merchant ledger
-CREATE OR REPLACE VIEW v_merchant_ledger AS
+DROP VIEW IF EXISTS v_merchant_ledger CASCADE;
+CREATE VIEW v_merchant_ledger AS
 SELECT
   le.id,
   le.account_id as merchant_id,
@@ -206,7 +207,8 @@ WHERE le.account_type = 'merchant'
 ORDER BY le.created_at DESC;
 
 -- View for user ledger
-CREATE OR REPLACE VIEW v_user_ledger AS
+DROP VIEW IF EXISTS v_user_ledger CASCADE;
+CREATE VIEW v_user_ledger AS
 SELECT
   le.id,
   le.account_id as user_id,

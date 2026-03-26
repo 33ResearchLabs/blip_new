@@ -8,6 +8,7 @@ export type { OrderEventName } from './orderEvents';
 import { registerReceiptListener } from './listeners/receiptListener';
 import { registerNotificationListener } from './listeners/notificationListener';
 import { registerBroadcastListener } from './listeners/broadcastListener';
+import { registerAuditLogListener } from './listeners/auditLogListener';
 
 let registered = false;
 
@@ -18,4 +19,5 @@ export function registerAllListeners(): void {
   registerReceiptListener();
   registerNotificationListener();
   registerBroadcastListener();
+  registerAuditLogListener();
 }

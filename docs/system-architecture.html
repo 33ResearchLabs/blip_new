@@ -1,0 +1,1791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blip P2P Trading - System Architecture</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --surface2: #1a1a26;
+      --border: #2a2a3a;
+      --border-hover: #3a3a5a;
+      --text: #e4e4ef;
+      --text-muted: #8888a0;
+      --text-dim: #55556a;
+      --accent: #6c5ce7;
+      --accent-glow: rgba(108, 92, 231, 0.15);
+      --green: #00d68f;
+      --green-glow: rgba(0, 214, 143, 0.12);
+      --orange: #f59e0b;
+      --orange-glow: rgba(245, 158, 11, 0.12);
+      --red: #ef4444;
+      --red-glow: rgba(239, 68, 68, 0.12);
+      --cyan: #22d3ee;
+      --cyan-glow: rgba(34, 211, 238, 0.12);
+      --pink: #ec4899;
+      --purple: #a78bfa;
+      --yellow: #facc15;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
+
+    /* Header */
+    .hero {
+      position: relative;
+      padding: 80px 40px 60px;
+      text-align: center;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -200px; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 800px;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero h1 {
+      font-size: 3rem;
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      background: linear-gradient(135deg, #fff 0%, var(--accent) 50%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 12px;
+    }
+    .hero p {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .hero-badges {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 24px;
+      flex-wrap: wrap;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .hero-badge .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* Navigation */
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(10, 10, 15, 0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 40px;
+      overflow-x: auto;
+    }
+    .nav-inner {
+      display: flex;
+      gap: 0;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .nav a {
+      padding: 14px 18px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.82rem;
+      font-weight: 500;
+      white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .nav a:hover {
+      color: var(--text);
+      border-bottom-color: var(--accent);
+    }
+
+    /* Main */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 40px;
+    }
+
+    /* Section */
+    .section {
+      margin-bottom: 80px;
+      scroll-margin-top: 60px;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .section-num {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px; height: 42px;
+      background: var(--accent-glow);
+      border: 1px solid rgba(108, 92, 231, 0.3);
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 800;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .section-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 20px;
+      transition: border-color 0.2s;
+    }
+    .card:hover { border-color: var(--border-hover); }
+
+    .card-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+    .card-title .icon {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    .card-body p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-bottom: 12px;
+    }
+    .card-body strong {
+      color: var(--text);
+    }
+
+    /* Code blocks */
+    .code-block {
+      background: #0d0d14;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 14px 0;
+      font-size: 0;
+    }
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 14px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+    }
+    .code-file {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+    .code-lang {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      background: var(--surface);
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    pre {
+      padding: 16px;
+      overflow-x: auto;
+      font-size: 0.82rem;
+      line-height: 1.7;
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      color: #c4c4d8;
+    }
+
+    /* Syntax colors */
+    .kw { color: #c792ea; }
+    .fn { color: #82aaff; }
+    .str { color: #c3e88d; }
+    .cm { color: #546e7a; font-style: italic; }
+    .num { color: #f78c6c; }
+    .op { color: #89ddff; }
+    .type { color: #ffcb6b; }
+    .param { color: #f07178; }
+    .prop { color: #b2ccd6; }
+
+    /* Flow Diagram */
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 20px 0;
+      overflow-x: auto;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .flow-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 14px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      min-width: 110px;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .flow-step:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+    .flow-step .step-icon {
+      font-size: 1.2rem;
+    }
+    .flow-step .step-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .flow-step .step-sub {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+    }
+    .flow-arrow {
+      font-size: 1.2rem;
+      color: var(--text-dim);
+      padding: 0 4px;
+      flex-shrink: 0;
+    }
+
+    /* Status Pipeline */
+    .pipeline {
+      display: flex;
+      align-items: stretch;
+      gap: 2px;
+      margin: 20px 0;
+      overflow-x: auto;
+      padding: 4px 0;
+    }
+    .pipeline-stage {
+      flex: 1;
+      min-width: 100px;
+      padding: 14px 10px;
+      text-align: center;
+      border-radius: 10px;
+      position: relative;
+      cursor: default;
+    }
+    .pipeline-stage .stage-name {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .pipeline-stage .stage-desc {
+      font-size: 0.65rem;
+      margin-top: 4px;
+      opacity: 0.7;
+    }
+    .stage-pending { background: rgba(250, 204, 21, 0.1); color: #facc15; border: 1px solid rgba(250, 204, 21, 0.2); }
+    .stage-accepted { background: rgba(0, 214, 143, 0.1); color: #00d68f; border: 1px solid rgba(0, 214, 143, 0.2); }
+    .stage-escrowed { background: rgba(167, 139, 250, 0.1); color: #a78bfa; border: 1px solid rgba(167, 139, 250, 0.2); }
+    .stage-payment { background: rgba(34, 211, 238, 0.1); color: #22d3ee; border: 1px solid rgba(34, 211, 238, 0.2); }
+    .stage-completed { background: rgba(0, 214, 143, 0.15); color: #00d68f; border: 1px solid rgba(0, 214, 143, 0.3); }
+    .stage-cancelled { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); }
+    .stage-expired { background: rgba(136, 136, 160, 0.1); color: #8888a0; border: 1px solid rgba(136, 136, 160, 0.2); }
+
+    /* Event Bus Diagram */
+    .event-bus-diagram {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 0;
+      align-items: start;
+      margin: 24px 0;
+    }
+    .bus-emitter {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    .bus-center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 30px;
+      position: relative;
+    }
+    .bus-center::before {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0;
+      left: 50%;
+      width: 3px;
+      background: linear-gradient(to bottom, var(--accent), var(--cyan));
+      border-radius: 2px;
+      transform: translateX(-50%);
+    }
+    .bus-label {
+      background: var(--accent);
+      color: white;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 6px 14px;
+      border-radius: 20px;
+      z-index: 2;
+      position: relative;
+      white-space: nowrap;
+    }
+    .bus-listeners {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .bus-item {
+      padding: 10px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .bus-item small {
+      display: block;
+      font-weight: 400;
+      color: var(--text-dim);
+      font-size: 0.68rem;
+      margin-top: 2px;
+    }
+
+    /* Tables */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 16px 0;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.83rem;
+    }
+    th {
+      background: var(--surface2);
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(42, 42, 58, 0.5);
+      color: var(--text-muted);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(108, 92, 231, 0.03); }
+    td code {
+      background: var(--surface2);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--cyan);
+    }
+
+    /* Channel badges */
+    .channel {
+      display: inline-block;
+      padding: 3px 9px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--purple);
+      margin: 2px;
+    }
+
+    /* Warning/Info boxes */
+    .callout {
+      padding: 16px 20px;
+      border-radius: 12px;
+      margin: 16px 0;
+      font-size: 0.85rem;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .callout-icon {
+      font-size: 1.1rem;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .callout-warning {
+      background: var(--orange-glow);
+      border: 1px solid rgba(245, 158, 11, 0.2);
+      color: #f59e0b;
+    }
+    .callout-info {
+      background: var(--cyan-glow);
+      border: 1px solid rgba(34, 211, 238, 0.2);
+      color: #22d3ee;
+    }
+    .callout-danger {
+      background: var(--red-glow);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+    }
+    .callout-success {
+      background: var(--green-glow);
+      border: 1px solid rgba(0, 214, 143, 0.2);
+      color: #00d68f;
+    }
+
+    /* Arch diagram */
+    .arch-diagram {
+      background: #0d0d14;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      margin: 24px 0;
+      overflow-x: auto;
+    }
+    .arch-row {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .arch-box {
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-align: center;
+      min-width: 130px;
+    }
+    .arch-arrow {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 1.4rem;
+      margin: 4px 0;
+    }
+    .arch-frontend { background: rgba(34,211,238,0.1); border: 1px solid rgba(34,211,238,0.25); color: var(--cyan); }
+    .arch-api { background: rgba(108,92,231,0.1); border: 1px solid rgba(108,92,231,0.25); color: var(--accent); }
+    .arch-db { background: rgba(0,214,143,0.1); border: 1px solid rgba(0,214,143,0.25); color: var(--green); }
+    .arch-queue { background: rgba(236,72,153,0.1); border: 1px solid rgba(236,72,153,0.25); color: var(--pink); }
+    .arch-rt { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.25); color: var(--orange); }
+    .arch-worker { background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.25); color: var(--purple); }
+
+    /* Grid for side-by-side */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 800px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 2rem; }
+      .container { padding: 20px; }
+      .event-bus-diagram { grid-template-columns: 1fr; gap: 16px; }
+      .bus-emitter, .bus-listeners { align-items: stretch; }
+      .bus-center { flex-direction: row; padding: 10px 0; }
+      .bus-center::before { top: 50%; bottom: auto; left: 0; right: 0; width: auto; height: 3px; transform: none; }
+    }
+
+    /* Inline tag */
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 5px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .tag-route { background: rgba(108,92,231,0.15); color: var(--accent); }
+    .tag-event { background: rgba(245,158,11,0.15); color: var(--orange); }
+    .tag-db { background: rgba(0,214,143,0.15); color: var(--green); }
+    .tag-queue { background: rgba(236,72,153,0.15); color: var(--pink); }
+    .tag-pusher { background: rgba(34,211,238,0.15); color: var(--cyan); }
+    .tag-worker { background: rgba(167,139,250,0.15); color: var(--purple); }
+
+    /* Lifecycle steps */
+    .lifecycle-step {
+      position: relative;
+      padding-left: 40px;
+      margin-bottom: 32px;
+    }
+    .lifecycle-step::before {
+      content: '';
+      position: absolute;
+      left: 15px;
+      top: 32px;
+      bottom: -32px;
+      width: 2px;
+      background: var(--border);
+    }
+    .lifecycle-step:last-child::before { display: none; }
+    .lifecycle-dot {
+      position: absolute;
+      left: 6px;
+      top: 6px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.6rem;
+      font-weight: 800;
+    }
+    .lifecycle-step h4 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      padding: 40px;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 0.8rem;
+    }
+
+    .section-divider {
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--border), transparent);
+      margin: 60px 0;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="hero">
+  <h1>Blip P2P Trading</h1>
+  <p>Complete system architecture and data flow documentation for the peer-to-peer crypto-fiat trading platform.</p>
+  <div class="hero-badges">
+    <span class="hero-badge"><span class="dot" style="background:var(--accent)"></span> Fastify</span>
+    <span class="hero-badge"><span class="dot" style="background:var(--green)"></span> PostgreSQL</span>
+    <span class="hero-badge"><span class="dot" style="background:var(--pink)"></span> BullMQ / Redis</span>
+    <span class="hero-badge"><span class="dot" style="background:var(--orange)"></span> Pusher</span>
+    <span class="hero-badge"><span class="dot" style="background:var(--cyan)"></span> Next.js</span>
+    <span class="hero-badge"><span class="dot" style="background:var(--purple)"></span> Solana</span>
+  </div>
+</div>
+
+<!-- Navigation -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="#overview">Overview</a>
+    <a href="#lifecycle">Order Lifecycle</a>
+    <a href="#receipts">Receipts</a>
+    <a href="#chat">Chat</a>
+    <a href="#realtime">Realtime</a>
+    <a href="#queue">Queue</a>
+    <a href="#expiry">Expiry</a>
+    <a href="#dataflow">Data Flow</a>
+    <a href="#risks">Risks</a>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- ================================================================== -->
+  <!-- OVERVIEW -->
+  <!-- ================================================================== -->
+  <section class="section" id="overview">
+    <div class="section-header">
+      <div class="section-num">0</div>
+      <h2 class="section-title">System Overview</h2>
+    </div>
+
+    <div class="arch-diagram">
+      <div class="arch-row">
+        <div class="arch-box arch-frontend">Next.js Frontend<br><small style="opacity:0.7;font-size:0.7rem">React 19 + Tailwind</small></div>
+      </div>
+      <div class="arch-arrow">&#8595;</div>
+      <div class="arch-row">
+        <div class="arch-box arch-api">Settle API Routes<br><small style="opacity:0.7;font-size:0.7rem">Auth, Validation, Proxy</small></div>
+        <div class="arch-box arch-api">Core API (Fastify)<br><small style="opacity:0.7;font-size:0.7rem">DB Writes, Business Logic</small></div>
+      </div>
+      <div class="arch-arrow">&#8595;</div>
+      <div class="arch-row">
+        <div class="arch-box arch-db">PostgreSQL<br><small style="opacity:0.7;font-size:0.7rem">Orders, Receipts, Chat</small></div>
+        <div class="arch-box arch-queue">Redis (Upstash)<br><small style="opacity:0.7;font-size:0.7rem">BullMQ Receipt Queue</small></div>
+      </div>
+      <div class="arch-arrow">&#8595;</div>
+      <div class="arch-row">
+        <div class="arch-box arch-rt">Pusher<br><small style="opacity:0.7;font-size:0.7rem">Real-time Events</small></div>
+        <div class="arch-box arch-rt">WebSocket<br><small style="opacity:0.7;font-size:0.7rem">Direct WS /ws/orders</small></div>
+        <div class="arch-box arch-worker">Background Workers<br><small style="opacity:0.7;font-size:0.7rem">Expiry, Bumps, Prices</small></div>
+      </div>
+    </div>
+
+    <!-- Event Bus -->
+    <div class="card">
+      <div class="card-title">
+        <div class="icon" style="background:var(--orange-glow);color:var(--orange)">&#9889;</div>
+        Event-Driven Core &mdash; <code style="font-size:0.85rem;color:var(--orange)">orderBus</code>
+      </div>
+      <div class="card-body">
+        <p>Every status change emits an event on the in-process <strong>orderBus</strong> (Node EventEmitter). Four independent listeners react without blocking the HTTP response:</p>
+      </div>
+
+      <div class="event-bus-diagram">
+        <div class="bus-emitter">
+          <div class="bus-item" style="border-color:rgba(250,204,21,0.3);color:#facc15">POST /v1/orders <small>Order Creation</small></div>
+          <div class="bus-item" style="border-color:rgba(0,214,143,0.3);color:#00d68f">PATCH /v1/orders/:id <small>Status Transitions</small></div>
+          <div class="bus-item" style="border-color:rgba(167,139,250,0.3);color:#a78bfa">POST /v1/orders/:id/escrow <small>Escrow Lock</small></div>
+          <div class="bus-item" style="border-color:rgba(136,136,160,0.3);color:#8888a0">expiryWorker <small>Auto-expire</small></div>
+        </div>
+        <div class="bus-center">
+          <div class="bus-label">orderBus</div>
+        </div>
+        <div class="bus-listeners">
+          <div class="bus-item" style="border-color:rgba(34,211,238,0.3);color:#22d3ee">broadcastListener <small>Pusher + WebSocket</small></div>
+          <div class="bus-item" style="border-color:rgba(236,72,153,0.3);color:#ec4899">receiptListener <small>BullMQ receipt jobs</small></div>
+          <div class="bus-item" style="border-color:rgba(245,158,11,0.3);color:#f59e0b">notificationListener <small>Outbox + Reputation</small></div>
+          <div class="bus-item" style="border-color:rgba(0,214,143,0.3);color:#00d68f">auditLogListener <small>order_events log</small></div>
+        </div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-file">apps/core-api/src/events/orderEvents.ts</span>
+          <span class="code-lang">TypeScript</span>
+        </div>
+<pre><span class="kw">export const</span> <span class="type">ORDER_EVENT</span> = {
+  <span class="prop">CREATED</span>:      <span class="str">'order.created'</span>,
+  <span class="prop">ACCEPTED</span>:     <span class="str">'order.accepted'</span>,
+  <span class="prop">ESCROWED</span>:     <span class="str">'order.escrowed'</span>,
+  <span class="prop">PAYMENT_SENT</span>: <span class="str">'order.payment_sent'</span>,
+  <span class="prop">COMPLETED</span>:    <span class="str">'order.completed'</span>,
+  <span class="prop">CANCELLED</span>:    <span class="str">'order.cancelled'</span>,
+  <span class="prop">EXPIRED</span>:      <span class="str">'order.expired'</span>,
+  <span class="prop">DISPUTED</span>:     <span class="str">'order.disputed'</span>,
+  <span class="prop">STATUS_CHANGED</span>: <span class="str">'order.status_changed'</span>, <span class="cm">// emitted for ALL transitions</span>
+};</pre>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- ================================================================== -->
+  <!-- ORDER LIFECYCLE -->
+  <!-- ================================================================== -->
+  <section class="section" id="lifecycle">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2 class="section-title">Order Lifecycle</h2>
+    </div>
+
+    <!-- Status Pipeline -->
+    <div class="pipeline">
+      <div class="pipeline-stage stage-pending"><div class="stage-name">Pending</div><div class="stage-desc">Created</div></div>
+      <div class="pipeline-stage stage-accepted"><div class="stage-name">Accepted</div><div class="stage-desc">Merchant took it</div></div>
+      <div class="pipeline-stage stage-escrowed"><div class="stage-name">Escrowed</div><div class="stage-desc">Crypto locked</div></div>
+      <div class="pipeline-stage stage-payment"><div class="stage-name">Payment Sent</div><div class="stage-desc">Fiat sent</div></div>
+      <div class="pipeline-stage stage-completed"><div class="stage-name">Completed</div><div class="stage-desc">Released</div></div>
+    </div>
+    <div style="text-align:center;margin:-10px 0 24px">
+      <span class="pipeline-stage stage-cancelled" style="display:inline-block;min-width:auto;padding:8px 16px;margin:4px"><div class="stage-name" style="font-size:0.68rem">Cancelled</div></span>
+      <span class="pipeline-stage stage-expired" style="display:inline-block;min-width:auto;padding:8px 16px;margin:4px"><div class="stage-name" style="font-size:0.68rem">Expired</div></span>
+      <span style="font-size:0.7rem;color:var(--text-dim);margin-left:8px">terminal states (can happen at any active stage)</span>
+    </div>
+
+    <!-- 1.1 Order Creation -->
+    <div class="lifecycle-step">
+      <div class="lifecycle-dot" style="border-color:#facc15;color:#facc15;background:rgba(250,204,21,0.1)">1</div>
+      <h4>Order Creation <span class="tag tag-route">POST /v1/orders</span></h4>
+      <div class="card" style="margin-left:0">
+        <div class="card-body">
+          <p>A user picks a merchant's offer and creates a trade. The system <strong>deducts liquidity first</strong> (short row lock on the offer), then inserts the order row.</p>
+          <p><strong>Expiry:</strong> <code>expires_at = now() + 15 minutes</code> (configurable, clamped 1&ndash;1440 min).</p>
+          <p><strong>Idempotency:</strong> Header <code>idempotency-key</code> scoped by actor prevents duplicate creation on retries.</p>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-file">apps/core-api/src/routes/orderCreate.ts:185-208</span>
+            <span class="code-lang">TypeScript</span>
+          </div>
+<pre><span class="cm">// 1. Deduct offer liquidity FIRST (short row lock, auto-commit)</span>
+<span class="kw">const</span> deducted = <span class="kw">await</span> <span class="fn">dbQuery</span>(
+  <span class="str">'UPDATE merchant_offers SET available_amount = available_amount - $1
+   WHERE id = $2 AND available_amount >= $1 RETURNING id'</span>,
+  [data.<span class="prop">crypto_amount</span>, data.<span class="prop">offer_id</span>]
+);
+<span class="kw">if</span> (deducted.<span class="prop">length</span> === <span class="num">0</span>) {
+  <span class="kw">return</span> reply.<span class="fn">status</span>(<span class="num">409</span>).<span class="fn">send</span>({ <span class="prop">error</span>: <span class="str">'Insufficient offer liquidity'</span> });
+}
+
+<span class="cm">// 2. Insert order row</span>
+<span class="kw">const</span> rows = <span class="kw">await</span> <span class="fn">dbQuery</span>(
+  <span class="str">`INSERT INTO orders (..., expires_at) VALUES (..., now() + interval '15 min') RETURNING *`</span>,
+  values
+);
+
+<span class="cm">// 3. Emit event -> all 4 listeners fire</span>
+orderBus.<span class="fn">emitOrderEvent</span>({
+  <span class="prop">event</span>: ORDER_EVENT.<span class="type">CREATED</span>,
+  <span class="prop">orderId</span>: order.<span class="prop">id</span>,
+  <span class="prop">newStatus</span>: order.<span class="prop">status</span>,   <span class="cm">// 'pending' or 'escrowed'</span>
+});</pre>
+        </div>
+
+        <div class="callout callout-warning">
+          <span class="callout-icon">&#9888;</span>
+          <div>Liquidity deduct and order insert are <strong>NOT in a transaction</strong>. A crash between them could leak liquidity. Mitigated by idempotency, but worth monitoring.</div>
+        </div>
+
+        <div style="margin-top:12px">
+          <span class="tag tag-db">DB</span> <code>orders</code> row inserted (status: pending) &bull; <code>merchant_offers.available_amount</code> decremented<br>
+          <span class="tag tag-pusher" style="margin-top:4px">Pusher</span> <code>order:created</code> &rarr; <span class="channel">private-merchants-global</span> (all merchants see new order)
+        </div>
+      </div>
+    </div>
+
+    <!-- 1.2 Order Acceptance -->
+    <div class="lifecycle-step">
+      <div class="lifecycle-dot" style="border-color:#00d68f;color:#00d68f;background:rgba(0,214,143,0.1)">2</div>
+      <h4>Order Acceptance <span class="tag tag-route">PATCH /v1/orders/:id</span></h4>
+      <div class="card" style="margin-left:0">
+        <div class="card-body">
+          <p>A merchant accepts a pending order. Uses the <strong><code>accept_order_v1()</code></strong> stored procedure for a single DB round-trip (atomic validate + update).</p>
+          <p><strong>Guards:</strong> Self-acceptance blocked &bull; Transition validated &bull; Merchant's default payment method auto-attached.</p>
+          <p><strong>Receipt created here</strong> (enqueued to BullMQ with 2s delay).</p>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-file">apps/core-api/src/routes/orders.ts:217-276</span>
+            <span class="code-lang">TypeScript</span>
+          </div>
+<pre><span class="cm">// Self-acceptance guard</span>
+<span class="kw">if</span> (preCheck.<span class="prop">merchant_id</span> === actor_id) {
+  <span class="kw">return</span> reply.<span class="fn">status</span>(<span class="num">400</span>).<span class="fn">send</span>({ <span class="prop">error</span>: <span class="str">'Cannot accept your own order'</span> });
+}
+
+<span class="cm">// Single stored proc: validate + update atomically</span>
+<span class="kw">const</span> procResult = <span class="kw">await</span> <span class="fn">queryOne</span>(
+  <span class="str">'SELECT accept_order_v1($1, $2, $3, $4)'</span>,
+  [id, actor_type, actor_id, acceptor_wallet_address]
+);
+
+<span class="cm">// Auto-attach merchant's payment method</span>
+<span class="kw">const</span> mpm = <span class="kw">await</span> <span class="fn">queryOne</span>(
+  <span class="str">`SELECT id FROM merchant_payment_methods
+   WHERE merchant_id = $1 AND is_active = true
+   ORDER BY is_default DESC, created_at DESC LIMIT 1`</span>,
+  [actor_id]
+);
+
+<span class="cm">// Emit ACCEPTED -> triggers receipt creation</span>
+orderBus.<span class="fn">emitOrderEvent</span>({ <span class="prop">event</span>: ORDER_EVENT.<span class="type">ACCEPTED</span>, ... });</pre>
+        </div>
+
+        <div style="margin-top:12px">
+          <span class="tag tag-db">DB</span> <code>status = 'accepted'</code> &bull; <code>accepted_at = NOW()</code> &bull; <code>expires_at = NOW() + 120 min</code><br>
+          <span class="tag tag-queue" style="margin-top:4px">Queue</span> <code>CREATE_RECEIPT</code> job enqueued (2s delay)<br>
+          <span class="tag tag-pusher" style="margin-top:4px">Pusher</span> <code>order:status-updated</code> &rarr; <span class="channel">private-order-{id}</span> <span class="channel">private-user-{userId}</span> <span class="channel">private-merchant-{merchantId}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1.3 Escrow Locking -->
+    <div class="lifecycle-step">
+      <div class="lifecycle-dot" style="border-color:#a78bfa;color:#a78bfa;background:rgba(167,139,250,0.1)">3</div>
+      <h4>Escrow Locking <span class="tag tag-route">POST /v1/orders/:id/escrow</span></h4>
+      <div class="card" style="margin-left:0">
+        <div class="card-body">
+          <p>The <strong>seller</strong> locks crypto into escrow. Who is the seller depends on the order type:</p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <tr><th>Order Type</th><th>Seller (locks escrow)</th><th>Buyer (sends fiat)</th></tr>
+            <tr><td>Buy (user buys crypto)</td><td>Merchant</td><td>User</td></tr>
+            <tr><td>Sell (user sells crypto)</td><td>User</td><td>Merchant</td></tr>
+            <tr><td>M2M (merchant-to-merchant)</td><td>merchant_id (always)</td><td>buyer_merchant_id</td></tr>
+          </table>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-file">apps/core-api/src/routes/escrow.ts:89-126</span>
+            <span class="code-lang">TypeScript</span>
+          </div>
+<pre><span class="cm">// Determine correct seller</span>
+<span class="kw">if</span> (isM2M) {
+  expectedSellerId = order.<span class="prop">merchant_id</span>;  <span class="cm">// M2M: merchant always sells</span>
+} <span class="kw">else if</span> (order.<span class="prop">type</span> === <span class="str">'buy'</span>) {
+  expectedSellerId = order.<span class="prop">merchant_id</span>;  <span class="cm">// User buys -> merchant sells</span>
+} <span class="kw">else</span> {
+  expectedSellerId = order.<span class="prop">user_id</span>;     <span class="cm">// User sells -> user is seller</span>
+}
+
+<span class="cm">// Guard: only seller can lock</span>
+<span class="kw">if</span> (actor_id !== expectedSellerId) {
+  <span class="kw">return</span> reply.<span class="fn">status</span>(<span class="num">403</span>).<span class="fn">send</span>({ <span class="prop">error</span>: <span class="str">'Only the seller can lock escrow'</span> });
+}
+
+<span class="cm">// Stored proc: FOR UPDATE + validate + deduct + update (1 round-trip)</span>
+<span class="kw">const</span> procResult = <span class="kw">await</span> <span class="fn">queryOne</span>(
+  <span class="str">'SELECT escrow_order_v1($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)'</span>,
+  [id, tx_hash, actor_type, actor_id, ...]
+);</pre>
+        </div>
+
+        <div style="margin-top:12px">
+          <span class="tag tag-db">DB</span> <code>status = 'escrowed'</code> &bull; <code>escrow_tx_hash</code> stored &bull; <code>escrowed_at = NOW()</code><br>
+          <span class="tag tag-queue" style="margin-top:4px">Queue</span> <code>UPDATE_RECEIPT</code> &rarr; set <code>escrowed_at</code> on receipt<br>
+          <span class="tag tag-pusher" style="margin-top:4px">Pusher</span> <code>order:status-updated</code> &rarr; order + user + merchant channels
+        </div>
+      </div>
+    </div>
+
+    <!-- 1.4 Payment Sent -->
+    <div class="lifecycle-step">
+      <div class="lifecycle-dot" style="border-color:#22d3ee;color:#22d3ee;background:rgba(34,211,238,0.1)">4</div>
+      <h4>Payment Sent <span class="tag tag-route">PATCH /v1/orders/:id</span></h4>
+      <div class="card" style="margin-left:0">
+        <div class="card-body">
+          <p>The fiat buyer marks payment as sent. <strong>Idempotency-protected</strong> to prevent duplicate marking. Payment deadlines vary by method:</p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <tr><th>Payment Method</th><th>Deadline</th><th>Needs Proof</th></tr>
+            <tr><td>Cash / UPI</td><td>60 minutes</td><td>No</td></tr>
+            <tr><td>Bank (existing beneficiary)</td><td>4 hours</td><td>Yes</td></tr>
+            <tr><td>Bank (new beneficiary)</td><td>48 hours</td><td>Yes</td></tr>
+          </table>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-file">apps/core-api/src/routes/orders.ts:282-343</span>
+            <span class="code-lang">TypeScript</span>
+          </div>
+<pre><span class="cm">// Idempotency-protected</span>
+<span class="kw">return</span> <span class="fn">withIdempotency</span>(request, reply, <span class="str">'payment_sent'</span>, id, <span class="kw">async</span> () => {
+  <span class="kw">const</span> updated = <span class="kw">await</span> <span class="fn">queryOne</span>(
+    <span class="str">`UPDATE orders SET status = 'payment_sent',
+            payment_sent_at = NOW(),
+            payment_deadline = NOW() + ${deadlineInterval},
+            order_version = order_version + 1
+     WHERE id = $1 AND status = 'escrowed' AND order_version = $2
+     RETURNING *`</span>,
+    [id, preRead.<span class="prop">order_version</span>]
+  );
+
+  orderBus.<span class="fn">emitOrderEvent</span>({ <span class="prop">event</span>: ORDER_EVENT.<span class="type">PAYMENT_SENT</span>, ... });
+});</pre>
+        </div>
+
+        <div class="callout callout-info">
+          <span class="callout-icon">&#128274;</span>
+          <div><strong>Optimistic locking:</strong> The <code>order_version</code> check in the WHERE clause prevents concurrent updates. If another request already changed the order, this returns 409.</div>
+        </div>
+
+        <div style="margin-top:12px">
+          <span class="tag tag-db">DB</span> <code>status = 'payment_sent'</code> &bull; <code>payment_sent_at = NOW()</code> &bull; <code>payment_deadline</code> set &bull; <code>order_version++</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1.5 Order Completion -->
+    <div class="lifecycle-step">
+      <div class="lifecycle-dot" style="border-color:#00d68f;color:#00d68f;background:rgba(0,214,143,0.15)">5</div>
+      <h4>Order Completion <span class="tag tag-route">PATCH /v1/orders/:id</span></h4>
+      <div class="card" style="margin-left:0">
+        <div class="card-body">
+          <p>The seller confirms they received fiat and releases escrow. <strong>Cannot complete without escrow release</strong> (release_tx_hash required).</p>
+          <p><strong>Side effects:</strong> Receipt finalized &bull; Reputation +5 for both parties &bull; Trade stats incremented.</p>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-file">apps/core-api/src/routes/orders.ts:384-386</span>
+            <span class="code-lang">TypeScript</span>
+          </div>
+<pre><span class="cm">// Guard: cannot complete without escrow release</span>
+<span class="kw">if</span> (newStatus === <span class="str">'completed'</span> && currentOrder.<span class="prop">escrow_tx_hash</span> && !currentOrder.<span class="prop">release_tx_hash</span>) {
+  <span class="kw">return</span> { <span class="prop">error</span>: <span class="str">'Cannot complete: escrow not released'</span> };
+}</pre>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-file">apps/core-api/src/events/listeners/notificationListener.ts:77-84</span>
+            <span class="code-lang">TypeScript</span>
+          </div>
+<pre><span class="cm">// On completion: update trade stats for both parties</span>
+orderBus.<span class="fn">safeOn</span>(ORDER_EVENT.<span class="type">COMPLETED</span>, (p) => {
+  <span class="fn">dbQuery</span>(
+    <span class="str">`WITH u AS (
+       UPDATE users SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $2
+     )
+     UPDATE merchants SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $3`</span>,
+    [p.order.<span class="prop">fiat_amount</span>, p.<span class="prop">userId</span>, p.<span class="prop">merchantId</span>]
+  );
+});</pre>
+        </div>
+
+        <div style="margin-top:12px">
+          <span class="tag tag-db">DB</span> <code>status = 'completed'</code> &bull; <code>completed_at = NOW()</code> &bull; <code>release_tx_hash</code> stored<br>
+          <span class="tag tag-event" style="margin-top:4px">Side Effects</span> Reputation: +5 both &bull; Stats: <code>total_trades++</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1.6 Cancellation -->
+    <div class="lifecycle-step">
+      <div class="lifecycle-dot" style="border-color:#ef4444;color:#ef4444;background:rgba(239,68,68,0.1)">6</div>
+      <h4>Order Cancellation <span class="tag tag-route">PATCH /v1/orders/:id</span></h4>
+      <div class="card" style="margin-left:0">
+        <div class="card-body">
+          <p>Either party can cancel. If escrow exists, <code>atomicCancelWithRefund()</code> handles refunding atomically to prevent double-spend.</p>
+          <p><strong>Liquidity restored</strong> to the merchant offer if cancelled from early stages (pending, accepted, escrow_pending).</p>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-file">apps/core-api/src/routes/orders.ts:174-213</span>
+            <span class="code-lang">TypeScript</span>
+          </div>
+<pre><span class="kw">if</span> (order.<span class="prop">escrow_tx_hash</span>) {
+  <span class="cm">// Atomic cancel + refund (prevents double-spend)</span>
+  <span class="kw">const</span> cancelResult = <span class="kw">await</span> <span class="fn">atomicCancelWithRefund</span>(
+    id, order.<span class="prop">status</span>, actor_type, actor_id, reason,
+    { type, crypto_amount, merchant_id, user_id, ... }
+  );
+
+  <span class="cm">// Verify refund invariants</span>
+  <span class="kw">await</span> <span class="fn">verifyRefundInvariants</span>({
+    <span class="prop">orderId</span>: id,
+    <span class="prop">expectedStatus</span>: <span class="str">'cancelled'</span>,
+    <span class="prop">expectedMinOrderVersion</span>: order.<span class="prop">order_version</span> + <span class="num">1</span>
+  });
+
+  orderBus.<span class="fn">emitOrderEvent</span>({
+    <span class="prop">event</span>: ORDER_EVENT.<span class="type">CANCELLED</span>,
+    <span class="prop">refundTxHash</span>: cancelResult.order?.<span class="prop">refund_tx_hash</span>,
+  });
+}</pre>
+        </div>
+
+        <div style="margin-top:12px">
+          <span class="tag tag-db">DB</span> <code>status = 'cancelled'</code> &bull; <code>cancelled_at</code> &bull; <code>cancelled_by</code> &bull; <code>cancellation_reason</code> &bull; Escrow refunded<br>
+          <span class="tag tag-pusher" style="margin-top:4px">Pusher</span> <code>order:cancelled</code> (dedicated event) &rarr; all participants + <span class="channel">private-merchants-global</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1.7 Expiry -->
+    <div class="lifecycle-step">
+      <div class="lifecycle-dot" style="border-color:#8888a0;color:#8888a0;background:rgba(136,136,160,0.1)">7</div>
+      <h4>Order Expiry <span class="tag tag-worker">expiryWorker</span></h4>
+      <div class="card" style="margin-left:0">
+        <div class="card-body">
+          <p>Background worker polls every <strong>10 seconds</strong>, batch-processes <strong>20 orders</strong> using <code>FOR UPDATE SKIP LOCKED</code>.</p>
+          <p><strong>Critical:</strong> <code>payment_sent</code> orders are <strong>excluded</strong> from expiry. This protects the buyer who already sent fiat.</p>
+        </div>
+        <p style="color:var(--text-dim);font-size:0.85rem;margin-top:4px">See <a href="#expiry" style="color:var(--accent)">Step 6: Expiry System</a> for full details.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- ================================================================== -->
+  <!-- RECEIPT SYSTEM -->
+  <!-- ================================================================== -->
+  <section class="section" id="receipts">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2 class="section-title">Receipt System</h2>
+    </div>
+
+    <div class="flow">
+      <div class="flow-step"><span class="step-icon">&#9989;</span><span class="step-label">ACCEPTED</span><span class="step-sub">receipt created</span></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step"><span class="step-icon">&#128274;</span><span class="step-label">ESCROWED</span><span class="step-sub">escrowed_at set</span></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step"><span class="step-icon">&#128176;</span><span class="step-label">PAYMENT_SENT</span><span class="step-sub">payment_sent_at set</span></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step"><span class="step-icon">&#127881;</span><span class="step-label">COMPLETED</span><span class="step-sub">release_tx_hash + completed_at</span></div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Create Receipt -->
+      <div class="card">
+        <div class="card-title">
+          <div class="icon" style="background:var(--green-glow);color:var(--green)">+</div>
+          createOrderReceipt()
+        </div>
+        <div class="card-body">
+          <p>Triggered on <strong>ORDER_EVENT.ACCEPTED</strong>. Resolves both parties (creator vs acceptor), inserts receipt row, then inserts into both <code>chat_messages</code> and <code>direct_messages</code>.</p>
+          <p><strong>Idempotent:</strong> <code>INSERT ... ON CONFLICT (order_id) DO NOTHING</code> &mdash; no race condition possible.</p>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-file">apps/core-api/src/receipts.ts:143-238</span>
+            <span class="code-lang">TypeScript</span>
+          </div>
+<pre><span class="kw">const</span> parties = <span class="kw">await</span> <span class="fn">resolveParties</span>(order, actorId);
+
+<span class="cm">// Atomic idempotent insert</span>
+<span class="kw">await</span> <span class="fn">dbQuery</span>(
+  <span class="str">`INSERT INTO order_receipts (
+    order_id, order_number, type, ...
+    creator_type, creator_id, creator_name,
+    acceptor_type, acceptor_id, acceptor_name, ...
+  ) VALUES ($1, $2, ...)
+  ON CONFLICT (order_id) DO NOTHING
+  RETURNING order_id`</span>, [...]
+);
+
+<span class="cm">// Insert receipt into chat (message_type = 'receipt')</span>
+<span class="kw">await</span> <span class="fn">dbQuery</span>(
+  <span class="str">`INSERT INTO chat_messages
+   (order_id, sender_type, sender_id, content, message_type, receipt_data)
+   VALUES ($1, $2, $3, $4, 'receipt', $5::jsonb)`</span>,
+  [orderId, acceptor_type, acceptor_id,
+   <span class="str">'Order Receipt #1234'</span>, receiptDataJSON]
+);</pre>
+        </div>
+      </div>
+
+      <!-- Update Receipt -->
+      <div class="card">
+        <div class="card-title">
+          <div class="icon" style="background:var(--cyan-glow);color:var(--cyan)">&#8635;</div>
+          updateOrderReceipt()
+        </div>
+        <div class="card-body">
+          <p>Called on every subsequent status transition. Uses <strong>forward-only guard</strong> to prevent backward transitions from out-of-order BullMQ jobs.</p>
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-file">apps/core-api/src/receipts.ts:20-37</span>
+            <span class="code-lang">TypeScript</span>
+          </div>
+<pre><span class="cm">// Status priority map (higher = further in lifecycle)</span>
+<span class="kw">const</span> <span class="type">STATUS_PRIORITY</span> = {
+  <span class="prop">accepted</span>:     <span class="num">1</span>,
+  <span class="prop">escrowed</span>:     <span class="num">2</span>,
+  <span class="prop">payment_sent</span>: <span class="num">3</span>,
+  <span class="prop">completed</span>:    <span class="num">4</span>,  <span class="cm">// terminal</span>
+  <span class="prop">cancelled</span>:    <span class="num">4</span>,  <span class="cm">// terminal (same rank)</span>
+  <span class="prop">expired</span>:      <span class="num">4</span>,  <span class="cm">// terminal (same rank)</span>
+};
+
+<span class="cm">// Forward-only: only overwrite lower-priority statuses</span>
+<span class="kw">const</span> <span class="fn">isForwardTransition</span> = (cur, next) =>
+  STATUS_PRIORITY[next] > STATUS_PRIORITY[cur];
+
+<span class="cm">// Atomic UPDATE with status guard</span>
+<span class="kw">await</span> <span class="fn">dbQuery</span>(
+  <span class="str">`UPDATE order_receipts
+   SET status = $1, updated_at = NOW(), ...
+   WHERE order_id = $2 AND status IN (${allowed})
+   RETURNING order_id`</span>, [...]
+);</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#9200;</span>
+      <div><strong>Receipt creation delay:</strong> The BullMQ job has a built-in <strong>2-second delay</strong> (<code>delay: 2000</code> in <code>receiptQueue.ts:143</code>). If a user opens chat immediately after acceptance, the receipt card may not be visible yet. Plus retry backoff: 2s &rarr; 4s &rarr; 8s on failure.</div>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- ================================================================== -->
+  <!-- CHAT SYSTEM -->
+  <!-- ================================================================== -->
+  <section class="section" id="chat">
+    <div class="section-header">
+      <div class="section-num">3</div>
+      <h2 class="section-title">Chat System</h2>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="icon" style="background:var(--accent-glow);color:var(--accent)">&#128172;</div>
+        Dual-Table Architecture
+      </div>
+      <div class="card-body">
+        <p>Every message is stored in <strong>two tables simultaneously</strong>:</p>
+        <p><strong>1. <code>chat_messages</code></strong> &mdash; order-scoped (visible in order chat view)<br>
+        <strong>2. <code>direct_messages</code></strong> &mdash; bridged copy (visible in DM thread view between parties)</p>
+        <p>Read status is tracked per-participant in <code>dm_read_status</code>.</p>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-file">settle/src/app/api/orders/[id]/messages/route.ts:125-196</span>
+          <span class="code-lang">TypeScript</span>
+        </div>
+<pre><span class="cm">// 1. Insert into order chat</span>
+<span class="kw">const</span> message = <span class="kw">await</span> <span class="fn">sendMessage</span>({
+  <span class="prop">order_id</span>: id, <span class="prop">sender_type</span>, <span class="prop">sender_id</span>, <span class="prop">content</span>, <span class="prop">message_type</span>, <span class="prop">image_url</span>
+});
+
+<span class="cm">// 2. Notify via Pusher</span>
+<span class="fn">notifyNewMessage</span>({
+  <span class="prop">orderId</span>: id, <span class="prop">messageId</span>: message.<span class="prop">id</span>,
+  <span class="prop">senderType</span>, <span class="prop">senderId</span>, <span class="prop">content</span>, <span class="prop">messageType</span>,
+});
+
+<span class="cm">// 3. Bridge to direct_messages</span>
+<span class="kw">await</span> <span class="fn">query</span>(
+  <span class="str">`INSERT INTO direct_messages
+   (sender_type, sender_id, recipient_type, recipient_id, content, message_type)
+   VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`</span>,
+  [sender_type, sender_id, recipientType, recipientId, content, message_type]
+);
+
+<span class="cm">// 4. Create per-participant read status</span>
+<span class="kw">await</span> <span class="fn">query</span>(
+  <span class="str">`INSERT INTO dm_read_status (message_id, actor_id, is_read, read_at)
+   VALUES ($1, $2, true, NOW()), ($1, $3, false, NULL)
+   ON CONFLICT DO NOTHING`</span>,
+  [dmId, sender_id, recipientId]
+);</pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="icon" style="background:var(--pink);color:white;font-size:0.7rem">&#128203;</div>
+        Receipt in Chat
+      </div>
+      <div class="card-body">
+        <p>The receipt appears as a special chat message with <code>message_type = 'receipt'</code> and structured data in the <strong><code>receipt_data</code> JSONB column</strong>.</p>
+        <p><strong>Frontend detection:</strong> No JSON.parse needed on <code>content</code>. The chat component checks <code>message_type</code> and renders a <code>ReceiptCard</code> component.</p>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-file">settle/src/components/chat/cards/ReceiptCard.tsx</span>
+          <span class="code-lang">React</span>
+        </div>
+<pre><span class="cm">// Frontend: receipt_data contains structured JSONB</span>
+<span class="kw">interface</span> <span class="type">ReceiptData</span> {
+  <span class="prop">order_number</span>?: <span class="type">string</span>;
+  <span class="prop">order_type</span>?: <span class="type">string</span>;       <span class="cm">// 'buy' | 'sell'</span>
+  <span class="prop">crypto_amount</span>?: <span class="type">string</span>;
+  <span class="prop">fiat_amount</span>?: <span class="type">string</span>;
+  <span class="prop">rate</span>?: <span class="type">string</span>;
+  <span class="prop">creator_name</span>?: <span class="type">string</span>;
+  <span class="prop">acceptor_name</span>?: <span class="type">string</span>;
+  <span class="prop">status</span>?: <span class="type">string</span>;
+}
+
+<span class="cm">// Renders as a rich card with amounts, parties, status badge</span>
+<span class="kw">export function</span> <span class="fn">ReceiptCard</span>({ <span class="param">data</span>, <span class="param">currentStatus</span> }) {
+  <span class="kw">const</span> effectiveStatus = currentStatus || data.<span class="prop">status</span>;
+  <span class="cm">// ... renders order number, parties, amounts, rate, fees</span>
+}</pre>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- ================================================================== -->
+  <!-- REALTIME -->
+  <!-- ================================================================== -->
+  <section class="section" id="realtime">
+    <div class="section-header">
+      <div class="section-num">4</div>
+      <h2 class="section-title">Realtime Flow (Pusher)</h2>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="icon" style="background:var(--orange-glow);color:var(--orange)">&#128225;</div>
+        Channel Architecture
+      </div>
+      <div class="card-body">
+        <p>All channels are <strong>private</strong> (authenticated via <code>/api/pusher/auth</code>). The backend triggers events from Core API directly, bypassing the Next.js proxy for minimal latency.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <tr>
+            <th>Channel Pattern</th>
+            <th>Subscribers</th>
+            <th>Purpose</th>
+          </tr>
+          <tr>
+            <td><code>private-order-{id}</code></td>
+            <td>Both parties viewing the order</td>
+            <td>Order-specific status changes</td>
+          </tr>
+          <tr>
+            <td><code>private-user-{userId}</code></td>
+            <td>The user</td>
+            <td>All orders for this user</td>
+          </tr>
+          <tr>
+            <td><code>private-merchant-{merchantId}</code></td>
+            <td>The merchant</td>
+            <td>All orders for this merchant</td>
+          </tr>
+          <tr>
+            <td><code>private-merchants-global</code></td>
+            <td>All merchants</td>
+            <td>New orders, cancellations (order pool changes)</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="icon" style="background:var(--cyan-glow);color:var(--cyan)">&#9889;</div>
+        Event Dispatch Map
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <tr>
+            <th>Order Event</th>
+            <th>Pusher Event</th>
+            <th>Target Channels</th>
+          </tr>
+          <tr>
+            <td><code>CREATED</code></td>
+            <td><code>order:created</code></td>
+            <td><span class="channel">private-merchants-global</span></td>
+          </tr>
+          <tr>
+            <td><code>ACCEPTED</code></td>
+            <td><code>order:status-updated</code></td>
+            <td><span class="channel">private-order-{id}</span> <span class="channel">private-user-{uid}</span> <span class="channel">private-merchant-{mid}</span> <span class="channel">private-merchants-global</span></td>
+          </tr>
+          <tr>
+            <td><code>ESCROWED</code></td>
+            <td><code>order:status-updated</code></td>
+            <td><span class="channel">private-order-{id}</span> <span class="channel">private-user-{uid}</span> <span class="channel">private-merchant-{mid}</span></td>
+          </tr>
+          <tr>
+            <td><code>PAYMENT_SENT</code></td>
+            <td><code>order:status-updated</code></td>
+            <td><span class="channel">private-order-{id}</span> <span class="channel">private-user-{uid}</span> <span class="channel">private-merchant-{mid}</span></td>
+          </tr>
+          <tr>
+            <td><code>COMPLETED</code></td>
+            <td><code>order:status-updated</code></td>
+            <td><span class="channel">private-order-{id}</span> <span class="channel">private-user-{uid}</span> <span class="channel">private-merchant-{mid}</span></td>
+          </tr>
+          <tr>
+            <td><code>CANCELLED</code></td>
+            <td><code>order:cancelled</code></td>
+            <td><span class="channel">private-order-{id}</span> <span class="channel">private-user-{uid}</span> <span class="channel">private-merchant-{mid}</span> <span class="channel">private-merchants-global</span></td>
+          </tr>
+          <tr>
+            <td><code>EXPIRED</code></td>
+            <td><code>order:status-updated</code></td>
+            <td><span class="channel">private-order-{id}</span> <span class="channel">private-user-{uid}</span> <span class="channel">private-merchant-{mid}</span> <span class="channel">private-merchants-global</span></td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-file">apps/core-api/src/pusher.ts:97-121</span>
+          <span class="code-lang">TypeScript</span>
+        </div>
+<pre><span class="kw">export function</span> <span class="fn">pusherNotifyOrderStatus</span>(payload) {
+  <span class="kw">const</span> channels = [
+    <span class="fn">getOrderChannel</span>(payload.<span class="prop">orderId</span>),     <span class="cm">// private-order-{id}</span>
+    <span class="fn">getUserChannel</span>(payload.<span class="prop">userId</span>),       <span class="cm">// private-user-{userId}</span>
+    <span class="fn">getMerchantChannel</span>(payload.<span class="prop">merchantId</span>), <span class="cm">// private-merchant-{mid}</span>
+  ];
+
+  <span class="cm">// Broadcast to all merchants for pool-affecting statuses</span>
+  <span class="kw">if</span> ([<span class="str">'accepted'</span>, <span class="str">'cancelled'</span>, <span class="str">'expired'</span>].<span class="fn">includes</span>(payload.<span class="prop">status</span>)) {
+    channels.<span class="fn">push</span>(<span class="fn">getAllMerchantsChannel</span>());
+  }
+
+  <span class="fn">triggerEvent</span>(channels, <span class="str">'order:status-updated'</span>, {
+    <span class="prop">orderId</span>, <span class="prop">status</span>, <span class="prop">minimal_status</span>,
+    <span class="prop">order_version</span>,  <span class="cm">// frontend uses this to reject stale updates</span>
+    <span class="prop">previousStatus</span>, <span class="prop">updatedAt</span>,
+    <span class="prop">data</span>: fullOrderSnapshot,
+  });
+}</pre>
+      </div>
+
+      <div class="callout callout-info">
+        <span class="callout-icon">&#128161;</span>
+        <div><strong>Stale update protection:</strong> The payload includes <code>order_version</code>. The frontend can compare this with its local version and discard events with lower versions to avoid flicker.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- ================================================================== -->
+  <!-- QUEUE SYSTEM -->
+  <!-- ================================================================== -->
+  <section class="section" id="queue">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2 class="section-title">Queue System (BullMQ)</h2>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="icon" style="background:rgba(236,72,153,0.15);color:var(--pink)">&#128230;</div>
+        Receipt Queue Only
+      </div>
+      <div class="card-body">
+        <p>BullMQ is used <strong>only for receipt processing</strong>. All other background tasks (expiry, bumps, prices) use polling workers.</p>
+        <p><strong>Why?</strong> Receipt creation involves 3&ndash;4 DB queries. Running this synchronously in the API response would add ~100ms latency to every order acceptance.</p>
+      </div>
+
+      <div class="flow">
+        <div class="flow-step"><span class="step-icon">&#128172;</span><span class="step-label">Event Bus</span><span class="step-sub">receiptListener</span></div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:rgba(236,72,153,0.3)"><span class="step-icon">&#128230;</span><span class="step-label">Redis Queue</span><span class="step-sub">BullMQ</span></div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step"><span class="step-icon">&#9881;</span><span class="step-label">Receipt Worker</span><span class="step-sub">concurrency: 5</span></div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step"><span class="step-icon">&#128451;</span><span class="step-label">PostgreSQL</span><span class="step-sub">order_receipts + chat</span></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">
+          <div class="icon" style="background:var(--pink);color:white;font-size:0.75rem">Q+</div>
+          queue.add()
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-file">apps/core-api/src/queues/receiptQueue.ts:130-162</span>
+            <span class="code-lang">TypeScript</span>
+          </div>
+<pre><span class="cm">// CREATE receipt (2s delay)</span>
+<span class="kw">export function</span> <span class="fn">enqueueCreateReceipt</span>(orderId, order, actorId) {
+  <span class="kw">return</span> q.<span class="fn">add</span>(
+    <span class="str">'CREATE_RECEIPT'</span>,
+    { <span class="prop">type</span>: <span class="str">'CREATE_RECEIPT'</span>, orderId, order, actorId },
+    { <span class="prop">jobId</span>: <span class="str">`create-receipt-${orderId}`</span>, <span class="prop">delay</span>: <span class="num">2000</span> },
+  );
+}
+
+<span class="cm">// UPDATE receipt (no delay)</span>
+<span class="kw">export function</span> <span class="fn">enqueueUpdateReceipt</span>(orderId, newStatus, fields) {
+  <span class="kw">return</span> q.<span class="fn">add</span>(
+    <span class="str">'UPDATE_RECEIPT'</span>,
+    { <span class="prop">type</span>: <span class="str">'UPDATE_RECEIPT'</span>, orderId, newStatus, fields },
+  );
+}</pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <div class="icon" style="background:var(--purple);color:white;font-size:0.75rem">W</div>
+          Worker Processing
+        </div>
+        <div class="code-block">
+          <div class="code-header">
+            <span class="code-file">apps/core-api/src/workers/receiptWorker.ts:29-78</span>
+            <span class="code-lang">TypeScript</span>
+          </div>
+<pre>worker = <span class="kw">new</span> <span class="fn">Worker</span>(<span class="str">'receiptQueue'</span>,
+  <span class="kw">async</span> (job) => {
+    <span class="kw">switch</span> (job.<span class="prop">data</span>.<span class="prop">type</span>) {
+      <span class="kw">case</span> <span class="str">'CREATE_RECEIPT'</span>:
+        <span class="kw">await</span> <span class="fn">createOrderReceipt</span>(
+          data.<span class="prop">orderId</span>, order, data.<span class="prop">actorId</span>
+        );
+        <span class="kw">break</span>;
+
+      <span class="kw">case</span> <span class="str">'UPDATE_RECEIPT'</span>:
+        <span class="kw">const</span> updated = <span class="kw">await</span> <span class="fn">updateOrderReceipt</span>(
+          data.<span class="prop">orderId</span>, data.<span class="prop">newStatus</span>, data.<span class="prop">fields</span>
+        );
+        <span class="cm">// Guard rejection = no-op (not an error)</span>
+        <span class="kw">break</span>;
+    }
+  },
+  { <span class="prop">connection</span>: redis, <span class="prop">concurrency</span>: <span class="num">5</span> }
+);</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="icon" style="background:var(--orange-glow);color:var(--orange)">&#128736;</div>
+        Queue Configuration
+      </div>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Setting</th><th>Value</th><th>Purpose</th></tr>
+          <tr><td>attempts</td><td><code>3</code></td><td>Max retries before job is marked failed</td></tr>
+          <tr><td>backoff</td><td><code>exponential, 2000ms</code></td><td>2s &rarr; 4s &rarr; 8s between retries</td></tr>
+          <tr><td>removeOnComplete</td><td><code>1000</code></td><td>Clean up completed jobs after 1s</td></tr>
+          <tr><td>removeOnFail</td><td><code>5000</code></td><td>Keep failed jobs for 5s for debugging</td></tr>
+          <tr><td>concurrency</td><td><code>5</code></td><td>Worker processes 5 jobs in parallel</td></tr>
+          <tr><td>CREATE delay</td><td><code>2000ms</code></td><td>Let DB settle before receipt creation</td></tr>
+          <tr><td>Redis fallback</td><td>Graceful no-op</td><td>If Redis unavailable, receipts are skipped</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- ================================================================== -->
+  <!-- EXPIRY -->
+  <!-- ================================================================== -->
+  <section class="section" id="expiry">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2 class="section-title">Expiry System</h2>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <div class="icon" style="background:rgba(136,136,160,0.15);color:#8888a0">&#9200;</div>
+        How Expiry Works
+      </div>
+      <div class="card-body">
+        <p>The <code>expiryWorker</code> is a <strong>polling-based background job</strong> that runs inside the Core API process. It checks for expired orders and auto-cancels them.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <tr><th>Parameter</th><th>Default</th><th>Env Var</th></tr>
+          <tr><td>Poll interval</td><td>10 seconds</td><td><code>EXPIRY_POLL_MS</code></td></tr>
+          <tr><td>Batch size</td><td>20 orders</td><td><code>EXPIRY_BATCH_SIZE</code></td></tr>
+          <tr><td>Default expiry</td><td>15 minutes</td><td>Set at order creation</td></tr>
+          <tr><td>Post-acceptance expiry</td><td>120 minutes</td><td>Extended on accept</td></tr>
+          <tr><td>Error backoff</td><td>Exponential up to 60s</td><td>&mdash;</td></tr>
+        </table>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-file">apps/core-api/src/workers/expiryWorker.ts:163-176</span>
+          <span class="code-lang">TypeScript</span>
+        </div>
+<pre><span class="cm">// Find expired orders (batch, skip locked for concurrency safety)</span>
+<span class="kw">const</span> expiredOrders = <span class="kw">await</span> <span class="fn">query</span>(
+  <span class="str">`SELECT id, order_number, status, order_version, ...
+   FROM orders
+   WHERE status NOT IN (
+     'completed', 'cancelled', 'expired', 'disputed',
+     'payment_sent', 'payment_confirmed'    </span><span class="cm">-- NEVER expire these!</span><span class="str">
+   )
+   AND expires_at < NOW()
+   ORDER BY expires_at ASC
+   LIMIT $1
+   FOR UPDATE SKIP LOCKED`</span>,
+  [BATCH_SIZE]
+);</pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-file">apps/core-api/src/workers/expiryWorker.ts:80-93</span>
+          <span class="code-lang">TypeScript</span>
+        </div>
+<pre><span class="cm">// Update with version + status guard (prevents double-expire)</span>
+<span class="kw">const</span> expireResult = <span class="kw">await</span> <span class="fn">query</span>(
+  <span class="str">`UPDATE orders
+   SET status = 'expired',
+       cancelled_at = NOW(),
+       cancelled_by = 'system',
+       cancellation_reason = 'Order expired (15 minute timeout)',
+       order_version = order_version + 1
+   WHERE id = $1
+     AND order_version = $2
+     AND status = $3::order_status
+   RETURNING id`</span>,
+  [order.<span class="prop">id</span>, order.<span class="prop">order_version</span>, order.<span class="prop">status</span>]
+);</pre>
+      </div>
+
+      <div class="callout callout-danger">
+        <span class="callout-icon">&#128680;</span>
+        <div><strong>Critical safety rule:</strong> <code>payment_sent</code> and <code>payment_confirmed</code> orders are <strong>excluded from expiry</strong>. This prevents the system from cancelling an order where the buyer has already sent fiat &mdash; which would cause a financial loss.</div>
+      </div>
+
+      <div class="card-body" style="margin-top:16px">
+        <p><strong>Extension system</strong> allows extending the deadline (max 3 times):</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Status</th><th>Extension Duration</th></tr>
+          <tr><td>pending</td><td>+15 minutes</td></tr>
+          <tr><td>accepted</td><td>+30 minutes</td></tr>
+          <tr><td>escrowed</td><td>+1 hour</td></tr>
+          <tr><td>payment_sent</td><td>+2 hours</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- ================================================================== -->
+  <!-- DATA FLOW -->
+  <!-- ================================================================== -->
+  <section class="section" id="dataflow">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2 class="section-title">Complete Data Flow</h2>
+    </div>
+
+    <!-- Per-order flow -->
+    <div class="card">
+      <div class="card-title">
+        <div class="icon" style="background:var(--accent-glow);color:var(--accent)">&#128640;</div>
+        Happy Path: Full Order Flow
+      </div>
+
+      <div class="flow">
+        <div class="flow-step" style="border-color:rgba(250,204,21,0.3)"><span class="step-icon">&#128100;</span><span class="step-label">User Creates</span><span class="step-sub">POST /v1/orders</span></div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:rgba(0,214,143,0.3)"><span class="step-icon">&#128451;</span><span class="step-label">DB Insert</span><span class="step-sub">status: pending</span></div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:rgba(245,158,11,0.3)"><span class="step-icon">&#9889;</span><span class="step-label">orderBus</span><span class="step-sub">CREATED event</span></div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:rgba(34,211,238,0.3)"><span class="step-icon">&#128225;</span><span class="step-label">Pusher</span><span class="step-sub">merchants-global</span></div>
+      </div>
+
+      <div class="flow">
+        <div class="flow-step" style="border-color:rgba(0,214,143,0.3)"><span class="step-icon">&#128176;</span><span class="step-label">Merchant Accepts</span><span class="step-sub">accept_order_v1()</span></div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:rgba(245,158,11,0.3)"><span class="step-icon">&#9889;</span><span class="step-label">orderBus</span><span class="step-sub">ACCEPTED</span></div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:rgba(236,72,153,0.3)"><span class="step-icon">&#128230;</span><span class="step-label">BullMQ</span><span class="step-sub">CREATE_RECEIPT</span></div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:rgba(167,139,250,0.3)"><span class="step-icon">&#128203;</span><span class="step-label">Receipt + Chat</span><span class="step-sub">3 DB inserts</span></div>
+      </div>
+
+      <div class="flow">
+        <div class="flow-step" style="border-color:rgba(167,139,250,0.3)"><span class="step-icon">&#128274;</span><span class="step-label">Escrow Lock</span><span class="step-sub">escrow_order_v1()</span></div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:rgba(34,211,238,0.3)"><span class="step-icon">&#128176;</span><span class="step-label">Payment Sent</span><span class="step-sub">+ deadline set</span></div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:rgba(0,214,143,0.3)"><span class="step-icon">&#127881;</span><span class="step-label">Completed</span><span class="step-sub">escrow released</span></div>
+        <span class="flow-arrow">&rarr;</span>
+        <div class="flow-step" style="border-color:rgba(0,214,143,0.3)"><span class="step-icon">&#11088;</span><span class="step-label">Reputation</span><span class="step-sub">+5 both parties</span></div>
+      </div>
+    </div>
+
+    <!-- System-level data flow -->
+    <div class="card">
+      <div class="card-title">
+        <div class="icon" style="background:var(--green-glow);color:var(--green)">&#127760;</div>
+        System-Level Architecture
+      </div>
+
+      <div class="arch-diagram">
+        <div class="arch-row">
+          <div class="arch-box arch-frontend" style="min-width:300px">
+            <strong>Frontend (Next.js)</strong><br>
+            <span style="font-size:0.7rem;opacity:0.7">React 19 &bull; Zustand stores &bull; Pusher-JS client</span>
+          </div>
+        </div>
+        <div class="arch-arrow">&#8595; HTTP requests &nbsp;&nbsp;&nbsp;&nbsp; &#8593; Pusher events + WebSocket</div>
+        <div class="arch-row">
+          <div class="arch-box arch-api">
+            <strong>Settle API</strong><br>
+            <span style="font-size:0.7rem;opacity:0.7">Auth &bull; Validation &bull; Chat &bull; Proxy</span>
+          </div>
+          <div class="arch-box arch-api">
+            <strong>Core API</strong><br>
+            <span style="font-size:0.7rem;opacity:0.7">Orders &bull; Escrow &bull; Events &bull; Workers</span>
+          </div>
+        </div>
+        <div class="arch-arrow">&#8595;</div>
+        <div class="arch-row">
+          <div class="arch-box arch-db">
+            <strong>PostgreSQL</strong><br>
+            <span style="font-size:0.7rem;opacity:0.7">orders &bull; order_receipts &bull; chat_messages<br>merchant_offers &bull; order_events</span>
+          </div>
+          <div class="arch-box arch-queue">
+            <strong>Redis (Upstash)</strong><br>
+            <span style="font-size:0.7rem;opacity:0.7">BullMQ receiptQueue<br>3 retries, exp. backoff</span>
+          </div>
+        </div>
+        <div class="arch-arrow">&#8595;</div>
+        <div class="arch-row">
+          <div class="arch-box arch-rt">
+            <strong>Pusher</strong><br>
+            <span style="font-size:0.7rem;opacity:0.7">Private channels<br>order:status-updated</span>
+          </div>
+          <div class="arch-box arch-rt">
+            <strong>WebSocket</strong><br>
+            <span style="font-size:0.7rem;opacity:0.7">/ws/orders<br>500 max connections</span>
+          </div>
+          <div class="arch-box arch-worker">
+            <strong>Workers</strong><br>
+            <span style="font-size:0.7rem;opacity:0.7">Expiry (10s) &bull; Bumps (30s)<br>Prices (60s) &bull; Unhappy (30s)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- All background workers -->
+    <div class="card">
+      <div class="card-title">
+        <div class="icon" style="background:rgba(167,139,250,0.15);color:var(--purple)">&#9881;</div>
+        All Background Workers
+      </div>
+      <div class="table-wrap">
+        <table>
+          <tr><th>Worker</th><th>Interval</th><th>Mechanism</th><th>Purpose</th></tr>
+          <tr><td><code>expiryWorker</code></td><td>10s</td><td>Polling</td><td>Auto-cancel expired orders</td></tr>
+          <tr><td><code>receiptWorker</code></td><td>On-demand</td><td>BullMQ</td><td>Create/update receipts</td></tr>
+          <tr><td><code>autoBumpWorker</code></td><td>30s</td><td>Polling</td><td>Auto-increase offer rates</td></tr>
+          <tr><td><code>unhappyPathWorker</code></td><td>30s</td><td>Polling</td><td>Escalate stuck orders</td></tr>
+          <tr><td><code>corridorTimeoutWorker</code></td><td>10s</td><td>Polling</td><td>Monitor corridor fulfillment</td></tr>
+          <tr><td><code>priceFeedWorker</code></td><td>60s</td><td>Polling</td><td>Update reference prices</td></tr>
+          <tr><td><code>notificationOutbox</code></td><td>Continuous</td><td>Polling</td><td>Process notification outbox</td></tr>
+          <tr><td><code>idempotencyCleanup</code></td><td>Daily</td><td>Polling</td><td>Clean expired idempotency records</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- ================================================================== -->
+  <!-- RISKS -->
+  <!-- ================================================================== -->
+  <section class="section" id="risks">
+    <div class="section-header">
+      <div class="section-num">!</div>
+      <h2 class="section-title">Risks &amp; Important Notes</h2>
+    </div>
+
+    <div class="callout callout-danger">
+      <span class="callout-icon">&#128680;</span>
+      <div>
+        <strong>Non-atomic order creation:</strong> Liquidity deduction and order insert are two separate queries (not a transaction). A crash between them could leak liquidity from <code>merchant_offers</code>. Idempotency keys mitigate retries but don't cover mid-query crashes.
+      </div>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#9888;</span>
+      <div>
+        <strong>Receipt 2s delay:</strong> The BullMQ <code>CREATE_RECEIPT</code> job has a 2-second delay. Users opening chat immediately after acceptance may not see the receipt card yet. Plus retry backoff (2s &rarr; 4s &rarr; 8s) on failure.
+      </div>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#9888;</span>
+      <div>
+        <strong>payment_sent stall attack:</strong> Since <code>payment_sent</code> orders never expire, a malicious buyer could mark payment_sent without actually sending fiat, stalling the order indefinitely. Mitigated by <code>unhappyPathWorker</code> and the dispute system, but worth monitoring.
+      </div>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#9888;</span>
+      <div>
+        <strong>Redis down = no receipts:</strong> If Redis (Upstash) is unavailable, the receipt queue silently no-ops. Receipts will be missing until Redis recovers. There is no catch-up mechanism to retroactively create missing receipts.
+      </div>
+    </div>
+
+    <div class="callout callout-info">
+      <span class="callout-icon">&#128161;</span>
+      <div>
+        <strong>Forward-only receipt guard:</strong> If BullMQ delivers events out of order (e.g., a slow <code>escrowed</code> update arrives after <code>payment_sent</code>), the <code>STATUS_PRIORITY</code> guard silently drops the stale update. This is by design, not a bug.
+      </div>
+    </div>
+
+    <div class="callout callout-success">
+      <span class="callout-icon">&#128170;</span>
+      <div>
+        <strong>Strong concurrency safety:</strong> Stored procedures (<code>accept_order_v1</code>, <code>escrow_order_v1</code>), optimistic locking (<code>order_version</code>), <code>FOR UPDATE SKIP LOCKED</code> in the expiry worker, and <code>ON CONFLICT DO NOTHING</code> for receipts make this system highly resilient to race conditions.
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  Blip P2P Trading &mdash; System Architecture Documentation<br>
+  <span style="color:var(--text-dim)">Generated from source code analysis &bull; March 2026</span>
+</div>
+
+</body>
+</html>

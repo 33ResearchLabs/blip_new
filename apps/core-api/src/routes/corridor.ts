@@ -124,11 +124,12 @@ export const corridorRoutes: FastifyPluginAsync = async (fastify) => {
 
         const fulfillment = ffResult.rows[0];
 
-        // 6. Link fulfillment to order
+        // 6. Link fulfillment to order (guard: never modify terminal-state orders)
         await client.query(
           `UPDATE orders
            SET payment_via = 'saed_corridor', corridor_fulfillment_id = $1
-           WHERE id = $2`,
+           WHERE id = $2
+             AND status NOT IN ('completed', 'cancelled', 'expired')`,
           [fulfillment.id, order_id]
         );
 

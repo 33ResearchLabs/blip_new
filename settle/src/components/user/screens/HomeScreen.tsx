@@ -19,6 +19,7 @@ import { HomeSparkline, HomeAmbientGlow } from "./HomeDecorations";
 import type { Screen, Order } from "./types";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
+const IS_MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
 
 export interface HomeScreenProps {
   userName: string;
@@ -43,6 +44,7 @@ export interface HomeScreenProps {
   embeddedWallet?: {
     state: 'none' | 'locked' | 'unlocked';
   };
+  userBalance?: number;
   maxW: string;
 }
 
@@ -63,8 +65,13 @@ export const HomeScreen = ({
   setShowWalletUnlock,
   solanaWallet,
   embeddedWallet,
+  userBalance,
   maxW,
 }: HomeScreenProps) => {
+  // In mock mode, use DB balance; otherwise use on-chain balance
+  const displayBalance = IS_MOCK_MODE ? (userBalance ?? 0) : solanaWallet.usdtBalance;
+  // In mock mode, consider "connected" if user is logged in (userId exists)
+  const isWalletReady = IS_MOCK_MODE ? (userBalance !== undefined && userBalance !== null) : solanaWallet.connected;
   return (
     <>
       <HomeAmbientGlow />
@@ -154,16 +161,16 @@ export const HomeScreen = ({
                 </div>
               </div>
 
-              {solanaWallet.connected ? (
+              {isWalletReady ? (
                 <>
                   <div className="mb-1">
                     <p style={{ fontSize: 8.5, fontWeight: 900, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', marginBottom: 4 }}>Total Balance</p>
                     <div className="flex items-baseline gap-0">
                       <span style={{ fontSize: 54, fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 1, color: '#fff' }}>
-                        {solanaWallet.usdtBalance !== null ? Math.floor(solanaWallet.usdtBalance).toLocaleString() : '0'}
+                        {displayBalance !== null ? Math.floor(displayBalance).toLocaleString() : '0'}
                       </span>
                       <span style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.02em', color: 'rgba(255,255,255,0.25)', lineHeight: 1 }}>
-                        {solanaWallet.usdtBalance !== null ? '.' + (solanaWallet.usdtBalance % 1).toFixed(2).slice(2) : '.00'}
+                        {displayBalance !== null ? '.' + (displayBalance % 1).toFixed(2).slice(2) : '.00'}
                       </span>
                     </div>
                   </div>
@@ -319,7 +326,7 @@ export const HomeScreen = ({
                 return orders.filter(o => { if (seen.has(o.merchant.id)) return false; seen.add(o.merchant.id); return true; }).slice(0, 4);
               })().map((order, i) => {
                 const colors = ['#7c3aed', '#059669', '#1a56db', '#f97316'];
-                const isActive = order.status !== 'complete';
+                const isActive = order.status !== 'complete' && order.status !== 'cancelled' && order.status !== 'expired';
                 return (
                   <motion.div key={order.merchant.id}
                     initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.18 + i * 0.06 }}
@@ -382,7 +389,7 @@ export const HomeScreen = ({
                       {isBuy
                         ? <ArrowDownLeft size={20} style={{ color: catColor }} strokeWidth={2.5} />
                         : <ArrowUpRight size={20} style={{ color: catColor }} strokeWidth={2.5} />}
-                      {order.status !== 'complete' && (
+                      {order.status !== 'complete' && order.status !== 'cancelled' && order.status !== 'expired' && (
                         <motion.div animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }}
                           className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full" style={{ background: catColor }} />
                       )}

@@ -9,7 +9,7 @@
  * - Or: import and call startOutboxWorker() from server startup
  */
 
-import { query } from '../lib/db';
+import { query, transaction } from '../lib/db';
 import { notifyOrderStatusUpdated } from '../lib/pusher/server';
 import { wsBroadcastOrderUpdate } from '../lib/websocket/broadcast';
 import { logger } from 'settlement-core';
@@ -42,25 +42,40 @@ let pollTimer: NodeJS.Timeout | null = null;
  */
 async function processOutboxRecord(record: OutboxRecord): Promise<boolean> {
   try {
-    // IDEMPOTENCY CHECK: Do not re-send if already marked as sent
-    // This prevents duplicate notifications if the record status is corrupted
-    // or if the worker is restarted during processing
-    const statusCheck = await query<{ status: string }>(
-      'SELECT status FROM notification_outbox WHERE id = $1',
-      [record.id]
-    );
-
-    if (statusCheck.length > 0 && statusCheck[0].status === 'sent') {
-      logger.info('[Outbox] Skipping already-sent notification', {
-        outboxId: record.id,
-        orderId: record.order_id,
-      });
-      return true; // Already sent, consider it successful
-    }
-
     const payload = typeof record.payload === 'string'
       ? JSON.parse(record.payload)
       : record.payload;
+
+    // Stale notification check: single query combines idempotency + staleness
+    // Skip if: (a) outbox record already sent, or (b) order version moved 2+ ahead
+    if (payload.orderVersion && record.order_id) {
+      const check = await query<{ outbox_status: string; order_version: number }>(
+        `SELECT n.status as outbox_status, COALESCE(o.order_version, 0) as order_version
+         FROM notification_outbox n
+         LEFT JOIN orders o ON o.id = $2
+         WHERE n.id = $1`,
+        [record.id, record.order_id]
+      );
+
+      if (check.length > 0) {
+        if (check[0].outbox_status === 'sent') {
+          logger.info('[Outbox] Skipping already-sent notification', {
+            outboxId: record.id,
+            orderId: record.order_id,
+          });
+          return true;
+        }
+        if (check[0].order_version > payload.orderVersion + 1) {
+          logger.info('[Outbox] Skipping stale notification (order progressed)', {
+            outboxId: record.id,
+            orderId: record.order_id,
+            notifVersion: payload.orderVersion,
+            currentVersion: check[0].order_version,
+          });
+          return true;
+        }
+      }
+    }
 
     // Send Pusher notification
     await notifyOrderStatusUpdated(payload);
@@ -108,69 +123,76 @@ async function processOutboxRecord(record: OutboxRecord): Promise<boolean> {
 
 /**
  * Process pending outbox records
+ *
+ * Distribution-safe: uses FOR UPDATE SKIP LOCKED inside a transaction
+ * so multiple worker instances never process the same notification records.
  */
 async function processBatch(): Promise<void> {
   try {
-    // Fetch pending records (including failed that are ready to retry)
-    const records = await query<OutboxRecord>(
-      `SELECT * FROM notification_outbox
-       WHERE status IN ('pending', 'failed')
-       AND attempts < max_attempts
-       AND (last_attempt_at IS NULL OR last_attempt_at < NOW() - INTERVAL '30 seconds')
-       ORDER BY created_at ASC
-       LIMIT $1
-       FOR UPDATE SKIP LOCKED`,
-      [BATCH_SIZE]
-    );
-
-    if (records.length === 0) {
-      return; // No work to do
-    }
-
-    logger.info(`[Outbox] Processing ${records.length} pending notifications`);
-
-    for (const record of records) {
-      // Mark as processing
-      await query(
-        `UPDATE notification_outbox
-         SET status = 'processing', last_attempt_at = NOW()
-         WHERE id = $1`,
-        [record.id]
+    await transaction(async (client) => {
+      // Fetch and lock pending records atomically — other workers skip these rows
+      const lockResult = await client.query(
+        `SELECT * FROM notification_outbox
+         WHERE status IN ('pending', 'failed')
+         AND attempts < max_attempts
+         AND (last_attempt_at IS NULL OR last_attempt_at < NOW() - INTERVAL '30 seconds')
+         ORDER BY created_at ASC
+         LIMIT $1
+         FOR UPDATE SKIP LOCKED`,
+        [BATCH_SIZE]
       );
 
-      const success = await processOutboxRecord(record);
+      const records = lockResult.rows as OutboxRecord[];
 
-      if (success) {
-        // Mark as sent
-        await query(
+      if (records.length === 0) {
+        return; // No work to do
+      }
+
+      logger.info(`[Outbox] Processing ${records.length} pending notifications`);
+
+      for (const record of records) {
+        // Mark as processing
+        await client.query(
           `UPDATE notification_outbox
-           SET status = 'sent', sent_at = NOW()
+           SET status = 'processing', last_attempt_at = NOW()
            WHERE id = $1`,
           [record.id]
         );
-      } else {
-        // Increment attempts, mark as failed if max attempts reached
-        const newAttempts = record.attempts + 1;
-        const newStatus = newAttempts >= record.max_attempts ? 'failed' : 'pending';
-        const errorMsg = 'Failed to send notification';
 
-        await query(
-          `UPDATE notification_outbox
-           SET status = $1, attempts = $2, last_error = $3, last_attempt_at = NOW()
-           WHERE id = $4`,
-          [newStatus, newAttempts, errorMsg, record.id]
-        );
+        const success = await processOutboxRecord(record);
 
-        if (newStatus === 'failed') {
-          logger.error('[Outbox] Notification permanently failed after max attempts', {
-            outboxId: record.id,
-            orderId: record.order_id,
-            eventType: record.event_type,
-            attempts: newAttempts,
-          });
+        if (success) {
+          // Mark as sent
+          await client.query(
+            `UPDATE notification_outbox
+             SET status = 'sent', sent_at = NOW()
+             WHERE id = $1`,
+            [record.id]
+          );
+        } else {
+          // Increment attempts, mark as failed if max attempts reached
+          const newAttempts = record.attempts + 1;
+          const newStatus = newAttempts >= record.max_attempts ? 'failed' : 'pending';
+          const errorMsg = 'Failed to send notification';
+
+          await client.query(
+            `UPDATE notification_outbox
+             SET status = $1, attempts = $2, last_error = $3, last_attempt_at = NOW()
+             WHERE id = $4`,
+            [newStatus, newAttempts, errorMsg, record.id]
+          );
+
+          if (newStatus === 'failed') {
+            logger.error('[Outbox] Notification permanently failed after max attempts', {
+              outboxId: record.id,
+              orderId: record.order_id,
+              eventType: record.event_type,
+              attempts: newAttempts,
+            });
+          }
         }
       }
-    }
+    });
   } catch (error) {
     logger.error('[Outbox] Error processing batch', {
       error: error instanceof Error ? error.message : String(error),

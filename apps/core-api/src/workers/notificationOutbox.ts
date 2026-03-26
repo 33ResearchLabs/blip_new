@@ -9,6 +9,7 @@ import { query, logger } from 'settlement-core';
 import { config } from 'dotenv';
 import { writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
+import { withCircuitBreaker, CircuitBreakerError } from '../circuitBreaker';
 
 // Load env from settle directory
 config({ path: '../../settle/.env.local' });
@@ -72,28 +73,27 @@ async function sendTelegramNotification(
     // Format message based on event type
     let message = formatTelegramMessage(eventType, payload);
 
-    // Send message via Telegram Bot API
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: message,
-        parse_mode: 'Markdown',
-        disable_web_page_preview: true,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!data.ok) {
-      logger.error('[Telegram] Failed to send message', {
-        merchantId,
-        chatId,
-        error: data.description || 'Unknown error',
+    // Send via circuit breaker — if Telegram is down, short-circuit instead of piling up failures
+    const result = await withCircuitBreaker('telegram', async () => {
+      const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: message,
+          parse_mode: 'Markdown',
+          disable_web_page_preview: true,
+        }),
       });
-      return false;
-    }
+
+      const data = await response.json() as { ok: boolean; description?: string };
+
+      if (!data.ok) {
+        throw new Error(data.description || 'Telegram API returned error');
+      }
+
+      return true;
+    });
 
     logger.info('[Telegram] Notification sent successfully', {
       merchantId,
@@ -101,8 +101,15 @@ async function sendTelegramNotification(
       orderId: payload.orderId,
     });
 
-    return true;
+    return result;
   } catch (error) {
+    if (error instanceof CircuitBreakerError) {
+      logger.warn('[Telegram] Circuit breaker OPEN — skipping notification', {
+        merchantId,
+        retryAfterMs: error.retryAfterMs,
+      });
+      return false;
+    }
     logger.error('[Telegram] Error sending notification', {
       merchantId,
       error: error instanceof Error ? error.message : String(error),

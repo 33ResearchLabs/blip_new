@@ -202,6 +202,7 @@ export default function Home() {
               setShowWalletUnlock={auth.setShowWalletUnlock}
               solanaWallet={solanaWallet}
               embeddedWallet={embeddedWallet}
+              userBalance={auth.userBalance}
               maxW={maxW}
             />
           </Panel>

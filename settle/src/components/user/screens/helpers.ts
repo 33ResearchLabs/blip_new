@@ -19,9 +19,11 @@ export function mapDbStatusToUI(dbStatus: string): { status: OrderStatus; step: 
     case 'completed':
       return { status: 'complete', step: 4 };
     case 'cancelled':
-    case 'disputed':
+      return { status: 'cancelled', step: 1 };
     case 'expired':
-      return { status: 'complete', step: 4 };
+      return { status: 'expired', step: 1 };
+    case 'disputed':
+      return { status: 'disputed', step: 3 };
     default:
       return { status: 'pending', step: 1 };
   }

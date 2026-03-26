@@ -17,21 +17,23 @@ let totalBumps = 0;
 
 async function processAutoBumps(): Promise<void> {
   try {
-    // Find orders ready for auto-bump
+    // Find orders ready for auto-bump (SKIP LOCKED prevents multi-instance double-bump)
     const orders = await dbQuery<{
       id: string;
+      order_version: number;
       premium_bps_current: number;
       premium_bps_cap: number;
       bump_step_bps: number;
       bump_interval_sec: number;
     }>(
-      `SELECT id, premium_bps_current, premium_bps_cap, bump_step_bps, bump_interval_sec
+      `SELECT id, order_version, premium_bps_current, premium_bps_cap, bump_step_bps, bump_interval_sec
        FROM orders
        WHERE auto_bump_enabled = TRUE
          AND status = 'pending'
          AND next_bump_at IS NOT NULL
          AND next_bump_at <= NOW()
-         AND premium_bps_current < premium_bps_cap`,
+         AND premium_bps_current < premium_bps_cap
+       FOR UPDATE SKIP LOCKED`,
       []
     );
 
@@ -48,14 +50,23 @@ async function processAutoBumps(): Promise<void> {
           ? new Date(Date.now() + order.bump_interval_sec * 1000).toISOString()
           : null;
 
-        await dbQuery(
+        // Version + status guard prevents double-bump from concurrent workers
+        const bumpResult = await dbQuery(
           `UPDATE orders
            SET premium_bps_current = $1,
                next_bump_at = $2,
-               updated_at = NOW()
-           WHERE id = $3`,
-          [newPremium, nextBumpAt, order.id]
+               updated_at = NOW(),
+               order_version = order_version + 1
+           WHERE id = $3
+             AND order_version = $4
+             AND status = 'pending'
+           RETURNING id`,
+          [newPremium, nextBumpAt, order.id, order.order_version]
         );
+        if (bumpResult.length === 0) {
+          logger.warn('[AutoBump] Skipped order (concurrent update)', { orderId: order.id });
+          continue;
+        }
 
         totalBumps++;
         logger.info('[AutoBump] Order bumped', {

@@ -9,10 +9,10 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
 );
 
 -- Index for fast token lookup
-CREATE INDEX idx_reset_tokens_hash ON password_reset_tokens(token_hash) WHERE used_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_reset_tokens_hash ON password_reset_tokens(token_hash) WHERE used_at IS NULL;
 
 -- Index for cleanup of expired tokens
-CREATE INDEX idx_reset_tokens_expires ON password_reset_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_reset_tokens_expires ON password_reset_tokens(expires_at);
 
 -- Auto-cleanup: delete tokens older than 24 hours
 -- (Run via cron or app-level cleanup)

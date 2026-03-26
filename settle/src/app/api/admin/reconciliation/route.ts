@@ -1,8 +1,15 @@
 /**
  * GET /api/admin/reconciliation
  *
- * Compares merchants.balance against the derived sum of ledger_entries
- * for each merchant. Reports mismatches so operators can investigate.
+ * Comprehensive ledger reconciliation check (TASK 5).
+ *
+ * Validates:
+ * 1. merchants.balance == SUM(ledger_entries) per merchant
+ * 2. users.balance == SUM(ledger_entries) per user
+ * 3. platform_balance == SUM(platform_fee_transactions)
+ * 4. Per-order integrity: completed orders have ESCROW_LOCK + ESCROW_RELEASE,
+ *    cancelled orders with escrow have ESCROW_LOCK + ESCROW_REFUND
+ * 5. No duplicate ledger entries per (order, entry_type, account)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -14,7 +21,8 @@ export async function GET(request: NextRequest) {
   if (authErr) return authErr;
 
   try {
-    const results = await query<{
+    // 1. Merchant balance vs ledger
+    const merchantResults = await query<{
       merchant_id: string;
       display_name: string;
       db_balance: number;
@@ -53,9 +61,9 @@ export async function GET(request: NextRequest) {
       ORDER BY drift_ledger DESC
     `);
 
-    const mismatches = results.filter((r) => r.status === 'MISMATCH');
+    const merchantMismatches = merchantResults.filter((r) => r.status === 'MISMATCH');
 
-    // Also check users
+    // 2. User balance vs ledger
     const userResults = await query<{
       user_id: string;
       username: string;
@@ -87,18 +95,139 @@ export async function GET(request: NextRequest) {
 
     const userMismatches = userResults.filter((r) => r.status === 'MISMATCH');
 
+    // 3. Platform balance vs fee transactions
+    const platformResults = await query<{
+      platform_balance: number;
+      fee_sum: number;
+      drift: number;
+      status: string;
+    }>(`
+      SELECT
+        COALESCE(pb.balance, 0) as platform_balance,
+        COALESCE(ft.fee_sum, 0) as fee_sum,
+        ABS(COALESCE(pb.balance, 0) - COALESCE(ft.fee_sum, 0)) as drift,
+        CASE
+          WHEN ABS(COALESCE(pb.balance, 0) - COALESCE(ft.fee_sum, 0)) > 0.01 THEN 'MISMATCH'
+          ELSE 'OK'
+        END as status
+      FROM (SELECT balance FROM platform_balance WHERE key = 'main') pb
+      CROSS JOIN (SELECT SUM(fee_amount) as fee_sum FROM platform_fee_transactions) ft
+    `);
+
+    // 4. Per-order integrity: check completed/cancelled orders for missing entries
+    const orderIntegrityIssues = await query<{
+      order_id: string;
+      order_number: number;
+      status: string;
+      has_escrow: boolean;
+      has_lock: boolean;
+      has_release: boolean;
+      has_refund: boolean;
+      issue: string;
+    }>(`
+      SELECT
+        o.id as order_id,
+        o.order_number,
+        o.status,
+        (o.escrow_tx_hash IS NOT NULL) as has_escrow,
+        EXISTS(SELECT 1 FROM ledger_entries WHERE related_order_id = o.id AND entry_type = 'ESCROW_LOCK') as has_lock,
+        EXISTS(SELECT 1 FROM ledger_entries WHERE related_order_id = o.id AND entry_type = 'ESCROW_RELEASE') as has_release,
+        EXISTS(SELECT 1 FROM ledger_entries WHERE related_order_id = o.id AND entry_type = 'ESCROW_REFUND') as has_refund,
+        CASE
+          WHEN o.status = 'completed' AND o.escrow_tx_hash IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM ledger_entries WHERE related_order_id = o.id AND entry_type = 'ESCROW_LOCK')
+            THEN 'COMPLETED_MISSING_ESCROW_LOCK'
+          WHEN o.status = 'completed' AND o.escrow_tx_hash IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM ledger_entries WHERE related_order_id = o.id AND entry_type = 'ESCROW_RELEASE')
+            THEN 'COMPLETED_MISSING_ESCROW_RELEASE'
+          WHEN o.status = 'cancelled' AND o.escrow_tx_hash IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM ledger_entries WHERE related_order_id = o.id AND entry_type = 'ESCROW_LOCK')
+            THEN 'CANCELLED_MISSING_ESCROW_LOCK'
+          WHEN o.status = 'cancelled' AND o.escrow_tx_hash IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM ledger_entries WHERE related_order_id = o.id AND entry_type = 'ESCROW_REFUND')
+            THEN 'CANCELLED_MISSING_ESCROW_REFUND'
+          ELSE NULL
+        END as issue
+      FROM orders o
+      WHERE o.status IN ('completed', 'cancelled')
+        AND o.escrow_tx_hash IS NOT NULL
+      HAVING
+        CASE
+          WHEN o.status = 'completed' AND o.escrow_tx_hash IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM ledger_entries WHERE related_order_id = o.id AND entry_type = 'ESCROW_LOCK')
+            THEN true
+          WHEN o.status = 'completed' AND o.escrow_tx_hash IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM ledger_entries WHERE related_order_id = o.id AND entry_type = 'ESCROW_RELEASE')
+            THEN true
+          WHEN o.status = 'cancelled' AND o.escrow_tx_hash IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM ledger_entries WHERE related_order_id = o.id AND entry_type = 'ESCROW_LOCK')
+            THEN true
+          WHEN o.status = 'cancelled' AND o.escrow_tx_hash IS NOT NULL
+            AND NOT EXISTS(SELECT 1 FROM ledger_entries WHERE related_order_id = o.id AND entry_type = 'ESCROW_REFUND')
+            THEN true
+          ELSE false
+        END
+      ORDER BY o.order_number DESC
+      LIMIT 100
+    `);
+
+    // 5. Duplicate ledger entries check
+    const duplicates = await query<{
+      related_order_id: string;
+      entry_type: string;
+      account_id: string;
+      entry_count: number;
+    }>(`
+      SELECT
+        related_order_id,
+        entry_type,
+        account_id,
+        COUNT(*) as entry_count
+      FROM ledger_entries
+      WHERE related_order_id IS NOT NULL
+        AND entry_type IN ('ESCROW_LOCK', 'ESCROW_RELEASE', 'ESCROW_REFUND', 'FEE')
+      GROUP BY related_order_id, entry_type, account_id
+      HAVING COUNT(*) > 1
+      ORDER BY COUNT(*) DESC
+      LIMIT 50
+    `);
+
+    const totalMismatches =
+      merchantMismatches.length +
+      userMismatches.length +
+      (platformResults[0]?.status === 'MISMATCH' ? 1 : 0) +
+      orderIntegrityIssues.length +
+      duplicates.length;
+
     return NextResponse.json({
       success: true,
       data: {
+        overall_status: totalMismatches === 0 ? 'HEALTHY' : 'ISSUES_FOUND',
+        total_issues: totalMismatches,
+        checked_at: new Date().toISOString(),
         merchants: {
-          total: results.length,
-          mismatches: mismatches.length,
-          details: results,
+          total: merchantResults.length,
+          mismatches: merchantMismatches.length,
+          details: merchantResults,
         },
         users: {
           total: userResults.length,
           mismatches: userMismatches.length,
           details: userResults,
+        },
+        platform: {
+          balance: platformResults[0]?.platform_balance ?? 0,
+          fee_sum: platformResults[0]?.fee_sum ?? 0,
+          drift: platformResults[0]?.drift ?? 0,
+          status: platformResults[0]?.status ?? 'UNKNOWN',
+        },
+        order_integrity: {
+          issues_found: orderIntegrityIssues.length,
+          details: orderIntegrityIssues,
+        },
+        duplicate_ledger_entries: {
+          found: duplicates.length,
+          details: duplicates,
         },
       },
     });

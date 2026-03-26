@@ -3,7 +3,6 @@
 import { motion } from "framer-motion";
 import {
   Lock,
-  Unlock,
   MessageCircle,
   ArrowRight,
   AlertTriangle,
@@ -21,7 +20,7 @@ export interface MobileEscrowViewProps {
   markingDone: boolean;
   onOpenEscrowModal: (order: Order) => void;
   onMarkFiatPaymentSent: (order: Order) => void;
-  onOpenReleaseModal: (order: Order) => void;
+  onConfirmPayment: (order: Order) => void;
   onOpenDisputeModal: (orderId: string) => void;
   onOpenCancelModal: (order: Order) => void;
   onOpenChat: (order: Order) => void;
@@ -33,7 +32,7 @@ export function MobileEscrowView({
   markingDone,
   onOpenEscrowModal,
   onMarkFiatPaymentSent,
-  onOpenReleaseModal,
+  onConfirmPayment,
   onOpenDisputeModal,
   onOpenCancelModal,
   onOpenChat,
@@ -60,7 +59,7 @@ export function MobileEscrowView({
             const mobileWaitingForUser = false;
             const mobileHasBeenAccepted = !!order.dbOrder?.accepted_at;
             const mobileCanMarkPaid = mobileRole === 'buyer' && (
-              ((mobileDbStatus === "accepted" || (mobileDbStatus === "escrowed" && mobileHasBeenAccepted)) && order.escrowTxHash)
+              (mobileDbStatus === "escrowed" && mobileHasBeenAccepted && order.escrowTxHash)
             );
             const mobileNeedsLockEscrow = mobileDbStatus === "accepted" && !order.escrowTxHash && mobileRole === 'seller';
 
@@ -202,32 +201,23 @@ export function MobileEscrowView({
                   <span className="flex-1 h-11 bg-white/5 border border-white/6 rounded-lg text-xs font-mono text-white/70 flex items-center justify-center">
                     Awaiting user
                   </span>
-                ) : mobileCanConfirmPayment ? (
+                ) : (mobileCanConfirmPayment || mobileCanComplete) ? (
                   <motion.button
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => onOpenReleaseModal(order)}
+                    onClick={() => onConfirmPayment(order)}
                     className="flex-1 h-11 bg-white/10 hover:bg-white/20 border border-white/6 rounded-lg text-xs font-medium text-white flex items-center justify-center gap-1.5 transition-colors"
                   >
-                    <Unlock className="w-3.5 h-3.5" />
-                    Confirm & Release
-                  </motion.button>
-                ) : mobileCanComplete ? (
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => onOpenReleaseModal(order)}
-                    className="flex-1 h-11 bg-white/10 hover:bg-white/20 border border-white/6 rounded-lg text-xs font-medium text-white flex items-center justify-center gap-1.5 transition-colors"
-                  >
-                    <Unlock className="w-3.5 h-3.5" />
-                    Release
+                    <ArrowRight className="w-3.5 h-3.5" />
+                    Confirm Payment
                   </motion.button>
                 ) : (
                   <motion.button
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => onOpenReleaseModal(order)}
+                    onClick={() => onConfirmPayment(order)}
                     className="flex-1 h-11 bg-white/10 hover:bg-white/20 border border-white/6 rounded-lg text-xs font-medium text-white flex items-center justify-center gap-1.5 transition-colors"
                   >
-                    <Unlock className="w-3.5 h-3.5" />
-                    Release
+                    <ArrowRight className="w-3.5 h-3.5" />
+                    Confirm Payment
                   </motion.button>
                 )}
                 <button

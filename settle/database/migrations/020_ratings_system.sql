@@ -107,7 +107,8 @@ CREATE TRIGGER trigger_update_aggregate_rating
   EXECUTE FUNCTION update_aggregate_rating();
 
 -- View for top rated sellers (merchants)
-CREATE OR REPLACE VIEW v_top_rated_sellers AS
+DROP VIEW IF EXISTS v_top_rated_sellers CASCADE;
+CREATE VIEW v_top_rated_sellers AS
 SELECT
   m.id,
   m.username,
@@ -125,7 +126,8 @@ ORDER BY m.rating DESC, m.rating_count DESC
 LIMIT 10;
 
 -- View for top rated users
-CREATE OR REPLACE VIEW v_top_rated_users AS
+DROP VIEW IF EXISTS v_top_rated_users CASCADE;
+CREATE VIEW v_top_rated_users AS
 SELECT
   u.id,
   u.username,

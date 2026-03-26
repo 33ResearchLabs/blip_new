@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   // Rate limit provider updates
-  const rl = checkRateLimit(request, 'corridor:providers', STANDARD_LIMIT);
+  const rl = await checkRateLimit(request, 'corridor:providers', STANDARD_LIMIT);
   if (rl) return rl;
 
   // Require DB-verified auth

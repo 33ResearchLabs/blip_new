@@ -27,20 +27,7 @@ export async function POST(request: NextRequest) {
 
       // Ensure table exists with wallet_address column
       try {
-        await query(`
-          CREATE TABLE IF NOT EXISTS compliance_team (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            email VARCHAR(255) UNIQUE,
-            wallet_address VARCHAR(64) UNIQUE,
-            name VARCHAR(255) NOT NULL,
-            role VARCHAR(50) DEFAULT 'support',
-            is_active BOOLEAN DEFAULT true,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            updated_at TIMESTAMPTZ DEFAULT NOW()
-          )
-        `);
-
-        // Try to add wallet_address column if it doesn't exist
+        // Ensure wallet_address column exists (table created by migrations)
         await query(`
           ALTER TABLE compliance_team
           ADD COLUMN IF NOT EXISTS wallet_address VARCHAR(64) UNIQUE
@@ -108,22 +95,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Check if table exists, if not create it
+      // Table is created by migrations. Just ensure seed data exists.
       try {
-        await query(`
-          CREATE TABLE IF NOT EXISTS compliance_team (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            email VARCHAR(255) UNIQUE,
-            wallet_address VARCHAR(64) UNIQUE,
-            name VARCHAR(255) NOT NULL,
-            role VARCHAR(50) DEFAULT 'support',
-            is_active BOOLEAN DEFAULT true,
-            created_at TIMESTAMPTZ DEFAULT NOW(),
-            updated_at TIMESTAMPTZ DEFAULT NOW()
-          )
-        `);
-
-        // Seed default compliance members if table was just created
         await query(`
           INSERT INTO compliance_team (email, name, role)
           VALUES
@@ -132,8 +105,8 @@ export async function POST(request: NextRequest) {
             ('admin@blip.money', 'Admin', 'admin')
           ON CONFLICT (email) DO NOTHING
         `);
-      } catch (tableError) {
-        console.error('Table creation error:', tableError);
+      } catch (seedError) {
+        console.error('Compliance seed error:', seedError);
       }
 
       // Query compliance team member
@@ -196,23 +169,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Create compliance team table and seed data
+// Seed compliance team data (table created by migrations)
 export async function PUT() {
   try {
-    // Create compliance_team table if not exists
-    await query(`
-      CREATE TABLE IF NOT EXISTS compliance_team (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        email VARCHAR(255) UNIQUE,
-        wallet_address VARCHAR(64) UNIQUE,
-        name VARCHAR(255) NOT NULL,
-        role VARCHAR(50) DEFAULT 'support',
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-
     // Seed default compliance members
     await query(`
       INSERT INTO compliance_team (email, name, role)

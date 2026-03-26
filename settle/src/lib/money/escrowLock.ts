@@ -32,7 +32,8 @@ export function determineEscrowPayer(order: {
 }): { entityType: 'merchant' | 'user'; entityId: string; table: 'merchants' | 'users' } {
   const isM2M = !!order.buyer_merchant_id;
   if (isM2M) {
-    // M2M: merchant_id is always the seller who locks escrow
+    // M2M: merchant_id is ALWAYS the seller (locks escrow). buyer_merchant_id is ALWAYS the buyer.
+    // Matches SQL role resolution — type does NOT affect M2M role assignment.
     return { entityType: 'merchant', entityId: order.merchant_id, table: 'merchants' };
   }
   if (order.type === 'buy') {
@@ -114,9 +115,22 @@ export async function mockEscrowLock(
         [amount, payer.entityId]
       );
 
-      const balanceAfter = currentBalance - amount;
+      // TASK 3: Validate balance consistency post-UPDATE
+      const balanceCheck = await client.query(
+        `SELECT balance FROM ${payer.table} WHERE id = $1`,
+        [payer.entityId]
+      );
+      const balanceAfter = parseFloat(String(balanceCheck.rows[0].balance));
+      const expectedBalance = currentBalance - amount;
+
+      if (Math.abs(balanceAfter - expectedBalance) > 0.00000001) {
+        throw new Error(
+          `BALANCE_MISMATCH: payer balance ${balanceAfter} != expected ${expectedBalance}`
+        );
+      }
 
       // 6. Update order with escrow details + debit tracking
+      // TASK 7: Guard against terminal states as defense-in-depth
       const updateResult = await client.query(
         `UPDATE orders
          SET status = 'escrowed',
@@ -133,6 +147,7 @@ export async function mockEscrowLock(
              escrow_pda = $7,
              escrow_creator_wallet = $8
          WHERE id = $9
+           AND status NOT IN ('completed', 'cancelled', 'expired')
          RETURNING *`,
         [
           txHash,
@@ -147,19 +162,28 @@ export async function mockEscrowLock(
         ]
       );
 
+      if (updateResult.rows.length === 0) {
+        throw new Error('INVALID_TRANSITION: Order is in a terminal state');
+      }
+
       const updatedOrder = updateResult.rows[0] as Order;
 
-      // 7. Insert ledger entry
+      // 7. Insert ledger entry (ON CONFLICT for idempotency — TASK 2)
       await client.query(
         `INSERT INTO ledger_entries
          (account_type, account_id, entry_type, amount, asset,
           related_order_id, related_tx_hash, description, metadata,
           balance_before, balance_after)
-         VALUES ($1, $2, 'ESCROW_LOCK', $3, 'USDT', $4, $5, $6, $7, $8, $9)`,
+         VALUES ($1, $2, 'ESCROW_LOCK', $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (related_order_id, entry_type, account_id)
+           WHERE related_order_id IS NOT NULL
+             AND entry_type IN ('ESCROW_LOCK', 'ESCROW_RELEASE', 'ESCROW_REFUND', 'FEE')
+         DO NOTHING`,
         [
           payer.entityType,
           payer.entityId,
           -amount,
+          lockedOrder.crypto_currency || 'USDT',
           orderId,
           txHash,
           `Escrow locked for order #${updatedOrder.order_number}`,

@@ -266,6 +266,7 @@ export async function canUserAccessOrder(
 /**
  * Check if merchant can access a specific order
  * Merchants can access orders where they are either the seller (merchant_id) or buyer (buyer_merchant_id for M2M trades)
+ * Also allows read-only access to unclaimed escrowed orders (broadcast model)
  */
 export async function canMerchantAccessOrder(
   merchantId: string,
@@ -275,7 +276,15 @@ export async function canMerchantAccessOrder(
     const order = await getOrderById(orderId);
     if (!order) return false;
     // Allow access if merchant is the seller OR the buyer (M2M trades)
-    return order.merchant_id === merchantId || order.buyer_merchant_id === merchantId;
+    if (order.merchant_id === merchantId || order.buyer_merchant_id === merchantId) {
+      return true;
+    }
+    // Broadcast model: allow viewing unclaimed escrowed orders
+    // (buyer_merchant_id is NULL means no one has claimed it yet)
+    if (order.status === 'escrowed' && !order.buyer_merchant_id) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -293,12 +302,28 @@ export async function canAccessOrder(
     if (!order) return false;
 
     if (auth.actorType === 'user') {
-      return order.user_id === auth.actorId;
+      if (order.user_id === auth.actorId) return true;
+      // When both user and merchant headers are present on a non-merchant route,
+      // auth resolves to 'user' — but the caller may be acting as merchant.
+      // Check merchantId as fallback to prevent false "access denied".
+      if (auth.merchantId) {
+        if (order.merchant_id === auth.merchantId || order.buyer_merchant_id === auth.merchantId) {
+          return true;
+        }
+      }
+      return false;
     }
 
     if (auth.actorType === 'merchant') {
       // Allow access if merchant is the seller OR the buyer (M2M trades)
-      return order.merchant_id === auth.actorId || order.buyer_merchant_id === auth.actorId;
+      if (order.merchant_id === auth.actorId || order.buyer_merchant_id === auth.actorId) {
+        return true;
+      }
+      // Broadcast model: allow viewing unclaimed escrowed orders
+      if (order.status === 'escrowed' && !order.buyer_merchant_id) {
+        return true;
+      }
+      return false;
     }
 
     // Compliance can access orders they're assigned to or orders with disputes assigned to them

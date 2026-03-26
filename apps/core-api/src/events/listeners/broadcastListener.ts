@@ -82,5 +82,25 @@ export function registerBroadcastListener(): void {
     });
   }
 
+  // Pusher: direct STATUS_CHANGED events (cancel requests/declines)
+  // These don't change the order status but update cancel_requested_by.
+  // Only fire for events emitted directly as STATUS_CHANGED (event field matches),
+  // not for the generic STATUS_CHANGED echo from specific events.
+  orderBus.safeOn(ORDER_EVENT.STATUS_CHANGED, (p: OrderEventPayload) => {
+    if (p.event !== ORDER_EVENT.STATUS_CHANGED) return; // skip generic echo
+    pusherNotifyOrderStatus({
+      orderId: p.orderId,
+      userId: p.userId,
+      merchantId: p.merchantId,
+      buyerMerchantId: p.buyerMerchantId,
+      status: p.newStatus,
+      minimal_status: p.minimalStatus,
+      order_version: p.orderVersion,
+      previousStatus: p.previousStatus,
+      updatedAt: new Date().toISOString(),
+      data: p.order,
+    });
+  });
+
   logger.info('[BroadcastListener] Registered');
 }

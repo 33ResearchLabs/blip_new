@@ -40,7 +40,7 @@ function verifyPassword(password: string, storedHash: string): { valid: boolean;
 // GET handler - fetch merchant by wallet address or validate session
 export async function GET(request: NextRequest) {
   // Rate limit: 100 requests per minute
-  const rateLimitResponse = checkRateLimit(request, 'auth:merchant:get', STANDARD_LIMIT);
+  const rateLimitResponse = await checkRateLimit(request, 'auth:merchant:get', STANDARD_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   // Rate limit: 5 auth attempts per minute (prevents brute force)
-  const rateLimitResponse = checkRateLimit(request, 'auth:merchant', AUTH_LIMIT);
+  const rateLimitResponse = await checkRateLimit(request, 'auth:merchant', AUTH_LIMIT);
   if (rateLimitResponse) return rateLimitResponse;
 
   try {

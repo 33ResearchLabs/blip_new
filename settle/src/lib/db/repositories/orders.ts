@@ -26,6 +26,7 @@ import { logger } from '../../logger';
 import { notifyNewMessage, notifyOrderStatusUpdated } from '../../pusher/server';
 import { recordReputationEvent } from '../../reputation';
 import { upsertMerchantContact } from './directMessages';
+import { getCachedOrder, updateOrderCache, invalidateOrderCache } from '@/lib/cache';
 
 // Result type for status updates
 export interface StatusUpdateResult {
@@ -36,7 +37,9 @@ export interface StatusUpdateResult {
 
 // Orders
 export async function getOrderById(id: string): Promise<Order | null> {
-  return queryOne<Order>('SELECT * FROM orders WHERE id = $1', [id]);
+  return getCachedOrder<Order>(id, (orderId) =>
+    queryOne<Order>('SELECT * FROM orders WHERE id = $1', [orderId])
+  );
 }
 
 export async function getOrderByNumber(orderNumber: string): Promise<Order | null> {
@@ -366,6 +369,25 @@ export async function getAllPendingOrdersForMerchant(
                'bank_iban', seller_offer.bank_iban
              )
            ELSE NULL END as seller_bank,
+           CASE
+             WHEN upm.id IS NOT NULL THEN json_build_object(
+               'id', upm.id,
+               'type', upm.type,
+               'label', upm.label,
+               'details', upm.details
+             )
+             ELSE NULL
+           END as locked_payment_method,
+           CASE
+             WHEN mpm.id IS NOT NULL THEN json_build_object(
+               'id', mpm.id,
+               'type', mpm.type,
+               'name', mpm.name,
+               'details', mpm.details,
+               'is_default', mpm.is_default
+             )
+             ELSE NULL
+           END as merchant_payment_method,
            COALESCE(chat_agg.unread_count, 0) as unread_count,
            COALESCE(chat_agg.message_count, 0) as message_count,
            chat_latest.content as last_human_message,
@@ -376,6 +398,8 @@ export async function getAllPendingOrdersForMerchant(
     JOIN merchant_offers mo ON o.offer_id = mo.id
     LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
     LEFT JOIN merchants current_m ON current_m.id = $1
+    LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
+    LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
     LEFT JOIN LATERAL (
       SELECT smo.id, smo.bank_name, smo.bank_account_name, smo.bank_iban
       FROM merchant_offers smo
@@ -568,11 +592,18 @@ export async function createOrder(data: {
       [order.id, data.user_id]
     );
 
-    // Reserve liquidity
-    await client.query(
-      'UPDATE merchant_offers SET available_amount = available_amount - $1 WHERE id = $2',
+    // Reserve liquidity (atomic: only deducts if sufficient balance exists)
+    const reserveResult = await client.query(
+      `UPDATE merchant_offers
+       SET available_amount = available_amount - $1
+       WHERE id = $2
+         AND available_amount >= $1
+       RETURNING *`,
       [data.crypto_amount, data.offer_id]
     );
+    if (reserveResult.rows.length === 0) {
+      throw new Error('INSUFFICIENT_LIQUIDITY');
+    }
 
     return order;
   });
@@ -782,12 +813,21 @@ export async function updateOrderStatus(
 
       // Check if this is M2M acceptance (merchant accepting another merchant's order)
       // In M2M: original merchant stays as merchant_id, acceptor becomes buyer_merchant_id
-      // This covers: escrowed orders AND pending orders created by a merchant (not a user)
+      // IMPORTANT: Only treat as M2M if the order was created by a merchant (placeholder user),
+      // NOT when a real user created the order. For user-created orders, the accepting merchant
+      // should replace merchant_id (via isMerchantClaiming), not set buyer_merchant_id.
+      const userResult = await client.query(
+        'SELECT username FROM users WHERE id = $1',
+        [currentOrder.user_id]
+      );
+      const username = userResult.rows[0]?.username || '';
+      const isPlaceholderUser = username.startsWith('open_order_') || username.startsWith('m2m_');
       const isM2MAcceptance =
         actorType === 'merchant' &&
         (oldStatus === 'escrowed' || oldStatus === 'pending') &&
         (newStatus === 'accepted' || newStatus === 'payment_pending') &&
-        currentOrder.merchant_id !== actorId;
+        currentOrder.merchant_id !== actorId &&
+        isPlaceholderUser;
 
       // Build update query with PARAMETERIZED values (prevent SQL injection)
       let timestampField = '';
@@ -887,9 +927,29 @@ export async function updateOrderStatus(
             }
           }
           break;
-        case 'payment_sent':
-          timestampField = ", payment_sent_at = NOW()";
+        case 'payment_sent': {
+          // Payment deadline system (Task 3):
+          // Set deadline based on payment method to prevent infinite payment_sent state
+          // - cash (UPI): 60 minutes
+          // - bank (existing beneficiary / locked payment method): 4 hours
+          // - bank (new beneficiary / no locked payment method): 48 hours
+          let deadlineInterval = "INTERVAL '60 minutes'"; // default: cash/UPI
+          let needsProof = false;
+
+          if (currentOrder.payment_method === 'bank') {
+            needsProof = true;
+            if (currentOrder.payment_method_id) {
+              // Existing beneficiary (locked payment method on file)
+              deadlineInterval = "INTERVAL '4 hours'";
+            } else {
+              // New beneficiary — allow more time for first-time transfers
+              deadlineInterval = "INTERVAL '48 hours'";
+            }
+          }
+
+          timestampField = `, payment_sent_at = NOW(), payment_deadline = NOW() + ${deadlineInterval}, requires_payment_proof = ${needsProof}`;
           break;
+        }
         case 'payment_confirmed':
           timestampField = ', payment_confirmed_at = NOW()';
           break;
@@ -905,7 +965,8 @@ export async function updateOrderStatus(
           timestampField = ", cancelled_at = NOW(), cancelled_by = 'system', cancellation_reason = 'Timed out'";
           break;
         case 'disputed':
-          // No special timestamp for disputed
+          // Set auto-resolve deadline: 24 hours from now to prevent infinite stall
+          timestampField = ", disputed_at = NOW(), dispute_auto_resolve_at = NOW() + INTERVAL '24 hours'";
           break;
       }
 
@@ -919,12 +980,30 @@ export async function updateOrderStatus(
         });
       }
 
-      // Build parameterized query: $1=status, $2..N=dynamic values, $N+1=orderId
-      const updateParams: unknown[] = [effectiveStatus, ...dynamicParams, orderId];
+      // Build parameterized query with version + previous status guards:
+      // $1=status, $2..N=dynamic values, $N+1=orderId, $N+2=expected_version, $N+3=expected_old_status
+      const updateParams: unknown[] = [effectiveStatus, ...dynamicParams, orderId, currentOrder.order_version, oldStatus];
       const whereParam = nextParam;
-      const sql = `UPDATE orders SET status = $1${timestampField}${merchantReassign}${acceptorWalletUpdate}${buyerMerchantUpdate} WHERE id = $${whereParam} RETURNING *`;
+      const versionParam = nextParam + 1;
+      const oldStatusParam = nextParam + 2;
+      const sql = `UPDATE orders SET status = $1, order_version = order_version + 1${timestampField}${merchantReassign}${acceptorWalletUpdate}${buyerMerchantUpdate} WHERE id = $${whereParam} AND order_version = $${versionParam} AND status = $${oldStatusParam}::order_status RETURNING *`;
 
       const updateResult = await client.query(sql, updateParams);
+
+      // If no row returned, a concurrent update beat us (version or status changed)
+      if (updateResult.rows.length === 0) {
+        logger.warn('Concurrent status update detected (version/status mismatch)', {
+          orderId,
+          expectedVersion: currentOrder.order_version,
+          expectedStatus: oldStatus,
+          targetStatus: effectiveStatus,
+        });
+        return {
+          success: false,
+          error: 'Order was modified concurrently. Please retry.',
+        };
+      }
+
       const updatedOrder = updateResult.rows[0] as Order;
 
       // Create event (always, for audit trail)
@@ -1202,6 +1281,10 @@ export async function updateOrderStatus(
         logger.warn('Failed to send status change message to chat', { orderId, error: msgErr });
       }
 
+      // Write-through: update cache with fresh order data instead of invalidating
+      // Avoids cache miss → stampede after every status change
+      updateOrderCache(orderId, updatedOrder);
+
       return { success: true, order: updatedOrder };
     });
   } catch (error) {
@@ -1240,6 +1323,191 @@ export async function cancelOrder(
   return updateOrderStatus(orderId, 'cancelled', actorType, actorId, { reason });
 }
 
+/**
+ * Atomically claim an escrowed order for a merchant (broadcast model).
+ *
+ * Uses WHERE buyer_merchant_id IS NULL AND status = 'escrowed' to prevent
+ * race conditions — only one merchant can claim. If no rows are updated,
+ * the order was already claimed by another merchant.
+ *
+ * @returns StatusUpdateResult with the claimed order or an error
+ */
+export async function claimOrder(
+  orderId: string,
+  claimingMerchantId: string,
+  acceptorWalletAddress?: string,
+): Promise<StatusUpdateResult> {
+  try {
+    return await transaction(async (client) => {
+      // Atomic claim: SET buyer_merchant_id only if still NULL and status is escrowed
+      // Keep status as 'escrowed' — escrow is already locked.
+      // Only set buyer_merchant_id + accepted_at to record the claim.
+      // Merchant can then immediately SEND_PAYMENT from 'escrowed' status.
+      const claimResult = await client.query(
+        `UPDATE orders
+         SET buyer_merchant_id = $1,
+             accepted_at = NOW(),
+             acceptor_wallet_address = COALESCE($3, acceptor_wallet_address),
+             order_version = order_version + 1
+         WHERE id = $2
+           AND buyer_merchant_id IS NULL
+           AND status = 'escrowed'
+         RETURNING *`,
+        [claimingMerchantId, orderId, acceptorWalletAddress || null]
+      );
+
+      if (claimResult.rows.length === 0) {
+        // Either order doesn't exist, is not escrowed, or already claimed
+        const checkResult = await client.query(
+          'SELECT id, status, buyer_merchant_id FROM orders WHERE id = $1',
+          [orderId]
+        );
+
+        if (checkResult.rows.length === 0) {
+          return { success: false, error: 'Order not found' };
+        }
+
+        const order = checkResult.rows[0];
+        if (order.buyer_merchant_id) {
+          return { success: false, error: 'Order already claimed by another merchant' };
+        }
+        if (order.status !== 'escrowed') {
+          return { success: false, error: `Order is in '${order.status}' status, cannot claim` };
+        }
+
+        return { success: false, error: 'Unable to claim order' };
+      }
+
+      const claimedOrder = claimResult.rows[0] as Order;
+
+      // Record the claim event
+      await client.query(
+        `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
+         VALUES ($1, 'status_changed_to_accepted', 'merchant', $2, 'escrowed', 'accepted', $3)`,
+        [orderId, claimingMerchantId, JSON.stringify({ claim: true, buyer_merchant_id: claimingMerchantId })]
+      );
+
+      logger.info('[claimOrder] Order claimed successfully', {
+        orderId,
+        claimingMerchantId,
+        previousStatus: 'escrowed',
+        newStatus: 'accepted',
+      });
+
+      // Invalidate cache
+      invalidateOrderCache(orderId);
+
+      return { success: true, order: claimedOrder };
+    });
+  } catch (error) {
+    logger.error('[claimOrder] Failed to claim order', {
+      orderId,
+      claimingMerchantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { success: false, error: 'Failed to claim order' };
+  }
+}
+
+/**
+ * Atomically claim an escrowed order AND mark payment as sent in one transaction.
+ * This is the "Option B (better UX)" flow: claim + payment_sent atomically.
+ *
+ * Prevents race conditions — only one merchant can claim and pay.
+ */
+export async function claimAndPayOrder(
+  orderId: string,
+  claimingMerchantId: string,
+  acceptorWalletAddress?: string,
+): Promise<StatusUpdateResult> {
+  try {
+    return await transaction(async (client) => {
+      // Atomic claim + payment: SET buyer_merchant_id and status to payment_sent
+      // only if still NULL and status is escrowed.
+      // Also backfill escrow_debited_entity_id if NULL (data gap from on-chain escrow).
+      // The DB constraint chk_escrow_required_for_payment_statuses requires it for payment_sent.
+      // Seller determination: depends on order type. For claim+pay, the merchant
+      // who created the escrowed order (merchant_id) is always the seller.
+      // This is a broadcast claim — only escrowed orders from merchants are claimable.
+      const claimResult = await client.query(
+        `UPDATE orders
+         SET buyer_merchant_id = $1,
+             status = 'payment_sent',
+             accepted_at = NOW(),
+             payment_sent_at = NOW(),
+             acceptor_wallet_address = COALESCE($3, acceptor_wallet_address),
+             escrow_debited_entity_id = COALESCE(escrow_debited_entity_id,
+               CASE
+                 WHEN type = 'sell' AND buyer_merchant_id IS NULL THEN user_id
+                 ELSE merchant_id
+               END),
+             escrow_debited_entity_type = COALESCE(escrow_debited_entity_type,
+               CASE WHEN type = 'sell' AND buyer_merchant_id IS NULL THEN 'user' ELSE 'merchant' END),
+             escrow_debited_amount = COALESCE(escrow_debited_amount, crypto_amount),
+             escrow_debited_at = COALESCE(escrow_debited_at, escrowed_at, created_at),
+             order_version = order_version + 1,
+             updated_at = NOW()
+         WHERE id = $2
+           AND buyer_merchant_id IS NULL
+           AND status = 'escrowed'
+         RETURNING *`,
+        [claimingMerchantId, orderId, acceptorWalletAddress || null]
+      );
+
+      if (claimResult.rows.length === 0) {
+        const checkResult = await client.query(
+          'SELECT id, status, buyer_merchant_id FROM orders WHERE id = $1',
+          [orderId]
+        );
+
+        if (checkResult.rows.length === 0) {
+          return { success: false, error: 'Order not found' };
+        }
+
+        const order = checkResult.rows[0];
+        if (order.buyer_merchant_id) {
+          return { success: false, error: 'Order already claimed by another merchant' };
+        }
+        if (order.status !== 'escrowed') {
+          return { success: false, error: `Order is in '${order.status}' status, cannot claim` };
+        }
+
+        return { success: false, error: 'Unable to claim and pay order' };
+      }
+
+      const claimedOrder = claimResult.rows[0] as Order;
+
+      // Record the claim + payment event
+      await client.query(
+        `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
+         VALUES ($1, 'status_changed_to_payment_sent', 'merchant', $2, 'escrowed', 'payment_sent', $3)`,
+        [orderId, claimingMerchantId, JSON.stringify({
+          claim_and_pay: true,
+          buyer_merchant_id: claimingMerchantId,
+        })]
+      );
+
+      logger.info('[claimAndPayOrder] Order claimed and payment sent', {
+        orderId,
+        claimingMerchantId,
+        previousStatus: 'escrowed',
+        newStatus: 'payment_sent',
+      });
+
+      invalidateOrderCache(orderId);
+
+      return { success: true, order: claimedOrder };
+    });
+  } catch (error) {
+    logger.error('[claimAndPayOrder] Failed', {
+      orderId,
+      claimingMerchantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { success: false, error: 'Failed to claim and pay order' };
+  }
+}
+
 // Order Events
 export async function getOrderEvents(orderId: string): Promise<OrderEvent[]> {
   return query<OrderEvent>(
@@ -1249,9 +1517,21 @@ export async function getOrderEvents(orderId: string): Promise<OrderEvent[]> {
 }
 
 // Chat Messages
-export async function getOrderMessages(orderId: string): Promise<ChatMessage[]> {
-  // Join with users and merchants to get sender names
-  return query<ChatMessage>(
+export async function getOrderMessages(
+  orderId: string,
+  options?: { limit?: number; before?: string }
+): Promise<ChatMessage[]> {
+  const limit = Math.min(options?.limit || 50, 200);
+  const params: unknown[] = [orderId, limit];
+
+  let cursorClause = '';
+  if (options?.before) {
+    cursorClause = 'AND cm.created_at < $3';
+    params.push(options.before);
+  }
+
+  // Fetch newest N messages (DESC), then reverse to return ASC order for frontend
+  const rows = await query<ChatMessage>(
     `SELECT
       cm.*,
       CASE
@@ -1266,9 +1546,14 @@ export async function getOrderMessages(orderId: string): Promise<ChatMessage[]> 
     LEFT JOIN compliance_team ct ON cm.sender_type = 'compliance' AND cm.sender_id = ct.id
     WHERE cm.order_id = $1
       AND NOT (cm.sender_type = 'system' AND cm.message_type = 'system')
-    ORDER BY cm.created_at ASC`,
-    [orderId]
+      ${cursorClause}
+    ORDER BY cm.created_at DESC
+    LIMIT $2`,
+    params
   );
+
+  // Reverse so messages are returned in chronological (ASC) order
+  return rows.reverse();
 }
 
 export async function sendMessage(data: {
@@ -1369,10 +1654,11 @@ export async function expireOldOrders(): Promise<number> {
     const expireResult = await query(
       `UPDATE orders
        SET status = 'expired'::order_status,
+           order_version = order_version + 1,
            cancelled_at = NOW(),
            cancelled_by = 'system',
            cancellation_reason = 'Order expired - no one accepted within 15 minutes'
-       WHERE id = ANY($1)
+       WHERE id = ANY($1) AND status = 'pending'
        RETURNING id`,
       [pendingIds]
     );
@@ -1393,6 +1679,7 @@ export async function expireOldOrders(): Promise<number> {
            WHEN escrow_tx_hash IS NOT NULL THEN 'disputed'::order_status
            ELSE 'cancelled'::order_status
          END,
+         order_version = order_version + 1,
          cancelled_at = NOW(),
          cancelled_by = 'system',
          cancellation_reason = CASE
@@ -1400,6 +1687,7 @@ export async function expireOldOrders(): Promise<number> {
            ELSE 'Order timeout - cancelled (no escrow)'
          END
        WHERE id = ANY($1)
+         AND status NOT IN ('completed', 'cancelled', 'expired', 'disputed')
        RETURNING id`,
       [acceptedIds]
     );

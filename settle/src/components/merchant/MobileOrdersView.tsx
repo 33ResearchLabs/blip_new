@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { UserBadge } from "@/components/merchant/UserBadge";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
+import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order } from "@/types/merchant";
 
 export interface MobileOrdersViewProps {

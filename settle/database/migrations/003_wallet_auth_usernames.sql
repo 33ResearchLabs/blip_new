@@ -10,6 +10,12 @@
 ALTER TABLE users
   ALTER COLUMN password_hash DROP NOT NULL;
 
+-- Backfill any NULL wallet_address values before adding NOT NULL constraint.
+-- Uses a deterministic placeholder derived from the user's ID so it's unique.
+UPDATE users
+SET wallet_address = 'placeholder_' || id::text
+WHERE wallet_address IS NULL;
+
 -- Make wallet_address required and add constraint
 ALTER TABLE users
   ALTER COLUMN wallet_address SET NOT NULL;

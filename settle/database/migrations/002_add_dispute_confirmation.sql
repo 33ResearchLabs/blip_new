@@ -67,13 +67,25 @@ WHERE id = OLD.id;
 
 CREATE TABLE IF NOT EXISTS compliance_team (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email VARCHAR(255) UNIQUE NOT NULL,
+  email VARCHAR(255) UNIQUE,
+  wallet_address VARCHAR(64) UNIQUE,
   name VARCHAR(255) NOT NULL,
+  password_hash TEXT,
   role VARCHAR(50) DEFAULT 'support',
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Fix: if table already exists from migration 008 with password_hash NOT NULL,
+-- drop the constraint so seed INSERTs don't fail.
+-- This is safe because compliance auth uses COMPLIANCE_PASSWORD env var, not per-row hashes.
+DO $$
+BEGIN
+  ALTER TABLE compliance_team ALTER COLUMN password_hash DROP NOT NULL;
+EXCEPTION
+  WHEN undefined_column THEN NULL; -- column doesn't exist yet, that's fine
+END $$;
 
 -- Seed default compliance members
 INSERT INTO compliance_team (email, name, role)

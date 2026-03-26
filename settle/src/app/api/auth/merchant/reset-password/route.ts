@@ -18,7 +18,7 @@ interface TokenRow {
 }
 
 export async function POST(request: NextRequest) {
-  const rl = checkRateLimit(request, 'auth:reset-password', AUTH_LIMIT);
+  const rl = await checkRateLimit(request, 'auth:reset-password', AUTH_LIMIT);
   if (rl) return rl;
 
   try {

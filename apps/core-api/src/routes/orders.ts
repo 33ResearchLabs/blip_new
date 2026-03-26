@@ -25,7 +25,10 @@ import {
 
 // Fire-and-forget helper — logs errors but never blocks
 const bgQuery = (sql: string, params: unknown[]) => dbQuery(sql, params).catch(() => {});
-import { orderBus, ORDER_EVENT, type OrderEventPayload } from '../events';
+import { ORDER_EVENT, type OrderEventPayload } from '../events';
+import { insertOutboxEvent, insertOutboxEventDirect } from '../outbox';
+import { withIdempotency, getIdempotencyKey } from '../idempotency';
+import { checkFinancialRateLimit } from '../rateLimit';
 
 interface OrderRow {
   id: string;
@@ -197,7 +200,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             logger.error('[CRITICAL] Refund invariant FAILED (PATCH cancel)', { orderId: id, error: invariantError });
             return reply.status(500).send({ success: false, error: 'ORDER_REFUND_INVARIANT_FAILED' });
           }
-          orderBus.emitOrderEvent({
+          await insertOutboxEventDirect({
             event: ORDER_EVENT.CANCELLED,
             orderId: id, previousStatus: order.status, newStatus: 'cancelled',
             actorType: actor_type, actorId: actor_id,
@@ -250,7 +253,8 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             );
             if (mpm) {
               await dbQuery(
-                'UPDATE orders SET merchant_payment_method_id = $1 WHERE id = $2',
+                `UPDATE orders SET merchant_payment_method_id = $1
+                 WHERE id = $2 AND status NOT IN ('completed', 'cancelled', 'expired')`,
                 [mpm.id, id]
               );
               (order as any).merchant_payment_method_id = mpm.id;
@@ -260,7 +264,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
-        orderBus.emitOrderEvent({
+        await insertOutboxEventDirect({
           event: ORDER_EVENT.ACCEPTED,
           orderId: id, orderNumber: order.order_number,
           previousStatus: oldStatus, newStatus: order.status,
@@ -274,25 +278,90 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Fast path: payment_sent is a simple status flip — no TX needed
+      // Payment deadline system: set deadline based on payment method
+      // Idempotency-protected: same key returns same response, no duplicate payment_sent
       if (newStatus === 'payment_sent') {
-        const updated = await queryOne<OrderRow>(
-          `UPDATE orders SET status = 'payment_sent', payment_sent_at = NOW(), order_version = order_version + 1
-           WHERE id = $1 AND status = 'escrowed'
-           RETURNING *`,
-          [id]
-        );
-        if (!updated) {
-          return reply.status(400).send({ success: false, error: 'Order not found or cannot transition to payment_sent' });
-        }
-        orderBus.emitOrderEvent({
-          event: ORDER_EVENT.PAYMENT_SENT,
-          orderId: id, previousStatus: 'escrowed', newStatus: 'payment_sent',
-          actorType: actor_type, actorId: actor_id,
-          userId: updated.user_id, merchantId: updated.merchant_id, buyerMerchantId: updated.buyer_merchant_id ?? undefined,
-          order: updated as unknown as Record<string, unknown>,
-          orderVersion: updated.order_version, minimalStatus: 'payment_sent',
+        const rl = checkFinancialRateLimit(request, 'payment_sent');
+        if (rl) return reply.status(rl.statusCode).send(rl.body);
+        return withIdempotency(request, reply, 'payment_sent', id, async () => {
+          // Pre-read to determine payment method for deadline calculation
+          const preRead = await queryOne<OrderRow>('SELECT * FROM orders WHERE id = $1', [id]);
+          if (!preRead) {
+            return { statusCode: 404, body: { success: false, error: 'Order not found' } };
+          }
+
+          let deadlineInterval = "INTERVAL '60 minutes'"; // default: cash/UPI
+          let needsProof = false;
+          if (preRead.payment_method === 'bank') {
+            needsProof = true;
+            // Check if there's a locked payment method (existing beneficiary → shorter deadline)
+            if ((preRead as any).payment_method_id) {
+              deadlineInterval = "INTERVAL '4 hours'";
+            } else {
+              deadlineInterval = "INTERVAL '48 hours'";
+            }
+          }
+
+          let updated: OrderRow | null;
+          try {
+            updated = await queryOne<OrderRow>(
+              `UPDATE orders SET status = 'payment_sent', payment_sent_at = NOW(),
+                      payment_deadline = NOW() + ${deadlineInterval},
+                      requires_payment_proof = ${needsProof},
+                      escrow_debited_entity_id = COALESCE(escrow_debited_entity_id,
+                        CASE
+                          WHEN buyer_merchant_id IS NOT NULL THEN merchant_id
+                          WHEN type = 'sell' THEN user_id
+                          ELSE merchant_id
+                        END),
+                      escrow_debited_entity_type = COALESCE(escrow_debited_entity_type,
+                        CASE WHEN type = 'sell' AND buyer_merchant_id IS NULL THEN 'user' ELSE 'merchant' END),
+                      escrow_debited_amount = COALESCE(escrow_debited_amount, crypto_amount),
+                      escrow_debited_at = COALESCE(escrow_debited_at, escrowed_at, created_at),
+                      order_version = order_version + 1
+               WHERE id = $1 AND status = 'escrowed' AND order_version = $2
+               RETURNING *`,
+              [id, preRead.order_version]
+            );
+          } catch (err: unknown) {
+            // Fallback: if payment_deadline/requires_payment_proof columns are missing (42703),
+            // proceed without them rather than returning a 500.
+            if (typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === '42703') {
+              console.warn('[orders] Column missing (payment_deadline or requires_payment_proof). Falling back to query without deadline columns. Run migrations 047+ to fix.');
+              updated = await queryOne<OrderRow>(
+                `UPDATE orders SET status = 'payment_sent', payment_sent_at = NOW(),
+                        escrow_debited_entity_id = COALESCE(escrow_debited_entity_id,
+                          CASE
+                            WHEN buyer_merchant_id IS NOT NULL THEN merchant_id
+                            WHEN type = 'sell' THEN user_id
+                            ELSE merchant_id
+                          END),
+                        escrow_debited_entity_type = COALESCE(escrow_debited_entity_type,
+                          CASE WHEN type = 'sell' AND buyer_merchant_id IS NULL THEN 'user' ELSE 'merchant' END),
+                        escrow_debited_amount = COALESCE(escrow_debited_amount, crypto_amount),
+                        escrow_debited_at = COALESCE(escrow_debited_at, escrowed_at, created_at),
+                        order_version = order_version + 1
+                 WHERE id = $1 AND status = 'escrowed' AND order_version = $2
+                 RETURNING *`,
+                [id, preRead.order_version]
+              );
+            } else {
+              throw err;
+            }
+          }
+          if (!updated) {
+            return { statusCode: 409, body: { success: false, error: 'Order was modified concurrently or cannot transition to payment_sent. Please retry.' } };
+          }
+          await insertOutboxEventDirect({
+            event: ORDER_EVENT.PAYMENT_SENT,
+            orderId: id, previousStatus: 'escrowed', newStatus: 'payment_sent',
+            actorType: actor_type, actorId: actor_id,
+            userId: updated.user_id, merchantId: updated.merchant_id, buyerMerchantId: updated.buyer_merchant_id ?? undefined,
+            order: updated as unknown as Record<string, unknown>,
+            orderVersion: updated.order_version, minimalStatus: 'payment_sent',
+          });
+          return { statusCode: 200, body: { success: true, data: { ...updated, minimal_status: normalizeStatus(updated.status) } } };
         });
-        return reply.send({ success: true, data: { ...updated, minimal_status: normalizeStatus(updated.status) } });
       }
 
       // General status update with state machine validation
@@ -360,11 +429,32 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           newStatus === 'accepted' &&
           currentOrder.merchant_id !== actor_id;
 
+        // Only treat as M2M if the order was created by a merchant (placeholder user),
+        // NOT when a real user created the order. For user-created orders, the accepting
+        // merchant should replace merchant_id, not set buyer_merchant_id.
+        const m2mUserResult = await client.query<{ username: string }>(
+          'SELECT username FROM users WHERE id = $1',
+          [currentOrder.user_id]
+        );
+        const m2mUsername = m2mUserResult.rows[0]?.username || '';
+        const isPlaceholderUser = m2mUsername.startsWith('open_order_') || m2mUsername.startsWith('m2m_');
         const isM2MAcceptance =
           actor_type === 'merchant' &&
           (oldStatus === 'escrowed' || oldStatus === 'pending') &&
           (newStatus === 'accepted' || newStatus === 'payment_pending') &&
-          currentOrder.merchant_id !== actor_id;
+          currentOrder.merchant_id !== actor_id &&
+          isPlaceholderUser;
+
+        console.log('[CORE-API DEBUG] Accept logic:', {
+          m2mUsername,
+          isPlaceholderUser,
+          isM2MAcceptance,
+          isMerchantClaiming,
+          actor_id,
+          merchant_id: currentOrder.merchant_id,
+          oldStatus,
+          newStatus,
+        });
 
         // Build dynamic update parts using parameterized queries (prevent SQL injection)
         let timestampField = '';
@@ -382,14 +472,22 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         switch (newStatus) {
           case 'accepted':
             timestampField = ", accepted_at = NOW(), expires_at = NOW() + INTERVAL '120 minutes'";
-            // When accepting an already-escrowed order, the escrow creator (seller) must
-            // remain as merchant_id. The acceptor becomes buyer_merchant_id.
-            if ((isMerchantClaiming || isM2MAcceptance) && currentOrder.escrow_tx_hash && !currentOrder.buyer_merchant_id) {
+            // Acceptance logic:
+            // - M2M (placeholder user): set buyer_merchant_id (acceptor joins as buyer)
+            // - User order with escrow: acceptor becomes buyer_merchant_id (escrow creator stays as merchant_id)
+            // - User order without escrow: reassign merchant_id to acceptor (normal claim)
+            if (isM2MAcceptance && !currentOrder.buyer_merchant_id) {
+              // M2M: acceptor becomes buyer_merchant_id
               extraSetClauses.push(`buyer_merchant_id = ${addParam(actor_id)}`);
-            } else if (isMerchantClaiming || (isM2MAcceptance && currentOrder.buyer_merchant_id)) {
+            } else if (isM2MAcceptance && currentOrder.buyer_merchant_id) {
+              // M2M with buyer already set: acceptor replaces merchant_id (seller)
               extraSetClauses.push(`merchant_id = ${addParam(actor_id)}`);
-            } else if (isM2MAcceptance && !currentOrder.buyer_merchant_id) {
+            } else if (isMerchantClaiming && currentOrder.escrow_tx_hash && !currentOrder.buyer_merchant_id) {
+              // User order with escrow already locked: keep merchant_id (seller), set buyer_merchant_id
               extraSetClauses.push(`buyer_merchant_id = ${addParam(actor_id)}`);
+            } else if (isMerchantClaiming) {
+              // User order without escrow: reassign merchant_id to the claiming merchant
+              extraSetClauses.push(`merchant_id = ${addParam(actor_id)}`);
             }
             if (acceptor_wallet_address) {
               extraSetClauses.push(`acceptor_wallet_address = ${addParam(acceptor_wallet_address)}`);
@@ -435,10 +533,16 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         const extraSetStr = extraSetClauses.length > 0 ? ', ' + extraSetClauses.join(', ') : '';
+        // Add version + previous status guards to WHERE clause
+        const versionParam = addParam(currentOrder.order_version);
+        const oldStatusParam = addParam(oldStatus);
         const allParams: unknown[] = [effectiveStatus, id, ...updateParams];
-        const sql = `UPDATE orders SET status = $1${timestampField}${extraSetStr}, order_version = order_version + 1 WHERE id = $2 RETURNING *`;
+        const sql = `UPDATE orders SET status = $1${timestampField}${extraSetStr}, order_version = order_version + 1 WHERE id = $2 AND order_version = ${versionParam} AND status = ${oldStatusParam}::order_status RETURNING *`;
 
         const updateResult = await client.query<OrderRow>(sql, allParams);
+        if (updateResult.rows.length === 0) {
+          return { success: false as const, error: 'Order was modified concurrently. Please retry.' };
+        }
         const updatedOrder = updateResult.rows[0];
 
         // Restore liquidity on cancellation/expiry (critical — must be atomic)
@@ -452,13 +556,26 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         // Mock mode balance handling (critical — must be atomic)
         if (MOCK_MODE && newStatus === 'completed' && currentOrder.escrow_tx_hash && !currentOrder.release_tx_hash) {
           const amount = parseFloat(String(currentOrder.crypto_amount));
-          const isBuyOrder = currentOrder.type === 'buy';
-          const recipientId = isBuyOrder
-            ? (currentOrder.buyer_merchant_id || currentOrder.user_id)
-            : (currentOrder.buyer_merchant_id || currentOrder.merchant_id);
-          const recipientTable = isBuyOrder
-            ? (currentOrder.buyer_merchant_id ? 'merchants' : 'users')
-            : 'merchants';
+          // Determine who receives the escrowed crypto (the buyer):
+          // Buy order (user buys): user_id receives crypto
+          // Sell order (user sells): merchant_id receives crypto
+          // M2M buy (stored 'sell'): buyer_merchant_id (creator/buyer) receives
+          // M2M sell (stored 'buy'): merchant_id (target/buyer) receives
+          const isM2M = !!currentOrder.buyer_merchant_id;
+          let recipientId: string;
+          let recipientTable: string;
+          if (isM2M) {
+            recipientId = currentOrder.type === 'sell'
+              ? currentOrder.buyer_merchant_id!  // M2M buy: creator is buyer
+              : currentOrder.merchant_id;        // M2M sell: target is buyer
+            recipientTable = 'merchants';
+          } else if (currentOrder.type === 'buy') {
+            recipientId = currentOrder.user_id;
+            recipientTable = 'users';
+          } else {
+            recipientId = currentOrder.merchant_id;
+            recipientTable = 'merchants';
+          }
 
           await client.query(
             `UPDATE ${recipientTable} SET balance = balance + $1 WHERE id = $2`,
@@ -491,32 +608,30 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
+        // Outbox event inside transaction — atomic with order update
+        const statusToEvent: Record<string, OrderEventPayload['event']> = {
+          escrowed: ORDER_EVENT.ESCROWED, payment_sent: ORDER_EVENT.PAYMENT_SENT,
+          completed: ORDER_EVENT.COMPLETED, cancelled: ORDER_EVENT.CANCELLED,
+          expired: ORDER_EVENT.EXPIRED, disputed: ORDER_EVENT.DISPUTED,
+        };
+        await insertOutboxEvent(client, {
+          event: statusToEvent[newStatus] || ORDER_EVENT.STATUS_CHANGED,
+          orderId: id, orderNumber: currentOrder.order_number,
+          previousStatus: oldStatus, newStatus: updatedOrder.status,
+          actorType: actor_type, actorId: actor_id,
+          userId: updatedOrder.user_id, merchantId: updatedOrder.merchant_id,
+          buyerMerchantId: updatedOrder.buyer_merchant_id ?? undefined,
+          order: updatedOrder as unknown as Record<string, unknown>,
+          orderVersion: updatedOrder.order_version, minimalStatus: normalizeStatus(updatedOrder.status),
+          metadata: request.body.metadata,
+        });
+
         return { success: true as const, order: updatedOrder, oldStatus, currentOrder };
       });
 
       if (!result.success) {
         return reply.status(400).send({ success: false, error: result.error });
       }
-
-      // --- All side-effects via event bus ---
-      const txOldStatus = result.oldStatus!;
-      const statusToEvent: Record<string, OrderEventPayload['event']> = {
-        escrowed: ORDER_EVENT.ESCROWED, payment_sent: ORDER_EVENT.PAYMENT_SENT,
-        completed: ORDER_EVENT.COMPLETED, cancelled: ORDER_EVENT.CANCELLED,
-        expired: ORDER_EVENT.EXPIRED, disputed: ORDER_EVENT.DISPUTED,
-      };
-
-      orderBus.emitOrderEvent({
-        event: statusToEvent[newStatus] || ORDER_EVENT.STATUS_CHANGED,
-        orderId: id, orderNumber: result.currentOrder!.order_number,
-        previousStatus: txOldStatus, newStatus: result.order!.status,
-        actorType: actor_type, actorId: actor_id,
-        userId: result.order!.user_id, merchantId: result.order!.merchant_id,
-        buyerMerchantId: result.order!.buyer_merchant_id ?? undefined,
-        order: result.order as unknown as Record<string, unknown>,
-        orderVersion: result.order!.order_version, minimalStatus: normalizeStatus(result.order!.status),
-        metadata: request.body.metadata,
-      });
 
       return reply.send({
         success: true,
@@ -529,6 +644,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // DELETE /v1/orders/:id - Cancel order
+  // Idempotency-protected: same key returns same response, no duplicate cancellation
   fastify.delete<{
     Params: { id: string };
     Querystring: {
@@ -547,153 +663,163 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    try {
-      const order = await queryOne<OrderRow>(
-        'SELECT * FROM orders WHERE id = $1',
-        [id]
-      );
+    const rl = checkFinancialRateLimit(request, 'cancel_order');
+    if (rl) return reply.status(rl.statusCode).send(rl.body);
 
-      if (!order) {
-        return reply.status(404).send({ success: false, error: 'Order not found' });
-      }
-
-      if (order.escrow_tx_hash) {
-        // Atomic cancel with refund
-        const result = await atomicCancelWithRefund(
-          id,
-          order.status,
-          actor_type as ActorType,
-          actor_id,
-          reason || undefined,
-          {
-            type: order.type as 'buy' | 'sell',
-            crypto_amount: parseFloat(String(order.crypto_amount)),
-            merchant_id: order.merchant_id,
-            user_id: order.user_id,
-            buyer_merchant_id: order.buyer_merchant_id,
-            order_number: parseInt(order.order_number, 10),
-            crypto_currency: order.crypto_currency,
-            fiat_amount: parseFloat(String(order.fiat_amount)),
-            fiat_currency: order.fiat_currency,
-          }
+    return withIdempotency(request, reply, 'cancel_order', id, async () => {
+      try {
+        const order = await queryOne<OrderRow>(
+          'SELECT * FROM orders WHERE id = $1',
+          [id]
         );
 
-        if (!result.success) {
-          return reply.status(400).send({ success: false, error: result.error });
+        if (!order) {
+          return { statusCode: 404, body: { success: false, error: 'Order not found' } };
         }
 
-        try {
-          await verifyRefundInvariants({
-            orderId: id,
-            expectedStatus: 'cancelled',
-            expectedMinOrderVersion: order.order_version + 1,
+        if (order.escrow_tx_hash) {
+          // Atomic cancel with refund
+          const result = await atomicCancelWithRefund(
+            id,
+            order.status,
+            actor_type as ActorType,
+            actor_id,
+            reason || undefined,
+            {
+              type: order.type as 'buy' | 'sell',
+              crypto_amount: parseFloat(String(order.crypto_amount)),
+              merchant_id: order.merchant_id,
+              user_id: order.user_id,
+              buyer_merchant_id: order.buyer_merchant_id,
+              order_number: parseInt(order.order_number, 10),
+              crypto_currency: order.crypto_currency,
+              fiat_amount: parseFloat(String(order.fiat_amount)),
+              fiat_currency: order.fiat_currency,
+            }
+          );
+
+          if (!result.success) {
+            return { statusCode: 400, body: { success: false, error: result.error } };
+          }
+
+          try {
+            await verifyRefundInvariants({
+              orderId: id,
+              expectedStatus: 'cancelled',
+              expectedMinOrderVersion: order.order_version + 1,
+            });
+          } catch (invariantError) {
+            logger.error('[CRITICAL] Refund invariant FAILED (DELETE)', { orderId: id, error: invariantError });
+            return { statusCode: 500, body: { success: false, error: 'ORDER_REFUND_INVARIANT_FAILED' } };
+          }
+
+          await insertOutboxEventDirect({
+            event: ORDER_EVENT.CANCELLED,
+            orderId: id, previousStatus: order.status, newStatus: 'cancelled',
+            actorType: actor_type, actorId: actor_id,
+            userId: order.user_id, merchantId: order.merchant_id, buyerMerchantId: order.buyer_merchant_id ?? undefined,
+            order: result.order as unknown as Record<string, unknown>,
+            orderVersion: result.order!.order_version, minimalStatus: 'cancelled',
+            refundTxHash: result.order?.refund_tx_hash ?? undefined,
           });
-        } catch (invariantError) {
-          logger.error('[CRITICAL] Refund invariant FAILED (DELETE)', { orderId: id, error: invariantError });
-          return reply.status(500).send({ success: false, error: 'ORDER_REFUND_INVARIANT_FAILED' });
-        }
 
-        orderBus.emitOrderEvent({
-          event: ORDER_EVENT.CANCELLED,
-          orderId: id, previousStatus: order.status, newStatus: 'cancelled',
-          actorType: actor_type, actorId: actor_id,
-          userId: order.user_id, merchantId: order.merchant_id, buyerMerchantId: order.buyer_merchant_id ?? undefined,
-          order: result.order as unknown as Record<string, unknown>,
-          orderVersion: result.order!.order_version, minimalStatus: 'cancelled',
-          refundTxHash: result.order?.refund_tx_hash ?? undefined,
-        });
-
-        return reply.send({
-          success: true,
-          data: { ...result.order, minimal_status: normalizeStatus(result.order!.status) },
-        });
-      } else {
-        // Simple cancel via state machine
-        const result = await transaction(async (client) => {
-          const current = await client.query<OrderRow>(
-            'SELECT * FROM orders WHERE id = $1 FOR UPDATE',
-            [id]
-          );
-
-          if (current.rows.length === 0) {
-            return { success: false as const, error: 'Order not found' };
-          }
-
-          const currentOrder = current.rows[0];
-          const validation = validateTransition(currentOrder.status, 'cancelled' as OrderStatus, actor_type as ActorType);
-          if (!validation.valid) {
-            return { success: false as const, error: validation.error };
-          }
-
-          const updateResult = await client.query<OrderRow>(
-            `UPDATE orders
-             SET status = 'cancelled',
-                 cancelled_at = NOW(),
-                 cancelled_by = $2::actor_type,
-                 cancellation_reason = $3,
-                 order_version = order_version + 1
-             WHERE id = $1
-             RETURNING *`,
-            [id, actor_type, reason || null]
-          );
-
-          const updatedOrder = updateResult.rows[0];
-
-          await client.query(
-            `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
-             VALUES ($1, 'status_changed_to_cancelled', $2, $3, $4, 'cancelled', $5)`,
-            [id, actor_type, actor_id, currentOrder.status, JSON.stringify({ reason })]
-          );
-
-          await client.query(
-            `INSERT INTO notification_outbox (order_id, event_type, payload, status) VALUES ($1, 'ORDER_CANCELLED', $2, 'pending')`,
-            [
-              id,
-              JSON.stringify({
-                orderId: id,
-                userId: updatedOrder.user_id,
-                merchantId: updatedOrder.merchant_id,
-                status: 'cancelled',
-                order_version: updatedOrder.order_version,
-                previousStatus: currentOrder.status,
-                updatedAt: new Date().toISOString(),
-              }),
-            ]
-          );
-
-          if (shouldRestoreLiquidity(currentOrder.status, 'cancelled' as OrderStatus)) {
-            await client.query(
-              'UPDATE merchant_offers SET available_amount = available_amount + $1 WHERE id = $2',
-              [currentOrder.crypto_amount, currentOrder.offer_id]
+          return {
+            statusCode: 200,
+            body: { success: true, data: { ...result.order, minimal_status: normalizeStatus(result.order!.status) } },
+          };
+        } else {
+          // Simple cancel via state machine
+          const result = await transaction(async (client) => {
+            const current = await client.query<OrderRow>(
+              'SELECT * FROM orders WHERE id = $1 FOR UPDATE',
+              [id]
             );
+
+            if (current.rows.length === 0) {
+              return { success: false as const, error: 'Order not found' };
+            }
+
+            const currentOrder = current.rows[0];
+            const validation = validateTransition(currentOrder.status, 'cancelled' as OrderStatus, actor_type as ActorType);
+            if (!validation.valid) {
+              return { success: false as const, error: validation.error };
+            }
+
+            const updateResult = await client.query<OrderRow>(
+              `UPDATE orders
+               SET status = 'cancelled',
+                   cancelled_at = NOW(),
+                   cancelled_by = $2::actor_type,
+                   cancellation_reason = $3,
+                   order_version = order_version + 1
+               WHERE id = $1 AND order_version = $4 AND status = $5::order_status
+               RETURNING *`,
+              [id, actor_type, reason || null, currentOrder.order_version, currentOrder.status]
+            );
+
+            if (updateResult.rows.length === 0) {
+              return { success: false as const, error: 'Order was modified concurrently. Please retry.' };
+            }
+
+            const updatedOrder = updateResult.rows[0];
+
+            await client.query(
+              `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
+               VALUES ($1, 'status_changed_to_cancelled', $2, $3, $4, 'cancelled', $5)`,
+              [id, actor_type, actor_id, currentOrder.status, JSON.stringify({ reason })]
+            );
+
+            await client.query(
+              `INSERT INTO notification_outbox (order_id, event_type, payload, status) VALUES ($1, 'ORDER_CANCELLED', $2, 'pending')`,
+              [
+                id,
+                JSON.stringify({
+                  orderId: id,
+                  userId: updatedOrder.user_id,
+                  merchantId: updatedOrder.merchant_id,
+                  status: 'cancelled',
+                  order_version: updatedOrder.order_version,
+                  previousStatus: currentOrder.status,
+                  updatedAt: new Date().toISOString(),
+                }),
+              ]
+            );
+
+            if (shouldRestoreLiquidity(currentOrder.status, 'cancelled' as OrderStatus)) {
+              await client.query(
+                'UPDATE merchant_offers SET available_amount = available_amount + $1 WHERE id = $2',
+                [currentOrder.crypto_amount, currentOrder.offer_id]
+              );
+            }
+
+            // Outbox event inside transaction — atomic with cancel
+            await insertOutboxEvent(client, {
+              event: ORDER_EVENT.CANCELLED,
+              orderId: id, previousStatus: currentOrder.status, newStatus: 'cancelled',
+              actorType: actor_type, actorId: actor_id,
+              userId: updatedOrder.user_id, merchantId: updatedOrder.merchant_id,
+              buyerMerchantId: updatedOrder.buyer_merchant_id ?? undefined,
+              order: updatedOrder as unknown as Record<string, unknown>,
+              orderVersion: updatedOrder.order_version, minimalStatus: 'cancelled',
+            });
+
+            return { success: true as const, order: updatedOrder };
+          });
+
+          if (!result.success) {
+            return { statusCode: 400, body: { success: false, error: result.error } };
           }
 
-          return { success: true as const, order: updatedOrder };
-        });
-
-        if (!result.success) {
-          return reply.status(400).send({ success: false, error: result.error });
+          return {
+            statusCode: 200,
+            body: { success: true, data: { ...result.order, minimal_status: normalizeStatus(result.order!.status) } },
+          };
         }
-
-        orderBus.emitOrderEvent({
-          event: ORDER_EVENT.CANCELLED,
-          orderId: id, previousStatus: order.status, newStatus: 'cancelled',
-          actorType: actor_type, actorId: actor_id,
-          userId: result.order!.user_id, merchantId: result.order!.merchant_id,
-          buyerMerchantId: result.order!.buyer_merchant_id ?? undefined,
-          order: result.order as unknown as Record<string, unknown>,
-          orderVersion: result.order!.order_version, minimalStatus: 'cancelled',
-        });
-
-        return reply.send({
-          success: true,
-          data: { ...result.order, minimal_status: normalizeStatus(result.order!.status) },
-        });
+      } catch (error) {
+        fastify.log.error({ error, id }, 'Error cancelling order');
+        return { statusCode: 500, body: { success: false, error: 'Internal server error' } };
       }
-    } catch (error) {
-      fastify.log.error({ error, id }, 'Error cancelling order');
-      return reply.status(500).send({ success: false, error: 'Internal server error' });
-    }
+    });
   });
 
   // POST /v1/orders/:id/events - Release/Refund finalization (existing)
@@ -715,77 +841,100 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(401).send({ success: false, error: 'Actor headers required' });
     }
 
+    const rl = checkFinancialRateLimit(request, `order_event_${event_type}`);
+    if (rl) return reply.status(rl.statusCode).send(rl.body);
+
     try {
       if (event_type === 'release') {
         if (!tx_hash) {
           return reply.status(400).send({ success: false, error: 'tx_hash required for release' });
         }
 
-        // Security: verify actor is authorized to release this order
-        const releaseOrder = await queryOne<{ status: string; merchant_id: string; user_id: string; buyer_merchant_id: string | null; release_tx_hash: string | null }>(
-          'SELECT status, merchant_id, user_id, buyer_merchant_id, release_tx_hash FROM orders WHERE id = $1',
-          [id]
-        );
-        if (!releaseOrder) {
-          return reply.status(404).send({ success: false, error: 'Order not found' });
-        }
-        // Double-release guard: reject if already released
-        if (releaseOrder.release_tx_hash) {
-          return reply.status(400).send({ success: false, error: 'Order already released' });
-        }
-        // Status guard: only allow release from valid states
-        const releasableStatuses = ['payment_confirmed', 'releasing', 'escrowed', 'payment_sent', 'payment_pending'];
-        if (!releasableStatuses.includes(releaseOrder.status)) {
-          return reply.status(400).send({ success: false, error: `Cannot release order in status '${releaseOrder.status}'` });
-        }
-        // Authorization: only the seller (merchant_id) or system can release
-        const isAuthorized = actorType === 'system'
-          || actorId === releaseOrder.merchant_id
-          || (actorType === 'merchant' && actorId === releaseOrder.buyer_merchant_id);
-        if (!isAuthorized) {
-          logger.error('[GUARD] Unauthorized release attempt', { orderId: id, actorType, actorId });
-          return reply.status(403).send({ success: false, error: 'Not authorized to release this order' });
-        }
-
-        // Single stored procedure: FOR UPDATE + update + credit balance (1 round-trip)
-        const procResult = await queryOne<{ release_order_v1: any }>(
-          'SELECT release_order_v1($1,$2,$3)',
-          [id, tx_hash, MOCK_MODE]
-        );
-        const releaseData = procResult!.release_order_v1;
-        if (!releaseData.success) {
-          if (releaseData.error === 'NOT_FOUND') {
-            return reply.status(404).send({ success: false, error: 'Order not found' });
+        // Idempotency-protected: same key returns same response, no duplicate release
+        return withIdempotency(request, reply, 'release_escrow', id, async () => {
+          // Security: verify actor is authorized to release this order
+          const releaseOrder = await queryOne<{ status: string; merchant_id: string; user_id: string; buyer_merchant_id: string | null; release_tx_hash: string | null; escrow_debited_entity_id: string | null; payment_sent_at: string | null }>(
+            'SELECT status, merchant_id, user_id, buyer_merchant_id, release_tx_hash, escrow_debited_entity_id, payment_sent_at FROM orders WHERE id = $1',
+            [id]
+          );
+          if (!releaseOrder) {
+            return { statusCode: 404, body: { success: false, error: 'Order not found' } };
           }
-          return reply.status(400).send({ success: false, error: releaseData.error });
-        }
-        const result = { updated: releaseData.order as OrderRow, oldOrder: { ...releaseData.order, status: releaseData.old_status } as OrderRow };
+          // Double-release guard: reject if already released
+          if (releaseOrder.release_tx_hash) {
+            return { statusCode: 400, body: { success: false, error: 'Order already released' } };
+          }
+          // Status guard: ONLY allow release after payment is sent
+          // BLOCKED: pending, accepted, escrowed, payment_pending — all pre-payment states
+          const releasableStatuses = ['payment_sent', 'payment_confirmed', 'releasing'];
+          if (!releasableStatuses.includes(releaseOrder.status)) {
+            return { statusCode: 400, body: { success: false, error: `Cannot release escrow from status '${releaseOrder.status}'. Payment must be sent first.` } };
+          }
+          // Double safety: payment_sent_at timestamp MUST exist
+          // Even if status is correct, reject if the timestamp was never set
+          if (!releaseOrder.payment_sent_at) {
+            logger.error('[GUARD] Release rejected — payment_sent_at is NULL despite status', {
+              orderId: id, status: releaseOrder.status,
+            });
+            return { statusCode: 400, body: { success: false, error: 'Payment has not been marked as sent' } };
+          }
+          // Authorization: only the seller or system can release
+          // Seller = whoever locked escrow (escrow_debited_entity_id).
+          // For buy orders: merchant locks escrow → merchant_id is seller
+          // For sell orders: user locks escrow → user_id is seller
+          // For M2M: merchant_id locks escrow
+          const isEscrowLocker = releaseOrder.escrow_debited_entity_id && actorId === releaseOrder.escrow_debited_entity_id;
+          const isAuthorized = actorType === 'system'
+            || isEscrowLocker;
+          if (!isAuthorized) {
+            logger.error('[GUARD] Unauthorized release attempt', {
+              orderId: id, actorType, actorId,
+              merchantId: releaseOrder.merchant_id,
+              escrowDebitedEntityId: releaseOrder.escrow_debited_entity_id,
+            });
+            return { statusCode: 403, body: { success: false, error: 'Not authorized to release this order' } };
+          }
 
-        // Invariant check — fire-and-forget (don't block response)
-        verifyReleaseInvariants({
-          orderId: id,
-          expectedStatus: 'completed',
-          expectedTxHash: tx_hash,
-          expectedMinOrderVersion: result.updated.order_version,
-        }).catch((invariantError) => {
-          logger.error('[CRITICAL] Release invariant FAILED', { orderId: id, error: invariantError });
-        });
+          // Single stored procedure: FOR UPDATE + update + credit balance (1 round-trip)
+          const procResult = await queryOne<{ release_order_v1: any }>(
+            'SELECT release_order_v1($1,$2,$3)',
+            [id, tx_hash, MOCK_MODE]
+          );
+          const releaseData = procResult!.release_order_v1;
+          if (!releaseData.success) {
+            if (releaseData.error === 'NOT_FOUND') {
+              return { statusCode: 404, body: { success: false, error: 'Order not found' } };
+            }
+            return { statusCode: 400, body: { success: false, error: releaseData.error } };
+          }
+          const result = { updated: releaseData.order as OrderRow, oldOrder: { ...releaseData.order, status: releaseData.old_status } as OrderRow };
 
-        orderBus.emitOrderEvent({
-          event: ORDER_EVENT.COMPLETED,
-          orderId: id, orderNumber: result.oldOrder.order_number,
-          previousStatus: result.oldOrder.status, newStatus: 'completed',
-          actorType: actorType!, actorId: actorId!,
-          userId: result.oldOrder.user_id, merchantId: result.oldOrder.merchant_id,
-          buyerMerchantId: result.oldOrder.buyer_merchant_id ?? undefined,
-          order: result.updated as unknown as Record<string, unknown>,
-          orderVersion: result.updated.order_version, minimalStatus: 'completed',
-          txHash: tx_hash, metadata: { tx_hash },
-        });
+          // Invariant check — fire-and-forget (don't block response)
+          verifyReleaseInvariants({
+            orderId: id,
+            expectedStatus: 'completed',
+            expectedTxHash: tx_hash,
+            expectedMinOrderVersion: result.updated.order_version,
+          }).catch((invariantError) => {
+            logger.error('[CRITICAL] Release invariant FAILED', { orderId: id, error: invariantError });
+          });
 
-        return reply.send({
-          success: true,
-          data: { ...result.updated, minimal_status: normalizeStatus(result.updated.status) },
+          await insertOutboxEventDirect({
+            event: ORDER_EVENT.COMPLETED,
+            orderId: id, orderNumber: result.oldOrder.order_number,
+            previousStatus: result.oldOrder.status, newStatus: 'completed',
+            actorType: actorType!, actorId: actorId!,
+            userId: result.oldOrder.user_id, merchantId: result.oldOrder.merchant_id,
+            buyerMerchantId: result.oldOrder.buyer_merchant_id ?? undefined,
+            order: result.updated as unknown as Record<string, unknown>,
+            orderVersion: result.updated.order_version, minimalStatus: 'completed',
+            txHash: tx_hash, metadata: { tx_hash },
+          });
+
+          return {
+            statusCode: 200,
+            body: { success: true, data: { ...result.updated, minimal_status: normalizeStatus(result.updated.status) } },
+          };
         });
       } else if (event_type === 'refund') {
         // Refund needs pre-read for atomicCancelWithRefund
@@ -827,7 +976,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.status(500).send({ success: false, error: 'ORDER_REFUND_INVARIANT_FAILED' });
         }
 
-        orderBus.emitOrderEvent({
+        await insertOutboxEventDirect({
           event: ORDER_EVENT.CANCELLED,
           orderId: id, previousStatus: order.status, newStatus: 'cancelled',
           actorType: actorType!, actorId: actorId!,

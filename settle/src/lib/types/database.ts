@@ -186,6 +186,11 @@ export interface Order {
   // Corridor bridge (migration 031)
   payment_via: PaymentVia;
   corridor_fulfillment_id: string | null;
+  // Payment deadline system (migration 047)
+  payment_deadline: Date | null;
+  requires_payment_proof: boolean;
+  // Idempotency (migration 047)
+  idempotency_key: string | null;
 }
 
 export interface OrderEvent {

@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 // POST /api/merchant-quotes - Create or update merchant quote
 export async function POST(request: NextRequest) {
   // Rate limit quote updates
-  const rl = checkRateLimit(request, 'merchant-quotes:post', STANDARD_LIMIT);
+  const rl = await checkRateLimit(request, 'merchant-quotes:post', STANDARD_LIMIT);
   if (rl) return rl;
 
   // Require DB-verified auth

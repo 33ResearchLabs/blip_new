@@ -104,8 +104,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- View for mempool orders with computed fields
-CREATE OR REPLACE VIEW v_mempool_orders AS
+-- View for mempool orders with computed fields.
+-- Must DROP + CREATE (not CREATE OR REPLACE) because the column list may differ
+-- from an existing view definition. PostgreSQL does not allow CREATE OR REPLACE
+-- to rename or reorder columns in an existing view.
+DROP VIEW IF EXISTS v_mempool_orders CASCADE;
+
+CREATE VIEW v_mempool_orders AS
 SELECT
   o.id,
   o.order_number,
@@ -116,6 +121,7 @@ SELECT
   o.premium_bps_current,
   o.premium_bps_cap,
   o.bump_step_bps,
+  o.bump_interval_sec,
   o.auto_bump_enabled,
   o.next_bump_at,
   calculate_offer_price(o.ref_price_at_create, o.premium_bps_current) as current_offer_price,
@@ -131,4 +137,5 @@ FROM orders o
 LEFT JOIN users u ON o.user_id = u.id
 WHERE o.status = 'pending'
   AND NOW() < o.expires_at
+  AND (o.auto_bump_enabled = TRUE OR o.premium_bps_current > 0)
 ORDER BY o.premium_bps_current DESC, o.created_at ASC;

@@ -12,6 +12,7 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { usePusherOptional } from '@/context/PusherContext';
 import { getOrderChannel } from '@/lib/pusher/channels';
 import { ORDER_EVENTS } from '@/lib/pusher/events';
+import { useOrderReconciliation } from './useOrderReconciliation';
 
 // Polling interval — only used when Pusher is unavailable
 const POLLING_INTERVAL_FALLBACK = 3000;
@@ -226,6 +227,22 @@ export function useRealtimeOrder(
       pusher.unsubscribe(channelName);
     };
   }, [orderId, pusher]);
+
+  // Reconciliation: on WebSocket reconnect, tab focus, or network restore,
+  // fetch latest order state to catch any events missed during disconnection.
+  useOrderReconciliation(orderId, {
+    onReconciled: (freshOrder) => {
+      const newStatus = freshOrder.status as string;
+      const prevStatus = previousStatusRef.current;
+
+      if (prevStatus && prevStatus !== newStatus && onStatusChangeRef.current) {
+        onStatusChangeRef.current(newStatus, prevStatus, freshOrder as unknown as OrderData);
+      }
+
+      setOrder(freshOrder as unknown as OrderData);
+      previousStatusRef.current = newStatus;
+    },
+  });
 
   return {
     order,

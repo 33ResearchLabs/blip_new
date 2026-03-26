@@ -2,6 +2,7 @@ export type KycStatus = 'none' | 'pending' | 'verified' | 'rejected';
 export type MerchantStatus = 'pending' | 'active' | 'suspended' | 'banned';
 export type OfferType = 'buy' | 'sell';
 export type PaymentMethod = 'bank' | 'cash';
+export type PaymentMethodType = 'bank' | 'upi' | 'cash' | 'other';
 export type RateType = 'fixed' | 'market_margin';
 export type OrderStatus = 'pending' | 'accepted' | 'escrow_pending' | 'escrowed' | 'payment_pending' | 'payment_sent' | 'payment_confirmed' | 'releasing' | 'completed' | 'cancelled' | 'disputed' | 'expired';
 export type MinimalOrderStatus = 'open' | 'accepted' | 'escrowed' | 'payment_sent' | 'completed' | 'cancelled' | 'expired' | 'disputed';
@@ -123,6 +124,7 @@ export interface Order {
     protocol_fee_percentage: number | null;
     protocol_fee_amount: number | null;
     order_version: number;
+    payment_method_id: string | null;
     minimal_status?: MinimalOrderStatus;
 }
 export interface OrderEvent {
@@ -157,6 +159,16 @@ export interface UserBankAccount {
     is_default: boolean;
     is_verified: boolean;
     created_at: Date;
+}
+export interface UserPaymentMethod {
+    id: string;
+    user_id: string;
+    type: PaymentMethodType;
+    label: string;
+    details: Record<string, string>;
+    is_active: boolean;
+    created_at: Date;
+    updated_at: Date;
 }
 export interface Review {
     id: string;

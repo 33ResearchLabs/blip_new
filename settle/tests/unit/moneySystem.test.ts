@@ -103,7 +103,8 @@ describe('determineEscrowPayer', () => {
     expect(result.table).toBe('merchants');
   });
 
-  it('M2M BUY trade: merchant_id is still the payer', () => {
+  it('M2M BUY trade: merchant_id (seller) is always the payer', () => {
+    // M2M: merchant_id is ALWAYS the seller who pays escrow, regardless of stored type
     const result = determineEscrowPayer({
       type: 'buy',
       merchant_id: 'seller-merchant',

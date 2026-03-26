@@ -14,7 +14,8 @@ import {
   normalizeStatus,
   logger,
 } from 'settlement-core';
-import { orderBus, ORDER_EVENT } from '../events';
+import { ORDER_EVENT } from '../events';
+import { insertOutboxEventDirect } from '../outbox';
 
 export const extensionRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /v1/orders/:id/extension - Request extension
@@ -91,7 +92,7 @@ export const extensionRoutes: FastifyPluginAsync = async (fastify) => {
 
       logger.info('[core-api] Extension requested', { orderId: id, actor: actor_type });
 
-      orderBus.emitOrderEvent({
+      await insertOutboxEventDirect({
         event: ORDER_EVENT.STATUS_CHANGED,
         orderId: id, previousStatus: order.status, newStatus: order.status,
         actorType: actor_type, actorId: actor_id,
@@ -225,7 +226,7 @@ export const extensionRoutes: FastifyPluginAsync = async (fastify) => {
       const extEvent = finalStatus === 'cancelled' ? ORDER_EVENT.CANCELLED
         : finalStatus === 'expired' ? ORDER_EVENT.EXPIRED
         : ORDER_EVENT.STATUS_CHANGED;
-      orderBus.emitOrderEvent({
+      await insertOutboxEventDirect({
         event: extEvent,
         orderId: id, previousStatus: order.status, newStatus: finalStatus,
         actorType: actor_type, actorId: actor_id,

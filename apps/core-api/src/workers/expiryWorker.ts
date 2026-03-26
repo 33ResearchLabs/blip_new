@@ -9,7 +9,8 @@ import { query, logger, MOCK_MODE } from 'settlement-core';
 import { config } from 'dotenv';
 import { writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { orderBus, ORDER_EVENT } from '../events';
+import { ORDER_EVENT } from '../events';
+import { insertOutboxEventDirect } from '../outbox';
 
 config({ path: '../../settle/.env.local' });
 config({ path: '../../settle/.env' });
@@ -18,6 +19,7 @@ interface ExpiredOrder {
   id: string;
   order_number: string;
   status: string;
+  order_version: number;
   user_id: string;
   merchant_id: string;
   crypto_amount: string;
@@ -76,17 +78,25 @@ async function expireOrder(order: ExpiredOrder): Promise<void> {
       });
     }
 
-    // Update order status to expired
-    await query(
+    // Update order status to expired with version + status guard
+    const expireResult = await query(
       `UPDATE orders
        SET status = 'expired',
            cancelled_at = NOW(),
            cancelled_by = 'system',
            cancellation_reason = 'Order expired (15 minute timeout)',
            order_version = order_version + 1
-       WHERE id = $1`,
-      [order.id]
+       WHERE id = $1
+         AND order_version = $2
+         AND status = $3::order_status
+       RETURNING id`,
+      [order.id, order.order_version, order.status]
     );
+
+    if (expireResult.length === 0) {
+      logger.warn('[Expiry] Skipped order (concurrent update)', { orderId: order.id });
+      return;
+    }
 
     // Create order_events record
     await query(
@@ -125,7 +135,7 @@ async function expireOrder(order: ExpiredOrder): Promise<void> {
       ]
     );
 
-    orderBus.emitOrderEvent({
+    await insertOutboxEventDirect({
       event: ORDER_EVENT.EXPIRED,
       orderId: order.id, orderNumber: order.order_number,
       previousStatus: order.status, newStatus: 'expired',
@@ -154,11 +164,13 @@ async function expireOrder(order: ExpiredOrder): Promise<void> {
 async function processBatch(): Promise<void> {
   try {
     // Find orders that have expired
-    // payment_sent orders never expire — they can only be completed or disputed
+    // payment_sent/payment_confirmed orders never expire — they can only be completed or disputed
+    // Edge case: also protect orders where payment_sent_at is set even if status hasn't transitioned yet
     const expiredOrders = await query<ExpiredOrder>(
-      `SELECT id, order_number, status, user_id, merchant_id, crypto_amount, type, escrow_tx_hash, created_at, expires_at
+      `SELECT id, order_number, status, order_version, user_id, merchant_id, crypto_amount, type, escrow_tx_hash, created_at, expires_at
        FROM orders
-       WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed', 'payment_sent', 'payment_confirmed')
+       WHERE status NOT IN ('completed', 'cancelled', 'expired', 'disputed', 'payment_sent', 'payment_confirmed', 'releasing')
+       AND payment_sent_at IS NULL
        AND expires_at < NOW()
        ORDER BY expires_at ASC
        LIMIT $1
