@@ -18,12 +18,14 @@ FROM deps AS builder
 COPY packages/settlement-core/ packages/settlement-core/
 RUN pnpm -C packages/settlement-core build
 COPY apps/core-api/ apps/core-api/
+COPY settle/database/migrations/ settle/database/migrations/
 
 # ── Production image ────────────────────────────────────────────────
 FROM base AS runner
 ENV NODE_ENV=production
 COPY --from=builder /app/packages/settlement-core/ packages/settlement-core/
 COPY --from=builder /app/apps/core-api/ apps/core-api/
+COPY --from=builder /app/settle/database/migrations/ settle/database/migrations/
 COPY --from=builder /app/node_modules/ node_modules/
 COPY --from=builder /app/pnpm-workspace.yaml pnpm-workspace.yaml
 COPY --from=builder /app/package.json package.json
