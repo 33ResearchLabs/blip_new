@@ -64,7 +64,7 @@ if (!globalForSchema.__schemaEnsured) {
 }
 
 // Lazy import to avoid circular dependency (monitoring imports from db)
-let _recordLatency: ((ms: number) => void) | undefined;
+let _recordLatency: (ms: number) => void;
 function getLatencyRecorder(): (ms: number) => void {
   if (_recordLatency) return _recordLatency;
   try {

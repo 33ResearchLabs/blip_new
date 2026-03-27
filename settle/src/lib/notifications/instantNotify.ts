@@ -15,6 +15,7 @@
 import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
 import { wsBroadcastOrderUpdate } from '@/lib/websocket/broadcast';
 import { normalizeStatus } from '@/lib/orders/statusNormalizer';
+import type { OrderStatus } from '@/lib/types/database';
 import { logger } from '@/lib/logger';
 
 interface InstantNotifyParams {
@@ -34,7 +35,7 @@ interface InstantNotifyParams {
  * Never throws — errors are logged and swallowed.
  */
 export async function fireInstantNotification(params: InstantNotifyParams): Promise<void> {
-  const minimalStatus = normalizeStatus(params.status);
+  const minimalStatus = normalizeStatus(params.status as OrderStatus);
 
   const payload = {
     orderId: params.orderId,

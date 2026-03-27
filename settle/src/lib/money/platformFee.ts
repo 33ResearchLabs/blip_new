@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 interface DeductFeeOrder {
   id: string;
   order_number: string;
+  type: 'buy' | 'sell';
   crypto_amount: number;
   protocol_fee_percentage: number | null;
   spread_preference: string | null;

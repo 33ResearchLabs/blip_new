@@ -593,7 +593,7 @@ export function ChatRoom({
                 </div>
 
                 {/* Compliance: highlight button */}
-                {currentUserType === 'compliance' && onHighlightMessage && !isMe && msg.from !== 'system' && (
+                {currentUserType === 'compliance' && onHighlightMessage && !isMe && (msg.from as string) !== 'system' && (
                   <button
                     onClick={() => onHighlightMessage(msg.id, !msg.isHighlighted)}
                     className={`mt-0.5 px-1.5 py-0.5 text-[9px] rounded transition-colors ${

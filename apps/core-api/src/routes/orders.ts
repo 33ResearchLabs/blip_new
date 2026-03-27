@@ -81,6 +81,7 @@ interface OrderRow {
   order_version: number;
   payment_via: string;
   corridor_fulfillment_id: string | null;
+  merchant_payment_method_id: string | null;
 }
 
 export const orderRoutes: FastifyPluginAsync = async (fastify) => {

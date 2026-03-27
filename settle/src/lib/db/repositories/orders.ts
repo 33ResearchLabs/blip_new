@@ -949,7 +949,7 @@ export async function updateOrderStatus(
 
           if (currentOrder.payment_method === 'bank') {
             needsProof = true;
-            if (currentOrder.payment_method_id) {
+            if ((currentOrder as any).payment_method_id) {
               // Existing beneficiary (locked payment method on file)
               deadlineInterval = "INTERVAL '4 hours'";
             } else {

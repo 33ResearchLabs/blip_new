@@ -14,7 +14,7 @@ export function registerNotificationListener(): void {
   orderBus.safeOn(ORDER_EVENT.STATUS_CHANGED, (p: OrderEventPayload) => {
     bufferEvent({
       order_id: p.orderId,
-      event_type: getTransitionEventType(p.previousStatus, p.newStatus),
+      event_type: getTransitionEventType(p.previousStatus as any, p.newStatus as any),
       actor_type: p.actorType,
       actor_id: p.actorId,
       old_status: p.previousStatus,

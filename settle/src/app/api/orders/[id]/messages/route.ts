@@ -199,7 +199,7 @@ export async function POST(
           if (order.buyer_merchant_id && order.buyer_merchant_id !== order.merchant_id) {
             channels.push(getMerchantChannel(order.buyer_merchant_id));
           }
-          Promise.allSettled(channels.map(ch => triggerEvent(ch, 'notification', notifPayload))).catch(() => {});
+          Promise.allSettled(channels.map(ch => triggerEvent(ch, 'notification:new', notifPayload))).catch(() => {});
         } else if (sender_type !== 'system' && message_type !== 'system') {
           // User/merchant: bridge to direct_messages so counterparty sees it in DM view
           const recipientType = sender_type === 'user' ? 'merchant' : 'user';

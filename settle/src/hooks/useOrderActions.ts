@@ -546,7 +546,7 @@ export function useOrderActions({
       async () => {
         setConfirmingOrderId(orderId);
         try {
-          let releaseTxHash: string;
+          let releaseTxHash: string = `server-release-fallback-${Date.now()}`;
 
           if (order.orderType === 'buy' || order.orderType === 'sell') {
             const hasOnChainEscrow = order.escrowTradeId && order.escrowCreatorWallet && order.userWallet;

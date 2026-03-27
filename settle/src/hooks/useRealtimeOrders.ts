@@ -405,7 +405,7 @@ export function useRealtimeOrders(
       personalChannel.bind(ORDER_EVENTS.CANCELLED, handleCancelled);
       personalChannel.bind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
       personalChannel.bind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
-      personalChannel.bind('notification', handleNotification);
+      personalChannel.bind('notification:new', handleNotification);
     }
 
     return () => {
@@ -421,7 +421,7 @@ export function useRealtimeOrders(
         personalChannel.unbind(ORDER_EVENTS.CANCELLED, handleCancelled);
         personalChannel.unbind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
         personalChannel.unbind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
-        personalChannel.unbind('notification', handleNotification);
+        personalChannel.unbind('notification:new', handleNotification);
         pusher.unsubscribe(personalChannelName);
       }
 
