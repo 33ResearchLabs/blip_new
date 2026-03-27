@@ -1,14 +1,8 @@
-import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
+import { Resend } from 'resend';
 
-const ses = new SESClient({
-  region: process.env.AWS_SES_REGION || 'ap-south-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM_EMAIL = process.env.AWS_SES_FROM_EMAIL || 'noreply@blipmoney.com';
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'noreply@blipmoney.com';
 
 interface SendEmailParams {
   to: string;
@@ -18,33 +12,29 @@ interface SendEmailParams {
 }
 
 export async function sendEmail({ to, subject, html, text }: SendEmailParams): Promise<boolean> {
-  if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
-    console.error('[SES] AWS credentials not configured — skipping email');
+  if (!process.env.RESEND_API_KEY) {
+    console.error('[Email] RESEND_API_KEY not configured — skipping email');
     return false;
   }
 
   try {
-    const command = new SendEmailCommand({
-      Source: FROM_EMAIL,
-      Destination: { ToAddresses: [to] },
-      Message: {
-        Subject: { Data: subject, Charset: 'UTF-8' },
-        Body: {
-          Html: { Data: html, Charset: 'UTF-8' },
-          ...(text ? { Text: { Data: text, Charset: 'UTF-8' } } : {}),
-        },
-      },
+    const { error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to,
+      subject,
+      html,
+      ...(text ? { text } : {}),
     });
 
-    const abortController = new AbortController();
-    const timeout = setTimeout(() => abortController.abort(), 10_000);
-    await ses.send(command, { abortSignal: abortController.signal });
-    clearTimeout(timeout);
+    if (error) {
+      console.error('[Email] Resend error:', error);
+      return false;
+    }
 
-    console.log(`[SES] Email sent to ${to}: ${subject}`);
+    console.log(`[Email] Sent to ${to}: ${subject}`);
     return true;
   } catch (error) {
-    console.error('[SES] Failed to send email:', error);
+    console.error('[Email] Failed to send email:', error);
     return false;
   }
 }
