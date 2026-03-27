@@ -11,7 +11,7 @@ settle/.next
 settle/.env.local
 settle/.env
 settle/tests
-settle/database/migrations
+# settle/database/migrations — kept: needed by core-api migration runner
 apps/core-api/node_modules
 packages/settlement-core/node_modules
 packages/settlement-core/dist
