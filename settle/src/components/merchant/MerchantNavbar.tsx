@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { Zap, Wallet, Lock, LogOut, User, Settings, ChevronDown, Activity } from 'lucide-react';
+import { Zap, Wallet, Lock, LogOut, User, Settings, ChevronDown, Activity, Shield } from 'lucide-react';
 
 export type NavPage = 'dashboard' | 'wallet' | 'settings' | 'ops';
 
@@ -14,6 +14,7 @@ interface MerchantNavbarProps {
     business_name?: string;
     avatar_url?: string | null;
     has_ops_access?: boolean;
+    has_compliance_access?: boolean;
   } | null;
   embeddedWalletState?: 'initializing' | 'none' | 'locked' | 'unlocked';
   /** Extra buttons rendered before the profile section (e.g. tx history, payment methods) */
@@ -109,6 +110,15 @@ export function MerchantNavbar({
                 Ops
               </Link>
             )}
+            {merchantInfo?.has_compliance_access && (
+              <Link
+                href="/compliance"
+                className={`${pill(activePage === 'compliance' as NavPage)} flex items-center gap-1.5`}
+              >
+                <Shield className="w-3.5 h-3.5 text-purple-400" />
+                Compliance
+              </Link>
+            )}
           </nav>
         </div>
 
@@ -196,6 +206,16 @@ export function MerchantNavbar({
                     >
                       <Activity className="w-4 h-4" />
                       Ops Panel
+                    </Link>
+                  )}
+                  {merchantInfo?.has_compliance_access && (
+                    <Link
+                      href="/compliance"
+                      onClick={() => setMenuOpen(false)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/[0.06] transition-colors"
+                    >
+                      <Shield className="w-4 h-4" />
+                      Compliance
                     </Link>
                   )}
                 </div>

@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
 import { requireAuth } from '@/lib/middleware/auth';
 
 // Get all disputed orders for compliance dashboard
 export async function GET(request: NextRequest) {
-  // Require DB-verified compliance or system actor type
+  // Require DB-verified compliance or system actor type OR merchant with has_compliance_access
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
-  if (auth.actorType !== 'compliance' && auth.actorType !== 'system') {
+
+  let hasAccess = auth.actorType === 'compliance' || auth.actorType === 'system';
+
+  // Check merchant compliance access flag (like ops access)
+  if (!hasAccess && auth.actorType === 'merchant' && auth.merchantId) {
+    const merchant = await queryOne<{ has_compliance_access: boolean }>(
+      `SELECT has_compliance_access FROM merchants WHERE id = $1 AND status = 'active'`,
+      [auth.merchantId]
+    );
+    if (merchant?.has_compliance_access) hasAccess = true;
+  }
+
+  if (!hasAccess) {
     return NextResponse.json(
       { success: false, error: 'Compliance authentication required' },
       { status: 403 }
@@ -48,7 +60,7 @@ export async function GET(request: NextRequest) {
         d.status as dispute_status,
         d.reason as dispute_reason,
         d.description as dispute_description,
-        d.initiated_by,
+        d.raised_by,
         d.created_at as dispute_created_at,
         d.resolved_at,
         d.resolution_notes,
@@ -101,7 +113,7 @@ export async function GET(request: NextRequest) {
         status: row.dispute_status,
         reason: row.dispute_reason,
         description: row.dispute_description,
-        initiatedBy: row.initiated_by,
+        initiatedBy: row.raised_by,
         createdAt: row.dispute_created_at,
         resolvedAt: row.resolved_at,
         resolutionNotes: row.resolution_notes,

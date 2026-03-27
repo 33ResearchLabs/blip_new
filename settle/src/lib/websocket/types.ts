@@ -11,6 +11,7 @@ export type ActorType = 'user' | 'merchant' | 'compliance' | 'system';
 export type MessageType =
   | 'text'
   | 'image'
+  | 'file'
   | 'system'
   | 'dispute'
   | 'resolution'
@@ -18,6 +19,17 @@ export type MessageType =
   | 'resolution_rejected'
   | 'resolution_accepted'
   | 'resolution_finalized';
+
+// Message delivery status
+export type MessageStatus = 'sent' | 'delivered' | 'seen';
+
+// File metadata for media messages
+export interface FileMetadata {
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  mimeType?: string;
+}
 
 // Base message structure
 export interface WSMessage {
@@ -42,9 +54,14 @@ export interface WSUnsubscribeMessage extends WSMessage {
 export interface WSSendMessage extends WSMessage {
   type: 'chat:send';
   orderId: string;
-  content: string;
+  content?: string;
   messageType: MessageType;
   imageUrl?: string;
+  // File metadata
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  mimeType?: string;
 }
 
 export interface WSTypingMessage extends WSMessage {
@@ -62,6 +79,26 @@ export interface WSPingMessage extends WSMessage {
   type: 'ping';
 }
 
+// Compliance-specific messages
+export interface WSHighlightMessage extends WSMessage {
+  type: 'chat:highlight';
+  orderId: string;
+  messageId: string;
+  highlighted: boolean;
+}
+
+export interface WSFreezeChatMessage extends WSMessage {
+  type: 'chat:freeze';
+  orderId: string;
+  frozen: boolean;
+}
+
+// Presence messages
+export interface WSPresenceQuery extends WSMessage {
+  type: 'presence:query';
+  orderId: string;
+}
+
 // Union of all client messages
 export type ClientMessage =
   | WSSubscribeMessage
@@ -69,7 +106,10 @@ export type ClientMessage =
   | WSSendMessage
   | WSTypingMessage
   | WSMarkReadMessage
-  | WSPingMessage;
+  | WSPingMessage
+  | WSHighlightMessage
+  | WSFreezeChatMessage
+  | WSPresenceQuery;
 
 // ============================================
 // Server -> Client Messages
@@ -95,10 +135,16 @@ export interface WSNewMessageEvent extends WSMessage {
     senderType: ActorType;
     senderId: string | null;
     senderName?: string;
-    content: string;
+    content?: string;
     messageType: MessageType;
     imageUrl?: string | null;
+    // File metadata
+    fileUrl?: string | null;
+    fileName?: string | null;
+    fileSize?: number | null;
+    mimeType?: string | null;
     createdAt: string;
+    status?: MessageStatus;
   };
 }
 
@@ -107,6 +153,7 @@ export interface WSTypingEvent extends WSMessage {
   data: {
     orderId: string;
     actorType: ActorType;
+    actorName?: string;
   };
 }
 
@@ -116,6 +163,60 @@ export interface WSMessagesReadEvent extends WSMessage {
     orderId: string;
     readerType: ActorType;
     readAt: string;
+  };
+}
+
+export interface WSMessageDeliveredEvent extends WSMessage {
+  type: 'chat:message-delivered';
+  data: {
+    orderId: string;
+    messageId: string;
+    deliveredAt: string;
+  };
+}
+
+// Compliance events
+export interface WSMessageHighlightedEvent extends WSMessage {
+  type: 'chat:message-highlighted';
+  data: {
+    orderId: string;
+    messageId: string;
+    highlighted: boolean;
+    highlightedBy: string;
+  };
+}
+
+export interface WSChatFrozenEvent extends WSMessage {
+  type: 'chat:frozen';
+  data: {
+    orderId: string;
+    frozen: boolean;
+    frozenBy: string;
+    frozenAt: string;
+  };
+}
+
+// Presence events
+export interface WSPresenceUpdateEvent extends WSMessage {
+  type: 'presence:update';
+  data: {
+    actorType: ActorType;
+    actorId: string;
+    isOnline: boolean;
+    lastSeen?: string;
+  };
+}
+
+export interface WSPresenceStateEvent extends WSMessage {
+  type: 'presence:state';
+  data: {
+    orderId: string;
+    members: Array<{
+      actorType: ActorType;
+      actorId: string;
+      isOnline: boolean;
+      lastSeen?: string;
+    }>;
   };
 }
 
@@ -178,6 +279,11 @@ export type ServerMessage =
   | WSNewMessageEvent
   | WSTypingEvent
   | WSMessagesReadEvent
+  | WSMessageDeliveredEvent
+  | WSMessageHighlightedEvent
+  | WSChatFrozenEvent
+  | WSPresenceUpdateEvent
+  | WSPresenceStateEvent
   | WSPongMessage
   | WSErrorMessage
   | WSConnectedMessage
@@ -204,4 +310,5 @@ export const WS_ERROR_CODES = {
   ORDER_ACCESS_DENIED: 4003,
   RATE_LIMITED: 4004,
   SERVER_ERROR: 4005,
+  CHAT_FROZEN: 4006,
 } as const;

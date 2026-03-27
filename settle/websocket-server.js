@@ -2,6 +2,7 @@
  * WebSocket Server Handlers
  *
  * Handles real-time chat messaging via native WebSocket
+ * Supports: text, image, file messages, typing, presence, compliance controls
  */
 
 const { Pool } = require('pg');
@@ -26,6 +27,8 @@ const pool = new Pool(poolConfig);
 const orderRooms = new Map();
 // Client info - maps WebSocket to client metadata
 const clientInfo = new Map();
+// Presence tracking - maps actorKey to presence data
+const presenceMap = new Map(); // "actorType:actorId" -> { isOnline, lastSeen, connectionCount }
 
 // Error codes
 const WS_ERROR_CODES = {
@@ -34,6 +37,7 @@ const WS_ERROR_CODES = {
   ORDER_ACCESS_DENIED: 4003,
   RATE_LIMITED: 4004,
   SERVER_ERROR: 4005,
+  CHAT_FROZEN: 4006,
 };
 
 // Rate limiting for WebSocket messages
@@ -104,6 +108,23 @@ async function verifyMerchant(merchantId) {
 }
 
 /**
+ * Verify compliance officer exists
+ */
+async function verifyCompliance(complianceId) {
+  try {
+    const result = await pool.query(
+      'SELECT id FROM compliance_team WHERE id = $1 AND is_active = true',
+      [complianceId]
+    );
+    return result.rows.length > 0;
+  } catch (error) {
+    // Table may not exist yet
+    console.warn('compliance_team verification failed, allowing access');
+    return true;
+  }
+}
+
+/**
  * Check if actor can access order
  */
 async function canAccessOrder(actorType, actorId, orderId) {
@@ -126,15 +147,38 @@ async function canAccessOrder(actorType, actorId, orderId) {
 }
 
 /**
- * Save message to database
+ * Check if chat is frozen for an order
  */
-async function saveMessage(orderId, senderType, senderId, content, messageType, imageUrl) {
+async function isChatFrozen(orderId) {
+  try {
+    const result = await pool.query('SELECT chat_frozen FROM orders WHERE id = $1', [orderId]);
+    return result.rows[0]?.chat_frozen === true;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Save message to database (with file metadata support)
+ */
+async function saveMessage(orderId, senderType, senderId, content, messageType, imageUrl, fileMetadata) {
   try {
     const result = await pool.query(
-      `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type, image_url)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type, image_url, file_url, file_name, file_size, mime_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [orderId, senderType, senderId, content, messageType || 'text', imageUrl || null]
+      [
+        orderId,
+        senderType,
+        senderId,
+        content || null,
+        messageType || 'text',
+        imageUrl || null,
+        fileMetadata?.fileUrl || null,
+        fileMetadata?.fileName || null,
+        fileMetadata?.fileSize || null,
+        fileMetadata?.mimeType || null,
+      ]
     );
     return result.rows[0];
   } catch (error) {
@@ -150,7 +194,7 @@ async function markMessagesRead(orderId, readerType) {
   try {
     await pool.query(
       `UPDATE chat_messages
-       SET is_read = true, read_at = NOW()
+       SET is_read = true, read_at = NOW(), status = 'seen'
        WHERE order_id = $1 AND sender_type != $2 AND is_read = false`,
       [orderId, readerType]
     );
@@ -158,6 +202,79 @@ async function markMessagesRead(orderId, readerType) {
   } catch (error) {
     console.error('Error marking messages read:', error);
     return false;
+  }
+}
+
+/**
+ * Highlight/unhighlight a message (compliance feature)
+ */
+async function toggleMessageHighlight(messageId, highlighted, highlightedBy) {
+  try {
+    await pool.query(
+      `UPDATE chat_messages SET is_highlighted = $1, highlighted_by = $2 WHERE id = $3`,
+      [highlighted, highlighted ? highlightedBy : null, messageId]
+    );
+    return true;
+  } catch (error) {
+    console.error('Error toggling message highlight:', error);
+    return false;
+  }
+}
+
+/**
+ * Freeze/unfreeze chat for an order (compliance feature)
+ */
+async function toggleChatFreeze(orderId, frozen, frozenBy) {
+  try {
+    await pool.query(
+      `UPDATE orders SET chat_frozen = $1, chat_frozen_at = $2, chat_frozen_by = $3 WHERE id = $4`,
+      [frozen, frozen ? new Date() : null, frozen ? frozenBy : null, orderId]
+    );
+    return true;
+  } catch (error) {
+    console.error('Error toggling chat freeze:', error);
+    return false;
+  }
+}
+
+/**
+ * Update presence in database
+ */
+async function updatePresence(actorType, actorId, isOnline, connectionId) {
+  try {
+    await pool.query(
+      `INSERT INTO chat_presence (actor_type, actor_id, is_online, last_seen, connection_id, updated_at)
+       VALUES ($1, $2, $3, NOW(), $4, NOW())
+       ON CONFLICT (actor_type, actor_id)
+       DO UPDATE SET is_online = $3, last_seen = NOW(), connection_id = $4, updated_at = NOW()`,
+      [actorType, actorId, isOnline, connectionId]
+    );
+  } catch (error) {
+    // Presence table may not exist yet
+    console.warn('Presence update failed:', error.message);
+  }
+}
+
+/**
+ * Get presence for order participants
+ */
+async function getOrderPresence(orderId) {
+  try {
+    const result = await pool.query(
+      `SELECT cp.actor_type, cp.actor_id, cp.is_online, cp.last_seen
+       FROM chat_presence cp
+       WHERE (cp.actor_type = 'user' AND cp.actor_id = (SELECT user_id FROM orders WHERE id = $1))
+          OR (cp.actor_type = 'merchant' AND cp.actor_id IN (
+               SELECT merchant_id FROM orders WHERE id = $1
+               UNION
+               SELECT buyer_merchant_id FROM orders WHERE id = $1 AND buyer_merchant_id IS NOT NULL
+             ))
+          OR cp.actor_type = 'compliance'`,
+      [orderId]
+    );
+    return result.rows;
+  } catch (error) {
+    return [];
   }
 }
 
@@ -177,12 +294,10 @@ async function getSenderName(senderType, senderId) {
       return result.rows[0]?.display_name || 'Merchant';
     }
     if (senderType === 'compliance') {
-      // Gracefully handle missing compliance_team table
       try {
         const result = await pool.query('SELECT name FROM compliance_team WHERE id = $1', [senderId]);
         return result.rows[0]?.name || 'Compliance Officer';
       } catch (complianceError) {
-        // Table may not exist yet - return default name
         console.warn('compliance_team table query failed, using default name');
         return 'Compliance Officer';
       }
@@ -253,6 +368,55 @@ function unsubscribeFromOrder(ws, orderId) {
 }
 
 /**
+ * Broadcast presence update to all rooms the actor is in
+ */
+function broadcastPresenceUpdate(actorType, actorId, isOnline, lastSeen) {
+  const presenceEvent = {
+    type: 'presence:update',
+    timestamp: new Date().toISOString(),
+    data: {
+      actorType,
+      actorId,
+      isOnline,
+      lastSeen: lastSeen || new Date().toISOString(),
+    },
+  };
+
+  // Find all rooms this actor is subscribed to and broadcast
+  for (const [orderId, room] of orderRooms.entries()) {
+    for (const client of room) {
+      const info = clientInfo.get(client);
+      if (info && (info.actorId !== actorId || info.actorType !== actorType)) {
+        sendToClient(client, presenceEvent);
+      }
+    }
+  }
+}
+
+/**
+ * Update in-memory presence tracking
+ */
+function updatePresenceTracking(actorType, actorId, isOnline) {
+  const key = `${actorType}:${actorId}`;
+  const existing = presenceMap.get(key) || { isOnline: false, lastSeen: null, connectionCount: 0 };
+
+  if (isOnline) {
+    existing.connectionCount++;
+    existing.isOnline = true;
+    existing.lastSeen = new Date().toISOString();
+  } else {
+    existing.connectionCount = Math.max(0, existing.connectionCount - 1);
+    if (existing.connectionCount === 0) {
+      existing.isOnline = false;
+      existing.lastSeen = new Date().toISOString();
+    }
+  }
+
+  presenceMap.set(key, existing);
+  return existing;
+}
+
+/**
  * Handle incoming WebSocket message
  */
 async function handleMessage(ws, rawData) {
@@ -308,6 +472,22 @@ async function handleMessage(ws, rawData) {
         success: true,
         timestamp: new Date().toISOString(),
       });
+
+      // Send presence state for the order room
+      const presenceMembers = await getOrderPresence(orderId);
+      sendToClient(ws, {
+        type: 'presence:state',
+        timestamp: new Date().toISOString(),
+        data: {
+          orderId,
+          members: presenceMembers.map(m => ({
+            actorType: m.actor_type,
+            actorId: m.actor_id,
+            isOnline: m.is_online,
+            lastSeen: m.last_seen?.toISOString(),
+          })),
+        },
+      });
       break;
     }
 
@@ -325,10 +505,30 @@ async function handleMessage(ws, rawData) {
     }
 
     case 'chat:send': {
-      const { orderId, content, messageType, imageUrl } = message;
-      if (!orderId || !content) {
-        sendToClient(ws, { type: 'error', code: WS_ERROR_CODES.INVALID_MESSAGE, message: 'Missing orderId or content' });
+      const { orderId, content, messageType, imageUrl, fileUrl, fileName, fileSize, mimeType } = message;
+      if (!orderId) {
+        sendToClient(ws, { type: 'error', code: WS_ERROR_CODES.INVALID_MESSAGE, message: 'Missing orderId' });
         return;
+      }
+
+      // For text messages, content is required. For file/image, it's optional.
+      const msgType = messageType || 'text';
+      if (msgType === 'text' && !content) {
+        sendToClient(ws, { type: 'error', code: WS_ERROR_CODES.INVALID_MESSAGE, message: 'Missing content for text message' });
+        return;
+      }
+
+      // Check if chat is frozen (compliance can still send)
+      if (info.actorType !== 'compliance') {
+        const frozen = await isChatFrozen(orderId);
+        if (frozen) {
+          sendToClient(ws, {
+            type: 'error',
+            code: WS_ERROR_CODES.CHAT_FROZEN,
+            message: 'Chat is frozen by compliance. You cannot send messages.',
+          });
+          return;
+        }
       }
 
       // Rate limit check
@@ -347,14 +547,18 @@ async function handleMessage(ws, rawData) {
         return;
       }
 
+      // Build file metadata
+      const fileMetadata = (fileUrl || fileName) ? { fileUrl, fileName, fileSize, mimeType } : null;
+
       // Save to database
       const savedMessage = await saveMessage(
         orderId,
         info.actorType,
         info.actorId,
         content,
-        messageType || 'text',
-        imageUrl
+        msgType,
+        imageUrl,
+        fileMetadata
       );
 
       if (!savedMessage) {
@@ -375,10 +579,15 @@ async function handleMessage(ws, rawData) {
           senderType: info.actorType,
           senderId: info.actorId,
           senderName,
-          content,
-          messageType: messageType || 'text',
+          content: content || null,
+          messageType: msgType,
           imageUrl: imageUrl || null,
+          fileUrl: fileMetadata?.fileUrl || null,
+          fileName: fileMetadata?.fileName || null,
+          fileSize: fileMetadata?.fileSize || null,
+          mimeType: fileMetadata?.mimeType || null,
           createdAt: savedMessage.created_at,
+          status: 'sent',
         },
       };
 
@@ -392,12 +601,16 @@ async function handleMessage(ws, rawData) {
 
       if (!info.subscribedOrders.has(orderId)) return;
 
+      // Get sender name for typing indicator
+      const typingName = await getSenderName(info.actorType, info.actorId);
+
       const typingEvent = {
         type: isTyping ? 'chat:typing-start' : 'chat:typing-stop',
         timestamp: new Date().toISOString(),
         data: {
           orderId,
           actorType: info.actorType,
+          actorName: typingName,
         },
       };
 
@@ -428,6 +641,80 @@ async function handleMessage(ws, rawData) {
       break;
     }
 
+    // Compliance: highlight a message
+    case 'chat:highlight': {
+      if (info.actorType !== 'compliance') {
+        sendToClient(ws, { type: 'error', code: WS_ERROR_CODES.ORDER_ACCESS_DENIED, message: 'Only compliance can highlight messages' });
+        return;
+      }
+
+      const { orderId, messageId, highlighted } = message;
+      if (!orderId || !messageId) return;
+
+      const highlightSuccess = await toggleMessageHighlight(messageId, highlighted, info.actorId);
+      if (highlightSuccess) {
+        broadcastToOrder(orderId, {
+          type: 'chat:message-highlighted',
+          timestamp: new Date().toISOString(),
+          data: {
+            orderId,
+            messageId,
+            highlighted,
+            highlightedBy: info.actorId,
+          },
+        });
+      }
+      break;
+    }
+
+    // Compliance: freeze/unfreeze chat
+    case 'chat:freeze': {
+      if (info.actorType !== 'compliance') {
+        sendToClient(ws, { type: 'error', code: WS_ERROR_CODES.ORDER_ACCESS_DENIED, message: 'Only compliance can freeze chat' });
+        return;
+      }
+
+      const { orderId, frozen } = message;
+      if (!orderId) return;
+
+      const freezeSuccess = await toggleChatFreeze(orderId, frozen, info.actorId);
+      if (freezeSuccess) {
+        broadcastToOrder(orderId, {
+          type: 'chat:frozen',
+          timestamp: new Date().toISOString(),
+          data: {
+            orderId,
+            frozen,
+            frozenBy: info.actorId,
+            frozenAt: new Date().toISOString(),
+          },
+        });
+      }
+      break;
+    }
+
+    // Presence query
+    case 'presence:query': {
+      const { orderId } = message;
+      if (!orderId) return;
+
+      const presenceMembers = await getOrderPresence(orderId);
+      sendToClient(ws, {
+        type: 'presence:state',
+        timestamp: new Date().toISOString(),
+        data: {
+          orderId,
+          members: presenceMembers.map(m => ({
+            actorType: m.actor_type,
+            actorId: m.actor_id,
+            isOnline: m.is_online,
+            lastSeen: m.last_seen?.toISOString(),
+          })),
+        },
+      });
+      break;
+    }
+
     default:
       sendToClient(ws, { type: 'error', code: WS_ERROR_CODES.INVALID_MESSAGE, message: `Unknown message type: ${type}` });
   }
@@ -452,8 +739,10 @@ async function handleConnection(ws, request, wss) {
     isValid = await verifyUser(actorId);
   } else if (actorType === 'merchant') {
     isValid = await verifyMerchant(actorId);
-  } else if (actorType === 'compliance' || actorType === 'system') {
-    isValid = true; // Trust system/compliance actors
+  } else if (actorType === 'compliance') {
+    isValid = await verifyCompliance(actorId);
+  } else if (actorType === 'system') {
+    isValid = true;
   }
 
   if (!isValid) {
@@ -472,6 +761,11 @@ async function handleConnection(ws, request, wss) {
     subscribedOrders: new Set(),
     lastPing: Date.now(),
   });
+
+  // Update presence
+  const presence = updatePresenceTracking(actorType, actorId, true);
+  updatePresence(actorType, actorId, true, connectionId);
+  broadcastPresenceUpdate(actorType, actorId, true);
 
   // Send connected message
   sendToClient(ws, {
@@ -493,6 +787,14 @@ async function handleConnection(ws, request, wss) {
       for (const orderId of info.subscribedOrders) {
         unsubscribeFromOrder(ws, orderId);
       }
+
+      // Update presence
+      const presence = updatePresenceTracking(info.actorType, info.actorId, false);
+      if (!presence.isOnline) {
+        updatePresence(info.actorType, info.actorId, false, null);
+        broadcastPresenceUpdate(info.actorType, info.actorId, false, new Date().toISOString());
+      }
+
       clientInfo.delete(ws);
       console.log(`WebSocket disconnected: ${info.actorType}:${info.actorId} (${info.connectionId})`);
     }
@@ -535,4 +837,5 @@ module.exports = {
   broadcastToOrder: broadcastToOrderExternal,
   orderRooms,
   clientInfo,
+  presenceMap,
 };

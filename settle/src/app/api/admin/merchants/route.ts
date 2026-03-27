@@ -11,6 +11,7 @@ interface MerchantRow {
   total_volume: string;
   created_at: string;
   has_ops_access: boolean;
+  has_compliance_access: boolean;
 }
 
 // GET /api/admin/merchants - Get all merchants with stats
@@ -42,7 +43,8 @@ export async function GET(request: NextRequest) {
           0
         )::text as total_volume,
         m.created_at::text,
-        m.has_ops_access
+        m.has_ops_access,
+        COALESCE(m.has_compliance_access, false) as has_compliance_access
       FROM merchants m
       ${orderClause}
       LIMIT $1
@@ -60,6 +62,7 @@ export async function GET(request: NextRequest) {
       volume: parseFloat(merchant.total_volume),
       createdAt: merchant.created_at,
       hasOpsAccess: merchant.has_ops_access,
+      hasComplianceAccess: merchant.has_compliance_access,
     }));
 
     return NextResponse.json({ success: true, data: formattedMerchants });
@@ -72,28 +75,54 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// PATCH /api/admin/merchants - Toggle merchant ops access
-// Body: { merchantId: string, hasOpsAccess: boolean }
+// PATCH /api/admin/merchants - Toggle merchant access flags
+// Body: { merchantId: string, hasOpsAccess?: boolean, hasComplianceAccess?: boolean }
 export async function PATCH(request: NextRequest) {
   const authError = requireAdminAuth(request);
   if (authError) return authError;
 
   try {
     const body = await request.json();
-    const { merchantId, hasOpsAccess } = body;
+    const { merchantId, hasOpsAccess, hasComplianceAccess } = body;
 
-    if (!merchantId || typeof hasOpsAccess !== 'boolean') {
+    if (!merchantId) {
       return NextResponse.json(
-        { success: false, error: 'merchantId (string) and hasOpsAccess (boolean) are required' },
+        { success: false, error: 'merchantId is required' },
         { status: 400 }
       );
     }
 
-    const updated = await queryOne<{ id: string; business_name: string; has_ops_access: boolean }>(
-      `UPDATE merchants SET has_ops_access = $1, updated_at = NOW()
-       WHERE id = $2
-       RETURNING id, business_name, has_ops_access`,
-      [hasOpsAccess, merchantId]
+    // Build dynamic SET clause
+    const setClauses: string[] = ['updated_at = NOW()'];
+    const params: unknown[] = [];
+    let paramIdx = 0;
+
+    if (typeof hasOpsAccess === 'boolean') {
+      paramIdx++;
+      setClauses.push(`has_ops_access = $${paramIdx}`);
+      params.push(hasOpsAccess);
+    }
+    if (typeof hasComplianceAccess === 'boolean') {
+      paramIdx++;
+      setClauses.push(`has_compliance_access = $${paramIdx}`);
+      params.push(hasComplianceAccess);
+    }
+
+    if (paramIdx === 0) {
+      return NextResponse.json(
+        { success: false, error: 'At least one of hasOpsAccess or hasComplianceAccess is required' },
+        { status: 400 }
+      );
+    }
+
+    paramIdx++;
+    params.push(merchantId);
+
+    const updated = await queryOne<{ id: string; business_name: string; has_ops_access: boolean; has_compliance_access: boolean }>(
+      `UPDATE merchants SET ${setClauses.join(', ')}
+       WHERE id = $${paramIdx}
+       RETURNING id, business_name, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access`,
+      params
     );
 
     if (!updated) {
@@ -109,12 +138,13 @@ export async function PATCH(request: NextRequest) {
         id: updated.id,
         businessName: updated.business_name,
         hasOpsAccess: updated.has_ops_access,
+        hasComplianceAccess: updated.has_compliance_access,
       },
     });
   } catch (error) {
-    console.error('Error updating merchant ops access:', error);
+    console.error('Error updating merchant access:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to update merchant ops access' },
+      { success: false, error: 'Failed to update merchant access' },
       { status: 500 }
     );
   }

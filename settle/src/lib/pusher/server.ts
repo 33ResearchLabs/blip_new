@@ -241,9 +241,14 @@ interface ChatMessageData {
   senderType: 'user' | 'merchant' | 'system' | 'compliance';
   senderId: string | null;
   content: string;
-  messageType: 'text' | 'image' | 'system';
+  messageType: 'text' | 'image' | 'file' | 'system' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
   imageUrl?: string | null;
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  mimeType?: string | null;
   createdAt: string;
+  senderName?: string;
 }
 
 /**
@@ -257,9 +262,14 @@ export async function notifyNewMessage(data: ChatMessageData): Promise<void> {
     orderId: data.orderId,
     senderType: data.senderType,
     senderId: data.senderId,
+    senderName: data.senderName,
     content: data.content,
     messageType: data.messageType,
     imageUrl: data.imageUrl,
+    fileUrl: data.fileUrl,
+    fileName: data.fileName,
+    fileSize: data.fileSize,
+    mimeType: data.mimeType,
     createdAt: data.createdAt,
   });
 }
@@ -316,7 +326,7 @@ export async function notifyNewDirectMessage(data: {
  */
 export async function notifyTyping(
   orderId: string,
-  actorType: 'user' | 'merchant',
+  actorType: 'user' | 'merchant' | 'compliance',
   isTyping: boolean
 ): Promise<void> {
   const channel = getOrderChannel(orderId);

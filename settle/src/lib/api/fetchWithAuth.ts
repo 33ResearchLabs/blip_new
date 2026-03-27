@@ -51,6 +51,19 @@ function getAuthHeaders(): Record<string, string> {
     // SSR or corrupt — skip
   }
 
+  // 4. Compliance officer ID from localStorage
+  try {
+    const saved = localStorage.getItem('compliance_member');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed?.id) {
+        headers['x-compliance-id'] = parsed.id;
+      }
+    }
+  } catch {
+    // SSR or corrupt — skip
+  }
+
   return headers;
 }
 

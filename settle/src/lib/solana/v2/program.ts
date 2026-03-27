@@ -607,8 +607,13 @@ export async function buildRefundEscrowTx(
   const [vaultAuthority] = findVaultAuthorityPda(escrowPda);
   const vaultAta = await getAssociatedTokenAddress(mint, vaultAuthority, true);
 
-  // Fetch escrow to get depositor
-  const escrow = await (program.account as any).escrow.fetch(escrowPda);
+  // Fetch escrow to get depositor — may not exist if already refunded or never funded
+  let escrow;
+  try {
+    escrow = await (program.account as any).escrow.fetch(escrowPda);
+  } catch (e) {
+    throw new Error(`Escrow account does not exist or has no data (${escrowPda.toString()}). It may have already been refunded or was never funded on-chain.`);
+  }
   const depositorAta = await getAssociatedTokenAddress(mint, escrow.depositor);
 
   // Fetch trade to get creator

@@ -5,22 +5,45 @@
  *
  * Real-time chat messaging using native WebSocket
  * API-compatible with useRealtimeChat for easy migration
+ * Supports: text, image, file messages, typing, presence, compliance controls
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useWebSocketChatContextOptional } from '@/context/WebSocketChatContext';
-import type { WSNewMessageEvent, WSTypingEvent, ActorType, MessageType } from '@/lib/websocket/types';
+import type {
+  WSNewMessageEvent,
+  WSTypingEvent,
+  WSPresenceStateEvent,
+  WSPresenceUpdateEvent,
+  WSMessageHighlightedEvent,
+  WSChatFrozenEvent,
+  ActorType,
+  MessageType,
+} from '@/lib/websocket/types';
 
 export interface ChatMessage {
   id: string;
-  from: 'me' | 'them' | 'system';
+  from: 'me' | 'them' | 'system' | 'compliance';
   text: string;
   timestamp: Date;
   messageType?: MessageType;
   imageUrl?: string | null;
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  mimeType?: string | null;
   senderType?: ActorType;
   senderName?: string;
+  isHighlighted?: boolean;
+  status?: 'sending' | 'sent' | 'delivered' | 'read';
+}
+
+export interface PresenceMember {
+  actorType: ActorType;
+  actorId: string;
+  isOnline: boolean;
+  lastSeen?: string;
 }
 
 export interface ChatWindow {
@@ -32,6 +55,10 @@ export interface ChatWindow {
   minimized: boolean;
   unread: number;
   isTyping: boolean;
+  typingActorType?: string;
+  typingActorName?: string;
+  presence: PresenceMember[];
+  isFrozen: boolean;
 }
 
 // Database message type
@@ -44,8 +71,14 @@ interface DbMessage {
   content: string;
   message_type: MessageType;
   image_url?: string | null;
+  file_url?: string | null;
+  file_name?: string | null;
+  file_size?: number | null;
+  mime_type?: string | null;
   created_at: string;
   is_read: boolean;
+  is_highlighted?: boolean;
+  status?: string;
 }
 
 interface UseWebSocketChatOptions {
@@ -66,14 +99,32 @@ const SYSTEM_MESSAGE_TYPES: MessageType[] = [
   'system',
 ];
 
+function determineSender(
+  senderType: string,
+  messageType: string,
+  myActorType: string
+): 'me' | 'them' | 'system' | 'compliance' {
+  if (senderType === 'system' || SYSTEM_MESSAGE_TYPES.includes(messageType as MessageType)) {
+    return 'system';
+  }
+  if (senderType === myActorType) {
+    return 'me';
+  }
+  if (senderType === 'compliance') {
+    return 'compliance';
+  }
+  return 'them';
+}
+
 export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   const { maxWindows = 3, onNewMessage, actorType = 'user', actorId } = options;
   const [chatWindows, setChatWindows] = useState<ChatWindow[]>([]);
 
   const wsContext = useWebSocketChatContextOptional();
   const subscribedOrdersRef = useRef<Set<string>>(new Set());
+  const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
-  // Use ref to always have access to latest actorId (prevents stale closure issues)
+  // Use ref to always have access to latest actorId
   const actorIdRef = useRef(actorId);
   actorIdRef.current = actorId;
 
@@ -87,16 +138,22 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   // Convert DB message to UI message
   const mapDbMessageToUI = useCallback(
     (dbMsg: DbMessage, myActorType: string): ChatMessage => {
-      const isSystemMessage = dbMsg.sender_type === 'system' || SYSTEM_MESSAGE_TYPES.includes(dbMsg.message_type);
+      const from = determineSender(dbMsg.sender_type, dbMsg.message_type, myActorType);
       return {
         id: dbMsg.id,
-        from: isSystemMessage ? 'system' : (dbMsg.sender_type === myActorType ? 'me' : 'them'),
+        from,
         text: dbMsg.content,
         timestamp: new Date(dbMsg.created_at),
         messageType: dbMsg.message_type,
         imageUrl: dbMsg.image_url,
+        fileUrl: dbMsg.file_url,
+        fileName: dbMsg.file_name,
+        fileSize: dbMsg.file_size,
+        mimeType: dbMsg.mime_type,
         senderType: dbMsg.sender_type,
         senderName: dbMsg.sender_name,
+        isHighlighted: dbMsg.is_highlighted,
+        status: from === 'me' ? ((dbMsg.status === 'seen' ? 'read' : dbMsg.status as 'sent' | 'delivered') || 'sent') : undefined,
       };
     },
     []
@@ -106,16 +163,21 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   const mapWSMessageToUI = useCallback(
     (event: WSNewMessageEvent, myActorType: string): ChatMessage => {
       const { data } = event;
-      const isSystemMessage = data.senderType === 'system' || SYSTEM_MESSAGE_TYPES.includes(data.messageType);
+      const from = determineSender(data.senderType, data.messageType, myActorType);
       return {
         id: data.messageId,
-        from: isSystemMessage ? 'system' : (data.senderType === myActorType ? 'me' : 'them'),
-        text: data.content,
+        from,
+        text: data.content || '',
         timestamp: new Date(data.createdAt),
         messageType: data.messageType,
         imageUrl: data.imageUrl,
+        fileUrl: data.fileUrl,
+        fileName: data.fileName,
+        fileSize: data.fileSize,
+        mimeType: data.mimeType,
         senderType: data.senderType,
         senderName: data.senderName,
+        status: from === 'me' ? 'sent' : undefined,
       };
     },
     []
@@ -125,21 +187,14 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   const fetchMessages = useCallback(
     async (orderId: string, chatId: string) => {
       try {
-        console.log('[Chat] Fetching messages for order:', orderId);
         const res = await fetchWithAuth(`/api/orders/${orderId}/messages`);
-        if (!res.ok) {
-          console.log('[Chat] Messages API not available - using demo mode');
-          return;
-        }
+        if (!res.ok) return;
         const data = await res.json();
 
         if (data.success && data.data) {
-          console.log('[Chat] Raw messages from API:', data.data);
           const messages: ChatMessage[] = data.data.map((m: DbMessage) =>
             mapDbMessageToUI(m, actorType)
           );
-          console.log('[Chat] Mapped messages:', messages);
-          console.log('[Chat] System messages:', messages.filter(m => m.from === 'system'));
 
           setChatWindows((prev) =>
             prev.map((w) => {
@@ -149,7 +204,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
           );
         }
       } catch (error) {
-        console.log('[Chat] Messages API error - running in demo mode', error);
+        console.log('[Chat] Messages API error', error);
       }
     },
     [actorType, mapDbMessageToUI]
@@ -168,26 +223,21 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
 
           const message = mapWSMessageToUI(event, actorType);
 
-          // Check if message already exists (from optimistic update)
-          const existingIndex = w.messages.findIndex(
-            (m) => m.id === message.id || m.id.startsWith('temp_')
-          );
-
           // If it's our own message, replace temp message
-          if (message.from === 'me' && existingIndex >= 0) {
-            const newMessages = [...w.messages];
-            newMessages[existingIndex] = message;
-            return { ...w, messages: newMessages };
+          if (message.from === 'me') {
+            const tempIndex = w.messages.findIndex((m) => m.id.startsWith('temp_'));
+            if (tempIndex >= 0) {
+              const newMessages = [...w.messages];
+              newMessages[tempIndex] = message;
+              return { ...w, messages: newMessages };
+            }
+            if (w.messages.some(m => m.id === message.id)) return w;
           }
 
-          // Skip if our message already exists
-          if (message.from === 'me' && existingIndex >= 0) return w;
+          // Add new message
+          const newUnread = message.from !== 'me' && w.minimized ? w.unread + 1 : w.unread;
 
-          // Add new message from others
-          const newUnread = message.from === 'them' && w.minimized ? w.unread + 1 : w.unread;
-
-          // Trigger callback for new messages from others
-          if (message.from === 'them') {
+          if (message.from !== 'me') {
             onNewMessage?.(w.id, message);
           }
 
@@ -195,6 +245,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
             ...w,
             messages: [...w.messages.filter((m) => !m.id.startsWith('temp_')), message],
             unread: newUnread,
+            isTyping: false,
           };
         })
       );
@@ -209,8 +260,8 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
 
     const unsubscribe = wsContext.onTyping((event: WSTypingEvent) => {
       const { orderId, actorType: typingActorType } = event.data;
+      const actorName = (event.data as WSTypingEvent['data'] & { actorName?: string }).actorName;
 
-      // Ignore our own typing
       if (typingActorType === actorType) return;
 
       const isTyping = event.type === 'chat:typing-start';
@@ -218,7 +269,51 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
       setChatWindows((prev) =>
         prev.map((w) => {
           if (w.orderId !== orderId) return w;
-          return { ...w, isTyping };
+          return {
+            ...w,
+            isTyping,
+            typingActorType: isTyping ? typingActorType : undefined,
+            typingActorName: isTyping ? actorName : undefined,
+          };
+        })
+      );
+
+      // Auto-clear typing after 5s
+      if (isTyping) {
+        const key = `${orderId}:${typingActorType}`;
+        const existing = typingTimeoutsRef.current.get(key);
+        if (existing) clearTimeout(existing);
+        typingTimeoutsRef.current.set(key, setTimeout(() => {
+          setChatWindows((prev) =>
+            prev.map((w) => {
+              if (w.orderId !== orderId) return w;
+              return { ...w, isTyping: false, typingActorType: undefined, typingActorName: undefined };
+            })
+          );
+        }, 5000));
+      }
+    });
+
+    return unsubscribe;
+  }, [wsContext, actorType]);
+
+  // Handle read receipts
+  useEffect(() => {
+    if (!wsContext) return;
+
+    const unsubscribe = wsContext.onRead((event) => {
+      const { orderId, readerType } = event.data;
+      if (readerType === actorType) return;
+
+      setChatWindows((prev) =>
+        prev.map((w) => {
+          if (w.orderId !== orderId) return w;
+          return {
+            ...w,
+            messages: w.messages.map((m) =>
+              m.from === 'me' ? { ...m, status: 'read' as const } : m
+            ),
+          };
         })
       );
     });
@@ -229,7 +324,6 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   // Subscribe to order via WebSocket
   const subscribeToOrder = useCallback(
     (orderId: string, chatId: string) => {
-      // Always fetch initial messages, even without WebSocket
       fetchMessages(orderId, chatId);
 
       if (!wsContext || subscribedOrdersRef.current.has(orderId)) return;
@@ -257,18 +351,17 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
       subscribedOrdersRef.current.forEach((orderId) => {
         unsubscribeFromOrder(orderId);
       });
+      typingTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
     };
   }, [unsubscribeFromOrder]);
 
   const openChat = useCallback(
     (user: string, emoji: string, orderId?: string) => {
       setChatWindows((prev) => {
-        // Check if chat already exists
         const existingIndex = prev.findIndex(
           (w) => w.orderId === orderId || w.user === user
         );
         if (existingIndex >= 0) {
-          // Bring to front and unminimize
           const existing = prev[existingIndex];
           if (orderId && existing.orderId) {
             subscribeToOrder(orderId, existing.id);
@@ -278,7 +371,6 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
           );
         }
 
-        // Create new window
         const chatId = `chat_${Date.now()}`;
         const newWindow: ChatWindow = {
           id: chatId,
@@ -289,16 +381,16 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
           minimized: false,
           unread: 0,
           isTyping: false,
+          presence: [],
+          isFrozen: false,
         };
 
-        // Subscribe to real-time updates if we have an orderId
         if (orderId) {
           subscribeToOrder(orderId, chatId);
         }
 
         const updated = [...prev, newWindow];
         if (updated.length > maxWindows) {
-          // Unsubscribe from removed windows
           const removed = updated[0];
           if (removed.orderId) {
             unsubscribeFromOrder(removed.orderId);
@@ -335,15 +427,16 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   }, []);
 
   const sendMessage = useCallback(
-    async (chatId: string, text: string, imageUrl?: string) => {
-      if (!text.trim() && !imageUrl) return;
+    async (chatId: string, text: string, imageUrl?: string, fileData?: { fileUrl: string; fileName: string; fileSize: number; mimeType: string }) => {
+      if (!text.trim() && !imageUrl && !fileData) return;
 
       const window = chatWindows.find((w) => w.id === chatId);
       const currentActorId = actorIdRef.current;
-      if (!window?.orderId || !currentActorId) {
-        console.error('Cannot send message: missing orderId or actorId', { orderId: window?.orderId, actorId: currentActorId });
-        return;
-      }
+      if (!window?.orderId || !currentActorId) return;
+
+      let messageType: string = 'text';
+      if (fileData) messageType = 'file';
+      else if (imageUrl) messageType = 'image';
 
       // Optimistically add message
       const tempId = `temp_${Date.now()}`;
@@ -352,17 +445,19 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         from: 'me',
         text,
         timestamp: new Date(),
-        messageType: imageUrl ? 'image' : 'text',
+        messageType: messageType as MessageType,
         imageUrl,
+        fileUrl: fileData?.fileUrl,
+        fileName: fileData?.fileName,
+        fileSize: fileData?.fileSize,
+        mimeType: fileData?.mimeType,
+        status: 'sending',
       };
 
       setChatWindows((prev) =>
         prev.map((w) => {
           if (w.id !== chatId) return w;
-          return {
-            ...w,
-            messages: [...w.messages, tempMessage],
-          };
+          return { ...w, messages: [...w.messages, tempMessage] };
         })
       );
 
@@ -371,9 +466,31 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         wsContext.sendMessage(
           window.orderId,
           text,
-          imageUrl ? 'image' : 'text',
+          messageType as MessageType,
           imageUrl
         );
+        // For file messages, we also send via API since WS sendMessage doesn't support file metadata yet
+        if (fileData) {
+          try {
+            await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sender_type: actorType,
+                sender_id: currentActorId,
+                content: text || undefined,
+                message_type: messageType,
+                image_url: imageUrl,
+                file_url: fileData.fileUrl,
+                file_name: fileData.fileName,
+                file_size: fileData.fileSize,
+                mime_type: fileData.mimeType,
+              }),
+            });
+          } catch {
+            // Best-effort
+          }
+        }
       } else {
         // Fallback to HTTP API
         try {
@@ -383,23 +500,21 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
             body: JSON.stringify({
               sender_type: actorType,
               sender_id: currentActorId,
-              content: text,
-              message_type: imageUrl ? 'image' : 'text',
+              content: text || undefined,
+              message_type: messageType,
               image_url: imageUrl,
+              file_url: fileData?.fileUrl,
+              file_name: fileData?.fileName,
+              file_size: fileData?.fileSize,
+              mime_type: fileData?.mimeType,
             }),
           });
 
-          if (!res.ok) {
-            console.log('Messages API not available - demo mode');
-            return;
-          }
-
+          if (!res.ok) return;
           const data = await res.json();
-          if (!data.success) {
-            throw new Error(data.error || 'Failed to send message');
-          }
-        } catch (error) {
-          console.log('Send message error - demo mode, keeping local message');
+          if (!data.success) throw new Error(data.error);
+        } catch {
+          // Keep local message in demo mode
         }
       }
     },
@@ -415,22 +530,16 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         prev.map((w) => (w.id === chatId ? { ...w, unread: 0 } : w))
       );
 
-      // Send via WebSocket if available
       if (wsContext?.isConnected) {
         wsContext.markRead(window.orderId);
       } else {
-        // Fallback to HTTP API
         try {
           await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              reader_type: actorType,
-            }),
+            body: JSON.stringify({ reader_type: actorType }),
           });
-        } catch (error) {
-          console.error('Error marking messages as read:', error);
-        }
+        } catch {}
       }
     },
     [chatWindows, actorType, wsContext]
@@ -441,26 +550,73 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
       const window = chatWindows.find((w) => w.id === chatId);
       if (!window?.orderId) return;
 
-      // Send via WebSocket if available
       if (wsContext?.isConnected) {
         wsContext.sendTyping(window.orderId, isTyping);
       } else {
-        // Fallback to HTTP API
         try {
           await fetchWithAuth(`/api/orders/${window.orderId}/typing`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              actor_type: actorType,
-              is_typing: isTyping,
-            }),
+            body: JSON.stringify({ actor_type: actorType, is_typing: isTyping }),
           });
-        } catch {
-          // Typing indicators are best-effort
-        }
+        } catch {}
       }
     },
     [chatWindows, actorType, wsContext]
+  );
+
+  // Compliance: highlight message
+  const highlightMessage = useCallback(
+    (orderId: string, messageId: string, highlighted: boolean) => {
+      if (actorType !== 'compliance') return;
+
+      // Update local state
+      setChatWindows((prev) =>
+        prev.map((w) => {
+          if (w.orderId !== orderId) return w;
+          return {
+            ...w,
+            messages: w.messages.map((m) =>
+              m.id === messageId ? { ...m, isHighlighted: highlighted } : m
+            ),
+          };
+        })
+      );
+
+      // Send via WebSocket
+      if (wsContext?.isConnected) {
+        (wsContext as unknown as { send: (msg: object) => void }).send?.({
+          type: 'chat:highlight',
+          orderId,
+          messageId,
+          highlighted,
+        });
+      }
+    },
+    [actorType, wsContext]
+  );
+
+  // Compliance: freeze/unfreeze chat
+  const freezeChat = useCallback(
+    (orderId: string, frozen: boolean) => {
+      if (actorType !== 'compliance') return;
+
+      setChatWindows((prev) =>
+        prev.map((w) => {
+          if (w.orderId !== orderId) return w;
+          return { ...w, isFrozen: frozen };
+        })
+      );
+
+      if (wsContext?.isConnected) {
+        (wsContext as unknown as { send: (msg: object) => void }).send?.({
+          type: 'chat:freeze',
+          orderId,
+          frozen,
+        });
+      }
+    },
+    [actorType, wsContext]
   );
 
   return {
@@ -472,6 +628,8 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
     sendMessage,
     markAsRead,
     sendTypingIndicator,
+    highlightMessage,
+    freezeChat,
   };
 }
 

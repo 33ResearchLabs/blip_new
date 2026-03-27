@@ -58,6 +58,7 @@ interface WebSocketChatContextType {
   sendMessage: (orderId: string, content: string, messageType?: MessageType, imageUrl?: string) => void;
   sendTyping: (orderId: string, isTyping: boolean) => void;
   markRead: (orderId: string) => void;
+  sendRaw: (message: object) => void;
 
   // Event listeners
   onMessage: (callback: MessageCallback) => () => void;
@@ -269,8 +270,8 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
         }
       };
 
-      ws.onerror = (error) => {
-        console.error('[WebSocket] Error:', error);
+      ws.onerror = () => {
+        console.warn('[WebSocket] Connection error — will retry');
       };
 
       ws.onmessage = handleMessage;
@@ -422,6 +423,11 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
     };
   }, []);
 
+  // Raw send for compliance operations (highlight, freeze)
+  const sendRaw = useCallback((message: object) => {
+    send(message);
+  }, [send]);
+
   const value: WebSocketChatContextType = {
     isConnected,
     connectionState,
@@ -436,6 +442,7 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
     sendMessage,
     sendTyping,
     markRead,
+    sendRaw,
     onMessage,
     onTyping,
     onRead,

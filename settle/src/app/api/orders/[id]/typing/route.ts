@@ -14,7 +14,7 @@ import { notifyTyping } from '@/lib/pusher/server';
 
 // Request body schema
 const typingSchema = z.object({
-  actor_type: z.enum(['user', 'merchant']),
+  actor_type: z.enum(['user', 'merchant', 'compliance']),
   is_typing: z.boolean(),
 });
 
@@ -57,12 +57,14 @@ export async function POST(
       return notFoundResponse('Order');
     }
 
-    // Authorization: verify actor can access this order
-    const actorId = actor_type === 'user' ? order.user_id : order.merchant_id;
-    const auth = { actorType: actor_type, actorId };
-    const canAccess = await canAccessOrder(auth as { actorType: 'user' | 'merchant' | 'system'; actorId: string }, id);
-    if (!canAccess) {
-      return forbiddenResponse('You do not have access to this order');
+    // Authorization: compliance always has access, others need order participation
+    if (actor_type !== 'compliance') {
+      const actorId = actor_type === 'user' ? order.user_id : order.merchant_id;
+      const auth = { actorType: actor_type, actorId };
+      const canAccess = await canAccessOrder(auth as { actorType: 'user' | 'merchant' | 'system'; actorId: string }, id);
+      if (!canAccess) {
+        return forbiddenResponse('You do not have access to this order');
+      }
     }
 
     // Don't send typing indicators on terminal orders

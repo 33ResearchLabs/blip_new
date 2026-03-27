@@ -141,7 +141,7 @@ export function useComplianceAuth(solanaWallet: SolanaWalletHook): UseCompliance
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [solanaWallet.connected, solanaWallet.walletAddress, isLoggedIn, isWalletLoggingIn]);
 
-  // Check for saved session
+  // Check for saved session OR merchant with compliance access
   useEffect(() => {
     const saved = localStorage.getItem("compliance_member");
     if (saved) {
@@ -149,9 +149,35 @@ export function useComplianceAuth(solanaWallet: SolanaWalletHook): UseCompliance
         const parsed = JSON.parse(saved);
         setMember(parsed);
         setIsLoggedIn(true);
+        return;
       } catch {
         localStorage.removeItem("compliance_member");
       }
+    }
+
+    // Auto-login: check if logged-in merchant has compliance access
+    const merchantData = localStorage.getItem("blip_merchant");
+    if (merchantData) {
+      try {
+        const merchant = JSON.parse(merchantData);
+        if (merchant?.id) {
+          fetchWithAuth(`/api/compliance/disputes?limit=1`).then(res => {
+            if (res.ok) {
+              // Merchant has compliance access — auto-login
+              const complianceMember = {
+                id: merchant.id,
+                email: null,
+                wallet_address: null,
+                name: merchant.display_name || merchant.business_name || 'Merchant',
+                role: 'merchant-compliance',
+              };
+              setMember(complianceMember);
+              setIsLoggedIn(true);
+              localStorage.setItem("compliance_member", JSON.stringify(complianceMember));
+            }
+          }).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 

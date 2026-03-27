@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     // Check session validity
     if (action === 'check_session' && merchant_id) {
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, balance, has_ops_access
+        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access
          FROM merchants
          WHERE id = $1 AND status = 'active'`,
         [merchant_id]
@@ -77,6 +77,7 @@ export async function GET(request: NextRequest) {
         total_trades: number;
         balance: number;
         has_ops_access: boolean;
+          has_compliance_access: boolean;
       };
 
       // Set merchant online when session is validated (critical for order matching!)
@@ -102,6 +103,7 @@ export async function GET(request: NextRequest) {
             total_trades: merchant.total_trades || 0,
             balance: parseFloat(String(merchant.balance)) || 0,
             has_ops_access: merchant.has_ops_access || false,
+            has_compliance_access: merchant.has_compliance_access || false,
           },
         },
       });
@@ -110,7 +112,7 @@ export async function GET(request: NextRequest) {
     if (action === 'wallet_login' && wallet_address) {
       // Query merchant by wallet address
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, is_online, has_ops_access
+        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, is_online, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access
          FROM merchants
          WHERE wallet_address = $1 AND status = 'active'`,
         [wallet_address]
@@ -190,7 +192,7 @@ export async function POST(request: NextRequest) {
 
       // Query merchant by wallet address
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, is_online, balance, has_ops_access
+        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access
          FROM merchants
          WHERE wallet_address = $1 AND status = 'active'`,
         [wallet_address]
@@ -224,6 +226,7 @@ export async function POST(request: NextRequest) {
           is_online: boolean;
           balance: number;
           has_ops_access: boolean;
+          has_compliance_access: boolean;
         };
 
         // Check if username needs to be set
@@ -284,6 +287,7 @@ export async function POST(request: NextRequest) {
               total_trades: merchant.total_trades || 0,
               balance: parseFloat(String(merchant.balance)) || 0,
               has_ops_access: merchant.has_ops_access || false,
+            has_compliance_access: merchant.has_compliance_access || false,
             },
             isNewMerchant,
             needsUsername,
@@ -608,7 +612,7 @@ export async function POST(request: NextRequest) {
 
       // Find merchant by email
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, email, password_hash, rating, total_trades, is_online, balance, has_ops_access
+        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, email, password_hash, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access
          FROM merchants
          WHERE email = $1 AND status = 'active'`,
         [email.toLowerCase()]
@@ -636,6 +640,7 @@ export async function POST(request: NextRequest) {
         is_online: boolean;
         balance: number;
         has_ops_access: boolean;
+          has_compliance_access: boolean;
       };
 
       // Verify password
@@ -683,6 +688,7 @@ export async function POST(request: NextRequest) {
             total_trades: merchant.total_trades || 0,
             balance: parseFloat(String(merchant.balance)) || 0,
             has_ops_access: merchant.has_ops_access || false,
+            has_compliance_access: merchant.has_compliance_access || false,
           },
         },
       });

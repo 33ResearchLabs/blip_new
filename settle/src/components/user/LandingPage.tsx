@@ -65,15 +65,15 @@ export function LandingPage({
           </button>
         </div>
 
-        <div className="bg-white/[0.02] rounded-2xl border border-white/[0.04] p-6 space-y-4">
+        <div className="rounded-2xl p-6 space-y-4" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 8px 40px rgba(0,0,0,0.3)' }}>
           {loginError && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-400">
+            <div className="rounded-xl p-3 text-sm" style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.15)', color: '#dc2626' }}>
               {loginError}
             </div>
           )}
 
           <div>
-            <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Username</label>
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(0,0,0,0.4)', marginBottom: 8 }}>Username</label>
             <input
               type="text"
               value={loginForm.username}
@@ -81,26 +81,35 @@ export function LandingPage({
               placeholder={authMode === 'register' ? 'Choose a username' : 'Your username'}
               autoCapitalize="none"
               autoCorrect="off"
-              className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
               onKeyDown={e => e.key === 'Enter' && submit()}
+              style={{
+                width: '100%', background: '#f4f4f4', border: '1px solid rgba(0,0,0,0.08)',
+                borderRadius: 12, padding: '12px 16px', fontSize: 14, fontWeight: 500,
+                color: '#000000', outline: 'none',
+              }}
             />
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Password</label>
+            <label style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(0,0,0,0.4)', marginBottom: 8 }}>Password</label>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
                 value={loginForm.password}
                 onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
                 placeholder={authMode === 'register' ? 'Min. 6 characters' : '••••••••'}
-                className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pr-11 text-sm outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
                 onKeyDown={e => e.key === 'Enter' && submit()}
+                style={{
+                  width: '100%', background: '#f4f4f4', border: '1px solid rgba(0,0,0,0.08)',
+                  borderRadius: 12, padding: '12px 44px 12px 16px', fontSize: 14, fontWeight: 500,
+                  color: '#000000', outline: 'none',
+                }}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
+                style={{ color: 'rgba(0,0,0,0.3)' }}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -111,26 +120,27 @@ export function LandingPage({
             whileTap={{ scale: 0.98 }}
             onClick={submit}
             disabled={isLoggingIn || !loginForm.username || !loginForm.password}
-            className={`w-full py-3 rounded-xl text-sm font-bold transition-colors disabled:opacity-50 ${
-              authMode === 'login'
-                ? 'bg-white text-black hover:bg-white/90'
-                : 'bg-white/10 border border-white/10 text-white hover:bg-white/20'
-            }`}
+            className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors"
+            style={{
+              background: (isLoggingIn || !loginForm.username || !loginForm.password) ? 'rgba(0,0,0,0.06)' : '#000000',
+              color: (isLoggingIn || !loginForm.username || !loginForm.password) ? 'rgba(0,0,0,0.25)' : '#ffffff',
+              letterSpacing: '-0.01em',
+            }}
           >
             {isLoggingIn
-              ? <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />{authMode === 'login' ? 'Signing in...' : 'Creating...'}</span>
+              ? <><Loader2 className="w-4 h-4 animate-spin" />{authMode === 'login' ? 'Signing in...' : 'Creating...'}</>
               : authMode === 'login' ? 'Sign In' : 'Create Account'}
           </motion.button>
 
-          <p className="text-[11px] text-gray-500 text-center">
+          <p className="text-center" style={{ fontSize: 11, color: 'rgba(0,0,0,0.7)' }}>
             Connect your wallet after signing in to enable on-chain trading
           </p>
         </div>
 
         <div className="mt-8 text-center space-y-2">
-          <p className="text-[10px] text-white/15 font-mono">Blip Money v1.0</p>
-          <div className="flex items-center justify-center gap-3 text-[10px] text-white/20">
-            <Link href="/merchant" className="hover:text-white/40 transition-colors">Merchant Portal</Link>
+          <p className="text-[10px] text-white/70 font-mono">Blip Money v1.0</p>
+          <div className="flex items-center justify-center gap-3 text-[10px] text-white/70">
+            <Link href="/merchant" className="hover:text-white transition-colors">Merchant Portal</Link>
           </div>
         </div>
       </div>

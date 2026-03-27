@@ -3,7 +3,8 @@
 /**
  * Real-time Chat Hook
  *
- * Subscribes to chat messages via Pusher instead of polling
+ * Subscribes to chat messages via Pusher with WebSocket fallback
+ * Supports: text, image, file messages, typing indicators, presence, compliance
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -14,16 +15,28 @@ import { CHAT_EVENTS } from '@/lib/pusher/events';
 
 export interface ChatMessage {
   id: string;
-  from: 'me' | 'them' | 'system';
+  from: 'me' | 'them' | 'system' | 'compliance';
   text: string;
   timestamp: Date;
-  messageType?: 'text' | 'image' | 'system' | 'receipt' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
+  messageType?: 'text' | 'image' | 'file' | 'system' | 'receipt' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
   receiptData?: Record<string, unknown> | null;
   imageUrl?: string | null;
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  mimeType?: string | null;
   senderType?: 'user' | 'merchant' | 'compliance' | 'system';
   senderName?: string;
   isRead?: boolean;
-  status?: 'sending' | 'sent' | 'read';
+  status?: 'sending' | 'sent' | 'delivered' | 'read';
+  isHighlighted?: boolean;
+}
+
+export interface PresenceMember {
+  actorType: 'user' | 'merchant' | 'compliance' | 'system';
+  actorId: string;
+  isOnline: boolean;
+  lastSeen?: string;
 }
 
 export interface ChatWindow {
@@ -35,6 +48,10 @@ export interface ChatWindow {
   minimized: boolean;
   unread: number;
   isTyping: boolean;
+  typingActorType?: string;
+  typingActorName?: string;
+  presence: PresenceMember[];
+  isFrozen: boolean;
 }
 
 // Database message type
@@ -45,11 +62,17 @@ interface DbMessage {
   sender_id: string;
   sender_name?: string;
   content: string;
-  message_type: 'text' | 'image' | 'system' | 'receipt' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
+  message_type: 'text' | 'image' | 'file' | 'system' | 'receipt' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
   receipt_data?: Record<string, unknown> | null;
   image_url?: string | null;
+  file_url?: string | null;
+  file_name?: string | null;
+  file_size?: number | null;
+  mime_type?: string | null;
   created_at: string;
   is_read: boolean;
+  is_highlighted?: boolean;
+  status?: 'sent' | 'delivered' | 'seen';
 }
 
 // Pusher message event
@@ -60,8 +83,12 @@ interface PusherMessageEvent {
   senderId: string | null;
   senderName?: string;
   content: string;
-  messageType: 'text' | 'image' | 'system' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
+  messageType: 'text' | 'image' | 'file' | 'system' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
   imageUrl?: string | null;
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  mimeType?: string | null;
   createdAt: string;
 }
 
@@ -69,8 +96,15 @@ interface PusherMessageEvent {
 interface PusherTypingEvent {
   orderId: string;
   actorType: 'user' | 'merchant' | 'compliance';
+  actorName?: string;
   timestamp: string;
 }
+
+// System message types that should be rendered as 'system' sender
+const SYSTEM_MESSAGE_TYPES = new Set([
+  'dispute', 'resolution', 'resolution_proposed',
+  'resolution_rejected', 'resolution_accepted', 'resolution_finalized', 'system',
+]);
 
 interface UseRealtimeChatOptions {
   maxWindows?: number;
@@ -79,26 +113,44 @@ interface UseRealtimeChatOptions {
   actorId?: string;
 }
 
+/**
+ * Determine 'from' field based on sender type and current actor
+ */
+function determineSender(
+  senderType: string,
+  messageType: string,
+  myActorType: string
+): 'me' | 'them' | 'system' | 'compliance' {
+  // System-generated messages
+  if (senderType === 'system' || SYSTEM_MESSAGE_TYPES.has(messageType)) {
+    return 'system';
+  }
+  // My own message
+  if (senderType === myActorType) {
+    return 'me';
+  }
+  // Compliance officer message (when I'm not compliance)
+  if (senderType === 'compliance') {
+    return 'compliance';
+  }
+  // Other party
+  return 'them';
+}
+
 export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   const { maxWindows = 3, onNewMessage, actorType = 'user', actorId } = options;
   const [chatWindows, setChatWindows] = useState<ChatWindow[]>([]);
 
   const pusher = usePusherOptional();
   const subscribedChannelsRef = useRef<Map<string, boolean>>(new Map());
+  const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const chatWindowsRef = useRef(chatWindows);
+  chatWindowsRef.current = chatWindows;
 
   // Convert DB message to UI message
   const mapDbMessageToUI = useCallback(
     (dbMsg: DbMessage, myActorType: string): ChatMessage => {
-      // System messages (dispute, resolution, etc.) are always from 'system'
-      const isSystemMessage = dbMsg.sender_type === 'system' ||
-        dbMsg.message_type === 'dispute' ||
-        dbMsg.message_type === 'resolution' ||
-        dbMsg.message_type === 'resolution_proposed' ||
-        dbMsg.message_type === 'resolution_rejected' ||
-        dbMsg.message_type === 'resolution_accepted' ||
-        dbMsg.message_type === 'resolution_finalized' ||
-        dbMsg.message_type === 'system';
-      const from = isSystemMessage ? 'system' : (dbMsg.sender_type === myActorType ? 'me' : 'them');
+      const from = determineSender(dbMsg.sender_type, dbMsg.message_type, myActorType);
       return {
         id: dbMsg.id,
         from,
@@ -107,10 +159,15 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         messageType: dbMsg.message_type,
         receiptData: dbMsg.receipt_data ?? null,
         imageUrl: dbMsg.image_url,
+        fileUrl: dbMsg.file_url,
+        fileName: dbMsg.file_name,
+        fileSize: dbMsg.file_size,
+        mimeType: dbMsg.mime_type,
         senderType: dbMsg.sender_type,
         senderName: dbMsg.sender_name,
         isRead: dbMsg.is_read,
-        status: from === 'me' ? (dbMsg.is_read ? 'read' : 'sent') : undefined,
+        isHighlighted: dbMsg.is_highlighted,
+        status: from === 'me' ? (dbMsg.is_read ? 'read' : (dbMsg.status as 'sent' | 'delivered' | undefined) || 'sent') : undefined,
       };
     },
     []
@@ -119,16 +176,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   // Convert Pusher event to UI message
   const mapPusherMessageToUI = useCallback(
     (event: PusherMessageEvent, myActorType: string): ChatMessage => {
-      // System messages (dispute, resolution, etc.) are always from 'system'
-      const isSystemMessage = event.senderType === 'system' ||
-        event.messageType === 'dispute' ||
-        event.messageType === 'resolution' ||
-        event.messageType === 'resolution_proposed' ||
-        event.messageType === 'resolution_rejected' ||
-        event.messageType === 'resolution_accepted' ||
-        event.messageType === 'resolution_finalized' ||
-        event.messageType === 'system';
-      const from = isSystemMessage ? 'system' : (event.senderType === myActorType ? 'me' : 'them');
+      const from = determineSender(event.senderType, event.messageType, myActorType);
       return {
         id: event.messageId,
         from,
@@ -136,6 +184,10 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         timestamp: new Date(event.createdAt),
         messageType: event.messageType,
         imageUrl: event.imageUrl,
+        fileUrl: event.fileUrl,
+        fileName: event.fileName,
+        fileSize: event.fileSize,
+        mimeType: event.mimeType,
         senderType: event.senderType,
         senderName: event.senderName,
         isRead: false,
@@ -149,47 +201,62 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   const fetchMessages = useCallback(
     async (orderId: string, chatId: string) => {
       try {
-        // Include auth params in URL
         const authParam = actorId ? `?user_id=${actorId}` : '';
         const res = await fetchWithAuth(`/api/orders/${orderId}/messages${authParam}`);
         if (!res.ok) {
-          // API not available (demo mode) - use empty messages
           console.log('Messages API not available - using demo mode', res.status);
           return;
         }
         const data = await res.json();
 
-        console.log('[useRealtimeChat] Fetched messages:', { orderId, chatId, count: data.data?.length });
-
         if (data.success && data.data) {
-          console.log('[useRealtimeChat] API returned messages:', { orderId, count: data.data.length, first: data.data[0] });
           const messages: ChatMessage[] = data.data.map((m: DbMessage) =>
             mapDbMessageToUI(m, actorType)
           );
 
-          setChatWindows((prev) => {
-            const windowToUpdate = prev.find(w => w.id === chatId);
-            console.log('[useRealtimeChat] Looking for window to update:', { chatId, found: !!windowToUpdate, windows: prev.map(w => w.id) });
-            const updated = prev.map((w) => {
+          setChatWindows((prev) =>
+            prev.map((w) => {
               if (w.id !== chatId) return w;
-              console.log('[useRealtimeChat] Updating chat window with messages:', { chatId, messageCount: messages.length });
               return { ...w, messages };
-            });
-            return updated;
-          });
+            })
+          );
         }
       } catch (error) {
-        // Silently fail in demo mode
         console.log('Messages API error - running in demo mode', error);
       }
     },
     [actorType, actorId, mapDbMessageToUI]
   );
 
+  // Stable ref for fetchMessages so polling interval doesn't recreate
+  const fetchMessagesRef = useRef(fetchMessages);
+  fetchMessagesRef.current = fetchMessages;
+
+  // Fetch presence for an order
+  const fetchPresence = useCallback(
+    async (orderId: string, chatId: string) => {
+      try {
+        const res = await fetchWithAuth(`/api/orders/${orderId}/presence`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success && data.data?.members) {
+          setChatWindows((prev) =>
+            prev.map((w) => {
+              if (w.id !== chatId) return w;
+              return { ...w, presence: data.data.members };
+            })
+          );
+        }
+      } catch {
+        // Presence is best-effort
+      }
+    },
+    []
+  );
+
   // Subscribe to real-time messages for an order
   const subscribeToOrder = useCallback(
     (orderId: string, chatId: string) => {
-      console.log('[useRealtimeChat] subscribeToOrder called:', { orderId, chatId, alreadySubscribed: subscribedChannelsRef.current.get(orderId) });
       if (!pusher || subscribedChannelsRef.current.get(orderId)) return;
 
       const channelName = getOrderChannel(orderId);
@@ -210,11 +277,6 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
           prev.map((w) => {
             if (w.orderId !== orderId) return w;
 
-            // Check if message already exists (from optimistic update)
-            const exists = w.messages.some(
-              (m) => m.id === message.id || m.id.startsWith('temp_')
-            );
-
             // If it's our own message, replace temp message
             if (message.from === 'me') {
               const tempIndex = w.messages.findIndex((m) =>
@@ -225,17 +287,15 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
                 newMessages[tempIndex] = message;
                 return { ...w, messages: newMessages };
               }
+              // Check if already exists
+              if (w.messages.some(m => m.id === message.id)) return w;
             }
 
-            // If message already exists, skip
-            if (exists && message.from === 'me') return w;
-
-            // Add new message from others
+            // Add new message
             const newUnread =
-              message.from === 'them' && w.minimized ? w.unread + 1 : w.unread;
+              message.from !== 'me' && w.minimized ? w.unread + 1 : w.unread;
 
-            // Trigger callback for new messages from others
-            if (message.from === 'them') {
+            if (message.from !== 'me') {
               onNewMessage?.(w.id, message);
             }
 
@@ -243,6 +303,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
               ...w,
               messages: [...w.messages.filter((m) => !m.id.startsWith('temp_')), message],
               unread: newUnread,
+              isTyping: false, // Clear typing on new message
             };
           })
         );
@@ -256,9 +317,22 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         setChatWindows((prev) =>
           prev.map((w) => {
             if (w.orderId !== orderId) return w;
-            return { ...w, isTyping: true };
+            return { ...w, isTyping: true, typingActorType: data.actorType, typingActorName: data.actorName };
           })
         );
+
+        // Auto-clear typing after 5 seconds
+        const key = `${orderId}:${data.actorType}`;
+        const existingTimeout = typingTimeoutsRef.current.get(key);
+        if (existingTimeout) clearTimeout(existingTimeout);
+        typingTimeoutsRef.current.set(key, setTimeout(() => {
+          setChatWindows((prev) =>
+            prev.map((w) => {
+              if (w.orderId !== orderId) return w;
+              return { ...w, isTyping: false, typingActorType: undefined, typingActorName: undefined };
+            })
+          );
+        }, 5000));
       };
 
       const handleTypingStop = (rawData: unknown) => {
@@ -268,12 +342,12 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         setChatWindows((prev) =>
           prev.map((w) => {
             if (w.orderId !== orderId) return w;
-            return { ...w, isTyping: false };
+            return { ...w, isTyping: false, typingActorType: undefined, typingActorName: undefined };
           })
         );
       };
 
-      // Handle messages read by the other party
+      // Handle messages read
       const handleMessagesRead = (rawData: unknown) => {
         const data = rawData as { orderId: string; readerType: string; readAt: string };
         if (data.orderId !== orderId || data.readerType === actorType) return;
@@ -296,10 +370,11 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       channel.bind(CHAT_EVENTS.TYPING_STOP, handleTypingStop);
       channel.bind(CHAT_EVENTS.MESSAGES_READ, handleMessagesRead);
 
-      // Fetch initial messages
+      // Fetch initial messages and presence
       fetchMessages(orderId, chatId);
+      fetchPresence(orderId, chatId);
     },
-    [pusher, actorType, mapPusherMessageToUI, fetchMessages, onNewMessage]
+    [pusher, actorType, mapPusherMessageToUI, fetchMessages, fetchPresence, onNewMessage]
   );
 
   // Unsubscribe from an order's channel
@@ -314,34 +389,32 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
     [pusher]
   );
 
-  // Retry subscriptions when Pusher connects (fixes race condition where
-  // openChat is called before Pusher is ready)
+  // Retry subscriptions when Pusher connects (only on pusher change)
   useEffect(() => {
     if (!pusher) return;
-    // Re-subscribe all open chat windows that aren't subscribed yet
-    chatWindows.forEach((w) => {
+    chatWindowsRef.current.forEach((w) => {
       if (w.orderId && !subscribedChannelsRef.current.get(w.orderId)) {
-        console.log('[useRealtimeChat] Late-subscribing to order:', w.orderId);
         subscribeToOrder(w.orderId, w.id);
       }
     });
-  }, [pusher, chatWindows, subscribeToOrder]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pusher]);
 
-  // Polling fallback: refresh messages every 5s for open chat windows
-  // This ensures messages arrive even if Pusher isn't connected
+  // Polling fallback: refresh messages every 5s (uses refs to avoid re-creating interval)
   useEffect(() => {
-    if (chatWindows.length === 0) return;
-
     const interval = setInterval(() => {
-      chatWindows.forEach((w) => {
+      const windows = chatWindowsRef.current;
+      if (windows.length === 0) return;
+      windows.forEach((w) => {
         if (w.orderId) {
-          fetchMessages(w.orderId, w.id);
+          fetchMessagesRef.current(w.orderId, w.id);
         }
       });
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [chatWindows, fetchMessages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -349,21 +422,18 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       subscribedChannelsRef.current.forEach((_, orderId) => {
         unsubscribeFromOrder(orderId);
       });
+      typingTimeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
     };
   }, [unsubscribeFromOrder]);
 
   const openChat = useCallback(
     (user: string, emoji: string, orderId?: string) => {
-      console.log('[useRealtimeChat] openChat called:', { user, orderId });
       setChatWindows((prev) => {
-        console.log('[useRealtimeChat] Current chat windows:', prev.map(w => ({ id: w.id, orderId: w.orderId, user: w.user, msgCount: w.messages.length })));
-        // Check if chat already exists - prioritize orderId match over user name match
         const existingIndex = prev.findIndex(
           (w) => w.orderId === orderId
         );
 
         if (existingIndex >= 0) {
-          // Exact orderId match - just bring to front and refresh messages
           const existing = prev[existingIndex];
           if (orderId) {
             setTimeout(() => subscribeToOrder(orderId, existing.id), 0);
@@ -374,23 +444,19 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         }
 
         // Check if there's a window with same user but different order
-        // In this case, we need to update the orderId and clear messages
         const userMatchIndex = prev.findIndex(
           (w) => w.user === user && w.orderId !== orderId
         );
 
         if (userMatchIndex >= 0 && orderId) {
-          // Reuse window but update orderId and clear messages for fresh load
           const existing = prev[userMatchIndex];
-          // Unsubscribe from old order if exists
           if (existing.orderId) {
             unsubscribeFromOrder(existing.orderId);
           }
-          // Subscribe to new order after state update
           setTimeout(() => subscribeToOrder(orderId, existing.id), 0);
           return prev.map((w, i) =>
             i === userMatchIndex
-              ? { ...w, orderId, minimized: false, unread: 0, messages: [] }
+              ? { ...w, orderId, minimized: false, unread: 0, messages: [], presence: [], isFrozen: false }
               : w
           );
         }
@@ -406,16 +472,16 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
           minimized: false,
           unread: 0,
           isTyping: false,
+          presence: [],
+          isFrozen: false,
         };
 
-        // Schedule subscription after state update so fetchMessages can find the chat window
         if (orderId) {
           setTimeout(() => subscribeToOrder(orderId, chatId), 0);
         }
 
         const updated = [...prev, newWindow];
         if (updated.length > maxWindows) {
-          // Unsubscribe from removed windows
           const removed = updated[0];
           if (removed.orderId) {
             unsubscribeFromOrder(removed.orderId);
@@ -452,14 +518,19 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   }, []);
 
   const sendMessage = useCallback(
-    async (chatId: string, text: string, imageUrl?: string) => {
-      if (!text.trim() && !imageUrl) return;
+    async (chatId: string, text: string, imageUrl?: string, fileData?: { fileUrl: string; fileName: string; fileSize: number; mimeType: string }) => {
+      if (!text.trim() && !imageUrl && !fileData) return;
 
       const window = chatWindows.find((w) => w.id === chatId);
       if (!window?.orderId || !actorId) {
         console.error('Cannot send message: missing orderId or actorId');
         return;
       }
+
+      // Determine message type
+      let messageType: string = 'text';
+      if (fileData) messageType = 'file';
+      else if (imageUrl) messageType = 'image';
 
       // Optimistically add message
       const tempId = `temp_${Date.now()}`;
@@ -468,8 +539,12 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         from: 'me',
         text,
         timestamp: new Date(),
-        messageType: imageUrl ? 'image' : 'text',
+        messageType: messageType as ChatMessage['messageType'],
         imageUrl,
+        fileUrl: fileData?.fileUrl,
+        fileName: fileData?.fileName,
+        fileSize: fileData?.fileSize,
+        mimeType: fileData?.mimeType,
         isRead: false,
         status: 'sending',
       };
@@ -485,34 +560,44 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       );
 
       try {
-        // Send to API (will trigger Pusher event)
         const res = await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             sender_type: actorType,
             sender_id: actorId,
-            content: text,
-            message_type: imageUrl ? 'image' : 'text',
+            content: text || undefined,
+            message_type: messageType,
             image_url: imageUrl,
+            file_url: fileData?.fileUrl,
+            file_name: fileData?.fileName,
+            file_size: fileData?.fileSize,
+            mime_type: fileData?.mimeType,
           }),
         });
 
         if (!res.ok) {
-          // Demo mode - keep the temp message as the actual message
           console.log('Messages API not available - demo mode');
+          // Update status to sent even in demo mode
+          setChatWindows((prev) =>
+            prev.map((w) => {
+              if (w.id !== chatId) return w;
+              return {
+                ...w,
+                messages: w.messages.map(m => m.id === tempId ? { ...m, status: 'sent' as const } : m),
+              };
+            })
+          );
           return;
         }
 
         const data = await res.json();
-
         if (!data.success) {
           throw new Error(data.error || 'Failed to send message');
         }
 
         // The real message will come through Pusher and replace the temp one
       } catch (error) {
-        // In demo mode, keep the message (don't remove it)
         console.log('Send message error - demo mode, keeping local message');
       }
     },
@@ -559,7 +644,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
           }),
         });
       } catch {
-        // Typing indicators are best-effort, ignore errors
+        // Typing indicators are best-effort
       }
     },
     [chatWindows, actorType]

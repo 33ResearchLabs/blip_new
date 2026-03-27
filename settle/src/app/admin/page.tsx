@@ -512,6 +512,12 @@ export default function AdminConsolePage() {
                 Ops Access
               </Link>
               <Link
+                href="/admin/compliance-access"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-white/40 hover:text-white/70 hover:bg-white/[0.04] transition-colors"
+              >
+                Compliance Access
+              </Link>
+              <Link
                 href="/merchant"
                 className="px-3 py-[5px] rounded-md text-[12px] font-medium text-white/40 hover:text-white/70 hover:bg-white/[0.04] transition-colors"
               >

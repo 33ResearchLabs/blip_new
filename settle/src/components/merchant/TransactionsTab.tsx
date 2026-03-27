@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import {
+  ArrowUpRight,
+  ArrowDownRight,
   RefreshCw,
   Loader2,
   ExternalLink,
@@ -96,7 +98,7 @@ export function TransactionsTab({ merchantId }: TransactionsTabProps) {
         ) : visibleEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-10 h-10 rounded-full border border-white/[0.06] bg-white/[0.02] flex items-center justify-center">
-              <span className="text-[11px] text-white/20 font-mono">--</span>
+              <ArrowUpRight className="w-5 h-5 text-white/20" />
             </div>
             <div className="text-center">
               <p className="text-[11px] font-medium text-white/30 mb-0.5">No transactions yet</p>
@@ -116,6 +118,17 @@ export function TransactionsTab({ merchantId }: TransactionsTabProps) {
                   key={entry.id}
                   className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/[0.03] transition-colors"
                 >
+                  {/* Direction icon */}
+                  <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${
+                    isPositive ? 'bg-emerald-500/[0.08]' : 'bg-white/[0.04]'
+                  }`}>
+                    {isPositive ? (
+                      <ArrowDownRight className="w-3 h-3 text-emerald-400" />
+                    ) : (
+                      <ArrowUpRight className="w-3 h-3 text-white/40" />
+                    )}
+                  </div>
+
                   {/* Label + order ref */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">

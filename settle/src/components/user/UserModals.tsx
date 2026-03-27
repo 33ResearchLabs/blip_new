@@ -89,7 +89,7 @@ export function UserModals({
 
       {IS_EMBEDDED_WALLET && showWalletSetup && embeddedWallet && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0d0d0d] rounded-2xl w-full max-w-sm border border-white/[0.08] shadow-2xl overflow-hidden">
+          <div className="rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
             <EmbeddedWalletSetup
               onWalletCreated={(kp) => {
                 embeddedWallet.setKeypairAndUnlock(kp);
@@ -118,27 +118,28 @@ export function UserModals({
             exit={{ opacity: 0, y: -50, scale: 0.9 }}
             className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm"
           >
-            <div className="bg-[#141414] rounded-2xl p-4 border border-white/6 shadow-xl shadow-black/20">
+            <div className="rounded-2xl p-4 shadow-xl" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
-                  <Check className="w-5 h-5 text-white" />
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(0,0,0,0.06)' }}>
+                  <Check className="w-5 h-5" style={{ color: '#000' }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white mb-1">Order Accepted!</p>
-                  <p className="text-xs text-gray-400 mb-2">
-                    <span className="text-white font-medium">{acceptedOrderInfo.merchantName}</span> accepted your {acceptedOrderInfo.orderType === 'sell' ? 'sell' : 'buy'} order
+                  <p className="text-sm font-bold mb-1" style={{ color: '#000' }}>Order Accepted!</p>
+                  <p className="text-xs mb-2" style={{ color: 'rgba(0,0,0,0.45)' }}>
+                    <span className="font-semibold" style={{ color: '#000' }}>{acceptedOrderInfo.merchantName}</span> accepted your {acceptedOrderInfo.orderType === 'sell' ? 'sell' : 'buy'} order
                   </p>
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="text-gray-300 font-medium">{acceptedOrderInfo.cryptoAmount} USDC</span>
-                    <span className="text-gray-500">{'\u2022'}</span>
-                    <span className="text-gray-400">{acceptedOrderInfo.fiatAmount.toLocaleString()} AED</span>
+                    <span className="font-semibold" style={{ color: '#000' }}>{acceptedOrderInfo.cryptoAmount} USDC</span>
+                    <span style={{ color: 'rgba(0,0,0,0.25)' }}>{'\u2022'}</span>
+                    <span style={{ color: 'rgba(0,0,0,0.45)' }}>{acceptedOrderInfo.fiatAmount.toLocaleString()} AED</span>
                   </div>
                 </div>
                 <button
                   onClick={() => setShowAcceptancePopup(false)}
-                  className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+                  className="p-1 rounded-lg transition-colors"
+                  style={{ background: 'rgba(0,0,0,0.05)' }}
                 >
-                  <X className="w-4 h-4 text-gray-400" />
+                  <X className="w-4 h-4" style={{ color: 'rgba(0,0,0,0.4)' }} />
                 </button>
               </div>
             </div>

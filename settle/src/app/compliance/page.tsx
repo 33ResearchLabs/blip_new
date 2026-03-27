@@ -34,6 +34,7 @@ import { useComplianceAuth } from "@/hooks/useComplianceAuth";
 import { useDisputeManagement } from "@/hooks/useDisputeManagement";
 import type { DisputeOrder } from "@/hooks/useDisputeManagement";
 import DisputeCard, { getEmoji, formatTimeAgo } from "@/components/compliance/DisputeCard";
+import { ChatRoom } from "@/components/chat/ChatRoom";
 import ResolveModal from "@/components/compliance/ResolveModal";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
 import dynamic from "next/dynamic";
@@ -147,16 +148,17 @@ export default function ComplianceDashboard() {
   }, [member, setActor]);
 
   // Real-time chat hook
+  const chatHookResult = useRealtimeChat({
+    maxWindows: 10,
+    actorType: "compliance",
+    actorId: member?.id,
+  });
   const {
     chatWindows,
     openChat,
     closeChat,
     sendMessage,
-  } = useRealtimeChat({
-    maxWindows: 10,
-    actorType: "compliance",
-    actorId: member?.id,
-  });
+  } = chatHookResult;
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -1142,132 +1144,63 @@ export default function ComplianceDashboard() {
                   })()}
                 </div>
 
-                {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {activeChat.messages.length === 0 && (
-                    <div className="text-center py-8">
-                      <div className="w-12 h-12 rounded-full bg-white/[0.04] flex items-center justify-center mx-auto mb-2">
-                        <MessageCircle className="w-6 h-6 text-gray-600" />
-                      </div>
-                      <p className="text-xs text-gray-500">No messages yet</p>
-                      <p className="text-[10px] text-gray-600 mt-1">Start the conversation</p>
+                {/* Chat Room with full features */}
+                <div className="flex-1 flex flex-col min-h-0">
+                  {/* Quick Questions */}
+                  <div className="px-3 py-2 border-b border-white/[0.04] shrink-0">
+                    <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                      {QUICK_QUESTIONS.map((q, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            sendMessage(activeChat.id, q);
+                          }}
+                          className="shrink-0 px-2.5 py-1 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-full text-[10px] text-gray-400 hover:text-white transition-all"
+                        >
+                          {q}
+                        </button>
+                      ))}
                     </div>
-                  )}
-                  {activeChat.messages.map((msg) => {
-                    // System messages
-                    if (msg.from === "system" || msg.messageType === "system" || msg.messageType === "dispute" || msg.messageType === "resolution" || msg.messageType === "resolution_proposed" || msg.messageType === "resolution_rejected" || msg.messageType === "resolution_accepted" || msg.messageType === "resolution_finalized") {
-                      return (
-                        <div key={msg.id} className="flex justify-center">
-                          <div className="px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full text-xs text-orange-400">
-                            {(() => {
-                              try {
-                                const data = JSON.parse(msg.text);
-                                if (data.type === 'dispute_opened') return `\u{1F6A8} ${data.reason}`;
-                                if (data.type === 'resolution_proposed') return `\u2696\uFE0F Resolution proposed: ${data.resolution}`;
-                                if (data.type === 'resolution_rejected') return `\u274C Resolution rejected`;
-                                if (data.type === 'resolution_accepted') return `\u2705 Resolution accepted by ${data.party}`;
-                                if (data.type === 'resolution_finalized') return `\u{1F389} Dispute resolved!`;
-                                return msg.text;
-                              } catch {
-                                return msg.text;
-                              }
-                            })()}
-                          </div>
-                        </div>
-                      );
-                    }
-                    // Get sender info for display
-                    const senderColor = msg.senderType === 'user' ? 'text-blue-400' :
-                                       msg.senderType === 'merchant' ? 'text-purple-400' :
-                                       msg.senderType === 'compliance' ? 'text-orange-400' : 'text-gray-400';
-                    const senderLabel = msg.senderName || (msg.senderType === 'user' ? 'User' : msg.senderType === 'merchant' ? 'Merchant' : 'Compliance');
-
-                    // Regular messages with sender name
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}
-                      >
-                        <div className={`max-w-[85%] ${msg.from === "me" ? "text-right" : "text-left"}`}>
-                          {/* Sender name */}
-                          {msg.from !== "me" && (
-                            <p className={`text-[10px] ${senderColor} mb-1 px-1`}>
-                              {msg.senderType === 'user' ? '\u{1F464}' : msg.senderType === 'merchant' ? '\u{1F3EA}' : '\u{1F6E1}\uFE0F'} {senderLabel}
-                            </p>
-                          )}
-                          <div
-                            className={`px-3 py-2 rounded-xl text-sm inline-block ${
-                              msg.from === "me"
-                                ? "bg-orange-500/20 border border-orange-500/30 text-white"
-                                : msg.senderType === 'user'
-                                  ? "bg-blue-500/10 border border-blue-500/20 text-gray-300"
-                                  : "bg-purple-500/10 border border-purple-500/20 text-gray-300"
-                            }`}
-                          >
-                            {msg.text}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {activeChat.isTyping && (
-                    <div className="flex justify-start">
-                      <div className="bg-[#1f1f1f] px-3 py-2 rounded-xl flex items-center gap-1">
-                        <motion.span className="w-1.5 h-1.5 bg-gray-400 rounded-full" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: 0 }} />
-                        <motion.span className="w-1.5 h-1.5 bg-gray-400 rounded-full" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: 0.2 }} />
-                        <motion.span className="w-1.5 h-1.5 bg-gray-400 rounded-full" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: 0.4 }} />
-                      </div>
-                    </div>
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Quick Questions */}
-                <div className="px-3 py-2 border-t border-white/[0.04] shrink-0">
-                  <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
-                    {QUICK_QUESTIONS.map((q, i) => (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          sendMessage(activeChat.id, q);
-                        }}
-                        className="shrink-0 px-2.5 py-1 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] rounded-full text-[10px] text-gray-400 hover:text-white transition-all"
-                      >
-                        {q}
-                      </button>
-                    ))}
                   </div>
-                </div>
 
-                {/* Input */}
-                <div className="p-3 border-t border-white/[0.04] shrink-0">
-                  <div className="flex gap-2">
-                    <input
-                      ref={(el) => { chatInputRefs.current[activeChat.id] = el; }}
-                      type="text"
-                      placeholder="Type a message..."
-                      className="flex-1 bg-[#1f1f1f] rounded-xl px-4 py-2.5 outline-none text-sm placeholder:text-gray-600 focus:ring-1 focus:ring-orange-500/30"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && e.currentTarget.value.trim()) {
-                          sendMessage(activeChat.id, e.currentTarget.value);
-                          e.currentTarget.value = "";
-                        }
-                      }}
-                    />
-                    <motion.button
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => {
-                        const input = chatInputRefs.current[activeChat.id];
-                        if (input && input.value.trim()) {
-                          sendMessage(activeChat.id, input.value);
-                          input.value = "";
-                        }
-                      }}
-                      className="w-10 h-10 rounded-xl bg-orange-500 hover:bg-orange-400 flex items-center justify-center transition-colors"
-                    >
-                      <Send className="w-4 h-4 text-black" />
-                    </motion.button>
-                  </div>
+                  <ChatRoom
+                    orderId={activeChat.orderId || ''}
+                    messages={activeChat.messages}
+                    currentUserType="compliance"
+                    currentUserId={member?.id}
+                    onSendMessage={(text, imageUrl, fileData) => {
+                      if (fileData) {
+                        sendMessage(activeChat.id, text, imageUrl);
+                      } else {
+                        sendMessage(activeChat.id, text, imageUrl);
+                      }
+                    }}
+                    onTyping={(typing) => {
+                      if ('sendTypingIndicator' in chatHookResult) {
+                        (chatHookResult as { sendTypingIndicator: (id: string, typing: boolean) => void }).sendTypingIndicator(activeChat.id, typing);
+                      }
+                    }}
+                    onMarkRead={() => {
+                      if ('markAsRead' in chatHookResult) {
+                        (chatHookResult as { markAsRead: (id: string) => void }).markAsRead(activeChat.id);
+                      }
+                    }}
+                    isTyping={activeChat.isTyping}
+                    typingActorType={(activeChat as { typingActorType?: string }).typingActorType}
+                    typingActorName={(activeChat as { typingActorName?: string }).typingActorName}
+                    presence={(activeChat as { presence?: { actorType: 'user' | 'merchant' | 'compliance' | 'system'; actorId: string; isOnline: boolean; lastSeen?: string }[] }).presence}
+                    isFrozen={(activeChat as { isFrozen?: boolean }).isFrozen}
+                    compact
+                    userName={(() => {
+                      const chatDispute = disputes.find(d => d.id === activeChat.orderId);
+                      return chatDispute?.user.name;
+                    })()}
+                    merchantName={(() => {
+                      const chatDispute = disputes.find(d => d.id === activeChat.orderId);
+                      return chatDispute?.merchant.name;
+                    })()}
+                    complianceName={member?.name}
+                  />
                 </div>
               </>
             ) : (

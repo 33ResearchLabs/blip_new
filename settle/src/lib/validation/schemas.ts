@@ -204,12 +204,27 @@ export const sendMessageSchema = z.object({
   sender_id: uuidSchema,
   content: z
     .string()
-    .min(1, 'Message cannot be empty')
     .max(2000, 'Message too long')
-    .transform((val) => sanitizeMessage(val)),
-  message_type: z.enum(['text', 'image', 'system']).optional().default('text'),
+    .transform((val) => sanitizeMessage(val))
+    .optional(),
+  message_type: z.enum(['text', 'image', 'file', 'system', 'dispute', 'resolution', 'resolution_proposed', 'resolution_rejected', 'resolution_accepted', 'resolution_finalized']).optional().default('text'),
   image_url: z.string().url().optional(),
-});
+  // File metadata
+  file_url: z.string().url().optional(),
+  file_name: z.string().max(255).optional(),
+  file_size: z.number().int().positive().max(10 * 1024 * 1024).optional(), // Max 10MB
+  mime_type: z.string().max(100).optional(),
+}).refine(
+  (data) => {
+    // Text messages require content
+    if (data.message_type === 'text' && !data.content) return false;
+    // File messages require file_url or image_url
+    if (data.message_type === 'file' && !data.file_url) return false;
+    if (data.message_type === 'image' && !data.image_url) return false;
+    return true;
+  },
+  { message: 'Text messages require content; file messages require file_url; image messages require image_url' }
+);
 
 export const markMessagesReadSchema = z.object({
   reader_type: actorTypeSchema,

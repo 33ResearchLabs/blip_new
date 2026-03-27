@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Home, Wallet, Activity, Zap, User } from "lucide-react";
+import { Home, Activity, Zap, User, MessageCircle } from "lucide-react";
 import type { Screen } from "./types";
 
 interface BottomNavProps {
@@ -10,36 +10,32 @@ interface BottomNavProps {
   maxW: string;
 }
 
-export const BottomNav = ({ screen, setScreen, maxW }: BottomNavProps) => (
-  <div className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-5">
-    <div className={`${maxW} mx-auto`}>
-      <div className="flex items-center justify-around px-2 py-2.5 rounded-[28px]"
-        style={{ background: 'rgba(14,14,22,0.92)', backdropFilter: 'blur(24px)', border: '1px solid rgba(255,255,255,0.07)' }}>
-        {([
-          { key: "home",   icon: Home,     label: "Home" },
-          { key: "wallet", icon: Wallet,   label: "Wallet" },
-          { key: "trade",  icon: Zap,      label: "Trade" },
-          { key: "orders", icon: Activity, label: "Activity" },
-          { key: "profile",icon: User,     label: "You" },
-        ] as const).map(({ key, icon: Icon, label }) => {
-          const on = (screen as string) === key;
-          return (
-            <motion.button key={key} whileTap={{ scale: 0.85 }} onClick={() => setScreen(key as Screen)}
-              className="relative flex flex-col items-center gap-1 px-3 py-1">
-              {on && (
-                <motion.div layoutId="blip-nav-pill" className="absolute inset-0 rounded-[18px]"
-                  style={{ background: 'rgba(124,58,237,0.18)' }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 30 }} />
-              )}
-              <Icon size={19} strokeWidth={on ? 2.5 : 1.5} style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.22)', position: 'relative' }} />
-              <span className="text-[8.5px] font-black uppercase tracking-wider relative z-10"
-                style={{ color: on ? '#a78bfa' : 'rgba(255,255,255,0.18)' }}>
-                {label}
-              </span>
-            </motion.button>
-          );
-        })}
-      </div>
+const TABS = [
+  { key: "home",    Icon: Home,          label: "Home" },
+  { key: "trade",   Icon: Zap,           label: "Trade" },
+  { key: "chats",   Icon: MessageCircle, label: "Inbox" },
+  { key: "orders",  Icon: Activity,      label: "Activity" },
+  { key: "profile", Icon: User,          label: "You" },
+] as const;
+
+export const BottomNav = ({ screen, setScreen }: BottomNavProps) => (
+  <div className="fixed bottom-0 left-0 right-0 z-50 border-t"
+    style={{ background: '#080810', borderColor: 'rgba(255,255,255,0.07)', paddingBottom: 'env(safe-area-inset-bottom, 12px)' }}>
+    <div className="flex items-center justify-around px-4 pt-2.5 pb-1" style={{ maxWidth: 430, margin: '0 auto' }}>
+      {TABS.map(({ key, Icon, label }) => {
+        const on = (screen as string) === key;
+        return (
+          <motion.button key={key} whileTap={{ scale: 0.88 }}
+            onClick={() => setScreen(key as Screen)}
+            className="flex flex-col items-center gap-1" style={{ minWidth: 52 }}>
+            <Icon size={22} strokeWidth={on ? 2.4 : 1.6} style={{ color: on ? '#fff' : 'rgba(255,255,255,0.3)' }} />
+            <span className={`text-[9px] tracking-[0.05em] uppercase ${on ? "font-black text-white" : "font-medium"}`}
+              style={{ color: on ? '#fff' : 'rgba(255,255,255,0.3)' }}>
+              {label}
+            </span>
+          </motion.button>
+        );
+      })}
     </div>
   </div>
 );

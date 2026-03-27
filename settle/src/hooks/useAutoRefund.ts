@@ -55,8 +55,20 @@ export function useAutoRefund({
         console.warn(`[AutoRefund] Failed for ${order.id}:`, refundResult.error);
         addNotification('system', `Auto-refund failed for ${order.amount} USDC. Use "Cancel & Withdraw" manually.`, order.id);
       }
-    } catch (e) {
-      console.error(`[AutoRefund] Error for ${order.id}:`, e);
+    } catch (e: any) {
+      const errMsg = e?.message || String(e);
+      // Known non-fatal errors — don't spam console with red errors
+      if (errMsg.includes('does not exist or has no data')
+        || errMsg.includes('Account does not exist')
+        || errMsg.includes('MustUseDispute')
+        || errMsg.includes('6033')
+        || errMsg.includes('0x1791')
+        || errMsg.includes('already been refunded')
+        || errMsg.includes('never funded')) {
+        console.log(`[AutoRefund] Skipped for ${order.id}: ${errMsg.slice(0, 120)}`);
+      } else {
+        console.warn(`[AutoRefund] Error for ${order.id}:`, errMsg);
+      }
     } finally {
       autoRefundInFlightRef.current.delete(order.id);
     }

@@ -71,36 +71,49 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
     if (createdKeypair) onWalletCreated(createdKeypair);
   };
 
+  const inputStyle = {
+    width: '100%', background: '#f4f4f4', border: '1px solid rgba(0,0,0,0.08)',
+    borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 500,
+    color: '#000', outline: 'none', fontFamily: 'monospace',
+  };
+
+  const labelStyle = {
+    display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.2em',
+    textTransform: 'uppercase' as const, color: 'rgba(0,0,0,0.4)', marginBottom: 6,
+  };
+
   // Backup screen after creation
   if (createdKeypair) {
     return (
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="bg-[#0d0d0d] rounded-2xl w-full max-w-md border border-white/[0.08] shadow-2xl p-6 space-y-5">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+        <div className="rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-orange-500" />
-            <h2 className="text-lg font-bold text-white font-mono">Backup Your Key</h2>
+            <h2 className="text-lg font-bold font-mono" style={{ color: '#000' }}>Backup Your Key</h2>
           </div>
 
-          <p className="text-sm text-white/60 font-mono">
+          <p className="text-sm font-mono" style={{ color: 'rgba(0,0,0,0.5)' }}>
             Save this private key somewhere safe. If you forget your password,
             this is the only way to recover your wallet.
           </p>
 
           <div className="relative">
-            <div className="p-3 bg-white/[0.04] border border-white/[0.08] rounded-lg font-mono text-xs text-white/80 break-all select-all">
+            <div className="p-3 rounded-lg font-mono text-xs break-all select-all"
+              style={{ background: '#f4f4f4', border: '1px solid rgba(0,0,0,0.08)', color: 'rgba(0,0,0,0.7)' }}>
               {backupKey}
             </div>
             <button
               onClick={handleCopyKey}
-              className="absolute top-2 right-2 p-1.5 rounded-md hover:bg-white/[0.08] transition-colors"
+              className="absolute top-2 right-2 p-1.5 rounded-md transition-colors"
+              style={{ background: 'rgba(0,0,0,0.05)' }}
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-white/40" />}
+              {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" style={{ color: 'rgba(0,0,0,0.4)' }} />}
             </button>
           </div>
 
-          <div className="p-3 bg-white/[0.04] border border-white/[0.08] rounded-lg">
-            <div className="text-[10px] text-white/40 font-mono uppercase mb-1">Public Address</div>
-            <div className="text-sm text-white/80 font-mono break-all">
+          <div className="p-3 rounded-lg" style={{ background: '#f4f4f4', border: '1px solid rgba(0,0,0,0.08)' }}>
+            <div className="text-[10px] font-mono uppercase mb-1" style={{ color: 'rgba(0,0,0,0.4)' }}>Public Address</div>
+            <div className="text-sm font-mono break-all" style={{ color: 'rgba(0,0,0,0.7)' }}>
               {createdKeypair.publicKey.toBase58()}
             </div>
           </div>
@@ -110,9 +123,10 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
               type="checkbox"
               checked={backupConfirmed}
               onChange={(e) => setBackupConfirmed(e.target.checked)}
-              className="w-4 h-4 rounded border-white/20 bg-white/[0.04] accent-orange-500"
+              className="w-4 h-4 rounded accent-orange-500"
+              style={{ border: '1px solid rgba(0,0,0,0.2)' }}
             />
-            <span className="text-xs text-white/60 font-mono">
+            <span className="text-xs font-mono" style={{ color: 'rgba(0,0,0,0.6)' }}>
               I have saved my private key
             </span>
           </label>
@@ -120,8 +134,8 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
           <button
             onClick={handleContinue}
             disabled={!backupConfirmed}
-            className="w-full py-3 rounded-lg bg-orange-500 text-black font-bold font-mono
-                       hover:bg-orange-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            className="w-full py-3 rounded-lg font-bold font-mono transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{ background: '#000', color: '#fff' }}
           >
             Continue to Dashboard
           </button>
@@ -131,32 +145,34 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#0d0d0d] rounded-2xl w-full max-w-md border border-white/[0.08] shadow-2xl p-6 space-y-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}>
+      <div className="rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white font-mono">Setup Wallet</h2>
+          <h2 className="text-lg font-bold font-mono" style={{ color: '#000' }}>Setup Wallet</h2>
           {onClose && (
-            <button onClick={onClose} className="text-white/40 hover:text-white/60 text-sm font-mono">
+            <button onClick={onClose} className="text-sm font-mono" style={{ color: 'rgba(0,0,0,0.4)' }}>
               Skip
             </button>
           )}
         </div>
 
         {/* Tabs */}
-        <div className="flex bg-white/[0.03] rounded-lg p-[3px]">
+        <div className="flex rounded-xl p-1" style={{ background: 'rgba(0,0,0,0.04)' }}>
           <button
             onClick={() => { setTab('create'); setError(''); }}
-            className={`flex-1 py-2 rounded-md text-xs font-mono font-medium transition-colors ${
-              tab === 'create' ? 'bg-white/[0.08] text-white' : 'text-white/40 hover:text-white/60'
-            }`}
+            className="flex-1 py-2 rounded-lg text-xs font-mono font-medium transition-colors"
+            style={tab === 'create'
+              ? { background: '#000', color: '#fff' }
+              : { color: 'rgba(0,0,0,0.4)' }}
           >
             Create New
           </button>
           <button
             onClick={() => { setTab('import'); setError(''); }}
-            className={`flex-1 py-2 rounded-md text-xs font-mono font-medium transition-colors ${
-              tab === 'import' ? 'bg-white/[0.08] text-white' : 'text-white/40 hover:text-white/60'
-            }`}
+            className="flex-1 py-2 rounded-lg text-xs font-mono font-medium transition-colors"
+            style={tab === 'import'
+              ? { background: '#000', color: '#fff' }
+              : { color: 'rgba(0,0,0,0.4)' }}
           >
             Import Key
           </button>
@@ -164,7 +180,7 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
 
         {/* Error */}
         {error && (
-          <div className="p-2 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-400 font-mono">
+          <div className="p-2 rounded-lg text-xs font-mono" style={{ background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.15)', color: '#dc2626' }}>
             {error}
           </div>
         )}
@@ -173,45 +189,43 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
         {tab === 'create' && (
           <div className="space-y-3">
             <div>
-              <label className="text-[10px] text-white/40 font-mono uppercase mb-1 block">Password</label>
+              <label style={labelStyle}>Password</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Min 6 characters"
-                  className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                             text-sm text-white font-mono placeholder:text-white/20
-                             focus:outline-none focus:border-orange-500/50"
+                  style={{ ...inputStyle, paddingRight: 40 }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-2 top-1/2 -translate-y-1/2 p-1"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4 text-white/30" /> : <Eye className="w-4 h-4 text-white/30" />}
+                  {showPassword
+                    ? <EyeOff className="w-4 h-4" style={{ color: 'rgba(0,0,0,0.3)' }} />
+                    : <Eye className="w-4 h-4" style={{ color: 'rgba(0,0,0,0.3)' }} />}
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="text-[10px] text-white/40 font-mono uppercase mb-1 block">Confirm Password</label>
+              <label style={labelStyle}>Confirm Password</label>
               <input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-enter password"
-                className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                           text-sm text-white font-mono placeholder:text-white/20
-                           focus:outline-none focus:border-orange-500/50"
+                style={inputStyle}
               />
             </div>
 
             <button
               onClick={handleCreate}
               disabled={isLoading}
-              className="w-full py-3 rounded-lg bg-orange-500 text-black font-bold font-mono
-                         hover:bg-orange-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-lg font-bold font-mono transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              style={{ background: '#000', color: '#fff' }}
             >
               {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</> : <><Key className="w-4 h-4" /> Create Wallet</>}
             </button>
@@ -222,43 +236,40 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
         {tab === 'import' && (
           <div className="space-y-3">
             <div>
-              <label className="text-[10px] text-white/40 font-mono uppercase mb-1 block">Private Key (Base58)</label>
+              <label style={labelStyle}>Private Key (Base58)</label>
               <textarea
                 value={privateKeyInput}
                 onChange={(e) => setPrivateKeyInput(e.target.value)}
                 placeholder="Paste your base58 private key..."
                 rows={3}
-                className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                           text-sm text-white font-mono placeholder:text-white/20 resize-none
-                           focus:outline-none focus:border-orange-500/50"
+                className="resize-none"
+                style={{ ...inputStyle, padding: '10px 14px' }}
               />
             </div>
 
             <div>
-              <label className="text-[10px] text-white/40 font-mono uppercase mb-1 block">Encryption Password</label>
+              <label style={labelStyle}>Encryption Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Min 6 characters"
-                className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                           text-sm text-white font-mono placeholder:text-white/20
-                           focus:outline-none focus:border-orange-500/50"
+                style={inputStyle}
               />
             </div>
 
             <button
               onClick={handleImport}
               disabled={isLoading}
-              className="w-full py-3 rounded-lg bg-orange-500 text-black font-bold font-mono
-                         hover:bg-orange-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-lg font-bold font-mono transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              style={{ background: '#000', color: '#fff' }}
             >
               {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Importing...</> : <><Download className="w-4 h-4" /> Import Wallet</>}
             </button>
           </div>
         )}
 
-        <p className="text-[9px] text-white/30 font-mono text-center">
+        <p className="text-[9px] font-mono text-center" style={{ color: 'rgba(0,0,0,0.3)' }}>
           Your private key is encrypted with AES-256-GCM and stored locally. We never see it.
         </p>
       </div>

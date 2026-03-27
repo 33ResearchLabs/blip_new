@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, queryOne } from '@/lib/db';
 import { updateOrderStatus } from '@/lib/db/repositories/orders';
 import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
 import { logger } from '@/lib/logger';
 import { requireAuth } from '@/lib/middleware/auth';
 import { checkRateLimit, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
+
+async function hasComplianceAccess(auth: { actorType: string; merchantId?: string }): Promise<boolean> {
+  if (auth.actorType === 'compliance' || auth.actorType === 'system') return true;
+  if (auth.actorType === 'merchant' && auth.merchantId) {
+    const m = await queryOne<{ has_compliance_access: boolean }>(
+      `SELECT has_compliance_access FROM merchants WHERE id = $1 AND status = 'active'`,
+      [auth.merchantId]
+    );
+    return !!m?.has_compliance_access;
+  }
+  return false;
+}
 
 /**
  * Finalize a dispute resolution
@@ -27,10 +39,9 @@ export async function POST(
   const rl = await checkRateLimit(request, 'dispute:finalize', STRICT_LIMIT);
   if (rl) return rl;
 
-  // Require DB-verified compliance auth
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
-  if (auth.actorType !== 'compliance' && auth.actorType !== 'system') {
+  if (!(await hasComplianceAccess(auth))) {
     return NextResponse.json(
       { success: false, error: 'Compliance authentication required' },
       { status: 403 }

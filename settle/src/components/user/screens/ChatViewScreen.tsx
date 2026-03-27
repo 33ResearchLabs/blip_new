@@ -41,7 +41,7 @@ export interface ChatViewScreenProps {
       receiptData?: Record<string, unknown> | null;
       imageUrl?: string | null;
       isRead?: boolean;
-      status?: 'sending' | 'sent' | 'read';
+      status?: 'sending' | 'sent' | 'delivered' | 'read';
     }>;
   } | null;
   chatMessage: string;

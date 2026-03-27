@@ -101,7 +101,7 @@ export async function POST(
       return validationErrorResponse(errors);
     }
 
-    const { sender_type, sender_id, content, message_type, image_url } = parseResult.data;
+    const { sender_type, sender_id, content, message_type, image_url, file_url, file_name, file_size, mime_type } = parseResult.data;
 
     // Check order exists
     const order = await getOrderById(id);
@@ -129,6 +129,10 @@ export async function POST(
       content,
       message_type,
       image_url,
+      file_url,
+      file_name,
+      file_size,
+      mime_type,
     });
 
     // Mark order as having manual messages (transition from automated to direct chat)
@@ -142,9 +146,13 @@ export async function POST(
       messageId: message.id,
       senderType: sender_type,
       senderId: sender_id,
-      content,
+      content: content || '',
       messageType: message_type || 'text',
       imageUrl: image_url,
+      fileUrl: file_url,
+      fileName: file_name,
+      fileSize: file_size,
+      mimeType: mime_type,
       createdAt: message.created_at.toISOString(),
     });
 
@@ -188,7 +196,7 @@ export async function POST(
               senderId: sender_id,
               recipientType: recipientType as 'merchant' | 'user',
               recipientId,
-              content,
+              content: content || '',
               messageType: message_type || 'text',
               imageUrl: image_url,
               createdAt: message.created_at.toISOString(),

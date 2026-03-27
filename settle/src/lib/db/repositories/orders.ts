@@ -1560,21 +1560,29 @@ export async function sendMessage(data: {
   order_id: string;
   sender_type: ActorType;
   sender_id: string;
-  content: string;
-  message_type?: 'text' | 'image' | 'system';
+  content?: string;
+  message_type?: 'text' | 'image' | 'file' | 'system' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
   image_url?: string;
+  file_url?: string;
+  file_name?: string;
+  file_size?: number;
+  mime_type?: string;
 }): Promise<ChatMessage> {
   const result = await queryOne<ChatMessage>(
-    `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type, image_url)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type, image_url, file_url, file_name, file_size, mime_type)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
     [
       data.order_id,
       data.sender_type,
       data.sender_id,
-      data.content,
+      data.content || null,
       data.message_type || 'text',
       data.image_url || null,
+      data.file_url || null,
+      data.file_name || null,
+      data.file_size || null,
+      data.mime_type || null,
     ]
   );
   return result!;

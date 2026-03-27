@@ -186,8 +186,8 @@ export default function WalletModal({
                 </button>
               </div>
               <div className="p-6 space-y-4">
-                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                  <p className="text-sm text-amber-400 font-medium mb-1">Test Mode Active</p>
+                <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+                  <p className="text-sm text-white font-medium mb-1">Test Mode Active</p>
                   <p className="text-xs text-white/50">
                     Real wallet connections are disabled. All accounts are auto-funded with 10,000 USDT test coins.
                     Login or register to get started.
@@ -356,8 +356,8 @@ export default function WalletModal({
 
                   {/* In-App Browser Warning */}
                   {isInAppBrowser && (
-                    <div className="mb-4 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3">
-                      <p className="text-sm text-yellow-400">
+                    <div className="mb-4 bg-white/5 border border-white/10 rounded-xl p-3">
+                      <p className="text-sm text-white/70">
                         For best experience, open this page in your browser (Safari/Chrome)
                       </p>
                     </div>

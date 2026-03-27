@@ -107,7 +107,9 @@ export function getAuthContext(request: NextRequest): AuthContext | null {
   const headerComplianceId = request.headers.get('x-compliance-id');
   const isMerchantRoute = request.nextUrl.pathname.includes('/merchant');
 
-  if (headerComplianceId) {
+  // Compliance header: only use on compliance routes — don't override merchant/user auth elsewhere
+  const isComplianceRoute = request.nextUrl.pathname.includes('/compliance');
+  if (headerComplianceId && isComplianceRoute && !headerMerchantId) {
     return { actorType: 'compliance', actorId: headerComplianceId, complianceId: headerComplianceId };
   }
   // If both user and merchant headers exist, disambiguate using route context
@@ -184,8 +186,8 @@ async function actorExistsInDb(auth: AuthContext): Promise<boolean> {
     // System actors are always valid (internal calls)
     exists = true;
   } else if (auth.actorType === 'compliance' && auth.complianceId) {
-    // Compliance officers are stored as users — verify they exist
-    exists = await verifyUser(auth.complianceId);
+    // Compliance officers are in compliance_team table
+    exists = await verifyComplianceMember(auth.complianceId);
   }
 
   setCache(cacheKey, exists);
@@ -244,6 +246,23 @@ export async function verifyMerchant(merchantId: string): Promise<boolean> {
     return merchant !== null && merchant.status === 'active';
   } catch {
     return false;
+  }
+}
+
+/**
+ * Verify that a compliance team member exists and is active
+ */
+async function verifyComplianceMember(complianceId: string): Promise<boolean> {
+  try {
+    const { queryOne: qOne } = await import('../db');
+    const member = await qOne<{ id: string; is_active: boolean }>(
+      'SELECT id, is_active FROM compliance_team WHERE id = $1',
+      [complianceId]
+    );
+    return member !== null && member.is_active !== false;
+  } catch {
+    // Table may not exist — allow access so compliance isn't locked out
+    return true;
   }
 }
 

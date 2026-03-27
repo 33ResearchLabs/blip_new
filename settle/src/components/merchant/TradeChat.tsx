@@ -272,8 +272,11 @@ export function TradeChat({
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) return;
-    if (!file.type.startsWith('image/')) return;
-    const previewUrl = URL.createObjectURL(file);
+    // Allow images, PDFs, and Word docs
+    const validTypes = ['image/', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    const isValid = validTypes.some(type => file.type.startsWith(type) || file.type === type);
+    if (!isValid) return;
+    const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
     setPendingImage({ file, previewUrl });
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -921,13 +924,15 @@ export function TradeChat({
                                 </div>
                               )}
                               {msg.messageType === 'image' && msg.imageUrl && (
-                                <img
-                                  src={msg.imageUrl}
-                                  alt="Shared image"
-                                  className="max-w-full rounded-lg mb-2"
-                                />
+                                <div className="max-w-[200px] rounded-lg overflow-hidden mb-2 cursor-pointer" onClick={() => window.open(msg.imageUrl!, '_blank')}>
+                                  <img
+                                    src={msg.imageUrl}
+                                    alt="Shared image"
+                                    className="w-full h-auto max-h-[200px] object-cover"
+                                  />
+                                </div>
                               )}
-                              <p>{msg.text}</p>
+                              {msg.text && msg.text !== 'Photo' && <p>{msg.text}</p>}
                               <span className={`text-[10px] mt-1 block ${
                                 msg.from === 'compliance' || msg.senderType === 'compliance'
                                   ? 'text-red-400/50'
@@ -991,7 +996,7 @@ export function TradeChat({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/*,.pdf,.doc,.docx"
               onChange={handleFileSelect}
               className="hidden"
             />
