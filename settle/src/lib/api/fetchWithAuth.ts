@@ -67,15 +67,46 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
+// ── In-flight request deduplication for GET requests ──────────────────
+// If the same GET URL is already being fetched, reuse the pending promise
+// instead of creating a duplicate network request.
+const inflightGets = new Map<string, Promise<Response>>();
+
 /**
  * Drop-in replacement for window.fetch with auth headers injected.
  * Signature matches fetch() exactly.
+ *
+ * GET requests are automatically deduplicated: concurrent calls to the
+ * same URL share a single in-flight request. Mutations (POST/PATCH/DELETE)
+ * are never deduplicated.
  */
 export function fetchWithAuth(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
   const authHeaders = getAuthHeaders();
+  const method = (init?.method || 'GET').toUpperCase();
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+
+  // Only deduplicate GET requests (mutations must always execute)
+  if (method === 'GET') {
+    const existing = inflightGets.get(url);
+    if (existing) return existing.then(res => res.clone());
+
+    const promise = fetch(input, {
+      ...init,
+      headers: {
+        ...authHeaders,
+        ...init?.headers,
+      },
+    }).finally(() => {
+      inflightGets.delete(url);
+    });
+
+    inflightGets.set(url, promise);
+    return promise.then(res => res.clone());
+  }
+
   return fetch(input, {
     ...init,
     headers: {

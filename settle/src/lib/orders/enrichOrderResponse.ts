@@ -181,16 +181,11 @@ function deriveOpen(
   actorId: string,
   role: 'buyer' | 'seller' | 'observer',
 ) {
+  // NOTE: Only BUY orders enter 'open' status.
+  // SELL orders start at 'escrowed' and use CLAIM (Mine) instead of ACCEPT.
   if (role === 'observer') {
-    // Mine = escrow already locked (just send fiat after accepting)
-    // Accept = no escrow yet (you'll lock escrow after accepting)
-    const hasEscrow = !!order.escrow_tx_hash;
-    const label = hasEscrow ? 'Mine' : 'Accept';
-    const hint = hasEscrow
-      ? 'Mine this order to send fiat payment.'
-      : 'Accept this order to lock escrow.';
-    result.primaryAction = guardedAction(order, actorId, 'ACCEPT', label);
-    result.nextStepText = hint;
+    result.primaryAction = guardedAction(order, actorId, 'ACCEPT', 'Accept');
+    result.nextStepText = 'Accept this order to start the trade.';
   } else {
     result.primaryAction = DISABLED_PRIMARY(
       'Waiting for Acceptor',
@@ -208,6 +203,8 @@ function deriveAccepted(
   role: 'buyer' | 'seller' | 'observer',
   hasEscrow: boolean,
 ) {
+  // NOTE: Only BUY orders enter 'accepted' status.
+  // SELL orders skip this entirely (escrowed at creation, claimed without status change).
   if (!hasEscrow) {
     if (role === 'seller') {
       result.primaryAction = guardedAction(order, actorId, 'LOCK_ESCROW', 'Lock Escrow');
@@ -277,10 +274,13 @@ function deriveEscrowed(
     result.primaryAction = guardedAction(order, actorId, 'SEND_PAYMENT', "I've Paid");
     result.nextStepText = 'Escrow is locked. Send fiat payment, then click "I\'ve Paid".';
   } else {
-    // Observer
+    // Observer: can CLAIM (mine) unclaimed escrowed orders
     const isUnclaimed = !buyerMerchantId;
     if (isUnclaimed) {
-      result.primaryAction = guardedAction(order, actorId, 'CLAIM', 'Accept & Mine');
+      // SELL orders show "Mine" (escrow-first, no prior acceptance needed)
+      // BUY orders show "Accept & Mine" (claiming an already-escrowed BUY order)
+      const label = order.type === 'sell' ? 'Mine' : 'Accept & Mine';
+      result.primaryAction = guardedAction(order, actorId, 'CLAIM', label);
       result.nextStepText = 'Claim this order and send fiat payment.';
     } else {
       result.primaryAction = DISABLED_PRIMARY(

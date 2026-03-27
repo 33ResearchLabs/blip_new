@@ -63,6 +63,7 @@ interface UseRealtimeOrdersOptions {
   onExtensionRequested?: (data: ExtensionRequestData) => void;
   onExtensionResponse?: (data: ExtensionResponseData) => void;
   onPriceUpdate?: (data: CorridorPriceData) => void;
+  onNotification?: (data: { type: string; orderId?: string; content: string; senderName: string }) => void;
 }
 
 interface UseRealtimeOrdersReturn {
@@ -84,7 +85,7 @@ const BATCH_WINDOW_MS = 100; // Coalesce events within 100ms
 export function useRealtimeOrders(
   options: UseRealtimeOrdersOptions
 ): UseRealtimeOrdersReturn {
-  const { actorType, actorId, onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse, onPriceUpdate } = options;
+  const { actorType, actorId, onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse, onPriceUpdate, onNotification } = options;
 
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -386,11 +387,25 @@ export function useRealtimeOrders(
     primaryChannel.bind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
     primaryChannel.bind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
 
+    // Handle compliance/system notifications on personal channel
+    const handleNotification = (rawData: unknown) => {
+      const data = rawData as { type?: string; orderId?: string; content?: string; senderName?: string };
+      if (data.type === 'compliance_message') {
+        onNotification?.({
+          type: 'compliance_message',
+          orderId: data.orderId,
+          content: data.content || 'New message from Compliance',
+          senderName: data.senderName || 'Compliance Officer',
+        });
+      }
+    };
+
     if (personalChannel) {
       personalChannel.bind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
       personalChannel.bind(ORDER_EVENTS.CANCELLED, handleCancelled);
       personalChannel.bind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
       personalChannel.bind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
+      personalChannel.bind('notification', handleNotification);
     }
 
     return () => {
@@ -406,6 +421,7 @@ export function useRealtimeOrders(
         personalChannel.unbind(ORDER_EVENTS.CANCELLED, handleCancelled);
         personalChannel.unbind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
         personalChannel.unbind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
+        personalChannel.unbind('notification', handleNotification);
         pusher.unsubscribe(personalChannelName);
       }
 

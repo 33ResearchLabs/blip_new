@@ -107,13 +107,8 @@ export function useUserTradeCreation({
       const offer = offerData.data;
       setCurrentRate(parseFloat(offer.rate));
 
-      if (paymentMethod === "cash") {
-        setSelectedOffer(offer);
-        setScreen("cash-confirm");
-        setIsLoading(false);
-        return;
-      }
-
+      // SELL orders MUST lock escrow first (escrow-first model), regardless of payment method.
+      // Route to escrow screen before anything else.
       if (tradeType === "sell") {
         const merchantWallet = offer?.merchant?.wallet_address;
         const isValidSolanaAddress = merchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
@@ -128,6 +123,14 @@ export function useUserTradeCreation({
         setEscrowTxHash(null);
         setEscrowError(null);
         setScreen("escrow");
+        setIsLoading(false);
+        return;
+      }
+
+      // BUY cash orders go to cash-confirm screen (no escrow needed from buyer)
+      if (paymentMethod === "cash") {
+        setSelectedOffer(offer);
+        setScreen("cash-confirm");
         setIsLoading(false);
         return;
       }
@@ -209,6 +212,12 @@ export function useUserTradeCreation({
   const confirmCashOrder = async () => {
     if (!selectedOffer || !amount) {
       showAlert('Error', 'Missing order details', 'error');
+      return;
+    }
+
+    // Guard: SELL orders must go through escrow screen, not cash-confirm
+    if (tradeType === 'sell') {
+      showAlert('Error', 'SELL orders require escrow. Please use the escrow flow.', 'error');
       return;
     }
 
@@ -426,9 +435,12 @@ export function useUserTradeCreation({
           type: 'sell',
           payment_method: paymentMethod,
           preference: tradePreference,
+          // CRITICAL: Include escrow_tx_hash so backend creates order as 'escrowed' (escrow-first model)
+          escrow_tx_hash: escrowResult.txHash,
           escrow_trade_pda: escrowResult.tradePda,
           escrow_pda: escrowResult.escrowPda,
           escrow_trade_id: escrowResult.tradeId,
+          escrow_creator_wallet: solanaWallet.walletAddress,
           user_bank_account: selectedBankDetails ? JSON.stringify(selectedBankDetails) : undefined,
           payment_method_id: selectedPaymentMethod?.id,
         }),

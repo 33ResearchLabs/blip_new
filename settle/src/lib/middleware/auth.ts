@@ -107,10 +107,18 @@ export function getAuthContext(request: NextRequest): AuthContext | null {
   const headerComplianceId = request.headers.get('x-compliance-id');
   const isMerchantRoute = request.nextUrl.pathname.includes('/merchant');
 
-  // Compliance header: only use on compliance routes — don't override merchant/user auth elsewhere
+  // Compliance header: use on compliance routes OR when accessing order messages/disputes
   const isComplianceRoute = request.nextUrl.pathname.includes('/compliance');
-  if (headerComplianceId && isComplianceRoute && !headerMerchantId) {
+  const isOrderRoute = request.nextUrl.pathname.includes('/orders/') && (
+    request.nextUrl.pathname.includes('/messages') || request.nextUrl.pathname.includes('/dispute')
+  );
+  if (headerComplianceId && (isComplianceRoute || isOrderRoute) && !headerMerchantId) {
     return { actorType: 'compliance', actorId: headerComplianceId, complianceId: headerComplianceId };
+  }
+  // When compliance + merchant headers both present, resolve as compliance on compliance/order routes
+  // but attach merchantId for canAccessOrder fallback
+  if (headerComplianceId && headerMerchantId && (isComplianceRoute || isOrderRoute)) {
+    return { actorType: 'compliance', actorId: headerComplianceId, complianceId: headerComplianceId, merchantId: headerMerchantId };
   }
   // If both user and merchant headers exist, disambiguate using route context
   // Also store both IDs so downstream checks can reference either identity
@@ -345,16 +353,18 @@ export async function canAccessOrder(
       return false;
     }
 
-    // Compliance can access orders they're assigned to or orders with disputes assigned to them
+    // Compliance can access orders they're assigned to or orders with disputes
     if (auth.actorType === 'compliance') {
       // Check if compliance is directly assigned to the order
       if (order.assigned_compliance_id === auth.actorId) {
         return true;
       }
-      // Check if order has a dispute assigned to this compliance officer
-      // Note: getDisputeByOrderId would need to be imported and checked here
-      // For now, compliance can access any disputed order
+      // Compliance can access any disputed order
       if (order.status === 'disputed') {
+        return true;
+      }
+      // Fallback: compliance officer may also be a merchant on this order
+      if (auth.merchantId && (order.merchant_id === auth.merchantId || order.buyer_merchant_id === auth.merchantId)) {
         return true;
       }
       return false;

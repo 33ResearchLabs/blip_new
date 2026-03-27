@@ -110,22 +110,22 @@ export function useMerchantEffects({
           return prev.map(o => o.id === orderId ? { ...o, status: uiStatus as Order['status'], minimalStatus: newStatus } : o);
         });
 
-        fetchOrders();
+        debouncedFetchOrders();
         debouncedFetchConversations();
 
         if (newStatus === 'payment_sent') { playSound('notification'); }
         else if (newStatus === 'completed') { playSound('order_complete'); refreshBalance(); }
       } else if (event.type === 'order:cancelled') {
-        fetchOrders();
+        debouncedFetchOrders();
         playSound('error');
       } else if (event.type === 'order:created') {
-        fetchOrders();
+        debouncedFetchOrders();
         playSound('new_order');
       }
     });
 
     return unsubscribe;
-  }, [wsContext, fetchOrders, debouncedFetchConversations, playSound, refreshBalance]);
+  }, [wsContext, debouncedFetchOrders, debouncedFetchConversations, playSound, refreshBalance]);
 
   // Keyboard shortcuts for dashboard
   useEffect(() => {

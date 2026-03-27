@@ -55,7 +55,8 @@ export const MINIMAL_ALLOWED_TRANSITIONS: Record<MinimalOrderStatus, MinimalTran
     { to: 'expired', allowedActors: ['system'], description: 'Timeout after acceptance' },
   ],
   escrowed: [
-    { to: 'accepted', allowedActors: ['merchant'], description: 'Merchant accepts escrowed order (M2M/sell)' },
+    // REMOVED: escrowed → accepted (backward transition violates flow integrity)
+    // SELL orders stay in 'escrowed' when claimed — merchant_id + accepted_at are set without status change.
     { to: 'payment_sent', allowedActors: ['user', 'merchant'], description: 'Mark fiat payment as sent' },
     { to: 'completed', allowedActors: ['user', 'merchant', 'system'], description: 'Direct completion after release' },
     { to: 'cancelled', allowedActors: ['user', 'merchant', 'system'], description: 'Cancel with refund' },
@@ -154,6 +155,55 @@ export function validateMinimalTransition(
     };
   }
 
+  return { valid: true };
+}
+
+// ── Order-type-aware flow validation ─────────────────────────────────
+
+/**
+ * Validate a transition considering the order type (buy vs sell).
+ *
+ * NOTE: No type-based status restrictions here. The stored `type` field is
+ * inverted for merchant-created broadcast orders (merchant "buy" = stored "sell"),
+ * so type-based guards cause false positives. Status-based enforcement is sufficient:
+ *
+ *   - Real user SELL orders are created as 'escrowed' → can never reach 'open'/'accepted'
+ *   - Merchant broadcast orders start as 'pending' → follow normal flow regardless of stored type
+ *   - The removed backward transition (escrowed → accepted) prevents regression
+ *   - DB trigger enforces rules for real users only (checks placeholder username)
+ */
+export function validateTypedTransition(
+  currentStatus: MinimalOrderStatus,
+  newStatus: MinimalOrderStatus,
+  actorType: ActorType,
+  _orderType: 'buy' | 'sell',
+): MinimalTransitionValidation {
+  // Run base state machine validation — this is the single source of truth
+  return validateMinimalTransition(currentStatus, newStatus, actorType);
+}
+
+/**
+ * Validate that an order's initial status is correct for its type.
+ *
+ * SELL → must start as 'escrowed'
+ * BUY  → must start as 'open'
+ */
+export function validateInitialStatus(
+  orderType: 'buy' | 'sell',
+  initialStatus: MinimalOrderStatus,
+): MinimalTransitionValidation {
+  if (orderType === 'sell' && initialStatus !== 'escrowed') {
+    return {
+      valid: false,
+      error: `SELL orders must be created with status 'escrowed'. Got '${initialStatus}'.`,
+    };
+  }
+  if (orderType === 'buy' && initialStatus !== 'open') {
+    return {
+      valid: false,
+      error: `BUY orders must be created with status 'open'. Got '${initialStatus}'.`,
+    };
+  }
   return { valid: true };
 }
 

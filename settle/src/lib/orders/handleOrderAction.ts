@@ -23,7 +23,7 @@
 
 import { Order, ActorType, MinimalOrderStatus } from '../types/database';
 import {
-  validateMinimalTransition,
+  validateTypedTransition,
   MINIMAL_TERMINAL_STATUSES,
 } from './stateMachineMinimal';
 import { normalizeStatus } from './statusNormalizer';
@@ -47,10 +47,13 @@ export type OrderAction = (typeof ORDER_ACTIONS)[number];
 export type TradeRole = 'buyer' | 'seller';
 
 // ── Action → target status mapping ─────────────────────────────────────
+//
+// NOTE: CLAIM does NOT change status for SELL orders (stays 'escrowed').
+// The target status is resolved dynamically in handleOrderAction for CLAIM.
 
 const ACTION_TARGET_STATUS: Record<OrderAction, MinimalOrderStatus> = {
   ACCEPT: 'accepted',
-  CLAIM: 'accepted',
+  CLAIM: 'escrowed',   // SELL/M2M claim: stays escrowed (merchant_id + accepted_at set, no status change)
   LOCK_ESCROW: 'escrowed',
   SEND_PAYMENT: 'payment_sent',
   CONFIRM_PAYMENT: 'completed',
@@ -68,15 +71,21 @@ interface ActionRule {
 
 const ACTION_RULES: Record<OrderAction, ActionRule> = {
   ACCEPT: {
+    // BUY flow only: merchant accepts → open → accepted
+    // SELL orders use CLAIM instead (no status change)
     allowedRole: 'buyer',
     allowedFromStatuses: ['open'],
   },
   CLAIM: {
+    // SELL/M2M flow: merchant claims escrowed order → stays escrowed
+    // Sets merchant_id + accepted_at WITHOUT changing status
     allowedRole: 'buyer',
     allowedFromStatuses: ['escrowed'],
     requiresEscrow: true,
   },
   LOCK_ESCROW: {
+    // BUY flow only: seller locks escrow after acceptance
+    // SELL orders have escrow locked at creation (never hits this)
     allowedRole: 'seller',
     allowedFromStatuses: ['accepted'],
   },
@@ -189,6 +198,12 @@ export function handleOrderAction(
     };
   }
 
+  // NOTE: No type-based guards here. Status-based rules are sufficient:
+  //   - Real user SELL orders start at 'escrowed' → ACCEPT (requires 'open') is impossible
+  //   - Merchant broadcast orders (placeholder user, stored type='sell') start at 'pending' → ACCEPT works
+  //   - CLAIM requires 'escrowed' → only works on orders with escrow already locked
+  //   - LOCK_ESCROW requires 'accepted' → only works after acceptance (BUY flow)
+
   const rule = ACTION_RULES[action];
   const targetStatus = ACTION_TARGET_STATUS[action];
 
@@ -277,11 +292,22 @@ export function handleOrderAction(
     };
   }
 
-  // 8. Validate via state machine (actor type mapping for state machine)
+  // 8. CLAIM/MINE: field-only update — no status transition.
+  //    Sets merchant_id + accepted_at on an escrowed order without changing status.
+  //    Skip state machine validation (same-status "transition" would be rejected as no-op).
+  if (action === 'CLAIM') {
+    return {
+      success: true,
+      targetStatus: 'escrowed', // Status stays the same
+    };
+  }
+
+  // 9. Validate via state machine (actor type mapping for state machine)
   //    State machine uses ActorType ('user' | 'merchant' | 'system'),
   //    so we map from the resolved role context.
+  //    Uses type-aware validation to enforce BUY/SELL flow rules.
   const actorType: ActorType = resolveActorType(order, currentUserId);
-  const smValidation = validateMinimalTransition(currentMinimal, targetStatus, actorType);
+  const smValidation = validateTypedTransition(currentMinimal, targetStatus, actorType, order.type);
   if (!smValidation.valid) {
     return {
       success: false,
@@ -334,4 +360,61 @@ export function getAllowedActions(
   return ORDER_ACTIONS.filter(
     (action) => handleOrderAction(order, action, currentUserId).success
   );
+}
+
+// ── Role Resolver (MANDATORY per spec) ──────────────────────────────
+
+export interface ResolvedRoles {
+  /** The entity ID who is the buyer (sends fiat) */
+  buyer_id: string | null;
+  /** The entity ID who is the seller (locks/releases crypto) */
+  seller_id: string | null;
+  /** Check if a given user is the buyer */
+  isBuyer: (userId: string) => boolean;
+  /** Check if a given user is the seller */
+  isSeller: (userId: string) => boolean;
+}
+
+/**
+ * resolveRoles — Determine buyer and seller IDs for any order.
+ *
+ * Escrow ownership (STRICT):
+ *   SELLER = locks crypto, releases crypto
+ *   - SELL → seller = user_id (order creator)
+ *   - BUY  → seller = merchant_id (after accept)
+ *   - M2M  → seller = merchant_id ALWAYS
+ *
+ * Payment ownership:
+ *   BUYER = sends fiat
+ *   - BUY  → buyer = user_id or buyer_merchant_id
+ *   - SELL → buyer = merchant_id or buyer_merchant_id
+ */
+export function resolveRoles(
+  order: Pick<Order, 'type' | 'user_id' | 'merchant_id' | 'buyer_merchant_id'>,
+): ResolvedRoles {
+  const isM2M = !!order.buyer_merchant_id;
+
+  let buyer_id: string | null;
+  let seller_id: string | null;
+
+  if (isM2M) {
+    // M2M: field names are authoritative, type-agnostic
+    buyer_id = order.buyer_merchant_id;
+    seller_id = order.merchant_id;
+  } else if (order.type === 'sell') {
+    // SELL: user sells crypto (seller), merchant buys (buyer)
+    seller_id = order.user_id;
+    buyer_id = order.merchant_id; // may be null until claimed
+  } else {
+    // BUY: user buys (buyer), merchant sells (seller)
+    buyer_id = order.user_id;
+    seller_id = order.merchant_id; // may be null until accepted
+  }
+
+  return {
+    buyer_id,
+    seller_id,
+    isBuyer: (userId: string) => !!buyer_id && userId === buyer_id,
+    isSeller: (userId: string) => !!seller_id && userId === seller_id,
+  };
 }

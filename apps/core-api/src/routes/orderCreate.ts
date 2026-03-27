@@ -274,11 +274,13 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
       logger.error('[order-create] Failed', {
         offerId: data.offer_id, actorId,
         error: error?.message, code: error?.code,
+        stack: error?.stack?.split('\n').slice(0, 5).join('\n'),
+        detail: error?.detail,
       });
       if (error?.statusCode) {
         return reply.status(error.statusCode).send({ success: false, error: error.message });
       }
-      return reply.status(500).send({ success: false, error: 'Internal server error' });
+      return reply.status(500).send({ success: false, error: 'Internal server error', debug: error?.message });
     }
   });
 
@@ -370,11 +372,13 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         logger.error('[merchant-order-create] Failed', {
           offerId: data.offer_id, actorId,
           error: error?.message, code: error?.code,
+          stack: error?.stack?.split('\n').slice(0, 5).join('\n'),
+          detail: error?.detail,
         });
         if (error?.statusCode) {
           return reply.status(error.statusCode).send({ success: false, error: error.message });
         }
-        return reply.status(500).send({ success: false, error: 'Internal server error' });
+        return reply.status(500).send({ success: false, error: 'Internal server error', debug: error?.message });
       }
     }
   );

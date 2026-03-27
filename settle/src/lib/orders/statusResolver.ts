@@ -356,7 +356,8 @@ export function getNextAction(order: any, orderType?: "buy" | "sell"): string {
         order.buyerMerchantId ||
         order.dbOrder?.buyer_merchant_id;
       if (buyerMerchant) return "Already Claimed";
-      return "Accept & Mine";
+      const oType = order.type || order.orderType;
+      return oType === "sell" ? "Mine" : "Accept & Mine";
     }
 
     case "payment_sent":
@@ -477,6 +478,8 @@ export function deriveOrderUI(order: any, myMerchantId: string): OrderUIState {
 
   switch (status) {
     case "open":
+      // NOTE: Only BUY orders enter 'open' status.
+      // SELL orders start at 'escrowed' and use CLAIM (Mine) from the escrowed case.
       if (myRole === "observer") {
         result.primaryAction = {
           label: "Accept Order",
@@ -503,6 +506,8 @@ export function deriveOrderUI(order: any, myMerchantId: string): OrderUIState {
       break;
 
     case "accepted": {
+      // NOTE: Only BUY orders enter 'accepted' status.
+      // SELL orders skip this entirely (escrowed at creation, claimed without status change).
       if (!hasEscrow) {
         if (myRole === "seller") {
           // I'm the seller — I lock USDC in escrow
@@ -605,10 +610,13 @@ export function deriveOrderUI(order: any, myMerchantId: string): OrderUIState {
       } else {
         // Observer: check if order is unclaimed or already claimed by someone else
         const isUnclaimed = !buyerMerchantId;
+        const orderType = order.type || order.orderType;
         if (isUnclaimed) {
-          // No one has claimed yet — show "Accept & Mine"
+          // SELL orders show "Mine" (escrow-first, no prior acceptance needed)
+          // BUY orders show "Accept & Mine" (claiming an already-escrowed BUY order)
+          const mineLabel = orderType === "sell" ? "Mine" : "Accept & Mine";
           result.primaryAction = {
-            label: "Accept & Mine",
+            label: mineLabel,
             handler: "signToClaimOrder",
             variant: "green",
             disabled: false,

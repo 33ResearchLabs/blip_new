@@ -1169,11 +1169,7 @@ export default function ComplianceDashboard() {
                     currentUserType="compliance"
                     currentUserId={member?.id}
                     onSendMessage={(text, imageUrl, fileData) => {
-                      if (fileData) {
-                        sendMessage(activeChat.id, text, imageUrl);
-                      } else {
-                        sendMessage(activeChat.id, text, imageUrl);
-                      }
+                      sendMessage(activeChat.id, text, imageUrl, fileData);
                     }}
                     onTyping={(typing) => {
                       if ('sendTypingIndicator' in chatHookResult) {

@@ -17,6 +17,14 @@ interface DisputeOrder {
   orderStatus: string;
   createdAt: string;
   expiresAt: string;
+  lifecycle?: Array<{
+    status: string;
+    fromStatus: string | null;
+    actorType: string;
+    timestamp: string;
+    deltaMs: number;
+    deltaFormatted: string;
+  }>;
   dispute: {
     id: string;
     status: string;
@@ -41,6 +49,13 @@ interface DisputeOrder {
     rating: number;
     trades: number;
   };
+  buyerMerchant?: {
+    id: string;
+    name: string;
+    wallet: string;
+    rating: number;
+    trades: number;
+  } | null;
 }
 
 interface ResolveForm {

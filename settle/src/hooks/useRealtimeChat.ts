@@ -400,8 +400,12 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pusher]);
 
-  // Polling fallback: refresh messages every 5s (uses refs to avoid re-creating interval)
+  // Polling fallback: refresh messages every 5s ONLY when Pusher is disconnected
+  const isPusherConnected = pusher?.isConnected ?? false;
   useEffect(() => {
+    // Skip polling when Pusher is delivering messages in real-time
+    if (isPusherConnected) return;
+
     const interval = setInterval(() => {
       const windows = chatWindowsRef.current;
       if (windows.length === 0) return;
@@ -414,7 +418,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
 
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isPusherConnected]);
 
   // Cleanup on unmount
   useEffect(() => {

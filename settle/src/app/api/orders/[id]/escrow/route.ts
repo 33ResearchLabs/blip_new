@@ -173,14 +173,54 @@ export async function POST(
 
     // ── ROLE + STATUS VALIDATION ──
     // Only the seller can lock escrow.
-    // Allowed from 'accepted' (normal flow).
-    // 'open' (pending) is only allowed for merchant-created orders (placeholder user)
-    // where the merchant locks escrow at creation time before anyone accepts.
-    // For user-created orders, a merchant must Mine/Accept first.
+    // Allowed from:
+    //   - 'accepted' (BUY flow: merchant accepted, now locks escrow)
+    //   - 'open' (placeholder user: merchant locks escrow at creation)
+    //   - 'escrowed' (idempotent: SELL orders already escrowed at creation,
+    //                  this call just updates on-chain refs like tx_hash)
     const minimalStatus = normalizeStatus(depositOrder.status);
     const isPlaceholderUser = depositOrder.user?.username?.startsWith('open_order_')
       || depositOrder.user?.username?.startsWith('m2m_');
     const allowOpenEscrow = minimalStatus === "open" && isPlaceholderUser;
+    const isAlreadyEscrowed = minimalStatus === "escrowed";
+
+    if (isAlreadyEscrowed) {
+      // Idempotent: order already escrowed (SELL escrow-first flow).
+      // Update on-chain references if needed, but don't change status.
+      logger.info("[Escrow:Deposit] Order already escrowed — updating on-chain refs only", {
+        orderId: id,
+        currentStatus: depositOrder.status,
+        existingTxHash: depositOrder.escrow_tx_hash,
+        newTxHash: parseResult.data.tx_hash,
+      });
+
+      // Update escrow fields on the existing escrowed order
+      const { query: dbQuery } = await import("@/lib/db");
+      await dbQuery(
+        `UPDATE orders SET
+           escrow_tx_hash = COALESCE($2, escrow_tx_hash),
+           escrow_trade_id = COALESCE($3, escrow_trade_id),
+           escrow_trade_pda = COALESCE($4, escrow_trade_pda),
+           escrow_pda = COALESCE($5, escrow_pda),
+           escrow_creator_wallet = COALESCE($6, escrow_creator_wallet),
+           escrow_address = COALESCE($7, escrow_address)
+         WHERE id = $1`,
+        [
+          id,
+          parseResult.data.tx_hash,
+          parseResult.data.escrow_trade_id ?? null,
+          parseResult.data.escrow_trade_pda ?? null,
+          parseResult.data.escrow_pda ?? null,
+          parseResult.data.escrow_creator_wallet ?? null,
+          parseResult.data.escrow_address ?? null,
+        ],
+      );
+
+      // Return the updated order
+      const updatedOrder = await getOrderWithRelations(id);
+      return successResponse(updatedOrder);
+    }
+
     if (minimalStatus !== "accepted" && !allowOpenEscrow) {
       logger.warn(
         "[Escrow:Deposit] Rejected — invalid status for escrow lock",

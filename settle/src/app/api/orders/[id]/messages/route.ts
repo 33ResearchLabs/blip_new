@@ -103,15 +103,34 @@ export async function POST(
 
     const { sender_type, sender_id, content, message_type, image_url, file_url, file_name, file_size, mime_type } = parseResult.data;
 
-    // Check order exists
+    // Check order exists + authorize in one step (avoid duplicate getOrderById)
     const order = await getOrderById(id);
     if (!order) {
       return notFoundResponse('Order');
     }
 
-    // Authorization: verify authenticated actor can access this order
-    const canAccess = await canAccessOrder(auth, id);
-    if (!canAccess) {
+    // Inline access check using already-fetched order (skip canAccessOrder's redundant DB query)
+    const hasAccess = (() => {
+      if (auth.actorType === 'system') return true;
+      if (auth.actorType === 'compliance') {
+        if (order.status === 'disputed') return true;
+        if (auth.merchantId && (order.merchant_id === auth.merchantId || order.buyer_merchant_id === auth.merchantId)) return true;
+        return false;
+      }
+      if (auth.actorType === 'user') {
+        if (order.user_id === auth.actorId) return true;
+        if (auth.merchantId && (order.merchant_id === auth.merchantId || order.buyer_merchant_id === auth.merchantId)) return true;
+        return false;
+      }
+      if (auth.actorType === 'merchant') {
+        if (order.merchant_id === auth.actorId || order.buyer_merchant_id === auth.actorId) return true;
+        if (order.status === 'escrowed' && !order.buyer_merchant_id) return true;
+        return false;
+      }
+      return false;
+    })();
+
+    if (!hasAccess) {
       logger.auth.forbidden(`POST /api/orders/${id}/messages`, sender_id, 'Not order participant');
       return forbiddenResponse('You do not have access to this order');
     }
@@ -135,12 +154,12 @@ export async function POST(
       mime_type,
     });
 
-    // Mark order as having manual messages (transition from automated to direct chat)
+    // Mark order as having manual messages (fire-and-forget, don't block response)
     if (sender_type !== 'system' && message_type !== 'system') {
-      await markOrderHasManualMessage(id);
+      markOrderHasManualMessage(id).catch(() => {});
     }
 
-    // Trigger real-time notification
+    // Trigger real-time notification on order channel (fire-and-forget)
     notifyNewMessage({
       orderId: id,
       messageId: message.id,
@@ -156,57 +175,60 @@ export async function POST(
       createdAt: message.created_at.toISOString(),
     });
 
-    // Bridge: also insert into direct_messages so merchant sees it in DM view
-    if (sender_type !== 'system' && message_type !== 'system') {
-      try {
-        // Look up the counterparty from the order
-        const recipientType = sender_type === 'user' ? 'merchant' : 'user';
-        const recipientIdField = sender_type === 'user' ? 'merchant_id' : 'user_id';
-        const recipientRow = await query<{ [key: string]: string }>(
-          `SELECT user_id, merchant_id, buyer_merchant_id FROM orders WHERE id = $1`,
-          [id]
-        );
-        if (recipientRow.length > 0) {
-          const row = recipientRow[0] as { user_id: string; merchant_id: string; buyer_merchant_id: string | null };
-          const recipientId = sender_type === 'user'
-            ? row.merchant_id
-            : row.user_id;
+    // ── Post-send notifications (fire-and-forget, don't block response) ──
+    //
+    // ARCHITECTURE: All dispute communication uses chat_messages (order channel) as single source.
+    // No DM bridging needed — merchant/user open the ORDER CHAT for disputed orders.
+    //
+    // For non-compliance messages (user/merchant): bridge to direct_messages for DM view.
+    // For compliance messages: only send Pusher notifications to private channels (notification bell).
 
+    const postSendWork = async () => {
+      try {
+        if (sender_type === 'compliance') {
+          // Compliance: notify user + merchant via their private channels (notification bell only)
+          // The actual message is in chat_messages — they'll see it when they open order chat
+          const { getUserChannel, getMerchantChannel } = await import('@/lib/pusher/channels');
+          const { triggerEvent } = await import('@/lib/pusher/server');
+          const notifPayload = {
+            type: 'compliance_message', orderId: id,
+            content: content || '', senderName: 'Compliance Officer',
+            createdAt: message.created_at.toISOString(),
+          };
+          const channels = [getUserChannel(order.user_id), getMerchantChannel(order.merchant_id)];
+          if (order.buyer_merchant_id && order.buyer_merchant_id !== order.merchant_id) {
+            channels.push(getMerchantChannel(order.buyer_merchant_id));
+          }
+          Promise.allSettled(channels.map(ch => triggerEvent(ch, 'notification', notifPayload))).catch(() => {});
+        } else if (sender_type !== 'system' && message_type !== 'system') {
+          // User/merchant: bridge to direct_messages so counterparty sees it in DM view
+          const recipientType = sender_type === 'user' ? 'merchant' : 'user';
+          const recipientId = sender_type === 'user' ? order.merchant_id : order.user_id;
           if (recipientId && recipientId !== sender_id) {
             const dmRows = await query<{ id: string }>(
               `INSERT INTO direct_messages (sender_type, sender_id, recipient_type, recipient_id, content, message_type, image_url)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
-               RETURNING id`,
+               VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
               [sender_type, sender_id, recipientType, recipientId, content, message_type || 'text', image_url || null]
             );
-            // Create per-participant read status
             if (dmRows.length > 0) {
-              await query(
-                `INSERT INTO dm_read_status (message_id, actor_id, is_read, read_at) VALUES
-                   ($1, $2, true,  NOW()),
-                   ($1, $3, false, NULL)
-                 ON CONFLICT DO NOTHING`,
+              query(
+                `INSERT INTO dm_read_status (message_id, actor_id, is_read, read_at) VALUES ($1, $2, true, NOW()), ($1, $3, false, NULL) ON CONFLICT DO NOTHING`,
                 [dmRows[0].id, sender_id, recipientId]
-              );
+              ).catch(() => {});
             }
-            // Notify recipient via Pusher DM channel
             notifyNewDirectMessage({
-              messageId: message.id,
-              senderType: sender_type as 'merchant' | 'user',
-              senderId: sender_id,
-              recipientType: recipientType as 'merchant' | 'user',
-              recipientId,
-              content: content || '',
-              messageType: message_type || 'text',
-              imageUrl: image_url,
-              createdAt: message.created_at.toISOString(),
+              messageId: message.id, senderType: sender_type as 'merchant' | 'user',
+              senderId: sender_id, recipientType: recipientType as 'merchant' | 'user',
+              recipientId, content: content || '', messageType: message_type || 'text',
+              imageUrl: image_url, createdAt: message.created_at.toISOString(),
             }).catch(() => {});
           }
         }
-      } catch (bridgeErr) {
-        logger.warn('[Messages] Bridge to direct_messages failed', { orderId: id, error: bridgeErr });
+      } catch (err) {
+        logger.warn('[Messages] Post-send work failed', { orderId: id, error: err });
       }
-    }
+    };
+    postSendWork();
 
     logger.chat.messageSent(id, sender_type, sender_id);
     return successResponse(message, 201);

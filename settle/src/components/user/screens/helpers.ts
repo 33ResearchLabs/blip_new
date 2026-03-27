@@ -1,12 +1,24 @@
 import type { OrderStatus, OrderStep, TradeType, DbOrder, Order, Merchant } from './types';
 
 // Map DB status to UI status/step
-export function mapDbStatusToUI(dbStatus: string): { status: OrderStatus; step: OrderStep } {
+// For SELL orders, pass the order type and merchant_id to determine the correct step:
+//   - SELL + escrowed + no merchant_id → step 1 (waiting for merchant to claim)
+//   - SELL + escrowed + merchant_id    → step 2 (claimed, waiting for fiat payment)
+export function mapDbStatusToUI(
+  dbStatus: string,
+  orderType?: string,
+  merchantId?: string | null,
+): { status: OrderStatus; step: OrderStep } {
   switch (dbStatus) {
     case 'pending':
       return { status: 'pending', step: 1 };
     case 'escrowed':
-      // Escrowed = escrow is locked, trade is active — buyer should send payment
+      // SELL orders: escrowed + unclaimed = step 1 (waiting for merchant to mine)
+      // SELL orders: escrowed + claimed   = step 2 (merchant claimed, waiting for fiat)
+      // BUY orders: escrowed = step 2 (escrow locked, buyer sends payment)
+      if (orderType === 'sell' && !merchantId) {
+        return { status: 'pending', step: 1 };
+      }
       return { status: 'payment', step: 2 };
     case 'accepted':
     case 'escrow_pending':
@@ -36,7 +48,7 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
     return null;
   }
 
-  const { status, step } = mapDbStatusToUI(dbOrder.status);
+  const { status, step } = mapDbStatusToUI(dbOrder.status, dbOrder.type, dbOrder.merchant_id);
   const offer = dbOrder.offer;
   // Use merchant data if available, or create a minimal fallback to prevent order disappearing
   const merchant = dbOrder.merchant || {

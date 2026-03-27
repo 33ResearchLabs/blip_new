@@ -30,6 +30,7 @@ import { atomicCancelWithRefund } from '@/lib/orders/atomicCancel';
 import {
   handleOrderAction,
   resolveTradeRole,
+  resolveRoles,
   getAllowedActions,
   ORDER_ACTIONS,
   type OrderAction,
@@ -430,6 +431,35 @@ export async function POST(
       });
     }
 
+    // ── Capture buyer's wallet address on SEND_PAYMENT ──
+    // The buyer (who sends fiat) needs their wallet recorded so on-chain escrow
+    // release sends USDT to the correct wallet. If the frontend sent it in the
+    // request, update it. Otherwise, look up from merchants table.
+    if (action === 'SEND_PAYMENT') {
+      let buyerWallet = acceptor_wallet_address;
+      if (!buyerWallet) {
+        // Look up from merchants table
+        const { query: dbQuery } = await import('@/lib/db');
+        const walletResult = await dbQuery<{ wallet_address: string }>(
+          'SELECT wallet_address FROM merchants WHERE id = $1',
+          [actor_id]
+        );
+        buyerWallet = walletResult?.[0]?.wallet_address || null;
+      }
+      if (buyerWallet && buyerWallet !== order.acceptor_wallet_address) {
+        const { query: dbQuery } = await import('@/lib/db');
+        await dbQuery(
+          'UPDATE orders SET acceptor_wallet_address = $1 WHERE id = $2',
+          [buyerWallet, id]
+        );
+        logger.info('[Action] Updated acceptor_wallet_address for buyer on SEND_PAYMENT', {
+          orderId: id,
+          actorId: actor_id,
+          wallet: buyerWallet,
+        });
+      }
+    }
+
     // ── ACCEPT, SEND_PAYMENT, DISPUTE: standard status transitions via core-api ──
     const isFinancial = action === 'SEND_PAYMENT';
     const idempotencyKey = getIdempotencyKey(request);
@@ -548,12 +578,17 @@ export async function GET(
 
     const allowedActions = getAllowedActions(order, actorId);
     const role = resolveTradeRole(order, actorId);
+    const roles = resolveRoles(order);
     const uiFields = enrichOrderResponse(order, actorId);
 
     return successResponse({
       orderId: id,
       currentStatus: order.status,
       role,
+      roles: {
+        buyer_id: roles.buyer_id,
+        seller_id: roles.seller_id,
+      },
       allowedActions,
       ...uiFields,
     });

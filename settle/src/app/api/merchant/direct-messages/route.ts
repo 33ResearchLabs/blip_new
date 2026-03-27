@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
          WHERE ((merchant_id = $1 AND user_id = $2) OR (merchant_id = $2 AND user_id = $1)
                 OR (buyer_merchant_id = $1 AND user_id = $2) OR (buyer_merchant_id = $2 AND user_id = $1)
                 OR (merchant_id = $1 AND buyer_merchant_id = $2) OR (merchant_id = $2 AND buyer_merchant_id = $1))
-           AND status NOT IN ('completed', 'cancelled', 'expired', 'disputed')
+           AND status NOT IN ('completed', 'cancelled', 'expired')
          ORDER BY created_at DESC LIMIT 1`,
         [merchant_id, targetId]
       );

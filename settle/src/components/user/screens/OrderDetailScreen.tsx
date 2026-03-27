@@ -616,8 +616,8 @@ export const OrderDetailScreen = ({
                     {activeOrder.dbStatus === 'pending' ? 'Waiting for merchant...' : `Matched with ${activeOrder.merchant.name}`}
                   </p>
                 )}
-                {/* For sell orders waiting for merchant to accept */}
-                {activeOrder.step === 1 && activeOrder.type === "sell" && (activeOrder.dbStatus === 'pending' || activeOrder.dbStatus === 'escrowed') && (
+                {/* For sell orders waiting for merchant to mine/claim */}
+                {activeOrder.step === 1 && activeOrder.type === "sell" && activeOrder.dbStatus === 'escrowed' && (
                   <div className="mt-3 rounded-xl p-4" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)' }}>
                     <div className="flex items-center gap-3 mb-2">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.08)' }}>
@@ -625,18 +625,12 @@ export const OrderDetailScreen = ({
                       </div>
                       <div>
                         <p className="text-[14px] font-medium" style={{ color: 'rgba(0,0,0,0.7)' }}>Waiting for Merchant</p>
-                        <p className="text-[12px]" style={{ color: 'rgba(0,0,0,0.45)' }}>{activeOrder.dbStatus === 'escrowed' ? 'Your USDT is locked. Waiting for merchant to accept' : 'Merchant will sign with their wallet to accept'}</p>
+                        <p className="text-[12px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Your USDT is locked. Waiting for merchant to claim</p>
                       </div>
                     </div>
-                    {activeOrder.dbStatus === 'escrowed' ? (
-                      <p className="text-[12px]" style={{ color: 'rgba(0,0,0,0.4)' }}>
-                        Your USDT is secured in escrow on-chain. The merchant will accept and send fiat to your bank account.
-                      </p>
-                    ) : (
-                      <p className="text-[12px]" style={{ color: 'rgba(0,0,0,0.4)' }}>
-                        Once accepted, you&apos;ll lock your USDT to escrow. The merchant&apos;s verified wallet will receive funds when you confirm payment.
-                      </p>
-                    )}
+                    <p className="text-[12px]" style={{ color: 'rgba(0,0,0,0.4)' }}>
+                      Your USDT is secured in escrow on-chain. A merchant will claim this order and send fiat to your bank account.
+                    </p>
                   </div>
                 )}
               </div>

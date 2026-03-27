@@ -484,7 +484,18 @@ export async function createOrder(data: {
       hasEscrow: !!data.escrow_tx_hash,
     });
 
-    // Determine initial status: 'escrowed' if escrow details provided, otherwise 'pending'
+    // ── Enforce order type flow rules ─────────────────────────────────
+    // SELL orders MUST have escrow locked at creation (escrow-first model)
+    // BUY orders start as 'pending' and go through accept → escrow → payment
+    if (data.type === 'sell' && !data.escrow_tx_hash) {
+      throw new Error('SELL orders require escrow at creation. Provide escrow_tx_hash.');
+    }
+    if (data.type === 'buy' && data.escrow_tx_hash) {
+      // BUY orders should not have escrow at creation (escrow comes after acceptance)
+      logger.warn('[CreateOrder] BUY order created with escrow_tx_hash — this is unusual but allowed for backwards compatibility');
+    }
+
+    // Determine initial status: 'escrowed' for SELL, 'pending' for BUY
     const initialStatus = data.escrow_tx_hash ? 'escrowed' : 'pending';
     const expiresMinutes = data.escrow_tx_hash ? 120 : 15;
 
@@ -1339,59 +1350,102 @@ export async function claimOrder(
 ): Promise<StatusUpdateResult> {
   try {
     return await transaction(async (client) => {
-      // Atomic claim: SET buyer_merchant_id only if still NULL and status is escrowed
-      // Keep status as 'escrowed' — escrow is already locked.
-      // Only set buyer_merchant_id + accepted_at to record the claim.
-      // Merchant can then immediately SEND_PAYMENT from 'escrowed' status.
-      const claimResult = await client.query(
-        `UPDATE orders
-         SET buyer_merchant_id = $1,
-             accepted_at = NOW(),
-             acceptor_wallet_address = COALESCE($3, acceptor_wallet_address),
-             order_version = order_version + 1
-         WHERE id = $2
-           AND buyer_merchant_id IS NULL
-           AND status = 'escrowed'
-         RETURNING *`,
-        [claimingMerchantId, orderId, acceptorWalletAddress || null]
+      // First, fetch the order to determine if this is user↔merchant or M2M
+      const orderCheck = await client.query(
+        `SELECT id, status, type, user_id, merchant_id, buyer_merchant_id,
+                accepted_at
+         FROM orders WHERE id = $1 FOR UPDATE`,
+        [orderId]
       );
 
-      if (claimResult.rows.length === 0) {
-        // Either order doesn't exist, is not escrowed, or already claimed
-        const checkResult = await client.query(
-          'SELECT id, status, buyer_merchant_id FROM orders WHERE id = $1',
-          [orderId]
+      if (orderCheck.rows.length === 0) {
+        return { success: false, error: 'Order not found' };
+      }
+
+      const order = orderCheck.rows[0];
+      if (order.status !== 'escrowed') {
+        return { success: false, error: `Order is in '${order.status}' status, cannot claim` };
+      }
+
+      // Determine if already claimed
+      const isM2MOrder = !!order.buyer_merchant_id;
+
+      if (isM2MOrder || order.accepted_at) {
+        return { success: false, error: 'Order already claimed by another merchant' };
+      }
+
+      // For user↔merchant orders: claiming merchant becomes merchant_id (the buyer/counterparty)
+      // buyer_merchant_id is ONLY for M2M trades
+      // For M2M placeholder orders: claiming merchant becomes buyer_merchant_id
+      const userUsername = await client.query(
+        'SELECT username FROM users WHERE id = $1', [order.user_id]
+      );
+      const username = userUsername.rows[0]?.username || '';
+      const isPlaceholderUser = username.startsWith('open_order_') || username.startsWith('m2m_');
+
+      // Look up the claiming merchant's wallet as fallback if not provided in request
+      let walletToUse = acceptorWalletAddress || null;
+      if (!walletToUse) {
+        const merchantWallet = await client.query(
+          'SELECT wallet_address FROM merchants WHERE id = $1',
+          [claimingMerchantId]
         );
+        walletToUse = merchantWallet.rows[0]?.wallet_address || null;
+      }
 
-        if (checkResult.rows.length === 0) {
-          return { success: false, error: 'Order not found' };
-        }
+      let claimResult;
+      if (isPlaceholderUser) {
+        // M2M / merchant-created order: set buyer_merchant_id
+        // ALWAYS overwrite acceptor_wallet_address with buyer's wallet (not COALESCE)
+        // The creator may have set it during self-accept — buyer's wallet is what matters for release
+        claimResult = await client.query(
+          `UPDATE orders
+           SET buyer_merchant_id = $1,
+               accepted_at = NOW(),
+               acceptor_wallet_address = COALESCE($3, acceptor_wallet_address),
+               order_version = order_version + 1
+           WHERE id = $2
+             AND buyer_merchant_id IS NULL
+             AND status = 'escrowed'
+           RETURNING *`,
+          [claimingMerchantId, orderId, walletToUse]
+        );
+      } else {
+        // User↔merchant order: set merchant_id (the claiming merchant is the buyer/counterparty)
+        claimResult = await client.query(
+          `UPDATE orders
+           SET merchant_id = $1,
+               accepted_at = NOW(),
+               acceptor_wallet_address = COALESCE($3, acceptor_wallet_address),
+               order_version = order_version + 1
+           WHERE id = $2
+             AND accepted_at IS NULL
+             AND status = 'escrowed'
+           RETURNING *`,
+          [claimingMerchantId, orderId, walletToUse]
+        );
+      }
 
-        const order = checkResult.rows[0];
-        if (order.buyer_merchant_id) {
-          return { success: false, error: 'Order already claimed by another merchant' };
-        }
-        if (order.status !== 'escrowed') {
-          return { success: false, error: `Order is in '${order.status}' status, cannot claim` };
-        }
-
-        return { success: false, error: 'Unable to claim order' };
+      if (claimResult.rows.length === 0) {
+        return { success: false, error: 'Unable to claim order — may have been claimed already' };
       }
 
       const claimedOrder = claimResult.rows[0] as Order;
 
       // Record the claim event
+      const claimField = isPlaceholderUser ? 'buyer_merchant_id' : 'merchant_id';
       await client.query(
         `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
-         VALUES ($1, 'status_changed_to_accepted', 'merchant', $2, 'escrowed', 'accepted', $3)`,
-        [orderId, claimingMerchantId, JSON.stringify({ claim: true, buyer_merchant_id: claimingMerchantId })]
+         VALUES ($1, 'order_claimed', 'merchant', $2, 'escrowed', 'escrowed', $3)`,
+        [orderId, claimingMerchantId, JSON.stringify({ claim: true, [claimField]: claimingMerchantId })]
       );
 
       logger.info('[claimOrder] Order claimed successfully', {
         orderId,
         claimingMerchantId,
+        claimField,
+        isPlaceholderUser,
         previousStatus: 'escrowed',
-        newStatus: 'accepted',
       });
 
       // Invalidate cache
@@ -1422,57 +1476,88 @@ export async function claimAndPayOrder(
 ): Promise<StatusUpdateResult> {
   try {
     return await transaction(async (client) => {
-      // Atomic claim + payment: SET buyer_merchant_id and status to payment_sent
-      // only if still NULL and status is escrowed.
-      // Also backfill escrow_debited_entity_id if NULL (data gap from on-chain escrow).
-      // The DB constraint chk_escrow_required_for_payment_statuses requires it for payment_sent.
-      // Seller determination: depends on order type. For claim+pay, the merchant
-      // who created the escrowed order (merchant_id) is always the seller.
-      // This is a broadcast claim — only escrowed orders from merchants are claimable.
-      const claimResult = await client.query(
-        `UPDATE orders
-         SET buyer_merchant_id = $1,
-             status = 'payment_sent',
-             accepted_at = NOW(),
-             payment_sent_at = NOW(),
-             acceptor_wallet_address = COALESCE($3, acceptor_wallet_address),
-             escrow_debited_entity_id = COALESCE(escrow_debited_entity_id,
-               CASE
-                 WHEN type = 'sell' AND buyer_merchant_id IS NULL THEN user_id
-                 ELSE merchant_id
-               END),
-             escrow_debited_entity_type = COALESCE(escrow_debited_entity_type,
-               CASE WHEN type = 'sell' AND buyer_merchant_id IS NULL THEN 'user' ELSE 'merchant' END),
-             escrow_debited_amount = COALESCE(escrow_debited_amount, crypto_amount),
-             escrow_debited_at = COALESCE(escrow_debited_at, escrowed_at, created_at),
-             order_version = order_version + 1,
-             updated_at = NOW()
-         WHERE id = $2
-           AND buyer_merchant_id IS NULL
-           AND status = 'escrowed'
-         RETURNING *`,
-        [claimingMerchantId, orderId, acceptorWalletAddress || null]
+      // Atomic claim + payment: claim the order and set status to payment_sent in one step.
+      // First determine if this is a user↔merchant or M2M order.
+      const orderCheck = await client.query(
+        `SELECT o.id, o.status, o.type, o.user_id, o.merchant_id, o.buyer_merchant_id,
+                o.accepted_at, u.username
+         FROM orders o JOIN users u ON o.user_id = u.id
+         WHERE o.id = $1 FOR UPDATE`,
+        [orderId]
       );
 
-      if (claimResult.rows.length === 0) {
-        const checkResult = await client.query(
-          'SELECT id, status, buyer_merchant_id FROM orders WHERE id = $1',
-          [orderId]
+      if (orderCheck.rows.length === 0) {
+        return { success: false, error: 'Order not found' };
+      }
+
+      const order = orderCheck.rows[0];
+      if (order.status !== 'escrowed') {
+        return { success: false, error: `Order is in '${order.status}' status, cannot claim` };
+      }
+      if (order.buyer_merchant_id || order.accepted_at) {
+        return { success: false, error: 'Order already claimed by another merchant' };
+      }
+
+      const isPlaceholderUser = order.username?.startsWith('open_order_') || order.username?.startsWith('m2m_');
+
+      // Look up the claiming merchant's wallet as fallback if not provided
+      let walletToUse = acceptorWalletAddress || null;
+      if (!walletToUse) {
+        const merchantWallet = await client.query(
+          'SELECT wallet_address FROM merchants WHERE id = $1',
+          [claimingMerchantId]
         );
+        walletToUse = merchantWallet.rows[0]?.wallet_address || null;
+      }
 
-        if (checkResult.rows.length === 0) {
-          return { success: false, error: 'Order not found' };
-        }
+      // For user↔merchant: set merchant_id (buyer_merchant_id is M2M only)
+      // For M2M/placeholder: set buyer_merchant_id
+      let claimResult;
+      if (isPlaceholderUser) {
+        claimResult = await client.query(
+          `UPDATE orders
+           SET buyer_merchant_id = $1,
+               status = 'payment_sent',
+               accepted_at = NOW(),
+               payment_sent_at = NOW(),
+               acceptor_wallet_address = COALESCE($3, acceptor_wallet_address),
+               escrow_debited_entity_id = COALESCE(escrow_debited_entity_id, merchant_id),
+               escrow_debited_entity_type = COALESCE(escrow_debited_entity_type, 'merchant'),
+               escrow_debited_amount = COALESCE(escrow_debited_amount, crypto_amount),
+               escrow_debited_at = COALESCE(escrow_debited_at, escrowed_at, created_at),
+               order_version = order_version + 1,
+               updated_at = NOW()
+           WHERE id = $2
+             AND buyer_merchant_id IS NULL
+             AND status = 'escrowed'
+           RETURNING *`,
+          [claimingMerchantId, orderId, walletToUse]
+        );
+      } else {
+        // User↔merchant: claiming merchant becomes merchant_id (the counterparty/buyer)
+        claimResult = await client.query(
+          `UPDATE orders
+           SET merchant_id = $1,
+               status = 'payment_sent',
+               accepted_at = NOW(),
+               payment_sent_at = NOW(),
+               acceptor_wallet_address = COALESCE($3, acceptor_wallet_address),
+               escrow_debited_entity_id = COALESCE(escrow_debited_entity_id, user_id),
+               escrow_debited_entity_type = COALESCE(escrow_debited_entity_type, 'user'),
+               escrow_debited_amount = COALESCE(escrow_debited_amount, crypto_amount),
+               escrow_debited_at = COALESCE(escrow_debited_at, escrowed_at, created_at),
+               order_version = order_version + 1,
+               updated_at = NOW()
+           WHERE id = $2
+             AND accepted_at IS NULL
+             AND status = 'escrowed'
+           RETURNING *`,
+          [claimingMerchantId, orderId, walletToUse]
+        );
+      }
 
-        const order = checkResult.rows[0];
-        if (order.buyer_merchant_id) {
-          return { success: false, error: 'Order already claimed by another merchant' };
-        }
-        if (order.status !== 'escrowed') {
-          return { success: false, error: `Order is in '${order.status}' status, cannot claim` };
-        }
-
-        return { success: false, error: 'Unable to claim and pay order' };
+      if (claimResult.rows.length === 0) {
+        return { success: false, error: 'Unable to claim and pay order — may have been claimed already' };
       }
 
       const claimedOrder = claimResult.rows[0] as Order;

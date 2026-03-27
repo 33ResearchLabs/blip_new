@@ -262,9 +262,18 @@ export async function POST(request: NextRequest) {
       throw reserveErr;
     }
 
-    // For sell orders, the user is the seller and may have already locked escrow on-chain.
-    // Forward escrow fields so core-api can set status to 'escrowed' directly.
-    const escrowFields = type === 'sell' && escrow_tx_hash ? {
+    // ── SELL ORDER ENFORCEMENT: escrow-first model ────────────────────
+    // SELL orders MUST lock escrow at creation. The user is the seller.
+    // Without escrow, the order cannot be created — this prevents SELL orders
+    // from entering 'pending' or 'accepted' status.
+    if (type === 'sell' && !escrow_tx_hash) {
+      return validationErrorResponse([
+        'SELL orders require escrow to be locked at creation. Provide escrow_tx_hash and related fields.',
+      ]);
+    }
+
+    // For sell orders, forward escrow fields so core-api sets status to 'escrowed' directly.
+    const escrowFields = type === 'sell' ? {
       escrow_tx_hash,
       escrow_trade_id,
       escrow_trade_pda,

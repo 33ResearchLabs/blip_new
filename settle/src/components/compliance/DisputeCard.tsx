@@ -8,6 +8,7 @@ import {
   Search,
 } from "lucide-react";
 import type { DisputeOrder } from "@/hooks/useDisputeManagement";
+import OrderLifecycle from "./OrderLifecycle";
 
 // Helper to get emoji from name
 const getEmoji = (name: string | null | undefined): string => {
@@ -34,6 +35,100 @@ const formatTimeAgo = (dateString: string): string => {
   if (diffHours < 24) return `${diffHours}h ago`;
   return `${diffDays}d ago`;
 };
+
+// ── Parties Display with Role Labels ────────────────────────────────
+function PartiesDisplay({ dispute }: { dispute: DisputeOrder }) {
+  const isM2M = !!(dispute as any).buyerMerchant;
+
+  // Determine buyer and seller based on order type and M2M status
+  let buyer: { name: string; trades: number; label: string; color: string; bg: string };
+  let seller: { name: string; trades: number; label: string; color: string; bg: string };
+
+  if (isM2M) {
+    // M2M: buyer_merchant_id = buyer, merchant_id = seller
+    const bm = (dispute as any).buyerMerchant;
+    buyer = {
+      name: bm.name,
+      trades: bm.trades,
+      label: "Buyer Merchant",
+      color: "text-emerald-400",
+      bg: "bg-emerald-500/10",
+    };
+    seller = {
+      name: dispute.merchant.name,
+      trades: dispute.merchant.trades,
+      label: "Seller Merchant",
+      color: "text-orange-400",
+      bg: "bg-orange-500/10",
+    };
+  } else if (dispute.type === "buy") {
+    // BUY: user = buyer, merchant = seller
+    buyer = {
+      name: dispute.user.name,
+      trades: dispute.user.trades,
+      label: "Buyer",
+      color: "text-emerald-400",
+      bg: "bg-emerald-500/10",
+    };
+    seller = {
+      name: dispute.merchant.name,
+      trades: dispute.merchant.trades,
+      label: "Seller",
+      color: "text-orange-400",
+      bg: "bg-orange-500/10",
+    };
+  } else {
+    // SELL: user = seller, merchant = buyer
+    seller = {
+      name: dispute.user.name,
+      trades: dispute.user.trades,
+      label: "Seller",
+      color: "text-orange-400",
+      bg: "bg-orange-500/10",
+    };
+    buyer = {
+      name: dispute.merchant.name,
+      trades: dispute.merchant.trades,
+      label: "Buyer",
+      color: "text-emerald-400",
+      bg: "bg-emerald-500/10",
+    };
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center gap-3">
+      <div className="flex items-center gap-1.5 flex-1">
+        <div className={`w-6 h-6 rounded-full ${seller.bg} flex items-center justify-center text-xs`}>
+          {getEmoji(seller.name)}
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1">
+            <p className="text-[10px] font-medium truncate">{seller.name}</p>
+            <span className={`text-[8px] px-1 py-px rounded ${seller.color} bg-white/[0.04] font-semibold`}>
+              {seller.label}
+            </span>
+          </div>
+          <p className="text-[9px] text-gray-500">{seller.trades} trades · Locks crypto</p>
+        </div>
+      </div>
+      <span className="text-[10px] text-gray-600">vs</span>
+      <div className="flex items-center gap-1.5 flex-1 justify-end">
+        <div className="min-w-0 text-right">
+          <div className="flex items-center gap-1 justify-end">
+            <span className={`text-[8px] px-1 py-px rounded ${buyer.color} bg-white/[0.04] font-semibold`}>
+              {buyer.label}
+            </span>
+            <p className="text-[10px] font-medium truncate">{buyer.name}</p>
+          </div>
+          <p className="text-[9px] text-gray-500">Sends fiat · {buyer.trades} trades</p>
+        </div>
+        <div className={`w-6 h-6 rounded-full ${buyer.bg} flex items-center justify-center text-xs`}>
+          {getEmoji(buyer.name)}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface DisputeReasonInfo {
   icon: string;
@@ -99,28 +194,13 @@ export default function DisputeCard({
           </div>
         </div>
 
-        {/* Parties */}
-        <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center gap-3">
-          <div className="flex items-center gap-1.5 flex-1">
-            <div className="w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center text-xs">
-              {getEmoji(dispute.user.name)}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-medium truncate">{dispute.user.name}</p>
-              <p className="text-[9px] text-gray-500">{dispute.user.trades} trades</p>
-            </div>
-          </div>
-          <span className="text-[10px] text-gray-600">vs</span>
-          <div className="flex items-center gap-1.5 flex-1 justify-end">
-            <div className="min-w-0 text-right">
-              <p className="text-[10px] font-medium truncate">{dispute.merchant.name}</p>
-              <p className="text-[9px] text-gray-500">{dispute.merchant.trades} trades</p>
-            </div>
-            <div className="w-6 h-6 rounded-full bg-purple-500/10 flex items-center justify-center text-xs">
-              {getEmoji(dispute.merchant.name)}
-            </div>
-          </div>
-        </div>
+        {/* Parties with Roles */}
+        <PartiesDisplay dispute={dispute} />
+
+        {/* Lifecycle Timeline */}
+        {(dispute as any).lifecycle && (
+          <OrderLifecycle events={(dispute as any).lifecycle} />
+        )}
 
         {/* Actions */}
         <div className="mt-3 flex items-center gap-2">
@@ -177,22 +257,13 @@ export default function DisputeCard({
         </div>
       </div>
 
-      {/* Parties Mini */}
-      <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center gap-2">
-        <div className="flex items-center gap-1">
-          <div className="w-5 h-5 rounded-full bg-blue-500/10 flex items-center justify-center text-[10px]">
-            {getEmoji(dispute.user.name)}
-          </div>
-          <span className="text-[10px] text-gray-400">{dispute.user.name}</span>
-        </div>
-        <span className="text-[10px] text-gray-600">vs</span>
-        <div className="flex items-center gap-1">
-          <div className="w-5 h-5 rounded-full bg-purple-500/10 flex items-center justify-center text-[10px]">
-            {getEmoji(dispute.merchant.name)}
-          </div>
-          <span className="text-[10px] text-gray-400">{dispute.merchant.name}</span>
-        </div>
-      </div>
+      {/* Parties with Roles */}
+      <PartiesDisplay dispute={dispute} />
+
+      {/* Lifecycle Timeline */}
+      {(dispute as any).lifecycle && (
+        <OrderLifecycle events={(dispute as any).lifecycle} />
+      )}
 
       {/* Actions */}
       <div className="mt-3 flex items-center gap-2">

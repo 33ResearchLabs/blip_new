@@ -125,5 +125,16 @@ export function useMerchantRealtimeEvents({
     onPriceUpdate: (data) => {
       window.dispatchEvent(new CustomEvent("corridor-price-update", { detail: data }));
     },
+    onNotification: (data) => {
+      if (data.type === 'compliance_message') {
+        addNotification('dispute', `📋 ${data.senderName}: ${data.content}`, data.orderId);
+        playSound('notification');
+        debouncedFetchOrders();
+        // Dispatch event so page.tsx can open the order chat directly
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('open-order-chat', { detail: { orderId: data.orderId } }));
+        }
+      }
+    },
   });
 }

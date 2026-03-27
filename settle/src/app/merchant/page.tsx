@@ -281,6 +281,16 @@ export default function MerchantDashboard() {
     }
   }, [openEscrowModal, markFiatPaymentSent, signToClaimOrder, confirmPayment, setSelectedOrderPopup]);
 
+  // Listen for compliance message notifications → auto-open order details
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const orderId = (e as CustomEvent).detail?.orderId;
+      if (orderId) setSelectedOrderId(orderId);
+    };
+    window.addEventListener('open-order-chat', handler);
+    return () => window.removeEventListener('open-order-chat', handler);
+  }, []);
+
   // Fetch dispute info when viewing a chat for a disputed order
   useEffect(() => {
     const activeChat = chatWindows.find(c => c.id === activeChatId || c.orderId === activeChatId);
@@ -612,11 +622,20 @@ export default function MerchantDashboard() {
       {selectedOrderId && merchantId && (
         <OrderDetailsPanel orderId={selectedOrderId} merchantId={merchantId} onClose={() => setSelectedOrderId(null)}
           onOpenChat={(orderId, targetId, targetType, targetName) => {
+            // For disputed orders: open ORDER CHAT (chat_messages via useWebSocketChat)
+            // so merchant can see compliance messages + reply in the same thread
+            const order = orders.find(o => o.id === orderId);
+            if (order && (order.status === 'disputed' || order.dbOrder?.status === 'disputed')) {
+              openChat(order.user || targetName || 'Dispute Chat', '📋', orderId);
+              setActiveChatId(orderId);
+              setSelectedOrderId(null);
+              return;
+            }
+            // For non-disputed orders: open DM view as before
             if (targetId && targetType && targetName) {
               directChat.addContact(targetId, targetType);
               directChat.openChat(targetId, targetType, targetName);
             } else {
-              const order = orders.find(o => o.id === orderId);
               if (order) handleOpenChat(order);
             }
             setSelectedOrderId(null);
