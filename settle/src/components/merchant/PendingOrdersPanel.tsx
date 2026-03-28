@@ -264,7 +264,7 @@ const OrderList = memo(function OrderList({
                       >
                         {acceptingOrderId === mOrder.id ? (
                           <><Loader2 className="w-3 h-3 animate-spin" /> Accepting...</>
-                        ) : (order.orderType === 'sell' || order.dbOrder?.type === 'sell') ? 'MINE' : 'ACCEPT'}
+                        ) : order.dbOrder?.primaryAction?.label || (order.escrowTxHash ? 'MINE' : 'ACCEPT')}
                       </button>
                     )}
                   </div>
@@ -478,7 +478,7 @@ const OrderList = memo(function OrderList({
                     >
                       {acceptingOrderId === order.id ? (
                         <><Loader2 className="w-3 h-3 animate-spin" /> Accepting...</>
-                      ) : isMineable ? "MINE" : "ACCEPT"}
+                      ) : order.dbOrder?.primaryAction?.label || (isMineable ? "MINE" : "ACCEPT")}
                     </button>
                   )}
                 </div>

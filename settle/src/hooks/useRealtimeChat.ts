@@ -525,7 +525,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
     async (chatId: string, text: string, imageUrl?: string, fileData?: { fileUrl: string; fileName: string; fileSize: number; mimeType: string }) => {
       if (!text.trim() && !imageUrl && !fileData) return;
 
-      const window = chatWindows.find((w) => w.id === chatId);
+      const window = chatWindowsRef.current.find((w) => w.id === chatId);
       if (!window?.orderId || !actorId) {
         console.error('Cannot send message: missing orderId or actorId');
         return;
@@ -605,12 +605,12 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         console.log('Send message error - demo mode, keeping local message');
       }
     },
-    [chatWindows, actorType, actorId]
+    [actorType, actorId]
   );
 
   const markAsRead = useCallback(
     async (chatId: string) => {
-      const window = chatWindows.find((w) => w.id === chatId);
+      const window = chatWindowsRef.current.find((w) => w.id === chatId);
       if (!window?.orderId) return;
 
       setChatWindows((prev) =>
@@ -629,14 +629,55 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         console.error('Error marking messages as read:', error);
       }
     },
-    [chatWindows, actorType]
+    [actorType]
   );
 
-  // Send typing indicator
+  // Throttled typing indicator — only send start once per session, stop after 2s idle
+  const isTypingSentRef = useRef<Map<string, boolean>>(new Map());
+  const typingIdleTimerRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
   const sendTypingIndicator = useCallback(
     async (chatId: string, isTyping: boolean) => {
-      const window = chatWindows.find((w) => w.id === chatId);
+      const window = chatWindowsRef.current.find((w) => w.id === chatId);
       if (!window?.orderId) return;
+
+      const orderId = window.orderId;
+
+      if (isTyping) {
+        // Only send typing:start once per session
+        if (isTypingSentRef.current.get(orderId)) {
+          // Reset idle timer
+          const existing = typingIdleTimerRef.current.get(orderId);
+          if (existing) clearTimeout(existing);
+          typingIdleTimerRef.current.set(orderId, setTimeout(() => {
+            isTypingSentRef.current.delete(orderId);
+            fetchWithAuth(`/api/orders/${orderId}/typing`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ actor_type: actorType, is_typing: false }),
+            }).catch(() => {});
+          }, 2000));
+          return;
+        }
+
+        isTypingSentRef.current.set(orderId, true);
+
+        // Schedule auto-stop after 2s idle
+        typingIdleTimerRef.current.set(orderId, setTimeout(() => {
+          isTypingSentRef.current.delete(orderId);
+          fetchWithAuth(`/api/orders/${orderId}/typing`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ actor_type: actorType, is_typing: false }),
+          }).catch(() => {});
+        }, 2000));
+      } else {
+        // Explicit stop — clear state
+        isTypingSentRef.current.delete(orderId);
+        const existing = typingIdleTimerRef.current.get(orderId);
+        if (existing) clearTimeout(existing);
+        typingIdleTimerRef.current.delete(orderId);
+      }
 
       try {
         await fetchWithAuth(`/api/orders/${window.orderId}/typing`, {
@@ -651,7 +692,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         // Typing indicators are best-effort
       }
     },
-    [chatWindows, actorType]
+    [actorType]
   );
 
   return {

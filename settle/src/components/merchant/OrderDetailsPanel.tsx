@@ -1092,9 +1092,11 @@ export function OrderDetailsPanel({
 
           {/* Action Buttons - uses deriveOrderUI for consistent status/actions */}
           {(() => {
-            // Don't render action buttons until merchantId is available
-            // (avoids showing wrong buttons during initial load)
+            // Don't render action buttons until ALL required data is available
+            // This prevents button flicker during initial load / hydration
             if (!merchantId) return null;
+            if (!order.dbOrder) return null;
+            if (order.myRole === undefined && order.dbOrder?.my_role === undefined) return null;
 
             const ui = deriveOrderUI(order, merchantId);
 

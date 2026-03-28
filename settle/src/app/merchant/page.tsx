@@ -191,7 +191,7 @@ export default function MerchantDashboard() {
 
   const { debouncedFetchConversations, fetchOrderConversationsRef } = useMerchantEffects({
     isMockMode, solanaWallet, merchantInfo, isLoggedIn, orders,
-    fetchOrders, debouncedFetchOrders, refreshBalance, playSound, addNotification,
+    fetchOrders, debouncedFetchOrders, refetchSingleOrder, refreshBalance, playSound, addNotification,
     chatWindows: [], activeChatId, messagesEndRef, fetchOrderConversations, autoRefundEscrow,
   });
 
@@ -308,7 +308,7 @@ export default function MerchantDashboard() {
   });
 
   useMerchantRealtimeEvents({
-    debouncedFetchOrders, debouncedFetchConversations, refreshBalance,
+    debouncedFetchOrders, refetchSingleOrder, debouncedFetchConversations, refreshBalance,
     addNotification, playSound, toast, setExtensionRequests,
   });
 

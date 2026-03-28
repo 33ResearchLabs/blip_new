@@ -56,6 +56,9 @@ export function useOrderFetching({
   const fetchPendingRef = useRef(false);
   const fetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ─── Mempool visibility ───
+  const [isMempoolVisible, setIsMempoolVisible] = useState(false);
+
   // ─── Polling refs ───
   const prevPusherConnected = useRef(isPusherConnected);
   const lastSyncRef = useRef<number>(Date.now());
@@ -78,7 +81,7 @@ export function useOrderFetching({
     fetchAbortRef.current = controller;
 
     try {
-      const res = await fetchWithAuth(`/api/merchant/orders?merchant_id=${merchantId}&include_all_pending=true&_t=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
+      const res = await fetchWithAuth(`/api/merchant/orders?merchant_id=${merchantId}&include_all_pending=true`, { cache: 'no-store', signal: controller.signal });
       if (!res.ok) {
         const errorBody = await res.json().catch(() => null);
         console.error('[Merchant] Failed to fetch orders:', res.status, res.statusText, errorBody);
@@ -287,7 +290,7 @@ export function useOrderFetching({
   const refetchSingleOrder = useCallback(async (orderId: string) => {
     if (!merchantId) return;
     try {
-      const res = await fetchWithAuth(`/api/orders/${orderId}?merchant_id=${merchantId}&_t=${Date.now()}`, {
+      const res = await fetchWithAuth(`/api/orders/${orderId}?merchant_id=${merchantId}`, {
         cache: 'no-store'
       });
       if (!res.ok) {
@@ -316,6 +319,7 @@ export function useOrderFetching({
   }, [merchantId]);
 
   // ─── Post-mutation reconcile (optimistic + authoritative refetch) ───
+  // WS/Pusher already syncs the full order list — only refetch the mutated order + balance
   const afterMutationReconcile = useCallback(async (
     orderId: string,
     optimisticUpdate?: Partial<Order>,
@@ -325,14 +329,10 @@ export function useOrderFetching({
         o.id === orderId ? { ...o, ...optimisticUpdate } : o
       ));
     }
-    // Parallel: refetch single order (delayed for DB consistency), full list, and balance
-    // Use 800ms delay to give core-api time to commit (300ms was causing stale reads)
-    await Promise.all([
-      new Promise<void>(resolve => setTimeout(() => { refetchSingleOrder(orderId); resolve(); }, 800)),
-      fetchOrders(),
-    ]);
+    // Delayed single-order refetch for DB consistency (800ms to avoid stale reads)
+    await new Promise<void>(resolve => setTimeout(() => { refetchSingleOrder(orderId); resolve(); }, 800));
     refreshBalance();
-  }, [refetchSingleOrder, fetchOrders, refreshBalance]);
+  }, [refetchSingleOrder, refreshBalance]);
 
   const dismissBigOrder = useCallback((id: string) => {
     setBigOrders(prev => prev.filter(o => o.id !== id));
@@ -342,17 +342,25 @@ export function useOrderFetching({
   // SINGLE POLLING ORCHESTRATOR (replaces 5 separate intervals)
   // ═══════════════════════════════════════════════════════════════════
 
-  // Initial fetch on login
+  // Initial fetch on login — stagger non-critical requests to reduce burst
   useEffect(() => {
     if (!merchantId) return;
+
+    // Immediate: critical data
     fetchOrders();
-    fetchMempoolOrders();
-    fetchResolvedDisputes();
-    fetchBigOrders();
     fetchActiveOffers();
-    fetchLeaderboard();
     if (isMockMode) fetchInAppBalance();
-  }, [merchantId, fetchOrders, fetchMempoolOrders, fetchResolvedDisputes, fetchBigOrders, fetchActiveOffers, fetchLeaderboard, isMockMode, fetchInAppBalance]);
+
+    // Delayed (2s): non-critical data
+    const timer = setTimeout(() => {
+      fetchLeaderboard();
+      if (isMempoolVisible) fetchMempoolOrders();
+      fetchResolvedDisputes();
+      fetchBigOrders();
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [merchantId, fetchOrders, fetchMempoolOrders, fetchResolvedDisputes, fetchBigOrders, fetchActiveOffers, fetchLeaderboard, isMockMode, isMempoolVisible, fetchInAppBalance]);
 
   // Unified poll: skip order polling when Pusher handles it, keep mempool/expiry
   useEffect(() => {
@@ -360,14 +368,13 @@ export function useOrderFetching({
     let tickCount = 0;
 
     if (isPusherConnected) {
-      // Pusher handles order updates — only poll mempool + periodic expiry/balance
+      // Pusher handles order updates — only poll mempool (when visible) + periodic balance
       const tick = () => {
         tickCount++;
-        fetchMempoolOrders();
+        if (isMempoolVisible) fetchMempoolOrders();
         lastSyncRef.current = Date.now();
-        // Every 3rd tick (~90s): expire + balance
+        // Every 3rd tick (~90s): balance
         if (tickCount % 3 === 0) {
-          fetchWithAuth('/api/orders/expire', { method: 'POST' }).catch(() => {});
           if (isMockMode) fetchInAppBalance();
         }
       };
@@ -378,17 +385,16 @@ export function useOrderFetching({
       const tick = () => {
         tickCount++;
         debouncedFetchOrders();
-        fetchMempoolOrders();
+        if (isMempoolVisible) fetchMempoolOrders();
         lastSyncRef.current = Date.now();
         if (tickCount % 3 === 0) {
-          fetchWithAuth('/api/orders/expire', { method: 'POST' }).catch(() => {});
           if (isMockMode) fetchInAppBalance();
         }
       };
       const interval = setInterval(tick, 5000);
       return () => clearInterval(interval);
     }
-  }, [merchantId, isPusherConnected, debouncedFetchOrders, fetchMempoolOrders, isMockMode, fetchInAppBalance]);
+  }, [merchantId, isPusherConnected, isMempoolVisible, debouncedFetchOrders, fetchMempoolOrders, isMockMode, fetchInAppBalance]);
 
   // Pusher reconnect — single sync
   useEffect(() => {
@@ -438,6 +444,10 @@ export function useOrderFetching({
     mempoolOrders,
     resolvedDisputes,
     effectiveBalance,
+
+    // Mempool visibility
+    isMempoolVisible,
+    setIsMempoolVisible,
 
     // State setters (for external mutation by realtime/other hooks)
     setActiveOffers,

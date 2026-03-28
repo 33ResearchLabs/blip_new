@@ -1127,10 +1127,24 @@ export const OrderDetailScreen = ({
               </div>
               <div className="flex-1">
                 <p className="text-[15px] font-medium" style={{ color: activeOrder.step >= 3 ? '#000' : 'rgba(0,0,0,0.3)' }}>
-                  {activeOrder.type === "buy" ? "Confirming payment" : "Confirm received"}
+                  {activeOrder.dbStatus === 'disputed' ? "Dispute" : activeOrder.type === "buy" ? "Confirming payment" : "Confirm received"}
                 </p>
 
-                {activeOrder.step === 3 && activeOrder.type === "buy" && (
+                {activeOrder.step === 3 && activeOrder.type === "buy" && activeOrder.dbStatus === 'disputed' && (
+                  <div className="mt-2">
+                    <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>This order is under dispute. Our team is reviewing the case.</p>
+                    <button
+                      onClick={handleOpenChat}
+                      className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2"
+                      style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.7)' }}
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      Message Seller
+                    </button>
+                  </div>
+                )}
+
+                {activeOrder.step === 3 && activeOrder.type === "buy" && activeOrder.dbStatus !== 'disputed' && (
                   <div className="mt-2">
                     <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Seller is verifying your payment...</p>
                     <div className="mt-2 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.08)' }}>
@@ -1152,7 +1166,21 @@ export const OrderDetailScreen = ({
                   </div>
                 )}
 
-                {activeOrder.step === 3 && activeOrder.type === "sell" && (
+                {activeOrder.step === 3 && activeOrder.type === "sell" && activeOrder.dbStatus === 'disputed' && (
+                  <div className="mt-2">
+                    <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>This order is under dispute. Our team is reviewing the case.</p>
+                    <button
+                      onClick={handleOpenChat}
+                      className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2"
+                      style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.7)' }}
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      Message Merchant
+                    </button>
+                  </div>
+                )}
+
+                {activeOrder.step === 3 && activeOrder.type === "sell" && activeOrder.dbStatus !== 'disputed' && (
                   <div className="mt-3">
                     <div className="rounded-xl p-3 mb-3" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)' }}>
                       <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.7)' }}>

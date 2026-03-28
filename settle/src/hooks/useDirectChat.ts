@@ -62,6 +62,9 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
   const activeContactIdRef = useRef(activeContactId);
   activeContactIdRef.current = activeContactId;
 
+  // Stable ref for fetchConversations — keeps polling interval independent of deps
+  const fetchConversationsRef = useRef<() => Promise<void>>(async () => {});
+
   // Fetch conversation list
   const fetchConversations = useCallback(async () => {
     const mid = merchantIdRef.current;
@@ -78,6 +81,12 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
       console.error('[useDirectChat] Error fetching conversations:', error);
     }
   }, []);
+
+  // Keep ref in sync
+  fetchConversationsRef.current = fetchConversations;
+
+  // Stable ref for fetchMessages — keeps message polling interval independent of deps
+  const fetchMessagesRef = useRef<(targetId: string) => Promise<void>>(async () => {});
 
   // Fetch messages for active contact
   const fetchMessages = useCallback(async (targetId: string) => {
@@ -114,17 +123,26 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
     }
   }, []);
 
-  // Initial load + conversation polling (15s)
+  // Keep ref in sync
+  fetchMessagesRef.current = fetchMessages;
+
+  // Initial fetch on mount (one-time)
   useEffect(() => {
     if (!merchantId) return;
     setIsLoadingConversations(true);
-    fetchConversations().finally(() => setIsLoadingConversations(false));
+    fetchConversationsRef.current().finally(() => setIsLoadingConversations(false));
+  }, [merchantId]);
 
-    pollConvRef.current = setInterval(fetchConversations, 15000);
+  // Stable polling interval (no deps that would cause restart)
+  useEffect(() => {
+    if (!merchantId) return;
+    pollConvRef.current = setInterval(() => {
+      fetchConversationsRef.current();
+    }, 15000);
     return () => {
       if (pollConvRef.current) clearInterval(pollConvRef.current);
     };
-  }, [merchantId, fetchConversations]);
+  }, [merchantId]);
 
   // Real-time: subscribe to merchant's private Pusher channel for incoming DMs
   useEffect(() => {
@@ -175,26 +193,27 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
     };
   }, [pusher, merchantId, fetchConversations]);
 
-  // Message polling (5s) when chat is open
+  // Message polling (5s) when chat is open — uses ref to avoid interval restarts
   useEffect(() => {
     if (!activeContactId) {
       if (pollMsgRef.current) clearInterval(pollMsgRef.current);
       return;
     }
 
-    // Initial fetch
+    // Initial fetch (one-time on contact change)
     setIsLoadingMessages(true);
-    fetchMessages(activeContactId).finally(() => setIsLoadingMessages(false));
+    fetchMessagesRef.current(activeContactId).finally(() => setIsLoadingMessages(false));
 
-    // Poll every 5s
+    // Stable interval — does not depend on fetchMessages identity
+    const contactId = activeContactId;
     pollMsgRef.current = setInterval(() => {
-      fetchMessages(activeContactId);
+      fetchMessagesRef.current(contactId);
     }, 5000);
 
     return () => {
       if (pollMsgRef.current) clearInterval(pollMsgRef.current);
     };
-  }, [activeContactId, fetchMessages]);
+  }, [activeContactId]);
 
   const openChat = useCallback((targetId: string, targetType: 'user' | 'merchant', name: string) => {
     setActiveContactId(targetId);

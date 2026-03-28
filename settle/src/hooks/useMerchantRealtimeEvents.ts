@@ -6,6 +6,7 @@ import type { Order, Notification } from "@/types/merchant";
 
 interface UseMerchantRealtimeEventsParams {
   debouncedFetchOrders: () => void;
+  refetchSingleOrder: (orderId: string) => Promise<void>;
   debouncedFetchConversations: () => void;
   refreshBalance: () => void;
   addNotification: (type: Notification['type'], message: string, orderId?: string) => void;
@@ -16,6 +17,7 @@ interface UseMerchantRealtimeEventsParams {
 
 export function useMerchantRealtimeEvents({
   debouncedFetchOrders,
+  refetchSingleOrder,
   debouncedFetchConversations,
   refreshBalance,
   addNotification,
@@ -47,7 +49,8 @@ export function useMerchantRealtimeEvents({
       if (newStatus === 'accepted' && extra?.buyerMerchantId) {
         setOrders((prev: Order[]) => prev.map(o => o.id === orderId ? { ...o, buyerMerchantId: extra.buyerMerchantId, minimalStatus: 'accepted' } : o));
       }
-      debouncedFetchOrders();
+      // Refetch only the affected order — Pusher batched events already handle list state
+      refetchSingleOrder(orderId);
       debouncedFetchConversations();
       const matchedOrder = orders.find(o => o.id === orderId);
       const isRelevantOrder = () => matchedOrder && (matchedOrder.orderMerchantId === merchantId || matchedOrder.buyerMerchantId === merchantId);

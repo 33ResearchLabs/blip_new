@@ -66,7 +66,8 @@ const InProgressOrderList = memo(function InProgressOrderList({
       <div style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const order = orders[virtualRow.index];
-          const nextAction = getNextAction(order);
+          // Prefer backend-provided action label over frontend computation
+          const nextAction = order.dbOrder?.primaryAction?.label || getNextAction(order);
           const isWaiting = WAITING_ACTIONS.includes(nextAction);
 
           return (

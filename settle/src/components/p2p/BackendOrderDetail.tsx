@@ -367,7 +367,8 @@ export function BackendOrderDetail({
       </div>
 
       {/* Action buttons - pinned to bottom */}
-      {!order.isTerminal && (
+      {/* Guard: only render when primaryAction is fully available from backend */}
+      {!order.isTerminal && order.primaryAction && (
         <div className="p-4 border-t border-zinc-800">
           <OrderActionButtons
             orderId={order.id}

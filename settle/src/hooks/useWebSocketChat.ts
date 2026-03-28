@@ -124,6 +124,10 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   const subscribedOrdersRef = useRef<Set<string>>(new Set());
   const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
+  // Stable ref for chatWindows — removes it from callback deps
+  const chatWindowsRef = useRef(chatWindows);
+  chatWindowsRef.current = chatWindows;
+
   // Use ref to always have access to latest actorId
   const actorIdRef = useRef(actorId);
   actorIdRef.current = actorId;
@@ -430,7 +434,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
     async (chatId: string, text: string, imageUrl?: string, fileData?: { fileUrl: string; fileName: string; fileSize: number; mimeType: string }) => {
       if (!text.trim() && !imageUrl && !fileData) return;
 
-      const window = chatWindows.find((w) => w.id === chatId);
+      const window = chatWindowsRef.current.find((w) => w.id === chatId);
       const currentActorId = actorIdRef.current;
       if (!window?.orderId || !currentActorId) return;
 
@@ -518,12 +522,12 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         }
       }
     },
-    [chatWindows, actorType, wsContext]
+    [actorType, wsContext]
   );
 
   const markAsRead = useCallback(
     async (chatId: string) => {
-      const window = chatWindows.find((w) => w.id === chatId);
+      const window = chatWindowsRef.current.find((w) => w.id === chatId);
       if (!window?.orderId) return;
 
       setChatWindows((prev) =>
@@ -542,19 +546,70 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         } catch {}
       }
     },
-    [chatWindows, actorType, wsContext]
+    [actorType, wsContext]
   );
+
+  // Throttled typing indicator — only send start once per session, stop after 2s idle
+  const isTypingSentRef = useRef<Map<string, boolean>>(new Map());
+  const typingIdleTimerRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   const sendTypingIndicator = useCallback(
     async (chatId: string, isTyping: boolean) => {
-      const window = chatWindows.find((w) => w.id === chatId);
+      const window = chatWindowsRef.current.find((w) => w.id === chatId);
       if (!window?.orderId) return;
 
+      const orderId = window.orderId;
+
+      if (isTyping) {
+        // Only send typing:start once per session
+        if (isTypingSentRef.current.get(orderId)) {
+          // Reset idle timer
+          const existing = typingIdleTimerRef.current.get(orderId);
+          if (existing) clearTimeout(existing);
+          typingIdleTimerRef.current.set(orderId, setTimeout(() => {
+            isTypingSentRef.current.delete(orderId);
+            // Send stop after 2s idle
+            if (wsContext?.isConnected) {
+              wsContext.sendTyping(orderId, false);
+            } else {
+              fetchWithAuth(`/api/orders/${orderId}/typing`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ actor_type: actorType, is_typing: false }),
+              }).catch(() => {});
+            }
+          }, 2000));
+          return;
+        }
+
+        isTypingSentRef.current.set(orderId, true);
+
+        // Schedule auto-stop after 2s idle
+        typingIdleTimerRef.current.set(orderId, setTimeout(() => {
+          isTypingSentRef.current.delete(orderId);
+          if (wsContext?.isConnected) {
+            wsContext.sendTyping(orderId, false);
+          } else {
+            fetchWithAuth(`/api/orders/${orderId}/typing`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ actor_type: actorType, is_typing: false }),
+            }).catch(() => {});
+          }
+        }, 2000));
+      } else {
+        // Explicit stop — clear state
+        isTypingSentRef.current.delete(orderId);
+        const existing = typingIdleTimerRef.current.get(orderId);
+        if (existing) clearTimeout(existing);
+        typingIdleTimerRef.current.delete(orderId);
+      }
+
       if (wsContext?.isConnected) {
-        wsContext.sendTyping(window.orderId, isTyping);
+        wsContext.sendTyping(orderId, isTyping);
       } else {
         try {
-          await fetchWithAuth(`/api/orders/${window.orderId}/typing`, {
+          await fetchWithAuth(`/api/orders/${orderId}/typing`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ actor_type: actorType, is_typing: isTyping }),
@@ -562,7 +617,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         } catch {}
       }
     },
-    [chatWindows, actorType, wsContext]
+    [actorType, wsContext]
   );
 
   // Compliance: highlight message

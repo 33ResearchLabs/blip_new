@@ -15,6 +15,7 @@ interface UseMerchantEffectsParams {
   orders: Order[];
   fetchOrders: () => Promise<void>;
   debouncedFetchOrders: () => void;
+  refetchSingleOrder: (orderId: string) => Promise<void>;
   refreshBalance: () => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
   addNotification: (type: any, message: string, orderId?: string) => void;
@@ -33,6 +34,7 @@ export function useMerchantEffects({
   orders,
   fetchOrders,
   debouncedFetchOrders,
+  refetchSingleOrder,
   refreshBalance,
   playSound,
   addNotification,
@@ -110,13 +112,14 @@ export function useMerchantEffects({
           return prev.map(o => o.id === orderId ? { ...o, status: uiStatus as Order['status'], minimalStatus: newStatus } : o);
         });
 
-        debouncedFetchOrders();
+        // Refetch only the affected order — not the full list
+        refetchSingleOrder(orderId);
         debouncedFetchConversations();
 
         if (newStatus === 'payment_sent') { playSound('notification'); }
         else if (newStatus === 'completed') { playSound('order_complete'); refreshBalance(); }
       } else if (event.type === 'order:cancelled') {
-        debouncedFetchOrders();
+        if (data.orderId) refetchSingleOrder(data.orderId);
         playSound('error');
       } else if (event.type === 'order:created') {
         debouncedFetchOrders();
@@ -125,7 +128,7 @@ export function useMerchantEffects({
     });
 
     return unsubscribe;
-  }, [wsContext, debouncedFetchOrders, debouncedFetchConversations, playSound, refreshBalance]);
+  }, [wsContext, debouncedFetchOrders, refetchSingleOrder, debouncedFetchConversations, playSound, refreshBalance]);
 
   // Keyboard shortcuts for dashboard
   useEffect(() => {
@@ -293,7 +296,7 @@ export function useMerchantEffects({
     } catch {}
   }, [merchantId, isMockMode]);
 
-  // Handle expired orders
+  // Handle expired orders — UI cleanup only, trust backend expiry worker for status transitions
   const lastExpiryRunRef = useRef<number>(0);
   useEffect(() => {
     const now = Date.now();
@@ -305,41 +308,19 @@ export function useMerchantEffects({
     if (expiredPending.length === 0 && expiredEscrow.length === 0) return;
     lastExpiryRunRef.current = now;
 
+    // Remove expired pending orders from UI (backend worker handles the actual status change)
     if (expiredPending.length > 0) {
       setOrders(prev => prev.filter(o => !(o.status === "pending" && o.expiresIn <= 0)));
-
-      Promise.allSettled(
-        expiredPending.map(order =>
-          fetchWithAuth(`/api/orders/${order.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              status: 'expired',
-              actor_type: 'system',
-              actor_id: '00000000-0000-0000-0000-000000000000',
-            }),
-          }).catch(() => {})
-        )
-      ).then(() => fetchOrders());
     }
 
+    // Auto-refund stuck escrows for expired orders I created
     for (const order of expiredEscrow) {
-      fetchWithAuth(`/api/orders/${order.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 'expired',
-          actor_type: 'system',
-          actor_id: '00000000-0000-0000-0000-000000000000',
-        }),
-      }).catch(() => {});
-
       const iAmEscrowCreator = order.escrowCreatorWallet === solanaWallet.walletAddress;
       if (iAmEscrowCreator && order.escrowTradeId != null && solanaWallet.connected && !isMockMode) {
         autoRefundEscrow(order);
       }
     }
-  }, [orders, solanaWallet.walletAddress, solanaWallet.connected, fetchOrders, addNotification]);
+  }, [orders, solanaWallet.walletAddress, solanaWallet.connected, addNotification]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
