@@ -196,6 +196,14 @@ async function actorExistsInDb(auth: AuthContext): Promise<boolean> {
   } else if (auth.actorType === 'compliance' && auth.complianceId) {
     // Compliance officers are in compliance_team table
     exists = await verifyComplianceMember(auth.complianceId);
+    // Fallback: merchant with compliance access may have their merchant ID
+    // stored as compliance_member — verify as merchant instead
+    if (!exists && auth.merchantId) {
+      const merchantExists = await verifyMerchant(auth.merchantId);
+      if (merchantExists) {
+        exists = true;
+      }
+    }
   }
 
   setCache(cacheKey, exists);
