@@ -69,22 +69,30 @@ export async function createUser(
   const initialBalance = MOCK_MODE ? MOCK_INITIAL_BALANCE : 0;
   // wallet_address is NOT NULL in DB — generate a placeholder for system-created users
   const walletAddress = data.wallet_address ?? `placeholder_${crypto.randomUUID()}`;
-  const result = await queryOne<User>(
-    `
-    INSERT INTO users (username, password_hash, wallet_address, name, balance)
-    VALUES ($1, $2, $3, $4, $5)
-    RETURNING *
-    `,
-    [
-      data.username ?? null,
-      passwordHash,
-      walletAddress,
-      data.name ?? null,
-      initialBalance,
-    ]
-  );
+  try {
+    const result = await queryOne<User>(
+      `
+      INSERT INTO users (username, password_hash, wallet_address, name, balance)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+      `,
+      [
+        data.username ?? null,
+        passwordHash,
+        walletAddress,
+        data.name ?? null,
+        initialBalance,
+      ]
+    );
 
-  return sanitizeUser(result)!;
+    return sanitizeUser(result)!;
+  } catch (err: any) {
+    // Handle race condition: username claimed between availability check and insert
+    if (err?.code === '23505' && data.username) {
+      throw new Error('Username already taken');
+    }
+    throw err;
+  }
 }
 
 
@@ -112,11 +120,19 @@ export async function updateUsername(
     throw new Error('Username already taken');
   }
 
-  const result = await queryOne<User>(
-    `UPDATE users SET username = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
-    [newUsername, id]
-  );
-  return sanitizeUser(result);
+  try {
+    const result = await queryOne<User>(
+      `UPDATE users SET username = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [newUsername, id]
+    );
+    return sanitizeUser(result);
+  } catch (err: any) {
+    // Handle race condition: another request claimed the username between check and update
+    if (err?.code === '23505') {
+      throw new Error('Username already taken');
+    }
+    throw err;
+  }
 }
 
 export async function updatePassword(

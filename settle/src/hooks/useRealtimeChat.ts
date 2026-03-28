@@ -400,21 +400,25 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pusher]);
 
-  // Polling fallback: refresh messages every 5s ONLY when Pusher is disconnected
+  // Polling fallback: round-robin messages ONLY when Pusher is disconnected
+  // Instead of fetching ALL windows every tick, fetch ONE window per tick
   const isPusherConnected = pusher?.isConnected ?? false;
+  const pollTickRef = useRef(0);
   useEffect(() => {
     // Skip polling when Pusher is delivering messages in real-time
     if (isPusherConnected) return;
 
     const interval = setInterval(() => {
-      const windows = chatWindowsRef.current;
+      const windows = chatWindowsRef.current.filter((w) => w.orderId && !w.minimized);
       if (windows.length === 0) return;
-      windows.forEach((w) => {
-        if (w.orderId) {
-          fetchMessagesRef.current(w.orderId, w.id);
-        }
-      });
-    }, 5000);
+      // Round-robin: fetch one window per tick
+      const idx = pollTickRef.current % windows.length;
+      const w = windows[idx];
+      if (w.orderId) {
+        fetchMessagesRef.current(w.orderId, w.id);
+      }
+      pollTickRef.current++;
+    }, 3000);
 
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -643,53 +647,46 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
 
       const orderId = window.orderId;
 
+      const sendTypingApi = (typing: boolean) =>
+        fetchWithAuth(`/api/orders/${orderId}/typing`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actor_type: actorType, is_typing: typing }),
+        }).catch(() => {});
+
       if (isTyping) {
-        // Only send typing:start once per session
+        // Already sent typing:start — just reset the idle timer, NO extra API call
         if (isTypingSentRef.current.get(orderId)) {
-          // Reset idle timer
           const existing = typingIdleTimerRef.current.get(orderId);
           if (existing) clearTimeout(existing);
           typingIdleTimerRef.current.set(orderId, setTimeout(() => {
             isTypingSentRef.current.delete(orderId);
-            fetchWithAuth(`/api/orders/${orderId}/typing`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ actor_type: actorType, is_typing: false }),
-            }).catch(() => {});
+            sendTypingApi(false);
           }, 2000));
-          return;
+          return; // No API call — already told server we're typing
         }
 
+        // First keystroke in session — send typing:start
         isTypingSentRef.current.set(orderId, true);
 
         // Schedule auto-stop after 2s idle
         typingIdleTimerRef.current.set(orderId, setTimeout(() => {
           isTypingSentRef.current.delete(orderId);
-          fetchWithAuth(`/api/orders/${orderId}/typing`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ actor_type: actorType, is_typing: false }),
-          }).catch(() => {});
+          sendTypingApi(false);
         }, 2000));
+
+        await sendTypingApi(true);
       } else {
-        // Explicit stop — clear state
+        // Explicit stop — clear state and send stop only if we were typing
+        const wasTyping = isTypingSentRef.current.get(orderId);
         isTypingSentRef.current.delete(orderId);
         const existing = typingIdleTimerRef.current.get(orderId);
         if (existing) clearTimeout(existing);
         typingIdleTimerRef.current.delete(orderId);
-      }
 
-      try {
-        await fetchWithAuth(`/api/orders/${window.orderId}/typing`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            actor_type: actorType,
-            is_typing: isTyping,
-          }),
-        });
-      } catch {
-        // Typing indicators are best-effort
+        if (wasTyping) {
+          await sendTypingApi(false);
+        }
       }
     },
     [actorType]

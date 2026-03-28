@@ -34,7 +34,6 @@ export function useOrderFetching({
   solanaRefreshBalances,
 }: UseOrderFetchingParams) {
   // ─── Zustand store ───
-  const orders = useMerchantStore(s => s.orders);
   const setOrders = useMerchantStore(s => s.setOrders);
   const merchantId = useMerchantStore(s => s.merchantId);
   const setIsLoading = useMerchantStore(s => s.setIsLoading);
@@ -51,6 +50,9 @@ export function useOrderFetching({
   const fetchAbortRef = useRef<AbortController | null>(null);
   const balanceAbortRef = useRef<AbortController | null>(null);
   const mempoolAbortRef = useRef<AbortController | null>(null);
+  const disputesAbortRef = useRef<AbortController | null>(null);
+  const bigOrdersAbortRef = useRef<AbortController | null>(null);
+  const offersAbortRef = useRef<AbortController | null>(null);
 
   // ─── Debounce refs ───
   const fetchPendingRef = useRef(false);
@@ -58,6 +60,9 @@ export function useOrderFetching({
 
   // ─── Mempool visibility ───
   const [isMempoolVisible, setIsMempoolVisible] = useState(false);
+  // Ref avoids restarting polling effects when visibility toggles
+  const isMempoolVisibleRef = useRef(isMempoolVisible);
+  isMempoolVisibleRef.current = isMempoolVisible;
 
   // ─── Polling refs ───
   const prevPusherConnected = useRef(isPusherConnected);
@@ -203,22 +208,29 @@ export function useOrderFetching({
 
   const fetchResolvedDisputes = useCallback(async () => {
     if (!merchantId) return;
+    disputesAbortRef.current?.abort();
+    const controller = new AbortController();
+    disputesAbortRef.current = controller;
     try {
-      const res = await fetchWithAuth(`/api/disputes/resolved?actor_type=merchant&actor_id=${merchantId}`);
+      const res = await fetchWithAuth(`/api/disputes/resolved?actor_type=merchant&actor_id=${merchantId}`, { signal: controller.signal });
       if (!res.ok) return;
       const data = await res.json();
       if (data.success && data.data) {
         setResolvedDisputes(data.data);
       }
     } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
       console.error('Failed to fetch resolved disputes:', err);
     }
   }, [merchantId]);
 
   const fetchBigOrders = useCallback(async () => {
     if (!merchantId) return;
+    bigOrdersAbortRef.current?.abort();
+    const controller = new AbortController();
+    bigOrdersAbortRef.current = controller;
     try {
-      const res = await fetchWithAuth(`/api/merchant/big-orders?merchant_id=${merchantId}&limit=10`);
+      const res = await fetchWithAuth(`/api/merchant/big-orders?merchant_id=${merchantId}&limit=10`, { signal: controller.signal });
       if (!res.ok) return;
       const data = await res.json();
       if (data.success && data.data?.orders) {
@@ -245,20 +257,25 @@ export function useOrderFetching({
         }
       }
     } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
       console.error('Failed to fetch big orders:', err);
     }
   }, [merchantId]);
 
   const fetchActiveOffers = useCallback(async () => {
     if (!merchantId) return;
+    offersAbortRef.current?.abort();
+    const controller = new AbortController();
+    offersAbortRef.current = controller;
     try {
-      const res = await fetchWithAuth(`/api/merchant/offers?merchant_id=${merchantId}`);
+      const res = await fetchWithAuth(`/api/merchant/offers?merchant_id=${merchantId}`, { signal: controller.signal });
       if (!res.ok) return;
       const data = await res.json();
       if (data.success && data.data) {
         setActiveOffers(data.data.filter((o: { is_active: boolean }) => o.is_active));
       }
     } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
       console.error('Failed to fetch active offers:', err);
     }
   }, [merchantId]);
@@ -320,17 +337,36 @@ export function useOrderFetching({
 
   // ─── Post-mutation reconcile (optimistic + authoritative refetch) ───
   // WS/Pusher already syncs the full order list — only refetch the mutated order + balance
+  const isPusherConnectedRef = useRef(isPusherConnected);
+  isPusherConnectedRef.current = isPusherConnected;
+
   const afterMutationReconcile = useCallback(async (
     orderId: string,
     optimisticUpdate?: Partial<Order>,
   ) => {
+    // Snapshot current version BEFORE optimistic update so we can detect WS delivery
+    const currentVersion = useMerchantStore.getState().orders.find((o: Order) => o.id === orderId)?.orderVersion;
+
     if (optimisticUpdate) {
       setOrders((prev: Order[]) => prev.map((o: Order) =>
         o.id === orderId ? { ...o, ...optimisticUpdate } : o
       ));
     }
-    // Delayed single-order refetch for DB consistency (800ms to avoid stale reads)
-    await new Promise<void>(resolve => setTimeout(() => { refetchSingleOrder(orderId); resolve(); }, 800));
+
+    // Wait 800ms then check if WS already delivered the update.
+    // If Pusher connected AND version advanced → skip redundant refetch.
+    // Otherwise → refetch as fallback.
+    await new Promise<void>(resolve => setTimeout(() => {
+      if (isPusherConnectedRef.current && currentVersion !== undefined) {
+        const latestVersion = useMerchantStore.getState().orders.find((o: Order) => o.id === orderId)?.orderVersion;
+        if (latestVersion !== undefined && latestVersion > currentVersion) {
+          resolve();
+          return;
+        }
+      }
+      refetchSingleOrder(orderId);
+      resolve();
+    }, 800));
     refreshBalance();
   }, [refetchSingleOrder, refreshBalance]);
 
@@ -342,25 +378,25 @@ export function useOrderFetching({
   // SINGLE POLLING ORCHESTRATOR (replaces 5 separate intervals)
   // ═══════════════════════════════════════════════════════════════════
 
-  // Initial fetch on login — stagger non-critical requests to reduce burst
+  // Initial fetch — CRITICAL: orders + offers + balance (fires on login / merchantId change)
   useEffect(() => {
     if (!merchantId) return;
-
-    // Immediate: critical data
     fetchOrders();
     fetchActiveOffers();
     if (isMockMode) fetchInAppBalance();
+  }, [merchantId, fetchOrders, fetchActiveOffers, isMockMode, fetchInAppBalance]);
 
-    // Delayed (2s): non-critical data
+  // Initial fetch — SECONDARY: leaderboard, disputes, big orders, mempool (deferred 2s)
+  useEffect(() => {
+    if (!merchantId) return;
     const timer = setTimeout(() => {
       fetchLeaderboard();
-      if (isMempoolVisible) fetchMempoolOrders();
+      if (isMempoolVisibleRef.current) fetchMempoolOrders();
       fetchResolvedDisputes();
       fetchBigOrders();
     }, 2000);
-
     return () => clearTimeout(timer);
-  }, [merchantId, fetchOrders, fetchMempoolOrders, fetchResolvedDisputes, fetchBigOrders, fetchActiveOffers, fetchLeaderboard, isMockMode, isMempoolVisible, fetchInAppBalance]);
+  }, [merchantId, fetchLeaderboard, fetchMempoolOrders, fetchResolvedDisputes, fetchBigOrders]);
 
   // Unified poll: skip order polling when Pusher handles it, keep mempool/expiry
   useEffect(() => {
@@ -371,7 +407,7 @@ export function useOrderFetching({
       // Pusher handles order updates — only poll mempool (when visible) + periodic balance
       const tick = () => {
         tickCount++;
-        if (isMempoolVisible) fetchMempoolOrders();
+        if (isMempoolVisibleRef.current) fetchMempoolOrders();
         lastSyncRef.current = Date.now();
         // Every 3rd tick (~90s): balance
         if (tickCount % 3 === 0) {
@@ -385,7 +421,7 @@ export function useOrderFetching({
       const tick = () => {
         tickCount++;
         debouncedFetchOrders();
-        if (isMempoolVisible) fetchMempoolOrders();
+        if (isMempoolVisibleRef.current) fetchMempoolOrders();
         lastSyncRef.current = Date.now();
         if (tickCount % 3 === 0) {
           if (isMockMode) fetchInAppBalance();
@@ -394,7 +430,8 @@ export function useOrderFetching({
       const interval = setInterval(tick, 5000);
       return () => clearInterval(interval);
     }
-  }, [merchantId, isPusherConnected, isMempoolVisible, debouncedFetchOrders, fetchMempoolOrders, isMockMode, fetchInAppBalance]);
+  // isMempoolVisible removed — uses ref to avoid restarting polling interval on toggle
+  }, [merchantId, isPusherConnected, debouncedFetchOrders, fetchMempoolOrders, isMockMode, fetchInAppBalance]);
 
   // Pusher reconnect — single sync
   useEffect(() => {

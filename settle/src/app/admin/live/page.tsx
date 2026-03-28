@@ -104,6 +104,9 @@ export default function LiveDashboardPage() {
   const [tickCount, setTickCount] = useState(0);
   const [noAuth, setNoAuth] = useState(false);
   const tokenRef = useRef<string | null>(null);
+  const fetchInFlightRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { subscribe, unsubscribe, isConnected } = usePusher();
 
   useEffect(() => {
@@ -122,15 +125,19 @@ export default function LiveDashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch data
+  // Fetch data with in-flight guard and abort controller
   const fetchData = useCallback(async () => {
     const token = tokenRef.current;
-    if (!token) return;
-    const headers = { Authorization: `Bearer ${token}` };
+    if (!token || fetchInFlightRef.current) return;
+    fetchInFlightRef.current = true;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
+      const headers = { Authorization: `Bearer ${token}` };
       const [ordersRes, statsRes] = await Promise.all([
-        fetch("/api/admin/orders?limit=200", { headers }),
-        fetch("/api/admin/stats", { headers }),
+        fetch("/api/admin/orders?limit=200", { headers, signal: controller.signal }),
+        fetch("/api/admin/stats", { headers, signal: controller.signal }),
       ]);
       const [ordersData, statsData] = await Promise.all([
         ordersRes.json(),
@@ -140,32 +147,43 @@ export default function LiveDashboardPage() {
       if (statsData.success) setStats(statsData.data);
       setLastUpdate(new Date());
     } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
       console.error("Live fetch error:", err);
+    } finally {
+      fetchInFlightRef.current = false;
     }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  // Faster polling for live view — every 5 seconds
-  useEffect(() => {
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
+  // Debounced fetch — coalesces Pusher event storms into single call
+  const debouncedFetchData = useCallback(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(fetchData, 300);
   }, [fetchData]);
 
-  // Pusher
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Polling fallback — only when Pusher is NOT connected, 10s interval
+  useEffect(() => {
+    if (isConnected) return; // Pusher handles updates — no polling needed
+    const interval = setInterval(fetchData, 10000);
+    return () => clearInterval(interval);
+  }, [fetchData, isConnected]);
+
+  // Pusher — debounced handler to avoid event storm double-fetches
   useEffect(() => {
     if (!isConnected) return;
     const channel = subscribe("private-admin");
     if (!channel) return;
-    const handleUpdate = () => fetchData();
+    const handleUpdate = () => debouncedFetchData();
     channel.bind("order:created", handleUpdate);
     channel.bind("order:status-updated", handleUpdate);
     return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       channel.unbind("order:created", handleUpdate);
       channel.unbind("order:status-updated", handleUpdate);
       unsubscribe("private-admin");
     };
-  }, [isConnected, subscribe, unsubscribe, fetchData]);
+  }, [isConnected, subscribe, unsubscribe, debouncedFetchData]);
 
   // Split orders
   const activeOrders = orders.filter((o) => isActiveOrder(o.status));

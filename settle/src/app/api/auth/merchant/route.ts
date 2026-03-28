@@ -362,20 +362,31 @@ export async function POST(request: NextRequest) {
 
       // Create merchant (auto-funded in mock mode)
       const merchantBalance = MOCK_MODE ? MOCK_INITIAL_BALANCE : 0;
-      const result = await query(
-        `INSERT INTO merchants (
-          wallet_address,
-          username,
-          business_name,
-          display_name,
-          email,
-          status,
-          is_online,
-          balance
-        ) VALUES ($1, $2, $3, $4, $5, 'active', true, $6)
-        RETURNING id, username, display_name, business_name, wallet_address, rating, total_trades`,
-        [wallet_address, username, username, username, `${username}@merchant.blip.money`, merchantBalance]
-      );
+      let result;
+      try {
+        result = await query(
+          `INSERT INTO merchants (
+            wallet_address,
+            username,
+            business_name,
+            display_name,
+            email,
+            status,
+            is_online,
+            balance
+          ) VALUES ($1, $2, $3, $4, $5, 'active', true, $6)
+          RETURNING id, username, display_name, business_name, wallet_address, rating, total_trades`,
+          [wallet_address, username, username, username, `${username}@merchant.blip.money`, merchantBalance]
+        );
+      } catch (insertErr: any) {
+        if (insertErr?.code === '23505') {
+          return NextResponse.json(
+            { success: false, error: 'Username already taken' },
+            { status: 409 }
+          );
+        }
+        throw insertErr;
+      }
 
       const merchant = result[0] as {
         id: string;
@@ -503,10 +514,20 @@ export async function POST(request: NextRequest) {
       }
 
       // Update username
-      await query(
-        `UPDATE merchants SET username = $1, display_name = $2, business_name = $3 WHERE id = $4`,
-        [username, username, username, merchant.id]
-      );
+      try {
+        await query(
+          `UPDATE merchants SET username = $1, display_name = $2, business_name = $3 WHERE id = $4`,
+          [username, username, username, merchant.id]
+        );
+      } catch (updateErr: any) {
+        if (updateErr?.code === '23505') {
+          return NextResponse.json(
+            { success: false, error: 'Username already taken' },
+            { status: 409 }
+          );
+        }
+        throw updateErr;
+      }
 
       console.log('[API] Merchant username set:', merchant.id, username);
 
@@ -561,10 +582,20 @@ export async function POST(request: NextRequest) {
       }
 
       // Update merchant username
-      await query(
-        `UPDATE merchants SET username = $1 WHERE id = $2`,
-        [username, merchant_id]
-      );
+      try {
+        await query(
+          `UPDATE merchants SET username = $1 WHERE id = $2`,
+          [username, merchant_id]
+        );
+      } catch (updateErr: any) {
+        if (updateErr?.code === '23505') {
+          return NextResponse.json(
+            { success: false, error: 'Username already taken' },
+            { status: 409 }
+          );
+        }
+        throw updateErr;
+      }
 
       return NextResponse.json({
         success: true,

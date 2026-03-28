@@ -88,12 +88,7 @@ export const StatusCard = memo(function StatusCard({
     }
   }, [inrBalance, merchantId]);
 
-  useEffect(() => {
-    fetchCorridorData();
-    const interval = setInterval(fetchCorridorData, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
+  // Reputation: fetch once on mount per merchantId (changes rarely, no polling needed)
   useEffect(() => {
     if (!merchantId) return;
     fetchWithAuth(`/api/reputation?entityId=${merchantId}&entityType=merchant`)
@@ -137,12 +132,15 @@ export const StatusCard = memo(function StatusCard({
     }
   }, [merchantId]);
 
+  // Unified polling: corridor + sAED balance in a single 30s interval
   useEffect(() => {
-    if (merchantId) {
-      fetchSaedBalance();
-      const interval = setInterval(fetchSaedBalance, 30000);
-      return () => clearInterval(interval);
-    }
+    const fetchAll = () => {
+      fetchCorridorData();
+      if (merchantId) fetchSaedBalance();
+    };
+    fetchAll(); // initial fetch
+    const interval = setInterval(fetchAll, 30000);
+    return () => clearInterval(interval);
   }, [merchantId, fetchSaedBalance]);
 
   const handleConvert = async () => {

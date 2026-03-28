@@ -59,8 +59,12 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
   merchantIdRef.current = merchantId;
 
   const pusher = usePusherOptional();
+  const isPusherConnected = pusher?.isConnected ?? false;
   const activeContactIdRef = useRef(activeContactId);
   activeContactIdRef.current = activeContactId;
+
+  // Debounced conversation refresh — coalesces rapid mutation + event calls
+  const convRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Stable ref for fetchConversations — keeps polling interval independent of deps
   const fetchConversationsRef = useRef<() => Promise<void>>(async () => {});
@@ -84,6 +88,15 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
 
   // Keep ref in sync
   fetchConversationsRef.current = fetchConversations;
+
+  // Debounced conversation refresh — prevents multiple rapid calls from
+  // mutations + Pusher events from causing redundant fetches
+  const scheduleFetchConversations = useCallback(() => {
+    if (convRefreshTimerRef.current) clearTimeout(convRefreshTimerRef.current);
+    convRefreshTimerRef.current = setTimeout(() => {
+      fetchConversationsRef.current();
+    }, 500);
+  }, []);
 
   // Stable ref for fetchMessages — keeps message polling interval independent of deps
   const fetchMessagesRef = useRef<(targetId: string) => Promise<void>>(async () => {});
@@ -133,16 +146,16 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
     fetchConversationsRef.current().finally(() => setIsLoadingConversations(false));
   }, [merchantId]);
 
-  // Stable polling interval (no deps that would cause restart)
+  // Conversation polling — only when Pusher is NOT delivering events
   useEffect(() => {
-    if (!merchantId) return;
+    if (!merchantId || isPusherConnected) return;
     pollConvRef.current = setInterval(() => {
       fetchConversationsRef.current();
     }, 15000);
     return () => {
       if (pollConvRef.current) clearInterval(pollConvRef.current);
     };
-  }, [merchantId]);
+  }, [merchantId, isPusherConnected]);
 
   // Real-time: subscribe to merchant's private Pusher channel for incoming DMs
   useEffect(() => {
@@ -181,8 +194,8 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
         });
       }
 
-      // Refresh conversations to update last message + unread count
-      fetchConversations();
+      // Refresh conversations to update last message + unread count (debounced)
+      scheduleFetchConversations();
     };
 
     channel.bind(CHAT_EVENTS.DM_NEW, handleNewDM);
@@ -191,9 +204,9 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
       channel.unbind(CHAT_EVENTS.DM_NEW, handleNewDM);
       pusher.unsubscribe(channelName);
     };
-  }, [pusher, merchantId, fetchConversations]);
+  }, [pusher, merchantId, scheduleFetchConversations]);
 
-  // Message polling (5s) when chat is open — uses ref to avoid interval restarts
+  // Message polling (5s) when chat is open — skip when Pusher delivers messages
   useEffect(() => {
     if (!activeContactId) {
       if (pollMsgRef.current) clearInterval(pollMsgRef.current);
@@ -204,7 +217,9 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
     setIsLoadingMessages(true);
     fetchMessagesRef.current(activeContactId).finally(() => setIsLoadingMessages(false));
 
-    // Stable interval — does not depend on fetchMessages identity
+    // Only poll when Pusher is NOT connected
+    if (isPusherConnected) return;
+
     const contactId = activeContactId;
     pollMsgRef.current = setInterval(() => {
       fetchMessagesRef.current(contactId);
@@ -213,7 +228,7 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
     return () => {
       if (pollMsgRef.current) clearInterval(pollMsgRef.current);
     };
-  }, [activeContactId]);
+  }, [activeContactId, isPusherConnected]);
 
   const openChat = useCallback((targetId: string, targetType: 'user' | 'merchant', name: string) => {
     setActiveContactId(targetId);
@@ -273,9 +288,9 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
       console.error('[useDirectChat] Error sending message:', error);
     }
 
-    // Refresh conversations to update last message
-    fetchConversations();
-  }, [merchantId, activeContactId, activeContactType, fetchConversations]);
+    // Refresh conversations to update last message (debounced)
+    scheduleFetchConversations();
+  }, [merchantId, activeContactId, activeContactType, scheduleFetchConversations]);
 
   const addContact = useCallback(async (targetId: string, targetType: 'user' | 'merchant') => {
     if (!merchantId) return;
@@ -290,12 +305,12 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
         }),
       });
       if (res.ok) {
-        await fetchConversations();
+        scheduleFetchConversations();
       }
     } catch (error) {
       console.error('[useDirectChat] Error adding contact:', error);
     }
-  }, [merchantId, fetchConversations]);
+  }, [merchantId, scheduleFetchConversations]);
 
   const removeContactById = useCallback(async (contactId: string) => {
     if (!merchantId) return;
@@ -304,12 +319,12 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
         method: 'DELETE',
       });
       if (res.ok) {
-        await fetchConversations();
+        scheduleFetchConversations();
       }
     } catch (error) {
       console.error('[useDirectChat] Error removing contact:', error);
     }
-  }, [merchantId, fetchConversations]);
+  }, [merchantId, scheduleFetchConversations]);
 
   const toggleFavorite = useCallback(async (contactId: string, currentFav: boolean) => {
     if (!merchantId) return;
@@ -323,11 +338,11 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
           is_favorite: !currentFav,
         }),
       });
-      await fetchConversations();
+      scheduleFetchConversations();
     } catch (error) {
       console.error('[useDirectChat] Error toggling favorite:', error);
     }
-  }, [merchantId, fetchConversations]);
+  }, [merchantId, scheduleFetchConversations]);
 
   return {
     // Conversations

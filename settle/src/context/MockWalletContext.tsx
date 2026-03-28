@@ -74,9 +74,26 @@ const MockWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) => {
 
     checkUser();
 
-    // Poll for changes (localStorage doesn't have a native change event in same tab)
-    const interval = setInterval(checkUser, 1000);
-    return () => clearInterval(interval);
+    // Event-driven: 'storage' fires on cross-tab changes,
+    // 'blip-auth-change' is a custom event for same-tab changes
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'blip_user' || e.key === 'blip_merchant' || e.key === 'blip_wallet') {
+        checkUser();
+      }
+    };
+    const handleCustom = () => checkUser();
+
+    // Low-frequency fallback poll (10s) catches same-tab localStorage writes
+    // that don't dispatch the custom event yet — 10x less than the previous 1s poll
+    const interval = setInterval(checkUser, 10000);
+
+    window.addEventListener('storage', handleStorage);
+    window.addEventListener('blip-auth-change', handleCustom);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('blip-auth-change', handleCustom);
+    };
   }, []);
 
   // Fetch balance from DB

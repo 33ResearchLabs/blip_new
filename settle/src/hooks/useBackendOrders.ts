@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { shouldAcceptUpdate } from '@/lib/orders/statusResolver';
 import type { BackendOrder } from '@/types/backendOrder';
 
 interface UseBackendOrdersOptions {
@@ -86,13 +87,11 @@ export function useBackendOrders(options: UseBackendOrdersOptions): UseBackendOr
 
         return incoming.map(inc => {
           const existing = prevMap.get(inc.id);
-          if (
-            existing &&
-            existing.order_version !== undefined &&
-            inc.order_version !== undefined &&
-            inc.order_version < existing.order_version
-          ) {
-            return existing; // Keep newer local version
+          if (existing) {
+            const versionCheck = shouldAcceptUpdate(inc.order_version, existing.order_version);
+            if (!versionCheck.accept) {
+              return existing; // Keep newer local version
+            }
           }
           return inc;
         });

@@ -158,7 +158,18 @@ export async function POST(request: NextRequest) {
       }
 
       // Update username
-      const updatedUser = await updateUsername(user.id, username);
+      let updatedUser;
+      try {
+        updatedUser = await updateUsername(user.id, username);
+      } catch (updateErr: any) {
+        if (updateErr?.message === 'Username already taken') {
+          return NextResponse.json(
+            { success: false, error: 'Username already taken' },
+            { status: 409 }
+          );
+        }
+        throw updateErr;
+      }
       if (!updatedUser) {
         return NextResponse.json(
           { success: false, error: 'Failed to update username' },
@@ -244,11 +255,22 @@ export async function POST(request: NextRequest) {
       }
 
       // Create user
-      const user = await createUser({
-        username,
-        password,
-        name: username,
-      });
+      let user;
+      try {
+        user = await createUser({
+          username,
+          password,
+          name: username,
+        });
+      } catch (createErr: any) {
+        if (createErr?.message === 'Username already taken') {
+          return NextResponse.json(
+            { success: false, error: 'Username already taken' },
+            { status: 409 }
+          );
+        }
+        throw createErr;
+      }
 
       console.log('[API] New user registered:', user.id, user.username);
 

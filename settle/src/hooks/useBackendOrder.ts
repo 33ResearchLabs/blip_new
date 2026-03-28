@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { shouldAcceptUpdate } from '@/lib/orders/statusResolver';
 import type { BackendOrder } from '@/types/backendOrder';
 
 interface UseBackendOrderOptions {
@@ -40,6 +41,7 @@ export function useBackendOrder(options: UseBackendOrderOptions): UseBackendOrde
   const [error, setError] = useState<string | null>(null);
   const currentVersionRef = useRef<number | undefined>(undefined);
   const mountedRef = useRef(true);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchOrder = useCallback(async () => {
     if (!orderId) return;
@@ -59,18 +61,14 @@ export function useBackendOrder(options: UseBackendOrderOptions): UseBackendOrde
       }
 
       const incoming = data.data as BackendOrder;
-      const incomingVersion = incoming.order_version;
 
       // Version check: only accept newer data
-      if (
-        currentVersionRef.current !== undefined &&
-        incomingVersion !== undefined &&
-        incomingVersion < currentVersionRef.current
-      ) {
+      const versionCheck = shouldAcceptUpdate(incoming.order_version, currentVersionRef.current);
+      if (!versionCheck.accept) {
         return; // Stale data, ignore
       }
 
-      currentVersionRef.current = incomingVersion;
+      currentVersionRef.current = incoming.order_version;
       setOrder(incoming);
     } catch (err) {
       if (!mountedRef.current) return;
@@ -89,7 +87,9 @@ export function useBackendOrder(options: UseBackendOrderOptions): UseBackendOrde
     };
   }, [fetchOrder]);
 
-  // Pusher subscription: re-fetch on any order event
+  // Pusher subscription: debounced re-fetch on any order event
+  // Multiple events (e.g. status_changed + updated) may fire within milliseconds
+  // for a single state transition — debounce to collapse into one API call
   useEffect(() => {
     if (!pusher || !orderId) return;
 
@@ -99,20 +99,19 @@ export function useBackendOrder(options: UseBackendOrderOptions): UseBackendOrde
     try {
       channel = pusher.subscribe(channelName);
 
-      const handleUpdate = () => {
-        // Re-fetch the full order from backend (gets fresh enriched response)
-        fetchOrder();
+      const debouncedFetch = () => {
+        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = setTimeout(fetchOrder, 200);
       };
 
-      channel.bind('order:updated', handleUpdate);
-      channel.bind('order:status_changed', handleUpdate);
-      channel.bind('order:cancelled', handleUpdate);
-      channel.bind('order:completed', handleUpdate);
-      channel.bind('order:disputed', handleUpdate);
-      channel.bind('order:escrowed', handleUpdate);
-      channel.bind('order:payment_sent', handleUpdate);
+      const events = [
+        'order:updated', 'order:status_changed', 'order:cancelled',
+        'order:completed', 'order:disputed', 'order:escrowed', 'order:payment_sent',
+      ];
+      events.forEach(e => channel.bind(e, debouncedFetch));
 
       return () => {
+        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
         channel.unbind_all();
         pusher.unsubscribe(channelName);
       };

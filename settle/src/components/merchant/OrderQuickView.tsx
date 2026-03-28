@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useState as useLocalState } from "react";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
-import { getAuthoritativeStatus, computeMyRole } from "@/lib/orders/statusResolver";
+// Backend-driven: action buttons read from dbOrder.primaryAction/secondaryAction
 import type { Order } from "@/types/merchant";
 import { CopyableBankDetails } from "@/components/shared/CopyableBankDetails";
 
@@ -90,12 +90,14 @@ export interface OrderQuickViewProps {
   acceptingOrderId?: string | null;
   confirmingOrderId?: string | null;
   cancellingOrderId?: string | null;
+  isRequestingCancel?: boolean;
   onClose: () => void;
   onAcceptOrder: (order: Order) => void;
   onOpenEscrowModal: (order: Order) => void;
   onMarkFiatPaymentSent: (order: Order) => void;
   onConfirmPayment: (orderId: string) => Promise<void>;
   onCancelOrderWithoutEscrow: (orderId: string) => void;
+  onRespondToCancel?: (orderId: string, accept: boolean) => void;
   onOpenChat: (order: Order) => void;
   onViewFullDetails: (orderId: string) => void;
 }
@@ -107,12 +109,14 @@ export function OrderQuickView({
   acceptingOrderId,
   confirmingOrderId,
   cancellingOrderId,
+  isRequestingCancel,
   onClose,
   onAcceptOrder,
   onOpenEscrowModal,
   onMarkFiatPaymentSent,
   onConfirmPayment,
   onCancelOrderWithoutEscrow,
+  onRespondToCancel,
   onOpenChat,
   onViewFullDetails,
 }: OrderQuickViewProps) {
@@ -354,170 +358,162 @@ export function OrderQuickView({
               })()}
             </div>
 
-            {/* Actions */}
-            <div className="px-5 pb-5 space-y-2">
-              {/* Cancel button for order creator (before escrow lock) */}
-              {(() => {
-                const iAmOrderCreatorPopup = selectedOrder.orderMerchantId === merchantId;
-                const canCancelPopup = iAmOrderCreatorPopup &&
-                  !selectedOrder.escrowTxHash &&
-                  (selectedOrder.dbOrder?.status === 'pending' || selectedOrder.dbOrder?.status === 'accepted');
+            {/* Cancel Request Banner — shown when counterparty requested cancellation */}
+            {(() => {
+              if (!selectedOrder.cancelRequestedBy && !selectedOrder.dbOrder?.cancel_requested_by) return null;
 
-                return canCancelPopup ? (
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    disabled={cancellingOrderId === selectedOrder.id}
-                    onClick={async () => {
-                      await onCancelOrderWithoutEscrow(selectedOrder.id);
-                      onClose();
-                    }}
-                    className={`w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
-                      cancellingOrderId === selectedOrder.id
-                        ? 'bg-red-500/5 border-red-500/20 text-red-400/50 cursor-wait'
-                        : 'bg-red-500/10 hover:bg-red-500/20 border-red-500/30 hover:border-red-500/40 text-red-400'
-                    }`}
-                  >
-                    {cancellingOrderId === selectedOrder.id ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Cancelling...</>
-                    ) : (
-                      <><X className="w-4 h-4" /> Cancel Order</>
-                    )}
-                  </motion.button>
-                ) : null;
-              })()}
+              const cancelBy = selectedOrder.cancelRequestedBy || selectedOrder.dbOrder?.cancel_requested_by;
+              const cancelReason = selectedOrder.cancelRequestReason || selectedOrder.dbOrder?.cancel_request_reason;
 
-              {/* For escrowed orders not yet accepted - show Go button */}
-              {/* Note: don't gate on isMyOrder — user-created orders assign merchant_id before acceptance */}
-              {selectedOrder.dbOrder?.status === 'escrowed' && !selectedOrder.dbOrder?.accepted_at && (
-                <motion.button
-                  whileTap={{ scale: 0.98 }}
-                  disabled={acceptingOrderId === selectedOrder.id}
-                  onClick={async () => {
-                    await onAcceptOrder(selectedOrder);
-                    onClose();
-                  }}
-                  className={`w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
-                    acceptingOrderId === selectedOrder.id
-                      ? 'bg-white/5 border-white/4 text-white/50 cursor-wait'
-                      : 'bg-white/10 hover:bg-white/20 border-white/6 hover:border-white/12 text-white'
-                  }`}
-                >
-                  {acceptingOrderId === selectedOrder.id ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> Accepting...</>
-                  ) : (
-                    <><Zap className="w-4 h-4" /> Go</>
-                  )}
-                </motion.button>
-              )}
+              // Determine if counterparty requested (I need to respond) or I requested (waiting)
+              const dbUsername = selectedOrder.dbOrder?.user?.username || '';
+              const isPlaceholderUser = dbUsername.startsWith('open_order_') || dbUsername.startsWith('m2m_');
+              const iRequestedIt = isPlaceholderUser
+                ? cancelBy === 'merchant' && selectedOrder.orderMerchantId === merchantId
+                : cancelBy === 'merchant';
+              const counterpartyRequested = !iRequestedIt;
 
-              {/* For pending orders without escrow (regular flow) */}
-              {selectedOrder.status === 'pending' && !selectedOrder.escrowTxHash && !selectedOrder.isMyOrder && (
-                <div className="space-y-2">
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    disabled={acceptingOrderId === selectedOrder.id}
-                    onClick={() => {
-                      onAcceptOrder(selectedOrder);
-                      onClose();
-                    }}
-                    className={`w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
-                      acceptingOrderId === selectedOrder.id
-                        ? 'bg-white/5 border-white/4 text-white/50 cursor-wait'
-                        : 'bg-white/10 hover:bg-white/20 border-white/6 hover:border-white/12 text-white'
-                    }`}
-                  >
-                    {acceptingOrderId === selectedOrder.id ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Accepting...</>
-                    ) : (
-                      <><Zap className="w-4 h-4" /> Go</>
-                    )}
-                  </motion.button>
-                </div>
-              )}
-
-              {/* For accepted orders without escrow -- only the SELLER locks escrow */}
-              {(() => {
-                const popupDbStatus = selectedOrder.dbOrder?.status;
-                if (popupDbStatus !== 'accepted' || selectedOrder.escrowTxHash) return null;
-                const popupEscrowRole = selectedOrder.myRole || 'observer';
-                if (popupEscrowRole !== 'seller') return null;
+              if (counterpartyRequested) {
                 return (
-                  <motion.button
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => {
-                      onOpenEscrowModal(selectedOrder);
-                      onClose();
-                    }}
-                    className="w-full py-3 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 hover:border-orange-500/40 text-orange-400 font-semibold flex items-center justify-center gap-2 transition-all"
-                  >
-                    <Lock className="w-4 h-4" />
-                    Lock Escrow
-                  </motion.button>
+                  <div className="mx-5 mb-2 rounded-xl border border-orange-500/30 bg-orange-500/[0.06] p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <X className="w-4 h-4 text-orange-400" />
+                      <span className="text-sm font-semibold text-orange-400">
+                        Cancel Requested by {cancelBy === 'user' ? 'User' : 'Merchant'}
+                      </span>
+                    </div>
+                    {cancelReason && (
+                      <p className="text-xs text-white/50 mb-3">{cancelReason}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <motion.button
+                        whileTap={{ scale: 0.98 }}
+                        disabled={isRequestingCancel}
+                        onClick={() => {
+                          onRespondToCancel?.(selectedOrder.id, true);
+                          onClose();
+                        }}
+                        className="flex-1 py-2.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 text-orange-400 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                      >
+                        {isRequestingCancel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        Agree to Cancel
+                      </motion.button>
+                      <motion.button
+                        whileTap={{ scale: 0.98 }}
+                        disabled={isRequestingCancel}
+                        onClick={() => {
+                          onRespondToCancel?.(selectedOrder.id, false);
+                          onClose();
+                        }}
+                        className="flex-1 py-2.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-white/70 text-sm font-medium flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                      >
+                        Continue Order
+                      </motion.button>
+                    </div>
+                  </div>
                 );
-              })()}
+              }
 
-              {/* For accepted/escrowed orders -- buyer needs to mark payment sent (only after merchant accepted) */}
+              // I requested — show waiting status
+              return (
+                <div className="mx-5 mb-2 rounded-xl border border-orange-500/20 bg-orange-500/[0.04] p-3 flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
+                  <div>
+                    <p className="text-sm font-medium text-orange-400">Cancel Request Sent</p>
+                    <p className="text-xs text-white/40">Waiting for counterparty to approve</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Actions — Backend-driven: only show what enrichOrderResponse allows */}
+            <div className="px-5 pb-5 space-y-2">
               {(() => {
-                const popupStatus = selectedOrder.dbOrder?.status;
-                const popupPayRole = selectedOrder.myRole || 'observer';
-                const hasBeenAccepted = !!selectedOrder.dbOrder?.accepted_at;
-                const canMarkPaidPopup = (popupStatus === 'escrowed' && hasBeenAccepted) && selectedOrder.escrowTxHash && popupPayRole === 'buyer';
+                // Read backend-computed actions (source of truth)
+                const primary = selectedOrder.dbOrder?.primaryAction;
+                const secondary = selectedOrder.dbOrder?.secondaryAction;
 
-                if (canMarkPaidPopup) {
-                  return (
-                    <motion.button
-                      whileTap={{ scale: 0.98 }}
-                      onClick={async () => {
-                        await onMarkFiatPaymentSent(selectedOrder);
-                        onClose();
-                      }}
-                      disabled={markingDone}
-                      className="w-full py-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
-                    >
-                      {markingDone ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <>
-                          <Check className="w-4 h-4" />
-                          I&apos;ve Paid
-                        </>
-                      )}
-                    </motion.button>
-                  );
-                }
-                return null;
-              })()}
+                // Guard: don't render action buttons until backend data is loaded
+                if (!primary) return null;
 
-              {/* For payment_sent status -- seller confirms receipt and releases escrow */}
-              {(() => {
-                const minimalStatus = getAuthoritativeStatus(selectedOrder);
-                const popupRole = merchantId ? computeMyRole(selectedOrder, merchantId) : 'observer';
-                const canConfirmPaymentPopup = minimalStatus === 'payment_sent' && popupRole === 'seller';
+                // Map backend action type → frontend handler
+                const ACTION_HANDLER: Record<string, () => void> = {
+                  ACCEPT: () => { onAcceptOrder(selectedOrder); onClose(); },
+                  CLAIM: () => { onAcceptOrder(selectedOrder); onClose(); },
+                  LOCK_ESCROW: () => { onOpenEscrowModal(selectedOrder); onClose(); },
+                  SEND_PAYMENT: () => { onMarkFiatPaymentSent(selectedOrder); onClose(); },
+                  CONFIRM_PAYMENT: () => { onConfirmPayment(selectedOrder.id).then(onClose); },
+                  CANCEL: () => { onCancelOrderWithoutEscrow(selectedOrder.id); onClose(); },
+                  DISPUTE: () => { onViewFullDetails(selectedOrder.id); onClose(); },
+                };
 
-                if (canConfirmPaymentPopup) {
-                  return (
-                    <motion.button
-                      whileTap={{ scale: 0.98 }}
-                      disabled={confirmingOrderId === selectedOrder.id}
-                      onClick={async () => {
-                        await onConfirmPayment(selectedOrder.id);
-                        onClose();
-                      }}
-                      className={`w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
-                        confirmingOrderId === selectedOrder.id
-                          ? 'bg-orange-500/5 border-orange-500/10 text-orange-400/50 cursor-wait'
-                          : 'bg-orange-500/10 hover:bg-orange-500/15 border-orange-500/20 hover:border-orange-500/30 text-orange-400'
-                      }`}
-                    >
-                      {confirmingOrderId === selectedOrder.id ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" /> Accepting...</>
-                      ) : (
-                        <><Check className="w-4 h-4" /> Confirm Receipt & Release Escrow</>
-                      )}
-                    </motion.button>
-                  );
-                }
-                return null;
+                // Loading state per action type
+                const isActionLoading = (type: string | null) => {
+                  if (!type) return false;
+                  if (type === 'ACCEPT' || type === 'CLAIM') return acceptingOrderId === selectedOrder.id;
+                  if (type === 'CONFIRM_PAYMENT') return confirmingOrderId === selectedOrder.id;
+                  if (type === 'CANCEL') return cancellingOrderId === selectedOrder.id;
+                  if (type === 'SEND_PAYMENT') return markingDone;
+                  return false;
+                };
+
+                // Action button styles
+                const PRIMARY_STYLE = 'bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30 hover:border-orange-500/40 text-orange-400';
+                const PRIMARY_LOADING = 'bg-orange-500/5 border-orange-500/10 text-orange-400/50 cursor-wait';
+                const SECONDARY_STYLE = 'bg-red-500/10 hover:bg-red-500/20 border-red-500/30 hover:border-red-500/40 text-red-400';
+                const DISABLED_STYLE = 'bg-white/[0.04] border-white/[0.06] text-white/40 cursor-not-allowed';
+
+                const loading = isActionLoading(primary.type);
+
+                return (
+                  <>
+                    {/* Primary Action — from backend */}
+                    {primary.type && primary.enabled ? (
+                      <motion.button
+                        whileTap={{ scale: 0.98 }}
+                        disabled={loading}
+                        onClick={() => ACTION_HANDLER[primary.type!]?.()}
+                        className={`w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
+                          loading ? PRIMARY_LOADING : PRIMARY_STYLE
+                        }`}
+                      >
+                        {loading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Zap className="w-4 h-4" />
+                        )}
+                        {primary.label}
+                      </motion.button>
+                    ) : primary.label ? (
+                      /* Disabled informational button (e.g., "Waiting for Payment") */
+                      <div className={`w-full py-3 rounded-xl border font-medium flex items-center justify-center gap-2 text-sm ${DISABLED_STYLE}`}
+                        title={primary.disabledReason}
+                      >
+                        <Loader2 className="w-4 h-4 animate-spin opacity-40" />
+                        {primary.label}
+                      </div>
+                    ) : null}
+
+                    {/* Secondary Action — from backend (CANCEL or DISPUTE) */}
+                    {secondary?.type && (
+                      <motion.button
+                        whileTap={{ scale: 0.98 }}
+                        disabled={isActionLoading(secondary.type)}
+                        onClick={() => ACTION_HANDLER[secondary.type!]?.()}
+                        className={`w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
+                          isActionLoading(secondary.type) ? PRIMARY_LOADING : SECONDARY_STYLE
+                        }`}
+                      >
+                        {isActionLoading(secondary.type) ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <X className="w-4 h-4" />
+                        )}
+                        {secondary.label}
+                      </motion.button>
+                    )}
+                  </>
+                );
               })()}
 
               <button
