@@ -56,10 +56,23 @@ interface EditFormData {
   is_active: boolean;
 }
 
-export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
+export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & { onCreateOffer?: () => void }) {
   const [offers, setOffers] = useState<MerchantOffer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Create modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    type: 'sell' as 'buy' | 'sell',
+    payment_method: 'bank' as 'bank' | 'cash',
+    rate: '',
+    min_amount: '100',
+    max_amount: '50000',
+    available_amount: '10000',
+  });
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Edit modal state
   const [editingOffer, setEditingOffer] = useState<MerchantOffer | null>(null);
@@ -245,6 +258,52 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
     }
   };
 
+  // Create new offer
+  const handleCreateOffer = async () => {
+    setIsCreating(true);
+    setCreateError(null);
+
+    try {
+      const rate = parseFloat(createForm.rate);
+      const minAmount = parseFloat(createForm.min_amount);
+      const maxAmount = parseFloat(createForm.max_amount);
+      const availableAmount = parseFloat(createForm.available_amount);
+
+      if (!rate || rate <= 0) { setCreateError('Rate must be greater than 0'); setIsCreating(false); return; }
+      if (!minAmount || minAmount <= 0) { setCreateError('Min amount must be greater than 0'); setIsCreating(false); return; }
+      if (!maxAmount || maxAmount <= 0) { setCreateError('Max amount must be greater than 0'); setIsCreating(false); return; }
+      if (minAmount > maxAmount) { setCreateError('Min amount must be less than max amount'); setIsCreating(false); return; }
+
+      const res = await fetchWithAuth('/api/merchant/offers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          merchant_id: merchantId,
+          type: createForm.type,
+          payment_method: createForm.payment_method,
+          rate,
+          min_amount: minAmount,
+          max_amount: maxAmount,
+          available_amount: availableAmount,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setShowCreateModal(false);
+        setCreateForm({ type: 'sell', payment_method: 'bank', rate: '', min_amount: '100', max_amount: '50000', available_amount: '10000' });
+        fetchOffers();
+      } else {
+        setCreateError(data.error || 'Failed to create offer');
+      }
+    } catch (err) {
+      console.error('[MyOffers] Error creating offer:', err);
+      setCreateError('Failed to create offer');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   // Separate active and paused offers
   const activeOffers = offers.filter((o) => o.is_active);
   const pausedOffers = offers.filter((o) => !o.is_active);
@@ -269,7 +328,7 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
             <RefreshCw className={`w-4 h-4 text-gray-400 ${isLoading ? "animate-spin" : ""}`} />
           </button>
           <button
-            onClick={onCreateOffer}
+            onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 px-3 py-2 bg-orange-500 hover:bg-orange-400 text-black rounded-lg text-xs font-medium transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -318,7 +377,7 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
             Create your first offer to start receiving orders from customers.
           </p>
           <button
-            onClick={onCreateOffer}
+            onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-400 text-black rounded-lg text-sm font-medium transition-colors"
           >
             <Plus className="w-4 h-4" />
@@ -549,6 +608,168 @@ export function MyOffers({ merchantId, onCreateOffer }: MyOffersProps) {
                       <>
                         <Check className="w-4 h-4" />
                         <span>Save Changes</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Create Offer Modal */}
+      <AnimatePresence>
+        {showCreateModal && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
+              onClick={() => setShowCreateModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md max-h-[90vh] overflow-y-auto"
+            >
+              <div className="bg-[#151515] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
+                {/* Header */}
+                <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
+                      <Plus className="w-5 h-5 text-orange-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold">Create New Offer</h2>
+                      <p className="text-[11px] text-gray-500">Set your trading terms</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowCreateModal(false)}
+                    className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
+                  >
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
+
+                {/* Body */}
+                <div className="p-5 space-y-4">
+                  {createError && (
+                    <div className="px-3 py-2 bg-red-500/10 rounded-xl border border-red-500/20 text-xs text-red-400">
+                      {createError}
+                    </div>
+                  )}
+
+                  {/* Type */}
+                  <div>
+                    <label className="text-[11px] text-gray-500 uppercase tracking-wide mb-2 block">Offer Type</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setCreateForm(f => ({ ...f, type: 'buy' }))}
+                        className={`py-2.5 rounded-xl text-xs font-medium transition-colors ${createForm.type === 'buy' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-white/[0.04] text-gray-400 border border-white/[0.04]'}`}
+                      >
+                        BUY (I buy from users)
+                      </button>
+                      <button
+                        onClick={() => setCreateForm(f => ({ ...f, type: 'sell' }))}
+                        className={`py-2.5 rounded-xl text-xs font-medium transition-colors ${createForm.type === 'sell' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-white/[0.04] text-gray-400 border border-white/[0.04]'}`}
+                      >
+                        SELL (I sell to users)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Payment Method */}
+                  <div>
+                    <label className="text-[11px] text-gray-500 uppercase tracking-wide mb-2 block">Payment Method</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setCreateForm(f => ({ ...f, payment_method: 'bank' }))}
+                        className={`py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${createForm.payment_method === 'bank' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-gray-400 border border-white/[0.04]'}`}
+                      >
+                        <Building2 className="w-3.5 h-3.5" /> Bank Transfer
+                      </button>
+                      <button
+                        onClick={() => setCreateForm(f => ({ ...f, payment_method: 'cash' }))}
+                        className={`py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${createForm.payment_method === 'cash' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-white/[0.04] text-gray-400 border border-white/[0.04]'}`}
+                      >
+                        <MapPin className="w-3.5 h-3.5" /> Cash
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Rate */}
+                  <div>
+                    <label className="text-[11px] text-gray-500 uppercase tracking-wide mb-2 block">Rate (AED per USDC)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={createForm.rate}
+                      onChange={(e) => setCreateForm(f => ({ ...f, rate: e.target.value.replace(/[^0-9.]/g, '') }))}
+                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-orange-500/50 transition-colors"
+                      placeholder="3.67"
+                    />
+                  </div>
+
+                  {/* Min / Max */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] text-gray-500 uppercase tracking-wide mb-2 block">Min (USDC)</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={createForm.min_amount}
+                        onChange={(e) => setCreateForm(f => ({ ...f, min_amount: e.target.value.replace(/[^0-9.]/g, '') }))}
+                        className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-orange-500/50 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-gray-500 uppercase tracking-wide mb-2 block">Max (USDC)</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={createForm.max_amount}
+                        onChange={(e) => setCreateForm(f => ({ ...f, max_amount: e.target.value.replace(/[^0-9.]/g, '') }))}
+                        className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-orange-500/50 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Available Amount */}
+                  <div>
+                    <label className="text-[11px] text-gray-500 uppercase tracking-wide mb-2 block">Available Amount (USDC)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={createForm.available_amount}
+                      onChange={(e) => setCreateForm(f => ({ ...f, available_amount: e.target.value.replace(/[^0-9.]/g, '') }))}
+                      className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-orange-500/50 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="px-5 py-4 border-t border-white/[0.04] flex items-center gap-3">
+                  <button
+                    onClick={() => setShowCreateModal(false)}
+                    className="flex-1 py-2.5 bg-white/[0.04] hover:bg-white/[0.08] rounded-xl text-xs font-medium transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCreateOffer}
+                    disabled={isCreating || !createForm.rate}
+                    className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-black rounded-xl text-xs font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    {isCreating ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" />
+                        <span>Create Offer</span>
                       </>
                     )}
                   </button>
