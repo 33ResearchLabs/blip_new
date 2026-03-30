@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { Screen, Order, BankAccount } from "@/components/user/screens/types";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { useMerchantStore } from '@/stores/merchantStore';
 
 interface UseUserAuthParams {
   setScreen: (s: Screen) => void;
@@ -72,6 +73,7 @@ export function useUserAuth({
         setUserWallet(walletAddress);
         setUserName(data.data.user.name || 'User');
         localStorage.setItem('blip_wallet', walletAddress);
+        if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
         fetchOrders(data.data.user.id);
         fetchBankAccounts(data.data.user.id);
         fetchResolvedDisputes(data.data.user.id);
@@ -157,6 +159,7 @@ export function useUserAuth({
         setUserName(user.username || user.name || 'User');
         setUserBalance(user.balance || 0);
         localStorage.setItem('blip_user', JSON.stringify(user));
+        if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
         fetchOrders(user.id);
         fetchBankAccounts(user.id);
         fetchResolvedDisputes(user.id);
@@ -200,6 +203,7 @@ export function useUserAuth({
         setUserName(user.username || user.name || 'User');
         setUserBalance(user.balance || 0);
         localStorage.setItem('blip_user', JSON.stringify(user));
+        if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
         fetchOrders(user.id);
         fetchBankAccounts(user.id);
         fetchResolvedDisputes(user.id);
@@ -252,6 +256,7 @@ export function useUserAuth({
         setUserName(user.username || user.name || 'User');
         setUserBalance(user.balance || 0);
         localStorage.setItem('blip_user', JSON.stringify(user));
+        if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
         fetchOrders(user.id);
         fetchBankAccounts(user.id);
         fetchResolvedDisputes(user.id);
@@ -285,6 +290,7 @@ export function useUserAuth({
               setUserId(user.id);
               setUserName(user.username || user.name || 'User');
               setUserBalance(user.balance || 0);
+              if (checkData.data.token) useMerchantStore.getState().setSessionToken(checkData.data.token);
               if (savedWallet) {
                 setUserWallet(savedWallet);
               }

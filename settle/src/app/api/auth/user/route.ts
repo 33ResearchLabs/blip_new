@@ -417,13 +417,24 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      return NextResponse.json({
+      const checkPayload = { actorId: user.id, actorType: 'user' as const };
+      const checkToken = generateSessionToken(checkPayload);
+      const checkAccessTk = generateAccessToken(checkPayload);
+      const checkRefreshTk = generateRefreshToken(checkPayload);
+
+      const checkRes = NextResponse.json({
         success: true,
         data: {
           valid: true,
           user,
+          ...(checkToken && { token: checkToken }),
+          ...(checkAccessTk && { accessToken: checkAccessTk }),
         },
       });
+      if (checkRefreshTk) {
+        checkRes.cookies.set(REFRESH_TOKEN_COOKIE, checkRefreshTk, REFRESH_COOKIE_OPTIONS);
+      }
+      return checkRes;
     }
 
     if (!userId) {
