@@ -1,14 +1,71 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useReducer, useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, DbOrder, Notification } from "@/types/merchant";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
 import { computeMyRole } from "@/lib/orders/statusResolver";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { isValidSolanaAddress } from '@/lib/validation/solana';
 import { showConfirm } from '@/context/ModalContext';
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
+
+// ─── Escrow reducer ───────────────────────────────────────────────
+// Replaces 15 individual useState calls with a single reducer.
+// Each operation (lock/release/cancel) has the same shape: show, order, loading, txHash, error.
+
+interface OperationState {
+  show: boolean;
+  order: Order | null;
+  loading: boolean;
+  txHash: string | null;
+  error: string | null;
+}
+
+const INITIAL_OP: OperationState = { show: false, order: null, loading: false, txHash: null, error: null };
+
+interface EscrowState {
+  lock: OperationState;
+  release: OperationState;
+  cancel: OperationState;
+}
+
+const INITIAL_ESCROW_STATE: EscrowState = {
+  lock: INITIAL_OP,
+  release: INITIAL_OP,
+  cancel: INITIAL_OP,
+};
+
+type EscrowAction =
+  | { type: 'OPEN'; op: 'lock' | 'release' | 'cancel'; order: Order }
+  | { type: 'CLOSE'; op: 'lock' | 'release' | 'cancel' }
+  | { type: 'SET_LOADING'; op: 'lock' | 'release' | 'cancel'; loading: boolean }
+  | { type: 'SET_TX_HASH'; op: 'lock' | 'release' | 'cancel'; txHash: string }
+  | { type: 'SET_ERROR'; op: 'lock' | 'release' | 'cancel'; error: string | null }
+  | { type: 'SET_ORDER'; op: 'lock' | 'release' | 'cancel'; order: Order | null }
+  | { type: 'HIDE_MODAL'; op: 'lock' | 'release' | 'cancel' };
+
+function escrowReducer(state: EscrowState, action: EscrowAction): EscrowState {
+  switch (action.type) {
+    case 'OPEN':
+      return { ...state, [action.op]: { show: true, order: action.order, loading: false, txHash: null, error: null } };
+    case 'CLOSE':
+      return { ...state, [action.op]: INITIAL_OP };
+    case 'SET_LOADING':
+      return { ...state, [action.op]: { ...state[action.op], loading: action.loading } };
+    case 'SET_TX_HASH':
+      return { ...state, [action.op]: { ...state[action.op], txHash: action.txHash } };
+    case 'SET_ERROR':
+      return { ...state, [action.op]: { ...state[action.op], error: action.error } };
+    case 'SET_ORDER':
+      return { ...state, [action.op]: { ...state[action.op], order: action.order } };
+    case 'HIDE_MODAL':
+      return { ...state, [action.op]: { ...state[action.op], show: false } };
+    default:
+      return state;
+  }
+}
 
 interface UseEscrowOperationsParams {
   solanaWallet: any;
@@ -38,26 +95,27 @@ export function useEscrowOperations({
   const merchantId = useMerchantStore(s => s.merchantId);
   const setOrders = useMerchantStore(s => s.setOrders);
 
-  // ─── Escrow lock state ───
-  const [showEscrowModal, setShowEscrowModal] = useState(false);
-  const [escrowOrder, setEscrowOrder] = useState<Order | null>(null);
-  const [isLockingEscrow, setIsLockingEscrow] = useState(false);
-  const [escrowTxHash, setEscrowTxHash] = useState<string | null>(null);
-  const [escrowError, setEscrowError] = useState<string | null>(null);
+  // ─── Escrow state (single reducer for all 3 operations) ───
+  const [es, dispatch] = useReducer(escrowReducer, INITIAL_ESCROW_STATE);
 
-  // ─── Escrow release state ───
-  const [showReleaseModal, setShowReleaseModal] = useState(false);
-  const [releaseOrder, setReleaseOrder] = useState<Order | null>(null);
-  const [isReleasingEscrow, setIsReleasingEscrow] = useState(false);
-  const [releaseTxHash, setReleaseTxHash] = useState<string | null>(null);
-  const [releaseError, setReleaseError] = useState<string | null>(null);
+  // Derived aliases — same names the return object exposes, zero behavior change
+  const showEscrowModal = es.lock.show;
+  const escrowOrder = es.lock.order;
+  const isLockingEscrow = es.lock.loading;
+  const escrowTxHash = es.lock.txHash;
+  const escrowError = es.lock.error;
 
-  // ─── Escrow cancel state ───
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelOrder, setCancelOrder] = useState<Order | null>(null);
-  const [isCancellingEscrow, setIsCancellingEscrow] = useState(false);
-  const [cancelTxHash, setCancelTxHash] = useState<string | null>(null);
-  const [cancelError, setCancelError] = useState<string | null>(null);
+  const showReleaseModal = es.release.show;
+  const releaseOrder = es.release.order;
+  const isReleasingEscrow = es.release.loading;
+  const releaseTxHash = es.release.txHash;
+  const releaseError = es.release.error;
+
+  const showCancelModal = es.cancel.show;
+  const cancelOrder = es.cancel.order;
+  const isCancellingEscrow = es.cancel.loading;
+  const cancelTxHash = es.cancel.txHash;
+  const cancelError = es.cancel.error;
 
   // ─── Cancel without escrow loading ───
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
@@ -94,18 +152,14 @@ export function useEscrowOperations({
       console.error('[Escrow] Error fetching fresh order:', err);
     }
 
-    setEscrowOrder(orderToUse);
-    setEscrowTxHash(null);
-    setEscrowError(null);
-    setIsLockingEscrow(false);
-    setShowEscrowModal(true);
+    dispatch({ type: 'OPEN', op: 'lock', order: orderToUse });
   }, [merchantId, solanaWallet.connected, addNotification, setShowWalletModal]);
 
   const executeLockEscrow = useCallback(async () => {
     if (!merchantId || !escrowOrder) return;
 
     if (effectiveBalance !== null && effectiveBalance < escrowOrder.amount) {
-      setEscrowError(`Insufficient USDC balance. You need ${escrowOrder.amount} USDC but have ${effectiveBalance.toFixed(2)} USDC.`);
+      dispatch({ type: 'SET_ERROR', op: 'lock', error: `Insufficient USDC balance. You need ${escrowOrder.amount} USDC but have ${effectiveBalance.toFixed(2)} USDC.` });
       return;
     }
 
@@ -114,20 +168,15 @@ export function useEscrowOperations({
       await new Promise(r => setTimeout(r, 500));
       const newBalance = solanaWallet.usdtBalance;
       if (newBalance !== null && newBalance < escrowOrder.amount) {
-        setEscrowError(`Insufficient USDC balance. You need ${escrowOrder.amount} USDC but have ${newBalance.toFixed(2)} USDC.`);
+        dispatch({ type: 'SET_ERROR', op: 'lock', error: `Insufficient USDC balance. You need ${escrowOrder.amount} USDC but have ${newBalance.toFixed(2)} USDC.` });
         return;
       }
     }
 
-    const validWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-    const isValidWallet = (addr: string | undefined | null): boolean => {
-      if (!addr) return false;
-      return validWalletRegex.test(addr);
-    };
     const myWallet = solanaWallet.walletAddress;
 
-    const hasAcceptorWallet = isValidWallet(escrowOrder.acceptorWallet);
-    const hasUserWallet = isValidWallet(escrowOrder.userWallet);
+    const hasAcceptorWallet = isValidSolanaAddress(escrowOrder.acceptorWallet);
+    const hasUserWallet = isValidSolanaAddress(escrowOrder.userWallet);
     const iAmOrderCreator = escrowOrder.orderMerchantId === merchantId;
     const isPendingOrEscrowed = escrowOrder.dbOrder?.status === 'pending' || escrowOrder.dbOrder?.status === 'escrowed';
     const isMyOrder = escrowOrder.isMyOrder || (isPendingOrEscrowed && iAmOrderCreator);
@@ -144,23 +193,23 @@ export function useEscrowOperations({
       recipientWallet = undefined;
     } else if (isMerchantTrade) {
       if (iAmCreator) {
-        recipientWallet = isValidWallet(escrowOrder.acceptorWallet) ? escrowOrder.acceptorWallet! : undefined;
+        recipientWallet = isValidSolanaAddress(escrowOrder.acceptorWallet) ? escrowOrder.acceptorWallet! : undefined;
       } else {
-        recipientWallet = isValidWallet(escrowOrder.buyerMerchantWallet) ? escrowOrder.buyerMerchantWallet! : undefined;
+        recipientWallet = isValidSolanaAddress(escrowOrder.buyerMerchantWallet) ? escrowOrder.buyerMerchantWallet! : undefined;
       }
     } else {
-      recipientWallet = isValidWallet(escrowOrder.userWallet) ? escrowOrder.userWallet! : undefined;
+      recipientWallet = isValidSolanaAddress(escrowOrder.userWallet) ? escrowOrder.userWallet! : undefined;
     }
 
     if (!recipientWallet && !canEscrowToTreasury && !IS_EMBEDDED_WALLET) {
-      setEscrowError(isMerchantTrade
+      dispatch({ type: 'SET_ERROR', op: 'lock', error: isMerchantTrade
         ? 'The other merchant has not connected their Solana wallet yet.'
-        : 'User has not connected their Solana wallet yet. Ask them to connect their wallet in the app first.');
+        : 'User has not connected their Solana wallet yet. Ask them to connect their wallet in the app first.' });
       return;
     }
 
-    setIsLockingEscrow(true);
-    setEscrowError(null);
+    dispatch({ type: 'SET_LOADING', op: 'lock', loading: true });
+    dispatch({ type: 'SET_ERROR', op: 'lock', error: null });
 
     try {
       const escrowResult: { success: boolean; txHash: string; tradeId?: number; tradePda?: string; escrowPda?: string; error?: string } = await solanaWallet.depositToEscrowOpen({
@@ -172,8 +221,8 @@ export function useEscrowOperations({
         throw new Error(escrowResult.error || 'Transaction failed');
       }
 
-      setEscrowTxHash(escrowResult.txHash);
-      setShowEscrowModal(false);
+      dispatch({ type: 'SET_TX_HASH', op: 'lock', txHash: escrowResult.txHash });
+      dispatch({ type: 'HIDE_MODAL', op: 'lock' });
 
       setOrders((prev: Order[]) => prev.map((o: Order) => o.id === escrowOrder.id ? {
         ...o,
@@ -215,10 +264,7 @@ export function useEscrowOperations({
             setOrders((prev: Order[]) => [newOrder, ...prev]);
             addNotification('escrow', `Sell order created! ${escrowOrder.amount} USDC locked in escrow`, data.data.id);
             delete (window as any).__pendingSellOrder;
-            setShowEscrowModal(false);
-            setEscrowOrder(null);
-            setEscrowTxHash(null);
-            setEscrowError(null);
+            dispatch({ type: 'CLOSE', op: 'lock' });
           } else {
             const errorMsg = data.error || data.validation_errors?.[0] || 'Unknown error';
             addNotification('system', `Escrow locked but order creation failed: ${errorMsg}`, escrowOrder.id);
@@ -265,10 +311,7 @@ export function useEscrowOperations({
         if (recorded) {
           playSound('trade_complete');
           addNotification('escrow', `${escrowOrder.amount} USDC locked in escrow - waiting for payment`, escrowOrder.id);
-          setShowEscrowModal(false);
-          setEscrowOrder(null);
-          setEscrowTxHash(null);
-          setEscrowError(null);
+          dispatch({ type: 'CLOSE', op: 'lock' });
           try { localStorage.removeItem(`blip_unrecorded_escrow_${escrowOrder.id}`); } catch {}
           await afterMutationReconcile(escrowOrder.id);
         } else {
@@ -287,25 +330,21 @@ export function useEscrowOperations({
         }
         refreshBalance();
       }
-      setIsLockingEscrow(false);
+      dispatch({ type: 'SET_LOADING', op: 'lock', loading: false });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       if (errorMsg.includes('block height exceeded') || errorMsg.includes('has expired')) {
-        setEscrowError('Transaction expired. Please approve the wallet popup faster (within 60 seconds). Try again.');
+        dispatch({ type: 'SET_ERROR', op: 'lock', error: 'Transaction expired. Please approve the wallet popup faster (within 60 seconds). Try again.' });
       } else {
-        setEscrowError(errorMsg || 'Failed to lock escrow. Please try again.');
+        dispatch({ type: 'SET_ERROR', op: 'lock', error: errorMsg || 'Failed to lock escrow. Please try again.' });
       }
-      setIsLockingEscrow(false);
+      dispatch({ type: 'SET_LOADING', op: 'lock', loading: false });
       playSound('error');
     }
   }, [merchantId, escrowOrder, effectiveBalance, inAppBalance, solanaWallet, addNotification, playSound, afterMutationReconcile, refreshBalance]);
 
   const closeEscrowModal = useCallback(() => {
-    setShowEscrowModal(false);
-    setEscrowOrder(null);
-    setEscrowTxHash(null);
-    setEscrowError(null);
-    setIsLockingEscrow(false);
+    dispatch({ type: 'CLOSE', op: 'lock' });
     fetchOrders();
   }, [fetchOrders]);
 
@@ -342,11 +381,7 @@ export function useEscrowOperations({
             return;
           }
 
-          setReleaseOrder(freshOrder);
-          setReleaseTxHash(null);
-          setReleaseError(null);
-          setIsReleasingEscrow(false);
-          setShowReleaseModal(true);
+          dispatch({ type: 'OPEN', op: 'release', order: freshOrder });
           return;
         }
       }
@@ -360,18 +395,14 @@ export function useEscrowOperations({
       return;
     }
 
-    setReleaseOrder(order);
-    setReleaseTxHash(null);
-    setReleaseError(null);
-    setIsReleasingEscrow(false);
-    setShowReleaseModal(true);
+    dispatch({ type: 'OPEN', op: 'release', order });
   }, [merchantId, solanaWallet.connected, addNotification, playSound, setShowWalletModal, fetchOrders]);
 
   const executeRelease = useCallback(async () => {
     if (!merchantId || !releaseOrder) return;
 
-    setIsReleasingEscrow(true);
-    setReleaseError(null);
+    dispatch({ type: 'SET_LOADING', op: 'release', loading: true });
+    dispatch({ type: 'SET_ERROR', op: 'release', error: null });
 
     try {
       // Server-side pre-flight validation before on-chain transaction
@@ -381,8 +412,8 @@ export function useEscrowOperations({
           const validateData = await validateRes.json();
           if (validateData.success && validateData.data && !validateData.data.canRelease) {
             const reasons = validateData.data.reasons as string[];
-            setReleaseError(reasons[0] || 'Release validation failed. Please ensure escrow is locked and payment is confirmed.');
-            setIsReleasingEscrow(false);
+            dispatch({ type: 'SET_ERROR', op: 'release', error: reasons[0] || 'Release validation failed. Please ensure escrow is locked and payment is confirmed.' });
+            dispatch({ type: 'SET_LOADING', op: 'release', loading: false });
             return;
           }
         }
@@ -393,15 +424,14 @@ export function useEscrowOperations({
 
       const { escrowTradeId, escrowCreatorWallet, userWallet } = releaseOrder;
 
-      const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
       if (!escrowTradeId || !escrowCreatorWallet || !userWallet) {
-        setReleaseError('Missing escrow details. The escrow may not have been locked on-chain. Please lock escrow before releasing funds.');
-        setIsReleasingEscrow(false);
+        dispatch({ type: 'SET_ERROR', op: 'release', error: 'Missing escrow details. The escrow may not have been locked on-chain. Please lock escrow before releasing funds.' });
+        dispatch({ type: 'SET_LOADING', op: 'release', loading: false });
         return;
       }
-      if (!base58Regex.test(userWallet)) {
-        setReleaseError('Invalid user wallet address format.');
-        setIsReleasingEscrow(false);
+      if (!isValidSolanaAddress(userWallet)) {
+        dispatch({ type: 'SET_ERROR', op: 'release', error: 'Invalid user wallet address format.' });
+        dispatch({ type: 'SET_LOADING', op: 'release', loading: false });
         return;
       }
 
@@ -439,8 +469,8 @@ export function useEscrowOperations({
             console.log('[Release] Escrow already released on-chain — syncing backend...');
             releaseResult = { success: true, txHash: releaseOrder.escrowTxHash || 'already-released' };
           } else if (msg.includes('ConstraintRaw') || msg.includes('CannotRelease')) {
-            setReleaseError(`Unable to release escrow: ${msg.slice(0, 200)}`);
-            setIsReleasingEscrow(false);
+            dispatch({ type: 'SET_ERROR', op: 'release', error: `Unable to release escrow: ${msg.slice(0, 200)}` });
+            dispatch({ type: 'SET_LOADING', op: 'release', loading: false });
             return;
           } else {
             throw releaseErr;
@@ -449,7 +479,7 @@ export function useEscrowOperations({
       }
 
       if (releaseResult.success) {
-        setReleaseTxHash(releaseResult.txHash);
+        dispatch({ type: 'SET_TX_HASH', op: 'release', txHash: releaseResult.txHash });
 
         const releaseBackendRes = await fetchWithAuth(`/api/orders/${releaseOrder.id}/escrow`, {
           method: 'PATCH',
@@ -480,23 +510,19 @@ export function useEscrowOperations({
           });
         }, 1500);
       } else {
-        setReleaseError(releaseResult.error || 'Failed to release escrow');
+        dispatch({ type: 'SET_ERROR', op: 'release', error: releaseResult.error || 'Failed to release escrow' });
         playSound('error');
       }
     } catch (error) {
-      setReleaseError(error instanceof Error ? error.message : 'Failed to release escrow. Please try again.');
+      dispatch({ type: 'SET_ERROR', op: 'release', error: error instanceof Error ? error.message : 'Failed to release escrow. Please try again.' });
       playSound('error');
     } finally {
-      setIsReleasingEscrow(false);
+      dispatch({ type: 'SET_LOADING', op: 'release', loading: false });
     }
   }, [merchantId, releaseOrder, solanaWallet, addNotification, playSound, afterMutationReconcile, setRatingModalData]);
 
   const closeReleaseModal = useCallback(() => {
-    setShowReleaseModal(false);
-    setReleaseOrder(null);
-    setReleaseTxHash(null);
-    setReleaseError(null);
-    setIsReleasingEscrow(false);
+    dispatch({ type: 'CLOSE', op: 'release' });
   }, []);
 
   // ═══════════════════════════════════════════════════════════════════
@@ -518,11 +544,7 @@ export function useEscrowOperations({
         const data = await res.json();
         if (data.success && data.data) {
           const freshOrder = mapDbOrderToUI(data.data, merchantId);
-          setCancelOrder(freshOrder);
-          setCancelTxHash(null);
-          setCancelError(null);
-          setIsCancellingEscrow(false);
-          setShowCancelModal(true);
+          dispatch({ type: 'OPEN', op: 'cancel', order: freshOrder });
           return;
         }
       }
@@ -530,25 +552,21 @@ export function useEscrowOperations({
       console.error('[Cancel] Error fetching fresh order:', err);
     }
 
-    setCancelOrder(order);
-    setCancelTxHash(null);
-    setCancelError(null);
-    setIsCancellingEscrow(false);
-    setShowCancelModal(true);
+    dispatch({ type: 'OPEN', op: 'cancel', order });
   }, [merchantId, solanaWallet.connected, addNotification, setShowWalletModal]);
 
   const executeCancelEscrow = useCallback(async () => {
     if (!merchantId || !cancelOrder) return;
 
-    setIsCancellingEscrow(true);
-    setCancelError(null);
+    dispatch({ type: 'SET_LOADING', op: 'cancel', loading: true });
+    dispatch({ type: 'SET_ERROR', op: 'cancel', error: null });
 
     try {
       const { escrowTradeId, escrowCreatorWallet } = cancelOrder;
 
       if (!escrowTradeId || !escrowCreatorWallet) {
-        setCancelError('Missing escrow details. The escrow may not have been locked on-chain.');
-        setIsCancellingEscrow(false);
+        dispatch({ type: 'SET_ERROR', op: 'cancel', error: 'Missing escrow details. The escrow may not have been locked on-chain.' });
+        dispatch({ type: 'SET_LOADING', op: 'cancel', loading: false });
         return;
       }
 
@@ -558,7 +576,7 @@ export function useEscrowOperations({
       });
 
       if (refundResult.success) {
-        setCancelTxHash(refundResult.txHash);
+        dispatch({ type: 'SET_TX_HASH', op: 'cancel', txHash: refundResult.txHash });
 
         await fetchWithAuth(`/api/orders/${cancelOrder.id}`, {
           method: 'PATCH',
@@ -575,23 +593,19 @@ export function useEscrowOperations({
         addNotification('system', `Escrow cancelled. ${cancelOrder.amount} USDC returned to your balance.`, cancelOrder.id);
         await afterMutationReconcile(cancelOrder.id, { status: "cancelled" as const });
       } else {
-        setCancelError(refundResult.error || 'Failed to refund escrow');
+        dispatch({ type: 'SET_ERROR', op: 'cancel', error: refundResult.error || 'Failed to refund escrow' });
         playSound('error');
       }
     } catch (error) {
-      setCancelError(error instanceof Error ? error.message : 'Failed to cancel escrow. Please try again.');
+      dispatch({ type: 'SET_ERROR', op: 'cancel', error: error instanceof Error ? error.message : 'Failed to cancel escrow. Please try again.' });
       playSound('error');
     } finally {
-      setIsCancellingEscrow(false);
+      dispatch({ type: 'SET_LOADING', op: 'cancel', loading: false });
     }
   }, [merchantId, cancelOrder, solanaWallet, addNotification, playSound, afterMutationReconcile]);
 
   const closeCancelModal = useCallback(() => {
-    setShowCancelModal(false);
-    setCancelOrder(null);
-    setCancelTxHash(null);
-    setCancelError(null);
-    setIsCancellingEscrow(false);
+    dispatch({ type: 'CLOSE', op: 'cancel' });
   }, []);
 
   // Cancel without escrow (pending/accepted orders)
@@ -632,11 +646,7 @@ export function useEscrowOperations({
 
   // Open escrow modal for a fresh sell order (used by handleDirectOrderCreation)
   const openEscrowModalForSell = useCallback((tempOrder: Order) => {
-    setEscrowOrder(tempOrder);
-    setEscrowTxHash(null);
-    setEscrowError(null);
-    setIsLockingEscrow(false);
-    setShowEscrowModal(true);
+    dispatch({ type: 'OPEN', op: 'lock', order: tempOrder });
   }, []);
 
   return {

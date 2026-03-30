@@ -1,148 +1,19 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Bell, Plus, Loader2, History } from "lucide-react";
-import dynamic from "next/dynamic";
 import { usePusher } from "@/context/PusherContext";
 import { useSounds } from "@/hooks/useSounds";
 import { useWebSocketChat } from "@/hooks/useWebSocketChat";
 import { useDirectChat } from "@/hooks/useDirectChat";
-import { DirectChatView } from "@/components/merchant/DirectChatView";
-import PWAInstallBanner from "@/components/PWAInstallBanner";
 import {
   NotificationToastContainer,
   useToast,
   ConnectionIndicator,
 } from "@/components/NotificationToast";
-import { MerchantChatTabs } from "@/components/merchant/MerchantChatTabs";
-const OrderDetailsPanel = dynamic(
-  () =>
-    import("@/components/merchant/OrderDetailsPanel").then((m) => ({
-      default: m.OrderDetailsPanel,
-    })),
-  { ssr: false },
-);
-const MerchantProfileModal = dynamic(
-  () =>
-    import("@/components/merchant/MerchantProfileModal").then((m) => ({
-      default: m.MerchantProfileModal,
-    })),
-  { ssr: false },
-);
-const TransactionHistoryModal = dynamic(
-  () =>
-    import("@/components/merchant/TransactionHistoryModal").then((m) => ({
-      default: m.TransactionHistoryModal,
-    })),
-  { ssr: false },
-);
-const PaymentMethodModal = dynamic(
-  () =>
-    import("@/components/merchant/PaymentMethodModal").then((m) => ({
-      default: m.PaymentMethodModal,
-    })),
-  { ssr: false },
-);
-const RatingModal = dynamic(
-  () =>
-    import("@/components/RatingModal").then((m) => ({
-      default: m.RatingModal,
-    })),
-  { ssr: false },
-);
-const MerchantQuoteModal = dynamic(
-  () =>
-    import("@/components/mempool/MerchantQuoteModal").then((m) => ({
-      default: m.MerchantQuoteModal,
-    })),
-  { ssr: false },
-);
-const OrderInspector = dynamic(
-  () =>
-    import("@/components/mempool/OrderInspector").then((m) => ({
-      default: m.OrderInspector,
-    })),
-  { ssr: false },
-);
-import { DashboardWidgets } from "@/components/merchant/DashboardWidgets";
-import { ConfigPanel } from "@/components/merchant/ConfigPanel";
-import { PendingOrdersPanel } from "@/components/merchant/PendingOrdersPanel";
-import { LeaderboardPanel } from "@/components/merchant/LeaderboardPanel";
-import { InProgressPanel } from "@/components/merchant/InProgressPanel";
-import { ActivityPanel } from "@/components/merchant/ActivityPanel";
-import { CompletedOrdersPanel } from "@/components/merchant/CompletedOrdersPanel";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
-import { NotificationsPanel } from "@/components/merchant/NotificationsPanel";
-import { MobileOrdersView } from "@/components/merchant/MobileOrdersView";
-import { MobileEscrowView } from "@/components/merchant/MobileEscrowView";
-import { MobileChatView } from "@/components/merchant/MobileChatView";
-import { MobileHistoryView } from "@/components/merchant/MobileHistoryView";
-import { MobileMarketplaceView } from "@/components/merchant/MobileMarketplaceView";
-import { MobileBottomNav } from "@/components/merchant/MobileBottomNav";
-const CorridorCreateModal = dynamic(
-  () =>
-    import("@/components/merchant/CorridorCreateModal").then((m) => ({
-      default: m.CorridorCreateModal,
-    })),
-  { ssr: false },
-);
-const TradeFormModal = dynamic(
-  () =>
-    import("@/components/merchant/TradeFormModal").then((m) => ({
-      default: m.TradeFormModal,
-    })),
-  { ssr: false },
-);
-const OrderQuickView = dynamic(
-  () =>
-    import("@/components/merchant/OrderQuickView").then((m) => ({
-      default: m.OrderQuickView,
-    })),
-  { ssr: false },
-);
 import { LoginScreen } from "@/components/merchant/LoginScreen";
-const EscrowLockModal = dynamic(
-  () =>
-    import("@/components/merchant/EscrowLockModal").then((m) => ({
-      default: m.EscrowLockModal,
-    })),
-  { ssr: false },
-);
-// EscrowReleaseModal removed — confirm payment now uses showConfirm dialog + automatic escrow release
-const EscrowCancelModal = dynamic(
-  () =>
-    import("@/components/merchant/EscrowCancelModal").then((m) => ({
-      default: m.EscrowCancelModal,
-    })),
-  { ssr: false },
-);
-const DisputeModal = dynamic(
-  () =>
-    import("@/components/merchant/DisputeModal").then((m) => ({
-      default: m.DisputeModal,
-    })),
-  { ssr: false },
-);
-const WalletPromptModal = dynamic(
-  () =>
-    import("@/components/merchant/WalletPromptModal").then((m) => ({
-      default: m.WalletPromptModal,
-    })),
-  { ssr: false },
-);
-const AnalyticsModal = dynamic(
-  () =>
-    import("@/components/merchant/AnalyticsModal").then((m) => ({
-      default: m.AnalyticsModal,
-    })),
-  { ssr: false },
-);
-import {
-  Group as PanelGroup,
-  Panel,
-  Separator as PanelResizeHandle,
-} from "react-resizable-panels";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order } from "@/types/merchant";
 import {
@@ -163,15 +34,9 @@ import { useTradeCreation } from "@/hooks/useTradeCreation";
 import { useMerchantRealtimeEvents } from "@/hooks/useMerchantRealtimeEvents";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
-
-const MerchantWalletModal = dynamic(
-  () => import("@/components/MerchantWalletModal"),
-  { ssr: false },
-);
-const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === "true";
-const UsernameModal = dynamic(() => import("@/components/UsernameModal"), {
-  ssr: false,
-});
+import { MerchantModals } from "@/components/merchant/MerchantModals";
+import { MerchantDesktopLayout } from "@/components/merchant/MerchantDesktopLayout";
+import { MerchantMobileContent } from "@/components/merchant/MerchantMobileContent";
 
 export default function MerchantDashboard() {
   const { playSound } = useSounds();
@@ -208,22 +73,34 @@ export default function MerchantDashboard() {
   } | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [isMerchantOnline, setIsMerchantOnline] = useState(true);
-  const [activityCollapsed, setActivityCollapsed] = useState(false);
-  const [inProgressCollapsed, setInProgressCollapsed] = useState(false);
-  const [completedCollapsed, setCompletedCollapsed] = useState(false);
-  const [leaderboardCollapsed, setLeaderboardCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState({
+    activity: false,
+    inProgress: false,
+    completed: false,
+    leaderboard: false,
+  });
+  const activityCollapsed = collapsed.activity;
+  const inProgressCollapsed = collapsed.inProgress;
+  const completedCollapsed = collapsed.completed;
+  const leaderboardCollapsed = collapsed.leaderboard;
+  const setActivityCollapsed = useCallback((v: boolean) => setCollapsed(p => ({ ...p, activity: v })), []);
+  const setInProgressCollapsed = useCallback((v: boolean) => setCollapsed(p => ({ ...p, inProgress: v })), []);
+  const setCompletedCollapsed = useCallback((v: boolean) => setCollapsed(p => ({ ...p, completed: v })), []);
+  const setLeaderboardCollapsed = useCallback((v: boolean) => setCollapsed(p => ({ ...p, leaderboard: v })), []);
   const [mobileView, setMobileView] = useState<
     "orders" | "escrow" | "chat" | "history" | "marketplace"
   >("orders");
-  const [marketSubTab, setMarketSubTab] = useState<"browse" | "offers">(
-    "browse",
-  );
-  const [leaderboardTab, setLeaderboardTab] = useState<
-    "traders" | "rated" | "reputation"
-  >("traders");
-  const [historyTab, setHistoryTab] = useState<
-    "completed" | "cancelled" | "stats"
-  >("completed");
+  const [tabs, setTabs] = useState({
+    market: "browse" as "browse" | "offers",
+    leaderboard: "traders" as "traders" | "rated" | "reputation",
+    history: "completed" as "completed" | "cancelled" | "stats",
+  });
+  const marketSubTab = tabs.market;
+  const leaderboardTab = tabs.leaderboard;
+  const historyTab = tabs.history;
+  const setMarketSubTab = useCallback((v: "browse" | "offers") => setTabs(p => ({ ...p, market: v })), []);
+  const setLeaderboardTab = useCallback((v: "traders" | "rated" | "reputation") => setTabs(p => ({ ...p, leaderboard: v })), []);
+  const setHistoryTab = useCallback((v: "completed" | "cancelled" | "stats") => setTabs(p => ({ ...p, history: v })), []);
   const [openTradeForm, setOpenTradeForm] = useState({
     tradeType: "sell" as "buy" | "sell",
     cryptoAmount: "",
@@ -624,6 +501,33 @@ export default function MerchantDashboard() {
     setExtensionRequests,
   });
 
+  // Rating submit handler (stable callback for MerchantModals)
+  const handleRatingSubmit = useCallback(async (rating: number, review: string) => {
+    if (!ratingModalData || !merchantId) return;
+    const res = await fetchWithAuth("/api/ratings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        order_id: ratingModalData.orderId,
+        rater_type: "merchant",
+        rater_id: merchantId,
+        rating,
+        review_text: review,
+      }),
+    });
+    if (res.ok) {
+      toast.show({
+        type: "complete",
+        title: "Rating Submitted",
+        message: `You rated ${ratingModalData.counterpartyName} ${rating} stars`,
+      });
+      fetchOrders();
+    } else {
+      const data = await res.json();
+      throw new Error(data.error || "Failed to submit rating");
+    }
+  }, [ratingModalData, merchantId, toast, fetchOrders]);
+
   // Order filtering — helpers are defined inside each useMemo so that
   // merchantId is a proper dependency and filters update on user switch.
   const pendingOrders = useMemo(() => {
@@ -824,630 +728,190 @@ export default function MerchantDashboard() {
         </button>
       </div>
 
-      {/* DESKTOP Layout */}
-      <div className="hidden md:flex md:flex-col h-screen overflow-hidden">
-        <PanelGroup
-          orientation="horizontal"
-          className="flex-1 overflow-hidden"
-          key={isWideScreen ? "wide" : "narrow"}
-        >
-          <Panel
-            defaultSize={isWideScreen ? "20%" : "24%"}
-            minSize={isWideScreen ? "14%" : "16%"}
-            maxSize={isWideScreen ? "30%" : "35%"}
-            id="left"
-          >
-            <div className="flex flex-col h-full bg-[#060606] overflow-y-auto p-2 gap-2">
-              <div
-                className="glass-card rounded-xl overflow-hidden flex-shrink-0 border border-white/[0.06]"
-                style={{ height: "48%", minHeight: "260px" }}
-              >
-                <DashboardWidgets
-                  todayEarnings={todayEarnings}
-                  completedOrders={completedOrders.length}
-                  cancelledOrders={cancelledOrders.length}
-                  avgResponseMins={0}
-                  rank={12}
-                  balance={effectiveBalance || 0}
-                  lockedInEscrow={245.5}
-                  isOnline={isMerchantOnline}
-                  merchantId={merchantId || undefined}
-                  onToggleOnline={() => setIsMerchantOnline((prev) => !prev)}
-                  onOpenCorridor={() =>
-                    window.open("/merchant/mempool", "_blank")
-                  }
-                />
-              </div>
-              <div className="glass-card rounded-xl overflow-hidden flex-1 min-h-0 border border-white/[0.06]">
-                <ConfigPanel
-                  merchantId={merchantId}
-                  merchantInfo={merchantInfo}
-                  effectiveBalance={effectiveBalance}
-                  openTradeForm={openTradeForm}
-                  setOpenTradeForm={setOpenTradeForm}
-                  isCreatingTrade={isCreatingTrade}
-                  onCreateOrder={handleDirectOrderCreation}
-                  refreshBalance={refreshBalance}
-                />
-              </div>
-            </div>
-          </Panel>
-          <PanelResizeHandle className="w-[3px]" />
-          <Panel
-            defaultSize={isWideScreen ? "24%" : "27%"}
-            minSize="16%"
-            maxSize={isWideScreen ? "35%" : "40%"}
-            id="center-left"
-          >
-            <div className="flex flex-col h-full bg-black">
-              {isWideScreen ? (
-                <PendingOrdersPanel
-                  orders={pendingOrders}
-                  mempoolOrders={mempoolOrders}
-                  merchantInfo={merchantInfo}
-                  onSelectOrder={setSelectedOrderPopup}
-                  onSelectMempoolOrder={setSelectedMempoolOrder}
-                  onAcceptOrder={acceptOrder}
-                  acceptingOrderId={acceptingOrderId}
-                  onCancelOrder={handleCancelOrder}
-                  onOpenChat={handleOpenChat}
-                  fetchOrders={fetchOrders}
-                />
-              ) : (
-                <>
-                  <div
-                    style={{ height: "60%" }}
-                    className="flex flex-col border-b border-white/[0.04]"
-                  >
-                    <PendingOrdersPanel
-                      orders={pendingOrders}
-                      mempoolOrders={mempoolOrders}
-                      merchantInfo={merchantInfo}
-                      onSelectOrder={setSelectedOrderPopup}
-                      onSelectMempoolOrder={setSelectedMempoolOrder}
-                      onAcceptOrder={acceptOrder}
-                      acceptingOrderId={acceptingOrderId}
-                      onCancelOrder={handleCancelOrder}
-                      onOpenChat={handleOpenChat}
-                      fetchOrders={fetchOrders}
-                    />
-                  </div>
-                  <div className="flex-1 flex flex-col min-h-0">
-                    <LeaderboardPanel
-                      leaderboardData={leaderboardData}
-                      leaderboardTab={leaderboardTab}
-                      setLeaderboardTab={setLeaderboardTab}
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-          </Panel>
-          <PanelResizeHandle className="w-[3px]" />
-          <Panel
-            defaultSize={isWideScreen ? "20%" : "27%"}
-            minSize={isWideScreen ? "14%" : "18%"}
-            maxSize={isWideScreen ? "32%" : "40%"}
-            id="center-right"
-          >
-            <div className="flex flex-col h-full bg-black">
-              <div
-                className={`flex flex-col border-b border-white/[0.04] transition-all duration-200 ${inProgressCollapsed ? "" : "flex-1 min-h-0"}`}
-              >
-                <InProgressPanel
-                  orders={ongoingOrders}
-                  onSelectOrder={setSelectedOrderPopup}
-                  onAction={handleOrderAction}
-                  onOpenChat={handleOpenChat}
-                  onOpenDispute={(order) => openDisputeModal(order.id)}
-                  collapsed={inProgressCollapsed}
-                  onCollapseChange={setInProgressCollapsed}
-                />
-              </div>
-              <div
-                className={`flex flex-col border-b border-white/[0.04] transition-all duration-200 ${completedCollapsed ? "" : "flex-1 min-h-0"}`}
-              >
-                <CompletedOrdersPanel
-                  orders={completedOrders}
-                  onSelectOrder={setSelectedOrderPopup}
-                  collapsed={completedCollapsed}
-                  onCollapseChange={setCompletedCollapsed}
-                />
-              </div>
-              {!isWideScreen && (
-                <div className="flex-1 flex flex-col min-h-0">
-                  <ActivityPanel
-                    merchantId={merchantId}
-                    completedOrders={completedOrders}
-                    cancelledOrders={cancelledOrders}
-                    ongoingOrders={ongoingOrders}
-                    pendingOrders={pendingOrders}
-                    onRateOrder={(order) =>
-                      setRatingModalData({
-                        orderId: order.id,
-                        counterpartyName: order.user || "User",
-                        counterpartyType: order.isM2M ? "merchant" : "user",
-                      })
-                    }
-                    onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
-                    onCollapseChange={setActivityCollapsed}
-                  />
-                </div>
-              )}
-            </div>
-          </Panel>
-          {isWideScreen && (
-            <>
-              <PanelResizeHandle className="w-[3px]" />
-              <Panel
-                defaultSize="18%"
-                minSize="12%"
-                maxSize="30%"
-                id="transactions"
-              >
-                <div className="flex flex-col h-full bg-black">
-                  <div
-                    className={`flex flex-col border-b border-white/[0.04] transition-all duration-200 ${leaderboardCollapsed ? "" : "flex-1 min-h-0"}`}
-                  >
-                    <LeaderboardPanel
-                      leaderboardData={leaderboardData}
-                      leaderboardTab={leaderboardTab}
-                      setLeaderboardTab={setLeaderboardTab}
-                      onCollapseChange={setLeaderboardCollapsed}
-                    />
-                  </div>
-                  <div
-                    className={`flex flex-col transition-all duration-200 ${activityCollapsed ? "" : "flex-1 min-h-0"}`}
-                  >
-                    <ActivityPanel
-                      merchantId={merchantId}
-                      completedOrders={completedOrders}
-                      cancelledOrders={cancelledOrders}
-                      ongoingOrders={ongoingOrders}
-                      pendingOrders={pendingOrders}
-                      onRateOrder={(order) =>
-                        setRatingModalData({
-                          orderId: order.id,
-                          counterpartyName: order.user || "User",
-                          counterpartyType: order.isM2M ? "merchant" : "user",
-                        })
-                      }
-                      onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
-                      onCollapseChange={setActivityCollapsed}
-                    />
-                  </div>
-                </div>
-              </Panel>
-            </>
-          )}
-          <PanelResizeHandle className="w-[3px]" />
-          <Panel
-            defaultSize={isWideScreen ? "18%" : "22%"}
-            minSize={isWideScreen ? "12%" : "15%"}
-            maxSize={isWideScreen ? "30%" : "35%"}
-            id="right"
-          >
-            <div className="flex flex-col h-full bg-[#060606] overflow-hidden">
-              <NotificationsPanel
-                notifications={notifications}
-                onMarkRead={markNotificationRead}
-                onSelectOrder={setSelectedOrderId}
-              />
-              <div className="flex-1 flex flex-col min-h-0">
-                {directChat.activeContactId ? (
-                  <DirectChatView
-                    contactName={directChat.activeContactName}
-                    contactType={directChat.activeContactType}
-                    messages={directChat.messages}
-                    isLoading={directChat.isLoadingMessages}
-                    onSendMessage={(text, imageUrl) => {
-                      directChat.sendMessage(text, imageUrl);
-                      playSound("send");
-                    }}
-                    onBack={() => directChat.closeChat()}
-                    orderStatus={activeContactOrderStatus}
-                  />
-                ) : (
-                  <MerchantChatTabs
-                    merchantId={merchantId || ""}
-                    conversations={directChat.conversations}
-                    totalUnread={directChat.totalUnread}
-                    isLoading={directChat.isLoadingConversations}
-                    onOpenChat={(targetId, targetType, username) => {
-                      directChat.addContact(targetId, targetType).then(() => {
-                        directChat.openChat(targetId, targetType, username);
-                      });
-                    }}
-                  />
-                )}
-              </div>
-            </div>
-          </Panel>
-        </PanelGroup>
-      </div>
+      <MerchantDesktopLayout
+        isWideScreen={isWideScreen}
+        pendingOrders={pendingOrders}
+        ongoingOrders={ongoingOrders}
+        completedOrders={completedOrders}
+        cancelledOrders={cancelledOrders}
+        mempoolOrders={mempoolOrders}
+        leaderboardData={leaderboardData}
+        merchantId={merchantId}
+        merchantInfo={merchantInfo}
+        effectiveBalance={effectiveBalance}
+        todayEarnings={todayEarnings}
+        isMerchantOnline={isMerchantOnline}
+        setIsMerchantOnline={setIsMerchantOnline}
+        openTradeForm={openTradeForm}
+        setOpenTradeForm={setOpenTradeForm}
+        isCreatingTrade={isCreatingTrade}
+        handleDirectOrderCreation={handleDirectOrderCreation}
+        refreshBalance={refreshBalance}
+        setSelectedOrderPopup={setSelectedOrderPopup}
+        setSelectedMempoolOrder={setSelectedMempoolOrder}
+        setSelectedOrderId={setSelectedOrderId}
+        acceptOrder={acceptOrder}
+        acceptingOrderId={acceptingOrderId}
+        handleCancelOrder={handleCancelOrder}
+        handleOpenChat={handleOpenChat}
+        handleOrderAction={handleOrderAction}
+        fetchOrders={fetchOrders}
+        openDisputeModal={openDisputeModal}
+        setRatingModalData={setRatingModalData}
+        inProgressCollapsed={inProgressCollapsed}
+        setInProgressCollapsed={setInProgressCollapsed}
+        completedCollapsed={completedCollapsed}
+        setCompletedCollapsed={setCompletedCollapsed}
+        activityCollapsed={activityCollapsed}
+        setActivityCollapsed={setActivityCollapsed}
+        leaderboardCollapsed={leaderboardCollapsed}
+        setLeaderboardCollapsed={setLeaderboardCollapsed}
+        leaderboardTab={leaderboardTab}
+        setLeaderboardTab={setLeaderboardTab}
+        notifications={notifications}
+        markNotificationRead={markNotificationRead}
+        directChat={directChat}
+        activeContactOrderStatus={activeContactOrderStatus}
+        playSound={playSound}
+      />
 
-      {/* Mobile View Content */}
-      <div className="md:hidden flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-auto p-3 pb-20">
-          {mobileView === "orders" && (
-            <MobileOrdersView
-              pendingOrders={pendingOrders}
-              bigOrders={bigOrders}
-              onAcceptOrder={acceptOrder}
-              acceptingOrderId={acceptingOrderId}
-              onOpenChat={handleOpenChat}
-              onDismissBigOrder={dismissBigOrder}
-              setMobileView={setMobileView}
-            />
-          )}
-          {mobileView === "escrow" && (
-            <MobileEscrowView
-              ongoingOrders={ongoingOrders}
-              markingDone={markingDone}
-              onOpenEscrowModal={openEscrowModal}
-              onMarkFiatPaymentSent={markFiatPaymentSent}
-              onConfirmPayment={(order) => confirmPayment(order.id)}
-              onOpenDisputeModal={(orderId) => openDisputeModal(orderId)}
-              onOpenCancelModal={openCancelModal}
-              onOpenChat={handleOpenChat}
-              setMobileView={setMobileView}
-            />
-          )}
-          {mobileView === "chat" && (
-            <MobileChatView
-              merchantId={merchantId}
-              directChat={directChat}
-              orderStatus={activeContactOrderStatus}
-              playSound={playSound}
-            />
-          )}
-          {mobileView === "history" && (
-            <MobileHistoryView
-              completedOrders={completedOrders}
-              cancelledOrders={cancelledOrders}
-              merchantId={merchantId}
-              merchantInfo={merchantInfo}
-              historyTab={historyTab}
-              setHistoryTab={setHistoryTab}
-              effectiveBalance={effectiveBalance}
-              totalTradedVolume={totalTradedVolume}
-              todayEarnings={todayEarnings}
-              pendingEarnings={pendingEarnings}
-              onShowAnalytics={() => setShowAnalytics(true)}
-              onShowWalletModal={() => setShowWalletModal(true)}
-              onLogout={handleLogout}
-            />
-          )}
-          {mobileView === "marketplace" && merchantId && (
-            <MobileMarketplaceView
-              merchantId={merchantId}
-              marketSubTab={marketSubTab}
-              setMarketSubTab={setMarketSubTab}
-              onTakeOffer={(offer) => {
-                setOpenTradeForm({
-                  tradeType: offer.type === "buy" ? "sell" : "buy",
-                  cryptoAmount: "",
-                  paymentMethod: offer.payment_method as "bank" | "cash",
-                  spreadPreference: "fastest",
-                  expiryMinutes: 15,
-                });
-                setShowOpenTradeModal(true);
-              }}
-              onCreateOffer={() => setShowCreateModal(true)}
-            />
-          )}
-        </main>
-      </div>
-
-      {/* Mobile FAB */}
-      <motion.button
-        whileTap={{ scale: 0.9 }}
-        onClick={() => setShowOpenTradeModal(true)}
-        className="md:hidden fixed right-4 bottom-[88px] z-40 w-14 h-14 rounded-full bg-orange-500 shadow-lg shadow-orange-500/25 flex items-center justify-center"
-      >
-        <Plus className="w-6 h-6 text-black" />
-      </motion.button>
-
-      <MobileBottomNav
+      <MerchantMobileContent
         mobileView={mobileView}
         setMobileView={setMobileView}
-        pendingCount={pendingOrders.length}
-        ongoingCount={ongoingOrders.length}
+        pendingOrders={pendingOrders}
+        ongoingOrders={ongoingOrders}
+        completedOrders={completedOrders}
+        cancelledOrders={cancelledOrders}
+        bigOrders={bigOrders}
+        acceptOrder={acceptOrder}
+        acceptingOrderId={acceptingOrderId}
+        handleOpenChat={handleOpenChat}
+        dismissBigOrder={dismissBigOrder}
+        markingDone={markingDone}
+        openEscrowModal={openEscrowModal}
+        markFiatPaymentSent={markFiatPaymentSent}
+        confirmPayment={confirmPayment}
+        openDisputeModal={openDisputeModal}
+        openCancelModal={openCancelModal}
+        merchantId={merchantId}
+        directChat={directChat}
+        activeContactOrderStatus={activeContactOrderStatus}
+        playSound={playSound}
+        merchantInfo={merchantInfo}
+        historyTab={historyTab}
+        setHistoryTab={setHistoryTab}
+        effectiveBalance={effectiveBalance}
+        totalTradedVolume={totalTradedVolume}
+        todayEarnings={todayEarnings}
+        pendingEarnings={pendingEarnings}
+        setShowAnalytics={setShowAnalytics}
+        setShowWalletModal={setShowWalletModal}
+        handleLogout={handleLogout}
+        marketSubTab={marketSubTab}
+        setMarketSubTab={setMarketSubTab}
+        setOpenTradeForm={setOpenTradeForm}
+        setShowOpenTradeModal={setShowOpenTradeModal}
+        setShowCreateModal={setShowCreateModal}
         totalUnread={totalUnread}
       />
 
-      {/* Modals */}
-      <DisputeModal
+      <MerchantModals
+        merchantId={merchantId}
+        orders={orders}
         showDisputeModal={showDisputeModal}
         disputeReason={disputeReason}
         setDisputeReason={setDisputeReason}
         disputeDescription={disputeDescription}
         setDisputeDescription={setDisputeDescription}
         isSubmittingDispute={isSubmittingDispute}
-        onClose={closeDisputeModal}
-        onSubmit={submitDispute}
-      />
-
-      <EscrowLockModal
+        closeDisputeModal={closeDisputeModal}
+        submitDispute={submitDispute}
         showEscrowModal={showEscrowModal}
         escrowOrder={escrowOrder}
         isLockingEscrow={isLockingEscrow}
         escrowTxHash={escrowTxHash}
         escrowError={escrowError}
         effectiveBalance={effectiveBalance}
-        onClose={closeEscrowModal}
-        onExecute={executeLockEscrow}
-      />
-
-      {/* EscrowReleaseModal removed — confirmPayment now handles the full flow with a confirmation dialog */}
-
-      <EscrowCancelModal
+        closeEscrowModal={closeEscrowModal}
+        executeLockEscrow={executeLockEscrow}
         showCancelModal={showCancelModal}
         cancelOrder={cancelOrder}
         isCancellingEscrow={isCancellingEscrow}
         cancelTxHash={cancelTxHash}
         cancelError={cancelError}
-        onClose={closeCancelModal}
-        onExecute={executeCancelEscrow}
-      />
-
-      <WalletPromptModal
-        show={
-          showWalletPrompt && !IS_EMBEDDED_WALLET && !solanaWallet.connected
-        }
-        onDismiss={() => setShowWalletPrompt(false)}
-        onConnect={() => {
-          setShowWalletPrompt(false);
-          setShowWalletModal(true);
-        }}
-      />
-
-      <AnalyticsModal
-        show={showAnalytics}
-        merchantId={merchantId}
-        onClose={() => setShowAnalytics(false)}
-      />
-
-      <PWAInstallBanner appName="Merchant" accentColor="#f97316" />
-
-      {!IS_EMBEDDED_WALLET && (
-        <MerchantWalletModal
-          isOpen={showWalletModal}
-          onClose={() => setShowWalletModal(false)}
-          onConnected={() => setShowWalletModal(false)}
-        />
-      )}
-
-      {(solanaWallet.walletAddress ||
-        (typeof window !== "undefined" &&
-          (window as any).phantom?.solana?.publicKey)) && (
-        <UsernameModal
-          isOpen={showUsernameModal}
-          walletAddress={
-            solanaWallet.walletAddress ||
-            (window as any).phantom?.solana?.publicKey?.toString()
-          }
-          onSubmit={handleMerchantUsername}
-          canClose={false}
-          apiEndpoint="/api/auth/merchant"
-        />
-      )}
-
-      <MerchantProfileModal
-        isOpen={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-        merchantId={merchantId || ""}
-        currentAvatar={merchantInfo?.avatar_url}
-        currentDisplayName={merchantInfo?.display_name}
-        currentBio={merchantInfo?.bio}
-        onProfileUpdated={handleProfileUpdated}
-      />
-
-      <TransactionHistoryModal
-        isOpen={showTransactionHistory}
-        onClose={() => setShowTransactionHistory(false)}
-        merchantId={merchantId || ""}
-      />
-      <PaymentMethodModal
-        isOpen={showPaymentMethods}
-        onClose={() => setShowPaymentMethods(false)}
-        merchantId={merchantId || ""}
-      />
-
-      {ratingModalData && merchantId && (
-        <RatingModal
-          orderId={ratingModalData.orderId}
-          counterpartyName={ratingModalData.counterpartyName}
-          counterpartyType={ratingModalData.counterpartyType}
-          raterType="merchant"
-          raterId={merchantId}
-          onClose={() => setRatingModalData(null)}
-          onSubmit={async (rating, review) => {
-            const res = await fetchWithAuth("/api/ratings", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                order_id: ratingModalData.orderId,
-                rater_type: "merchant",
-                rater_id: merchantId,
-                rating,
-                review_text: review,
-              }),
-            });
-            if (res.ok) {
-              toast.show({
-                type: "complete",
-                title: "Rating Submitted",
-                message: `You rated ${ratingModalData.counterpartyName} ${rating} stars`,
-              });
-              fetchOrders();
-            } else {
-              const data = await res.json();
-              throw new Error(data.error || "Failed to submit rating");
-            }
-          }}
-        />
-      )}
-
-      {merchantId && (
-        <MerchantQuoteModal
-          merchantId={merchantId}
-          corridorId="USDT_AED"
-          isOpen={showMerchantQuoteModal}
-          onClose={() => setShowMerchantQuoteModal(false)}
-        />
-      )}
-
-      {selectedMempoolOrder && merchantId && (
-        <OrderInspector
-          order={selectedMempoolOrder}
-          merchantId={merchantId}
-          onClose={() => setSelectedMempoolOrder(null)}
-          onBump={() => setSelectedMempoolOrder(null)}
-          onAccept={() => setSelectedMempoolOrder(null)}
-        />
-      )}
-
-      <CorridorCreateModal
-        isOpen={showCreateModal}
+        closeCancelModal={closeCancelModal}
+        executeCancelEscrow={executeCancelEscrow}
+        showWalletPrompt={showWalletPrompt}
+        setShowWalletPrompt={setShowWalletPrompt}
+        solanaWalletConnected={solanaWallet.connected}
+        showWalletModal={showWalletModal}
+        setShowWalletModal={setShowWalletModal}
+        solanaWalletAddress={solanaWallet.walletAddress}
+        showAnalytics={showAnalytics}
+        setShowAnalytics={setShowAnalytics}
+        showUsernameModal={showUsernameModal}
+        handleMerchantUsername={handleMerchantUsername}
+        showProfileModal={showProfileModal}
+        setShowProfileModal={setShowProfileModal}
+        merchantInfo={merchantInfo}
+        handleProfileUpdated={handleProfileUpdated}
+        showTransactionHistory={showTransactionHistory}
+        setShowTransactionHistory={setShowTransactionHistory}
+        showPaymentMethods={showPaymentMethods}
+        setShowPaymentMethods={setShowPaymentMethods}
+        ratingModalData={ratingModalData}
+        setRatingModalData={setRatingModalData}
+        onRatingSubmit={handleRatingSubmit}
+        showMerchantQuoteModal={showMerchantQuoteModal}
+        setShowMerchantQuoteModal={setShowMerchantQuoteModal}
+        selectedMempoolOrder={selectedMempoolOrder}
+        setSelectedMempoolOrder={setSelectedMempoolOrder}
+        showCreateModal={showCreateModal}
+        setShowCreateModal={setShowCreateModal}
         corridorForm={corridorForm}
         setCorridorForm={setCorridorForm}
-        effectiveBalance={effectiveBalance}
-        merchantId={merchantId}
-        solanaWalletAddress={solanaWallet.walletAddress}
-        onClose={() => setShowCreateModal(false)}
-        onRefreshBalance={() => refreshBalance()}
-        onFetchActiveOffers={fetchActiveOffers}
-      />
-
-      <TradeFormModal
-        isOpen={showOpenTradeModal}
+        solanaWalletAddressForCorridor={solanaWallet.walletAddress}
+        refreshBalance={refreshBalance}
+        fetchActiveOffers={fetchActiveOffers}
+        showOpenTradeModal={showOpenTradeModal}
+        setShowOpenTradeModal={setShowOpenTradeModal}
         openTradeForm={openTradeForm}
         setOpenTradeForm={setOpenTradeForm}
-        effectiveBalance={effectiveBalance}
         isCreatingTrade={isCreatingTrade}
         createTradeError={createTradeError}
         setCreateTradeError={setCreateTradeError}
-        onClose={() => setShowOpenTradeModal(false)}
-        onSubmit={handleCreateTrade}
-      />
-
-      <OrderQuickView
-        selectedOrder={selectedOrderPopup}
-        merchantId={merchantId}
+        handleCreateTrade={handleCreateTrade}
+        selectedOrderPopup={selectedOrderPopup}
+        setSelectedOrderPopup={setSelectedOrderPopup}
         markingDone={markingDone}
         acceptingOrderId={acceptingOrderId}
         confirmingOrderId={confirmingOrderId}
         cancellingOrderId={cancellingOrderId}
         isRequestingCancel={isRequestingCancel}
-        onClose={() => setSelectedOrderPopup(null)}
-        onAcceptOrder={acceptOrder}
-        onOpenEscrowModal={openEscrowModal}
-        onMarkFiatPaymentSent={markFiatPaymentSent}
-        onConfirmPayment={confirmPayment}
-        onCancelOrderWithoutEscrow={cancelOrderWithoutEscrow}
-        onRespondToCancel={respondToCancelRequest}
-        onOpenChat={handleOpenChat}
-        onViewFullDetails={(orderId) => setSelectedOrderId(orderId)}
+        acceptOrder={acceptOrder}
+        openEscrowModal={openEscrowModal}
+        markFiatPaymentSent={markFiatPaymentSent}
+        confirmPayment={confirmPayment}
+        cancelOrderWithoutEscrow={cancelOrderWithoutEscrow}
+        respondToCancelRequest={respondToCancelRequest}
+        handleOpenChat={handleOpenChat}
+        selectedOrderId={selectedOrderId}
+        setSelectedOrderId={setSelectedOrderId}
+        openChat={openChat}
+        setActiveChatId={setActiveChatId}
+        directChat={directChat}
+        openDisputeModal={openDisputeModal}
+        requestCancelOrder={requestCancelOrder}
+        openCancelModal={openCancelModal}
+        fetchOrders={fetchOrders}
+        toast={toast}
+        showMessageHistory={showMessageHistory}
+        setShowMessageHistory={setShowMessageHistory}
+        activeContactOrderStatus={activeContactOrderStatus}
+        playSound={playSound}
       />
 
-      {selectedOrderId && merchantId && (
-        <OrderDetailsPanel
-          orderId={selectedOrderId}
-          merchantId={merchantId}
-          onClose={() => setSelectedOrderId(null)}
-          onOpenChat={(orderId, targetId, targetType, targetName) => {
-            // For disputed orders: open ORDER CHAT (chat_messages via useWebSocketChat)
-            // so merchant can see compliance messages + reply in the same thread
-            const order = orders.find((o) => o.id === orderId);
-            if (
-              order &&
-              (order.status === "disputed" ||
-                order.dbOrder?.status === "disputed")
-            ) {
-              openChat(
-                order.user || targetName || "Dispute Chat",
-                "📋",
-                orderId,
-              );
-              setActiveChatId(orderId);
-              setSelectedOrderId(null);
-              return;
-            }
-            // For non-disputed orders: open DM view as before
-            if (targetId && targetType && targetName) {
-              directChat.addContact(targetId, targetType);
-              directChat.openChat(targetId, targetType, targetName);
-            } else {
-              if (order) handleOpenChat(order);
-            }
-            setSelectedOrderId(null);
-          }}
-          onConfirmPayment={confirmPayment}
-          onMarkPaymentSent={(orderId) => {
-            const order = orders.find((o) => o.id === orderId);
-            if (order) markFiatPaymentSent(order);
-          }}
-          onAcceptOrder={(orderId) => {
-            const order = orders.find((o) => o.id === orderId);
-            if (order) acceptOrder(order);
-          }}
-          onCancelOrder={(orderId) => {
-            const order = orders.find((o) => o.id === orderId);
-            if (order) {
-              if (order.escrowTxHash) openCancelModal(order);
-              else cancelOrderWithoutEscrow(order.id);
-            }
-          }}
-          onLockEscrow={(orderId) => {
-            const order = orders.find((o) => o.id === orderId);
-            if (order) openEscrowModal(order);
-          }}
-          onReleaseEscrow={(orderId) => confirmPayment(orderId)}
-          onOpenDispute={openDisputeModal}
-          onRequestCancel={requestCancelOrder}
-          onRespondToCancel={respondToCancelRequest}
-          isRequestingCancel={isRequestingCancel}
-        />
-      )}
 
-      {/* Message History Panel (Desktop) */}
-      <AnimatePresence>
-        {showMessageHistory && merchantId && (
-          <motion.div
-            initial={{ opacity: 0, x: 300 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 300 }}
-            className="fixed right-0 top-0 h-full w-full max-w-md z-50 shadow-2xl bg-[#060606] border-l border-white/[0.04]"
-          >
-            {directChat.activeContactId ? (
-              <DirectChatView
-                contactName={directChat.activeContactName}
-                contactType={directChat.activeContactType}
-                messages={directChat.messages}
-                isLoading={directChat.isLoadingMessages}
-                onSendMessage={(text, imageUrl) => {
-                  directChat.sendMessage(text, imageUrl);
-                  playSound("send");
-                }}
-                onBack={() => directChat.closeChat()}
-                orderStatus={activeContactOrderStatus}
-              />
-            ) : (
-              <MerchantChatTabs
-                merchantId={merchantId}
-                conversations={directChat.conversations}
-                totalUnread={directChat.totalUnread}
-                isLoading={directChat.isLoadingConversations}
-                onOpenChat={(targetId, targetType, username) =>
-                  directChat.openChat(targetId, targetType, username)
-                }
-                onClose={() => setShowMessageHistory(false)}
-              />
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

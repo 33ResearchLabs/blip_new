@@ -6,6 +6,7 @@ import {
   authenticateMerchantWithWallet,
   createMerchantAccount,
 } from '@/lib/auth/walletAuth';
+import { useMerchantStore } from '@/stores/merchantStore';
 
 interface Merchant {
   id: string;
@@ -60,6 +61,12 @@ export function useMerchantAuth() {
         setAuthError(result.error || 'Authentication failed');
         setIsAuthenticating(false);
         return result;
+      }
+
+      // Capture session token if returned (raw API response has data.token)
+      const rawResult = result as any;
+      if (rawResult.data?.token) {
+        useMerchantStore.getState().setSessionToken(rawResult.data.token);
       }
 
       // Check if this is a new merchant
@@ -129,6 +136,12 @@ export function useMerchantAuth() {
 
       if (!result.success) {
         return result;
+      }
+
+      // Capture session token if returned (raw API response has data.token)
+      const rawCreateResult = result as any;
+      if (rawCreateResult.data?.token) {
+        useMerchantStore.getState().setSessionToken(rawCreateResult.data.token);
       }
 
       // Close modal on success

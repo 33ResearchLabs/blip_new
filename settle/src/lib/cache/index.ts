@@ -2,6 +2,7 @@ export { cache, redis, cacheMetrics } from './redis';
 export {
   CacheKeys,
   getCachedOrder,
+  getCachedOrderFull,
   getCachedReceipt,
   getCachedMerchant,
   updateOrderCache,

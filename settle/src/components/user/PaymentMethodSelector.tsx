@@ -234,11 +234,11 @@ export const PaymentMethodSelector = ({
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] font-medium text-white truncate">
                         {m.label}
-                        <span className="ml-1.5 text-[10px] text-neutral-500 font-normal">
+                        <span className="ml-1.5 text-[10px] text-neutral-400 font-normal">
                           {cfg.label}
                         </span>
                       </p>
-                      <p className="text-[11px] text-neutral-500 truncate">{getSubtext(m)}</p>
+                      <p className="text-[11px] text-neutral-400 truncate">{getSubtext(m)}</p>
                     </div>
                     {isSel && (
                       <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center shrink-0">

@@ -20,6 +20,8 @@ import { BottomNav } from "./BottomNav";
 import type { Screen, Order, BankAccount } from "./types";
 import type { MutableRefObject } from "react";
 
+const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
+
 export interface ProfileScreenProps {
   screen: Screen;
   setScreen: (s: Screen) => void;
@@ -36,6 +38,16 @@ export interface ProfileScreenProps {
     disconnect: () => void;
   };
   setShowWalletModal: (v: boolean) => void;
+  // Embedded wallet
+  embeddedWallet?: {
+    state: 'none' | 'locked' | 'unlocked';
+    unlockWallet: (password: string) => Promise<boolean>;
+    lockWallet: () => void;
+    deleteWallet: () => void;
+    setKeypairAndUnlock: (kp: any) => void;
+  };
+  setShowWalletSetup?: (v: boolean) => void;
+  setShowWalletUnlock?: (v: boolean) => void;
   // Copy
   copied: boolean;
   setCopied: (v: boolean) => void;
@@ -84,6 +96,9 @@ export const ProfileScreen = ({
   timedOutOrders,
   solanaWallet,
   setShowWalletModal,
+  embeddedWallet,
+  setShowWalletSetup,
+  setShowWalletUnlock,
   copied,
   setCopied,
   bankAccounts,
@@ -238,7 +253,14 @@ export const ProfileScreen = ({
           {/* Connect Solana Wallet Button */}
           {!solanaWallet.connected && (
             <motion.button whileTap={{ scale: 0.97 }}
-              onClick={() => setShowWalletModal(true)}
+              onClick={() => {
+                if (IS_EMBEDDED_WALLET && setShowWalletSetup && setShowWalletUnlock) {
+                  if (embeddedWallet?.state === 'locked') setShowWalletUnlock(true);
+                  else setShowWalletSetup(true);
+                } else {
+                  setShowWalletModal(true);
+                }
+              }}
               className="w-full py-3 rounded-[14px] flex items-center justify-center gap-2 mt-2"
               style={{ background: '#000000', fontSize: 14, fontWeight: 800, color: '#fff', letterSpacing: '-0.01em' }}>
               <Wallet size={16} color="#fff" /> Connect Wallet
@@ -330,7 +352,7 @@ export const ProfileScreen = ({
           </>
         )}
 
-        {/* Theme Toggle */}
+        {/* Theme Toggle — commented out, not ready yet
         <p style={{ ...label, marginBottom: 8, display: 'block' }}>Appearance</p>
         <div className="rounded-[16px] px-4 py-3 flex items-center justify-between mb-3" style={card}>
           <div className="flex items-center gap-3">
@@ -357,6 +379,7 @@ export const ProfileScreen = ({
             </div>
           </button>
         </div>
+        */}
 
         {/* Logout */}
         <motion.button whileTap={{ scale: 0.97 }}
@@ -446,7 +469,7 @@ export const ProfileScreen = ({
                   />
                 </div>
               </div>
-              <div className="px-5 pb-8 pt-1">
+              <div className="px-5 pt-1" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)' }}>
                 <motion.button whileTap={{ scale: 0.97 }}
                   onClick={addBankAccount}
                   disabled={!newBank.bank || !newBank.iban || !newBank.name}

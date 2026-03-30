@@ -23,6 +23,8 @@ import cache, { cacheMetrics } from './redis';
 export const CacheKeys = {
   order: (id: string) => `order:${id}`,
   orderLock: (id: string) => `lock:order:${id}`,
+  orderFull: (id: string) => `order-full:${id}`,
+  orderFullLock: (id: string) => `lock:order-full:${id}`,
   receipt: (orderId: string) => `receipt:${orderId}`,
   receiptLock: (orderId: string) => `lock:receipt:${orderId}`,
   merchant: (id: string) => `merchant:${id}`,
@@ -150,6 +152,23 @@ export async function getCachedOrder<T>(
 }
 
 /**
+ * Get order-with-relations from cache with stampede protection.
+ * Uses a separate cache key from getCachedOrder to avoid returning
+ * a bare Order when the caller expects OrderWithRelations (JOIN result).
+ */
+export async function getCachedOrderFull<T>(
+  orderId: string,
+  dbFetcher: (id: string) => Promise<T | null>
+): Promise<T | null> {
+  return fetchWithProtection<T>(
+    CacheKeys.orderFull(orderId),
+    CacheKeys.orderFullLock(orderId),
+    TTL.ACTIVE_ORDER,
+    () => dbFetcher(orderId)
+  );
+}
+
+/**
  * Write-through: update order cache in-place after a mutation.
  * Avoids cache miss → stampede after every status change.
  */
@@ -164,6 +183,7 @@ export async function updateOrderCache(orderId: string, order: unknown): Promise
 export async function invalidateOrderCache(orderId: string): Promise<void> {
   await cache.del(
     CacheKeys.order(orderId),
+    CacheKeys.orderFull(orderId),
     CacheKeys.receipt(orderId)
   );
 }
@@ -217,7 +237,7 @@ export async function invalidateOrderRelatedCaches(
   orderId: string,
   merchantId?: string,
 ): Promise<void> {
-  const keys = [CacheKeys.order(orderId), CacheKeys.receipt(orderId)];
+  const keys = [CacheKeys.order(orderId), CacheKeys.orderFull(orderId), CacheKeys.receipt(orderId)];
   if (merchantId) keys.push(CacheKeys.merchant(merchantId));
   await cache.del(...keys);
 }

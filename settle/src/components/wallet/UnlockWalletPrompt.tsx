@@ -80,7 +80,7 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
             {onForgotPassword && (
               <button
                 onClick={onForgotPassword}
-                className="text-[10px] text-white/40 hover:text-white font-mono transition-colors flex items-center gap-1"
+                className="text-[11px] text-white/60 hover:text-white font-mono transition-colors flex items-center gap-1"
               >
                 <Key className="w-3 h-3" />
                 Import key
@@ -89,7 +89,7 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
             {onCreateNew && (
               <button
                 onClick={onCreateNew}
-                className="text-[10px] text-white/30 hover:text-white/50 font-mono transition-colors flex items-center gap-1"
+                className="text-[11px] text-white/50 hover:text-white/70 font-mono transition-colors flex items-center gap-1"
               >
                 <Lock className="w-3 h-3" />
                 New wallet
@@ -99,7 +99,7 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
           {onClose && (
             <button
               onClick={onClose}
-              className="text-[10px] text-white/30 hover:text-white/50 font-mono transition-colors"
+              className="text-[11px] text-white/50 hover:text-white/70 font-mono transition-colors"
             >
               Cancel
             </button>

@@ -26,7 +26,7 @@ import { logger } from '../../logger';
 import { notifyNewMessage, notifyOrderStatusUpdated } from '../../pusher/server';
 import { recordReputationEvent } from '../../reputation';
 import { upsertMerchantContact } from './directMessages';
-import { getCachedOrder, updateOrderCache, invalidateOrderCache } from '@/lib/cache';
+import { getCachedOrder, getCachedOrderFull, updateOrderCache, invalidateOrderCache } from '@/lib/cache';
 
 // Result type for status updates
 export interface StatusUpdateResult {
@@ -47,7 +47,7 @@ export async function getOrderByNumber(orderNumber: string): Promise<Order | nul
 }
 
 export async function getOrderWithRelations(id: string): Promise<OrderWithRelations | null> {
-  return queryOne<OrderWithRelations>(
+  return getCachedOrderFull<OrderWithRelations>(id, (_id) => queryOne<OrderWithRelations>(
     `SELECT o.*,
             json_build_object(
               'id', u.id,
@@ -119,8 +119,8 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
      LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
      LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
      WHERE o.id = $1`,
-    [id]
-  );
+    [_id]
+  ));
 }
 
 export async function getUserOrders(

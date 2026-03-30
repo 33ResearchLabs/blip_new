@@ -99,6 +99,66 @@ export async function updateMerchant(
   return result;
 }
 
+/**
+ * Create default sell + buy bank offers for a new merchant.
+ * Extracted from auth/merchant/route.ts where it was duplicated 3 times.
+ */
+export async function createDefaultMerchantOffers(merchantId: string, displayName: string): Promise<void> {
+  try {
+    await query(
+      `INSERT INTO merchant_offers (merchant_id, type, payment_method, rate, min_amount, max_amount, available_amount, bank_name, bank_account_name, bank_iban, is_active)
+       VALUES ($1, 'sell', 'bank', 3.67, 100, 50000, 50000, 'Emirates NBD', $2, 'AE070331234567890123456', true)`,
+      [merchantId, displayName]
+    );
+    await query(
+      `INSERT INTO merchant_offers (merchant_id, type, payment_method, rate, min_amount, max_amount, available_amount, bank_name, bank_account_name, bank_iban, is_active)
+       VALUES ($1, 'buy', 'bank', 3.65, 100, 50000, 50000, 'Emirates NBD', $2, 'AE070331234567890123456', true)`,
+      [merchantId, displayName]
+    );
+    console.log('[DB] Default offers created for merchant:', merchantId);
+  } catch (err) {
+    console.error('[DB] Failed to create default offers:', err);
+  }
+}
+
+/**
+ * Serialize a merchant DB row to the API response DTO.
+ * Single source of truth — replaces 6+ inline object spreads in auth/merchant/route.ts.
+ */
+export function serializeMerchant(merchant: {
+  id: string;
+  username?: string | null;
+  display_name?: string;
+  business_name?: string;
+  wallet_address?: string | null;
+  avatar_url?: string | null;
+  bio?: string | null;
+  email?: string;
+  rating?: number;
+  total_trades?: number;
+  balance?: number;
+  has_ops_access?: boolean;
+  has_compliance_access?: boolean;
+}): Record<string, unknown> {
+  const dto: Record<string, unknown> = {
+    id: merchant.id,
+    username: merchant.username ?? null,
+    display_name: merchant.display_name,
+    business_name: merchant.business_name,
+    wallet_address: merchant.wallet_address ?? null,
+    rating: parseFloat(String(merchant.rating ?? 5)) || 5,
+    total_trades: merchant.total_trades || 0,
+  };
+  // Only include optional fields if they exist on the source row
+  if (merchant.avatar_url !== undefined) dto.avatar_url = merchant.avatar_url;
+  if (merchant.bio !== undefined) dto.bio = merchant.bio;
+  if (merchant.email !== undefined) dto.email = merchant.email;
+  if (merchant.balance !== undefined) dto.balance = parseFloat(String(merchant.balance)) || 0;
+  if (merchant.has_ops_access !== undefined) dto.has_ops_access = merchant.has_ops_access || false;
+  if (merchant.has_compliance_access !== undefined) dto.has_compliance_access = merchant.has_compliance_access || false;
+  return dto;
+}
+
 // Offers
 export async function getOfferById(id: string): Promise<MerchantOffer | null> {
   return queryOne<MerchantOffer>('SELECT * FROM merchant_offers WHERE id = $1', [id]);

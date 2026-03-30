@@ -93,6 +93,8 @@ export interface DbOrder {
   spread_preference?: string;
   protocol_fee_percentage?: number | string;
   protocol_fee_amount?: number | string;
+  primaryAction?: { type: string; label: string; enabled?: boolean; disabledReason?: string };
+  secondaryAction?: { type: string; label: string; enabled?: boolean; disabledReason?: string };
 }
 
 export interface Order {

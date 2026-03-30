@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, Notification } from "@/types/merchant";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { fetchDisputeInfoFromApi } from '@/lib/api/disputeApi';
 
 interface UseDisputeHandlersParams {
   solanaWallet: any;
@@ -118,17 +119,8 @@ export function useDisputeHandlers({
 
   // ─── Fetch dispute info ───
   const fetchDisputeInfo = useCallback(async (orderId: string) => {
-    try {
-      const res = await fetchWithAuth(`/api/orders/${orderId}/dispute`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data) {
-          setDisputeInfo(data.data);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch dispute info:', err);
-    }
+    const data = await fetchDisputeInfoFromApi(orderId);
+    if (data) setDisputeInfo(data);
   }, []);
 
   // ─── Request extension ───
