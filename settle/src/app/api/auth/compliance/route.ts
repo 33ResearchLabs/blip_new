@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { isComplianceWallet, addComplianceWallet, COMPLIANCE_WALLETS } from '@/lib/solana/v2/config';
+import crypto from 'crypto';
+import { generateSessionToken, generateAccessToken, generateRefreshToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
 
 // Compliance team authentication (supports both email/password and wallet)
 export async function POST(request: NextRequest) {
@@ -71,7 +73,12 @@ export async function POST(request: NextRequest) {
 
       const member = rows[0] as { id: string; email: string | null; wallet_address: string; name: string; role: string };
 
-      return NextResponse.json({
+      const cwPayload = { actorId: member.id, actorType: 'compliance' as const };
+      const walletToken = generateSessionToken(cwPayload);
+      const cwAccessTk = generateAccessToken(cwPayload);
+      const cwRefreshTk = generateRefreshToken(cwPayload);
+
+      const cwResponse = NextResponse.json({
         success: true,
         data: {
           member: {
@@ -82,8 +89,14 @@ export async function POST(request: NextRequest) {
             role: member.role,
           },
           authMethod: 'wallet',
+          ...(walletToken && { token: walletToken }),
+          ...(cwAccessTk && { accessToken: cwAccessTk }),
         },
       });
+      if (cwRefreshTk) {
+        cwResponse.cookies.set(REFRESH_TOKEN_COOKIE, cwRefreshTk, REFRESH_COOKIE_OPTIONS);
+      }
+      return cwResponse;
     }
 
     // Traditional email/password login
@@ -134,14 +147,22 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-      if (password !== compliancePassword) {
+      // Timing-safe comparison to prevent timing attacks
+      const passwordMatch = password.length === compliancePassword.length &&
+        crypto.timingSafeEqual(Buffer.from(password), Buffer.from(compliancePassword));
+      if (!passwordMatch) {
         return NextResponse.json(
           { success: false, error: 'Invalid credentials' },
           { status: 401 }
         );
       }
 
-      return NextResponse.json({
+      const cePayload = { actorId: member.id, actorType: 'compliance' as const };
+      const emailToken = generateSessionToken(cePayload);
+      const ceAccessTk = generateAccessToken(cePayload);
+      const ceRefreshTk = generateRefreshToken(cePayload);
+
+      const ceResponse = NextResponse.json({
         success: true,
         data: {
           member: {
@@ -152,8 +173,14 @@ export async function POST(request: NextRequest) {
             role: member.role,
           },
           authMethod: 'email',
+          ...(emailToken && { token: emailToken }),
+          ...(ceAccessTk && { accessToken: ceAccessTk }),
         },
       });
+      if (ceRefreshTk) {
+        ceResponse.cookies.set(REFRESH_TOKEN_COOKIE, ceRefreshTk, REFRESH_COOKIE_OPTIONS);
+      }
+      return ceResponse;
     }
 
     return NextResponse.json(

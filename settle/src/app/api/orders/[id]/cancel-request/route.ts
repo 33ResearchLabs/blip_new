@@ -5,6 +5,7 @@ import { logger, canRequestCancel, canUnilateralCancel } from 'settlement-core';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import {
   requireAuth,
+  canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
   validationErrorResponse,
@@ -166,6 +167,11 @@ export async function GET(
     if (auth instanceof NextResponse) return auth;
 
     const { id } = await params;
+
+    const canAccess = await canAccessOrder(auth, id);
+    if (!canAccess) {
+      return forbiddenResponse('You do not have access to this order');
+    }
 
     const order = await queryOne<{
       status: string;

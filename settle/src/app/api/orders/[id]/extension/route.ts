@@ -10,6 +10,7 @@ import {
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import {
   requireAuth,
+  canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
   validationErrorResponse,
@@ -124,6 +125,11 @@ export async function GET(
     if (authGet instanceof NextResponse) return authGet;
 
     const { id } = await params;
+
+    const canAccess = await canAccessOrder(authGet, id);
+    if (!canAccess) {
+      return forbiddenResponse('You do not have access to this order');
+    }
 
     const order = await queryOne<Order>(
       'SELECT * FROM orders WHERE id = $1',

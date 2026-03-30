@@ -77,9 +77,9 @@ export async function mockEscrowRelease(
 
       const lockedOrder = lockResult.rows[0] as Order;
 
-      // TASK 4: Only allow release from payment_confirmed or releasing
-      // This is the SOLE guard against double release
-      const allowedStatuses = ['payment_confirmed', 'releasing'];
+      // Allow release from payment_sent (seller confirms + releases in one step),
+      // payment_confirmed, or releasing. This matches the route-level validation.
+      const allowedStatuses = ['payment_sent', 'payment_confirmed', 'releasing'];
       if (!allowedStatuses.includes(lockedOrder.status)) {
         if (lockedOrder.status === 'completed') {
           throw new Error('ALREADY_RELEASED');
@@ -198,6 +198,18 @@ export async function mockEscrowRelease(
 
           // Don't deduct more than seller has (edge case: seller withdrew between lock and release)
           actualFeeAmount = Math.min(feeAmount, sellerBalanceBefore);
+
+          // Track fee leakage for revenue monitoring
+          if (actualFeeAmount < feeAmount) {
+            logger.warn('[FEE_LEAK] Platform fee partially or fully lost', {
+              orderId,
+              expectedFee: feeAmount,
+              actualFee: actualFeeAmount,
+              sellerBalance: sellerBalanceBefore,
+              sellerId,
+              lostRevenue: feeAmount - actualFeeAmount,
+            });
+          }
 
           if (actualFeeAmount > 0) {
             await client.query(

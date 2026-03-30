@@ -4,6 +4,7 @@ import { logger, normalizeStatus } from "settlement-core";
 import { updateOrderStatusSchema, uuidSchema } from "@/lib/validation/schemas";
 import {
   requireAuth,
+  requireTokenAuth,
   canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/orders/handleOrderAction";
 import { normalizeStatus as normalizeToMinimal } from "@/lib/orders/statusNormalizer";
 import { enrichOrderResponse } from "@/lib/orders/enrichOrderResponse";
+import { auditLog } from "@/lib/auditLog";
 
 // Prevent Next.js from caching this route
 export const dynamic = "force-dynamic";
@@ -138,6 +140,13 @@ export async function PATCH(
       refund_tx_hash,
     } = parseResult.data;
 
+    // Phase 3: Require token auth for sensitive financial transitions
+    const sensitiveStatuses = ["payment_sent", "completed", "cancelled"];
+    if (sensitiveStatuses.includes(status)) {
+      const tokenAuth = await requireTokenAuth(request);
+      if (tokenAuth instanceof NextResponse) return tokenAuth;
+    }
+
     // Security: enforce actor matches authenticated identity
     // When both user+merchant headers are present and the route is /api/orders (not /merchant),
     // auth defaults to user. But a merchant acting (e.g. sending fiat, confirming payment)
@@ -184,28 +193,44 @@ export async function PATCH(
       }
     }
 
+    // ── Acquire row-level lock for claim/financial actions to prevent race conditions ──
+    const isActualClaim = ["accepted", "payment_pending"].includes(body.status);
+    const needsLock = isActualClaim || ["payment_sent", "completed", "cancelled"].includes(status);
+    if (needsLock) {
+      const { query: lockQuery } = await import("@/lib/db");
+      const lockResult = await lockQuery(
+        `SELECT id FROM orders WHERE id = $1 FOR UPDATE`,
+        [id]
+      );
+      if (!lockResult || lockResult.length === 0) {
+        return notFoundResponse("Order");
+      }
+    }
+
+    // ── Fetch order once for all validation checks below ──
+    // This single query replaces 4 separate getOrderWithRelations(id) calls
+    // that previously hit the same 7-table JOIN for self-accept, role validation,
+    // previousStatus, and escrow checks.
+    let prefetchedOrder = await getOrderWithRelations(id);
+
     // Self-accept guard: prevent same wallet from creating and accepting an order.
     // Only applies to actual claiming actions (accepted/payment_pending),
     // NOT to payment_sent — the order creator IS the buyer in BUY orders
     // and must be allowed to mark their own payment as sent.
-    const isActualClaim = ["accepted", "payment_pending"].includes(body.status);
-    if (isActualClaim) {
+    if (isActualClaim && prefetchedOrder) {
       try {
-        const order = await getOrderWithRelations(id);
-        if (order) {
-          const creatorUserId = order.user_id;
-          const headerUserId = request.headers.get("x-user-id");
-          if (
-            creatorUserId &&
-            (creatorUserId === actor_id ||
-              creatorUserId === headerUserId ||
-              creatorUserId === auth.userId)
-          ) {
-            return NextResponse.json(
-              { success: false, error: "You cannot accept your own order" },
-              { status: 400 },
-            );
-          }
+        const creatorUserId = prefetchedOrder.user_id;
+        const headerUserId = request.headers.get("x-user-id");
+        if (
+          creatorUserId &&
+          (creatorUserId === actor_id ||
+            creatorUserId === headerUserId ||
+            creatorUserId === auth.userId)
+        ) {
+          return NextResponse.json(
+            { success: false, error: "You cannot accept your own order" },
+            { status: 400 },
+          );
         }
       } catch (e) {
         logger.warn("[PATCH /orders] Self-accept check failed", {
@@ -234,14 +259,12 @@ export async function PATCH(
 
     const mappedAction = STATUS_TO_ACTION[status];
     if (mappedAction) {
-      // Fetch order for validation (we'll reuse it below)
-      const orderForValidation = await getOrderWithRelations(id);
-      if (!orderForValidation) {
+      if (!prefetchedOrder) {
         return notFoundResponse("Order");
       }
 
       const validation = handleOrderAction(
-        orderForValidation,
+        prefetchedOrder,
         mappedAction,
         actor_id,
       );
@@ -261,30 +284,14 @@ export async function PATCH(
       }
     }
 
-    // Fetch current order status BEFORE the update so we can send previousStatus in Pusher
-    let previousStatus: string | undefined;
-    try {
-      const currentOrder = await getOrderWithRelations(id);
-      if (currentOrder) {
-        previousStatus = currentOrder.status;
-      }
-    } catch (e) {
-      logger.warn("[PATCH /orders] Could not fetch previous status", {
-        orderId: id,
-      });
-    }
+    // Use prefetched order for previousStatus (no separate query needed)
+    const previousStatus: string | undefined = prefetchedOrder?.status;
 
     // Flow integrity: payment_sent and payment_confirmed require escrow to be locked.
     // Without escrow, these statuses are meaningless — the trade has no locked funds.
     const escrowRequiredStatuses = ["payment_sent", "payment_confirmed"];
     if (escrowRequiredStatuses.includes(status)) {
-      const currentOrder = previousStatus
-        ? undefined
-        : await getOrderWithRelations(id);
-      // We already fetched currentOrder above for previousStatus — reuse if available
-      const orderForCheck =
-        currentOrder ||
-        (previousStatus ? await getOrderWithRelations(id) : null);
+      const orderForCheck = prefetchedOrder;
       if (orderForCheck && !orderForCheck.escrow_debited_entity_id) {
         // If the order is in 'escrowed' status, escrow IS locked — backfill the missing field
         // to satisfy the DB constraint chk_escrow_required_for_payment_statuses.
@@ -352,34 +359,14 @@ export async function PATCH(
     const idempotencyKey = getIdempotencyKey(request);
 
     if (isFinancialTransition && !idempotencyKey) {
-      // Generate server-side fallback idempotency key for financial actions
-      const fallbackKey = `${id}:${status}:${actor_id}:${Date.now()}`;
-      const idempotencyResult = await withIdempotency(
-        fallbackKey,
-        status === "payment_sent"
-          ? "payment_sent"
-          : status === "cancelled"
-            ? "cancel_order"
-            : "complete_order",
-        id,
-        async () => {
-          const resp = await proxyCoreApi(`/v1/orders/${id}`, {
-            method: "PATCH",
-            body: {
-              status,
-              actor_type,
-              actor_id,
-              reason,
-              acceptor_wallet_address,
-            },
-          });
-          const respData = await resp.json();
-          return { data: respData, statusCode: resp.status };
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Idempotency-Key header is required for financial transitions (payment_sent, completed, cancelled)",
+          code: "MISSING_IDEMPOTENCY_KEY",
         },
+        { status: 400 },
       );
-      return NextResponse.json(idempotencyResult.data, {
-        status: idempotencyResult.statusCode,
-      });
     }
 
     if (isFinancialTransition && idempotencyKey) {
@@ -423,6 +410,15 @@ export async function PATCH(
       method: "PATCH",
       body: { status, actor_type, actor_id, reason, acceptor_wallet_address },
     });
+
+    if (response.status < 400) {
+      const action = status === 'cancelled' ? 'order.cancelled' as const : 'order.status_changed' as const;
+      auditLog(action, actor_id, actor_type, id, {
+        newStatus: status,
+        previousStatus: prefetchedOrder?.status,
+        reason,
+      });
+    }
 
     // Pusher notifications are now triggered by Core API directly
     return response;

@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blip P2P Escrow - Pre-Mainnet Testing Checklist</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #e0e0e0; padding: 20px; max-width: 1200px; margin: 0 auto; }
+  h1 { color: #fff; margin-bottom: 8px; font-size: 24px; }
+  .subtitle { color: #888; margin-bottom: 24px; font-size: 14px; }
+  .stats { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  .stat { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 12px 20px; min-width: 120px; }
+  .stat-value { font-size: 28px; font-weight: 700; }
+  .stat-label { font-size: 12px; color: #888; margin-top: 2px; }
+  .stat-pass .stat-value { color: #22c55e; }
+  .stat-fail .stat-value { color: #ef4444; }
+  .stat-pending .stat-value { color: #f59e0b; }
+  .stat-total .stat-value { color: #3b82f6; }
+  .progress-bar { width: 100%; height: 8px; background: #1a1a1a; border-radius: 4px; margin-bottom: 24px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #22c55e, #16a34a); border-radius: 4px; transition: width 0.3s; }
+  .category { margin-bottom: 20px; border: 1px solid #222; border-radius: 10px; overflow: hidden; }
+  .category-header { background: #141414; padding: 14px 18px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; }
+  .category-header:hover { background: #1a1a1a; }
+  .category-title { font-weight: 600; font-size: 15px; }
+  .category-badge { font-size: 12px; padding: 2px 10px; border-radius: 12px; }
+  .badge-critical { background: #7f1d1d; color: #fca5a5; }
+  .badge-high { background: #78350f; color: #fcd34d; }
+  .badge-medium { background: #1e3a5f; color: #93c5fd; }
+  .category-body { padding: 0; }
+  .test-item { display: flex; align-items: flex-start; gap: 12px; padding: 12px 18px; border-top: 1px solid #1a1a1a; transition: background 0.15s; }
+  .test-item:hover { background: #111; }
+  .test-item.passed { background: #052e16; }
+  .test-item.failed { background: #2a0a0a; }
+  .test-checkbox { width: 20px; height: 20px; margin-top: 2px; cursor: pointer; accent-color: #22c55e; flex-shrink: 0; }
+  .test-content { flex: 1; }
+  .test-name { font-weight: 500; font-size: 14px; margin-bottom: 4px; }
+  .test-name .test-id { color: #666; font-weight: 400; margin-right: 6px; }
+  .test-risk { font-size: 11px; padding: 1px 8px; border-radius: 10px; margin-left: 8px; font-weight: 500; }
+  .risk-critical { background: #7f1d1d; color: #fca5a5; }
+  .risk-high { background: #78350f; color: #fcd34d; }
+  .risk-medium { background: #1e3a5f; color: #93c5fd; }
+  .test-steps { font-size: 13px; color: #999; margin-top: 6px; display: none; }
+  .test-item.expanded .test-steps { display: block; }
+  .test-steps ol { padding-left: 20px; margin: 6px 0; }
+  .test-steps li { margin: 4px 0; line-height: 1.5; }
+  .test-steps .expected { color: #22c55e; margin-top: 6px; }
+  .test-steps .db-check { color: #60a5fa; margin-top: 4px; }
+  .test-steps .log-check { color: #c084fc; margin-top: 4px; }
+  .test-steps code { background: #1a1a1a; padding: 2px 6px; border-radius: 3px; font-size: 12px; color: #e0e0e0; }
+  .test-steps pre { background: #111; padding: 10px; border-radius: 6px; margin: 6px 0; overflow-x: auto; font-size: 12px; line-height: 1.4; color: #ccc; }
+  .expand-btn { font-size: 12px; color: #666; cursor: pointer; background: none; border: 1px solid #333; border-radius: 4px; padding: 2px 8px; flex-shrink: 0; }
+  .expand-btn:hover { border-color: #555; color: #aaa; }
+  .fail-btn { font-size: 12px; color: #ef4444; cursor: pointer; background: none; border: 1px solid #7f1d1d; border-radius: 4px; padding: 2px 8px; flex-shrink: 0; margin-left: 4px; }
+  .fail-btn:hover { background: #2a0a0a; }
+  .notes-input { width: 100%; margin-top: 6px; background: #111; border: 1px solid #333; border-radius: 4px; color: #e0e0e0; padding: 6px 8px; font-size: 12px; display: none; }
+  .test-item.failed .notes-input, .test-item.expanded .notes-input { display: block; }
+  .actions-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .action-btn { padding: 8px 16px; border-radius: 6px; border: 1px solid #333; background: #1a1a1a; color: #e0e0e0; cursor: pointer; font-size: 13px; }
+  .action-btn:hover { background: #222; border-color: #555; }
+  .action-btn.primary { background: #1d4ed8; border-color: #2563eb; color: #fff; }
+  .action-btn.danger { background: #7f1d1d; border-color: #991b1b; color: #fca5a5; }
+  .verdict { margin-top: 24px; padding: 20px; border-radius: 10px; text-align: center; font-size: 18px; font-weight: 700; }
+  .verdict.safe { background: #052e16; border: 2px solid #22c55e; color: #22c55e; }
+  .verdict.unsafe { background: #2a0a0a; border: 2px solid #ef4444; color: #ef4444; }
+  .verdict.pending { background: #1a1a1a; border: 2px solid #f59e0b; color: #f59e0b; }
+  .timestamp { font-size: 12px; color: #555; margin-top: 16px; text-align: center; }
+</style>
+</head>
+<body>
+
+<h1>Blip P2P Escrow - Pre-Mainnet Testing Checklist</h1>
+<p class="subtitle">Complete all CRITICAL tests before deploying. Any failure blocks deployment.</p>
+
+<div class="stats">
+  <div class="stat stat-total"><div class="stat-value" id="total-count">22</div><div class="stat-label">Total Tests</div></div>
+  <div class="stat stat-pass"><div class="stat-value" id="pass-count">0</div><div class="stat-label">Passed</div></div>
+  <div class="stat stat-fail"><div class="stat-value" id="fail-count">0</div><div class="stat-label">Failed</div></div>
+  <div class="stat stat-pending"><div class="stat-value" id="pending-count">22</div><div class="stat-label">Remaining</div></div>
+</div>
+
+<div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width: 0%"></div></div>
+
+<div class="actions-bar">
+  <button class="action-btn" onclick="expandAll()">Expand All</button>
+  <button class="action-btn" onclick="collapseAll()">Collapse All</button>
+  <button class="action-btn primary" onclick="exportReport()">Export Report</button>
+  <button class="action-btn danger" onclick="resetAll()">Reset All</button>
+</div>
+
+<div id="checklist"></div>
+
+<div class="verdict pending" id="verdict">Complete all tests to see verdict</div>
+<div class="timestamp" id="timestamp"></div>
+
+<script>
+const tests = [
+  {
+    category: "Normal Flows",
+    items: [
+      {
+        id: "TEST-1", name: "BUY Order - Complete Happy Path", risk: "critical",
+        steps: [
+          "Record merchant balance (M_before) and user balance (U_before)",
+          "Browser B (User): Click 'Buy', enter 10 USDC, select payment method, submit",
+          "Browser A (Merchant): Check pending orders list - new order appears",
+          "Browser A: Click 'Accept' on the order",
+          "Browser A: Click 'Lock Escrow', sign wallet transaction",
+          "Verify merchant balance = M_before - 10",
+          "Browser B (User): Click 'I've Paid'",
+          "Browser A (Merchant): Click 'Confirm Payment' / 'Release'",
+          "Verify user balance = U_before + 10 (minus fee)",
+          "Verify merchant balance = M_before - fee"
+        ],
+        expected: "Order completes. Balances correct. All ledger entries present.",
+        dbCheck: "SELECT status, escrow_debited_entity_id, completed_at FROM orders WHERE id = '<order-id>';\n-- status = 'completed', all fields populated\n\nSELECT * FROM ledger_entries WHERE related_order_id = '<order-id>';\n-- escrow_lock, escrow_release, platform_fee entries",
+        logCheck: "grep '[AUDIT].*order.created\\|escrow.locked\\|escrow.released' test.log"
+      },
+      {
+        id: "TEST-2", name: "SELL Order - Complete Happy Path", risk: "critical",
+        steps: [
+          "Record merchant balance (M_before)",
+          "Browser A (Merchant): Create SELL order, 15 USDC",
+          "Verify merchant balance = M_before - 15 (escrow auto-locked at creation)",
+          "Browser B (User): Find the order, click 'Accept'",
+          "Browser A: Click 'I've Sent Fiat'",
+          "Browser B: Click 'Confirm & Release'",
+          "Verify user balance increased by 15 (minus fee)"
+        ],
+        expected: "Escrow locked at creation. Trade completes. Buyer receives crypto.",
+        dbCheck: "SELECT escrowed_at, created_at FROM orders WHERE id = '<order-id>';\n-- escrowed_at close to created_at (auto-lock)",
+        logCheck: "grep '[AUDIT].*order.created' test.log"
+      }
+    ]
+  },
+  {
+    category: "Money Stuck Scenarios",
+    items: [
+      {
+        id: "TEST-3", name: "Escrow Expiry - Auto Refund (Worker)", risk: "critical",
+        steps: [
+          "Record merchant balance (M_before)",
+          "Create BUY order -> Merchant accepts -> Merchant locks escrow",
+          "Verify merchant balance = M_before - amount",
+          "Simulate expiry in DB: UPDATE orders SET expires_at = NOW() - INTERVAL '1 minute' WHERE id = '<order-id>';",
+          "Wait 30 seconds (worker interval) OR manually trigger worker",
+          "Check order status = 'cancelled'",
+          "Check merchant balance = M_before (fully refunded)"
+        ],
+        expected: "Worker auto-cancels expired escrowed order. Funds returned to merchant.",
+        dbCheck: "SELECT status, cancelled_at, cancellation_reason FROM orders WHERE id = '<order-id>';\n-- status = 'cancelled', reason mentions escrow expiry\n\nSELECT * FROM ledger_entries WHERE related_order_id = '<order-id>' AND entry_type = 'escrow_refund';",
+        logCheck: "grep '[EscrowExpiry]' test.log\n# Should see: Order expired - cancelled with refund"
+      },
+      {
+        id: "TEST-4", name: "Dispute Auto-Resolve - Refund", risk: "critical",
+        steps: [
+          "Record merchant balance (M_before)",
+          "Complete flow up to 'Payment Sent' state",
+          "User or merchant raises dispute -> Status = 'Disputed'",
+          "Simulate: UPDATE orders SET dispute_auto_resolve_at = NOW() - INTERVAL '1 minute' WHERE id = '<order-id>';",
+          "Wait 30 seconds or trigger worker",
+          "Check order status = 'cancelled'",
+          "Check merchant balance = M_before (escrow refunded)"
+        ],
+        expected: "Dispute auto-resolved AND escrow fully refunded. Not just status change.",
+        dbCheck: "SELECT * FROM ledger_entries WHERE related_order_id = '<order-id>' AND entry_type = 'escrow_refund';",
+        logCheck: "grep '[DisputeAutoResolve]' test.log\n# Should see: Dispute auto-resolved with refund"
+      },
+      {
+        id: "TEST-5", name: "SELL Order - No Buyer (Expiry)", risk: "critical",
+        steps: [
+          "Record merchant balance (M_before)",
+          "Merchant creates SELL order (escrow auto-locked) - balance decreases",
+          "No user accepts",
+          "Simulate: UPDATE orders SET expires_at = NOW() - INTERVAL '1 minute' WHERE id = '<order-id>';",
+          "Wait for worker",
+          "Check merchant balance = M_before (refunded)"
+        ],
+        expected: "Merchant's funds returned even though no buyer ever participated.",
+        dbCheck: "Same as TEST-3",
+        logCheck: "grep '[EscrowExpiry]' test.log"
+      }
+    ]
+  },
+  {
+    category: "Cancel Flows",
+    items: [
+      {
+        id: "TEST-6", name: "Cancel Before Accept", risk: "medium",
+        steps: [
+          "User creates BUY order - Status = 'Open'",
+          "User clicks 'Cancel'",
+          "Check both balances - No change"
+        ],
+        expected: "Order cancelled. No balance changes (no escrow was locked).",
+        dbCheck: "SELECT status, escrow_debited_entity_id FROM orders WHERE id = '<order-id>';\n-- escrow_debited_entity_id = NULL",
+        logCheck: ""
+      },
+      {
+        id: "TEST-7", name: "Cancel After Accept (Before Escrow)", risk: "medium",
+        steps: [
+          "Create order -> Merchant accepts - Status = 'Accepted'",
+          "Either party requests cancel",
+          "Other party approves",
+          "Check both balances - No change"
+        ],
+        expected: "Cancel succeeds. No balance changes.",
+        dbCheck: "SELECT status FROM orders WHERE id = '<order-id>';\n-- status = 'cancelled'",
+        logCheck: ""
+      },
+      {
+        id: "TEST-8", name: "Cancel After Escrow Lock", risk: "critical",
+        steps: [
+          "Record merchant balance (M_before)",
+          "Create -> Accept -> Lock escrow. Merchant balance decreased.",
+          "Request cancel (either party)",
+          "Both parties approve cancel",
+          "Check merchant balance = M_before (escrow refunded)"
+        ],
+        expected: "Full refund on cancellation after escrow lock.",
+        dbCheck: "SELECT * FROM ledger_entries WHERE related_order_id = '<order-id>';\n-- Should have escrow_lock AND escrow_refund entries with matching amounts",
+        logCheck: ""
+      }
+    ]
+  },
+  {
+    category: "Failure Scenarios",
+    items: [
+      {
+        id: "TEST-9", name: "Network Failure on 'I've Paid'", risk: "high",
+        steps: [
+          "Get to 'Escrowed' state",
+          "Open DevTools -> Network -> check 'Offline'",
+          "Browser B: Click 'I've Paid' - should show error",
+          "Uncheck 'Offline'",
+          "Click 'I've Paid' again - should succeed",
+          "Check DB: status = 'payment_sent', order_version incremented once"
+        ],
+        expected: "Retry works. No duplicate state change.",
+        dbCheck: "SELECT status, order_version FROM orders WHERE id = '<order-id>';",
+        logCheck: ""
+      },
+      {
+        id: "TEST-10", name: "Double-Click Release", risk: "critical",
+        steps: [
+          "Get to 'Payment Sent' state",
+          "Record user + merchant balances",
+          "Rapidly click 'Release' 3 times",
+          "Check user balance - increased by crypto_amount ONCE",
+          "Check merchant balance - fee deducted ONCE"
+        ],
+        expected: "Exactly one release. No double-credit.",
+        dbCheck: "SELECT COUNT(*) FROM ledger_entries WHERE related_order_id = '<order-id>' AND entry_type = 'escrow_release';\n-- Must be exactly 1",
+        logCheck: ""
+      },
+      {
+        id: "TEST-11", name: "Token Expiry Auto-Refresh", risk: "high",
+        steps: [
+          "Login to merchant dashboard",
+          "Wait 15+ minutes OR clear sessionStorage item 'blip_session_token'",
+          "Click any action (view orders, accept, etc.)",
+          "Check DevTools Network tab for /api/auth/refresh call",
+          "Action should succeed without login prompt"
+        ],
+        expected: "Transparent token refresh. No user interruption.",
+        dbCheck: "",
+        logCheck: "Check Network tab for /api/auth/refresh -> 200"
+      }
+    ]
+  },
+  {
+    category: "Race Conditions",
+    items: [
+      {
+        id: "TEST-12", name: "Two Merchants Accept Same Order", risk: "critical",
+        steps: [
+          "User creates BUY order",
+          "Open TWO merchant accounts (different browsers)",
+          "Both see the order in pending list",
+          "Click 'Accept' on both simultaneously",
+          "One succeeds, one gets error",
+          "Check DB: only ONE buyer_merchant_id"
+        ],
+        expected: "Exactly one merchant wins. No double-claim.",
+        dbCheck: "SELECT buyer_merchant_id, accepted_at FROM orders WHERE id = '<order-id>';\n-- Exactly one merchant ID",
+        logCheck: ""
+      },
+      {
+        id: "TEST-13", name: "Cancel vs Accept Race", risk: "high",
+        steps: [
+          "User creates order - Status = 'Open'",
+          "Simultaneously: User clicks Cancel + Merchant clicks Accept",
+          "Check DB: status is either 'Cancelled' OR 'Accepted' (not stuck)"
+        ],
+        expected: "One action wins. Order in clean state.",
+        dbCheck: "SELECT status FROM orders WHERE id = '<order-id>';",
+        logCheck: ""
+      }
+    ]
+  },
+  {
+    category: "Edge Cases",
+    items: [
+      {
+        id: "TEST-14", name: "Self-Accept Prevention", risk: "high",
+        steps: [
+          "Merchant creates SELL order",
+          "Same merchant tries to accept via API curl command:",
+          "curl -X POST /api/orders/<id>/action -H 'Authorization: Bearer <token>' -d '{\"action\":\"ACCEPT\",\"actor_id\":\"<same-merchant-id>\",\"actor_type\":\"merchant\"}'",
+          "Expected response: 403 - 'You cannot accept your own order'"
+        ],
+        expected: "Self-accept blocked by server.",
+        dbCheck: "",
+        logCheck: ""
+      },
+      {
+        id: "TEST-15", name: "Page Refresh Mid-Transaction", risk: "medium",
+        steps: [
+          "Get to 'Escrowed' state",
+          "Press F5 to refresh page",
+          "Check order still shows correct state and buttons",
+          "Continue flow (mark paid, release) - completes normally"
+        ],
+        expected: "No state loss. Flow continues after refresh.",
+        dbCheck: "",
+        logCheck: ""
+      },
+      {
+        id: "TEST-16", name: "Multi-Tab Conflict", risk: "medium",
+        steps: [
+          "Open same merchant dashboard in Tab 1 and Tab 2",
+          "View same order in both tabs",
+          "In Tab 1: Click 'Release' - succeeds",
+          "In Tab 2: Click 'Release' - should fail",
+          "Check DB: only one release, correct balances"
+        ],
+        expected: "Second tab's action rejected. No double execution.",
+        dbCheck: "SELECT COUNT(*) FROM ledger_entries WHERE related_order_id = '<order-id>' AND entry_type = 'escrow_release';",
+        logCheck: ""
+      }
+    ]
+  },
+  {
+    category: "Security Tests",
+    items: [
+      {
+        id: "TEST-17", name: "IDOR - Access Other User's Order", risk: "critical",
+        steps: [
+          "Get your valid token",
+          "curl GET /api/orders/<other-users-order-id>/action -H 'Authorization: Bearer <your-token>'",
+          "Expected: 403 Forbidden"
+        ],
+        expected: "Access denied. Cannot read other user's order details.",
+        dbCheck: "",
+        logCheck: ""
+      },
+      {
+        id: "TEST-18", name: "No Token Request (Production)", risk: "critical",
+        steps: [
+          "Set NODE_ENV=production",
+          "curl GET /api/orders/<any-order-id>/dispute (no auth header)",
+          "Expected: 401 Unauthorized"
+        ],
+        expected: "Rejected without authentication.",
+        dbCheck: "",
+        logCheck: ""
+      },
+      {
+        id: "TEST-19", name: "Fake Header Attack (IDOR Fix)", risk: "critical",
+        steps: [
+          "Get valid USER token",
+          "curl GET /api/orders/<victim-merchant-order>/action -H 'Authorization: Bearer <user-token>' -H 'x-merchant-id: <victim-merchant-id>'",
+          "Expected: 403 (user cannot inject merchant context)"
+        ],
+        expected: "Supplementary header ignored for user tokens. IDOR blocked.",
+        dbCheck: "",
+        logCheck: ""
+      },
+      {
+        id: "TEST-20", name: "Wallet Update Without Signature", risk: "critical",
+        steps: [
+          "curl -X PATCH /api/auth/merchant -H 'Authorization: Bearer <your-token>' -H 'Content-Type: application/json' -d '{\"merchant_id\":\"<your-id>\",\"wallet_address\":\"AttackerWallet\"}'",
+          "Expected: 400 - 'signature and message are required'"
+        ],
+        expected: "Wallet update rejected without cryptographic proof.",
+        dbCheck: "",
+        logCheck: ""
+      }
+    ]
+  },
+  {
+    category: "Financial Verification",
+    items: [
+      {
+        id: "TEST-21", name: "Post-Trade Balance Reconciliation", risk: "critical",
+        steps: [
+          "Run after completing TEST-1 and TEST-2",
+          "Query 1: SELECT * FROM users WHERE balance < 0 UNION ALL SELECT * FROM merchants WHERE balance < 0; -- Expect: 0 rows",
+          "Query 2: Check all completed orders have escrow data (escrow_debited_entity_id NOT NULL)",
+          "Query 3: Check all cancelled escrowed orders have refund ledger entries",
+          "Query 4: Compare expected_fee vs actual_fee for completed orders"
+        ],
+        expected: "Zero negative balances. All escrow/refund entries consistent. Fee collection verified.",
+        dbCheck: "-- No negative balances\nSELECT 'FAIL' FROM users WHERE balance < 0\nUNION ALL SELECT 'FAIL' FROM merchants WHERE balance < 0;\n\n-- All completed orders have escrow\nSELECT id FROM orders WHERE status='completed' AND escrow_debited_entity_id IS NULL;\n\n-- All cancelled escrowed orders have refund\nSELECT o.id FROM orders o WHERE status='cancelled' AND escrow_debited_entity_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ledger_entries le WHERE le.related_order_id=o.id AND le.entry_type='escrow_refund');",
+        logCheck: "grep '[FEE_LEAK]' test.log\n# Should be empty for normal trades"
+      },
+      {
+        id: "TEST-22", name: "Audit Trail Verification", risk: "high",
+        steps: [
+          "After running all tests, check log files:",
+          "1. grep '[AUDIT]' test.log | wc -l  -- Should have entries",
+          "2. grep '[FEE_LEAK]' test.log  -- Should be empty",
+          "3. grep 'ERROR|CRITICAL' test.log | grep -v node_modules  -- Should be empty",
+          "4. grep '[EscrowExpiry]|[DisputeAutoResolve]' test.log  -- Should show worker activity"
+        ],
+        expected: "Complete audit trail. No unexpected errors. Workers active.",
+        dbCheck: "",
+        logCheck: "All log prefixes present and correct"
+      }
+    ]
+  }
+];
+
+// State
+let state = JSON.parse(localStorage.getItem('blip_test_state') || '{}');
+
+function saveState() {
+  localStorage.setItem('blip_test_state', JSON.stringify(state));
+}
+
+function render() {
+  const container = document.getElementById('checklist');
+  container.innerHTML = '';
+
+  let passed = 0, failed = 0, total = 0;
+
+  tests.forEach(cat => {
+    const catDiv = document.createElement('div');
+    catDiv.className = 'category';
+
+    const maxRisk = cat.items.reduce((max, item) => {
+      const order = { critical: 3, high: 2, medium: 1 };
+      return (order[item.risk] || 0) > (order[max] || 0) ? item.risk : max;
+    }, 'medium');
+
+    catDiv.innerHTML = `
+      <div class="category-header" onclick="this.parentElement.classList.toggle('collapsed')">
+        <span class="category-title">${cat.category}</span>
+        <span class="category-badge badge-${maxRisk}">${cat.items.length} tests</span>
+      </div>
+      <div class="category-body"></div>
+    `;
+
+    const body = catDiv.querySelector('.category-body');
+
+    cat.items.forEach(item => {
+      total++;
+      const s = state[item.id] || {};
+      if (s.status === 'pass') passed++;
+      if (s.status === 'fail') failed++;
+
+      const div = document.createElement('div');
+      div.className = `test-item ${s.status === 'pass' ? 'passed' : s.status === 'fail' ? 'failed' : ''} ${s.expanded ? 'expanded' : ''}`;
+      div.id = `item-${item.id}`;
+
+      div.innerHTML = `
+        <input type="checkbox" class="test-checkbox" ${s.status === 'pass' ? 'checked' : ''} onchange="togglePass('${item.id}', this.checked)">
+        <div class="test-content">
+          <div class="test-name">
+            <span class="test-id">${item.id}</span>${item.name}
+            <span class="test-risk risk-${item.risk}">${item.risk.toUpperCase()}</span>
+          </div>
+          <div class="test-steps">
+            <ol>${item.steps.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ol>
+            <div class="expected"><strong>Expected:</strong> ${escapeHtml(item.expected)}</div>
+            ${item.dbCheck ? `<div class="db-check"><strong>DB Check:</strong><pre>${escapeHtml(item.dbCheck)}</pre></div>` : ''}
+            ${item.logCheck ? `<div class="log-check"><strong>Log Check:</strong><pre>${escapeHtml(item.logCheck)}</pre></div>` : ''}
+            <input class="notes-input" placeholder="Notes (optional)..." value="${escapeHtml(s.notes || '')}" onchange="setNotes('${item.id}', this.value)">
+          </div>
+        </div>
+        <button class="expand-btn" onclick="toggleExpand('${item.id}')">Details</button>
+        <button class="fail-btn" onclick="markFail('${item.id}')">Fail</button>
+      `;
+
+      body.appendChild(div);
+    });
+
+    container.appendChild(catDiv);
+  });
+
+  const pending = total - passed - failed;
+  document.getElementById('total-count').textContent = total;
+  document.getElementById('pass-count').textContent = passed;
+  document.getElementById('fail-count').textContent = failed;
+  document.getElementById('pending-count').textContent = pending;
+  document.getElementById('progress-fill').style.width = `${(passed / total) * 100}%`;
+
+  const verdict = document.getElementById('verdict');
+  if (failed > 0) {
+    verdict.className = 'verdict unsafe';
+    verdict.textContent = `NOT SAFE FOR MAINNET - ${failed} test(s) failed`;
+  } else if (passed === total) {
+    verdict.className = 'verdict safe';
+    verdict.textContent = 'SAFE FOR MAINNET - All 22 tests passed';
+  } else {
+    verdict.className = 'verdict pending';
+    verdict.textContent = `${pending} test(s) remaining - Complete all to see verdict`;
+  }
+
+  document.getElementById('timestamp').textContent = `Last updated: ${new Date().toLocaleString()}`;
+}
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function togglePass(id, checked) {
+  if (!state[id]) state[id] = {};
+  state[id].status = checked ? 'pass' : null;
+  saveState();
+  render();
+}
+
+function markFail(id) {
+  if (!state[id]) state[id] = {};
+  state[id].status = state[id].status === 'fail' ? null : 'fail';
+  state[id].expanded = true;
+  saveState();
+  render();
+}
+
+function toggleExpand(id) {
+  if (!state[id]) state[id] = {};
+  state[id].expanded = !state[id].expanded;
+  saveState();
+  render();
+}
+
+function setNotes(id, notes) {
+  if (!state[id]) state[id] = {};
+  state[id].notes = notes;
+  saveState();
+}
+
+function expandAll() {
+  tests.forEach(cat => cat.items.forEach(item => {
+    if (!state[item.id]) state[item.id] = {};
+    state[item.id].expanded = true;
+  }));
+  saveState();
+  render();
+}
+
+function collapseAll() {
+  tests.forEach(cat => cat.items.forEach(item => {
+    if (state[item.id]) state[item.id].expanded = false;
+  }));
+  saveState();
+  render();
+}
+
+function resetAll() {
+  if (confirm('Reset all test results? This cannot be undone.')) {
+    state = {};
+    saveState();
+    render();
+  }
+}
+
+function exportReport() {
+  let report = `BLIP P2P ESCROW - TEST REPORT\n`;
+  report += `Generated: ${new Date().toISOString()}\n`;
+  report += `${'='.repeat(60)}\n\n`;
+
+  let passed = 0, failed = 0, total = 0;
+
+  tests.forEach(cat => {
+    report += `## ${cat.category}\n\n`;
+    cat.items.forEach(item => {
+      total++;
+      const s = state[item.id] || {};
+      const status = s.status === 'pass' ? 'PASS' : s.status === 'fail' ? 'FAIL' : 'PENDING';
+      if (s.status === 'pass') passed++;
+      if (s.status === 'fail') failed++;
+      report += `  [${status}] ${item.id}: ${item.name} (${item.risk.toUpperCase()})\n`;
+      if (s.notes) report += `         Notes: ${s.notes}\n`;
+    });
+    report += `\n`;
+  });
+
+  report += `${'='.repeat(60)}\n`;
+  report += `SUMMARY: ${passed} passed, ${failed} failed, ${total - passed - failed} pending\n`;
+  report += `VERDICT: ${failed > 0 ? 'NOT SAFE' : passed === total ? 'SAFE FOR MAINNET' : 'INCOMPLETE'}\n`;
+
+  const blob = new Blob([report], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `blip-test-report-${new Date().toISOString().slice(0, 10)}.txt`;
+  a.click();
+}
+
+render();
+</script>
+</body>
+</html>

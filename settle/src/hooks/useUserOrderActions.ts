@@ -2,7 +2,8 @@
 
 import { useState, useCallback, useEffect } from "react";
 import type { Order, OrderStatus, OrderStep, BankAccount } from "@/components/user/screens/types";
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
+import { fetchDisputeInfoFromApi } from '@/lib/api/disputeApi';
 import { showAlert } from '@/context/ModalContext';
 
 interface UseUserOrderActionsParams {
@@ -105,7 +106,7 @@ export function useUserOrderActions({
 
       const res = await fetchWithAuth(`/api/orders/${activeOrder.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': generateIdempotencyKey() },
         body: JSON.stringify({
           status: 'payment_sent',
           actor_type: 'user',
@@ -283,7 +284,7 @@ export function useUserOrderActions({
 
       const res = await fetchWithAuth(`/api/orders/${activeOrder.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': generateIdempotencyKey() },
         body: JSON.stringify({
           status: 'completed',
           actor_type: 'user',
@@ -384,17 +385,8 @@ export function useUserOrderActions({
   };
 
   const fetchDisputeInfo = useCallback(async (orderId: string) => {
-    try {
-      const res = await fetchWithAuth(`/api/orders/${orderId}/dispute`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.data) {
-          setDisputeInfo(data.data);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch dispute info:', err);
-    }
+    const data = await fetchDisputeInfoFromApi(orderId);
+    if (data) setDisputeInfo(data);
   }, []);
 
   const respondToResolution = async (action: 'accept' | 'reject') => {

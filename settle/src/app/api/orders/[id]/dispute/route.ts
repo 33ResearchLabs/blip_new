@@ -124,7 +124,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { id: orderId } = await params;
+
+    const canAccess = await canAccessOrder(auth, orderId);
+    if (!canAccess) {
+      return forbiddenResponse('You do not have access to this order');
+    }
 
     const result = await query(
       `SELECT d.*, o.order_number, o.crypto_amount, o.fiat_amount

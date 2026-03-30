@@ -7,6 +7,33 @@
 
 const { Pool } = require('pg');
 const url = require('url');
+const crypto = require('crypto');
+
+/**
+ * Verify a session token (mirrors src/lib/auth/sessionToken.ts logic).
+ * Returns { actorType, actorId } or null.
+ */
+function verifySessionTokenWs(token) {
+  const secret = process.env.ADMIN_SECRET || process.env.SESSION_TOKEN_SECRET || '';
+  if (!secret || !token) return null;
+  try {
+    const decoded = Buffer.from(token, 'base64').toString();
+    const parts = decoded.split(':');
+    if (parts.length !== 4) return null;
+    const [actorType, actorId, tsStr, sig] = parts;
+    const ts = parseInt(tsStr, 10);
+    if (isNaN(ts)) return null;
+    const age = Math.floor(Date.now() / 1000) - ts;
+    if (age > 7 * 24 * 60 * 60 || age < 0) return null;
+    if (!['user', 'merchant', 'compliance'].includes(actorType)) return null;
+    const expected = crypto.createHmac('sha256', secret).update(`${actorType}:${actorId}:${tsStr}`).digest('hex');
+    if (sig.length !== expected.length) return null;
+    if (!crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) return null;
+    return { actorType, actorId };
+  } catch {
+    return null;
+  }
+}
 
 // Connection pool for database
 const poolConfig = process.env.DATABASE_URL
@@ -118,9 +145,9 @@ async function verifyCompliance(complianceId) {
     );
     return result.rows.length > 0;
   } catch (error) {
-    // Table may not exist yet
-    console.warn('compliance_team verification failed, allowing access');
-    return true;
+    // Table may not exist yet — fail closed for safety
+    console.error('compliance_team verification failed, denying access:', error.message);
+    return false;
   }
 }
 
@@ -725,7 +752,24 @@ async function handleMessage(ws, rawData) {
  */
 async function handleConnection(ws, request, wss) {
   const parsedUrl = url.parse(request.url, true);
-  const { actorType, actorId } = parsedUrl.query;
+  let { actorType, actorId } = parsedUrl.query;
+  let authMethod = 'query_params';
+
+  // Phase 1: Try signed token from query param (preferred, cryptographically verified)
+  const { token } = parsedUrl.query;
+  if (token) {
+    const tokenPayload = verifySessionTokenWs(token);
+    if (tokenPayload) {
+      actorType = tokenPayload.actorType;
+      actorId = tokenPayload.actorId;
+      authMethod = 'token';
+    }
+    // If token present but invalid, fall through to legacy query params
+  }
+
+  if (authMethod === 'query_params' && actorType && actorId) {
+    console.warn('[WS_AUTH_MIGRATION] Legacy query param auth used', { actorType, actorId });
+  }
 
   // Validate required params
   if (!actorType || !actorId) {
@@ -733,7 +777,14 @@ async function handleConnection(ws, request, wss) {
     return;
   }
 
-  // Verify actor exists
+  // Reject 'system' actorType from external WebSocket connections —
+  // system actions must originate from server-side code, not client connections
+  if (actorType === 'system') {
+    ws.close(WS_ERROR_CODES.AUTH_FAILED, 'System actor type not allowed via WebSocket');
+    return;
+  }
+
+  // Verify actor exists in DB before allowing connection
   let isValid = false;
   if (actorType === 'user') {
     isValid = await verifyUser(actorId);
@@ -741,8 +792,6 @@ async function handleConnection(ws, request, wss) {
     isValid = await verifyMerchant(actorId);
   } else if (actorType === 'compliance') {
     isValid = await verifyCompliance(actorId);
-  } else if (actorType === 'system') {
-    isValid = true;
   }
 
   if (!isValid) {

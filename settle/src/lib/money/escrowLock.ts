@@ -86,6 +86,25 @@ export async function mockEscrowLock(
 
       const amount = parseFloat(String(lockedOrder.crypto_amount));
 
+      // 2b. Validate escrow amount is positive and finite
+      if (!amount || amount <= 0 || !isFinite(amount)) {
+        throw new Error(`INVALID_ESCROW_AMOUNT: crypto_amount=${lockedOrder.crypto_amount} resolves to ${amount}`);
+      }
+
+      // 2c. Cross-check: if fiat_amount and rate exist, verify crypto_amount is consistent
+      const fiatAmount = parseFloat(String(lockedOrder.fiat_amount || 0));
+      const rate = parseFloat(String(lockedOrder.rate || 0));
+      if (fiatAmount > 0 && rate > 0) {
+        const expectedCrypto = fiatAmount / rate;
+        const deviation = Math.abs(amount - expectedCrypto) / expectedCrypto;
+        // Allow 1% tolerance for rounding
+        if (deviation > 0.01) {
+          throw new Error(
+            `ESCROW_AMOUNT_MISMATCH: crypto_amount=${amount} but fiat/rate implies ${expectedCrypto.toFixed(6)} (${(deviation * 100).toFixed(1)}% deviation)`
+          );
+        }
+      }
+
       // 3. Determine who pays escrow
       const payer = determineEscrowPayer({
         type: lockedOrder.type as 'buy' | 'sell',

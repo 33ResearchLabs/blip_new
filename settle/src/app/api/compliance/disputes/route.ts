@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { requireAuth } from '@/lib/middleware/auth';
+import { auditLog } from '@/lib/auditLog';
 
 /** Format millisecond delta to human-readable string */
 function formatDelta(ms: number): string {
@@ -41,6 +42,12 @@ export async function GET(request: NextRequest) {
       { status: 403 }
     );
   }
+
+  // Audit log: track who is accessing dispute data
+  auditLog('compliance.dispute_accessed', auth.actorId, auth.actorType, undefined, {
+    merchantId: auth.merchantId,
+    endpoint: 'GET /api/compliance/disputes',
+  });
 
   try {
     const searchParams = request.nextUrl.searchParams;

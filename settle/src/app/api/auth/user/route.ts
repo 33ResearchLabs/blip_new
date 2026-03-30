@@ -11,6 +11,8 @@ import {
 } from '@/lib/db/repositories/users';
 import { verifyWalletSignature } from '@/lib/solana/verifySignature';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
+import { validateUsername } from '@/lib/validation/username';
+import { generateSessionToken, generateAccessToken, generateRefreshToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
 
 /**
  * POST /api/auth/user
@@ -88,14 +90,25 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] User authenticated via wallet:', user.id, user.username, { isNewUser, needsUsername });
 
-      return NextResponse.json({
+      const userPayload = { actorId: user.id, actorType: 'user' as const };
+      const token = generateSessionToken(userPayload);
+      const userAccessTk = generateAccessToken(userPayload);
+      const userRefreshTk = generateRefreshToken(userPayload);
+
+      const walletRes = NextResponse.json({
         success: true,
         data: {
           user,
           isNewUser,
           needsUsername,
+          ...(token && { token }),
+          ...(userAccessTk && { accessToken: userAccessTk }),
         },
       });
+      if (userRefreshTk) {
+        walletRes.cookies.set(REFRESH_TOKEN_COOKIE, userRefreshTk, REFRESH_COOKIE_OPTIONS);
+      }
+      return walletRes;
     }
 
     // Set username for first-time users
@@ -117,16 +130,10 @@ export async function POST(request: NextRequest) {
       }
 
       // Validate username
-      if (username.length < 3 || username.length > 20) {
+      const usernameError = validateUsername(username);
+      if (usernameError) {
         return NextResponse.json(
-          { success: false, error: 'Username must be 3-20 characters' },
-          { status: 400 }
-        );
-      }
-
-      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        return NextResponse.json(
-          { success: false, error: 'Username can only contain letters, numbers, and underscores' },
+          { success: false, error: usernameError },
           { status: 400 }
         );
       }
@@ -179,10 +186,23 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] Username set for user:', user.id, username);
 
-      return NextResponse.json({
+      const setUnPayload = { actorId: user.id, actorType: 'user' as const };
+      const setUsernameToken = generateSessionToken(setUnPayload);
+      const setUnAccessTk = generateAccessToken(setUnPayload);
+      const setUnRefreshTk = generateRefreshToken(setUnPayload);
+
+      const setUnRes = NextResponse.json({
         success: true,
-        data: { user: updatedUser },
+        data: {
+          user: updatedUser,
+          ...(setUsernameToken && { token: setUsernameToken }),
+          ...(setUnAccessTk && { accessToken: setUnAccessTk }),
+        },
       });
+      if (setUnRefreshTk) {
+        setUnRes.cookies.set(REFRESH_TOKEN_COOKIE, setUnRefreshTk, REFRESH_COOKIE_OPTIONS);
+      }
+      return setUnRes;
     }
 
     // Login with username/password
@@ -204,13 +224,24 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] User login successful:', user.id, user.username);
 
-      return NextResponse.json({
+      const loginPayload = { actorId: user.id, actorType: 'user' as const };
+      const loginToken = generateSessionToken(loginPayload);
+      const loginAccessTk = generateAccessToken(loginPayload);
+      const loginRefreshTk = generateRefreshToken(loginPayload);
+
+      const loginRes = NextResponse.json({
         success: true,
         data: {
           user,
           needsWallet: !user.wallet_address,
+          ...(loginToken && { token: loginToken }),
+          ...(loginAccessTk && { accessToken: loginAccessTk }),
         },
       });
+      if (loginRefreshTk) {
+        loginRes.cookies.set(REFRESH_TOKEN_COOKIE, loginRefreshTk, REFRESH_COOKIE_OPTIONS);
+      }
+      return loginRes;
     }
 
     // Register with username/password
@@ -223,16 +254,10 @@ export async function POST(request: NextRequest) {
       }
 
       // Validate username
-      if (username.length < 3 || username.length > 20) {
+      const regUsernameError = validateUsername(username);
+      if (regUsernameError) {
         return NextResponse.json(
-          { success: false, error: 'Username must be 3-20 characters' },
-          { status: 400 }
-        );
-      }
-
-      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        return NextResponse.json(
-          { success: false, error: 'Username can only contain letters, numbers, and underscores' },
+          { success: false, error: regUsernameError },
           { status: 400 }
         );
       }
@@ -274,13 +299,24 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] New user registered:', user.id, user.username);
 
-      return NextResponse.json({
+      const regPayload = { actorId: user.id, actorType: 'user' as const };
+      const registerToken = generateSessionToken(regPayload);
+      const regAccessTk = generateAccessToken(regPayload);
+      const regRefreshTk = generateRefreshToken(regPayload);
+
+      const regRes = NextResponse.json({
         success: true,
         data: {
           user,
           needsWallet: true,
+          ...(registerToken && { token: registerToken }),
+          ...(regAccessTk && { accessToken: regAccessTk }),
         },
       });
+      if (regRefreshTk) {
+        regRes.cookies.set(REFRESH_TOKEN_COOKIE, regRefreshTk, REFRESH_COOKIE_OPTIONS);
+      }
+      return regRes;
     }
 
     // Link wallet to existing user account

@@ -16,6 +16,7 @@ import { logger } from 'settlement-core';
 import { uuidSchema } from '@/lib/validation/schemas';
 import {
   requireAuth,
+  requireTokenAuth,
   canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
@@ -94,8 +95,12 @@ export async function POST(
       escrow_creator_wallet,
     } = parseResult.data;
 
-    // 3. Authenticate
-    const auth = await requireAuth(request);
+    // 3. Authenticate — use strict token auth for financial actions
+    const sensitiveActions = ['SEND_PAYMENT', 'CONFIRM_PAYMENT', 'CANCEL', 'LOCK_ESCROW'];
+    const isSensitive = sensitiveActions.includes(action);
+    const auth = isSensitive
+      ? await requireTokenAuth(request)
+      : await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
     // 4. Security: enforce actor matches authenticated identity
@@ -566,6 +571,11 @@ export async function GET(
 
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
+
+    const canAccess = await canAccessOrder(auth, id);
+    if (!canAccess) {
+      return forbiddenResponse('You do not have access to this order');
+    }
 
     const order = await getOrderWithRelations(id);
     if (!order) {

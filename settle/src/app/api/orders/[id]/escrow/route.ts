@@ -6,6 +6,7 @@ import { proxyCoreApi } from "@/lib/proxy/coreApi";
 import { uuidSchema } from "@/lib/validation/schemas";
 import {
   requireAuth,
+  requireTokenAuth,
   canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
@@ -17,6 +18,7 @@ import { checkRateLimit, STRICT_LIMIT } from "@/lib/middleware/rateLimit";
 import { serializeOrder } from "@/lib/api/orderSerializer";
 import { getIdempotencyKey, withIdempotency } from "@/lib/idempotency";
 import { mockEscrowLock, determineEscrowPayer } from "@/lib/money/escrowLock";
+import { auditLog } from "@/lib/auditLog";
 import { resolveTradeRole } from "@/lib/orders/handleOrderAction";
 import { normalizeStatus } from "@/lib/orders/statusNormalizer";
 
@@ -54,8 +56,8 @@ export async function GET(
       return validationErrorResponse(["Invalid order ID format"]);
     }
 
-    // Require authentication
-    const auth = await requireAuth(request);
+    // Require token auth for escrow operations (sensitive financial action)
+    const auth = await requireTokenAuth(request);
     if (auth instanceof NextResponse) return auth;
 
     // Fetch order
@@ -121,8 +123,8 @@ export async function POST(
 
     const body = await request.json();
 
-    // Require authentication
-    const auth = await requireAuth(request);
+    // Require token auth for escrow deposit (sensitive financial action)
+    const auth = await requireTokenAuth(request);
     if (auth instanceof NextResponse) return auth;
 
     // Validate request body
@@ -165,7 +167,17 @@ export async function POST(
       return forbiddenResponse("You do not have access to this order");
     }
 
-    // Fetch order for validation + logging
+    // Acquire row-level lock to prevent parallel escrow locks (double-spend)
+    const { query: lockQuery } = await import("@/lib/db");
+    const lockResult = await lockQuery(
+      `SELECT id FROM orders WHERE id = $1 FOR UPDATE`,
+      [id]
+    );
+    if (!lockResult || lockResult.length === 0) {
+      return notFoundResponse("Order");
+    }
+
+    // Fetch order for validation + logging (after lock acquired)
     const depositOrder = await getOrderWithRelations(id);
     if (!depositOrder) {
       return notFoundResponse("Order");
@@ -282,6 +294,13 @@ export async function POST(
     });
 
     const depositSuccess = depositResponse.status < 400;
+    if (depositSuccess) {
+      auditLog('escrow.locked', parseResult.data.actor_id, parseResult.data.actor_type, id, {
+        txHash: parseResult.data.tx_hash,
+        cryptoAmount: depositOrder?.crypto_amount,
+        sellerId,
+      });
+    }
     logger.info(`[Escrow:Deposit] ${depositSuccess ? "Success" : "Failed"}`, {
       orderId: id,
       actorId: parseResult.data.actor_id,
@@ -315,8 +334,8 @@ export async function PATCH(
 
     const body = await request.json();
 
-    // Require authentication
-    const auth = await requireAuth(request);
+    // Require token auth for escrow release (sensitive financial action)
+    const auth = await requireTokenAuth(request);
     if (auth instanceof NextResponse) return auth;
 
     // Validate request body
@@ -588,6 +607,12 @@ export async function PATCH(
       });
     } else {
       const releaseSuccess = idempotencyResult.statusCode < 400;
+      if (releaseSuccess) {
+        auditLog('escrow.released', actor_id, actor_type, id, {
+          deductedAmount: order.escrow_debited_amount,
+          txHash: tx_hash,
+        });
+      }
       logger.info(`[Escrow:Release] ${releaseSuccess ? "Success" : "Failed"}`, {
         orderId: id,
         actorId: actor_id,

@@ -29,6 +29,7 @@ export function useDashboardAuth({
   const setIsLoggedIn = useMerchantStore(s => s.setIsLoggedIn);
   const isLoggedIn = useMerchantStore(s => s.isLoggedIn);
   const setIsLoading = useMerchantStore(s => s.setIsLoading);
+  const setSessionToken = useMerchantStore(s => s.setSessionToken);
 
   // Auth UI state
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
@@ -102,6 +103,7 @@ export function useDashboardAuth({
         setIsLoggedIn(true);
         setShowUsernameModal(false);
         localStorage.setItem('blip_merchant', JSON.stringify(merchant));
+        if (data.data.token) setSessionToken(data.data.token);
       } else {
         throw new Error(data.error || 'Failed to create merchant');
       }
@@ -145,6 +147,7 @@ export function useDashboardAuth({
         setMerchantInfo(data.data.merchant);
         setIsLoggedIn(true);
         localStorage.setItem('blip_merchant', JSON.stringify(data.data.merchant));
+        if (data.data.token) setSessionToken(data.data.token);
         if (!isMockMode && !data.data.merchant.wallet_address) {
           setTimeout(() => setShowWalletPrompt(true), 500);
         }
@@ -196,6 +199,7 @@ export function useDashboardAuth({
         setMerchantInfo(data.data.merchant);
         setIsLoggedIn(true);
         localStorage.setItem('blip_merchant', JSON.stringify(data.data.merchant));
+        if (data.data.token) setSessionToken(data.data.token);
         if (!isMockMode) {
           setTimeout(() => setShowWalletPrompt(true), 500);
         }
@@ -217,11 +221,12 @@ export function useDashboardAuth({
   const handleLogout = useCallback(() => {
     localStorage.removeItem('blip_merchant');
     localStorage.removeItem('merchant_info');
+    setSessionToken(null);
     if (solanaWallet.disconnect) {
       solanaWallet.disconnect();
     }
     window.location.href = '/merchant';
-  }, [solanaWallet]);
+  }, [solanaWallet, setSessionToken]);
 
   // Session restore on mount
   useEffect(() => {
@@ -240,6 +245,7 @@ export function useDashboardAuth({
               setIsLoggedIn(true);
               setIsLoading(false);
               localStorage.setItem('blip_merchant', JSON.stringify(freshMerchant));
+              if (checkData.data.token) setSessionToken(checkData.data.token);
               if (!isMockMode && !freshMerchant.wallet_address && !solanaWallet.connected) {
                 setTimeout(() => setShowWalletPrompt(true), 1000);
               }

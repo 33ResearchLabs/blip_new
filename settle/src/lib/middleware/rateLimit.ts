@@ -182,9 +182,6 @@ export async function checkRateLimit(
   endpoint: string,
   config: RateLimitConfig
 ): Promise<NextResponse | null> {
-  // TODO: Re-enable rate limiting after testing
-  // eslint-disable-next-line no-constant-condition
-  if (true as boolean) return null;
   if (process.env.NEXT_PUBLIC_MOCK_MODE === 'true') return null;
   if (config.skip?.(request)) return null;
 

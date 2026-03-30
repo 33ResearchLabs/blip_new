@@ -97,6 +97,20 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(['Merchant not found']);
     }
 
+    // Verify an active order relationship exists between sender and recipient
+    const activeOrderRows = await query<{ id: string }>(
+      `SELECT id FROM orders
+       WHERE ((merchant_id = $1 AND user_id = $2) OR (merchant_id = $2 AND user_id = $1)
+              OR (buyer_merchant_id = $1 AND user_id = $2) OR (buyer_merchant_id = $2 AND user_id = $1)
+              OR (merchant_id = $1 AND buyer_merchant_id = $2) OR (merchant_id = $2 AND buyer_merchant_id = $1))
+         AND status NOT IN ('completed', 'cancelled', 'expired')
+       LIMIT 1`,
+      [merchant_id, targetId]
+    );
+    if (activeOrderRows.length === 0) {
+      return forbiddenResponse('Direct messages require an active order between parties');
+    }
+
     const message = await sendDirectMessage({
       sender_type: 'merchant',
       sender_id: merchant_id,

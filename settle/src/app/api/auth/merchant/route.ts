@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { verifyWalletSignature } from '@/lib/solana/verifySignature';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
+import { requireTokenAuth } from '@/lib/middleware/auth';
+import { updateMerchantOnlineStatus, createDefaultMerchantOffers, serializeMerchant } from '@/lib/db/repositories/merchants';
+import { generateSessionToken, generateAccessToken, generateRefreshToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { validateUsername } from '@/lib/validation/username';
 import crypto from 'crypto';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
 
@@ -81,32 +85,27 @@ export async function GET(request: NextRequest) {
       };
 
       // Set merchant online when session is validated (critical for order matching!)
-      await query(
-        `UPDATE merchants SET is_online = true, last_seen_at = NOW() WHERE id = $1`,
-        [merchant.id]
-      );
+      await updateMerchantOnlineStatus(merchant.id, true);
       console.log('[API] Merchant session restored, set online:', merchant.id);
 
-      return NextResponse.json({
+      const payload = { actorId: merchant.id, actorType: 'merchant' as const };
+      const sessionToken = generateSessionToken(payload);
+      const accessToken = generateAccessToken(payload);
+      const refreshToken = generateRefreshToken(payload);
+
+      const response = NextResponse.json({
         success: true,
         data: {
           valid: true,
-          merchant: {
-            id: merchant.id,
-            username: merchant.username,
-            display_name: merchant.display_name,
-            business_name: merchant.business_name,
-            wallet_address: merchant.wallet_address,
-            avatar_url: merchant.avatar_url,
-            bio: merchant.bio,
-            rating: parseFloat(String(merchant.rating)) || 5,
-            total_trades: merchant.total_trades || 0,
-            balance: parseFloat(String(merchant.balance)) || 0,
-            has_ops_access: merchant.has_ops_access || false,
-            has_compliance_access: merchant.has_compliance_access || false,
-          },
+          merchant: serializeMerchant(merchant),
+          ...(sessionToken && { token: sessionToken }),
+          ...(accessToken && { accessToken }),
         },
       });
+      if (refreshToken) {
+        response.cookies.set(REFRESH_TOKEN_COOKIE, refreshToken, REFRESH_COOKIE_OPTIONS);
+      }
+      return response;
     }
 
     if (action === 'wallet_login' && wallet_address) {
@@ -138,15 +137,7 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        data: {
-          id: merchant.id,
-          username: merchant.username,
-          display_name: merchant.display_name,
-          business_name: merchant.business_name,
-          wallet_address: merchant.wallet_address,
-          rating: parseFloat(String(merchant.rating)) || 5,
-          total_trades: merchant.total_trades || 0,
-        },
+        data: serializeMerchant(merchant),
       });
     }
 
@@ -235,10 +226,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Update online status
-        await query(
-          `UPDATE merchants SET is_online = true, last_seen_at = NOW() WHERE id = $1`,
-          [merchant.id]
-        );
+        await updateMerchantOnlineStatus(merchant.id, true);
 
         // Check if merchant has any offers, if not create default ones
         const existingOffers = await query(
@@ -248,51 +236,31 @@ export async function POST(request: NextRequest) {
 
         if (existingOffers.length === 0) {
           console.log('[API] No offers found for merchant, creating defaults:', merchant.id);
-          try {
-            const displayName = merchant.display_name || merchant.username || 'Merchant';
-            // Create a sell offer (bank transfer)
-            await query(
-              `INSERT INTO merchant_offers (merchant_id, type, payment_method, rate, min_amount, max_amount, available_amount, bank_name, bank_account_name, bank_iban, is_active)
-               VALUES ($1, 'sell', 'bank', 3.67, 100, 50000, 50000, 'Emirates NBD', $2, 'AE070331234567890123456', true)`,
-              [merchant.id, displayName]
-            );
-
-            // Create a buy offer (bank transfer)
-            await query(
-              `INSERT INTO merchant_offers (merchant_id, type, payment_method, rate, min_amount, max_amount, available_amount, bank_name, bank_account_name, bank_iban, is_active)
-               VALUES ($1, 'buy', 'bank', 3.65, 100, 50000, 50000, 'Emirates NBD', $2, 'AE070331234567890123456', true)`,
-              [merchant.id, displayName]
-            );
-
-            console.log('[API] Default offers created for existing merchant:', merchant.id);
-          } catch (offerError) {
-            console.error('[API] Failed to create default offers:', offerError);
-          }
+          const displayName = merchant.display_name || merchant.username || 'Merchant';
+          await createDefaultMerchantOffers(merchant.id, displayName);
         }
 
         console.log('[API] Merchant login successful:', merchant.id, merchant.username);
 
-        return NextResponse.json({
+        const walletPayload = { actorId: merchant.id, actorType: 'merchant' as const };
+        const token = generateSessionToken(walletPayload);
+        const walletAccessToken = generateAccessToken(walletPayload);
+        const walletRefreshToken = generateRefreshToken(walletPayload);
+
+        const walletResponse = NextResponse.json({
           success: true,
           data: {
-            merchant: {
-              id: merchant.id,
-              username: merchant.username,
-              display_name: merchant.display_name,
-              business_name: merchant.business_name,
-              wallet_address: merchant.wallet_address,
-              avatar_url: merchant.avatar_url,
-              bio: merchant.bio,
-              rating: parseFloat(String(merchant.rating)) || 5,
-              total_trades: merchant.total_trades || 0,
-              balance: parseFloat(String(merchant.balance)) || 0,
-              has_ops_access: merchant.has_ops_access || false,
-            has_compliance_access: merchant.has_compliance_access || false,
-            },
+            merchant: serializeMerchant(merchant),
             isNewMerchant,
             needsUsername,
+            ...(token && { token }),
+            ...(walletAccessToken && { accessToken: walletAccessToken }),
           },
         });
+        if (walletRefreshToken) {
+          walletResponse.cookies.set(REFRESH_TOKEN_COOKIE, walletRefreshToken, REFRESH_COOKIE_OPTIONS);
+        }
+        return walletResponse;
       }
     }
 
@@ -315,16 +283,10 @@ export async function POST(request: NextRequest) {
       }
 
       // Validate username
-      if (username.length < 3 || username.length > 20) {
+      const createUsernameError = validateUsername(username);
+      if (createUsernameError) {
         return NextResponse.json(
-          { success: false, error: 'Username must be 3-20 characters' },
-          { status: 400 }
-        );
-      }
-
-      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        return NextResponse.json(
-          { success: false, error: 'Username can only contain letters, numbers, and underscores' },
+          { success: false, error: createUsernameError },
           { status: 400 }
         );
       }
@@ -401,42 +363,25 @@ export async function POST(request: NextRequest) {
       console.log('[API] New merchant created:', merchant.id, merchant.username, MOCK_MODE ? `(mock balance: ${merchantBalance})` : '');
 
       // Auto-create default offers for new merchant (so they can start receiving orders immediately)
-      try {
-        // Create a sell offer (bank transfer) - users can buy USDC from this merchant
-        await query(
-          `INSERT INTO merchant_offers (merchant_id, type, payment_method, rate, min_amount, max_amount, available_amount, bank_name, bank_account_name, bank_iban, is_active)
-           VALUES ($1, 'sell', 'bank', 3.67, 100, 50000, 50000, 'Emirates NBD', $2, 'AE070331234567890123456', true)`,
-          [merchant.id, username]
-        );
+      await createDefaultMerchantOffers(merchant.id, username);
 
-        // Create a buy offer (bank transfer) - users can sell USDC to this merchant
-        await query(
-          `INSERT INTO merchant_offers (merchant_id, type, payment_method, rate, min_amount, max_amount, available_amount, bank_name, bank_account_name, bank_iban, is_active)
-           VALUES ($1, 'buy', 'bank', 3.65, 100, 50000, 50000, 'Emirates NBD', $2, 'AE070331234567890123456', true)`,
-          [merchant.id, username]
-        );
+      const createPayload = { actorId: merchant.id, actorType: 'merchant' as const };
+      const createToken = generateSessionToken(createPayload);
+      const createAccessTk = generateAccessToken(createPayload);
+      const createRefreshTk = generateRefreshToken(createPayload);
 
-        console.log('[API] Default offers created for merchant:', merchant.id);
-      } catch (offerError) {
-        console.error('[API] Failed to create default offers:', offerError);
-        // Don't fail the registration if offer creation fails
-      }
-
-      return NextResponse.json({
+      const createResponse = NextResponse.json({
         success: true,
         data: {
-          merchant: {
-            id: merchant.id,
-            username: merchant.username,
-            display_name: merchant.display_name,
-            business_name: merchant.business_name,
-            wallet_address: merchant.wallet_address,
-            rating: parseFloat(String(merchant.rating)) || 5,
-            total_trades: merchant.total_trades || 0,
-            balance: merchantBalance,
-          },
+          merchant: { ...serializeMerchant(merchant), balance: merchantBalance },
+          ...(createToken && { token: createToken }),
+          ...(createAccessTk && { accessToken: createAccessTk }),
         },
       });
+      if (createRefreshTk) {
+        createResponse.cookies.set(REFRESH_TOKEN_COOKIE, createRefreshTk, REFRESH_COOKIE_OPTIONS);
+      }
+      return createResponse;
     }
 
     // Set username for existing merchant
@@ -458,16 +403,10 @@ export async function POST(request: NextRequest) {
       }
 
       // Validate username
-      if (username.length < 3 || username.length > 20) {
+      const setUsernameError = validateUsername(username);
+      if (setUsernameError) {
         return NextResponse.json(
-          { success: false, error: 'Username must be 3-20 characters' },
-          { status: 400 }
-        );
-      }
-
-      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        return NextResponse.json(
-          { success: false, error: 'Username can only contain letters, numbers, and underscores' },
+          { success: false, error: setUsernameError },
           { status: 400 }
         );
       }
@@ -537,28 +476,43 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Update username for existing merchant (no signature required)
+    // Update username for existing merchant (wallet signature required)
     if (action === 'update_username') {
       const { merchant_id } = body;
 
-      if (!merchant_id || !username) {
+      if (!merchant_id || !username || !wallet_address || !signature || !message) {
         return NextResponse.json(
-          { success: false, error: 'merchant_id and username are required' },
+          { success: false, error: 'merchant_id, username, wallet_address, signature, and message are required' },
           { status: 400 }
+        );
+      }
+
+      // Verify the wallet signature to prove ownership
+      const isValid = await verifyWalletSignature(wallet_address, signature, message);
+      if (!isValid) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid wallet signature' },
+          { status: 401 }
+        );
+      }
+
+      // Verify the wallet address belongs to this merchant_id
+      const ownerCheck = await query(
+        `SELECT id FROM merchants WHERE id = $1 AND wallet_address = $2 AND status = 'active'`,
+        [merchant_id, wallet_address]
+      );
+      if (ownerCheck.length === 0) {
+        return NextResponse.json(
+          { success: false, error: 'Wallet does not match merchant account' },
+          { status: 403 }
         );
       }
 
       // Validate username
-      if (username.length < 3 || username.length > 20) {
+      const updateUsernameError = validateUsername(username);
+      if (updateUsernameError) {
         return NextResponse.json(
-          { success: false, error: 'Username must be 3-20 characters' },
-          { status: 400 }
-        );
-      }
-
-      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        return NextResponse.json(
-          { success: false, error: 'Username can only contain letters, numbers, and underscores' },
+          { success: false, error: updateUsernameError },
           { status: 400 }
         );
       }
@@ -696,33 +650,27 @@ export async function POST(request: NextRequest) {
       }
 
       // Update online status
-      await query(
-        `UPDATE merchants SET is_online = true, last_seen_at = NOW() WHERE id = $1`,
-        [merchant.id]
-      );
+      await updateMerchantOnlineStatus(merchant.id, true);
 
       console.log('[API] Merchant email login successful:', merchant.id, merchant.email);
 
-      return NextResponse.json({
+      const emailPayload = { actorId: merchant.id, actorType: 'merchant' as const };
+      const emailLoginToken = generateSessionToken(emailPayload);
+      const emailAccessTk = generateAccessToken(emailPayload);
+      const emailRefreshTk = generateRefreshToken(emailPayload);
+
+      const emailResponse = NextResponse.json({
         success: true,
         data: {
-          merchant: {
-            id: merchant.id,
-            username: merchant.username,
-            display_name: merchant.display_name,
-            business_name: merchant.business_name,
-            wallet_address: merchant.wallet_address,
-            avatar_url: merchant.avatar_url,
-            bio: merchant.bio,
-            email: merchant.email,
-            rating: parseFloat(String(merchant.rating)) || 5,
-            total_trades: merchant.total_trades || 0,
-            balance: parseFloat(String(merchant.balance)) || 0,
-            has_ops_access: merchant.has_ops_access || false,
-            has_compliance_access: merchant.has_compliance_access || false,
-          },
+          merchant: serializeMerchant(merchant),
+          ...(emailLoginToken && { token: emailLoginToken }),
+          ...(emailAccessTk && { accessToken: emailAccessTk }),
         },
       });
+      if (emailRefreshTk) {
+        emailResponse.cookies.set(REFRESH_TOKEN_COOKIE, emailRefreshTk, REFRESH_COOKIE_OPTIONS);
+      }
+      return emailResponse;
     }
 
     // Email/Password Registration
@@ -816,37 +764,12 @@ export async function POST(request: NextRequest) {
       console.log('[API] New merchant registered:', merchant.id, merchant.email);
 
       // Auto-create default offers
-      try {
-        await query(
-          `INSERT INTO merchant_offers (merchant_id, type, payment_method, rate, min_amount, max_amount, available_amount, bank_name, bank_account_name, bank_iban, is_active)
-           VALUES ($1, 'sell', 'bank', 3.67, 100, 50000, 50000, 'Emirates NBD', $2, 'AE070331234567890123456', true)`,
-          [merchant.id, merchant.display_name]
-        );
-
-        await query(
-          `INSERT INTO merchant_offers (merchant_id, type, payment_method, rate, min_amount, max_amount, available_amount, bank_name, bank_account_name, bank_iban, is_active)
-           VALUES ($1, 'buy', 'bank', 3.65, 100, 50000, 50000, 'Emirates NBD', $2, 'AE070331234567890123456', true)`,
-          [merchant.id, merchant.display_name]
-        );
-        console.log('[API] Default offers created for merchant:', merchant.id);
-      } catch (offerError) {
-        console.error('[API] Failed to create default offers:', offerError);
-      }
+      await createDefaultMerchantOffers(merchant.id, merchant.display_name);
 
       return NextResponse.json({
         success: true,
         data: {
-          merchant: {
-            id: merchant.id,
-            username: merchant.username,
-            display_name: merchant.display_name,
-            business_name: merchant.business_name,
-            wallet_address: merchant.wallet_address,
-            email: merchant.email,
-            rating: parseFloat(String(merchant.rating)) || 5,
-            total_trades: merchant.total_trades || 0,
-            balance: regBalance,
-          },
+          merchant: { ...serializeMerchant(merchant), balance: regBalance },
         },
       });
     }
@@ -864,16 +787,41 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH handler - update merchant wallet address
+// PATCH handler - update merchant wallet address (requires token + wallet signature)
 export async function PATCH(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { merchant_id, wallet_address } = body;
+  // Rate limit wallet updates
+  const rl = await checkRateLimit(request, 'auth:merchant:patch', AUTH_LIMIT);
+  if (rl) return rl;
 
-    if (!merchant_id || !wallet_address) {
+  try {
+    // Require token auth — this is a critical identity operation
+    const auth = await requireTokenAuth(request);
+    if (auth instanceof NextResponse) return auth;
+
+    const body = await request.json();
+    const { merchant_id, wallet_address, signature, message } = body;
+
+    if (!merchant_id || !wallet_address || !signature || !message) {
       return NextResponse.json(
-        { success: false, error: 'merchant_id and wallet_address are required' },
+        { success: false, error: 'merchant_id, wallet_address, signature, and message are required' },
         { status: 400 }
+      );
+    }
+
+    // Enforce: authenticated actor must own this merchant account
+    if (auth.actorId !== merchant_id) {
+      return NextResponse.json(
+        { success: false, error: 'You can only update your own wallet' },
+        { status: 403 }
+      );
+    }
+
+    // Verify the wallet signature proves ownership of the NEW wallet
+    const isValid = await verifyWalletSignature(wallet_address, signature, message);
+    if (!isValid) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid wallet signature' },
+        { status: 401 }
       );
     }
 
@@ -896,7 +844,7 @@ export async function PATCH(request: NextRequest) {
       [wallet_address, merchant_id]
     );
 
-    console.log('[API] Merchant wallet updated:', merchant_id, wallet_address);
+    console.log('[API] Merchant wallet updated:', merchant_id);
 
     return NextResponse.json({
       success: true,

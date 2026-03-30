@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
 import { generateAdminToken, verifyAdminToken } from '@/lib/middleware/auth';
+import crypto from 'crypto';
+import { auditLog } from '@/lib/auditLog';
 
 // Admin credentials from env vars (no fallbacks — must be configured)
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
@@ -28,7 +30,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD) {
+    // Timing-safe comparison to prevent timing attacks on credentials
+    const usernameMatch = username.length === ADMIN_USERNAME.length &&
+      crypto.timingSafeEqual(Buffer.from(username), Buffer.from(ADMIN_USERNAME));
+    const passwordMatch = password.length === ADMIN_PASSWORD.length &&
+      crypto.timingSafeEqual(Buffer.from(password), Buffer.from(ADMIN_PASSWORD));
+    if (!usernameMatch || !passwordMatch) {
       return NextResponse.json(
         { success: false, error: 'Invalid credentials' },
         { status: 401 }
@@ -37,6 +44,7 @@ export async function POST(request: NextRequest) {
 
     // Generate a signed admin token (valid for 24h)
     const token = generateAdminToken(username);
+    auditLog('admin.login', username, 'admin');
 
     return NextResponse.json({
       success: true,
@@ -72,10 +80,9 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Fallback: query param check (legacy, less secure)
-  const username = request.nextUrl.searchParams.get('username');
+  // No valid auth — reject
   return NextResponse.json({
     success: true,
-    data: { valid: username === ADMIN_USERNAME },
+    data: { valid: false },
   });
 }

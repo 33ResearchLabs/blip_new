@@ -107,7 +107,18 @@ const PRICE_MAX_DEVIATION = parseFloat(process.env.PRICE_MAX_DEVIATION || '0.15'
 const PRICE_GUARDRAILS_ENABLED = process.env.PRICE_GUARDRAILS_ENABLED === 'true';
 const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
+// In-memory cache for corridor prices — avoids DB query on every order creation.
+// 10s TTL is safe because the corridor price itself has a 5-minute staleness threshold.
+const corridorPriceCache = new Map<string, { data: any; expiresAt: number }>();
+const CORRIDOR_CACHE_TTL_MS = 10_000; // 10 seconds
+
 async function fetchCorridorRefPrice(corridorId = 'USDT_AED') {
+  // Check in-memory cache first
+  const cached = corridorPriceCache.get(corridorId);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
+  }
+
   try {
     const rows = await query<{ ref_price: string; updated_at: Date; confidence: string }>(
       'SELECT ref_price, updated_at, confidence FROM corridor_prices WHERE corridor_id = $1',
@@ -115,11 +126,16 @@ async function fetchCorridorRefPrice(corridorId = 'USDT_AED') {
     );
     if (!rows[0]) return null;
     const ageMs = Date.now() - new Date(rows[0].updated_at).getTime();
-    return {
+    const result = {
       ref_price: parseFloat(rows[0].ref_price),
       confidence: rows[0].confidence || 'low',
       is_stale: ageMs > STALE_THRESHOLD_MS,
     };
+
+    // Cache the result
+    corridorPriceCache.set(corridorId, { data: result, expiresAt: Date.now() + CORRIDOR_CACHE_TTL_MS });
+
+    return result;
   } catch (err) {
     logger.error('Failed to fetch corridor ref price', { corridorId, error: String(err) });
     return null;
@@ -463,7 +479,6 @@ export async function POST(request: NextRequest) {
       message: err.message,
       stack: err.stack?.split('\n').slice(0, 5).join('\n'),
     });
-    // Return specific error to help debug
-    return errorResponse(`${err.name}: ${err.message}`);
+    return errorResponse('An error occurred while processing your order');
   }
 }

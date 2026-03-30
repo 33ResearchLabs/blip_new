@@ -3,13 +3,34 @@ import { User, UserBankAccount } from '../../types/database';
 import crypto from 'crypto';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
 
-// Simple password hashing (in production, use bcrypt)
+// Password hashing — PBKDF2 with 100k iterations (OWASP minimum for SHA-512)
+const PBKDF2_ITERATIONS = 100_000;
 function hashPassword(password: string): string {
-  return crypto.createHash('sha256').update(password).digest('hex');
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, 64, 'sha512').toString('hex');
+  return `${salt}:${PBKDF2_ITERATIONS}:${hash}`;
 }
 
-function verifyPassword(password: string, hash: string): boolean {
-  return hashPassword(password) === hash;
+function verifyPassword(password: string, storedHash: string): { valid: boolean; needsRehash: boolean } {
+  const parts = storedHash.split(':');
+
+  if (parts.length === 3) {
+    // New format: salt:iterations:hash
+    const [salt, , hash] = parts;
+    const iterations = parseInt(parts[1], 10);
+    const verifyHash = crypto.pbkdf2Sync(password, salt, iterations, 64, 'sha512').toString('hex');
+    const valid = crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(verifyHash, 'hex'));
+    return { valid, needsRehash: valid && iterations < PBKDF2_ITERATIONS };
+  }
+
+  // Legacy format: plain SHA256 hex (64 chars, no colon)
+  if (storedHash.length === 64 && !storedHash.includes(':')) {
+    const legacyHash = crypto.createHash('sha256').update(password).digest('hex');
+    const valid = crypto.timingSafeEqual(Buffer.from(legacyHash, 'hex'), Buffer.from(storedHash, 'hex'));
+    return { valid, needsRehash: valid };
+  }
+
+  return { valid: false, needsRehash: false };
 }
 
 // Strip password_hash from user object before returning
@@ -103,8 +124,18 @@ export async function authenticateUser(
   const user = await getUserByUsername(username);
   if (!user || !user.password_hash) return null;
 
-  if (!verifyPassword(password, user.password_hash)) {
+  const { valid, needsRehash } = verifyPassword(password, user.password_hash);
+  if (!valid) {
     return null;
+  }
+
+  // Auto-rehash legacy SHA256 passwords to PBKDF2 on successful login
+  if (needsRehash) {
+    const newHash = hashPassword(password);
+    await queryOne(
+      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+      [newHash, user.id]
+    );
   }
 
   return sanitizeUser(user);

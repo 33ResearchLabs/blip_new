@@ -134,7 +134,7 @@ export async function createFulfillment(data: CreateFulfillmentInput): Promise<C
     `INSERT INTO corridor_fulfillments
      (order_id, provider_merchant_id, provider_id, saed_amount_locked, fiat_amount,
       corridor_fee, bank_details, send_deadline, idempotency_key)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() + INTERVAL '${deadlineMinutes} minutes', $8)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() + make_interval(mins => $9), $8)
      RETURNING *`,
     [
       data.order_id,
@@ -145,6 +145,7 @@ export async function createFulfillment(data: CreateFulfillmentInput): Promise<C
       data.corridor_fee,
       data.bank_details ? JSON.stringify(data.bank_details) : null,
       data.idempotency_key || null,
+      deadlineMinutes,
     ]
   );
   return rows[0];

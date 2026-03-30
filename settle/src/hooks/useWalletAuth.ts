@@ -6,6 +6,7 @@ import {
   authenticateWithWallet,
   setUsername as setUsernameAPI,
 } from '@/lib/auth/walletAuth';
+import { useMerchantStore } from '@/stores/merchantStore';
 
 interface User {
   id: string;
@@ -62,6 +63,12 @@ export function useWalletAuth() {
         setAuthError(result.error || 'Authentication failed');
         setIsAuthenticating(false);
         return result;
+      }
+
+      // Capture session token if returned (raw API response has data.token)
+      const rawResult = result as any;
+      if (rawResult.data?.token) {
+        useMerchantStore.getState().setSessionToken(rawResult.data.token);
       }
 
       // Check if username is needed

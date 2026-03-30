@@ -103,6 +103,12 @@ export async function POST(
 
     const { sender_type, sender_id, content, message_type, image_url, file_url, file_name, file_size, mime_type } = parseResult.data;
 
+    // Verify sender identity matches authenticated actor (prevent spoofing)
+    if (sender_id !== auth.actorId || sender_type !== auth.actorType) {
+      logger.auth.forbidden(`POST /api/orders/${id}/messages`, sender_id, 'Sender identity mismatch with authenticated actor');
+      return forbiddenResponse('Sender identity does not match authenticated user');
+    }
+
     // Check order exists + authorize in one step (avoid duplicate getOrderById)
     const order = await getOrderById(id);
     if (!order) {

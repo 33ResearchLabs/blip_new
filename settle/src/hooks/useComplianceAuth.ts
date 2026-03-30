@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { useMerchantStore } from '@/stores/merchantStore';
 
 interface ComplianceMember {
   id: string;
@@ -80,6 +81,7 @@ export function useComplianceAuth(solanaWallet: SolanaWalletHook): UseCompliance
         setMember(data.data.member);
         setIsLoggedIn(true);
         localStorage.setItem("compliance_member", JSON.stringify(data.data.member));
+        if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
       } else {
         setLoginError(data.error || "Login failed");
       }
@@ -118,6 +120,7 @@ export function useComplianceAuth(solanaWallet: SolanaWalletHook): UseCompliance
         setAuthMethod("wallet");
         setIsLoggedIn(true);
         localStorage.setItem("compliance_member", JSON.stringify({ ...data.data.member, authMethod: "wallet" }));
+        if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
       } else {
         setLoginError(data.error || "Wallet not authorized for compliance access");
       }

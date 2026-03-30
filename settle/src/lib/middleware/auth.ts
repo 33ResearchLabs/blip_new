@@ -9,6 +9,7 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { getOrderById } from '../db/repositories/orders';
 import { getUserById } from '../db/repositories/users';
 import { getMerchantById } from '../db/repositories/merchants';
+import { verifySessionToken } from '../auth/sessionToken';
 
 // Admin auth secret - MUST be configured via environment variable
 const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
@@ -94,20 +95,70 @@ export interface AuthContext {
   actorId: string;
 }
 
+// Production mode: token is the ONLY trusted identity source
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
 /**
- * Extract actor context from request headers or body
- * In production, this would verify JWT/session tokens
- * For now, we trust the actor_type and actor_id from request
+ * Extract actor context from request.
+ *
+ * PRODUCTION:
+ *   - Token (Authorization: Bearer) is the ONLY trusted identity source
+ *   - Supplementary headers (x-merchant-id, x-user-id) are read AFTER
+ *     token validation for actor-matching context only — never for identity
+ *   - No token → returns null (request will be rejected)
+ *
+ * DEVELOPMENT:
+ *   - Token preferred, but header fallback allowed for easier testing
+ *   - Fallback usage is logged as a warning
  */
 export function getAuthContext(request: NextRequest): AuthContext | null {
-  // 1. Check headers first (set by middleware, most trusted)
-  // Detect merchant context from URL path to resolve correct actor when both headers are present
+  // ── Token-based auth (trusted, cryptographically verified) ──
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const tokenPayload = verifySessionToken(authHeader.slice(7));
+    if (tokenPayload) {
+      const ctx: AuthContext = {
+        actorType: tokenPayload.actorType,
+        actorId: tokenPayload.actorId,
+      };
+      if (tokenPayload.actorType === 'user') ctx.userId = tokenPayload.actorId;
+      if (tokenPayload.actorType === 'merchant') ctx.merchantId = tokenPayload.actorId;
+      if (tokenPayload.actorType === 'compliance') ctx.complianceId = tokenPayload.actorId;
+
+      // Supplementary headers for dual-login context (NOT identity trust).
+      // Only accept supplementary IDs that match the token's actor type:
+      //   - Merchant token → can populate userId from header (dual-login)
+      //   - User token → can populate merchantId ONLY if token is merchant type
+      // This prevents a user from injecting x-merchant-id to access merchant orders.
+      const headerMerchantId = request.headers.get('x-merchant-id');
+      const headerUserId = request.headers.get('x-user-id');
+      if (headerMerchantId && !ctx.merchantId && tokenPayload.actorType === 'merchant') {
+        ctx.merchantId = headerMerchantId;
+      }
+      if (headerUserId && !ctx.userId) ctx.userId = headerUserId;
+
+      return ctx;
+    }
+    // Token present but invalid — in production, do NOT fall through to headers
+    if (IS_PRODUCTION) return null;
+  }
+
+  // ── No valid token ──
+  // In production: reject — token is required
+  if (IS_PRODUCTION) {
+    return null;
+  }
+
+  // ── Development-only: header fallback for testing ──
+  console.warn('[AUTH] Dev-mode header fallback used — would be rejected in production', {
+    route: request.nextUrl.pathname,
+  });
+
   const headerUserId = request.headers.get('x-user-id');
   const headerMerchantId = request.headers.get('x-merchant-id');
   const headerComplianceId = request.headers.get('x-compliance-id');
   const isMerchantRoute = request.nextUrl.pathname.includes('/merchant');
 
-  // Compliance header: use on compliance routes OR when accessing order messages/disputes
   const isComplianceRoute = request.nextUrl.pathname.includes('/compliance');
   const isOrderRoute = request.nextUrl.pathname.includes('/orders/') && (
     request.nextUrl.pathname.includes('/messages') || request.nextUrl.pathname.includes('/dispute')
@@ -115,13 +166,9 @@ export function getAuthContext(request: NextRequest): AuthContext | null {
   if (headerComplianceId && (isComplianceRoute || isOrderRoute) && !headerMerchantId) {
     return { actorType: 'compliance', actorId: headerComplianceId, complianceId: headerComplianceId };
   }
-  // When compliance + merchant headers both present, resolve as compliance on compliance/order routes
-  // but attach merchantId for canAccessOrder fallback
   if (headerComplianceId && headerMerchantId && (isComplianceRoute || isOrderRoute)) {
     return { actorType: 'compliance', actorId: headerComplianceId, complianceId: headerComplianceId, merchantId: headerMerchantId };
   }
-  // If both user and merchant headers exist, disambiguate using route context
-  // Also store both IDs so downstream checks can reference either identity
   if (headerMerchantId && headerUserId) {
     if (isMerchantRoute) {
       return { actorType: 'merchant', actorId: headerMerchantId, merchantId: headerMerchantId, userId: headerUserId };
@@ -135,8 +182,6 @@ export function getAuthContext(request: NextRequest): AuthContext | null {
     return { actorType: 'user', actorId: headerUserId, userId: headerUserId };
   }
 
-  // Body and query param fallbacks removed — actor identity must come from headers only.
-  // This prevents actor spoofing via crafted POST bodies.
   return null;
 }
 
@@ -221,15 +266,74 @@ export async function getVerifiedAuthContext(
   if (!auth) return null;
 
   const exists = await actorExistsInDb(auth);
-  return exists ? auth : null;
+  if (!exists) return null;
+
+  // Phase 2 migration metrics: track token vs header auth usage
+  const usedToken = request.headers.get('authorization')?.startsWith('Bearer ');
+  if (usedToken) {
+    authMigrationMetrics.tokenAuth++;
+  } else {
+    authMigrationMetrics.headerAuth++;
+    // Throttled log — only emit once per actor per 60s to avoid log spam
+    const logKey = `${auth.actorType}:${auth.actorId}`;
+    const now = Date.now();
+    const lastLog = legacyAuthLogTimestamps.get(logKey) || 0;
+    if (now - lastLog > 60_000) {
+      legacyAuthLogTimestamps.set(logKey, now);
+      console.warn('[AUTH_MIGRATION] Legacy header auth used', {
+        actorId: auth.actorId,
+        actorType: auth.actorType,
+        route: request.nextUrl.pathname,
+      });
+    }
+  }
+
+  // Log metrics summary every 500 requests
+  const totalRequests = authMigrationMetrics.tokenAuth + authMigrationMetrics.headerAuth;
+  if (totalRequests > 0 && totalRequests % 500 === 0) {
+    const tokenPct = ((authMigrationMetrics.tokenAuth / totalRequests) * 100).toFixed(1);
+    const sensitiveTotal = authMigrationMetrics.sensitiveTokenAuth + authMigrationMetrics.sensitiveHeaderAuth;
+    const sensitiveTokenPct = sensitiveTotal > 0
+      ? ((authMigrationMetrics.sensitiveTokenAuth / sensitiveTotal) * 100).toFixed(1)
+      : 'N/A';
+    console.log('[AUTH_MIGRATION] Metrics', {
+      totalRequests,
+      tokenAuth: authMigrationMetrics.tokenAuth,
+      headerAuth: authMigrationMetrics.headerAuth,
+      tokenPct: `${tokenPct}%`,
+      sensitiveRoutes: {
+        total: sensitiveTotal,
+        tokenAuth: authMigrationMetrics.sensitiveTokenAuth,
+        headerAuth: authMigrationMetrics.sensitiveHeaderAuth,
+        tokenPct: `${sensitiveTokenPct}%`,
+      },
+      enforcement: AUTH_TOKEN_REQUIRED ? 'STRICT' : 'SOFT',
+    });
+  }
+
+  return auth;
 }
+
+// Throttle map for legacy auth migration logs (bounded, auto-evicts)
+const legacyAuthLogTimestamps = new Map<string, number>();
+
+// In-memory counters for auth method adoption tracking
+const authMigrationMetrics = { tokenAuth: 0, headerAuth: 0, sensitiveTokenAuth: 0, sensitiveHeaderAuth: 0 };
+
+// Phase 3 env flag — when true, sensitive routes REQUIRE a valid token
+const AUTH_TOKEN_REQUIRED = process.env.AUTH_TOKEN_REQUIRED === 'true';
 
 /**
  * One-liner auth gate for routes.
  * Returns an AuthContext on success or a 401 NextResponse on failure.
  *
+ * Phase 3 behavior:
+ *   - If token present → validates and uses it (preferred)
+ *   - If token absent → falls back to headers (still works)
+ *   - Logs warning when headers are used (soft enforcement)
+ *
  * Usage:
- *   const auth = await requireAuth(request, body);
+ *   const auth = await requireAuth(request);
  *   if (auth instanceof NextResponse) return auth;
  *   // auth is AuthContext here
  */
@@ -238,6 +342,54 @@ export async function requireAuth(
 ): Promise<AuthContext | NextResponse> {
   const auth = await getVerifiedAuthContext(request);
   if (!auth) return unauthorizedResponse('Authentication required');
+  return auth;
+}
+
+/**
+ * Strict auth gate for sensitive routes (financial operations).
+ *
+ * When AUTH_TOKEN_REQUIRED=true:
+ *   - Requires a valid signed session token
+ *   - Rejects requests using only legacy headers with 401
+ *
+ * When AUTH_TOKEN_REQUIRED=false (default):
+ *   - Same as requireAuth() but logs louder warnings
+ *   - Tracks separate metrics for sensitive route adoption
+ *
+ * Use this for: payment_sent, completed, cancelled, escrow lock/release
+ */
+export async function requireTokenAuth(
+  request: NextRequest,
+): Promise<AuthContext | NextResponse> {
+  const auth = await getVerifiedAuthContext(request);
+  if (!auth) return unauthorizedResponse('Authentication required');
+
+  const hasValidToken = !!request.headers.get('authorization')?.startsWith('Bearer ');
+
+  if (hasValidToken) {
+    authMigrationMetrics.sensitiveTokenAuth++;
+  } else {
+    authMigrationMetrics.sensitiveHeaderAuth++;
+
+    if (AUTH_TOKEN_REQUIRED) {
+      console.error('[AUTH_ENFORCEMENT] Token required but missing on sensitive route', {
+        actorId: auth.actorId,
+        actorType: auth.actorType,
+        route: request.nextUrl.pathname,
+      });
+      return unauthorizedResponse(
+        'Session token required for this action. Please re-login to continue.'
+      );
+    }
+
+    // Soft enforcement: allow but warn
+    console.warn('[AUTH_ENFORCEMENT] Sensitive route using legacy headers — token preferred', {
+      actorId: auth.actorId,
+      actorType: auth.actorType,
+      route: request.nextUrl.pathname,
+    });
+  }
+
   return auth;
 }
 
@@ -276,9 +428,10 @@ async function verifyComplianceMember(complianceId: string): Promise<boolean> {
       [complianceId]
     );
     return member !== null && member.is_active !== false;
-  } catch {
-    // Table may not exist — allow access so compliance isn't locked out
-    return true;
+  } catch (err) {
+    // Table may not exist — fail closed for security
+    console.error('[AUTH] Compliance verification failed — denying access:', err);
+    return false;
   }
 }
 

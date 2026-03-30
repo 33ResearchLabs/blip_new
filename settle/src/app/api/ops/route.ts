@@ -17,8 +17,8 @@ import { readFileSync } from 'fs';
 export const dynamic = 'force-dynamic';
 
 async function hasOpsAccess(request: NextRequest): Promise<boolean> {
-  // Path 1: Admin secret (header or query param)
-  const secret = request.headers.get('x-admin-secret') || request.nextUrl.searchParams.get('secret');
+  // Path 1: Admin secret (header only — never accept secrets via query params)
+  const secret = request.headers.get('x-admin-secret');
   if (process.env.ADMIN_SECRET && secret === process.env.ADMIN_SECRET) {
     return true;
   }

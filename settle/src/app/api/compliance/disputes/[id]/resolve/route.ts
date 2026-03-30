@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, queryOne } from '@/lib/db';
 import { requireAuth } from '@/lib/middleware/auth';
 import { checkRateLimit, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
+import { auditLog } from '@/lib/auditLog';
 
 async function hasComplianceAccess(auth: { actorType: string; merchantId?: string }): Promise<boolean> {
   if (auth.actorType === 'compliance' || auth.actorType === 'system') return true;
@@ -147,6 +148,12 @@ export async function POST(
       console.log('Chat message insert note:', msgErr);
     }
 
+    auditLog('compliance.dispute_resolved', complianceId, auth.actorType, orderId, {
+      resolution,
+      notes,
+      splitPercentage,
+    });
+
     return NextResponse.json({
       success: true,
       data: {
@@ -215,6 +222,11 @@ export async function PATCH(
         { status: 404 }
       );
     }
+
+    auditLog('compliance.dispute_status_changed', complianceId, patchAuth.actorType, orderId, {
+      newStatus: status,
+      notes,
+    });
 
     return NextResponse.json({
       success: true,

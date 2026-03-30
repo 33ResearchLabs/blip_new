@@ -1,15 +1,17 @@
 /**
- * Payment Deadline & Dispute Auto-Resolve Worker
+ * Payment Deadline, Escrow Expiry & Dispute Auto-Resolve Worker
  *
- * Two jobs in one worker:
+ * Three jobs in one worker:
  *
  * 1. Payment Deadline Expiry:
  *    Moves orders stuck in 'payment_sent' past their payment_deadline to 'disputed'.
- *    Prevents orders from staying in payment_sent forever.
  *
- * 2. Dispute Auto-Resolve:
- *    Auto-cancels orders that have been in 'disputed' past their dispute_auto_resolve_at.
- *    Prevents disputes from stalling indefinitely — escrow is refunded to seller.
+ * 2. Escrow Expiry (FUND SAFETY):
+ *    Auto-cancels + refunds orders in 'escrowed' past their expires_at.
+ *    Prevents funds from being locked indefinitely when both parties go inactive.
+ *
+ * 3. Dispute Auto-Resolve:
+ *    Auto-cancels + refunds orders in 'disputed' past their dispute_auto_resolve_at.
  *
  * Distribution-safe: uses FOR UPDATE SKIP LOCKED inside a transaction
  * so multiple worker instances never process the same orders.
@@ -18,6 +20,7 @@
 import { transaction } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { invalidateOrderCache } from '@/lib/cache';
+import { atomicCancelWithRefund } from '@/lib/orders/atomicCancel';
 
 const WORKER_INTERVAL_MS = 30000; // Check every 30 seconds
 const BATCH_SIZE = 20;
@@ -134,108 +137,161 @@ async function processDeadlineExpiries(): Promise<void> {
   }
 }
 
-// ── Job 2: Dispute auto-resolve → auto-cancel with refund ───────────────
+// ── Job 2: Escrow expiry → auto-cancel with refund (FUND SAFETY) ──────
+
+async function processEscrowExpiries(): Promise<void> {
+  try {
+    // Find escrowed orders past their expires_at
+    const { query } = await import('@/lib/db');
+    const expiredRows = await query<{
+      id: string; status: string; user_id: string; merchant_id: string;
+      buyer_merchant_id: string | null; order_number: number;
+      crypto_amount: number; crypto_currency: string;
+      fiat_amount: number; fiat_currency: string; type: string;
+    }>(
+      `SELECT id, status, user_id, merchant_id, buyer_merchant_id,
+              order_number, crypto_amount, crypto_currency, fiat_amount, fiat_currency, type
+       FROM orders
+       WHERE status = 'escrowed'
+         AND expires_at IS NOT NULL
+         AND expires_at < NOW()
+       LIMIT $1`,
+      [BATCH_SIZE]
+    );
+
+    if (expiredRows.length === 0) return;
+
+    let refundedCount = 0;
+
+    for (const order of expiredRows) {
+      try {
+        const result = await atomicCancelWithRefund(
+          order.id,
+          order.status,
+          'system' as any,
+          'system',
+          'Escrow expired: no payment within time limit. Funds refunded.',
+          {
+            type: order.type as 'buy' | 'sell',
+            crypto_amount: order.crypto_amount,
+            merchant_id: order.merchant_id,
+            user_id: order.user_id,
+            buyer_merchant_id: order.buyer_merchant_id,
+            order_number: order.order_number,
+            crypto_currency: order.crypto_currency,
+            fiat_amount: order.fiat_amount,
+            fiat_currency: order.fiat_currency,
+          }
+        );
+
+        if (result.success) {
+          invalidateOrderCache(order.id);
+          refundedCount++;
+          logger.info('[EscrowExpiry] Order expired — cancelled with refund', {
+            orderId: order.id,
+            orderNumber: order.order_number,
+            refundedAmount: order.crypto_amount,
+          });
+        } else {
+          logger.warn('[EscrowExpiry] atomicCancel returned failure', {
+            orderId: order.id,
+            error: result.error,
+          });
+        }
+      } catch (orderErr) {
+        // Log but continue processing other orders
+        logger.error('[EscrowExpiry] Failed to cancel expired order', {
+          orderId: order.id,
+          error: orderErr instanceof Error ? orderErr.message : String(orderErr),
+        });
+      }
+    }
+
+    if (refundedCount > 0) {
+      logger.info('[EscrowExpiry] Expired escrowed orders refunded', {
+        count: refundedCount,
+        total: expiredRows.length,
+      });
+    }
+  } catch (error) {
+    logger.error('[EscrowExpiry] Worker error', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+// ── Job 3: Dispute auto-resolve → auto-cancel with refund ─────────────
 
 async function processDisputeAutoResolve(): Promise<void> {
   try {
-    const resolved = await transaction(async (client) => {
-      // Claim disputed orders past their auto-resolve deadline
-      const lockResult = await client.query(
-        `SELECT id, order_version, user_id, merchant_id, buyer_merchant_id,
-                order_number, crypto_amount, crypto_currency, fiat_amount, fiat_currency, type
-         FROM orders
-         WHERE status = 'disputed'
-           AND dispute_auto_resolve_at IS NOT NULL
-           AND dispute_auto_resolve_at < NOW()
-         FOR UPDATE SKIP LOCKED
-         LIMIT $1`,
-        [BATCH_SIZE]
-      );
+    // Find disputed orders past their auto-resolve deadline
+    const { query } = await import('@/lib/db');
+    const expiredDisputes = await query<{
+      id: string; status: string; user_id: string; merchant_id: string;
+      buyer_merchant_id: string | null; order_number: number;
+      crypto_amount: number; crypto_currency: string;
+      fiat_amount: number; fiat_currency: string; type: string;
+    }>(
+      `SELECT id, status, user_id, merchant_id, buyer_merchant_id,
+              order_number, crypto_amount, crypto_currency, fiat_amount, fiat_currency, type
+       FROM orders
+       WHERE status = 'disputed'
+         AND dispute_auto_resolve_at IS NOT NULL
+         AND dispute_auto_resolve_at < NOW()
+       LIMIT $1`,
+      [BATCH_SIZE]
+    );
 
-      if (lockResult.rows.length === 0) {
-        return [];
-      }
+    if (expiredDisputes.length === 0) return;
 
-      const results: string[] = [];
+    let resolvedCount = 0;
 
-      for (const order of lockResult.rows) {
-        // Auto-cancel — escrow refund handled by atomicCancelWithRefund called separately
-        // Here we just transition to cancelled for unresolved disputes
-        const updateResult = await client.query(
-          `UPDATE orders
-           SET status = 'cancelled',
-               cancelled_at = NOW(),
-               cancelled_by = 'system',
-               cancellation_reason = 'Dispute auto-resolved: no resolution within 24 hours. Escrow refunded to seller.',
-               order_version = order_version + 1
-           WHERE id = $1
-             AND order_version = $2
-             AND status = 'disputed'
-           RETURNING id`,
-          [order.id, order.order_version]
+    for (const order of expiredDisputes) {
+      try {
+        const result = await atomicCancelWithRefund(
+          order.id,
+          order.status,
+          'system' as any,
+          'system',
+          'Dispute auto-resolved: no resolution within 24 hours. Escrow refunded to seller.',
+          {
+            type: order.type as 'buy' | 'sell',
+            crypto_amount: order.crypto_amount,
+            merchant_id: order.merchant_id,
+            user_id: order.user_id,
+            buyer_merchant_id: order.buyer_merchant_id,
+            order_number: order.order_number,
+            crypto_currency: order.crypto_currency,
+            fiat_amount: order.fiat_amount,
+            fiat_currency: order.fiat_currency,
+          }
         );
 
-        if (updateResult.rows.length === 0) {
-          logger.warn('[DisputeAutoResolve] Skipped order (concurrent update)', { orderId: order.id });
-          continue;
+        if (result.success) {
+          invalidateOrderCache(order.id);
+          resolvedCount++;
+          logger.info('[DisputeAutoResolve] Dispute auto-resolved with refund', {
+            orderId: order.id,
+            orderNumber: order.order_number,
+          });
+        } else {
+          logger.warn('[DisputeAutoResolve] atomicCancel returned failure', {
+            orderId: order.id,
+            error: result.error,
+          });
         }
-
-        // Create audit event
-        await client.query(
-          `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
-           VALUES ($1, 'dispute_auto_resolved', 'system', $1, 'disputed', 'cancelled', $2)`,
-          [
-            order.id,
-            JSON.stringify({
-              reason: 'Dispute auto-resolved after 24 hours',
-              auto_cancelled: true,
-            }),
-          ]
-        );
-
-        // Queue notification
-        await client.query(
-          `INSERT INTO notification_outbox (event_type, order_id, payload)
-           VALUES ('ORDER_CANCELLED', $1, $2)`,
-          [
-            order.id,
-            JSON.stringify({
-              orderId: order.id,
-              userId: order.user_id,
-              merchantId: order.merchant_id,
-              buyerMerchantId: order.buyer_merchant_id,
-              status: 'cancelled',
-              previousStatus: 'disputed',
-              orderNumber: order.order_number,
-              reason: 'Dispute auto-resolved after 24 hours. Escrow refunded.',
-              updatedAt: new Date().toISOString(),
-            }),
-          ]
-        );
-
-        // System chat message
-        await client.query(
-          `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type)
-           VALUES ($1, 'system', $1, $2, 'system')`,
-          [
-            order.id,
-            '⚠️ This dispute was not resolved within 24 hours. The order has been automatically cancelled and escrow will be refunded to the seller.',
-          ]
-        );
-
-        // Invalidate cache
-        invalidateOrderCache(order.id);
-
-        results.push(order.id);
+      } catch (orderErr) {
+        logger.error('[DisputeAutoResolve] Failed to auto-resolve dispute', {
+          orderId: order.id,
+          error: orderErr instanceof Error ? orderErr.message : String(orderErr),
+        });
       }
+    }
 
-      return results;
-    });
-
-    if (resolved.length > 0) {
-      logger.info('[DisputeAutoResolve] Disputes auto-resolved (cancelled)', {
-        count: resolved.length,
-        orderIds: resolved,
+    if (resolvedCount > 0) {
+      logger.info('[DisputeAutoResolve] Disputes auto-resolved', {
+        count: resolvedCount,
+        total: expiredDisputes.length,
       });
     }
   } catch (error) {
@@ -249,13 +305,14 @@ async function processDisputeAutoResolve(): Promise<void> {
 
 async function runCycle(): Promise<void> {
   await processDeadlineExpiries();
+  await processEscrowExpiries();
   await processDisputeAutoResolve();
 }
 
 async function start() {
   console.log('[payment-deadline] Worker started');
   console.log(`[payment-deadline] Checking every ${WORKER_INTERVAL_MS}ms`);
-  console.log('[payment-deadline] Jobs: payment deadline expiry + dispute auto-resolve');
+  console.log('[payment-deadline] Jobs: payment deadline expiry + escrow expiry + dispute auto-resolve');
 
   // Initial run
   await runCycle();
@@ -283,4 +340,4 @@ if (require.main === module) {
   });
 }
 
-export { start, processDeadlineExpiries, processDisputeAutoResolve };
+export { start, processDeadlineExpiries, processEscrowExpiries, processDisputeAutoResolve };

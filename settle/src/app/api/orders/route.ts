@@ -18,8 +18,9 @@ import {
 } from '@/lib/middleware/auth';
 import { checkRateLimit, STANDARD_LIMIT, ORDER_LIMIT } from '@/lib/middleware/rateLimit';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
-import { transaction } from '@/lib/db';
+import { transaction, query as dbQuery } from '@/lib/db';
 import { enrichOrderResponse } from '@/lib/orders/enrichOrderResponse';
+import { auditLog } from '@/lib/auditLog';
 
 // Prevent Next.js from caching this route
 export const dynamic = 'force-dynamic';
@@ -177,6 +178,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Price guardrail: reject if offer rate deviates too far from corridor reference price
+    const PRICE_MAX_DEVIATION = parseFloat(process.env.PRICE_MAX_DEVIATION || '0.15');
+    const PRICE_GUARDRAILS_ENABLED = process.env.PRICE_GUARDRAILS_ENABLED === 'true';
+    if (PRICE_GUARDRAILS_ENABLED) {
+      try {
+        const corridorRows = await dbQuery<{ ref_price: string; updated_at: Date }>(
+          'SELECT ref_price, updated_at FROM corridor_prices WHERE corridor_id = $1',
+          ['USDT_AED']
+        );
+        if (corridorRows[0]) {
+          const refPrice = parseFloat(corridorRows[0].ref_price);
+          const ageMs = Date.now() - new Date(corridorRows[0].updated_at).getTime();
+          const isStale = ageMs > 5 * 60 * 1000;
+          if (!isStale && refPrice > 0) {
+            const deviation = Math.abs(offer.rate - refPrice) / refPrice;
+            if (deviation > PRICE_MAX_DEVIATION) {
+              return NextResponse.json(
+                {
+                  success: false,
+                  error: `Offer rate ${offer.rate.toFixed(4)} deviates ${(deviation * 100).toFixed(1)}% from market rate. Max allowed: ${(PRICE_MAX_DEVIATION * 100).toFixed(0)}%.`,
+                  code: 'PRICE_GUARDRAIL',
+                },
+                { status: 422 }
+              );
+            }
+          }
+        }
+      } catch {
+        // Non-blocking: if corridor price check fails, allow order to proceed
+      }
+    }
+
     // Calculate fiat amount
     const fiatAmount = crypto_amount * offer.rate;
 
@@ -295,6 +328,8 @@ export async function POST(request: NextRequest) {
         rate: offer.rate,
         payment_details: paymentDetails,
         buyer_wallet_address: type === 'buy' ? buyer_wallet_address : undefined,
+        // Merchant implicitly accepted by publishing the offer — record acceptance time
+        accepted_at: new Date().toISOString(),
         // buyer_merchant_id is NOT set for user-created orders.
         // It is ONLY for M2M trades (set via /api/merchant/orders).
         ref_price_at_create: offer.rate,
@@ -317,7 +352,20 @@ export async function POST(request: NextRequest) {
         logger.api.request('POST', '/api/orders — liquidity reservation rolled back', user_id);
       } catch (rollbackErr) {
         logger.api.error('POST', '/api/orders — CRITICAL: liquidity rollback failed', rollbackErr as Error);
+        return errorResponse(
+          'Order creation failed and liquidity rollback also failed. Please contact support.',
+          500
+        );
       }
+    }
+
+    if (createResponse.status < 400) {
+      auditLog('order.created', user_id, 'user', undefined, {
+        offerId: offer?.id,
+        type,
+        crypto_amount,
+        merchantId: offer?.merchant_id,
+      });
     }
 
     return createResponse;
@@ -330,7 +378,6 @@ export async function POST(request: NextRequest) {
     });
     logger.api.error('POST', '/api/orders', err);
 
-    // Return specific error to help debug
-    return errorResponse(`${err.name}: ${err.message}`);
+    return errorResponse('An error occurred while processing your order');
   }
 }

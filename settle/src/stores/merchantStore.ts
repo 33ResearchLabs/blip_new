@@ -20,6 +20,9 @@ export interface MerchantStoreState {
   isLoggedIn: boolean;
   isLoading: boolean;
 
+  // ─── Session token (persisted in sessionStorage) ──────
+  sessionToken: string | null;
+
   // ─── PendingOrdersPanel filter/sort state ──────────
   searchQuery: string;
   orderViewFilter: OrderViewFilter;
@@ -35,6 +38,7 @@ export interface MerchantStoreState {
   /** Merge-update orders: only applies patches that are newer (version-aware) */
   mergeOrders: (incoming: any[]) => void;
 
+  setSessionToken: (token: string | null) => void;
   setMerchantId: (id: string | null) => void;
   /** Accepts direct value OR callback (prev => next) */
   setMerchantInfo: (infoOrFn: any | null | ((prev: any | null) => any | null)) => void;
@@ -59,6 +63,7 @@ export const useMerchantStore = create<MerchantStoreState>()(
     merchantInfo: null,
     isLoggedIn: false,
     isLoading: true,
+    sessionToken: (() => { try { return typeof window !== 'undefined' ? sessionStorage.getItem('blip_session_token') : null; } catch { return null; } })(),
 
     // ─── Filter/sort initial state ─────────────────────
     searchQuery: '',
@@ -99,6 +104,18 @@ export const useMerchantStore = create<MerchantStoreState>()(
       });
     },
 
+    setSessionToken: (token) => {
+      set({ sessionToken: token });
+      try {
+        if (token) {
+          sessionStorage.setItem('blip_session_token', token);
+        } else {
+          sessionStorage.removeItem('blip_session_token');
+        }
+      } catch {
+        // SSR or sessionStorage unavailable — ignore
+      }
+    },
     setMerchantId: (id) => set({ merchantId: id }),
     setMerchantInfo: (infoOrFn) => {
       if (typeof infoOrFn === 'function') {

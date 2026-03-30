@@ -25,6 +25,7 @@ import type {
   WSMessagesReadEvent,
   WSOrderEvent,
 } from '@/lib/websocket/types';
+import { useMerchantStore } from '@/stores/merchantStore';
 
 // Connection states
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'failed';
@@ -223,10 +224,13 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
 
     setConnectionState('connecting');
 
-    // Build WebSocket URL
+    // Build WebSocket URL — include token when available, plus legacy params as fallback
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
-    const url = `${protocol}//${host}/ws/chat?actorType=${actorType}&actorId=${actorId}`;
+    const sessionToken = useMerchantStore.getState().sessionToken
+      || sessionStorage.getItem('blip_session_token');
+    const tokenParam = sessionToken ? `&token=${encodeURIComponent(sessionToken)}` : '';
+    const url = `${protocol}//${host}/ws/chat?actorType=${actorType}&actorId=${actorId}${tokenParam}`;
 
     console.log('[WebSocket] Connecting to:', url);
 

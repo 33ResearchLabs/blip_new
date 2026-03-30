@@ -4,7 +4,8 @@ import { useState, useCallback } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order, DbOrder, Notification } from "@/types/merchant";
 import { mapDbOrderToUI } from "@/lib/orders/mappers";
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
+import { isValidSolanaAddress } from '@/lib/validation/solana';
 import { showConfirm } from '@/context/ModalContext';
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
@@ -110,7 +111,7 @@ export function useOrderActions({
           actor_type: 'merchant',
           actor_id: merchantId,
         };
-        if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
+        if (isValidSolanaAddress(solanaWallet.walletAddress)) {
           actionBody.acceptor_wallet_address = solanaWallet.walletAddress;
         }
         acceptRes = await fetchWithAuth(`/api/orders/${order.id}/action`, {
@@ -125,7 +126,7 @@ export function useOrderActions({
           actor_type: "merchant",
           actor_id: merchantId,
         };
-        if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
+        if (isValidSolanaAddress(solanaWallet.walletAddress)) {
           requestBody.acceptor_wallet_address = solanaWallet.walletAddress;
         }
         acceptRes = await fetchWithAuth(`/api/orders/${order.id}`, {
@@ -281,7 +282,7 @@ export function useOrderActions({
         actor_type: 'merchant',
         actor_id: merchantId,
       };
-      if (walletAddr && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(walletAddr)) {
+      if (isValidSolanaAddress(walletAddr)) {
         claimBody.acceptor_wallet_address = walletAddr;
       }
 
@@ -348,14 +349,14 @@ export function useOrderActions({
         actor_type: "merchant",
         actor_id: merchantId,
       };
-      if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
+      if (isValidSolanaAddress(solanaWallet.walletAddress)) {
         proceedBody.acceptor_wallet_address = solanaWallet.walletAddress;
         proceedBody.acceptor_wallet_signature = signature;
       }
 
       const res = await fetchWithAuth(`/api/orders/${order.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": generateIdempotencyKey() },
         body: JSON.stringify(proceedBody),
       });
 
@@ -430,7 +431,7 @@ export function useOrderActions({
       };
 
       // Include wallet address for auto-claim scenarios
-      if (solanaWallet.walletAddress && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(solanaWallet.walletAddress)) {
+      if (isValidSolanaAddress(solanaWallet.walletAddress)) {
         actionBody.acceptor_wallet_address = solanaWallet.walletAddress;
       }
 
@@ -471,7 +472,7 @@ export function useOrderActions({
     try {
       const res = await fetchWithAuth(`/api/orders/${order.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": generateIdempotencyKey() },
         body: JSON.stringify({
           status: "completed",
           actor_type: "merchant",
@@ -505,7 +506,7 @@ export function useOrderActions({
     try {
       const res = await fetchWithAuth(`/api/orders/${orderId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": generateIdempotencyKey() },
         body: JSON.stringify({
           status: "completed",
           actor_type: "merchant",
@@ -558,8 +559,6 @@ export function useOrderActions({
               || escrowPda.startsWith('mock-');
 
             if (hasOnChainEscrow && !isMockEscrow) {
-              const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-
               if (!solanaWallet.connected) {
                 addNotification('system', 'Please connect your wallet to release escrow.', orderId);
                 setShowWalletModal(true);
@@ -574,7 +573,7 @@ export function useOrderActions({
                 || order.dbOrder?.acceptor_wallet_address
                 || order.userWallet;
 
-              if (!counterpartyWallet || !base58Regex.test(counterpartyWallet)) {
+              if (!isValidSolanaAddress(counterpartyWallet)) {
                 addNotification('system', 'Invalid buyer wallet address. Cannot release escrow.', orderId);
                 playSound('error');
                 return;
@@ -708,9 +707,7 @@ export function useOrderActions({
         // Validate counterparty wallet (skip in embedded wallet mode)
         if (!IS_EMBEDDED_WALLET) {
           const counterpartyWallet = matchedOffer?.merchant?.wallet_address;
-          const isValidWallet = counterpartyWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(counterpartyWallet);
-
-          if (!isValidWallet) {
+          if (!isValidSolanaAddress(counterpartyWallet)) {
             addNotification('system', 'No matching merchant with wallet found. Try a different amount.');
             setIsCreatingTrade(false);
             return;
