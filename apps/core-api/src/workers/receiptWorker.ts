@@ -72,7 +72,7 @@ export async function startReceiptWorker() {
       }
     },
     {
-      connection: redis,
+      connection: redis as any,
       concurrency: 5,
     },
   );

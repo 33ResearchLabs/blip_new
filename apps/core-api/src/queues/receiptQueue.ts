@@ -110,7 +110,7 @@ function getQueue(): Queue<ReceiptJobData> | null {
   if (!redis) return null;
 
   receiptQueue = new Queue<ReceiptJobData>('receiptQueue', {
-    connection: redis,
+    connection: redis as any,
     defaultJobOptions: {
       attempts: 3,
       backoff: { type: 'exponential', delay: 2000 },
