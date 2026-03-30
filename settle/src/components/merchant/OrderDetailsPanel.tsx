@@ -1095,8 +1095,8 @@ export function OrderDetailsPanel({
             // Don't render action buttons until ALL required data is available
             // This prevents button flicker during initial load / hydration
             if (!merchantId) return null;
-            if (!order.dbOrder) return null;
-            if (order.myRole === undefined && order.dbOrder?.my_role === undefined) return null;
+            if (!(order as any).dbOrder && !order.status) return null;
+            if ((order as any).myRole === undefined && (order as any).dbOrder?.my_role === undefined) return null;
 
             const ui = deriveOrderUI(order, merchantId);
 
