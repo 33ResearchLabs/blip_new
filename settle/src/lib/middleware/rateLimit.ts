@@ -189,7 +189,14 @@ export async function checkRateLimit(
   const identifier = getIdentifier(request);
   const key = `${identifier}:${endpoint}`;
 
-  // Try Redis first
+  // GET requests: use in-memory rate limiter (saves ~2 Redis calls per request)
+  const method = request.method?.toUpperCase();
+  if (method === 'GET') {
+    const memResult = checkMemoryRateLimit(key, maxRequests, windowSeconds);
+    return memResult.allowed ? null : createRateLimitResponse(memResult.resetAt, maxRequests);
+  }
+
+  // POST/PATCH/DELETE: use Redis for distributed rate limiting
   const redisResult = await checkRedisRateLimit(key, maxRequests, windowSeconds);
   if (redisResult) {
     return redisResult!.allowed ? null : createRateLimitResponse(redisResult!.resetAt, maxRequests);

@@ -38,7 +38,7 @@ import {
 } from '@/lib/orders/handleOrderAction';
 import { denormalizeStatus } from '@/lib/orders/statusNormalizer';
 import { fireInstantNotification } from '@/lib/notifications/instantNotify';
-import { invalidateOrderCache, updateOrderCache } from '@/lib/cache';
+import { invalidateOrderCache, updateOrderCache, invalidateMerchantOrderListCache } from '@/lib/cache';
 import { enrichOrderResponse } from '@/lib/orders/enrichOrderResponse';
 
 export const dynamic = 'force-dynamic';
@@ -205,8 +205,8 @@ export async function POST(
         data: escrowResult.order,
       });
       // Write-through: update cache with fresh data instead of invalidating
-      if (escrowResult.order) updateOrderCache(id, escrowResult.order);
-      else invalidateOrderCache(id);
+      if (escrowResult.order) { updateOrderCache(id, escrowResult.order); invalidateMerchantOrderListCache(order.merchant_id); }
+      else { invalidateOrderCache(id); invalidateMerchantOrderListCache(order.merchant_id); }
 
       const enrichedEscrow = escrowResult.order
         ? enrichOrderResponse(escrowResult.order, actor_id)
@@ -249,8 +249,8 @@ export async function POST(
         updatedAt: new Date().toISOString(),
         data: cancelResult.order,
       });
-      if (cancelResult.order) updateOrderCache(id, cancelResult.order);
-      else invalidateOrderCache(id);
+      if (cancelResult.order) { updateOrderCache(id, cancelResult.order); invalidateMerchantOrderListCache(order.merchant_id); }
+      else { invalidateOrderCache(id); invalidateMerchantOrderListCache(order.merchant_id); }
 
       const enrichedCancel = cancelResult.order
         ? enrichOrderResponse(cancelResult.order, actor_id)
@@ -306,8 +306,8 @@ export async function POST(
           data: respOrder,
         });
         // Write-through cache update
-        if (respOrder) updateOrderCache(id, respOrder);
-        else invalidateOrderCache(id);
+        if (respOrder) { updateOrderCache(id, respOrder); invalidateMerchantOrderListCache(order.merchant_id); }
+        else { invalidateOrderCache(id); invalidateMerchantOrderListCache(order.merchant_id); }
       }
 
       return NextResponse.json(
@@ -347,8 +347,8 @@ export async function POST(
         updatedAt: new Date().toISOString(),
         data: claimResult.order,
       });
-      if (claimResult.order) updateOrderCache(id, claimResult.order);
-      else invalidateOrderCache(id);
+      if (claimResult.order) { updateOrderCache(id, claimResult.order); invalidateMerchantOrderListCache(order.merchant_id); }
+      else { invalidateOrderCache(id); invalidateMerchantOrderListCache(order.merchant_id); }
 
       const enrichedClaim = claimResult.order
         ? enrichOrderResponse(claimResult.order, actor_id)
@@ -393,8 +393,8 @@ export async function POST(
         updatedAt: new Date().toISOString(),
         data: claimPayResult.order,
       });
-      if (claimPayResult.order) updateOrderCache(id, claimPayResult.order);
-      else invalidateOrderCache(id);
+      if (claimPayResult.order) { updateOrderCache(id, claimPayResult.order); invalidateMerchantOrderListCache(order.merchant_id); }
+      else { invalidateOrderCache(id); invalidateMerchantOrderListCache(order.merchant_id); }
 
       const enrichedClaimPay = claimPayResult.order
         ? enrichOrderResponse(claimPayResult.order, actor_id)
@@ -478,6 +478,8 @@ export async function POST(
           actor_id,
           reason: action === 'DISPUTE' ? (reason || 'Dispute raised') : reason,
           acceptor_wallet_address: action === 'ACCEPT' ? acceptor_wallet_address : undefined,
+          // For ACCEPT on unclaimed orders: assign the claiming merchant
+          ...(action === 'ACCEPT' && !order.merchant_id && actor_type === 'merchant' ? { merchant_id: actor_id } : {}),
         },
       });
       const respData = await resp.json();
@@ -506,8 +508,8 @@ export async function POST(
           updatedAt: new Date().toISOString(),
           data: respOrder,
         });
-        if (respOrder) updateOrderCache(id, respOrder);
-        else invalidateOrderCache(id);
+        if (respOrder) { updateOrderCache(id, respOrder); invalidateMerchantOrderListCache(order.merchant_id); }
+        else { invalidateOrderCache(id); invalidateMerchantOrderListCache(order.merchant_id); }
       }
 
       return NextResponse.json(
@@ -537,8 +539,16 @@ export async function POST(
         updatedAt: new Date().toISOString(),
         data: respOrder,
       });
-      if (respOrder) updateOrderCache(id, respOrder);
-      else invalidateOrderCache(id);
+      if (respOrder) { updateOrderCache(id, respOrder); invalidateMerchantOrderListCache(order.merchant_id); }
+      else { invalidateOrderCache(id); invalidateMerchantOrderListCache(order.merchant_id); }
+    }
+
+    // Invalidate caches for ALL involved merchants (order creator + actor + buyer)
+    if (auth.actorType === 'merchant' && auth.actorId !== order.merchant_id) {
+      invalidateMerchantOrderListCache(auth.actorId);
+    }
+    if (order.buyer_merchant_id && order.buyer_merchant_id !== order.merchant_id) {
+      invalidateMerchantOrderListCache(order.buyer_merchant_id);
     }
 
     return NextResponse.json(

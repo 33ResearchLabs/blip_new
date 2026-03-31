@@ -604,7 +604,7 @@ export async function POST(request: NextRequest) {
 
       // Find merchant by email
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, email, password_hash, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access, COALESCE(totp_enabled, false) as totp_enabled
+        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, email, password_hash, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access, COALESCE(totp_enabled, false) as totp_enabled, COALESCE(email_verified, true) as email_verified
          FROM merchants
          WHERE email = $1 AND status = 'active'`,
         [email.toLowerCase()]
@@ -634,6 +634,7 @@ export async function POST(request: NextRequest) {
         has_ops_access: boolean;
           has_compliance_access: boolean;
         totp_enabled: boolean;
+        email_verified: boolean;
       };
 
       // Verify password
@@ -655,6 +656,16 @@ export async function POST(request: NextRequest) {
       if (pwResult.needsRehash) {
         const newHash = hashPassword(password);
         await query('UPDATE merchants SET password_hash = $1 WHERE id = $2', [newHash, merchant.id]);
+      }
+
+      // Email verification gate
+      if (!merchant.email_verified) {
+        return NextResponse.json({
+          success: false,
+          error: 'Please verify your email before logging in. Check your inbox for a verification link.',
+          code: 'EMAIL_NOT_VERIFIED',
+          merchantId: merchant.id,
+        }, { status: 403 });
       }
 
       // Update online status
@@ -696,9 +707,9 @@ export async function POST(request: NextRequest) {
     if (action === 'register') {
       const { email, password, business_name } = body;
 
-      if (!email || !password) {
+      if (!email || !password || !business_name?.trim()) {
         return NextResponse.json(
-          { success: false, error: 'Email and password are required' },
+          { success: false, error: 'Email, password, and business name are required' },
           { status: 400 }
         );
       }
@@ -733,8 +744,21 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Generate username from email
-      const baseUsername = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 15);
+      // Check if business name already taken
+      const existingBusiness = await query(
+        `SELECT id FROM merchants WHERE LOWER(business_name) = $1`,
+        [business_name.trim().toLowerCase()]
+      );
+
+      if (existingBusiness.length > 0) {
+        return NextResponse.json(
+          { success: false, error: 'Business name already taken' },
+          { status: 409 }
+        );
+      }
+
+      // Use business_name as username
+      const baseUsername = business_name.trim().toLowerCase().replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 20);
       let username = baseUsername;
       let counter = 1;
 
@@ -752,7 +776,7 @@ export async function POST(request: NextRequest) {
       // Hash password
       const passwordHash = hashPassword(password);
 
-      // Create merchant (auto-funded in mock mode)
+      // Create merchant (auto-funded in mock mode, email NOT verified)
       const regBalance = MOCK_MODE ? MOCK_INITIAL_BALANCE : 0;
       const result = await query(
         `INSERT INTO merchants (
@@ -763,10 +787,11 @@ export async function POST(request: NextRequest) {
           display_name,
           status,
           is_online,
-          balance
-        ) VALUES ($1, $2, $3, $4, $5, 'active', true, $6)
+          balance,
+          email_verified
+        ) VALUES ($1, $2, $3, $4, $5, 'active', true, $6, false)
         RETURNING id, username, display_name, business_name, wallet_address, email, rating, total_trades`,
-        [email.toLowerCase(), passwordHash, username, business_name || username, business_name || username, regBalance]
+        [email.toLowerCase(), passwordHash, username, business_name.trim(), business_name.trim(), regBalance]
       );
 
       const merchant = result[0] as {
@@ -785,10 +810,34 @@ export async function POST(request: NextRequest) {
       // Auto-create default offers
       await createDefaultMerchantOffers(merchant.id, merchant.display_name);
 
+      // Send verification email
+      try {
+        const verifyToken = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(verifyToken).digest('hex');
+
+        await query(
+          `INSERT INTO email_verification_tokens (merchant_id, token_hash, expires_at)
+           VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
+          [merchant.id, tokenHash]
+        );
+
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const verifyLink = `${appUrl}/merchant/verify-email?token=${verifyToken}&id=${merchant.id}`;
+
+        const { sendEmail, emailVerificationEmail } = await import('@/lib/email/ses');
+        const emailContent = emailVerificationEmail(verifyLink, merchant.display_name);
+        sendEmail({ to: merchant.email, ...emailContent })
+          .catch(err => console.error('[Register] Verification email failed:', err));
+      } catch (emailErr) {
+        console.error('[Register] Failed to create verification token:', emailErr);
+      }
+
       return NextResponse.json({
         success: true,
         data: {
           merchant: { ...serializeMerchant(merchant), balance: regBalance },
+          requiresEmailVerification: true,
+          message: 'Account created! Please check your email to verify your account.',
         },
       });
     }

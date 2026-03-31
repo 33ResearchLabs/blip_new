@@ -24,7 +24,7 @@ export function MobileBottomNav({
   totalUnread,
 }: MobileBottomNavProps) {
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 bg-[#060606]/95 backdrop-blur-lg border-t border-white/[0.04] px-1 py-1.5 pb-safe z-50">
+    <nav className="md:hidden fixed bottom-0 inset-x-0 bg-background/95 backdrop-blur-lg border-t border-white/[0.04] px-1 py-1.5 pb-safe z-50">
       <div className="flex items-center justify-around">
         <button
           onClick={() => setMobileView('orders')}

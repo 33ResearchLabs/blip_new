@@ -241,7 +241,7 @@ export function TransactionHistoryModal({
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className="relative w-full max-w-lg bg-[#0a0a0a] rounded-2xl border border-white/[0.08] shadow-2xl max-h-[90vh] flex flex-col"
+          className="relative w-full max-w-lg bg-card-solid rounded-2xl border border-white/[0.08] shadow-2xl max-h-[90vh] flex flex-col"
         >
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-white/[0.06]">
@@ -315,7 +315,7 @@ export function TransactionHistoryModal({
           <div className="flex-1 overflow-y-auto p-4">
             {isLoading && transactions.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
-                <Loader2 className="w-8 h-8 text-orange-500 animate-spin mb-3" />
+                <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
                 <p className="text-xs text-gray-400">Loading transactions...</p>
               </div>
             ) : error && transactions.length === 0 ? (

@@ -41,8 +41,10 @@ export function useMerchantRealtimeEvents({
       if (newStatus === 'accepted' && extra?.buyerMerchantId) {
         setOrders((prev: Order[]) => prev.map(o => o.id === orderId ? { ...o, buyerMerchantId: extra.buyerMerchantId, minimalStatus: 'accepted' } : o));
       }
-      // Refetch only the affected order — Pusher batched events already handle list state
+      // Fast path: refetch single order for immediate UI update
       refetchSingleOrder(orderId);
+      // Full list refetch to ensure enrichOrderResponse recomputes actions (primaryAction etc.)
+      debouncedFetchOrders();
       debouncedFetchConversations();
       const matchedOrder = orders.find(o => o.id === orderId);
       const isRelevantOrder = () => matchedOrder && (matchedOrder.orderMerchantId === merchantId || matchedOrder.buyerMerchantId === merchantId);

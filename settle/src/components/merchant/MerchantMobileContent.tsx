@@ -159,7 +159,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
       <motion.button
         whileTap={{ scale: 0.9 }}
         onClick={() => setShowOpenTradeModal(true)}
-        className="md:hidden fixed right-4 bottom-[88px] z-40 w-14 h-14 rounded-full bg-orange-500 shadow-lg shadow-orange-500/25 flex items-center justify-center"
+        className="md:hidden fixed right-4 bottom-[88px] z-40 w-14 h-14 rounded-full bg-primary shadow-lg shadow-primary/25 flex items-center justify-center"
       >
         <Plus className="w-6 h-6 text-black" />
       </motion.button>

@@ -180,7 +180,7 @@ export function MerchantProfileModal({
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className="relative w-full max-w-3xl bg-[#0a0a0a] rounded-2xl border border-white/[0.08] shadow-2xl max-h-[90vh] flex flex-col"
+          className="relative w-full max-w-3xl bg-card-solid rounded-2xl border border-white/[0.08] shadow-2xl max-h-[90vh] flex flex-col"
         >
           <button
             onClick={onClose}

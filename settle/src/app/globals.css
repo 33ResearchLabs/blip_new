@@ -302,10 +302,12 @@ html:not(.no-transitions) * {
   color-scheme: light;
 }
 
-/* ALL white text → foreground color (catches text-white, text-white/80, text-white/[0.5], etc.) */
+/* ALL white text → foreground color */
 :is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-white"] {
   color: var(--foreground) !important;
 }
+
+/* Modals follow the active theme via bg-card-solid */
 
 /* Restore opacity for muted white text variants */
 :is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-white/"] {

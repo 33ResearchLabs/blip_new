@@ -441,7 +441,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md max-h-[90vh] overflow-y-auto"
             >
-              <div className="bg-[#151515] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
+              <div className="bg-card-solid rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
                 {/* Modal Header */}
                 <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -635,7 +635,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md max-h-[90vh] overflow-y-auto"
             >
-              <div className="bg-[#151515] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
+              <div className="bg-card-solid rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -801,7 +801,7 @@ function OfferCard({
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`p-4 bg-[#151515] rounded-xl border transition-all ${
+      className={`p-4 bg-card-solid rounded-xl border transition-all ${
         isPaused
           ? "border-gray-700/50 opacity-60"
           : "border-white/[0.04] hover:border-white/[0.08]"

@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { ChevronLeft, Check, Clock } from "lucide-react";
 import type { Screen, OrderStatus, OrderStep } from "./types";
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
 
 export interface MatchingScreenProps {
   setScreen: (s: Screen) => void;
@@ -197,7 +197,7 @@ export const MatchingScreen = ({
                 try {
                   const res = await fetchWithAuth(`/api/orders/${activeOrderId}`, {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': generateIdempotencyKey() },
                     body: JSON.stringify({
                       status: 'cancelled',
                       actor_type: 'user',

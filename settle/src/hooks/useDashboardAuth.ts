@@ -39,6 +39,10 @@ export function useDashboardAuth({
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // Email verification state
+  const [unverifiedMerchantId, setUnverifiedMerchantId] = useState<string | null>(null);
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
+
   // 2FA state
   const [pending2FA, setPending2FA] = useState<{ pendingToken: string; merchantName: string } | null>(null);
   const [totpCode, setTotpCode] = useState("");
@@ -164,7 +168,10 @@ export function useDashboardAuth({
           setTimeout(() => setShowWalletPrompt(true), 500);
         }
       } else {
-        if (res.status === 401) {
+        if (data.code === 'EMAIL_NOT_VERIFIED') {
+          setLoginError('EMAIL_NOT_VERIFIED');
+          setUnverifiedMerchantId(data.merchantId || null);
+        } else if (res.status === 401) {
           setLoginError('Incorrect email or password. Please try again.');
         } else if (res.status === 404) {
           setLoginError('No account found with this email. Please create an account first.');
@@ -224,6 +231,24 @@ export function useDashboardAuth({
     setLoginError('');
   }, []);
 
+  const resendVerificationEmail = useCallback(async () => {
+    if (!unverifiedMerchantId) return;
+    setIsResendingVerification(true);
+    try {
+      await fetchWithAuth('/api/auth/merchant/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ merchantId: unverifiedMerchantId }),
+      });
+      setLoginError('Verification email sent! Check your inbox.');
+      setUnverifiedMerchantId(null);
+    } catch {
+      setLoginError('Failed to resend. Please try again.');
+    } finally {
+      setIsResendingVerification(false);
+    }
+  }, [unverifiedMerchantId]);
+
   const handleRegister = useCallback(async () => {
     if (registerForm.password !== registerForm.confirmPassword) {
       setLoginError('Passwords do not match');
@@ -275,8 +300,26 @@ export function useDashboardAuth({
   }, [registerForm, isMockMode, setMerchantId, setMerchantInfo, setIsLoggedIn, setShowWalletPrompt]);
 
   const handleLogout = useCallback(() => {
+    // Clear all merchant-related state from storage
     localStorage.removeItem('blip_merchant');
     localStorage.removeItem('merchant_info');
+    localStorage.removeItem('blip_wallet_session');
+    localStorage.removeItem('blip_embedded_wallet');
+    localStorage.removeItem('pusherTransportTLS');
+
+    // Clear merchant-specific keys (inr_cash_*, blip_unrecorded_escrow_*)
+    try {
+      const keysToRemove = Object.keys(localStorage).filter(k =>
+        k.startsWith('inr_cash_') || k.startsWith('blip_unrecorded_escrow_')
+      );
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch { /* ignore */ }
+
+    // Clear session storage
+    try {
+      sessionStorage.removeItem('blip_session_token');
+    } catch { /* ignore */ }
+
     setSessionToken(null);
     if (solanaWallet.disconnect) {
       solanaWallet.disconnect();
@@ -340,6 +383,9 @@ export function useDashboardAuth({
     authTab, setAuthTab,
     loginError, setLoginError,
     isLoggingIn, isRegistering,
+
+    // Email verification state
+    unverifiedMerchantId, isResendingVerification, resendVerificationEmail,
 
     // 2FA state
     pending2FA, totpCode, setTotpCode, isVerifying2FA,

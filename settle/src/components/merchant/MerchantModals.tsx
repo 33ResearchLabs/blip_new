@@ -460,7 +460,7 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
             initial={{ opacity: 0, x: 300 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 300 }}
-            className="fixed right-0 top-0 h-full w-full max-w-md z-50 shadow-2xl bg-[#060606] border-l border-white/[0.04]"
+            className="fixed right-0 top-0 h-full w-full max-w-md z-50 shadow-2xl bg-background border-l border-white/[0.04]"
           >
             {directChat.activeContactId ? (
               <DirectChatView

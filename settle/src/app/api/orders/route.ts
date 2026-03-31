@@ -134,242 +134,129 @@ export async function POST(request: NextRequest) {
       verifiedPaymentMethodId = pm.id;
     }
 
-    let offer;
-
-    // If offer_id provided, use that offer
-    if (offer_id) {
-      offer = await getOfferWithMerchant(offer_id);
-      if (!offer) {
-        return NextResponse.json(
-          { success: false, error: 'Offer not found' },
-          { status: 404 }
-        );
-      }
-
-      // Check if offer has enough liquidity
-      if (offer.available_amount < crypto_amount) {
+    // ── SELL ORDERS: manual merchant-claim model (no offer matching) ────
+    // Sell orders are broadcast to all merchants. No merchant_id assigned.
+    // A merchant must manually claim via POST /api/orders/:id/claim.
+    if (type === 'sell') {
+      if (!escrow_tx_hash) {
         return validationErrorResponse([
-          `Insufficient liquidity. Available: ${offer.available_amount}, Requested: ${crypto_amount}`,
+          'SELL orders require escrow to be locked at creation. Provide escrow_tx_hash and related fields.',
         ]);
       }
 
-      // Check amount bounds
-      if (crypto_amount < offer.min_amount || crypto_amount > offer.max_amount) {
-        return validationErrorResponse([
-          `Amount must be between ${offer.min_amount} and ${offer.max_amount}`,
-        ]);
-      }
-    } else {
-      // ── AUTO-MATCHING DISABLED — manual trading only for now ──
-      // Uncomment below to re-enable offer-based auto-matching
-      //
-      // const offerType = type === 'buy' ? 'sell' : 'buy';
-      // offer = await findBestOffer(
-      //   crypto_amount,
-      //   offerType as OfferType,
-      //   (payment_method as PaymentMethod) || 'bank',
-      //   preference || 'best'
-      // );
-      //
-      // if (!offer) {
-      //   return NextResponse.json(
-      //     { success: false, error: 'No matching offers available' },
-      //     { status: 404 }
-      //   );
-      // }
-      return NextResponse.json(
-        { success: false, error: 'Auto-matching is disabled. Please use merchant-posted orders.' },
-        { status: 400 }
-      );
-    }
-
-    // Price guardrail: reject if offer rate deviates too far from corridor reference price
-    const PRICE_MAX_DEVIATION = parseFloat(process.env.PRICE_MAX_DEVIATION || '0.15');
-    const PRICE_GUARDRAILS_ENABLED = process.env.PRICE_GUARDRAILS_ENABLED === 'true';
-    if (PRICE_GUARDRAILS_ENABLED) {
+      // Get corridor rate for fiat calculation
+      let sellRate = 3.67; // fallback
       try {
-        const corridorRows = await dbQuery<{ ref_price: string; updated_at: Date }>(
-          'SELECT ref_price, updated_at FROM corridor_prices WHERE corridor_id = $1',
+        const corridorRows = await dbQuery<{ ref_price: string }>(
+          'SELECT ref_price FROM corridor_prices WHERE corridor_id = $1',
           ['USDT_AED']
         );
         if (corridorRows[0]) {
-          const refPrice = parseFloat(corridorRows[0].ref_price);
-          const ageMs = Date.now() - new Date(corridorRows[0].updated_at).getTime();
-          const isStale = ageMs > 5 * 60 * 1000;
-          if (!isStale && refPrice > 0) {
-            const deviation = Math.abs(offer.rate - refPrice) / refPrice;
-            if (deviation > PRICE_MAX_DEVIATION) {
-              return NextResponse.json(
-                {
-                  success: false,
-                  error: `Offer rate ${offer.rate.toFixed(4)} deviates ${(deviation * 100).toFixed(1)}% from market rate. Max allowed: ${(PRICE_MAX_DEVIATION * 100).toFixed(0)}%.`,
-                  code: 'PRICE_GUARDRAIL',
-                },
-                { status: 422 }
-              );
-            }
-          }
+          sellRate = parseFloat(corridorRows[0].ref_price);
         }
-      } catch {
-        // Non-blocking: if corridor price check fails, allow order to proceed
+      } catch { /* use fallback */ }
+
+      const fiatAmount = crypto_amount * sellRate;
+
+      // Build user bank details for payment
+      let parsedUserBank: Record<string, string> | string | undefined;
+      if (user_bank_account) {
+        try {
+          const parsed = JSON.parse(user_bank_account);
+          parsedUserBank = (parsed && typeof parsed === 'object' && parsed.bank_name) ? parsed : user_bank_account;
+        } catch { parsedUserBank = user_bank_account; }
       }
-    }
 
-    // Calculate fiat amount
-    const fiatAmount = crypto_amount * offer.rate;
-
-    // Look up merchant's default payment method (where buyer should send fiat)
-    let merchantPaymentMethodId: string | undefined;
-    const merchantPm = await getMerchantDefaultPaymentMethod(offer.merchant_id);
-    if (merchantPm) {
-      merchantPaymentMethodId = merchantPm.id;
-    }
-
-    // Build payment details snapshot
-    // For sell orders, include user's bank account where merchant will send fiat
-    // user_bank_account may be a JSON string with structured details or a plain text string
-    let parsedUserBank: Record<string, string> | string | undefined;
-    if (type === 'sell' && user_bank_account) {
-      try {
-        const parsed = JSON.parse(user_bank_account);
-        if (parsed && typeof parsed === 'object' && parsed.bank_name) {
-          parsedUserBank = parsed;
-        } else {
-          parsedUserBank = user_bank_account;
-        }
-      } catch {
-        parsedUserBank = user_bank_account;
-      }
-    }
-
-    const paymentDetails =
-      offer.payment_method === 'bank'
-        ? {
-            bank_name: offer.bank_name,
-            bank_account_name: offer.bank_account_name,
-            bank_iban: offer.bank_iban,
-            user_bank_account: parsedUserBank,
-          }
-        : {
-            location_name: offer.location_name,
-            location_address: offer.location_address,
-            location_lat: offer.location_lat,
-            location_lng: offer.location_lng,
-            meeting_instructions: offer.meeting_instructions,
-            user_bank_account: parsedUserBank,
-          };
-
-    // TASK 6: Atomically reserve liquidity before creating order.
-    // Deduct offer available_amount in a transaction, then proxy to core-api.
-    // If core-api fails, roll back the reservation to prevent liquidity leak.
-    let liquidityReserved = false;
-    try {
-      await transaction(async (client) => {
-        // Lock the offer row and re-check liquidity
-        const offerLock = await client.query(
-          `SELECT available_amount FROM merchant_offers WHERE id = $1 FOR UPDATE`,
-          [offer.id]
-        );
-        if (offerLock.rows.length === 0) {
-          throw new Error('OFFER_NOT_FOUND');
-        }
-        const currentAvailable = parseFloat(String(offerLock.rows[0].available_amount));
-        if (currentAvailable < crypto_amount) {
-          throw new Error('INSUFFICIENT_LIQUIDITY');
-        }
-        // Reserve liquidity
-        await client.query(
-          `UPDATE merchant_offers SET available_amount = available_amount - $1 WHERE id = $2`,
-          [crypto_amount, offer.id]
-        );
+      const createResponse = await proxyCoreApi('/v1/orders', {
+        method: 'POST',
+        body: {
+          user_id,
+          merchant_id: null,       // NO merchant assigned — broadcast to all
+          offer_id: null,          // No offer matching
+          type: 'sell',
+          payment_method: payment_method || 'bank',
+          crypto_amount,
+          fiat_amount: fiatAmount,
+          rate: sellRate,
+          payment_details: { user_bank_account: parsedUserBank },
+          accepted_at: null,       // NOT accepted — merchant must claim
+          ref_price_at_create: sellRate,
+          payment_method_id: verifiedPaymentMethodId,
+          escrow_tx_hash,
+          escrow_trade_id,
+          escrow_trade_pda,
+          escrow_pda,
+          escrow_creator_wallet,
+        },
       });
-      liquidityReserved = true;
-    } catch (reserveErr) {
-      const errMsg = (reserveErr as Error).message;
-      if (errMsg === 'INSUFFICIENT_LIQUIDITY') {
-        return validationErrorResponse([
-          `Insufficient liquidity. Requested: ${crypto_amount}`,
-        ]);
-      }
-      if (errMsg === 'OFFER_NOT_FOUND') {
-        return NextResponse.json(
-          { success: false, error: 'Offer no longer available' },
-          { status: 404 }
-        );
-      }
-      throw reserveErr;
+
+      return createResponse;
     }
 
-    // ── SELL ORDER ENFORCEMENT: escrow-first model ────────────────────
-    // SELL orders MUST lock escrow at creation. The user is the seller.
-    // Without escrow, the order cannot be created — this prevents SELL orders
-    // from entering 'pending' or 'accepted' status.
-    if (type === 'sell' && !escrow_tx_hash) {
-      return validationErrorResponse([
-        'SELL orders require escrow to be locked at creation. Provide escrow_tx_hash and related fields.',
-      ]);
-    }
+    // ── BUY ORDERS: manual merchant-claim model (no offer matching) ────
+    // Same as sell orders — broadcast to all merchants, first to claim wins.
+    // Offer-based flow commented out below for easy revert.
 
-    // For sell orders, forward escrow fields so core-api sets status to 'escrowed' directly.
-    const escrowFields = type === 'sell' ? {
-      escrow_tx_hash,
-      escrow_trade_id,
-      escrow_trade_pda,
-      escrow_pda,
-      escrow_creator_wallet,
-    } : {};
+    // Get corridor rate for fiat calculation
+    let buyRate = 3.67; // fallback
+    try {
+      const corridorRows = await dbQuery<{ ref_price: string }>(
+        'SELECT ref_price FROM corridor_prices WHERE corridor_id = $1',
+        ['USDT_AED']
+      );
+      if (corridorRows[0]) {
+        buyRate = parseFloat(corridorRows[0].ref_price);
+      }
+    } catch { /* use fallback */ }
 
-    // Forward to core-api (single writer for all mutations)
+    const fiatAmount = crypto_amount * buyRate;
+
     const createResponse = await proxyCoreApi('/v1/orders', {
       method: 'POST',
       body: {
         user_id,
-        merchant_id: offer.merchant_id,
-        offer_id: offer.id,
-        type: type as OfferType,
-        payment_method: offer.payment_method,
+        merchant_id: null,          // NO merchant assigned — broadcast to all
+        offer_id: null,             // No offer matching
+        type: 'buy',
+        payment_method: payment_method || 'bank',
         crypto_amount,
         fiat_amount: fiatAmount,
-        rate: offer.rate,
-        payment_details: paymentDetails,
-        buyer_wallet_address: type === 'buy' ? buyer_wallet_address : undefined,
-        // Merchant implicitly accepted by publishing the offer — record acceptance time
-        accepted_at: new Date().toISOString(),
-        // buyer_merchant_id is NOT set for user-created orders.
-        // It is ONLY for M2M trades (set via /api/merchant/orders).
-        ref_price_at_create: offer.rate,
+        rate: buyRate,
+        payment_details: {},
+        buyer_wallet_address: buyer_wallet_address,
+        accepted_at: null,          // NOT accepted — merchant must claim
+        ref_price_at_create: buyRate,
         payment_method_id: verifiedPaymentMethodId,
-        merchant_payment_method_id: merchantPaymentMethodId,
-        liquidity_reserved: true, // Signal core-api that liquidity is already deducted
-        ...escrowFields,
       },
     });
 
-    // If core-api failed, roll back the liquidity reservation
-    if (liquidityReserved && createResponse.status >= 400) {
-      try {
-        await transaction(async (client) => {
-          await client.query(
-            `UPDATE merchant_offers SET available_amount = available_amount + $1 WHERE id = $2`,
-            [crypto_amount, offer.id]
-          );
-        });
-        logger.api.request('POST', '/api/orders — liquidity reservation rolled back', user_id);
-      } catch (rollbackErr) {
-        logger.api.error('POST', '/api/orders — CRITICAL: liquidity rollback failed', rollbackErr as Error);
-        return errorResponse(
-          'Order creation failed and liquidity rollback also failed. Please contact support.',
-          500
-        );
-      }
-    }
+    // ── OFFER-BASED BUY FLOW (commented out — re-enable when ready) ──
+    // let offer;
+    // if (offer_id) {
+    //   offer = await getOfferWithMerchant(offer_id);
+    //   if (!offer) return NextResponse.json({ success: false, error: 'Offer not found' }, { status: 404 });
+    //   if (offer.available_amount < crypto_amount) return validationErrorResponse([`Insufficient liquidity`]);
+    //   if (crypto_amount < offer.min_amount || crypto_amount > offer.max_amount) return validationErrorResponse([`Amount out of bounds`]);
+    // } else {
+    //   return NextResponse.json({ success: false, error: 'Auto-matching is disabled.' }, { status: 400 });
+    // }
+    // const fiatAmount = crypto_amount * offer.rate;
+    // const createResponse = await proxyCoreApi('/v1/orders', {
+    //   method: 'POST',
+    //   body: {
+    //     user_id, merchant_id: offer.merchant_id, offer_id: offer.id,
+    //     type: type, payment_method: offer.payment_method, crypto_amount,
+    //     fiat_amount: fiatAmount, rate: offer.rate, payment_details: paymentDetails,
+    //     buyer_wallet_address, accepted_at: new Date().toISOString(),
+    //     ref_price_at_create: offer.rate, payment_method_id: verifiedPaymentMethodId,
+    //     merchant_payment_method_id: merchantPaymentMethodId, liquidity_reserved: true,
+    //   },
+    // });
 
     if (createResponse.status < 400) {
       auditLog('order.created', user_id, 'user', undefined, {
-        offerId: offer?.id,
         type,
         crypto_amount,
-        merchantId: offer?.merchant_id,
       });
     }
 

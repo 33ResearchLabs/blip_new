@@ -58,6 +58,12 @@ export async function GET(
     // NOTE: GET always uses local query (read-only) because core-api
     // doesn't return joined merchant/user/offer objects needed by the UI.
     // Core-api proxy is used only for mutations (PATCH).
+    // If _fresh param present, bypass cache for immediate consistency after mutations
+    const wantsFresh = request.nextUrl.searchParams.has('_fresh');
+    if (wantsFresh) {
+      const { invalidateOrderCache } = await import('@/lib/cache/cacheService');
+      await invalidateOrderCache(id);
+    }
     // Fetch order
     const order = await getOrderWithRelations(id);
     if (!order) {

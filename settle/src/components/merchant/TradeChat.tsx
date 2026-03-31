@@ -482,9 +482,9 @@ export function TradeChat({
   });
 
   return (
-    <div data-testid="chat-panel" className="h-full flex flex-col bg-[#0a0a0a]">
+    <div data-testid="chat-panel" className="h-full flex flex-col bg-background">
       {/* Header with trade info */}
-      <div className="border-b border-white/[0.04] bg-[#0d0d0d]">
+      <div className="border-b border-white/[0.04] bg-card-solid">
         {/* Navigation bar */}
         <div className="px-4 py-3 flex items-center gap-3">
           <button
@@ -576,7 +576,7 @@ export function TradeChat({
         {showTimeline && (
           <div className="w-1/2 flex flex-col border-r border-white/[0.04] min-h-0 overflow-hidden">
             {/* Timeline header */}
-            <div className="px-4 py-3 border-b border-white/[0.04] bg-[#0d0d0d]/50">
+            <div className="px-4 py-3 border-b border-white/[0.04] bg-card-solid/50">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-gray-500" />
                 <span className="text-xs font-medium text-gray-400">Order Timeline</span>
@@ -585,7 +585,7 @@ export function TradeChat({
 
             {/* Horizontal status progression */}
             {tradeInfo && (
-              <div className="px-4 py-3 border-b border-white/[0.04] bg-[#0d0d0d]/30">
+              <div className="px-4 py-3 border-b border-white/[0.04] bg-card-solid/30">
                 <div className="flex items-center gap-1 overflow-x-auto pb-2">
                   <TimelineStep status="completed" label="Created" time={tradeInfo.createdAt} isFirst />
                   <TimelineStep
@@ -758,7 +758,7 @@ export function TradeChat({
         {/* Right Panel - Chat Messages (50% or 100% if no timeline) */}
         <div className={`${showTimeline ? 'w-1/2' : 'w-full'} flex flex-col min-h-0 overflow-hidden`}>
           {/* Chat tabs header */}
-          <div className="border-b border-white/[0.04] bg-[#0d0d0d]/50">
+          <div className="border-b border-white/[0.04] bg-card-solid/50">
             <div className="flex">
               {/* Order Chat Tab */}
               <button
@@ -973,7 +973,7 @@ export function TradeChat({
 
           {/* Image preview bar */}
           {pendingImage && (
-            <div className="px-3 py-2 bg-[#0d0d0d] border-t border-white/[0.04] flex items-center gap-2">
+            <div className="px-3 py-2 bg-card-solid border-t border-white/[0.04] flex items-center gap-2">
               <div className="relative">
                 <img
                   src={pendingImage.previewUrl}
@@ -992,7 +992,7 @@ export function TradeChat({
           )}
 
           {/* Input area */}
-          <div className="p-3 bg-[#0d0d0d] border-t border-white/[0.04]">
+          <div className="p-3 bg-card-solid border-t border-white/[0.04]">
             <input
               ref={fileInputRef}
               type="file"
@@ -1023,7 +1023,7 @@ export function TradeChat({
                 onKeyDown={handleKeyDown}
                 placeholder={pendingImage ? "Add a caption..." : "Type a message..."}
                 className="flex-1 bg-[#1f1f1f] rounded-xl px-4 py-3 outline-none text-sm
-                           text-white placeholder:text-gray-500 focus:ring-1 focus:ring-orange-500/50"
+                           text-white placeholder:text-gray-500 focus:ring-1 focus:ring-primary/50"
               />
               <motion.button
                 data-testid="chat-send"

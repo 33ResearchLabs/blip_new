@@ -1285,7 +1285,8 @@ export const OrderDetailScreen = ({
           )}
         </div>
 
-        {/* Merchant */}
+        {/* Merchant — hidden until a merchant claims this order */}
+        {activeOrder.merchant?.name ? (
         <div className="mt-4 rounded-2xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -1314,6 +1315,17 @@ export const OrderDetailScreen = ({
             </button>
           </div>
         </div>
+        ) : (
+        <div className="mt-4 rounded-2xl p-4 flex items-center gap-3" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
+          <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.06)' }}>
+            <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'rgba(0,0,0,0.3)' }} />
+          </div>
+          <div>
+            <p className="text-[15px] font-medium" style={{ color: '#000' }}>Waiting for merchant</p>
+            <p className="text-[12px]" style={{ color: 'rgba(0,0,0,0.4)' }}>A merchant will claim your order shortly</p>
+          </div>
+        </div>
+        )}
 
         {/* Cancel & Dispute Buttons - Show for active orders (step 2-3) */}
         {activeOrder.step >= 2 && activeOrder.step < 4 && activeOrder.status !== "disputed" && !activeOrder.cancelRequest && (
@@ -1631,7 +1643,7 @@ export const OrderDetailScreen = ({
                       if (receiptPayload) {
                         return (
                           <div key={msg.id} className="max-w-[90%] mx-auto">
-                            <ReceiptCard data={receiptPayload as any} currentStatus={activeOrder?.dbStatus || activeOrder?.status} />
+                            <ReceiptCard data={receiptPayload as any} currentStatus={activeOrder?.dbStatus || activeOrder?.status} theme="light" />
                             <p className="text-[10px] mt-1 text-center" style={{ color: 'rgba(0,0,0,0.4)' }}>
                               {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </p>

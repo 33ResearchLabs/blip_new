@@ -112,9 +112,9 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
               ELSE NULL
             END as merchant_payment_method
      FROM orders o
-     JOIN users u ON o.user_id = u.id
-     JOIN merchants m ON o.merchant_id = m.id
-     JOIN merchant_offers mo ON o.offer_id = mo.id
+     LEFT JOIN users u ON o.user_id = u.id
+     LEFT JOIN merchants m ON o.merchant_id = m.id
+     LEFT JOIN merchant_offers mo ON o.offer_id = mo.id
      LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
      LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
      LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
@@ -171,8 +171,8 @@ export async function getUserOrders(
            COALESCE(chat_agg.unread_count, 0) as unread_count,
            chat_latest.last_message
     FROM orders o
-    JOIN merchants m ON o.merchant_id = m.id
-    JOIN merchant_offers mo ON o.offer_id = mo.id
+    LEFT JOIN merchants m ON o.merchant_id = m.id
+    LEFT JOIN merchant_offers mo ON o.offer_id = mo.id
     LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
     LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
     LEFT JOIN LATERAL (
@@ -258,8 +258,8 @@ export async function getMerchantOrders(
            END as merchant_payment_method
     FROM orders o
     JOIN users u ON o.user_id = u.id
-    JOIN merchants m ON o.merchant_id = m.id
-    JOIN merchant_offers mo ON o.offer_id = mo.id
+    LEFT JOIN merchants m ON o.merchant_id = m.id
+    LEFT JOIN merchant_offers mo ON o.offer_id = mo.id
     LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
     LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
     LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
@@ -394,8 +394,8 @@ export async function getAllPendingOrdersForMerchant(
            chat_latest.sender_type as last_human_message_sender
     FROM orders o
     JOIN users u ON o.user_id = u.id
-    JOIN merchants m ON o.merchant_id = m.id
-    JOIN merchant_offers mo ON o.offer_id = mo.id
+    LEFT JOIN merchants m ON o.merchant_id = m.id
+    LEFT JOIN merchant_offers mo ON o.offer_id = mo.id
     LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
     LEFT JOIN merchants current_m ON current_m.id = $1
     LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
@@ -420,13 +420,15 @@ export async function getAllPendingOrdersForMerchant(
     ) chat_latest ON true
     WHERE (
         -- OPEN orders: broadcast pending/escrowed that are NOT yet taken by another merchant
-        -- "Taken" = has buyer_merchant_id set to someone else (and merchant_id differs, meaning a seller accepted)
         (o.status IN ('pending', 'escrowed')
          AND (o.buyer_merchant_id IS NULL
               OR o.buyer_merchant_id = $1
               OR (o.buyer_merchant_id = o.merchant_id AND o.accepted_at IS NULL))
          AND o.accepted_at IS NULL
         )
+
+        -- Unclaimed sell orders (merchant_id IS NULL, broadcast to all merchants)
+        OR (o.merchant_id IS NULL AND o.status IN ('pending', 'escrowed') AND o.accepted_at IS NULL)
 
         -- All orders where I'm the assigned merchant
         OR (o.merchant_id = $1)
@@ -1412,6 +1414,7 @@ export async function claimOrder(
         );
       } else {
         // User↔merchant order: set merchant_id (the claiming merchant is the buyer/counterparty)
+        // merchant_id IS NULL check prevents overwriting an already-assigned merchant
         claimResult = await client.query(
           `UPDATE orders
            SET merchant_id = $1,
@@ -1420,6 +1423,7 @@ export async function claimOrder(
                order_version = order_version + 1
            WHERE id = $2
              AND accepted_at IS NULL
+             AND merchant_id IS NULL
              AND status = 'escrowed'
            RETURNING *`,
           [claimingMerchantId, orderId, walletToUse]

@@ -177,7 +177,9 @@ export async function POST(
       return notFoundResponse("Order");
     }
 
-    // Fetch order for validation + logging (after lock acquired)
+    // Fetch order FRESH from DB (skip cache — merchant_id may have just been set by accept)
+    const { invalidateOrderCache } = await import("@/lib/cache");
+    invalidateOrderCache(id);
     const depositOrder = await getOrderWithRelations(id);
     if (!depositOrder) {
       return notFoundResponse("Order");

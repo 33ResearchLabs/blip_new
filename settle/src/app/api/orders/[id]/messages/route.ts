@@ -104,7 +104,12 @@ export async function POST(
     const { sender_type, sender_id, content, message_type, image_url, file_url, file_name, file_size, mime_type } = parseResult.data;
 
     // Verify sender identity matches authenticated actor (prevent spoofing)
-    if (sender_id !== auth.actorId || sender_type !== auth.actorType) {
+    // Allow dual-login: user token can send as user if userId matches,
+    // merchant token can send as merchant if merchantId matches.
+    const senderMatchesAuth = sender_id === auth.actorId && sender_type === auth.actorType;
+    const senderMatchesUserId = sender_type === 'user' && sender_id === auth.userId;
+    const senderMatchesMerchantId = sender_type === 'merchant' && sender_id === auth.merchantId;
+    if (!senderMatchesAuth && !senderMatchesUserId && !senderMatchesMerchantId) {
       logger.auth.forbidden(`POST /api/orders/${id}/messages`, sender_id, 'Sender identity mismatch with authenticated actor');
       return forbiddenResponse('Sender identity does not match authenticated user');
     }

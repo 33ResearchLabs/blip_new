@@ -145,14 +145,16 @@ export function useRealtimeOrder(
     }
   }, [orderId, initialData, fetchOrder]);
 
-  // Polling fallback — only active when Pusher is NOT connected
+  // Polling — always active for the user's active order to ensure status stays in sync.
+  // When Pusher is connected: poll less frequently (10s) as a safety net.
+  // When Pusher is NOT connected: poll at 3s as primary update mechanism.
   useEffect(() => {
     if (!orderId || !enablePolling) return;
-    if (pusher?.isConnected) return; // Pusher handles updates — no polling needed
 
+    const interval = pusher?.isConnected ? 10000 : POLLING_INTERVAL_FALLBACK;
     const intervalId = setInterval(() => {
       fetchOrder(true); // silent fetch
-    }, POLLING_INTERVAL_FALLBACK);
+    }, interval);
 
     return () => {
       clearInterval(intervalId);

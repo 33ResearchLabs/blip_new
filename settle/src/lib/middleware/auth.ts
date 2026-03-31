@@ -498,6 +498,10 @@ export async function canAccessOrder(
         if (order.merchant_id === auth.merchantId || order.buyer_merchant_id === auth.merchantId) {
           return true;
         }
+        // Broadcast model: merchant_id is NULL, any merchant can access
+        if (!order.merchant_id && ['pending', 'accepted', 'escrowed'].includes(order.status)) {
+          return true;
+        }
       }
       return false;
     }
@@ -507,7 +511,11 @@ export async function canAccessOrder(
       if (order.merchant_id === auth.actorId || order.buyer_merchant_id === auth.actorId) {
         return true;
       }
-      // Broadcast model: allow viewing unclaimed escrowed orders
+      // Broadcast model: allow any merchant to view unclaimed orders
+      // (merchant_id is NULL in manual claim model, or escrowed without buyer)
+      if (!order.merchant_id && ['pending', 'accepted', 'escrowed'].includes(order.status)) {
+        return true;
+      }
       if (order.status === 'escrowed' && !order.buyer_merchant_id) {
         return true;
       }

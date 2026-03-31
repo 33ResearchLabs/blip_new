@@ -181,6 +181,9 @@ export default function MerchantDashboard() {
     setLoginError,
     isLoggingIn,
     isRegistering,
+    unverifiedMerchantId,
+    isResendingVerification,
+    resendVerificationEmail,
     pending2FA,
     totpCode,
     setTotpCode,
@@ -547,11 +550,19 @@ export default function MerchantDashboard() {
       const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
       return !o.dbOrder?.accepted_at && !(buyerMid && buyerMid !== merchantId);
     };
+    // Unclaimed escrowed orders (no accepted_at, no buyer_merchant_id) are still "pending" for claimers
+    const isUnclaimedEscrow = (o: Order) => {
+      const status = getEffectiveStatus(o);
+      if (status !== "escrow") return false;
+      const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
+      return !o.dbOrder?.accepted_at && !buyerMid;
+    };
     return orders.filter((o) => {
       if (isOrderExpired(o)) return false;
       const status = getEffectiveStatus(o);
       if (status === "pending") return true;
       if (status === "escrow" && isSelfUnaccepted(o)) return true;
+      if (isUnclaimedEscrow(o)) return true;
       return false;
     });
   }, [orders, merchantId]);
@@ -569,10 +580,16 @@ export default function MerchantDashboard() {
       const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
       return !o.dbOrder?.accepted_at && !(buyerMid && buyerMid !== merchantId);
     };
+    // Unclaimed escrowed orders go to Pending, not In Progress
+    const isUnclaimedEscrow = (o: Order) => {
+      const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
+      return !o.dbOrder?.accepted_at && !buyerMid;
+    };
     return orders.filter((o) => {
       const status = getEffectiveStatus(o);
       if (status !== "escrow") return false;
       if (isSelfUnaccepted(o)) return false;
+      if (isUnclaimedEscrow(o)) return false;
       if (hasMyEscrow(o)) return true;
       return !isOrderExpired(o);
     });
@@ -701,6 +718,8 @@ export default function MerchantDashboard() {
         isAuthenticating={false}
         onLogin={handleLogin}
         onRegister={handleRegister}
+        onResendVerification={resendVerificationEmail}
+        isResendingVerification={isResendingVerification}
       />
     );
   }

@@ -184,12 +184,15 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
     const data = request.body;
     const actorId = data.user_id || data.merchant_id;
 
-    if (!data.user_id || !data.merchant_id || !data.offer_id) {
+    if (!data.user_id) {
       return reply.status(400).send({
         success: false,
-        error: 'user_id, merchant_id, and offer_id are required',
+        error: 'user_id is required',
       });
     }
+
+    // Manual claim model: merchant_id and offer_id can be null (broadcast orders)
+    const isManualClaimOrder = !data.merchant_id || !data.offer_id;
 
     // Idempotency check: prevent duplicate order creation from retries
     const idem = resolveIdempotency(request, actorId, 'create_order');
@@ -206,25 +209,29 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
 
     logger.info('[order-create] Transaction starting', {
       offerId: data.offer_id, actorId, cryptoAmount: data.crypto_amount,
+      manualClaim: isManualClaimOrder,
     });
 
     try {
       // Atomic transaction with deadlock retry:
-      //   1. Deduct liquidity (row-level lock via UPDATE WHERE)
+      //   1. Deduct liquidity (skip if no offer — manual claim model)
       //   2. Insert order
       //   3. Store idempotency record (same tx — commits or rolls back together)
       const { order, remainingLiquidity } = await transactionWithRetry(async (client) => {
-        // Deduct liquidity — the WHERE clause acts as an implicit row lock.
-        // RETURNING available_amount gives us post-deduction balance for observability.
-        const { rows: deducted } = await client.query(
-          `UPDATE merchant_offers
-           SET available_amount = available_amount - $1, updated_at = NOW()
-           WHERE id = $2 AND available_amount >= $1
-           RETURNING id, available_amount`,
-          [data.crypto_amount, data.offer_id]
-        );
-        if (deducted.length === 0) {
-          throw Object.assign(new Error('Insufficient offer liquidity'), { statusCode: 409 });
+        // Deduct liquidity — skip for manual claim orders (no offer to deduct from)
+        let remainingLiquidityValue: number | null = null;
+        if (!isManualClaimOrder) {
+          const { rows: deducted } = await client.query(
+            `UPDATE merchant_offers
+             SET available_amount = available_amount - $1, updated_at = NOW()
+             WHERE id = $2 AND available_amount >= $1
+             RETURNING id, available_amount`,
+            [data.crypto_amount, data.offer_id]
+          );
+          if (deducted.length === 0) {
+            throw Object.assign(new Error('Insufficient offer liquidity'), { statusCode: 409 });
+          }
+          remainingLiquidityValue = deducted[0].available_amount;
         }
 
         const { rows } = await client.query(
@@ -250,13 +257,13 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         await insertOutboxEvent(client, {
           event: ORDER_EVENT.CREATED,
           orderId: order.id, previousStatus: '', newStatus: String(order.status),
-          actorType: 'system', actorId: data.merchant_id,
-          userId: data.user_id, merchantId: data.merchant_id, buyerMerchantId: data.buyer_merchant_id,
+          actorType: 'system', actorId: data.merchant_id || data.user_id,
+          userId: data.user_id, merchantId: data.merchant_id || undefined, buyerMerchantId: data.buyer_merchant_id,
           order: order as unknown as Record<string, unknown>,
           orderVersion: order.order_version || 1, minimalStatus: normalizeStatus(order.status as any),
         });
 
-        return { order, remainingLiquidity: deducted[0].available_amount };
+        return { order, remainingLiquidity: remainingLiquidityValue };
       }, { label: 'order-create' });
 
       logger.info('[order-create] Success', {

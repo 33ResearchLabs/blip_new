@@ -46,6 +46,71 @@ export async function sendEmail({ to, subject, html, text }: SendEmailParams): P
   }
 }
 
+export function emailVerificationEmail(verifyLink: string, merchantName: string): { subject: string; html: string; text: string } {
+  const subject = 'Verify your Blip Money email';
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#0a0a0a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a0a0a;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="480" cellpadding="0" cellspacing="0" style="background-color:#1a1a1a;border-radius:12px;border:1px solid #2a2a2a;">
+          <tr>
+            <td style="padding:32px 32px 0;text-align:center;">
+              <h1 style="margin:0;color:#00e676;font-size:24px;font-weight:700;">Blip Money</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 32px;">
+              <h2 style="margin:0 0 16px;color:#ffffff;font-size:20px;">Verify Your Email</h2>
+              <p style="margin:0 0 16px;color:#b0b0b0;font-size:14px;line-height:1.6;">
+                Hi <strong style="color:#ffffff;">${merchantName}</strong>,
+              </p>
+              <p style="margin:0 0 24px;color:#b0b0b0;font-size:14px;line-height:1.6;">
+                Welcome to Blip Money! Please verify your email address to activate your merchant account. This link expires in <strong style="color:#ffffff;">24 hours</strong>.
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding:8px 0 24px;">
+                    <a href="${verifyLink}" style="display:inline-block;background-color:#00e676;color:#000000;font-size:16px;font-weight:600;padding:14px 32px;border-radius:8px;text-decoration:none;">
+                      Verify Email
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 8px;color:#808080;font-size:12px;">
+                If you didn't create a Blip Money account, you can safely ignore this email.
+              </p>
+              <p style="margin:0;color:#808080;font-size:12px;word-break:break-all;">
+                Link: ${verifyLink}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:16px 32px 24px;border-top:1px solid #2a2a2a;text-align:center;">
+              <p style="margin:0;color:#606060;font-size:11px;">
+                &copy; ${new Date().getFullYear()} Blip Money. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `Hi ${merchantName},\n\nWelcome to Blip Money! Please verify your email address.\n\nVerify: ${verifyLink}\n\nThis link expires in 24 hours.\n\n— Blip Money`;
+
+  return { subject, html, text };
+}
+
 export function passwordResetEmail(resetLink: string, merchantName: string): { subject: string; html: string; text: string } {
   const subject = 'Reset your Blip Money password';
 

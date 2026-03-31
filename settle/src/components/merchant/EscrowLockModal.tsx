@@ -52,7 +52,7 @@ export function EscrowLockModal({
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className="fixed z-50 w-full max-w-md inset-x-0 bottom-0 md:inset-auto md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
           >
-            <div className="bg-[#0c0c0c] rounded-t-2xl md:rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden pb-safe md:pb-0">
+            <div className="bg-card-solid rounded-t-2xl md:rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden pb-safe md:pb-0">
               {/* Header */}
               <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -84,7 +84,11 @@ export function EscrowLockModal({
                     </div>
                     <div>
                       <p className="text-sm font-medium">{escrowOrder.user}</p>
-                      <p className="text-xs text-gray-500">Buy Order</p>
+                      <p className="text-xs text-gray-500">
+                        {escrowOrder.orderType === 'sell'
+                          ? 'Sell Order — anyone can accept'
+                          : `Buy Order — ${escrowOrder.user}`}
+                      </p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -147,7 +151,7 @@ export function EscrowLockModal({
                           href={getBlipscanTradeUrl(escrowOrder.escrowPda)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-xs text-orange-400 hover:text-orange-300 transition-colors"
+                          className="flex items-center gap-2 text-xs text-primary hover:text-primary/80 transition-colors"
                         >
                           <ExternalLink className="w-3 h-3" />
                           BlipScan

@@ -135,7 +135,7 @@ export function OrderQuickView({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[90%] max-w-md bg-white/[0.03] rounded-2xl shadow-2xl border border-white/[0.08] overflow-hidden"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[90%] max-w-md bg-card-solid rounded-2xl shadow-2xl border border-white/[0.08] overflow-hidden"
           >
             {/* Header */}
             <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
@@ -430,8 +430,10 @@ export function OrderQuickView({
             <div className="px-5 pb-5 space-y-2">
               {(() => {
                 // Read backend-computed actions (source of truth)
-                const primary = selectedOrder.dbOrder?.primaryAction;
-                const secondary = selectedOrder.dbOrder?.secondaryAction;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const enriched = selectedOrder.dbOrder as any;
+                const primary = enriched?.primaryAction;
+                const secondary = enriched?.secondaryAction;
 
                 // Guard: don't render action buttons until backend data is loaded
                 if (!primary) return null;

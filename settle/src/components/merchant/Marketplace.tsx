@@ -222,7 +222,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
         <div className="relative">
           <button
             onClick={() => setShowSortDropdown(!showSortDropdown)}
-            className="flex items-center gap-2 px-3 py-2 bg-[#151515] rounded-xl border border-white/[0.04] text-xs hover:border-white/[0.08] transition-colors"
+            className="flex items-center gap-2 px-3 py-2 bg-card-solid rounded-xl border border-white/[0.04] text-xs hover:border-white/[0.08] transition-colors"
           >
             <TrendingUp className="w-3.5 h-3.5 text-orange-400" />
             <span>{sortOption?.label || "Best Overall"}</span>
@@ -268,7 +268,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
         </div>
 
         {/* Type Filter */}
-        <div className="flex bg-[#151515] rounded-xl p-0.5 border border-white/[0.04]">
+        <div className="flex bg-card-solid rounded-xl p-0.5 border border-white/[0.04]">
           {(["all", "buy", "sell"] as const).map((type) => (
             <button
               key={type}
@@ -285,7 +285,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
         </div>
 
         {/* Payment Filter */}
-        <div className="flex bg-[#151515] rounded-xl p-0.5 border border-white/[0.04]">
+        <div className="flex bg-card-solid rounded-xl p-0.5 border border-white/[0.04]">
           {(["all", "bank", "cash"] as const).map((method) => (
             <button
               key={method}
@@ -351,7 +351,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
               key={offer.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-4 bg-[#151515] rounded-xl border border-white/[0.04] hover:border-white/[0.08] transition-all"
+              className="p-4 bg-card-solid rounded-xl border border-white/[0.04] hover:border-white/[0.08] transition-all"
             >
               <div className="flex items-start gap-3">
                 {/* Merchant Avatar + Name */}

@@ -112,14 +112,16 @@ export function useMerchantEffects({
           return prev.map(o => o.id === orderId ? { ...o, status: uiStatus as Order['status'], minimalStatus: newStatus } : o);
         });
 
-        // Refetch only the affected order — not the full list
+        // Fast path + full refetch to ensure UI state is correct
         refetchSingleOrder(orderId);
+        debouncedFetchOrders();
         debouncedFetchConversations();
 
         if (newStatus === 'payment_sent') { playSound('notification'); }
         else if (newStatus === 'completed') { playSound('order_complete'); refreshBalance(); }
       } else if (event.type === 'order:cancelled') {
         if (data.orderId) refetchSingleOrder(data.orderId);
+        debouncedFetchOrders();
         playSound('error');
       } else if (event.type === 'order:created') {
         debouncedFetchOrders();
