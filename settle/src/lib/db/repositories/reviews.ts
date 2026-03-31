@@ -1,7 +1,8 @@
 import { query, queryOne } from '../index';
 import { Review, Dispute, ActorType, DisputeReason } from '../../types/database';
 import { updateMerchantRating } from './merchants';
-import { recordReputationEvent, updateReputationScore } from '../../reputation';
+import { updateUserRating } from './users';
+import { recordReputationEvent } from '../../reputation';
 
 // Reviews
 export async function getReviewByOrderId(orderId: string): Promise<Review | null> {
@@ -46,12 +47,14 @@ export async function createReview(data: {
     ]
   );
 
-  // Update merchant rating if reviewee is merchant
+  // Update rating on the reviewee's profile
   if (data.reviewee_type === 'merchant') {
     await updateMerchantRating(data.reviewee_id);
+  } else if (data.reviewee_type === 'user') {
+    await updateUserRating(data.reviewee_id);
   }
 
-  // Record reputation event for the reviewee
+  // Record reputation event (score recalculated daily by worker)
   try {
     const entityType = data.reviewee_type === 'merchant' ? 'merchant' : 'user';
     await recordReputationEvent(

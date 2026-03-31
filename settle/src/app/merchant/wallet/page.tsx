@@ -395,7 +395,7 @@ export default function WalletPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#060606] overflow-hidden">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
       <MerchantNavbar
         activePage="wallet"
         merchantInfo={merchantInfo}

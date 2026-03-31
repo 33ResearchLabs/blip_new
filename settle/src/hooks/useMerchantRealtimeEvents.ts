@@ -32,18 +32,10 @@ export function useMerchantRealtimeEvents({
   useRealtimeOrders({
     actorType: 'merchant',
     actorId: merchantId,
-    onOrderCreated: (order) => {
+    onOrderCreated: () => {
+      // No notification — new orders appear in the Pending list directly
       debouncedFetchOrders();
       debouncedFetchConversations();
-      const isRelevant = order?.merchant_id === merchantId || order?.buyer_merchant_id === merchantId;
-      if (isRelevant) {
-        playSound('new_order');
-        const typeLabel = order?.type === 'buy' ? 'Send' : 'Receive';
-        const amt = order?.crypto_amount ? `${Number(order.crypto_amount).toLocaleString()} USDC` : '';
-        const fiat = order?.fiat_amount ? `${Number(order.fiat_amount).toLocaleString()} AED` : '';
-        addNotification('order', order ? `New ${typeLabel} order · ${amt}${fiat ? ` → ${fiat}` : ''}` : 'New order received', order?.id);
-        toast.showOrderCreated(order ? `${typeLabel} ${order.crypto_amount} USDC for ${order.fiat_amount} AED` : undefined);
-      }
     },
     onOrderStatusUpdated: (orderId, newStatus, _previousStatus, extra?: { buyerMerchantId?: string; merchantId?: string }) => {
       if (newStatus === 'accepted' && extra?.buyerMerchantId) {

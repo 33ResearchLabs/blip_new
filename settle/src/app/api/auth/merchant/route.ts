@@ -4,7 +4,7 @@ import { verifyWalletSignature } from '@/lib/solana/verifySignature';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { requireTokenAuth } from '@/lib/middleware/auth';
 import { updateMerchantOnlineStatus, createDefaultMerchantOffers, serializeMerchant } from '@/lib/db/repositories/merchants';
-import { generateSessionToken, generateAccessToken, generateRefreshToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { generateSessionToken, generateAccessToken, setSessionOnResponse } from '@/lib/auth/sessionToken';
 import { validateUsername } from '@/lib/validation/username';
 import crypto from 'crypto';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
@@ -91,9 +91,10 @@ export async function GET(request: NextRequest) {
       const payload = { actorId: merchant.id, actorType: 'merchant' as const };
       const sessionToken = generateSessionToken(payload);
       const accessToken = generateAccessToken(payload);
-      const refreshToken = generateRefreshToken(payload);
 
-      const response = NextResponse.json({
+      // check_session: issue new access tokens but do NOT create a new DB session.
+      // The refresh cookie from the original login is still valid.
+      return NextResponse.json({
         success: true,
         data: {
           valid: true,
@@ -102,10 +103,6 @@ export async function GET(request: NextRequest) {
           ...(accessToken && { accessToken }),
         },
       });
-      if (refreshToken) {
-        response.cookies.set(REFRESH_TOKEN_COOKIE, refreshToken, REFRESH_COOKIE_OPTIONS);
-      }
-      return response;
     }
 
     if (action === 'wallet_login' && wallet_address) {
@@ -183,7 +180,7 @@ export async function POST(request: NextRequest) {
 
       // Query merchant by wallet address
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access
+        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access, COALESCE(totp_enabled, false) as totp_enabled
          FROM merchants
          WHERE wallet_address = $1 AND status = 'active'`,
         [wallet_address]
@@ -218,6 +215,7 @@ export async function POST(request: NextRequest) {
           balance: number;
           has_ops_access: boolean;
           has_compliance_access: boolean;
+          totp_enabled: boolean;
         };
 
         // Check if username needs to be set
@@ -242,10 +240,25 @@ export async function POST(request: NextRequest) {
 
         console.log('[API] Merchant login successful:', merchant.id, merchant.username);
 
+        // 2FA gate: if enabled, return pendingToken instead of real tokens
+        if (merchant.totp_enabled) {
+          const { createPendingLoginToken } = await import('@/lib/auth/totp');
+          const pendingToken = await createPendingLoginToken(merchant.id, 'merchant');
+          return NextResponse.json({
+            success: true,
+            data: {
+              requires2FA: true,
+              pendingToken,
+              merchant: { id: merchant.id, display_name: merchant.display_name },
+              isNewMerchant,
+              needsUsername,
+            },
+          });
+        }
+
         const walletPayload = { actorId: merchant.id, actorType: 'merchant' as const };
         const token = generateSessionToken(walletPayload);
         const walletAccessToken = generateAccessToken(walletPayload);
-        const walletRefreshToken = generateRefreshToken(walletPayload);
 
         const walletResponse = NextResponse.json({
           success: true,
@@ -257,9 +270,7 @@ export async function POST(request: NextRequest) {
             ...(walletAccessToken && { accessToken: walletAccessToken }),
           },
         });
-        if (walletRefreshToken) {
-          walletResponse.cookies.set(REFRESH_TOKEN_COOKIE, walletRefreshToken, REFRESH_COOKIE_OPTIONS);
-        }
+        await setSessionOnResponse(walletResponse, walletPayload, request);
         return walletResponse;
       }
     }
@@ -368,8 +379,6 @@ export async function POST(request: NextRequest) {
       const createPayload = { actorId: merchant.id, actorType: 'merchant' as const };
       const createToken = generateSessionToken(createPayload);
       const createAccessTk = generateAccessToken(createPayload);
-      const createRefreshTk = generateRefreshToken(createPayload);
-
       const createResponse = NextResponse.json({
         success: true,
         data: {
@@ -378,9 +387,7 @@ export async function POST(request: NextRequest) {
           ...(createAccessTk && { accessToken: createAccessTk }),
         },
       });
-      if (createRefreshTk) {
-        createResponse.cookies.set(REFRESH_TOKEN_COOKIE, createRefreshTk, REFRESH_COOKIE_OPTIONS);
-      }
+      await setSessionOnResponse(createResponse, createPayload, request);
       return createResponse;
     }
 
@@ -597,7 +604,7 @@ export async function POST(request: NextRequest) {
 
       // Find merchant by email
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, email, password_hash, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access
+        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, email, password_hash, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access, COALESCE(totp_enabled, false) as totp_enabled
          FROM merchants
          WHERE email = $1 AND status = 'active'`,
         [email.toLowerCase()]
@@ -626,6 +633,7 @@ export async function POST(request: NextRequest) {
         balance: number;
         has_ops_access: boolean;
           has_compliance_access: boolean;
+        totp_enabled: boolean;
       };
 
       // Verify password
@@ -654,10 +662,23 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] Merchant email login successful:', merchant.id, merchant.email);
 
+      // 2FA gate: if enabled, return pendingToken instead of real tokens
+      if (merchant.totp_enabled) {
+        const { createPendingLoginToken } = await import('@/lib/auth/totp');
+        const pendingToken = await createPendingLoginToken(merchant.id, 'merchant');
+        return NextResponse.json({
+          success: true,
+          data: {
+            requires2FA: true,
+            pendingToken,
+            merchant: { id: merchant.id, display_name: merchant.display_name },
+          },
+        });
+      }
+
       const emailPayload = { actorId: merchant.id, actorType: 'merchant' as const };
       const emailLoginToken = generateSessionToken(emailPayload);
       const emailAccessTk = generateAccessToken(emailPayload);
-      const emailRefreshTk = generateRefreshToken(emailPayload);
 
       const emailResponse = NextResponse.json({
         success: true,
@@ -667,9 +688,7 @@ export async function POST(request: NextRequest) {
           ...(emailAccessTk && { accessToken: emailAccessTk }),
         },
       });
-      if (emailRefreshTk) {
-        emailResponse.cookies.set(REFRESH_TOKEN_COOKIE, emailRefreshTk, REFRESH_COOKIE_OPTIONS);
-      }
+      await setSessionOnResponse(emailResponse, emailPayload, request);
       return emailResponse;
     }
 

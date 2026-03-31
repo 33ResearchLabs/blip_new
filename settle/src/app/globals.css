@@ -44,29 +44,200 @@
   --color-error: #ef4444;     /* red    — negative / sell  */
   --color-info: #60a5fa;      /* blue   — informational   */
 
+  /* Primary accent */
+  --primary: #F97316;
+  --primary-dim: rgba(249, 115, 22, 0.15);
+
   /* Legacy */
   --muted: #525252;
   --muted-bg: #131313;
 }
 
-/* Light mode */
-:root.light {
-  --background: #fafafa;
-  --foreground: #0a0a0a;
+/* Light mode (Solarized Light) */
+:root.light, [data-theme="light"] {
+  --background: #FDF6E3;
+  --foreground: #073642;
+  --color-bg-primary: #FDF6E3;
+  --color-bg-secondary: #EEE8D5;
+  --color-bg-tertiary: #E0DAC8;
+  --color-text-primary: rgba(7, 54, 66, 0.92);
+  --color-text-secondary: rgba(7, 54, 66, 0.60);
+  --color-text-tertiary: rgba(7, 54, 66, 0.35);
+  --color-text-quaternary: rgba(7, 54, 66, 0.15);
   --card: rgba(0, 0, 0, 0.025);
-  --card-solid: rgba(255, 255, 255, 0.9);
+  --card-solid: #EEE8D5;
   --border: rgba(0, 0, 0, 0.07);
-  --muted: #71717a;
-  --muted-bg: #f5f5f5;
+  --color-border-subtle: rgba(0, 0, 0, 0.05);
+  --color-border-medium: rgba(0, 0, 0, 0.09);
+  --muted: #586E75;
+  --muted-bg: #EEE8D5;
   --accent: #0a0a0a;
   --accent-bright: #171717;
   --accent-dark: #262626;
   --accent-subtle: rgba(0, 0, 0, 0.05);
   --accent-glow: rgba(0, 0, 0, 0.04);
+  --primary: #268BD2;
+  --primary-dim: rgba(38, 139, 210, 0.15);
   --color-success: #059669;
   --color-warning: #d97706;
   --color-error: #dc2626;
   --color-info: #2563eb;
+}
+
+/* Clean White — higher specificity to override :root.light */
+:root.light[data-theme="clean"],
+[data-theme="clean"] {
+  --background: #FFFFFF;
+  --foreground: #111827;
+  --color-bg-primary: #FFFFFF;
+  --color-bg-secondary: #F9FAFB;
+  --color-bg-tertiary: #F3F4F6;
+  --color-text-primary: rgba(17, 24, 39, 0.92);
+  --color-text-secondary: rgba(17, 24, 39, 0.60);
+  --color-text-tertiary: rgba(17, 24, 39, 0.40);
+  --color-text-quaternary: rgba(17, 24, 39, 0.18);
+  --card: rgba(0, 0, 0, 0.02);
+  --card-solid: #F9FAFB;
+  --border: rgba(0, 0, 0, 0.08);
+  --color-border-subtle: rgba(0, 0, 0, 0.05);
+  --color-border-medium: rgba(0, 0, 0, 0.10);
+  --muted: #6B7280;
+  --muted-bg: #F3F4F6;
+  --accent: #111827;
+  --accent-bright: #1F2937;
+  --accent-dark: #374151;
+  --accent-subtle: rgba(0, 0, 0, 0.04);
+  --accent-glow: rgba(59, 130, 246, 0.06);
+  --primary: #3B82F6;
+  --primary-dim: rgba(59, 130, 246, 0.12);
+  --color-success: #059669;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+  --color-info: #3B82F6;
+}
+
+/* Midnight Navy */
+[data-theme="navy"] {
+  --background: #0B1120;
+  --foreground: #F1F5F9;
+  --color-bg-primary: #0B1120;
+  --color-bg-secondary: #131D35;
+  --color-bg-tertiary: #1A2744;
+  --color-text-primary: rgba(241, 245, 249, 0.92);
+  --color-text-secondary: rgba(241, 245, 249, 0.50);
+  --color-text-tertiary: rgba(241, 245, 249, 0.30);
+  --color-text-quaternary: rgba(241, 245, 249, 0.15);
+  --card: rgba(255, 255, 255, 0.04);
+  --card-solid: #161E31;
+  --border: rgba(255, 255, 255, 0.07);
+  --color-border-subtle: rgba(255, 255, 255, 0.05);
+  --color-border-medium: rgba(255, 255, 255, 0.10);
+  --muted: #94A3B8;
+  --muted-bg: #161E31;
+  --accent: #F1F5F9;
+  --accent-bright: #E2E8F0;
+  --accent-dark: #CBD5E1;
+  --accent-subtle: rgba(255, 255, 255, 0.06);
+  --accent-glow: rgba(56, 189, 248, 0.06);
+  --primary: #38BDF8;
+  --primary-dim: rgba(56, 189, 248, 0.15);
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #38BDF8;
+}
+
+/* Emerald Matrix */
+[data-theme="emerald"] {
+  --background: #050705;
+  --foreground: #ECFDF5;
+  --color-bg-primary: #050705;
+  --color-bg-secondary: #0A120E;
+  --color-bg-tertiary: #0F1A14;
+  --color-text-primary: rgba(236, 253, 245, 0.92);
+  --color-text-secondary: rgba(236, 253, 245, 0.50);
+  --color-text-tertiary: rgba(236, 253, 245, 0.30);
+  --color-text-quaternary: rgba(236, 253, 245, 0.15);
+  --card: rgba(255, 255, 255, 0.03);
+  --card-solid: #0D1410;
+  --border: rgba(255, 255, 255, 0.06);
+  --color-border-subtle: rgba(255, 255, 255, 0.04);
+  --color-border-medium: rgba(255, 255, 255, 0.08);
+  --muted: #6B7280;
+  --muted-bg: #0D1410;
+  --accent: #ECFDF5;
+  --accent-bright: #D1FAE5;
+  --accent-dark: #A7F3D0;
+  --accent-subtle: rgba(16, 185, 129, 0.08);
+  --accent-glow: rgba(16, 185, 129, 0.06);
+  --primary: #10B981;
+  --primary-dim: rgba(16, 185, 129, 0.15);
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #60a5fa;
+}
+
+/* Cyberpunk Orchid */
+[data-theme="orchid"] {
+  --background: #1A1A2E;
+  --foreground: #FFFFFF;
+  --color-bg-primary: #1A1A2E;
+  --color-bg-secondary: #16213E;
+  --color-bg-tertiary: #1F2B4D;
+  --color-text-primary: rgba(255, 255, 255, 0.92);
+  --color-text-secondary: rgba(255, 255, 255, 0.50);
+  --color-text-tertiary: rgba(255, 255, 255, 0.30);
+  --color-text-quaternary: rgba(255, 255, 255, 0.15);
+  --card: rgba(255, 255, 255, 0.04);
+  --card-solid: #16213E;
+  --border: rgba(255, 255, 255, 0.07);
+  --color-border-subtle: rgba(255, 255, 255, 0.05);
+  --color-border-medium: rgba(255, 255, 255, 0.10);
+  --muted: #94A3B8;
+  --muted-bg: #16213E;
+  --accent: #FFFFFF;
+  --accent-bright: #F5F5F5;
+  --accent-dark: #E5E5E5;
+  --accent-subtle: rgba(233, 69, 96, 0.08);
+  --accent-glow: rgba(233, 69, 96, 0.06);
+  --primary: #E94560;
+  --primary-dim: rgba(233, 69, 96, 0.15);
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #818CF8;
+}
+
+/* Slate & Gold */
+[data-theme="gold"] {
+  --background: #1C1C1C;
+  --foreground: #E0E0E0;
+  --color-bg-primary: #1C1C1C;
+  --color-bg-secondary: #252525;
+  --color-bg-tertiary: #2D2D2D;
+  --color-text-primary: rgba(224, 224, 224, 0.92);
+  --color-text-secondary: rgba(224, 224, 224, 0.50);
+  --color-text-tertiary: rgba(224, 224, 224, 0.30);
+  --color-text-quaternary: rgba(224, 224, 224, 0.15);
+  --card: rgba(255, 255, 255, 0.04);
+  --card-solid: #2D2D2D;
+  --border: rgba(255, 255, 255, 0.07);
+  --color-border-subtle: rgba(255, 255, 255, 0.05);
+  --color-border-medium: rgba(255, 255, 255, 0.10);
+  --muted: #888888;
+  --muted-bg: #2D2D2D;
+  --accent: #E0E0E0;
+  --accent-bright: #D4D4D4;
+  --accent-dark: #A3A3A3;
+  --accent-subtle: rgba(212, 175, 55, 0.08);
+  --accent-glow: rgba(212, 175, 55, 0.06);
+  --primary: #D4AF37;
+  --primary-dim: rgba(212, 175, 55, 0.15);
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #60a5fa;
 }
 
 @theme inline {
@@ -81,6 +252,8 @@
   --color-accent-dark: var(--accent-dark);
   --color-accent-subtle: var(--accent-subtle);
   --color-accent-glow: var(--accent-glow);
+  --color-primary: var(--primary);
+  --color-primary-dim: var(--primary-dim);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -110,6 +283,103 @@ body.dashboard-layout {
   overflow: hidden;
   height: 100vh;
   height: 100dvh;
+}
+
+/* Theme transition */
+html:not(.no-transitions) {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+html:not(.no-transitions) * {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
+}
+
+/* ── Light theme overrides ──
+   Remap white-based Tailwind utilities for light backgrounds.
+   Uses broad attribute selectors to catch all Tailwind opacity variants. */
+
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) {
+  color-scheme: light;
+}
+
+/* ALL white text → foreground color (catches text-white, text-white/80, text-white/[0.5], etc.) */
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-white"] {
+  color: var(--foreground) !important;
+}
+
+/* Restore opacity for muted white text variants */
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-white/"] {
+  opacity: 1 !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-white/8"],
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-white/9"] {
+  color: color-mix(in srgb, var(--foreground) 90%, transparent) !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-white/7"] {
+  color: color-mix(in srgb, var(--foreground) 75%, transparent) !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-white/6"] {
+  color: color-mix(in srgb, var(--foreground) 65%, transparent) !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-white/5"] {
+  color: color-mix(in srgb, var(--foreground) 55%, transparent) !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-white/4"] {
+  color: color-mix(in srgb, var(--foreground) 60%, transparent) !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-white/3"] {
+  color: color-mix(in srgb, var(--foreground) 55%, transparent) !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-white/2"] {
+  color: color-mix(in srgb, var(--foreground) 55%, transparent) !important;
+}
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="text-white/1"] {
+  color: color-mix(in srgb, var(--foreground) 45%, transparent) !important;
+}
+
+/* ALL bg-black → theme background */
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="bg-black"] {
+  background-color: var(--background) !important;
+}
+
+/* ALL bg-white/[0.xx] → semi-transparent foreground */
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="bg-white/"] {
+  background-color: color-mix(in srgb, var(--foreground) 5%, transparent) !important;
+}
+
+/* ALL border-white/ → dark borders */
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="border-white/"] {
+  border-color: color-mix(in srgb, var(--foreground) 12%, transparent) !important;
+}
+
+/* Ring */
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="ring-white/"] {
+  --tw-ring-color: color-mix(in srgb, var(--foreground) 12%, transparent) !important;
+}
+
+/* Shadow */
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="shadow-black"] {
+  --tw-shadow-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Placeholder */
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="placeholder:text-white"]::placeholder {
+  color: color-mix(in srgb, var(--foreground) 40%, transparent) !important;
+}
+
+/* Hover text */
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="hover:text-white"]:hover {
+  color: var(--foreground) !important;
+}
+
+/* Hover bg */
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="hover:bg-white"]:hover {
+  background-color: color-mix(in srgb, var(--foreground) 8%, transparent) !important;
+}
+
+/* Dividers */
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [class*="divide-white"] > * + * {
+  border-color: color-mix(in srgb, var(--foreground) 8%, transparent) !important;
 }
 
 /* ==========================================
@@ -422,11 +692,94 @@ input[type="number"] { -moz-appearance: textfield; }
 }
 
 .press-effect {
-  transition: transform 0.08s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.08s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.2s ease;
 }
 
 .press-effect:active {
   transform: scale(0.98);
+}
+
+/* ── Premium glow effects ── */
+
+/* Primary button glow */
+.glow-primary {
+  box-shadow: 0 0 20px color-mix(in srgb, var(--primary) 25%, transparent),
+              0 0 60px color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.glow-primary:hover {
+  box-shadow: 0 0 25px color-mix(in srgb, var(--primary) 35%, transparent),
+              0 0 80px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+/* Subtle glow for cards and active elements */
+.glow-subtle {
+  box-shadow: 0 0 15px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+/* Active tab / selected state glow */
+.glow-active {
+  box-shadow: 0 1px 8px color-mix(in srgb, var(--primary) 20%, transparent),
+              inset 0 1px 0 color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+/* Pulse glow animation for important CTAs */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 15px color-mix(in srgb, var(--primary) 20%, transparent); }
+  50% { box-shadow: 0 0 30px color-mix(in srgb, var(--primary) 35%, transparent); }
+}
+
+.glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+/* Auto-apply glow to primary-colored buttons */
+.bg-primary,
+[style*="background-color: var(--primary)"] {
+  box-shadow: 0 0 20px color-mix(in srgb, var(--primary) 25%, transparent),
+              0 4px 12px color-mix(in srgb, var(--primary) 15%, transparent);
+  transition: box-shadow 0.2s ease, transform 0.08s ease;
+}
+
+.bg-primary:hover,
+[style*="background-color: var(--primary)"]:hover {
+  box-shadow: 0 0 30px color-mix(in srgb, var(--primary) 40%, transparent),
+              0 6px 20px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+/* Glow border for active/selected elements */
+.border-primary {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+/* Text glow for primary colored text headings */
+.text-primary {
+  text-shadow: 0 0 20px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+/* Live dot glow */
+.animate-live-dot {
+  box-shadow: 0 0 6px color-mix(in srgb, var(--primary) 50%, transparent);
+}
+
+/* Notification badge glow */
+.bg-primary.rounded-full {
+  box-shadow: 0 0 10px color-mix(in srgb, var(--primary) 40%, transparent);
+}
+
+/* Reduce glow intensity on light themes */
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) .bg-primary,
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) [style*="background-color: var(--primary)"] {
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) .text-primary {
+  text-shadow: none;
+}
+
+:is(:root.light, [data-theme="light"], [data-theme="clean"]) .border-primary {
+  box-shadow: 0 0 8px color-mix(in srgb, var(--primary) 10%, transparent);
 }
 
 /* Shimmer — neutral white, very subtle */

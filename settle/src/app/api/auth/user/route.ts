@@ -12,7 +12,7 @@ import {
 import { verifyWalletSignature } from '@/lib/solana/verifySignature';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { validateUsername } from '@/lib/validation/username';
-import { generateSessionToken, generateAccessToken, generateRefreshToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { generateSessionToken, generateAccessToken, setSessionOnResponse } from '@/lib/auth/sessionToken';
 
 /**
  * POST /api/auth/user
@@ -90,10 +90,28 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] User authenticated via wallet:', user.id, user.username, { isNewUser, needsUsername });
 
+      // 2FA gate: if enabled and not a new user, return pendingToken
+      if (!isNewUser) {
+        const { getTotpStatus: getWalletTotpStatus, createPendingLoginToken: createWalletPendingToken } = await import('@/lib/auth/totp');
+        const walletTotpStatus = await getWalletTotpStatus(user.id, 'user');
+        if (walletTotpStatus.enabled) {
+          const pendingToken = await createWalletPendingToken(user.id, 'user');
+          return NextResponse.json({
+            success: true,
+            data: {
+              requires2FA: true,
+              pendingToken,
+              user: { id: user.id, username: user.username },
+              isNewUser,
+              needsUsername,
+            },
+          });
+        }
+      }
+
       const userPayload = { actorId: user.id, actorType: 'user' as const };
       const token = generateSessionToken(userPayload);
       const userAccessTk = generateAccessToken(userPayload);
-      const userRefreshTk = generateRefreshToken(userPayload);
 
       const walletRes = NextResponse.json({
         success: true,
@@ -105,9 +123,7 @@ export async function POST(request: NextRequest) {
           ...(userAccessTk && { accessToken: userAccessTk }),
         },
       });
-      if (userRefreshTk) {
-        walletRes.cookies.set(REFRESH_TOKEN_COOKIE, userRefreshTk, REFRESH_COOKIE_OPTIONS);
-      }
+      await setSessionOnResponse(walletRes, userPayload, request);
       return walletRes;
     }
 
@@ -189,7 +205,6 @@ export async function POST(request: NextRequest) {
       const setUnPayload = { actorId: user.id, actorType: 'user' as const };
       const setUsernameToken = generateSessionToken(setUnPayload);
       const setUnAccessTk = generateAccessToken(setUnPayload);
-      const setUnRefreshTk = generateRefreshToken(setUnPayload);
 
       const setUnRes = NextResponse.json({
         success: true,
@@ -199,9 +214,7 @@ export async function POST(request: NextRequest) {
           ...(setUnAccessTk && { accessToken: setUnAccessTk }),
         },
       });
-      if (setUnRefreshTk) {
-        setUnRes.cookies.set(REFRESH_TOKEN_COOKIE, setUnRefreshTk, REFRESH_COOKIE_OPTIONS);
-      }
+      await setSessionOnResponse(setUnRes, setUnPayload, request);
       return setUnRes;
     }
 
@@ -224,10 +237,24 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] User login successful:', user.id, user.username);
 
+      // 2FA gate: if enabled, return pendingToken instead of real tokens
+      const { getTotpStatus, createPendingLoginToken } = await import('@/lib/auth/totp');
+      const totpStatus = await getTotpStatus(user.id, 'user');
+      if (totpStatus.enabled) {
+        const pendingToken = await createPendingLoginToken(user.id, 'user');
+        return NextResponse.json({
+          success: true,
+          data: {
+            requires2FA: true,
+            pendingToken,
+            user: { id: user.id, username: user.username },
+          },
+        });
+      }
+
       const loginPayload = { actorId: user.id, actorType: 'user' as const };
       const loginToken = generateSessionToken(loginPayload);
       const loginAccessTk = generateAccessToken(loginPayload);
-      const loginRefreshTk = generateRefreshToken(loginPayload);
 
       const loginRes = NextResponse.json({
         success: true,
@@ -238,9 +265,7 @@ export async function POST(request: NextRequest) {
           ...(loginAccessTk && { accessToken: loginAccessTk }),
         },
       });
-      if (loginRefreshTk) {
-        loginRes.cookies.set(REFRESH_TOKEN_COOKIE, loginRefreshTk, REFRESH_COOKIE_OPTIONS);
-      }
+      await setSessionOnResponse(loginRes, loginPayload, request);
       return loginRes;
     }
 
@@ -302,7 +327,6 @@ export async function POST(request: NextRequest) {
       const regPayload = { actorId: user.id, actorType: 'user' as const };
       const registerToken = generateSessionToken(regPayload);
       const regAccessTk = generateAccessToken(regPayload);
-      const regRefreshTk = generateRefreshToken(regPayload);
 
       const regRes = NextResponse.json({
         success: true,
@@ -313,9 +337,7 @@ export async function POST(request: NextRequest) {
           ...(regAccessTk && { accessToken: regAccessTk }),
         },
       });
-      if (regRefreshTk) {
-        regRes.cookies.set(REFRESH_TOKEN_COOKIE, regRefreshTk, REFRESH_COOKIE_OPTIONS);
-      }
+      await setSessionOnResponse(regRes, regPayload, request);
       return regRes;
     }
 
@@ -420,9 +442,9 @@ export async function GET(request: NextRequest) {
       const checkPayload = { actorId: user.id, actorType: 'user' as const };
       const checkToken = generateSessionToken(checkPayload);
       const checkAccessTk = generateAccessToken(checkPayload);
-      const checkRefreshTk = generateRefreshToken(checkPayload);
 
-      const checkRes = NextResponse.json({
+      // check_session: issue new access tokens but do NOT create a new DB session.
+      return NextResponse.json({
         success: true,
         data: {
           valid: true,
@@ -431,10 +453,6 @@ export async function GET(request: NextRequest) {
           ...(checkAccessTk && { accessToken: checkAccessTk }),
         },
       });
-      if (checkRefreshTk) {
-        checkRes.cookies.set(REFRESH_TOKEN_COOKIE, checkRefreshTk, REFRESH_COOKIE_OPTIONS);
-      }
-      return checkRes;
     }
 
     if (!userId) {

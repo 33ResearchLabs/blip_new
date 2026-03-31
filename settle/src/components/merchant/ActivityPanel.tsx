@@ -82,9 +82,9 @@ export const ActivityPanel = memo(function ActivityPanel({
       case 'pending':
         return { label: 'PENDING', color: 'text-white/40 bg-white/[0.04] border-white/[0.06]' };
       case 'accepted':
-        return { label: 'ACCEPTED', color: 'text-orange-400/70 bg-orange-500/10 border-orange-500/20' };
+        return { label: 'ACCEPTED', color: 'text-primary/70 bg-primary/10 border-orange-500/20' };
       case 'escrowed':
-        return { label: 'ESCROWED', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' };
+        return { label: 'ESCROWED', color: 'text-primary bg-primary/10 border-orange-500/20' };
       case 'payment_sent':
         return { label: 'PAID', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' };
       case 'payment_confirmed':
@@ -96,21 +96,19 @@ export const ActivityPanel = memo(function ActivityPanel({
 
   if (isCollapsed) {
     return (
-      <div className="flex flex-col h-full justify-end">
+      <div className="flex flex-col">
         <button
           onClick={() => handleCollapse(false)}
-          className="flex items-center justify-between px-3 py-2 bg-white/[0.02] hover:bg-white/[0.04] border-t border-white/[0.04] transition-all"
+          className="flex items-center gap-2 px-3 py-2 bg-white/[0.02] hover:bg-white/[0.04] border-t border-white/[0.04] transition-all"
         >
-          <div className="flex items-center gap-2">
-            <History className="w-3.5 h-3.5 text-white/30" />
-            <span className="text-[10px] font-bold text-white/40 font-mono tracking-wider uppercase">
-              Activity
-            </span>
-            <span className="text-[10px] border border-white/[0.08] text-white/30 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
-              {completedOrders.length + failedCount + openCount}
-            </span>
-          </div>
           <ChevronUp className="w-3.5 h-3.5 text-white/25" />
+          <History className="w-3.5 h-3.5 text-white/30" />
+          <span className="text-[10px] font-bold text-white/40 font-mono tracking-wider uppercase">
+            Activity
+          </span>
+          <span className="text-[10px] border border-white/[0.08] text-white/30 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
+            {completedOrders.length + failedCount + openCount}
+          </span>
         </button>
       </div>
     );
@@ -121,14 +119,20 @@ export const ActivityPanel = memo(function ActivityPanel({
       {/* Header */}
       <div className="px-3 py-2 border-b border-white/[0.04]">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => handleCollapse(true)}
+              className="p-1 rounded hover:bg-white/[0.06] transition-colors text-white/20 hover:text-white/40"
+              title="Minimize"
+            >
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
             <History className="w-3.5 h-3.5 text-white/30" />
             <h2 className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">
               Activity
             </h2>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="flex gap-0.5">
+          <div className="flex items-center gap-0.5">
               <button
                 onClick={() => setActiveTab('transactions')}
                 className={`px-2 py-1 rounded text-[9px] font-medium transition-all ${
@@ -163,7 +167,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                 onClick={() => setActiveTab('open')}
                 className={`px-2 py-1 rounded text-[9px] font-medium transition-all relative ${
                   activeTab === 'open'
-                    ? 'bg-orange-500/15 text-orange-400 border border-orange-500/20'
+                    ? 'bg-primary/15 text-primary border border-orange-500/20'
                     : 'text-white/30 hover:text-white/50'
                 }`}
               >
@@ -172,14 +176,6 @@ export const ActivityPanel = memo(function ActivityPanel({
                   <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
                 )}
               </button>
-            </div>
-            <button
-              onClick={() => handleCollapse(true)}
-              className="p-1 rounded hover:bg-white/[0.06] transition-colors text-white/20 hover:text-white/40"
-              title="Minimize"
-            >
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
       </div>
@@ -235,7 +231,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                         <div className="flex items-center gap-1 text-[10px] font-mono text-white/30">
                           <span className="tabular-nums">{Math.round(order.amount).toLocaleString()} {order.fromCurrency}</span>
                           <ArrowRight className="w-2.5 h-2.5 text-white/15" />
-                          <span className="tabular-nums text-orange-400/60">{Math.round(order.amount * (order.rate || 3.67)).toLocaleString()} AED</span>
+                          <span className="tabular-nums text-primary/60">{Math.round(order.amount * (order.rate || 3.67)).toLocaleString()} AED</span>
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-0.5 shrink-0">
@@ -257,7 +253,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                                   key={s}
                                   className={`w-2.5 h-2.5 ${
                                     s <= (order.dbOrder?.merchant_rating || 0)
-                                      ? 'fill-orange-400 text-orange-400'
+                                      ? 'fill-orange-400 text-primary'
                                       : 'text-white/10'
                                   }`}
                                 />
@@ -266,7 +262,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                           ) : (
                             <button
                               onClick={(e) => { e.stopPropagation(); onRateOrder(order); }}
-                              className="flex items-center gap-0.5 text-[9px] text-orange-400/50 hover:text-orange-400 font-medium transition-colors"
+                              className="flex items-center gap-0.5 text-[9px] text-primary/50 hover:text-primary font-medium transition-colors"
                             >
                               <Star className="w-2.5 h-2.5" />
                               Rate
@@ -318,7 +314,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                         </div>
                         <span className={`flex items-center gap-1 text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border ${
                           isDisputed
-                            ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                            ? 'bg-primary/10 text-primary border-orange-500/20'
                             : 'bg-white/[0.04] text-white/30 border-white/[0.06]'
                         }`}>
                           {isDisputed ? (
@@ -384,7 +380,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                           <span className="text-xs font-medium text-white/70 truncate">{order.user}</span>
                           {order.orderType && (
                             <span className={`text-[9px] font-bold font-mono uppercase ${
-                              order.orderType === 'buy' ? 'text-green-400/60' : 'text-orange-400/60'
+                              order.orderType === 'buy' ? 'text-green-400/60' : 'text-primary/60'
                             }`}>
                               {order.orderType === 'buy' ? 'SEND' : 'RECEIVE'}
                             </span>

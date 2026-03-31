@@ -13,6 +13,8 @@ import {
   ArrowRight,
   Flame,
   Loader2,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -159,14 +161,14 @@ const OrderList = memo(function OrderList({
                   className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
                     isMyMempoolOrder
                       ? "bg-white/[0.01] border-white/[0.04] opacity-50"
-                      : "glass-card border-white/[0.10] hover:border-orange-500/30 ring-1 ring-white/[0.04]"
+                      : "glass-card border-white/[0.10] hover:border-primary/30 ring-1 ring-white/[0.04]"
                   }`}
                 >
                   {/* Processing banner */}
                   {acceptingOrderId === mOrder.id && (
-                    <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-orange-500/10 border border-orange-500/20">
-                      <Loader2 className="w-3 h-3 text-orange-400 animate-spin" />
-                      <span className="text-[9px] text-orange-400 font-mono font-bold tracking-wider uppercase">
+                    <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-primary/10 border border-primary/20">
+                      <Loader2 className="w-3 h-3 text-primary animate-spin" />
+                      <span className="text-[9px] text-primary font-mono font-bold tracking-wider uppercase">
                         Accepting...
                       </span>
                     </div>
@@ -183,16 +185,16 @@ const OrderList = memo(function OrderList({
                   {/* Row 1: User + tags on left, timer on right */}
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <div className="w-7 h-7 rounded-lg bg-orange-500/[0.06] flex items-center justify-center shrink-0 text-sm border border-orange-500/20">
-                        <Zap className="w-3.5 h-3.5 text-orange-400" />
+                      <div className="w-7 h-7 rounded-lg bg-primary/[0.06] flex items-center justify-center shrink-0 text-sm border border-primary/20">
+                        <Zap className="w-3.5 h-3.5 text-primary" />
                       </div>
                       <span className="text-xs font-medium text-white truncate">
                         {mOrder.creator_username || `#${mOrder.order_number}`}
                       </span>
-                      <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-orange-500/10 border-orange-500/20 text-orange-400">
+                      <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-primary/10 border-primary/20 text-primary">
                         SEND
                       </span>
-                      <span className="flex items-center gap-0.5 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-orange-500/10 border-orange-500/20 text-orange-400">
+                      <span className="flex items-center gap-0.5 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-primary/10 border-primary/20 text-primary">
                         <Zap className="w-2.5 h-2.5" />
                         PRIORITY
                       </span>
@@ -205,7 +207,7 @@ const OrderList = memo(function OrderList({
                     {/* Timer */}
                     <div
                       className={`flex items-center gap-1 text-sm font-bold font-mono tabular-nums shrink-0 ml-auto ${
-                        liveExpiry <= 120 ? "text-red-400" : "text-orange-400"
+                        liveExpiry <= 120 ? "text-red-400" : "text-primary"
                       }`}
                     >
                       {liveExpiry <= 0 ? "Expired" : liveExpiry >= 3600 ? `${Math.floor(liveExpiry / 3600)}h ${Math.floor((liveExpiry % 3600) / 60)}m` : liveExpiry >= 60 ? `${Math.floor(liveExpiry / 60)}m ${liveExpiry % 60}s` : `${liveExpiry}s`}
@@ -216,10 +218,10 @@ const OrderList = memo(function OrderList({
                   {/* Warning banner when under 5 minutes */}
                   {liveExpiry > 0 && liveExpiry <= 300 && (
                     <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-1 ${
-                      liveExpiry <= 120 ? 'bg-red-500/10 border border-red-500/20' : 'bg-orange-500/10 border border-orange-500/20'
+                      liveExpiry <= 120 ? 'bg-red-500/10 border border-red-500/20' : 'bg-primary/10 border border-primary/20'
                     }`}>
                       <span className="text-xs shrink-0">🔥</span>
-                      <span className={`text-[10px] font-bold ${liveExpiry <= 120 ? 'text-red-400' : 'text-orange-400'}`}>
+                      <span className={`text-[10px] font-bold ${liveExpiry <= 120 ? 'text-red-400' : 'text-primary'}`}>
                         {liveExpiry <= 120 ? 'Expiring soon! Act now' : `Expires in ${Math.floor(liveExpiry / 60)}m ${liveExpiry % 60}s`}
                       </span>
                     </div>
@@ -231,7 +233,7 @@ const OrderList = memo(function OrderList({
                       {Math.round(amount).toLocaleString()} USDC
                     </span>
                     <ArrowRight className="w-3 h-3 text-white/20" />
-                    <span className="text-sm font-bold text-orange-400 tabular-nums">
+                    <span className="text-sm font-bold text-primary tabular-nums">
                       {fiatTotal.toLocaleString()} AED
                     </span>
                     {yourCut > 0 && (
@@ -247,7 +249,7 @@ const OrderList = memo(function OrderList({
                       @ {livePrice}
                     </span>
                     {livePremiumPct > 0 && (
-                      <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400">
+                      <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">
                         +{livePremiumPct.toFixed(2)}%
                       </span>
                     )}
@@ -258,8 +260,8 @@ const OrderList = memo(function OrderList({
                         disabled={acceptingOrderId === mOrder.id}
                         className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 flex items-center gap-1 ${
                           acceptingOrderId === mOrder.id
-                            ? 'bg-orange-500/50 text-black/60 cursor-wait'
-                            : 'bg-orange-500 text-black hover:bg-orange-400'
+                            ? 'bg-primary/50 text-black/60 cursor-wait'
+                            : 'bg-primary text-black hover:bg-primary'
                         }`}
                       >
                         {acceptingOrderId === mOrder.id ? (
@@ -310,7 +312,7 @@ const OrderList = memo(function OrderList({
                   isMyOwnOrder
                     ? "bg-white/[0.01] border-white/[0.04] opacity-50"
                     : isMineable
-                      ? "glass-card border-white/[0.10] hover:border-orange-500/30 ring-1 ring-white/[0.04]"
+                      ? "glass-card border-white/[0.10] hover:border-primary/30 ring-1 ring-white/[0.04]"
                       : isHighPremium
                         ? "glass-card border-white/[0.08] hover:border-white/[0.12]"
                         : "glass-card hover:border-white/[0.08]"
@@ -318,9 +320,9 @@ const OrderList = memo(function OrderList({
               >
                 {/* Processing banner */}
                 {acceptingOrderId === order.id && (
-                  <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-orange-500/10 border border-orange-500/20">
-                    <Loader2 className="w-3 h-3 text-orange-400 animate-spin" />
-                    <span className="text-[9px] text-orange-400 font-mono font-bold tracking-wider uppercase">
+                  <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-primary/10 border border-primary/20">
+                    <Loader2 className="w-3 h-3 text-primary animate-spin" />
+                    <span className="text-[9px] text-primary font-mono font-bold tracking-wider uppercase">
                       Accepting...
                     </span>
                   </div>
@@ -346,7 +348,7 @@ const OrderList = memo(function OrderList({
                     <span
                       className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
                         order.orderType === "buy"
-                          ? "bg-orange-500/10 border-orange-500/20 text-orange-400"
+                          ? "bg-primary/10 border-primary/20 text-primary"
                           : "bg-white/[0.06] border-white/[0.08] text-white/50"
                       }`}
                     >
@@ -356,7 +358,7 @@ const OrderList = memo(function OrderList({
                       <span
                         className={`flex items-center gap-0.5 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
                           order.spreadPreference === "fastest"
-                            ? "bg-orange-500/10 border-orange-500/20 text-orange-400"
+                            ? "bg-primary/10 border-primary/20 text-primary"
                             : order.spreadPreference === "cheap"
                               ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                               : "bg-blue-500/10 border-blue-500/20 text-blue-400"
@@ -398,7 +400,7 @@ const OrderList = memo(function OrderList({
                       </span>
                     )}
                     {order.hasMessages && order.unreadCount > 0 && (
-                      <span className="px-1 py-0.5 bg-orange-500 text-black text-[9px] font-bold rounded">
+                      <span className="px-1 py-0.5 bg-primary text-black text-[9px] font-bold rounded">
                         {order.unreadCount}
                       </span>
                     )}
@@ -406,7 +408,7 @@ const OrderList = memo(function OrderList({
                   {/* Timer */}
                   <div
                     className={`flex items-center gap-1 text-sm font-bold font-mono tabular-nums shrink-0 ml-auto ${
-                      order.expiresIn <= 120 ? "text-red-400" : "text-orange-400"
+                      order.expiresIn <= 120 ? "text-red-400" : "text-primary"
                     }`}
                   >
                     {order.expiresIn <= 0 ? "Expired" : order.expiresIn >= 3600 ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m` : order.expiresIn >= 60 ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s` : `${order.expiresIn}s`}
@@ -421,7 +423,7 @@ const OrderList = memo(function OrderList({
                     {order.fromCurrency}
                   </span>
                   <ArrowRight className="w-3 h-3 text-white/20" />
-                  <span className="text-sm font-bold text-orange-400 tabular-nums">
+                  <span className="text-sm font-bold text-primary tabular-nums">
                     {Math.round(order.total).toLocaleString()}{" "}
                     {order.toCurrency}
                   </span>
@@ -449,7 +451,7 @@ const OrderList = memo(function OrderList({
                         : order.spreadPreference === "best"
                           ? 2.0
                           : 1.5) && (
-                      <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400">
+                      <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">
                         +
                         {(
                           order.protocolFeePercent -
@@ -470,10 +472,10 @@ const OrderList = memo(function OrderList({
                       disabled={acceptingOrderId === order.id}
                       className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 flex items-center gap-1 ${
                         acceptingOrderId === order.id
-                          ? "bg-orange-500/50 text-black/60 cursor-wait"
+                          ? "bg-primary/50 text-black/60 cursor-wait"
                           : isMineable
-                            ? "bg-orange-500 text-black hover:bg-orange-400"
-                            : "bg-orange-500/80 text-black hover:bg-orange-400"
+                            ? "bg-primary text-black hover:bg-primary"
+                            : "bg-primary/80 text-black hover:bg-primary"
                       }`}
                     >
                       {acceptingOrderId === order.id ? (
@@ -516,6 +518,23 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   const setShowOrderFilters = useMerchantStore((s) => s.setShowOrderFilters);
   const orderFilters = useMerchantStore((s) => s.orderFilters);
   const setOrderFilters = useMerchantStore((s) => s.setOrderFilters);
+
+  // Sort dropdown state
+  const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
+  const sortDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(e.target as Node)) {
+        setSortDropdownOpen(false);
+      }
+    };
+    if (sortDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [sortDropdownOpen]);
+
   let displayOrders = [...orders];
 
   if (orderViewFilter === "new" && mempoolOrders.length > 0) {
@@ -643,7 +662,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
 
           <div className="flex items-center gap-1.5">
             <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.02] rounded border border-white/[0.06]">
-              <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-live-dot" />
+              <div className="w-1.5 h-1.5 bg-primary rounded-full animate-live-dot" />
               <span className="text-[9px] text-white/35 font-mono">Live</span>
             </div>
             <button
@@ -715,16 +734,51 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
               className="flex-1 bg-transparent text-[11px] text-white placeholder:text-white/15 outline-none font-mono"
             />
           </div>
-          <select
-            value={pendingSortBy}
-            onChange={(e) => setPendingSortBy(e.target.value as any)}
-            className="text-[9px] font-mono text-white/35 bg-white/[0.02] border border-white/[0.06] rounded-lg px-1.5 py-1.5 outline-none cursor-pointer hover:border-white/[0.10]"
-          >
-            <option value="time">Time</option>
-            <option value="premium">Premium</option>
-            <option value="amount">Size</option>
-            <option value="rating">Rating</option>
-          </select>
+          <div className="relative" ref={sortDropdownRef}>
+            <button
+              onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
+              className="flex items-center gap-1 text-[9px] font-mono text-white/35 bg-white/[0.02] border border-white/[0.06] rounded-lg px-1.5 py-1.5 cursor-pointer hover:border-white/[0.10] transition-colors"
+            >
+              {{ time: "Time", premium: "Premium", amount: "Size", rating: "Rating" }[pendingSortBy]}
+              <ChevronDown className={`w-2.5 h-2.5 transition-transform ${sortDropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+            <AnimatePresence>
+              {sortDropdownOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-full mt-1 z-50 min-w-[100px] bg-[#1a1a1a] border border-white/[0.08] rounded-lg shadow-xl overflow-hidden"
+                >
+                  {([
+                    { value: "time", label: "Time" },
+                    { value: "premium", label: "Premium" },
+                    { value: "amount", label: "Size" },
+                    { value: "rating", label: "Rating" },
+                  ] as const).map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        setPendingSortBy(option.value);
+                        setSortDropdownOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 text-[10px] font-mono transition-colors ${
+                        pendingSortBy === option.value
+                          ? "text-white/70 bg-white/[0.06]"
+                          : "text-white/35 hover:text-white/50 hover:bg-white/[0.04]"
+                      }`}
+                    >
+                      {option.label}
+                      {pendingSortBy === option.value && (
+                        <Check className="w-2.5 h-2.5 text-white/50" />
+                      )}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
         {/* Advanced Filters */}

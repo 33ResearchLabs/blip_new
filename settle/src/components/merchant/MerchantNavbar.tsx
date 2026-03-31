@@ -92,7 +92,7 @@ export function MerchantNavbar({
               {embeddedWalletState === 'unlocked' ? (
                 <Wallet className="w-3.5 h-3.5 text-green-400" />
               ) : embeddedWalletState === 'locked' ? (
-                <Lock className="w-3.5 h-3.5 text-orange-400" />
+                <Lock className="w-3.5 h-3.5 text-primary" />
               ) : (
                 <Wallet className="w-3.5 h-3.5" />
               )}
@@ -106,7 +106,7 @@ export function MerchantNavbar({
                 href="/ops"
                 className={`${pill(activePage === 'ops')} flex items-center gap-1.5`}
               >
-                <Activity className="w-3.5 h-3.5 text-orange-400" />
+                <Activity className="w-3.5 h-3.5 text-primary" />
                 Ops
               </Link>
             )}
@@ -150,7 +150,7 @@ export function MerchantNavbar({
 
             {/* Dropdown menu */}
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-52 rounded-xl border border-white/[0.08] bg-[#111] shadow-2xl shadow-black/60 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150 z-[60]">
+              <div className="absolute right-0 top-full mt-1.5 w-52 rounded-xl border border-white/[0.08] bg-card-solid shadow-2xl shadow-black/60 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150 z-[60]">
                 {/* User info header */}
                 <div className="px-3 py-2.5 border-b border-white/[0.06]">
                   <div className="flex items-center gap-2.5">
@@ -202,7 +202,7 @@ export function MerchantNavbar({
                     <Link
                       href="/ops"
                       onClick={() => setMenuOpen(false)}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-orange-400/70 hover:text-orange-400 hover:bg-orange-500/[0.06] transition-colors"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-primary/70 hover:text-primary hover:bg-primary/[0.06] transition-colors"
                     >
                       <Activity className="w-4 h-4" />
                       Ops Panel

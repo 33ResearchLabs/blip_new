@@ -88,7 +88,7 @@ export default function MerchantProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#060606] flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-6 h-6 text-orange-400/40 animate-spin" />
       </div>
     );
@@ -96,7 +96,7 @@ export default function MerchantProfilePage() {
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-[#060606] flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <p className="text-white/40">{error || 'Profile not found'}</p>
         <button onClick={() => router.back()} className="text-orange-400 text-sm hover:underline">Go back</button>
       </div>
@@ -117,7 +117,7 @@ export default function MerchantProfilePage() {
   ] : [];
 
   return (
-    <div className="min-h-screen bg-[#060606]">
+    <div className="min-h-screen bg-background">
       <div className="max-w-lg mx-auto px-4 py-6">
         {/* Back button */}
         <button

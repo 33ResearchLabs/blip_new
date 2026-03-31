@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, memo } from 'react';
+import { useState, useEffect, useMemo, memo, lazy, Suspense } from 'react';
 import {
   Zap,
   Target,
@@ -12,6 +12,8 @@ import {
   ArrowRightLeft,
 } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { MyOffers } from '@/components/merchant/MyOffers';
+import { ChevronRight, Package } from 'lucide-react';
 
 interface ConfigPanelProps {
   merchantId: string | null;
@@ -98,6 +100,7 @@ export const ConfigPanel = memo(function ConfigPanel({
   const [currentRate, setCurrentRate] = useState<number>(3.67);
   const [priorityFee, setPriorityFee] = useState<number>(0);
   const [showPriorityInput, setShowPriorityInput] = useState(false);
+  const [showOffers, setShowOffers] = useState(false);
 
   useEffect(() => {
     const fetchRate = async () => {
@@ -147,12 +150,12 @@ export const ConfigPanel = memo(function ConfigPanel({
         <div>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-1.5">
-              <ArrowRightLeft className="w-3.5 h-3.5 text-orange-400/60" />
+              <ArrowRightLeft className="w-3.5 h-3.5 text-primary/60" />
               <span className="text-[11px] font-bold text-white/50 uppercase tracking-wider">Amount</span>
             </div>
             <button
               onClick={() => setOpenTradeForm({ ...openTradeForm, cryptoAmount: maxAmount.toFixed(0) })}
-              className="text-[10px] text-orange-400/70 hover:text-orange-400 font-mono font-bold transition-colors px-1.5 py-0.5 rounded bg-orange-500/[0.06] hover:bg-orange-500/10"
+              className="text-[10px] text-primary/70 hover:text-primary font-mono font-bold transition-colors px-1.5 py-0.5 rounded bg-primary/[0.06] hover:bg-primary/10"
             >
               MAX {maxAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
             </button>
@@ -163,7 +166,7 @@ export const ConfigPanel = memo(function ConfigPanel({
               value={openTradeForm.cryptoAmount}
               onChange={(e) => setOpenTradeForm({ ...openTradeForm, cryptoAmount: e.target.value })}
               placeholder="0"
-              className="w-full bg-white/[0.03] border border-white/[0.08] rounded-xl px-4 py-3 text-xl font-bold text-white placeholder:text-white/10 outline-none focus:border-orange-500/30 focus:bg-white/[0.04] transition-all font-mono tabular-nums"
+              className="w-full bg-white/[0.03] border border-white/[0.08] rounded-xl px-4 py-3 text-xl font-bold text-white placeholder:text-white/10 outline-none focus:border-primary/30 focus:bg-white/[0.04] transition-all font-mono tabular-nums"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-white/25 font-mono">USDT</span>
           </div>
@@ -205,15 +208,15 @@ export const ConfigPanel = memo(function ConfigPanel({
                   onClick={() => setOpenTradeForm({ ...openTradeForm, spreadPreference: key })}
                   className={`flex-1 py-2 px-1.5 rounded-xl transition-all border text-center ${
                     isSelected
-                      ? 'bg-orange-500/[0.08] border-orange-500/20'
+                      ? 'bg-primary/[0.08] border-primary/20'
                       : 'bg-white/[0.02] hover:bg-white/[0.04] border-white/[0.04]'
                   }`}
                 >
                   <div className="flex items-center justify-center gap-1 mb-0.5">
-                    <TierIcon className={`w-3 h-3 ${isSelected ? 'text-orange-400' : 'text-white/20'}`} />
+                    <TierIcon className={`w-3 h-3 ${isSelected ? 'text-primary' : 'text-white/20'}`} />
                     <span className={`text-[10px] font-bold ${isSelected ? 'text-white' : 'text-white/35'}`}>{t.label}</span>
                   </div>
-                  <div className={`text-[11px] font-black font-mono tabular-nums ${isSelected ? 'text-orange-400' : 'text-white/25'}`}>
+                  <div className={`text-[11px] font-black font-mono tabular-nums ${isSelected ? 'text-primary' : 'text-white/25'}`}>
                     +{t.base}%
                   </div>
                 </button>
@@ -226,12 +229,12 @@ export const ConfigPanel = memo(function ConfigPanel({
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-[10px] text-white/30 font-mono uppercase tracking-wider font-bold flex items-center gap-1">
-              <Flame className="w-3 h-3 text-orange-400/40" />
+              <Flame className="w-3 h-3 text-primary/40" />
               Boost
             </label>
             <button
               onClick={() => setShowPriorityInput(!showPriorityInput)}
-              className="text-[9px] text-orange-400/50 hover:text-orange-400 font-mono font-bold transition-colors"
+              className="text-[9px] text-primary/50 hover:text-primary font-mono font-bold transition-colors"
             >
               {showPriorityInput ? 'hide' : 'manual'}
             </button>
@@ -275,7 +278,7 @@ export const ConfigPanel = memo(function ConfigPanel({
             <div className="mt-1.5 rounded-xl bg-white/[0.02] border border-white/[0.04] p-1.5">
               <div className="flex items-center justify-between px-1 mb-0.5">
                 <span className="text-[9px] text-white/15 font-mono font-bold">DECAY</span>
-                <span className="text-[9px] text-orange-400/50 font-mono font-bold">{priorityFee}% → 0%</span>
+                <span className="text-[9px] text-primary/50 font-mono font-bold">{priorityFee}% → 0%</span>
               </div>
               <DecayChart maxFee={priorityFee} />
             </div>
@@ -290,7 +293,8 @@ export const ConfigPanel = memo(function ConfigPanel({
               onCreateOrder('buy', priorityFee);
             }}
             disabled={isDisabled}
-            className="flex-1 py-3 rounded-xl bg-gradient-to-b from-orange-500 to-orange-600 text-black font-bold hover:from-orange-400 hover:to-orange-500 transition-all disabled:opacity-20 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5 shadow-[0_2px_12px_rgba(249,115,22,0.15)]"
+            className="flex-1 py-3 rounded-xl text-black font-bold transition-all disabled:opacity-20 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5"
+            style={{ backgroundColor: 'var(--primary)', boxShadow: '0 2px 12px var(--primary-dim)' }}
           >
             {isCreatingTrade && openTradeForm.tradeType === 'buy' ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -329,6 +333,25 @@ export const ConfigPanel = memo(function ConfigPanel({
           <div className="flex items-center justify-between px-1 text-[9px] font-mono text-white/20">
             <span>+{pricing.totalSpread.toFixed(1)}% spread</span>
             <span className="tabular-nums">B {pricing.buyRate.toFixed(4)} · S {pricing.sellRate.toFixed(4)}</span>
+          </div>
+        )}
+
+        {/* My Offers Toggle */}
+        <button
+          onClick={() => setShowOffers(!showOffers)}
+          className="w-full flex items-center justify-between px-3 py-2.5 mt-1 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] transition-all"
+        >
+          <div className="flex items-center gap-2">
+            <Package className="w-4 h-4 text-primary/60" />
+            <span className="text-[11px] font-semibold text-white/70">My Offers</span>
+          </div>
+          <ChevronRight className={`w-4 h-4 text-white/30 transition-transform duration-200 ${showOffers ? 'rotate-90' : ''}`} />
+        </button>
+
+        {/* My Offers Panel (inline) */}
+        {showOffers && merchantId && (
+          <div className="mt-1 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2 overflow-y-auto max-h-[400px]">
+            <MyOffers merchantId={merchantId} />
           </div>
         )}
       </div>

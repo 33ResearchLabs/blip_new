@@ -321,6 +321,8 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
         isOpen={showTransactionHistory}
         onClose={() => setShowTransactionHistory(false)}
         merchantId={merchantId || ""}
+        orders={orders}
+        effectiveBalance={effectiveBalance}
       />
       <PaymentMethodModal
         isOpen={showPaymentMethods}

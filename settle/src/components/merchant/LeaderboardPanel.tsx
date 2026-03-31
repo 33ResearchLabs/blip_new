@@ -200,8 +200,8 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
                     ? `$${(entry.totalVolume / 1000).toFixed(1)}k`
                     : `$${Math.round(entry.totalVolume)}`}
                 </span>
-                <span className="w-11 text-right flex items-center justify-end gap-0.5 text-orange-400/70 shrink-0">
-                  <Star className="w-3 h-3 fill-orange-400/60 text-orange-400/60" />
+                <span className="w-11 text-right flex items-center justify-end gap-0.5 text-primary/70 shrink-0">
+                  <Star className="w-3 h-3 fill-orange-400/60 text-primary/60" />
                   {entry.rating.toFixed(1)}
                 </span>
               </div>

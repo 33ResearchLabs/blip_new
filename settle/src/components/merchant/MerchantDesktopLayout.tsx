@@ -17,7 +17,6 @@ import { CompletedOrdersPanel } from "@/components/merchant/CompletedOrdersPanel
 import { NotificationsPanel } from "@/components/merchant/NotificationsPanel";
 import { DirectChatView } from "@/components/merchant/DirectChatView";
 import { MerchantChatTabs } from "@/components/merchant/MerchantChatTabs";
-import { MyOffers } from "@/components/merchant/MyOffers";
 
 export interface MerchantDesktopLayoutProps {
   isWideScreen: boolean;
@@ -116,7 +115,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
           maxSize={isWideScreen ? "30%" : "35%"}
           id="left"
         >
-          <div className="flex flex-col h-full bg-[#060606] overflow-y-auto p-2 gap-2 scrollbar-thin scrollbar-thumb-white/10">
+          <div className="flex flex-col h-full bg-background overflow-y-auto p-2 gap-2 scrollbar-thin scrollbar-thumb-white/10">
             <div
               className="glass-card rounded-xl overflow-hidden flex-shrink-0 border border-white/[0.06]"
               style={{ minHeight: "220px" }}
@@ -135,7 +134,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 onOpenCorridor={() => window.open("/merchant/mempool", "_blank")}
               />
             </div>
-            <div className="glass-card rounded-xl overflow-hidden flex-shrink-0 border border-white/[0.06]" style={{ minHeight: "280px" }}>
+            <div className="glass-card rounded-xl overflow-hidden flex-1 min-h-0 border border-white/[0.06]">
               <ConfigPanel
                 merchantId={merchantId}
                 merchantInfo={merchantInfo}
@@ -147,14 +146,6 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 refreshBalance={refreshBalance}
               />
             </div>
-            {merchantId && (
-              <div className="glass-card rounded-xl overflow-hidden flex-shrink-0 border border-white/[0.06]">
-                <MyOffers
-                  merchantId={merchantId}
-                  onCreateOffer={() => {}}
-                />
-              </div>
-            )}
           </div>
         </Panel>
         <PanelResizeHandle className="w-[3px]" />
@@ -164,7 +155,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
           maxSize={isWideScreen ? "35%" : "40%"}
           id="center-left"
         >
-          <div className="flex flex-col h-full bg-black">
+          <div className="flex flex-col h-full bg-background">
             {isWideScreen ? (
               <PendingOrdersPanel
                 orders={pendingOrders}
@@ -215,7 +206,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
           maxSize={isWideScreen ? "32%" : "40%"}
           id="center-right"
         >
-          <div className="flex flex-col h-full bg-black">
+          <div className="flex flex-col h-full bg-background">
             <div
               className={`flex flex-col border-b border-white/[0.04] transition-all duration-200 ${inProgressCollapsed ? "" : "flex-1 min-h-0"}`}
             >
@@ -239,8 +230,11 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 onCollapseChange={setCompletedCollapsed}
               />
             </div>
+            {!isWideScreen && activityCollapsed && inProgressCollapsed && completedCollapsed && (
+              <div className="flex-1" />
+            )}
             {!isWideScreen && (
-              <div className="flex-1 flex flex-col min-h-0">
+              <div className={`flex flex-col min-h-0 ${activityCollapsed ? '' : 'flex-1'}`}>
                 <ActivityPanel
                   merchantId={merchantId}
                   completedOrders={completedOrders}
@@ -270,7 +264,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
               maxSize="30%"
               id="transactions"
             >
-              <div className="flex flex-col h-full bg-black">
+              <div className="flex flex-col h-full bg-background">
                 <div
                   className={`flex flex-col border-b border-white/[0.04] transition-all duration-200 ${leaderboardCollapsed ? "" : "flex-1 min-h-0"}`}
                 >
@@ -281,6 +275,9 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                     onCollapseChange={setLeaderboardCollapsed}
                   />
                 </div>
+                {activityCollapsed && leaderboardCollapsed && (
+                  <div className="flex-1" />
+                )}
                 <div
                   className={`flex flex-col transition-all duration-200 ${activityCollapsed ? "" : "flex-1 min-h-0"}`}
                 >
@@ -312,7 +309,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
           maxSize={isWideScreen ? "30%" : "35%"}
           id="right"
         >
-          <div className="flex flex-col h-full bg-[#060606] overflow-hidden">
+          <div className="flex flex-col h-full bg-background overflow-hidden">
             <NotificationsPanel
               notifications={notifications}
               onMarkRead={markNotificationRead}

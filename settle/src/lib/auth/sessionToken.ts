@@ -184,3 +184,29 @@ export const REFRESH_COOKIE_OPTIONS = {
   path: '/api/auth',
   maxAge: REFRESH_TOKEN_MAX_AGE,
 };
+
+/**
+ * Helper for login endpoints: create DB session + set cookie on response.
+ * Falls back to stateless cookie if DB session creation fails (zero regression).
+ */
+export async function setSessionOnResponse(
+  response: import('next/server').NextResponse,
+  payload: TokenPayload,
+  request?: any
+): Promise<void> {
+  try {
+    const { createSession } = await import('./sessions');
+    const session = await createSession(payload, request);
+    if (session) {
+      response.cookies.set(REFRESH_TOKEN_COOKIE, session.refreshToken, REFRESH_COOKIE_OPTIONS);
+      return;
+    }
+  } catch {
+    // DB not ready or sessions table doesn't exist — fall back to stateless
+  }
+  // Fallback: stateless refresh token (no DB tracking)
+  const refreshToken = generateRefreshToken(payload);
+  if (refreshToken) {
+    response.cookies.set(REFRESH_TOKEN_COOKIE, refreshToken, REFRESH_COOKIE_OPTIONS);
+  }
+}

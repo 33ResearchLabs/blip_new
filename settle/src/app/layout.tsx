@@ -33,13 +33,17 @@ export const viewport: Viewport = {
   themeColor: "#0a0a0a",
 };
 
-// Script to prevent theme flash and register service worker - runs before React hydrates
+// Script to prevent theme flash - runs before React hydrates
 const themeScript = `
   (function() {
     try {
       var theme = localStorage.getItem('theme');
-      if (theme === 'light') {
-        document.documentElement.classList.add('light');
+      var lightThemes = ['light', 'clean'];
+      if (theme && theme !== 'dark') {
+        document.documentElement.setAttribute('data-theme', theme);
+        if (lightThemes.indexOf(theme) !== -1) {
+          document.documentElement.classList.add('light');
+        }
       }
     } catch (e) {}
   })();

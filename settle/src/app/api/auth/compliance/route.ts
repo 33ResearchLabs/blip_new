@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { isComplianceWallet, addComplianceWallet, COMPLIANCE_WALLETS } from '@/lib/solana/v2/config';
 import crypto from 'crypto';
-import { generateSessionToken, generateAccessToken, generateRefreshToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { generateSessionToken, generateAccessToken, setSessionOnResponse } from '@/lib/auth/sessionToken';
 
 // Compliance team authentication (supports both email/password and wallet)
 export async function POST(request: NextRequest) {
@@ -76,7 +76,6 @@ export async function POST(request: NextRequest) {
       const cwPayload = { actorId: member.id, actorType: 'compliance' as const };
       const walletToken = generateSessionToken(cwPayload);
       const cwAccessTk = generateAccessToken(cwPayload);
-      const cwRefreshTk = generateRefreshToken(cwPayload);
 
       const cwResponse = NextResponse.json({
         success: true,
@@ -93,9 +92,7 @@ export async function POST(request: NextRequest) {
           ...(cwAccessTk && { accessToken: cwAccessTk }),
         },
       });
-      if (cwRefreshTk) {
-        cwResponse.cookies.set(REFRESH_TOKEN_COOKIE, cwRefreshTk, REFRESH_COOKIE_OPTIONS);
-      }
+      await setSessionOnResponse(cwResponse, cwPayload, request);
       return cwResponse;
     }
 
@@ -160,7 +157,6 @@ export async function POST(request: NextRequest) {
       const cePayload = { actorId: member.id, actorType: 'compliance' as const };
       const emailToken = generateSessionToken(cePayload);
       const ceAccessTk = generateAccessToken(cePayload);
-      const ceRefreshTk = generateRefreshToken(cePayload);
 
       const ceResponse = NextResponse.json({
         success: true,
@@ -177,9 +173,7 @@ export async function POST(request: NextRequest) {
           ...(ceAccessTk && { accessToken: ceAccessTk }),
         },
       });
-      if (ceRefreshTk) {
-        ceResponse.cookies.set(REFRESH_TOKEN_COOKIE, ceRefreshTk, REFRESH_COOKIE_OPTIONS);
-      }
+      await setSessionOnResponse(ceResponse, cePayload, request);
       return ceResponse;
     }
 

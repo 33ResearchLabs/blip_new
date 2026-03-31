@@ -55,8 +55,8 @@ function LockedPaymentMethodCard({
   return (
     <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <Lock className="w-3.5 h-3.5 text-orange-400" />
-        <span className="text-[11px] text-orange-400 uppercase tracking-wide font-bold">Send AED Here</span>
+        <Lock className="w-3.5 h-3.5 text-primary" />
+        <span className="text-[11px] text-primary uppercase tracking-wide font-bold">Send AED Here</span>
       </div>
       <div className="flex items-center gap-2">
         {typeIcon}
@@ -196,7 +196,7 @@ export function OrderQuickView({
                         href={getBlipscanTradeUrl(selectedOrder.escrowPda)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-xs text-orange-400/70 hover:text-orange-400 transition-colors"
+                        className="flex items-center gap-1 text-xs text-primary/70 hover:text-primary transition-colors"
                       >
                         BlipScan <ExternalLink className="w-3 h-3" />
                       </a>
@@ -375,10 +375,10 @@ export function OrderQuickView({
 
               if (counterpartyRequested) {
                 return (
-                  <div className="mx-5 mb-2 rounded-xl border border-orange-500/30 bg-orange-500/[0.06] p-3">
+                  <div className="mx-5 mb-2 rounded-xl border border-primary/30 bg-primary/[0.06] p-3">
                     <div className="flex items-center gap-2 mb-2">
-                      <X className="w-4 h-4 text-orange-400" />
-                      <span className="text-sm font-semibold text-orange-400">
+                      <X className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-semibold text-primary">
                         Cancel Requested by {cancelBy === 'user' ? 'User' : 'Merchant'}
                       </span>
                     </div>
@@ -393,7 +393,7 @@ export function OrderQuickView({
                           onRespondToCancel?.(selectedOrder.id, true);
                           onClose();
                         }}
-                        className="flex-1 py-2.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 text-orange-400 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                        className="flex-1 py-2.5 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary text-sm font-semibold flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
                       >
                         {isRequestingCancel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                         Agree to Cancel
@@ -416,10 +416,10 @@ export function OrderQuickView({
 
               // I requested — show waiting status
               return (
-                <div className="mx-5 mb-2 rounded-xl border border-orange-500/20 bg-orange-500/[0.04] p-3 flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 text-orange-400 animate-spin" />
+                <div className="mx-5 mb-2 rounded-xl border border-primary/20 bg-primary/[0.04] p-3 flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 text-primary animate-spin" />
                   <div>
-                    <p className="text-sm font-medium text-orange-400">Cancel Request Sent</p>
+                    <p className="text-sm font-medium text-primary">Cancel Request Sent</p>
                     <p className="text-xs text-white/40">Waiting for counterparty to approve</p>
                   </div>
                 </div>
@@ -458,8 +458,8 @@ export function OrderQuickView({
                 };
 
                 // Action button styles
-                const PRIMARY_STYLE = 'bg-orange-500/10 hover:bg-orange-500/20 border-orange-500/30 hover:border-orange-500/40 text-orange-400';
-                const PRIMARY_LOADING = 'bg-orange-500/5 border-orange-500/10 text-orange-400/50 cursor-wait';
+                const PRIMARY_STYLE = 'bg-primary/10 hover:bg-primary/20 border-primary/30 hover:border-primary/40 text-primary';
+                const PRIMARY_LOADING = 'bg-primary/5 border-primary/10 text-primary/50 cursor-wait';
                 const SECONDARY_STYLE = 'bg-red-500/10 hover:bg-red-500/20 border-red-500/30 hover:border-red-500/40 text-red-400';
                 const DISABLED_STYLE = 'bg-white/[0.04] border-white/[0.06] text-white/40 cursor-not-allowed';
 
@@ -484,8 +484,8 @@ export function OrderQuickView({
                         )}
                         {primary.label}
                       </motion.button>
-                    ) : primary.label ? (
-                      /* Disabled informational button (e.g., "Waiting for Payment") */
+                    ) : primary.label && primary.disabledReason && !primary.disabledReason.includes('No actions available') ? (
+                      /* Disabled informational button (e.g., "Waiting for Payment") — hidden for terminal states */
                       <div className={`w-full py-3 rounded-xl border font-medium flex items-center justify-center gap-2 text-sm ${DISABLED_STYLE}`}
                         title={primary.disabledReason}
                       >

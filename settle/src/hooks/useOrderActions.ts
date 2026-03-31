@@ -778,7 +778,6 @@ export function useOrderActions({
           const newOrder = mapDbOrderToUI(data.data, merchantId);
           setOrders((prev: Order[]) => [newOrder, ...prev]);
           playSound('trade_complete');
-          addNotification('order', `Buy order created for ${parseFloat(openTradeForm.cryptoAmount)} USDC`, data.data?.id);
         }
 
         setOpenTradeForm({

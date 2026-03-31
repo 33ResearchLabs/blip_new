@@ -2,7 +2,17 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
-type Theme = 'dark' | 'light';
+export type Theme = 'dark' | 'light' | 'clean' | 'navy' | 'emerald' | 'orchid' | 'gold';
+
+export const THEMES: { id: Theme; label: string; color: string }[] = [
+  { id: 'dark', label: 'Amoled Dark', color: '#F97316' },
+  { id: 'navy', label: 'Midnight Navy', color: '#38BDF8' },
+  { id: 'emerald', label: 'Emerald Matrix', color: '#10B981' },
+  { id: 'orchid', label: 'Cyberpunk Orchid', color: '#E94560' },
+  { id: 'gold', label: 'Slate & Gold', color: '#D4AF37' },
+  { id: 'clean', label: 'Clean White', color: '#3B82F6' },
+  { id: 'light', label: 'Solarized Light', color: '#268BD2' },
+];
 
 interface ThemeContextType {
   theme: Theme;
@@ -13,22 +23,36 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
+const LIGHT_THEMES: Theme[] = ['light', 'clean'];
+
+function applyTheme(theme: Theme) {
+  const el = document.documentElement;
+  el.removeAttribute('data-theme');
+  el.classList.remove('light');
+
+  if (theme === 'dark') {
+    // Default — no attribute needed, :root styles apply
+  } else {
+    el.setAttribute('data-theme', theme);
+    if (LIGHT_THEMES.includes(theme)) {
+      el.classList.add('light');
+    }
+  }
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('dark');
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load saved theme on mount - run immediately to prevent flash
   useEffect(() => {
-    // Add no-transitions class to prevent flash
     document.documentElement.classList.add('no-transitions');
 
     const savedTheme = localStorage.getItem('theme') as Theme | null;
-    if (savedTheme) {
+    if (savedTheme && THEMES.some(t => t.id === savedTheme)) {
       setThemeState(savedTheme);
-      document.documentElement.classList.toggle('light', savedTheme === 'light');
+      applyTheme(savedTheme);
     }
 
-    // Remove no-transitions after a frame to enable smooth transitions
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         document.documentElement.classList.remove('no-transitions');
@@ -40,11 +64,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme);
     localStorage.setItem('theme', newTheme);
-    document.documentElement.classList.toggle('light', newTheme === 'light');
+    applyTheme(newTheme);
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
+    const idx = THEMES.findIndex(t => t.id === theme);
+    const next = THEMES[(idx + 1) % THEMES.length].id;
+    setTheme(next);
   }, [theme, setTheme]);
 
   return (

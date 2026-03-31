@@ -129,7 +129,6 @@ export function useTradeCreation({
       if (data.data) {
         const newOrder = mapDbOrderToUI(data.data, merchantId);
         setOrders((prev: Order[]) => [newOrder, ...prev.filter((o: Order) => o.id !== newOrder.id)]);
-        addNotification('order', `Buy order created for ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC`, data.data?.id);
       }
       setShowOpenTradeModal(false);
       setOpenTradeForm(DEFAULT_FORM);

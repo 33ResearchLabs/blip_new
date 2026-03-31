@@ -288,7 +288,7 @@ export function OrderDetailsPanel({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
         <div className="bg-[#0a0a0a] border border-white/[0.08] rounded-2xl p-8">
-          <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
     );
@@ -359,21 +359,21 @@ export function OrderDetailsPanel({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-[#0a0a0a] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden border border-white/10"
+        className="bg-[#0a0a0a] rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden border border-white/10"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/[0.02]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/[0.02]">
           <div>
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold text-white">{order.order_number}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-white">{order.order_number}</h2>
               <span data-testid="order-status" className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium
                 ${statusConfig.color} ${statusConfig.bgColor}`}>
                 <StatusIcon className="w-3 h-3" />
                 {statusConfig.label}
               </span>
             </div>
-            <p className="text-sm text-white/50 mt-0.5">
+            <p className="text-xs text-white/50 mt-0.5">
               Created {formatDate(order.created_at)}
             </p>
           </div>
@@ -381,42 +381,42 @@ export function OrderDetailsPanel({
             {onOpenChat && (
               <button
                 onClick={handleOpenChat}
-                className="p-2 rounded-lg bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 transition-colors"
+                className="p-2 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
                 title="Open Chat"
               >
-                <MessageCircle className="w-5 h-5" />
+                <MessageCircle className="w-4 h-4" />
               </button>
             )}
             <button
               onClick={onClose}
               className="p-2 rounded-lg hover:bg-white/10 transition-colors"
             >
-              <X className="w-5 h-5 text-white/60" />
+              <X className="w-4 h-4 text-white/60" />
             </button>
           </div>
         </div>
 
         {/* Content */}
-        <div className="overflow-y-auto max-h-[calc(90vh-80px)] p-6 space-y-4">
+        <div className="overflow-y-auto max-h-[calc(90vh-64px)] p-4 space-y-3">
           {/* Trade Summary */}
-          <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
+          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-white/50">Amount</p>
-                <p className="text-2xl font-bold text-white">
+                <p className="text-xs text-white/50">Amount</p>
+                <p className="text-base font-bold text-white">
                   {Number(order.crypto_amount).toLocaleString()} {order.crypto_currency}
                 </p>
-                <p className="text-lg text-white/70">
+                <p className="text-sm text-white/70">
                   {Number(order.fiat_amount).toLocaleString()} {order.fiat_currency}
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-sm text-white/50">Rate</p>
-                <p className="text-lg font-medium text-white">
+                <p className="text-xs text-white/50">Rate</p>
+                <p className="text-sm font-medium text-white">
                   1 {order.crypto_currency} = {Number(order.rate).toFixed(2)} {order.fiat_currency}
                 </p>
-                <span className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-medium
-                  ${order.type === 'buy' ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'}`}>
+                <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium
+                  ${order.type === 'buy' ? 'bg-green-500/20 text-green-400' : 'bg-primary/20 text-primary'}`}>
                   {order.type === 'buy' ? 'Send USDT' : 'Receive USDT'}
                 </span>
               </div>
@@ -424,24 +424,24 @@ export function OrderDetailsPanel({
           </div>
 
           {/* Buyer Info */}
-          <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
-            <h3 className="text-sm font-medium text-white/50 mb-3 flex items-center gap-2">
-              <User className="w-4 h-4" /> Buyer
+          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
+            <h3 className="text-xs font-medium text-white/50 mb-2 flex items-center gap-2">
+              <User className="w-3.5 h-3.5" /> Buyer
             </h3>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-white/5 border border-white/6
-                                flex items-center justify-center text-lg">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6
+                                flex items-center justify-center text-sm">
                   🦊
                 </div>
                 <div>
-                  <p className="font-medium text-white">{buyerName}</p>
-                  <div className="flex items-center gap-1.5 text-sm text-white/50">
+                  <p className="text-sm font-medium text-white">{buyerName}</p>
+                  <div className="flex items-center gap-1.5 text-xs text-white/50">
                     <span>{buyerTrades || 0} trades</span>
                     <span>•</span>
                     <div className="flex items-center gap-0.5">
                       {[1, 2, 3, 4, 5].map((s) => (
-                        <Star key={s} className={`w-3 h-3 ${s <= Math.round(buyerRating || 0) ? 'fill-orange-400 text-orange-400' : 'text-white/15'}`} />
+                        <Star key={s} className={`w-3 h-3 ${s <= Math.round(buyerRating || 0) ? 'fill-orange-400 text-primary' : 'text-white/15'}`} />
                       ))}
                     </div>
                     {buyerRating != null && <span className="text-xs font-mono">{buyerRating.toFixed(1)}</span>}
@@ -451,7 +451,7 @@ export function OrderDetailsPanel({
               {buyerWallet && (
                 <button
                   onClick={() => handleCopy(buyerWallet, 'buyer_wallet')}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-white/[0.04] rounded-lg text-sm text-white/60
+                  className="flex items-center gap-1 px-2 py-1 bg-white/[0.04] rounded-lg text-xs text-white/60
                              hover:bg-white/[0.08] transition-colors border border-white/[0.06]"
                 >
                   <Wallet className="w-4 h-4" />
@@ -463,24 +463,24 @@ export function OrderDetailsPanel({
           </div>
 
           {/* Seller Info */}
-          <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
-            <h3 className="text-sm font-medium text-white/50 mb-3 flex items-center gap-2">
-              <Store className="w-4 h-4" /> Seller
+          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
+            <h3 className="text-xs font-medium text-white/50 mb-2 flex items-center gap-2">
+              <Store className="w-3.5 h-3.5" /> Seller
             </h3>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-white/5 border border-white/6
-                                flex items-center justify-center text-lg">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6
+                                flex items-center justify-center text-sm">
                   🏪
                 </div>
                 <div>
-                  <p className="font-medium text-white">{sellerName}</p>
-                  <div className="flex items-center gap-1.5 text-sm text-white/50">
+                  <p className="text-sm font-medium text-white">{sellerName}</p>
+                  <div className="flex items-center gap-1.5 text-xs text-white/50">
                     <span>{sellerTrades || 0} trades</span>
                     <span>•</span>
                     <div className="flex items-center gap-0.5">
                       {[1, 2, 3, 4, 5].map((s) => (
-                        <Star key={s} className={`w-3 h-3 ${s <= Math.round(sellerRating || 0) ? 'fill-orange-400 text-orange-400' : 'text-white/15'}`} />
+                        <Star key={s} className={`w-3 h-3 ${s <= Math.round(sellerRating || 0) ? 'fill-orange-400 text-primary' : 'text-white/15'}`} />
                       ))}
                     </div>
                     {sellerRating != null && <span className="text-xs font-mono">{sellerRating.toFixed(1)}</span>}
@@ -493,7 +493,7 @@ export function OrderDetailsPanel({
               {sellerWallet && (
                 <button
                   onClick={() => handleCopy(sellerWallet, 'seller_wallet')}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-white/[0.04] rounded-lg text-sm text-white/60
+                  className="flex items-center gap-1 px-2 py-1 bg-white/[0.04] rounded-lg text-xs text-white/60
                              hover:bg-white/[0.08] transition-colors border border-white/[0.06]"
                 >
                   <Wallet className="w-4 h-4" />
@@ -505,10 +505,10 @@ export function OrderDetailsPanel({
           </div>
 
           {/* Bank/Payment Details */}
-          <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
+          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
             <button
               onClick={() => setShowBankDetails(!showBankDetails)}
-              className="w-full flex items-center justify-between text-sm font-medium text-white/50 mb-3"
+              className="w-full flex items-center justify-between text-xs font-medium text-white/50 mb-2"
             >
               <span className="flex items-center gap-2">
                 {order.payment_method === 'bank' ? <Building2 className="w-4 h-4" /> : <MapPin className="w-4 h-4" />}
@@ -593,8 +593,8 @@ export function OrderDetailsPanel({
                     return (
                       <div className="space-y-2 pt-3 border-t border-white/[0.06]">
                         <div className="flex items-center gap-1.5">
-                          <Lock className="w-3 h-3 text-orange-400" />
-                          <p className="text-[11px] text-orange-400 uppercase tracking-wide font-bold">Send AED Here</p>
+                          <Lock className="w-3 h-3 text-primary" />
+                          <p className="text-[11px] text-primary uppercase tracking-wide font-bold">Send AED Here</p>
                         </div>
                         <div className="flex items-center gap-2 mb-1">
                           {typeIcon}
@@ -718,7 +718,7 @@ export function OrderDetailsPanel({
                         href={getBlipscanTradeUrl(order.escrow_pda || order.escrow_trade_pda!)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-orange-400 hover:text-orange-300 transition-colors"
+                        className="text-primary hover:text-orange-300 transition-colors"
                         title="View on Blipscan"
                       >
                         <ExternalLink className="w-4 h-4" />
@@ -818,7 +818,7 @@ export function OrderDetailsPanel({
           <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
             <button
               onClick={() => setShowTimeline(!showTimeline)}
-              className="w-full flex items-center justify-between text-sm font-medium text-white/50 mb-3"
+              className="w-full flex items-center justify-between text-xs font-medium text-white/50 mb-2"
             >
               <span className="flex items-center gap-2">
                 <Clock className="w-4 h-4" /> Timeline
@@ -979,9 +979,9 @@ export function OrderDetailsPanel({
                 ? 'User'
                 : (order.buyer_merchant?.display_name || order.buyer_merchant?.business_name || 'Counterparty');
               return (
-                <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
+                <div className="bg-primary/10 border border-primary/20 rounded-xl p-4">
                   <div className="flex items-center gap-3 mb-3">
-                    <XCircle className="w-5 h-5 text-orange-400" />
+                    <XCircle className="w-5 h-5 text-primary" />
                     <div className="flex-1">
                       <p className="text-sm font-semibold text-white">Cancel Requested by {requesterLabel}</p>
                       <p className="text-xs text-white/50">{order.cancel_request_reason || 'Requested cancellation'}</p>
@@ -994,7 +994,7 @@ export function OrderDetailsPanel({
                         onClose();
                       }}
                       disabled={isRequestingCancel}
-                      className="flex-1 py-2.5 rounded-xl bg-orange-500/20 text-orange-300 text-sm font-semibold hover:bg-orange-500/30 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="flex-1 py-2.5 rounded-xl bg-primary/20 text-orange-300 text-sm font-semibold hover:bg-primary/30 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {isRequestingCancel ? (
                         <div className="w-4 h-4 border-2 border-orange-300/30 border-t-orange-300 rounded-full animate-spin" />
@@ -1018,9 +1018,9 @@ export function OrderDetailsPanel({
 
             // I requested it — show waiting state
             return (
-              <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4">
+              <div className="bg-primary/10 border border-primary/20 rounded-xl p-4">
                 <div className="flex items-center gap-3">
-                  <Clock className="w-5 h-5 text-orange-400 animate-pulse" />
+                  <Clock className="w-5 h-5 text-primary animate-pulse" />
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-white">Cancel Request Sent</p>
                     <p className="text-xs text-white/50">
@@ -1073,12 +1073,12 @@ export function OrderDetailsPanel({
                 onClose();
               }}
               disabled={isRequestingCancel}
-              className="w-full py-2.5 rounded-xl bg-orange-500/10 text-orange-400 text-sm font-medium flex items-center justify-center gap-2
-                         hover:bg-orange-500/20 transition-colors border border-orange-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full py-2.5 rounded-xl bg-primary/10 text-primary text-sm font-medium flex items-center justify-center gap-2
+                         hover:bg-primary/20 transition-colors border border-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isRequestingCancel ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-primary/30 border-t-orange-400 rounded-full animate-spin" />
                   Requesting...
                 </>
               ) : (
@@ -1144,10 +1144,10 @@ export function OrderDetailsPanel({
             };
 
             const variantClasses = {
-              green: 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border-orange-500/30',
+              green: 'bg-primary/20 text-primary hover:bg-primary/30 border-primary/30',
               blue: 'bg-white/[0.06] text-white/80 hover:bg-white/[0.10] border-white/[0.10]',
               red: 'bg-white/[0.04] text-white/50 hover:bg-white/[0.08] border-white/[0.06]',
-              gold: 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border-orange-500/30',
+              gold: 'bg-primary/20 text-primary hover:bg-primary/30 border-primary/30',
             };
 
             return (
@@ -1188,8 +1188,8 @@ export function OrderDetailsPanel({
           {onOpenChat && (
             <button
               onClick={handleOpenChat}
-              className="w-full py-3 rounded-xl bg-orange-500/20 text-orange-400 font-semibold flex items-center justify-center gap-2
-                         hover:bg-orange-500/30 transition-colors border border-orange-500/30"
+              className="w-full py-3 rounded-xl bg-primary/20 text-primary font-semibold flex items-center justify-center gap-2
+                         hover:bg-primary/30 transition-colors border border-primary/30"
             >
               <MessageCircle className="w-5 h-5" />
               Open Chat with {username}

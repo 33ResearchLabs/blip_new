@@ -160,22 +160,27 @@ export async function POST(request: NextRequest) {
         ]);
       }
     } else {
-      // Find best matching offer
-      // When user wants to buy crypto, we need a merchant sell offer (and vice versa)
-      const offerType = type === 'buy' ? 'sell' : 'buy';
-      offer = await findBestOffer(
-        crypto_amount,
-        offerType as OfferType,
-        (payment_method as PaymentMethod) || 'bank',
-        preference || 'best'
+      // ── AUTO-MATCHING DISABLED — manual trading only for now ──
+      // Uncomment below to re-enable offer-based auto-matching
+      //
+      // const offerType = type === 'buy' ? 'sell' : 'buy';
+      // offer = await findBestOffer(
+      //   crypto_amount,
+      //   offerType as OfferType,
+      //   (payment_method as PaymentMethod) || 'bank',
+      //   preference || 'best'
+      // );
+      //
+      // if (!offer) {
+      //   return NextResponse.json(
+      //     { success: false, error: 'No matching offers available' },
+      //     { status: 404 }
+      //   );
+      // }
+      return NextResponse.json(
+        { success: false, error: 'Auto-matching is disabled. Please use merchant-posted orders.' },
+        { status: 400 }
       );
-
-      if (!offer) {
-        return NextResponse.json(
-          { success: false, error: 'No matching offers available' },
-          { status: 404 }
-        );
-      }
     }
 
     // Price guardrail: reject if offer rate deviates too far from corridor reference price

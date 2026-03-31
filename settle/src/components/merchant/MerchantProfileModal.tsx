@@ -219,7 +219,7 @@ export function MerchantProfileModal({
                       <div className="flex items-center gap-1.5 ml-2">
                         <div className="w-16 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-orange-500/60 rounded-full transition-all"
+                            className="h-full bg-primary/60 rounded-full transition-all"
                             style={{ width: `${reputation.progress.progress}%` }}
                           />
                         </div>
@@ -242,14 +242,14 @@ export function MerchantProfileModal({
                 onChange={(e) => setBio(e.target.value.slice(0, 200))}
                 placeholder="Tell traders about yourself..."
                 rows={2}
-                className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-xl text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-orange-500/30 resize-none transition-colors"
+                className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-xl text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-primary/30 resize-none transition-colors"
               />
               <div className="flex items-center justify-between mt-1.5">
                 <span className="text-[10px] text-white/20 font-mono">{bio.length}/200</span>
                 <button
                   onClick={handleSaveBio}
                   disabled={isSavingBio || bio === (currentBio || '')}
-                  className="px-3 py-1 rounded-lg bg-orange-500/10 border border-orange-500/20 text-[11px] text-orange-400 font-medium hover:bg-orange-500/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
+                  className="px-3 py-1 rounded-lg bg-primary/10 border border-primary/20 text-[11px] text-primary font-medium hover:bg-primary/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
                 >
                   {isSavingBio ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                   Save Bio
@@ -283,13 +283,13 @@ export function MerchantProfileModal({
                   disabled={isUploading}
                   className={`relative aspect-square rounded-full overflow-hidden border-2 transition-all ${
                     selectedPreset === avatarUrl
-                      ? 'border-orange-500 ring-2 ring-orange-500/30'
+                      ? 'border-primary ring-2 ring-orange-500/30'
                       : 'border-white/10 hover:border-white/30'
                   } ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <img src={avatarUrl} alt={`Avatar ${index + 1}`} className="absolute inset-0 w-full h-full object-cover" />
                   {selectedPreset === avatarUrl && !success && (
-                    <div className="absolute inset-0 bg-orange-500/20 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-primary/20 flex items-center justify-center">
                       {isUploading && <Loader2 className="w-6 h-6 text-white animate-spin" />}
                     </div>
                   )}

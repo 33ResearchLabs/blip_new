@@ -97,7 +97,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
                     {order.spreadPreference && (
                       <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
                         order.spreadPreference === 'fastest'
-                          ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
+                          ? 'bg-primary/10 border-primary/20 text-primary'
                           : order.spreadPreference === 'cheap'
                           ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                           : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
@@ -125,7 +125,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
                     ) : (
                       <div className="flex items-center gap-1">
                         <span className={`text-sm font-bold font-mono tabular-nums ${
-                          order.expiresIn <= 120 ? 'text-red-400' : 'text-orange-400'
+                          order.expiresIn <= 120 ? 'text-red-400' : 'text-primary'
                         }`}>
                           {order.expiresIn > 0 ? formatTimeRemaining(order.expiresIn) : 'Expired'}
                         </span>
@@ -138,10 +138,10 @@ const InProgressOrderList = memo(function InProgressOrderList({
                 {/* Warning banner when under 5 minutes */}
                 {order.expiresIn > 0 && order.expiresIn <= 300 && order.minimalStatus !== 'payment_sent' && order.dbOrder?.status !== 'payment_sent' && order.dbOrder?.status !== 'payment_confirmed' && (
                   <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-2 ${
-                    order.expiresIn <= 120 ? 'bg-red-500/10 border border-red-500/20' : 'bg-orange-500/10 border border-orange-500/20'
+                    order.expiresIn <= 120 ? 'bg-red-500/10 border border-red-500/20' : 'bg-primary/10 border border-primary/20'
                   }`}>
                     <span className="text-xs shrink-0">🔥</span>
-                    <span className={`text-[10px] font-bold ${order.expiresIn <= 120 ? 'text-red-400' : 'text-orange-400'}`}>
+                    <span className={`text-[10px] font-bold ${order.expiresIn <= 120 ? 'text-red-400' : 'text-primary'}`}>
                       {order.expiresIn <= 120 ? 'Order expiring soon! Complete action now' : `Order expires in ${formatTimeRemaining(order.expiresIn)}`}
                     </span>
                   </div>
@@ -149,9 +149,9 @@ const InProgressOrderList = memo(function InProgressOrderList({
 
                 {/* Cancel Request Banner on order card */}
                 {order.cancelRequestedBy && (
-                  <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-2 bg-orange-500/10 border border-orange-500/20`}>
-                    <XCircle className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                    <span className="text-[10px] font-bold text-orange-400">
+                  <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-2 bg-primary/10 border border-primary/20`}>
+                    <XCircle className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <span className="text-[10px] font-bold text-primary">
                       Cancel requested — tap to respond
                     </span>
                   </div>
@@ -164,7 +164,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
                       {Math.round(order.amount).toLocaleString()} {order.fromCurrency}
                     </span>
                     <ArrowRight className="w-3 h-3 text-white/20" />
-                    <span className="text-sm font-bold text-orange-400 tabular-nums">
+                    <span className="text-sm font-bold text-primary tabular-nums">
                       {Math.round(order.amount * (order.rate || 3.67)).toLocaleString()} {order.toCurrency || 'AED'}
                     </span>
                   </div>
@@ -180,7 +180,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
                         {premium !== 0 && (
                           <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${
                             premium > 0
-                              ? 'bg-orange-500/10 text-orange-400'
+                              ? 'bg-primary/10 text-primary'
                               : 'bg-white/[0.04] text-white/30'
                           }`}>
                             {premium > 0 ? '+' : ''}{premium.toFixed(2)}%
@@ -217,7 +217,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
                         onSelectOrder(order);
                       }
                     }}
-                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-orange-500 rounded-lg text-[11px] text-white font-bold hover:bg-orange-600 transition-colors"
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-primary rounded-lg text-[11px] text-white font-bold hover:bg-orange-600 transition-colors"
                   >
                     <Zap className="w-3.5 h-3.5" />
                     {nextAction}
@@ -243,7 +243,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
                       if (onOpenChat) onOpenChat(order);
                       else onSelectOrder(order);
                     }}
-                    className="mt-1.5 flex items-center gap-1.5 text-[10px] text-orange-400/80 font-medium hover:text-orange-300 transition-colors w-full"
+                    className="mt-1.5 flex items-center gap-1.5 text-[10px] text-primary/80 font-medium hover:text-orange-300 transition-colors w-full"
                   >
                     <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-live-dot" />
                     {order.unreadCount} new message{order.unreadCount > 1 ? 's' : ''}
@@ -341,7 +341,7 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
                   onClick={() => setStatusFilter(f.value)}
                   className={`text-[9px] font-mono font-medium px-1.5 py-0.5 rounded-full border transition-colors ${
                     isActive
-                      ? 'bg-orange-500/15 border-orange-500/30 text-orange-400'
+                      ? 'bg-primary/15 border-primary/30 text-primary'
                       : 'bg-white/[0.02] border-white/[0.06] text-white/30 hover:text-white/50 hover:border-white/[0.10]'
                   }`}
                 >

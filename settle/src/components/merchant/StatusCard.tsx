@@ -231,14 +231,14 @@ export const StatusCard = memo(function StatusCard({
         <div className="absolute inset-0 shimmer pointer-events-none" />
         <div className="flex items-center gap-4 relative z-10">
           <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-live-dot" />
-            <span className="text-orange-400/80 font-bold tracking-wide">LIVE</span>
+            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-live-dot" />
+            <span className="text-primary/80 font-bold tracking-wide">LIVE</span>
           </div>
           <div className="flex items-center gap-3">
             {reputationTier && (
               <span className="flex items-center gap-0.5">
-                <Shield className="w-2.5 h-2.5 text-orange-400/60" />
-                <span className="text-orange-400/70 font-bold uppercase">{reputationTier.name}</span>
+                <Shield className="w-2.5 h-2.5 text-primary/60" />
+                <span className="text-primary/70 font-bold uppercase">{reputationTier.name}</span>
               </span>
             )}
             <span className="text-white/25">RNK <span className="text-white/70 font-bold">{rank > 0 ? `#${rank}` : '—'}</span></span>
@@ -249,14 +249,14 @@ export const StatusCard = memo(function StatusCard({
         {/* Active toggle */}
         <button
           onClick={onToggleOnline}
-          className={`relative z-10 flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold tracking-wide transition-all border ${
+          className={`relative z-10 flex items-center justify-center w-6 h-6 rounded-full transition-all border ${
             isOnline
-              ? 'bg-orange-500/10 border-orange-500/30 text-orange-400'
+              ? 'bg-primary/10 border-primary/30 text-primary'
               : 'bg-white/[0.03] border-white/[0.08] text-white/30'
           }`}
+          title={isOnline ? 'ACTIVE' : 'OFFLINE'}
         >
-          <Radio className={`w-2.5 h-2.5 ${isOnline ? 'animate-live-dot' : ''}`} />
-          {isOnline ? 'ACTIVE' : 'OFFLINE'}
+          <Radio className={`w-3 h-3 ${isOnline ? 'animate-live-dot' : ''}`} />
         </button>
       </div>
 
@@ -264,7 +264,7 @@ export const StatusCard = memo(function StatusCard({
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-3 relative">
         {/* Ambient glow behind amount */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-48 h-24 bg-orange-500/[0.03] rounded-full blur-[60px]" />
+          <div className="w-48 h-24 bg-primary/[0.03] rounded-full blur-[60px]" />
         </div>
 
         {/* USDT Label */}
@@ -285,12 +285,12 @@ export const StatusCard = memo(function StatusCard({
 
         {/* 24h Earnings badge */}
         {todayEarnings !== 0 && (
-          <div className="mt-2.5 flex items-center gap-1 px-2 py-0.5 bg-orange-500/[0.06] border border-orange-500/15 rounded-full relative z-10">
-            <TrendingUp className="w-2.5 h-2.5 text-orange-400" />
-            <span className="text-[10px] font-bold text-orange-400 font-mono tabular-nums">
+          <div className="mt-2.5 flex items-center gap-1 px-2 py-0.5 bg-primary/[0.06] border border-primary/15 rounded-full relative z-10">
+            <TrendingUp className="w-2.5 h-2.5 text-primary" />
+            <span className="text-[10px] font-bold text-primary font-mono tabular-nums">
               {todayEarnings > 0 ? '+' : ''}{todayEarnings.toFixed(2)} USDT
             </span>
-            <span className="text-[9px] text-orange-400/50 font-mono">24h</span>
+            <span className="text-[9px] text-primary/50 font-mono">24h</span>
           </div>
         )}
 
@@ -349,9 +349,9 @@ export const StatusCard = memo(function StatusCard({
 
         {/* Success toast */}
         {conversionSuccess && (
-          <div className="flex items-center gap-1.5 py-1 px-2 bg-orange-500/[0.06] border border-orange-500/20 rounded">
-            <Check className="w-3 h-3 text-orange-400" />
-            <span className="text-[9px] text-orange-400">{conversionSuccess}</span>
+          <div className="flex items-center gap-1.5 py-1 px-2 bg-primary/[0.06] border border-primary/20 rounded">
+            <Check className="w-3 h-3 text-primary" />
+            <span className="text-[9px] text-primary">{conversionSuccess}</span>
           </div>
         )}
 
@@ -367,7 +367,7 @@ export const StatusCard = memo(function StatusCard({
                     corridor.confidence === 'medium' ? 'bg-white/[0.03] text-white/35' :
                     'bg-white/[0.02] text-white/20'
                   }`}>
-                    <span className={`w-1 h-1 rounded-full ${corridor.confidence === 'high' ? 'bg-orange-400 animate-live-dot' : 'bg-white/20'}`} />
+                    <span className={`w-1 h-1 rounded-full ${corridor.confidence === 'high' ? 'bg-primary animate-live-dot' : 'bg-white/20'}`} />
                     {corridor.confidence === 'high' ? 'LIVE' : corridor.confidence === 'medium' ? 'CALC' : 'EST'}
                   </span>
                 )}
@@ -381,7 +381,7 @@ export const StatusCard = memo(function StatusCard({
               {!showRefPriceInput && (
                 <button
                   onClick={() => setShowRefPriceInput(true)}
-                  className="px-2 py-1 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-orange-500/20 text-[9px] text-orange-400 font-bold transition-all"
+                  className="px-2 py-1 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-primary/20 text-[9px] text-primary font-bold transition-all"
                 >
                   {customRefPrice ? `${customRefPrice.toFixed(4)}` : 'SET PRICE'}
                 </button>
@@ -408,7 +408,7 @@ export const StatusCard = memo(function StatusCard({
                     setShowRefPriceInput(false);
                   }
                 }}
-                className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] border border-orange-500/30 rounded text-[9px] text-orange-400 font-medium"
+                className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] border border-primary/30 rounded text-[9px] text-primary font-medium"
               >
                 Set
               </button>
