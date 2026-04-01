@@ -287,12 +287,12 @@ export const WalletScreen = ({
             className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-end justify-center">
             <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="w-full max-w-sm bg-[#0d0d0d] rounded-t-3xl border-t border-white/[0.08] p-6">
+              className="w-full max-w-sm bg-white rounded-t-3xl border-t border-black/[0.06] p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-black text-white">Send</h3>
+                <h3 className="text-lg font-black text-black">Send</h3>
                 <button onClick={() => { setShowSend(false); setSendError(''); setSendSuccess(''); }}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5">
-                  <X size={16} className="text-neutral-400" />
+                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-black/5">
+                  <X size={16} className="text-neutral-500" />
                 </button>
               </div>
 
@@ -302,8 +302,8 @@ export const WalletScreen = ({
                   <button key={t} onClick={() => setSendToken(t)}
                     className="flex-1 py-2 rounded-xl text-sm font-bold"
                     style={sendToken === t
-                      ? { background: 'rgba(124,58,237,0.2)', border: '1px solid rgba(124,58,237,0.4)', color: '#a78bfa' }
-                      : { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)' }}>
+                      ? { background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.3)', color: '#7c3aed' }
+                      : { background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', color: 'rgba(0,0,0,0.4)' }}>
                     {t}
                   </button>
                 ))}
@@ -312,12 +312,12 @@ export const WalletScreen = ({
               <input
                 type="text" placeholder="Recipient address" value={sendTo}
                 onChange={e => setSendTo(e.target.value)}
-                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-600 mb-3 outline-none focus:border-purple-500/40"
+                className="w-full bg-black/[0.04] border border-black/[0.08] rounded-xl px-4 py-3 text-sm text-black placeholder-neutral-400 mb-3 outline-none focus:border-purple-500/40"
               />
               <input
                 type="number" placeholder="Amount" value={sendAmount}
                 onChange={e => setSendAmount(e.target.value)}
-                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-600 mb-3 outline-none focus:border-purple-500/40"
+                className="w-full bg-black/[0.04] border border-black/[0.08] rounded-xl px-4 py-3 text-sm text-black placeholder-neutral-400 mb-3 outline-none focus:border-purple-500/40"
               />
 
               <p className="text-xs text-neutral-500 mb-4">
@@ -346,12 +346,12 @@ export const WalletScreen = ({
             className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-end justify-center">
             <motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="w-full max-w-sm bg-[#0d0d0d] rounded-t-3xl border-t border-white/[0.08] p-6">
+              className="w-full max-w-sm bg-white rounded-t-3xl border-t border-black/[0.06] p-6">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-black text-white">Receive</h3>
+                <h3 className="text-lg font-black text-black">Receive</h3>
                 <button onClick={() => setShowReceive(false)}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5">
-                  <X size={16} className="text-neutral-400" />
+                  className="w-8 h-8 rounded-lg flex items-center justify-center bg-black/5">
+                  <X size={16} className="text-neutral-500" />
                 </button>
               </div>
 
@@ -359,16 +359,16 @@ export const WalletScreen = ({
                 Send USDT or SOL to this address on Solana (Devnet)
               </p>
 
-              <div className="bg-white/[0.03] border border-white/[0.08] rounded-2xl p-4 mb-4">
-                <p className="font-mono text-[12px] text-neutral-300 break-all text-center leading-relaxed">
+              <div className="bg-black/[0.03] border border-black/[0.08] rounded-2xl p-4 mb-4">
+                <p className="font-mono text-[12px] text-neutral-600 break-all text-center leading-relaxed">
                   {solanaWallet.walletAddress}
                 </p>
               </div>
 
               <motion.button whileTap={{ scale: 0.97 }} onClick={handleCopy}
                 className="w-full py-3.5 rounded-2xl text-[15px] font-bold flex items-center justify-center gap-2"
-                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff' }}>
-                {copied ? <><Check size={16} className="text-emerald-400" /> Copied!</> : <><Copy size={16} /> Copy Address</>}
+                style={{ background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.1)', color: '#000' }}>
+                {copied ? <><Check size={16} className="text-emerald-500" /> Copied!</> : <><Copy size={16} /> Copy Address</>}
               </motion.button>
             </motion.div>
           </motion.div>

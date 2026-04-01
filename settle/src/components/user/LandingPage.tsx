@@ -25,20 +25,20 @@ export function LandingPage({
   const submit = () => authMode === 'login' ? handleUserLogin() : handleUserRegister();
 
   return (
-    <div className="min-h-screen bg-[#060606] text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-white text-black flex flex-col items-center justify-center p-4 relative overflow-hidden">
       {/* Ambient background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-orange-500/[0.03] rounded-full blur-[150px]" />
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-white/[0.01] rounded-full blur-[200px]" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-orange-500/[0.05] rounded-full blur-[150px]" />
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] bg-black/[0.02] rounded-full blur-[200px]" />
       </div>
 
       <div className="w-full max-w-sm relative z-10">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2.5 mb-4">
-            <Zap className="w-7 h-7 text-white fill-white" />
+            <Zap className="w-7 h-7 text-black fill-black" />
             <span className="text-[22px] leading-none">
-              <span className="font-bold text-white">Blip</span>{' '}
-              <span className="italic text-white/90">money</span>
+              <span className="font-bold text-black">Blip</span>{' '}
+              <span className="italic text-black/90">money</span>
             </span>
           </div>
           <h1 className="text-xl font-bold mb-2">Welcome</h1>
@@ -46,11 +46,11 @@ export function LandingPage({
         </div>
 
         {/* Tabs */}
-        <div className="flex mb-4 bg-white/[0.03] rounded-xl p-1">
+        <div className="flex mb-4 bg-black/[0.04] rounded-xl p-1">
           <button
             onClick={() => { setAuthMode('login'); setLoginError(''); }}
             className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              authMode === 'login' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+              authMode === 'login' ? 'bg-white text-black' : 'text-gray-400 hover:text-black'
             }`}
           >
             Sign In
@@ -58,7 +58,7 @@ export function LandingPage({
           <button
             onClick={() => { setAuthMode('register'); setLoginError(''); }}
             className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              authMode === 'register' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'
+              authMode === 'register' ? 'bg-white text-black' : 'text-gray-400 hover:text-black'
             }`}
           >
             Create Account
@@ -138,9 +138,9 @@ export function LandingPage({
         </div>
 
         <div className="mt-8 text-center space-y-2">
-          <p className="text-[10px] text-white/70 font-mono">Blip Money v1.0</p>
-          <div className="flex items-center justify-center gap-3 text-[10px] text-white/70">
-            <Link href="/merchant" className="hover:text-white transition-colors">Merchant Portal</Link>
+          <p className="text-[10px] text-black/50 font-mono">Blip Money v1.0</p>
+          <div className="flex items-center justify-center gap-3 text-[10px] text-black/50">
+            <Link href="/merchant" className="hover:text-black transition-colors">Merchant Portal</Link>
           </div>
         </div>
       </div>

@@ -39,27 +39,27 @@ export const CashConfirmScreen = ({
 
       <div className="px-5 py-4 flex items-center">
         <button onClick={() => { setScreen("home"); setSelectedOffer(null); }} className="p-2 -ml-2">
-          <ChevronLeft className="w-6 h-6 text-white" />
+          <ChevronLeft className="w-6 h-6 text-black" />
         </button>
-        <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">Confirm Meeting</h1>
+        <h1 className="flex-1 text-center text-[17px] font-semibold text-black pr-8">Confirm Meeting</h1>
       </div>
 
       <div className="flex-1 px-5 overflow-auto">
         {/* Order Summary */}
-        <div className="bg-neutral-900 rounded-2xl p-4 mb-4">
+        <div className="rounded-2xl p-4 mb-4" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[13px] text-neutral-500">You {tradeType === "buy" ? "pay" : "receive"}</span>
+            <span className="text-[13px] text-white/40">You {tradeType === "buy" ? "pay" : "receive"}</span>
             <span className="text-[22px] font-semibold text-white">{'\u062F.\u0625'} {parseFloat(fiatAmount).toLocaleString()}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[13px] text-neutral-500">You {tradeType === "buy" ? "receive" : "sell"}</span>
-            <span className="text-[17px] font-medium text-neutral-400">{amount} USDC</span>
+            <span className="text-[13px] text-white/40">You {tradeType === "buy" ? "receive" : "sell"}</span>
+            <span className="text-[17px] font-medium text-white/50">{amount} USDC</span>
           </div>
         </div>
 
         {/* Merchant Card */}
-        <div className="bg-neutral-900 rounded-2xl p-4 mb-4">
-          <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-3">Meeting with</p>
+        <div className="rounded-2xl p-4 mb-4" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <p className="text-[11px] text-white/40 uppercase tracking-wide mb-3">Meeting with</p>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white text-lg font-semibold">
               {selectedOffer.merchant.display_name.charAt(0)}
@@ -69,17 +69,17 @@ export const CashConfirmScreen = ({
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1">
                   <Star className="w-3 h-3 fill-amber-400 text-white/70" />
-                  <span className="text-[13px] text-neutral-400">{selectedOffer.merchant.rating}</span>
+                  <span className="text-[13px] text-white/50">{selectedOffer.merchant.rating}</span>
                 </div>
-                <span className="text-neutral-600">{'\u00b7'}</span>
-                <span className="text-[13px] text-neutral-400">{selectedOffer.merchant.total_trades} trades</span>
+                <span className="text-white/30">{'\u00b7'}</span>
+                <span className="text-[13px] text-white/50">{selectedOffer.merchant.total_trades} trades</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Location Preview */}
-        <div className="bg-neutral-900 rounded-2xl overflow-hidden mb-4">
+        <div className="rounded-2xl overflow-hidden mb-4" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
           <div className="relative h-36">
             <div className="absolute inset-0 bg-black/30" />
             <div className="absolute inset-0 flex items-center justify-center">
@@ -109,11 +109,11 @@ export const CashConfirmScreen = ({
           <div className="p-4 space-y-3">
             <div>
               <p className="text-[15px] font-medium text-white">{selectedOffer.location_name}</p>
-              <p className="text-[13px] text-neutral-400">{selectedOffer.location_address}</p>
+              <p className="text-[13px] text-white/50">{selectedOffer.location_address}</p>
             </div>
             {selectedOffer.meeting_instructions && (
-              <div className="pt-3 border-t border-neutral-800">
-                <p className="text-[11px] text-neutral-500 uppercase tracking-wide mb-1">Meeting spot</p>
+              <div className="pt-3 border-t border-white/8">
+                <p className="text-[11px] text-white/40 uppercase tracking-wide mb-1">Meeting spot</p>
                 <div className="flex items-start gap-2">
                   <Navigation className="w-4 h-4 text-white flex-shrink-0 mt-0.5" />
                   <p className="text-[13px] text-white">{selectedOffer.meeting_instructions}</p>
@@ -129,7 +129,7 @@ export const CashConfirmScreen = ({
             <Shield className="w-5 h-5 text-white/70 flex-shrink-0 mt-0.5" />
             <div>
               <p className="text-[13px] font-medium text-white/70 mb-1">Safety tips</p>
-              <ul className="text-[12px] text-neutral-400 space-y-1">
+              <ul className="text-[12px] text-white/50 space-y-1">
                 <li>{'\u2022'} Meet in public places only</li>
                 <li>{'\u2022'} Verify the amount before handing over cash</li>
                 <li>{'\u2022'} Keep chat records of your conversation</li>
@@ -151,7 +151,7 @@ export const CashConfirmScreen = ({
         </motion.button>
         <button
           onClick={() => { setScreen("home"); setSelectedOffer(null); }}
-          className="w-full py-3 text-[15px] font-medium text-neutral-500"
+          className="w-full py-3 text-[15px] font-medium text-white/40"
         >
           Cancel
         </button>

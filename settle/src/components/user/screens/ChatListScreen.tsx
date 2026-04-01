@@ -22,15 +22,15 @@ export const ChatListScreen = ({
   setOrders,
   maxW,
 }: ChatListScreenProps) => {
-  const card = { background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' };
+  const card = { background: '#111111', border: '1px solid rgba(255,255,255,0.08)' };
 
   return (
-    <div className="flex flex-col h-dvh overflow-hidden" style={{ background: '#060606' }}>
+    <div className="flex flex-col h-dvh overflow-hidden" style={{ background: '#ffffff' }}>
 
       {/* ── Header ── */}
       <header className="px-5 pt-10 pb-4 shrink-0">
-        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', marginBottom: 4 }}>Inbox</p>
-        <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', color: '#fff', lineHeight: 1 }}>Messages</p>
+        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(0,0,0,0.4)', textTransform: 'uppercase', marginBottom: 4 }}>Inbox</p>
+        <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', color: '#000', lineHeight: 1 }}>Messages</p>
       </header>
 
       {/* ── List ── */}
@@ -38,11 +38,11 @@ export const ChatListScreen = ({
         {orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4"
-              style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
-              <MessageCircle size={22} color="rgba(0,0,0,0.2)" />
+              style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <MessageCircle size={22} color="rgba(255,255,255,0.3)" />
             </div>
-            <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: '#fff', marginBottom: 6 }}>No messages</p>
-            <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>Start a trade to chat with merchants</p>
+            <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: '#000', marginBottom: 6 }}>No messages</p>
+            <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(0,0,0,0.4)' }}>Start a trade to chat with merchants</p>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -59,33 +59,33 @@ export const ChatListScreen = ({
                     setOrders(prev => prev.map(o => o.id === order.id ? { ...o, unreadCount: 0 } : o));
                   }}
                   className="w-full rounded-[18px] p-3.5 flex items-center gap-3 text-left"
-                  style={hasUnread ? { background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.15)' } : card}>
+                  style={hasUnread ? { background: '#111111', border: '1.5px solid rgba(255,255,255,0.2)' } : card}>
                   {/* Avatar */}
                   <div className="relative shrink-0">
                     <div className="w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0"
-                      style={{ background: hasUnread ? '#000' : 'rgba(0,0,0,0.07)' }}>
-                      <span style={{ fontSize: 17, fontWeight: 800, color: hasUnread ? '#fff' : 'rgba(0,0,0,0.5)' }}>{initial}</span>
+                      style={{ background: hasUnread ? '#fff' : 'rgba(255,255,255,0.1)' }}>
+                      <span style={{ fontSize: 17, fontWeight: 800, color: hasUnread ? '#000' : 'rgba(255,255,255,0.5)' }}>{initial}</span>
                     </div>
                     {hasUnread && (
                       <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
-                        style={{ background: '#000', border: '2px solid #ffffff' }}>
-                        <span style={{ fontSize: 8, fontWeight: 800, color: '#fff' }}>{order.unreadCount}</span>
+                        style={{ background: '#fff', border: '2px solid #111111' }}>
+                        <span style={{ fontSize: 8, fontWeight: 800, color: '#000' }}>{order.unreadCount}</span>
                       </div>
                     )}
                   </div>
                   {/* Text */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
-                      <p style={{ fontSize: 14, fontWeight: hasUnread ? 800 : 600, color: '#000', letterSpacing: '-0.01em' }}>
+                      <p style={{ fontSize: 14, fontWeight: hasUnread ? 800 : 600, color: '#fff', letterSpacing: '-0.01em' }}>
                         {order.merchant.name}
                       </p>
-                      <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(0,0,0,0.35)' }}>
+                      <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.35)' }}>
                         {order.lastMessage
                           ? order.lastMessage.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : order.createdAt.toLocaleDateString()}
+                          : order.createdAt.toLocaleDateString('en-GB')}
                       </p>
                     </div>
-                    <p style={{ fontSize: 12, fontWeight: hasUnread ? 600 : 400, color: hasUnread ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <p style={{ fontSize: 12, fontWeight: hasUnread ? 600 : 400, color: hasUnread ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {order.lastMessage
                         ? (order.lastMessage.fromMerchant ? '' : 'You: ') + order.lastMessage.content
                         : order.status === 'complete'
@@ -95,7 +95,7 @@ export const ChatListScreen = ({
                   </div>
                   {/* Active indicator */}
                   {!hasUnread && order.status !== 'complete' && (
-                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'rgba(0,0,0,0.2)' }} />
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'rgba(255,255,255,0.2)' }} />
                   )}
                 </motion.button>
               );

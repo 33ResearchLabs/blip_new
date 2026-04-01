@@ -51,11 +51,11 @@ export interface HomeScreenProps {
 
 // ─── Avatar palettes — premium gradients, no neon ─────────────────────────
 const AVATAR_PALETTES = [
-  { bg: 'linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%)', letter: '#bfdbfe' },
-  { bg: 'linear-gradient(135deg, #78350f 0%, #b45309 100%)', letter: '#fde68a' },
-  { bg: 'linear-gradient(135deg, #3b0764 0%, #6d28d9 100%)', letter: '#ddd6fe' },
-  { bg: 'linear-gradient(135deg, #052e16 0%, #047857 100%)', letter: '#a7f3d0' },
-  { bg: 'linear-gradient(135deg, #4a044e 0%, #9d174d 100%)', letter: '#fecdd3' },
+  { bg: '#111111', letter: '#ffffff' },
+  { bg: '#1a1a1a', letter: '#ffffff' },
+  { bg: '#222222', letter: '#ffffff' },
+  { bg: '#111111', letter: '#ffffff' },
+  { bg: '#1a1a1a', letter: '#ffffff' },
 ];
 
 function formatDate(d: Date) {
@@ -96,7 +96,7 @@ function TxRow({ order, index, onPress, avatarUrl }: { order: Order; index: numb
             style={{
               position: 'absolute', bottom: -2, right: -2,
               width: 10, height: 10, borderRadius: '50%',
-              background: '#fff', border: '2px solid #f8f8f8',
+              background: '#10b981', border: '2px solid #fff',
             }}
           />
         )}
@@ -209,8 +209,8 @@ function WalletBalanceSection({
           </motion.div>
         ) : (
           <div className="flex flex-col items-start gap-4">
-            <p style={{ fontSize: 52, fontWeight: 800, letterSpacing: '-0.04em', color: 'rgba(255,255,255,0.08)', lineHeight: 1 }}>——</p>
-            <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>
+            <p style={{ fontSize: 52, fontWeight: 800, letterSpacing: '-0.04em', color: 'rgba(255,255,255,0.15)', lineHeight: 1 }}>——</p>
+            <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.45)', lineHeight: 1.5 }}>
               {IS_EMBEDDED_WALLET
                 ? embeddedWallet?.state === 'locked' ? 'Unlock your wallet' : 'Set up a wallet to start trading'
                 : 'Connect your Solana wallet to trade'}
@@ -352,7 +352,7 @@ export const HomeScreen = ({
           <div style={{
             position: 'absolute', top: '-20%', left: '-15%',
             width: '65%', height: '65%',
-            background: 'radial-gradient(ellipse, rgba(79,70,229,0.28) 0%, transparent 65%)',
+            background: 'radial-gradient(ellipse, rgba(255,255,255,0.06) 0%, transparent 65%)',
             filter: 'blur(60px)',
           }} />
 
@@ -360,7 +360,7 @@ export const HomeScreen = ({
           <div style={{
             position: 'absolute', bottom: '-15%', right: '-10%',
             width: '60%', height: '60%',
-            background: 'radial-gradient(ellipse, rgba(30,58,138,0.16) 0%, transparent 65%)',
+            background: 'radial-gradient(ellipse, rgba(255,255,255,0.04) 0%, transparent 65%)',
             filter: 'blur(55px)',
           }} />
 
@@ -405,8 +405,8 @@ export const HomeScreen = ({
             <div className="flex items-center gap-3">
               <motion.button whileTap={{ scale: 0.92 }} onClick={() => setScreen('profile')}>
                 <div className="relative w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, #3b0764 0%, #1e3a8a 100%)' }}>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: '#c4b5fd' }}>
+                  style={{ background: '#ffffff' }}>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: '#000' }}>
                     {userName.charAt(0).toUpperCase()}
                   </span>
                   <ConnectionIndicator isConnected={!!userId} />

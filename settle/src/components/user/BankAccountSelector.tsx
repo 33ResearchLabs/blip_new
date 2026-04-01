@@ -126,9 +126,9 @@ export const BankAccountSelector = ({
 
   if (loading) {
     return (
-      <div className="w-full bg-neutral-900 rounded-2xl p-4 flex items-center justify-center gap-2">
-        <Loader2 className="w-4 h-4 animate-spin text-neutral-500" />
-        <span className="text-[13px] text-neutral-500">Loading payment methods...</span>
+      <div className="w-full bg-[#111111] rounded-2xl p-4 flex items-center justify-center gap-2">
+        <Loader2 className="w-4 h-4 animate-spin text-white/40" />
+        <span className="text-[13px] text-white/40">Loading payment methods...</span>
       </div>
     );
   }
@@ -136,8 +136,8 @@ export const BankAccountSelector = ({
   return (
     <div className="w-full">
       <div className="flex items-center gap-2 mb-2">
-        <Building2 className="w-4 h-4 text-neutral-500" />
-        <span className="text-[12px] text-neutral-500 uppercase tracking-wide font-semibold">
+        <Building2 className="w-4 h-4 text-white/40" />
+        <span className="text-[12px] text-white/40 uppercase tracking-wide font-semibold">
           Your Payment Method
         </span>
       </div>
@@ -146,7 +146,7 @@ export const BankAccountSelector = ({
       {accounts.length > 0 && !showAddForm && (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full bg-neutral-900 rounded-xl p-3 flex items-center gap-3 text-left"
+          className="w-full bg-[#111111] rounded-xl p-3 flex items-center gap-3 text-left"
         >
           <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
             <Building2 className="w-4 h-4 text-white/40" />
@@ -157,16 +157,16 @@ export const BankAccountSelector = ({
                 <p className="text-[14px] font-medium text-white truncate">
                   {selected.bank_name}
                 </p>
-                <p className="text-[12px] text-neutral-500 truncate">
+                <p className="text-[12px] text-white/40 truncate">
                   {selected.account_name} &middot; {selected.iban.slice(0, 4)}...{selected.iban.slice(-4)}
                 </p>
               </>
             ) : (
-              <p className="text-[14px] text-neutral-500">Select a payment method</p>
+              <p className="text-[14px] text-white/40">Select a payment method</p>
             )}
           </div>
           <ChevronDown
-            className={`w-4 h-4 text-neutral-500 transition-transform ${expanded ? "rotate-180" : ""}`}
+            className={`w-4 h-4 text-white/40 transition-transform ${expanded ? "rotate-180" : ""}`}
           />
         </button>
       )}
@@ -195,7 +195,7 @@ export const BankAccountSelector = ({
                   className={`w-full flex items-center gap-3 rounded-xl p-3 text-left transition-colors ${
                     isSelected(acc)
                       ? "bg-white/10 border border-white/15"
-                      : "bg-neutral-900/60 hover:bg-neutral-800/60"
+                      : "bg-[#111111]/60 hover:bg-[#1a1a1a]/60"
                   }`}
                 >
                   <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
@@ -205,10 +205,10 @@ export const BankAccountSelector = ({
                     <p className="text-[13px] font-medium text-white truncate">
                       {acc.bank_name}
                       {acc.is_default && (
-                        <span className="ml-1.5 text-[10px] text-neutral-500 font-normal">Default</span>
+                        <span className="ml-1.5 text-[10px] text-white/40 font-normal">Default</span>
                       )}
                     </p>
-                    <p className="text-[11px] text-neutral-500 truncate">
+                    <p className="text-[11px] text-white/40 truncate">
                       {acc.account_name} &middot; {acc.iban}
                     </p>
                   </div>
@@ -223,12 +223,12 @@ export const BankAccountSelector = ({
               {/* Add new button */}
               <button
                 onClick={() => setShowAddForm(true)}
-                className="w-full flex items-center gap-3 rounded-xl p-3 text-left bg-neutral-900/40 hover:bg-neutral-800/40 transition-colors"
+                className="w-full flex items-center gap-3 rounded-xl p-3 text-left bg-[#111111]/40 hover:bg-[#1a1a1a]/40 transition-colors"
               >
                 <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
                   <Plus className="w-3.5 h-3.5 text-white/40" />
                 </div>
-                <span className="text-[13px] text-neutral-400 font-medium">
+                <span className="text-[13px] text-white/50 font-medium">
                   Add New Payment Method
                 </span>
               </button>
@@ -241,14 +241,14 @@ export const BankAccountSelector = ({
       {accounts.length === 0 && !showAddForm && (
         <button
           onClick={() => setShowAddForm(true)}
-          className="w-full bg-neutral-900 rounded-xl p-4 flex items-center gap-3 text-left hover:bg-neutral-800 transition-colors"
+          className="w-full bg-[#111111] rounded-xl p-4 flex items-center gap-3 text-left hover:bg-[#1a1a1a] transition-colors"
         >
           <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
             <Plus className="w-4 h-4 text-white/40" />
           </div>
           <div>
             <p className="text-[14px] font-medium text-white">Add Payment Method</p>
-            <p className="text-[12px] text-neutral-500">
+            <p className="text-[12px] text-white/40">
               Add your bank account so merchant can send you AED
             </p>
           </div>
@@ -262,7 +262,7 @@ export const BankAccountSelector = ({
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            className="bg-neutral-900 rounded-xl p-4 mt-1"
+            className="bg-[#111111] rounded-xl p-4 mt-1"
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-[13px] font-semibold text-white">Add Bank Account</span>
@@ -270,7 +270,7 @@ export const BankAccountSelector = ({
                 onClick={() => { setShowAddForm(false); setFormError(""); }}
                 className="p-1 rounded-lg hover:bg-white/5"
               >
-                <X className="w-4 h-4 text-neutral-500" />
+                <X className="w-4 h-4 text-white/40" />
               </button>
             </div>
 
@@ -280,14 +280,14 @@ export const BankAccountSelector = ({
                 value={bankName}
                 onChange={(e) => setBankName(e.target.value)}
                 placeholder="Bank Name (e.g. Emirates NBD)"
-                className="w-full bg-neutral-800 rounded-lg px-3 py-2.5 text-[13px] text-white placeholder:text-neutral-600 outline-none focus:ring-1 focus:ring-white/20"
+                className="w-full bg-[#1a1a1a] rounded-lg px-3 py-2.5 text-[13px] text-white placeholder:text-white/30 outline-none focus:ring-1 focus:ring-white/20"
               />
               <input
                 type="text"
                 value={accountName}
                 onChange={(e) => setAccountName(e.target.value)}
                 placeholder="Account Holder Name"
-                className="w-full bg-neutral-800 rounded-lg px-3 py-2.5 text-[13px] text-white placeholder:text-neutral-600 outline-none focus:ring-1 focus:ring-white/20"
+                className="w-full bg-[#1a1a1a] rounded-lg px-3 py-2.5 text-[13px] text-white placeholder:text-white/30 outline-none focus:ring-1 focus:ring-white/20"
               />
               <input
                 type="text"

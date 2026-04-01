@@ -57,9 +57,14 @@ export default function Home() {
     setKeypairAndUnlock: (kp: any) => void;
   } | undefined;
 
-  const [screen, setScreen] = useState<Screen>("home");
+  const [screen, setScreenRaw] = useState<Screen>("home");
+  const [previousScreen, setPreviousScreen] = useState<Screen>("home");
+  const setScreen = (s: Screen) => {
+    setPreviousScreen(screen);
+    setScreenRaw(s);
+  };
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
-  const [activityTab, setActivityTab] = useState<'active' | 'completed'>('active');
+  const [activityTab, setActivityTab] = useState<'active' | 'completed' | 'cancelled'>('active');
   const [copied, setCopied] = useState(false);
   const [rating, setRating] = useState(0);
   const [showAddBank, setShowAddBank] = useState(false);
@@ -135,8 +140,9 @@ export default function Home() {
   });
   extensionRequestSetterRef.current = orderActions.setExtensionRequest;
 
-  const pendingOrders = orders.filter(o => o.status !== "complete");
+  const pendingOrders = orders.filter(o => o.status !== "complete" && o.status !== "cancelled" && o.status !== "expired");
   const completedOrders = orders.filter(o => o.status === "complete");
+  const cancelledOrders = orders.filter(o => o.status === "cancelled" || o.status === "expired");
 
   const fiatAmount = tradeCreation.amount ? (parseFloat(tradeCreation.amount) * tradeCreation.currentRate).toFixed(2) : "0";
   const currentFees = FEE_CONFIG[tradeCreation.tradePreference];
@@ -159,14 +165,14 @@ export default function Home() {
 
   if (auth.isInitializing) {
     return (
-      <div className="h-dvh bg-black flex items-center justify-center overflow-hidden">
-        <Loader2 className="w-8 h-8 text-white animate-spin" />
+      <div className="h-dvh bg-white flex items-center justify-center overflow-hidden">
+        <Loader2 className="w-8 h-8 text-black animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-dvh flex flex-col items-center overflow-y-auto relative" style={{ background: '#0a0a0a' }}>
+    <div className="min-h-dvh flex flex-col items-center overflow-y-auto relative" style={{ background: '#ffffff' }}>
       <NotificationToastContainer position="top-right" />
       <AnimatePresence mode="wait">
         {screen === "welcome" && (
@@ -184,7 +190,7 @@ export default function Home() {
         )}
 
         {screen === "home" && (
-          <Panel k="home" className="relative" style={darkBg}>
+          <Panel k="home" className="relative" style={{ background: '#ffffff' }}>
             <HomeScreen
               userName={auth.userName}
               userId={auth.userId}
@@ -269,6 +275,7 @@ export default function Home() {
           <Panel k="order" anim={slide}>
             <OrderDetailScreen
               setScreen={setScreen}
+              previousScreen={previousScreen}
               activeOrder={activeOrder}
               isLoading={auth.isLoading}
               setIsLoading={auth.setIsLoading}
@@ -322,21 +329,21 @@ export default function Home() {
             <div className="h-12" />
             <div className="px-5 py-4 flex items-center w-full">
               <button onClick={() => setScreen("home")} className="p-2 -ml-2">
-                <ChevronLeft className="w-6 h-6 text-white" />
+                <ChevronLeft className="w-6 h-6 text-black" />
               </button>
-              <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">Order Details</h1>
+              <h1 className="flex-1 text-center text-[17px] font-semibold text-black pr-8">Order Details</h1>
             </div>
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
-                <Loader2 className="w-6 h-6 text-white/40 animate-spin mx-auto mb-3" />
-                <p className="text-[15px] text-neutral-400">Loading order...</p>
+                <Loader2 className="w-6 h-6 text-black/40 animate-spin mx-auto mb-3" />
+                <p className="text-[15px] text-black/50">Loading order...</p>
               </div>
             </div>
           </Panel>
         )}
 
         {screen === "orders" && (
-          <Panel k="orders" className="relative" style={darkBg}>
+          <Panel k="orders" className="relative" style={{ background: '#ffffff' }}>
             <OrdersListScreen
               screen={screen}
               setScreen={setScreen}
@@ -345,13 +352,14 @@ export default function Home() {
               setActivityTab={setActivityTab}
               pendingOrders={pendingOrders}
               completedOrders={completedOrders}
+              cancelledOrders={cancelledOrders}
               maxW={maxW}
             />
           </Panel>
         )}
 
         {screen === "profile" && (
-          <Panel k="profile" className="overflow-hidden relative" style={darkBg}>
+          <Panel k="profile" className="overflow-hidden relative" style={{ background: '#ffffff' }}>
             <ProfileScreen
               screen={screen}
               setScreen={setScreen}

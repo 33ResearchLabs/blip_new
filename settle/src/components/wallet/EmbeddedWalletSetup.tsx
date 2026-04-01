@@ -135,7 +135,7 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
             onClick={handleContinue}
             disabled={!backupConfirmed}
             className="w-full py-3 rounded-lg font-bold font-mono transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            style={{ background: '#000', color: '#fff' }}
+            style={{ background: '#111111', color: '#fff' }}
           >
             Continue to Dashboard
           </button>
@@ -162,7 +162,7 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
             onClick={() => { setTab('create'); setError(''); }}
             className="flex-1 py-2 rounded-lg text-xs font-mono font-medium transition-colors"
             style={tab === 'create'
-              ? { background: '#000', color: '#fff' }
+              ? { background: '#111111', color: '#fff' }
               : { color: 'rgba(0,0,0,0.4)' }}
           >
             Create New
@@ -171,7 +171,7 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
             onClick={() => { setTab('import'); setError(''); }}
             className="flex-1 py-2 rounded-lg text-xs font-mono font-medium transition-colors"
             style={tab === 'import'
-              ? { background: '#000', color: '#fff' }
+              ? { background: '#111111', color: '#fff' }
               : { color: 'rgba(0,0,0,0.4)' }}
           >
             Import Key
@@ -225,7 +225,7 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
               onClick={handleCreate}
               disabled={isLoading}
               className="w-full py-3 rounded-lg font-bold font-mono transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{ background: '#000', color: '#fff' }}
+              style={{ background: '#111111', color: '#fff' }}
             >
               {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</> : <><Key className="w-4 h-4" /> Create Wallet</>}
             </button>
@@ -262,7 +262,7 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
               onClick={handleImport}
               disabled={isLoading}
               className="w-full py-3 rounded-lg font-bold font-mono transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{ background: '#000', color: '#fff' }}
+              style={{ background: '#111111', color: '#fff' }}
             >
               {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Importing...</> : <><Download className="w-4 h-4" /> Import Wallet</>}
             </button>

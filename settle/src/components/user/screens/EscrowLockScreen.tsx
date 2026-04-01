@@ -66,185 +66,193 @@ export const EscrowLockScreen = ({
 }: EscrowLockScreenProps) => {
   const handleConnectWallet = onConnectWallet || (() => setShowWalletModal(true));
   return (
-    <>
+    <div style={{ background: '#ffffff', minHeight: '100%' }}>
       <div className="h-12" />
 
       <div className="px-5 py-4 flex items-center">
-        <button onClick={() => { setScreen("home"); setEscrowTxStatus('idle'); setEscrowError(null); }} className="p-2 -ml-2">
-          <ChevronLeft className="w-6 h-6 text-white" />
+        <button onClick={() => { setScreen("home"); setEscrowTxStatus('idle'); setEscrowError(null); }}
+          className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1"
+          style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <ChevronLeft className="w-5 h-5" style={{ color: '#fff' }} />
         </button>
-        <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">Confirm Escrow</h1>
+        <h1 className="flex-1 text-center text-[17px] font-semibold text-black pr-8">Confirm Escrow</h1>
       </div>
 
-      <div className="flex-1 px-5 flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-center text-center">
-          <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
-            <Shield className="w-10 h-10 text-white/70" />
+      <div className="px-5 flex flex-col gap-4 pb-10">
+        {/* Header */}
+        <div className="flex items-center gap-4 py-4">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: '#111111' }}>
+            <Shield className="w-7 h-7" style={{ color: '#fff' }} />
           </div>
-          <h2 className="text-[22px] font-semibold text-white mb-2">Lock {amount} USDT</h2>
-          <p className="text-[15px] text-neutral-500 mb-6 max-w-[280px]">
-            Your USDT will be held securely on Solana until you confirm receiving payment
-          </p>
+          <div>
+            <h2 className="text-[22px] font-bold" style={{ color: '#000' }}>Lock {parseFloat(amount).toFixed(2)} USDT</h2>
+            <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>
+              Held securely on Solana until you confirm payment
+            </p>
+          </div>
+        </div>
 
-          {/* Wallet Status */}
-          <div className="w-full bg-neutral-900 rounded-2xl p-4 mb-4">
-            <div className="flex items-center justify-between">
-              <span className="text-[15px] text-neutral-500">Wallet</span>
-              {solanaWallet.connected ? (
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-white/10" />
-                  <span className="text-[14px] text-white font-mono">
-                    {solanaWallet.walletAddress?.slice(0, 4)}...{solanaWallet.walletAddress?.slice(-4)}
-                  </span>
-                </div>
-              ) : (
-                <button
-                  onClick={handleConnectWallet}
-                  className="text-[14px] text-white/70 font-medium"
-                >
-                  Connect Wallet
-                </button>
-              )}
-            </div>
-            {solanaWallet.connected && (
-              <div className="flex items-center justify-between mt-2 pt-2 border-t border-neutral-800">
-                <span className="text-[15px] text-neutral-500">Balance</span>
-                <span className={`text-[15px] font-medium ${
-                  solanaWallet.usdtBalance !== null && solanaWallet.usdtBalance >= parseFloat(amount || '0')
-                    ? 'text-white'
-                    : 'text-red-400'
-                }`}>
-                  {solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : '...'} USDT
+        {/* Wallet Status */}
+        <div className="w-full rounded-2xl p-4" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center justify-between">
+            <span className="text-[15px]" style={{ color: 'rgba(255,255,255,0.45)' }}>Wallet</span>
+            {solanaWallet.connected ? (
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full" style={{ background: '#10b981' }} />
+                <span className="text-[14px] text-white font-mono">
+                  {solanaWallet.walletAddress?.slice(0, 4)}...{solanaWallet.walletAddress?.slice(-4)}
                 </span>
               </div>
-            )}
-          </div>
-
-          {/* Order Details */}
-          <div className="w-full bg-neutral-900 rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[15px] text-neutral-500">Amount to Lock</span>
-              <span className="text-[15px] font-medium text-white">{amount} USDT</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[15px] text-neutral-500">You&apos;ll receive</span>
-              <span className="text-[15px] font-medium text-white">{'\u062F.\u0625'} {parseFloat(fiatAmount).toLocaleString()}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[15px] text-neutral-500">Rate</span>
-              <span className="text-[15px] text-neutral-400">1 USDT = {currentRate} AED</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-[15px] text-neutral-500">Network</span>
-              <span className="text-[14px] text-white/70">Solana Devnet</span>
-            </div>
-          </div>
-
-          {/* Payment Method Display */}
-          <div className="w-full mt-2">
-            {selectedPaymentMethod ? (
-              <div className="w-full">
-                <div className="flex items-center gap-2 mb-2">
-                  <Building2 className="w-4 h-4 text-neutral-500" />
-                  <span className="text-[12px] text-neutral-500 uppercase tracking-wide font-semibold">
-                    Your Payment Method
-                  </span>
-                </div>
-                <div className="w-full bg-neutral-900 rounded-xl p-3 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
-                    {selectedPaymentMethod.type === 'upi' ? (
-                      <Smartphone className="w-4 h-4 text-white/40" />
-                    ) : (
-                      <Building2 className="w-4 h-4 text-white/40" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-medium text-white truncate">
-                      {selectedPaymentMethod.label}
-                    </p>
-                    <p className="text-[12px] text-neutral-500 truncate">
-                      {selectedPaymentMethod.type === 'bank'
-                        ? `${selectedPaymentMethod.details.account_name || ''} · ${selectedPaymentMethod.details.iban ? selectedPaymentMethod.details.iban.slice(0, 4) + '...' + selectedPaymentMethod.details.iban.slice(-4) : ''}`
-                        : selectedPaymentMethod.type === 'upi'
-                        ? selectedPaymentMethod.details.upi_id || ''
-                        : Object.values(selectedPaymentMethod.details).filter(Boolean).join(' · ')}
-                    </p>
-                  </div>
-                  <Lock className="w-4 h-4 text-neutral-600 shrink-0" />
-                </div>
-              </div>
             ) : (
-              <BankAccountSelector
-                userId={userId}
-                selected={selectedBankDetails}
-                onSelect={setSelectedBankDetails}
-              />
+              <button
+                onClick={handleConnectWallet}
+                className="text-[14px] font-medium" style={{ color: 'rgba(255,255,255,0.7)' }}
+              >
+                Connect Wallet
+              </button>
             )}
           </div>
-
-          {/* Program Not Ready Warning */}
-          {solanaWallet.connected && !solanaWallet.programReady && (
-            <div className="w-full mt-4 bg-white/5 border border-white/6 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-white/70 flex-shrink-0 mt-0.5" />
-                <div className="text-left flex-1">
-                  <p className="text-[14px] text-white/70 font-medium">Wallet Needs Reconnection</p>
-                  <p className="text-[13px] text-neutral-400 mt-1">
-                    The escrow program is not ready. Please reconnect your wallet.
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2 mt-3">
-                <button
-                  onClick={() => {
-                    solanaWallet.disconnect();
-                    setTimeout(handleConnectWallet, 100);
-                  }}
-                  className="flex-1 py-2 rounded-lg bg-white/10 text-[14px] text-white/70 font-medium"
-                >
-                  Reconnect Wallet
-                </button>
-                <button
-                  onClick={() => solanaWallet.reinitializeProgram()}
-                  className="py-2 px-4 rounded-lg bg-neutral-800 text-[14px] text-neutral-300"
-                >
-                  Retry
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Error Message */}
-          {escrowError && (
-            <div className="w-full mt-4 bg-red-500/10 border border-red-500/20 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                <div className="text-left">
-                  <p className="text-[14px] text-red-400 font-medium">Transaction Failed</p>
-                  <p className="text-[13px] text-neutral-400 mt-1">{escrowError}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => { setEscrowError(null); setEscrowTxStatus('idle'); }}
-                className="w-full mt-3 py-2 rounded-lg bg-neutral-800 text-[14px] text-neutral-300"
-              >
-                Try Again
-              </button>
+          {solanaWallet.connected && (
+            <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <span className="text-[15px]" style={{ color: 'rgba(255,255,255,0.45)' }}>Balance</span>
+              <span className={`text-[15px] font-medium ${
+                solanaWallet.usdtBalance !== null && solanaWallet.usdtBalance >= parseFloat(amount || '0')
+                  ? 'text-white'
+                  : 'text-red-400'
+              }`}>
+                {solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : '...'} USDT
+              </span>
             </div>
           )}
         </div>
 
+        {/* Order Details */}
+        <div className="w-full rounded-2xl p-4 space-y-3" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center justify-between">
+            <span className="text-[15px]" style={{ color: 'rgba(255,255,255,0.45)' }}>Amount to Lock</span>
+            <span className="text-[15px] font-medium text-white">{parseFloat(amount).toFixed(2)} USDT</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[15px]" style={{ color: 'rgba(255,255,255,0.45)' }}>You&apos;ll receive</span>
+            <span className="text-[15px] font-medium text-white">{'\u062F.\u0625'} {parseFloat(fiatAmount).toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[15px]" style={{ color: 'rgba(255,255,255,0.45)' }}>Rate</span>
+            <span className="text-[15px]" style={{ color: 'rgba(255,255,255,0.5)' }}>1 USDT = {currentRate} AED</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[15px]" style={{ color: 'rgba(255,255,255,0.45)' }}>Network</span>
+            <span className="text-[14px]" style={{ color: 'rgba(255,255,255,0.7)' }}>Solana Devnet</span>
+          </div>
+        </div>
+
+        {/* Payment Method Display */}
+        <div className="w-full">
+          {selectedPaymentMethod ? (
+            <div className="w-full">
+              <div className="flex items-center gap-2 mb-2">
+                <Building2 className="w-4 h-4" style={{ color: 'rgba(0,0,0,0.4)' }} />
+                <span className="text-[12px] uppercase tracking-wide font-semibold" style={{ color: 'rgba(0,0,0,0.4)' }}>
+                  Your Payment Method
+                </span>
+              </div>
+              <div className="w-full rounded-xl p-3 flex items-center gap-3" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                  {selectedPaymentMethod.type === 'upi' ? (
+                    <Smartphone className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.5)' }} />
+                  ) : (
+                    <Building2 className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.5)' }} />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-medium text-white truncate">
+                    {selectedPaymentMethod.label}
+                  </p>
+                  <p className="text-[12px] truncate" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                    {selectedPaymentMethod.type === 'bank'
+                      ? `${selectedPaymentMethod.details.account_name || ''} · ${selectedPaymentMethod.details.iban ? selectedPaymentMethod.details.iban.slice(0, 4) + '...' + selectedPaymentMethod.details.iban.slice(-4) : ''}`
+                      : selectedPaymentMethod.type === 'upi'
+                      ? selectedPaymentMethod.details.upi_id || ''
+                      : Object.values(selectedPaymentMethod.details).filter(Boolean).join(' · ')}
+                  </p>
+                </div>
+                <Lock className="w-4 h-4 shrink-0" style={{ color: 'rgba(255,255,255,0.3)' }} />
+              </div>
+            </div>
+          ) : (
+            <BankAccountSelector
+              userId={userId}
+              selected={selectedBankDetails}
+              onSelect={setSelectedBankDetails}
+            />
+          )}
+        </div>
+
+        {/* Program Not Ready Warning */}
+        {solanaWallet.connected && !solanaWallet.programReady && (
+          <div className="w-full rounded-xl p-4" style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)' }}>
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+              <div className="text-left flex-1">
+                <p className="text-[14px] font-medium text-yellow-600">Wallet Needs Reconnection</p>
+                <p className="text-[13px] mt-1" style={{ color: 'rgba(0,0,0,0.45)' }}>
+                  The escrow program is not ready. Please reconnect your wallet.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => {
+                  solanaWallet.disconnect();
+                  setTimeout(handleConnectWallet, 100);
+                }}
+                className="flex-1 py-2 rounded-lg text-[14px] font-medium"
+                style={{ background: '#111111', color: '#fff' }}
+              >
+                Reconnect Wallet
+              </button>
+              <button
+                onClick={() => solanaWallet.reinitializeProgram()}
+                className="py-2 px-4 rounded-lg text-[14px]"
+                style={{ background: 'rgba(0,0,0,0.05)', color: 'rgba(0,0,0,0.5)' }}
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {escrowError && (
+          <div className="w-full rounded-xl p-4" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <div className="text-left">
+                <p className="text-[14px] text-red-500 font-medium">Transaction Failed</p>
+                <p className="text-[13px] mt-1" style={{ color: 'rgba(0,0,0,0.45)' }}>{escrowError}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => { setEscrowError(null); setEscrowTxStatus('idle'); }}
+              className="w-full mt-3 py-2 rounded-lg text-[14px]"
+              style={{ background: 'rgba(0,0,0,0.05)', color: 'rgba(0,0,0,0.5)' }}
+            >
+              Try Again
+            </button>
+          </div>
+        )}
+
         {/* Show waiting state after success */}
         {escrowTxStatus === 'success' ? (
-          <div className="pb-10 space-y-4">
-            <div className="bg-white/5 border border-white/6 rounded-2xl p-4">
+          <div className="space-y-4">
+            <div className="rounded-2xl p-4" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                  <Lock className="w-5 h-5 text-white" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.15)' }}>
+                  <Lock className="w-5 h-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-[15px] font-semibold text-white">Escrow Locked</p>
-                  <p className="text-[13px] text-neutral-400">Your USDC is secured on-chain</p>
+                  <p className="text-[15px] font-semibold text-green-700">Escrow Locked</p>
+                  <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Your USDC is secured on-chain</p>
                 </div>
               </div>
               {escrowTxHash && (
@@ -252,75 +260,75 @@ export const EscrowLockScreen = ({
                   href={`https://explorer.solana.com/tx/${escrowTxHash}?cluster=devnet`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[13px] text-white/50 hover:text-white"
+                  className="flex items-center gap-1 text-[13px] text-green-600 hover:text-green-700"
                 >
                   View Transaction <ExternalLink className="w-3 h-3" />
                 </a>
               )}
             </div>
 
-            <div className="bg-neutral-900 rounded-2xl p-4">
+            <div className="rounded-2xl p-4" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-white/70" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                  <Clock className="w-5 h-5" style={{ color: 'rgba(255,255,255,0.7)' }} />
                 </div>
                 <div className="flex-1">
                   <p className="text-[15px] font-medium text-white">Waiting for merchant</p>
-                  <p className="text-[13px] text-neutral-500">Merchant will accept and send fiat to your bank</p>
+                  <p className="text-[13px]" style={{ color: 'rgba(255,255,255,0.4)' }}>Merchant will accept and send fiat to your bank</p>
                 </div>
               </div>
-              <div className="mt-3 h-1 bg-neutral-800 rounded-full overflow-hidden">
+              <div className="mt-3 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
                 <motion.div
-                  className="h-full bg-white/10"
+                  className="h-full"
+                  style={{ background: 'rgba(255,255,255,0.2)', width: "30%" }}
                   animate={{ x: ["-100%", "100%"] }}
                   transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                  style={{ width: "30%" }}
                 />
               </div>
             </div>
 
             <button
               onClick={() => setScreen("order")}
-              className="w-full py-3 rounded-xl bg-neutral-800 text-[15px] font-medium text-white"
+              className="w-full py-3 rounded-xl text-[15px] font-medium"
+              style={{ background: '#111111', color: '#fff' }}
             >
               View Order Details
             </button>
           </div>
         ) : (
-          <div className="pb-10">
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={solanaWallet.connected ? confirmEscrow : handleConnectWallet}
-              disabled={isLoading || (solanaWallet.connected && !solanaWallet.programReady)}
-              className="w-full py-4 rounded-2xl text-[17px] font-semibold bg-white/10 text-white flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {escrowTxStatus === 'signing' && (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Sign in Wallet...
-                </>
-              )}
-              {escrowTxStatus === 'confirming' && (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Confirming...
-                </>
-              )}
-              {escrowTxStatus === 'recording' && (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Recording...
-                </>
-              )}
-              {(escrowTxStatus === 'idle' || escrowTxStatus === 'error' || escrowTxStatus === 'connecting') && (
-                solanaWallet.connected
-                  ? (solanaWallet.programReady ? "Confirm & Lock" : "Wallet Not Ready")
-                  : "Connect Wallet to Lock"
-              )}
-            </motion.button>
-          </div>
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            onClick={solanaWallet.connected ? confirmEscrow : handleConnectWallet}
+            disabled={isLoading || (solanaWallet.connected && !solanaWallet.programReady)}
+            className="w-full py-4 rounded-2xl text-[17px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+            style={{ background: '#111111', color: '#fff' }}
+          >
+            {escrowTxStatus === 'signing' && (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Sign in Wallet...
+              </>
+            )}
+            {escrowTxStatus === 'confirming' && (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Confirming...
+              </>
+            )}
+            {escrowTxStatus === 'recording' && (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Recording...
+              </>
+            )}
+            {(escrowTxStatus === 'idle' || escrowTxStatus === 'error' || escrowTxStatus === 'connecting') && (
+              solanaWallet.connected
+                ? (solanaWallet.programReady ? "Confirm & Lock" : "Wallet Not Ready")
+                : "Connect Wallet to Lock"
+            )}
+          </motion.button>
         )}
       </div>
-    </>
+    </div>
   );
 };

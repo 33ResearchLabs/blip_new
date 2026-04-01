@@ -186,7 +186,6 @@ export async function getUserOrders(
       ORDER BY cm.created_at DESC LIMIT 1
     ) chat_latest ON true
     WHERE o.user_id = $1
-      AND o.status NOT IN ('expired', 'cancelled')
   `;
 
   const params: unknown[] = [userId];
