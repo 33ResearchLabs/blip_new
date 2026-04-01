@@ -803,7 +803,7 @@ export const OrderDetailScreen = ({
                     ? "Order Cancelled"
                     : "Order Expired"}
                 </p>
-                <p className="text-[13px] text-white/40">
+                <p className="text-[13px] text-red-400">
                   {activeOrder.status === "cancelled"
                     ? "This trade was cancelled and did not complete."
                     : "This order expired before it could be completed."}
@@ -2933,7 +2933,6 @@ export const OrderDetailScreen = ({
                               currentStatus={
                                 activeOrder?.dbStatus || activeOrder?.status
                               }
-                              variant="light"
                             />
                             <p
                               className="text-[10px] mt-1 text-center"

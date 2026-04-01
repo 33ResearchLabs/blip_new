@@ -316,7 +316,7 @@ export const ChatViewScreen = ({
                 const orderNum = receiptPayload.order_number as string | undefined;
                 return (
                   <div key={msg.id} className="max-w-[90%] mx-auto">
-                    <ReceiptCard data={receiptPayload as any} currentStatus={(orderNum ? receiptStatuses[orderNum] : undefined) || activeOrder?.dbStatus || activeOrder?.status} variant="light" />
+                    <ReceiptCard data={receiptPayload as any} currentStatus={(orderNum ? receiptStatuses[orderNum] : undefined) || activeOrder?.dbStatus || activeOrder?.status} />
                     <p className="text-[10px] text-black/35 mt-1 text-center">
                       {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
