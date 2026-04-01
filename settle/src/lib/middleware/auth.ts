@@ -420,7 +420,7 @@ export async function verifyMerchant(merchantId: string): Promise<boolean> {
 /**
  * Verify that a compliance team member exists and is active
  */
-async function verifyComplianceMember(complianceId: string): Promise<boolean> {
+export async function verifyComplianceMember(complianceId: string): Promise<boolean> {
   try {
     const { queryOne: qOne } = await import('../db');
     const member = await qOne<{ id: string; is_active: boolean }>(
@@ -472,7 +472,40 @@ export async function canMerchantAccessOrder(
     if (order.status === 'escrowed' && !order.buyer_merchant_id) {
       return true;
     }
+    // Merchant with compliance access can access disputed orders
+    if (order.status === 'disputed') {
+      const merchant = await getMerchantById(merchantId);
+      if (merchant?.has_compliance_access) {
+        return true;
+      }
+    }
     return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a verified compliance member can access a specific order.
+ * Compliance can only access disputed orders.
+ * Accepts both compliance_team IDs and merchant IDs (with has_compliance_access).
+ */
+export async function canComplianceAccessOrder(
+  complianceId: string,
+  orderId: string
+): Promise<boolean> {
+  try {
+    // Check compliance_team table first
+    let isValid = await verifyComplianceMember(complianceId);
+    // Fallback: check if it's a merchant with compliance access
+    if (!isValid) {
+      const merchant = await getMerchantById(complianceId);
+      isValid = merchant?.has_compliance_access === true;
+    }
+    if (!isValid) return false;
+    const order = await getOrderById(orderId);
+    if (!order) return false;
+    return order.status === 'disputed';
   } catch {
     return false;
   }
@@ -518,6 +551,13 @@ export async function canAccessOrder(
       }
       if (order.status === 'escrowed' && !order.buyer_merchant_id) {
         return true;
+      }
+      // Merchant with compliance access can access disputed orders
+      if (order.status === 'disputed') {
+        const merchant = await getMerchantById(auth.actorId);
+        if (merchant?.has_compliance_access) {
+          return true;
+        }
       }
       return false;
     }

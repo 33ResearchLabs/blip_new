@@ -1601,6 +1601,7 @@ export function OrderDetailsPanel({
               "expired",
               "disputed",
               "pending",
+              "payment_sent",
             ].includes(order.status) && (
               <button
                 onClick={async () => {

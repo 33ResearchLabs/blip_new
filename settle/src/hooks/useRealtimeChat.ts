@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { usePusherOptional } from '@/context/PusherContext';
-import { getOrderChannel } from '@/lib/pusher/channels';
+import { getOrderChannel, getOrderPresenceChannel } from '@/lib/pusher/channels';
 import { CHAT_EVENTS } from '@/lib/pusher/events';
 
 export interface ChatMessage {
@@ -287,9 +287,10 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
                 newMessages[tempIndex] = message;
                 return { ...w, messages: newMessages };
               }
-              // Check if already exists
-              if (w.messages.some(m => m.id === message.id)) return w;
             }
+
+            // Dedup — message may arrive via both order channel and private channel
+            if (w.messages.some(m => m.id === message.id)) return w;
 
             // Add new message
             const newUnread =
@@ -370,20 +371,61 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       channel.bind(CHAT_EVENTS.TYPING_STOP, handleTypingStop);
       channel.bind(CHAT_EVENTS.MESSAGES_READ, handleMessagesRead);
 
-      // Fetch initial messages and presence
+      // Fetch initial messages
       fetchMessages(orderId, chatId);
-      fetchPresence(orderId, chatId);
+
+      // Subscribe to presence channel for online status
+      const presenceChannelName = getOrderPresenceChannel(orderId);
+      const presenceChannel = pusher.subscribe(presenceChannelName);
+      if (presenceChannel) {
+        // Build presence list from Pusher member events
+        const updatePresenceFromMembers = (members: { each: (cb: (m: { id: string; info: { type: string; name?: string } }) => void) => void }) => {
+          const list: PresenceMember[] = [];
+          members.each((m: { id: string; info: { type: string; name?: string } }) => {
+            list.push({ actorType: m.info.type as PresenceMember['actorType'], actorId: m.id, isOnline: true });
+          });
+          setChatWindows((prev) =>
+            prev.map((w) => (w.orderId === orderId ? { ...w, presence: list } : w))
+          );
+        };
+
+        presenceChannel.bind('pusher:subscription_succeeded', (rawMembers: unknown) => {
+          const members = rawMembers as { each: (cb: (m: { id: string; info: { type: string; name?: string } }) => void) => void };
+          updatePresenceFromMembers(members);
+        });
+
+        presenceChannel.bind('pusher:member_added', (rawMember: unknown) => {
+          const member = rawMember as { id: string; info: { type: string; name?: string } };
+          setChatWindows((prev) =>
+            prev.map((w) => {
+              if (w.orderId !== orderId) return w;
+              if (w.presence.some((p) => p.actorId === member.id)) return w;
+              return { ...w, presence: [...w.presence, { actorType: member.info.type as PresenceMember['actorType'], actorId: member.id, isOnline: true }] };
+            })
+          );
+        });
+
+        presenceChannel.bind('pusher:member_removed', (rawMember: unknown) => {
+          const member = rawMember as { id: string };
+          setChatWindows((prev) =>
+            prev.map((w) => {
+              if (w.orderId !== orderId) return w;
+              return { ...w, presence: w.presence.filter((p) => p.actorId !== member.id) };
+            })
+          );
+        });
+      }
     },
-    [pusher, actorType, mapPusherMessageToUI, fetchMessages, fetchPresence, onNewMessage]
+    [pusher, actorType, mapPusherMessageToUI, fetchMessages, onNewMessage]
   );
 
-  // Unsubscribe from an order's channel
+  // Unsubscribe from an order's channels (private + presence)
   const unsubscribeFromOrder = useCallback(
     (orderId: string) => {
       if (!pusher || !subscribedChannelsRef.current.get(orderId)) return;
 
-      const channelName = getOrderChannel(orderId);
-      pusher.unsubscribe(channelName);
+      pusher.unsubscribe(getOrderChannel(orderId));
+      pusher.unsubscribe(getOrderPresenceChannel(orderId));
       subscribedChannelsRef.current.delete(orderId);
     },
     [pusher]
@@ -604,7 +646,23 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
           throw new Error(data.error || 'Failed to send message');
         }
 
-        // The real message will come through Pusher and replace the temp one
+        // Immediately update temp message with real ID + 'sent' status.
+        // Don't wait for Pusher echo — it may not arrive if channel subscription
+        // is pending or the actor type doesn't match the order channel auth.
+        const realMessage = data.data;
+        if (realMessage?.id) {
+          setChatWindows((prev) =>
+            prev.map((w) => {
+              if (w.id !== chatId) return w;
+              return {
+                ...w,
+                messages: w.messages.map((m) =>
+                  m.id === tempId ? { ...m, id: realMessage.id, status: 'sent' as const } : m
+                ),
+              };
+            })
+          );
+        }
       } catch (error) {
         console.log('Send message error - demo mode, keeping local message');
       }
@@ -612,23 +670,42 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
     [actorType, actorId]
   );
 
+  // Track orders where markAsRead has been rejected or recently called
+  const markReadBlockedRef = useRef<Set<string>>(new Set());
+  const markReadLastCallRef = useRef<Map<string, number>>(new Map());
+
   const markAsRead = useCallback(
     async (chatId: string) => {
       const window = chatWindowsRef.current.find((w) => w.id === chatId);
       if (!window?.orderId) return;
+
+      // Don't retry if server already rejected access for this order
+      if (markReadBlockedRef.current.has(window.orderId)) return;
+
+      // Skip if no unread messages
+      if (window.unread === 0) return;
+
+      // Throttle: at most once per 5 seconds per order
+      const now = Date.now();
+      const lastCall = markReadLastCallRef.current.get(window.orderId) || 0;
+      if (now - lastCall < 5000) return;
+      markReadLastCallRef.current.set(window.orderId, now);
 
       setChatWindows((prev) =>
         prev.map((w) => (w.id === chatId ? { ...w, unread: 0 } : w))
       );
 
       try {
-        await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
+        const res = await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             reader_type: actorType,
           }),
         });
+        if (res.status === 403) {
+          markReadBlockedRef.current.add(window.orderId);
+        }
       } catch (error) {
         console.error('Error marking messages as read:', error);
       }

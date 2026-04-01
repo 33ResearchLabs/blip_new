@@ -15,8 +15,10 @@ import { InProgressPanel } from "@/components/merchant/InProgressPanel";
 import { ActivityPanel } from "@/components/merchant/ActivityPanel";
 import { CompletedOrdersPanel } from "@/components/merchant/CompletedOrdersPanel";
 import { NotificationsPanel } from "@/components/merchant/NotificationsPanel";
+import { useState } from "react";
 import { DirectChatView } from "@/components/merchant/DirectChatView";
 import { MerchantChatTabs } from "@/components/merchant/MerchantChatTabs";
+import { DisputeChatView } from "@/components/merchant/DisputeChatView";
 
 export interface MerchantDesktopLayoutProps {
   isWideScreen: boolean;
@@ -82,6 +84,8 @@ export interface MerchantDesktopLayoutProps {
 }
 
 export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(props: MerchantDesktopLayoutProps) {
+  const [activeDisputeOrderId, setActiveDisputeOrderId] = useState<string | null>(null);
+  const [activeDisputeUserName, setActiveDisputeUserName] = useState('');
   const {
     isWideScreen,
     pendingOrders, ongoingOrders, completedOrders, cancelledOrders,
@@ -316,7 +320,15 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
               onSelectOrder={setSelectedOrderId}
             />
             <div className="flex-1 flex flex-col min-h-0">
-              {directChat.activeContactId ? (
+              {activeDisputeOrderId ? (
+                <DisputeChatView
+                  orderId={activeDisputeOrderId}
+                  merchantId={merchantId || ""}
+                  userName={activeDisputeUserName}
+                  onBack={() => { setActiveDisputeOrderId(null); setActiveDisputeUserName(''); }}
+                  onSendSound={() => playSound("send")}
+                />
+              ) : directChat.activeContactId ? (
                 <DirectChatView
                   contactName={directChat.activeContactName}
                   contactType={directChat.activeContactType}
@@ -339,6 +351,10 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                     directChat.addContact(targetId, targetType).then(() => {
                       directChat.openChat(targetId, targetType, username);
                     });
+                  }}
+                  onOpenDisputeChat={(orderId, userName) => {
+                    setActiveDisputeOrderId(orderId);
+                    setActiveDisputeUserName(userName);
                   }}
                 />
               )}

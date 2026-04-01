@@ -21,9 +21,12 @@ export function useUserDataFetching() {
     resolvedAt: string;
   }[]>([]);
 
-  const fetchOrders = useCallback(async (uid: string) => {
+  const fetchOrders = useCallback(async (uid: string, opts?: { status?: string; days?: number }) => {
     try {
-      const res = await fetchWithAuth(`/api/orders?user_id=${uid}`);
+      const params = new URLSearchParams({ user_id: uid });
+      if (opts?.status) params.set('status', opts.status);
+      if (opts?.days) params.set('days', opts.days.toString());
+      const res = await fetchWithAuth(`/api/orders?${params}`);
       if (!res.ok) {
         console.log('Orders API not available - running in demo mode');
         return;

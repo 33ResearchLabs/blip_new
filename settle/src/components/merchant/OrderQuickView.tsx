@@ -100,6 +100,7 @@ export interface OrderQuickViewProps {
   onRespondToCancel?: (orderId: string, accept: boolean) => void;
   onOpenChat: (order: Order) => void;
   onViewFullDetails: (orderId: string) => void;
+  onOpenDispute?: (orderId: string) => void;
 }
 
 export function OrderQuickView({
@@ -119,6 +120,7 @@ export function OrderQuickView({
   onRespondToCancel,
   onOpenChat,
   onViewFullDetails,
+  onOpenDispute,
 }: OrderQuickViewProps) {
   return (
     <AnimatePresence>
@@ -446,7 +448,7 @@ export function OrderQuickView({
                   SEND_PAYMENT: () => { onMarkFiatPaymentSent(selectedOrder); onClose(); },
                   CONFIRM_PAYMENT: () => { onConfirmPayment(selectedOrder.id).then(onClose); },
                   CANCEL: () => { onCancelOrderWithoutEscrow(selectedOrder.id); onClose(); },
-                  DISPUTE: () => { onViewFullDetails(selectedOrder.id); onClose(); },
+                  DISPUTE: () => { onOpenDispute?.(selectedOrder.id); onClose(); },
                 };
 
                 // Loading state per action type

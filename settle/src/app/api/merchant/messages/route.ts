@@ -36,13 +36,21 @@ export async function GET(request: NextRequest) {
       return forbiddenResponse('You can only access your own messages');
     }
 
-    // Verify merchant exists
+    // Verify merchant exists and check compliance access
     const merchantExists = await verifyMerchant(merchantId);
     if (!merchantExists) {
       return validationErrorResponse(['Merchant not found']);
     }
 
+    const merchantRow = await query<{ has_compliance_access: boolean }>(
+      'SELECT has_compliance_access FROM merchants WHERE id = $1',
+      [merchantId]
+    );
+    const hasComplianceAccess = merchantRow[0]?.has_compliance_access === true;
+
     // Build the query for conversations (grouped by order)
+    // Access: seller (merchant_id) OR buyer (buyer_merchant_id)
+    // For dispute tab: also include all disputed orders if merchant has compliance access
     let conversationsQuery = `
       SELECT
         o.id as order_id,
@@ -92,11 +100,15 @@ export async function GET(request: NextRequest) {
         ) as last_activity
       FROM orders o
       JOIN users u ON o.user_id = u.id
-      WHERE o.merchant_id = $1
+      WHERE (
+        o.merchant_id = $1
+        OR o.buyer_merchant_id = $1
+        OR ($2::boolean = true AND o.status = 'disputed')
+      )
     `;
 
-    const queryParams: (string | number)[] = [merchantId];
-    let paramIndex = 2;
+    const queryParams: (string | number | boolean)[] = [merchantId, hasComplianceAccess];
+    let paramIndex = 3;
 
     // Filter by order status
     if (orderStatus) {
@@ -141,14 +153,14 @@ export async function GET(request: NextRequest) {
     let countQuery = `
       SELECT COUNT(DISTINCT o.id)::int as total
       FROM orders o
-      WHERE o.merchant_id = $1
+      WHERE (o.merchant_id = $1 OR o.buyer_merchant_id = $1 OR ($2::boolean = true AND o.status = 'disputed'))
       AND EXISTS (SELECT 1 FROM chat_messages cm WHERE cm.order_id = o.id)
     `;
-    const countParams: (string | number)[] = [merchantId];
+    const countParams: (string | number | boolean)[] = [merchantId, hasComplianceAccess];
 
     if (orderStatus) {
       const statuses = orderStatus.split(',');
-      countQuery += ` AND o.status = ANY($2::text[])`;
+      countQuery += ` AND o.status = ANY($${countParams.length + 1}::text[])`;
       countParams.push(statuses as unknown as string);
     }
 
@@ -163,13 +175,17 @@ export async function GET(request: NextRequest) {
     const countResult = await query(countQuery, countParams);
     const total = (countResult[0] as { total?: number })?.total || 0;
 
+    // Reusable access clause for all aggregate queries
+    const accessClause = `(o.merchant_id = $1 OR o.buyer_merchant_id = $1 OR ($2::boolean = true AND o.status = 'disputed'))`;
+    const accessParams: (string | boolean)[] = [merchantId, hasComplianceAccess];
+
     // Get total unread across all orders
     const unreadResult = await query(
       `SELECT COUNT(*)::int as total_unread
        FROM chat_messages cm
        JOIN orders o ON cm.order_id = o.id
-       WHERE o.merchant_id = $1 AND cm.sender_type != 'merchant' AND cm.is_read = false`,
-      [merchantId]
+       WHERE ${accessClause} AND cm.sender_type != 'merchant' AND cm.is_read = false`,
+      accessParams
     );
     const totalUnread = (unreadResult[0] as { total_unread?: number })?.total_unread || 0;
 
@@ -180,9 +196,9 @@ export async function GET(request: NextRequest) {
         COUNT(*) FILTER (WHERE COALESCE(o.has_manual_message, false) = false AND o.status != 'disputed')::int as automated_count,
         COUNT(*) FILTER (WHERE o.status = 'disputed')::int as dispute_count
        FROM orders o
-       WHERE o.merchant_id = $1
+       WHERE ${accessClause}
          AND EXISTS (SELECT 1 FROM chat_messages cm WHERE cm.order_id = o.id)`,
-      [merchantId]
+      accessParams
     );
     const tabCounts = tabCountsResult[0] as { direct_count: number; automated_count: number; dispute_count: number } || { direct_count: 0, automated_count: 0, dispute_count: 0 };
 
@@ -194,8 +210,8 @@ export async function GET(request: NextRequest) {
         COUNT(*) FILTER (WHERE o.status = 'disputed')::int as dispute_unread
        FROM chat_messages cm
        JOIN orders o ON cm.order_id = o.id
-       WHERE o.merchant_id = $1 AND cm.sender_type != 'merchant' AND cm.is_read = false`,
-      [merchantId]
+       WHERE ${accessClause} AND cm.sender_type != 'merchant' AND cm.is_read = false`,
+      accessParams
     );
     const tabUnread = tabUnreadResult[0] as { direct_unread: number; automated_unread: number; dispute_unread: number } || { direct_unread: 0, automated_unread: 0, dispute_unread: 0 };
 

@@ -106,10 +106,13 @@ export async function POST(
     // Verify sender identity matches authenticated actor (prevent spoofing)
     // Allow dual-login: user token can send as user if userId matches,
     // merchant token can send as merchant if merchantId matches.
+    // Allow compliance: merchant with has_compliance_access can send as sender_type 'compliance'.
     const senderMatchesAuth = sender_id === auth.actorId && sender_type === auth.actorType;
     const senderMatchesUserId = sender_type === 'user' && sender_id === auth.userId;
     const senderMatchesMerchantId = sender_type === 'merchant' && sender_id === auth.merchantId;
-    if (!senderMatchesAuth && !senderMatchesUserId && !senderMatchesMerchantId) {
+    // Merchant with compliance access sending as compliance (sender_id = merchant ID)
+    const senderMatchesComplianceMerchant = sender_type === 'compliance' && auth.actorType === 'merchant' && sender_id === auth.actorId;
+    if (!senderMatchesAuth && !senderMatchesUserId && !senderMatchesMerchantId && !senderMatchesComplianceMerchant) {
       logger.auth.forbidden(`POST /api/orders/${id}/messages`, sender_id, 'Sender identity mismatch with authenticated actor');
       return forbiddenResponse('Sender identity does not match authenticated user');
     }
@@ -121,7 +124,9 @@ export async function POST(
     }
 
     // Inline access check using already-fetched order (skip canAccessOrder's redundant DB query)
-    const hasAccess = (() => {
+    // Note: for compliance-as-merchant, we already validated has_compliance_access via
+    // senderMatchesComplianceMerchant — so we can trust sender_type here.
+    const hasAccess = await (async () => {
       if (auth.actorType === 'system') return true;
       if (auth.actorType === 'compliance') {
         if (order.status === 'disputed') return true;
@@ -136,6 +141,12 @@ export async function POST(
       if (auth.actorType === 'merchant') {
         if (order.merchant_id === auth.actorId || order.buyer_merchant_id === auth.actorId) return true;
         if (order.status === 'escrowed' && !order.buyer_merchant_id) return true;
+        // Merchant with compliance access can send messages on disputed orders
+        if (senderMatchesComplianceMerchant && order.status === 'disputed') {
+          const { getMerchantById } = await import('@/lib/db/repositories/merchants');
+          const merchant = await getMerchantById(auth.actorId);
+          if (merchant?.has_compliance_access) return true;
+        }
         return false;
       }
       return false;
@@ -170,7 +181,7 @@ export async function POST(
       markOrderHasManualMessage(id).catch(() => {});
     }
 
-    // Trigger real-time notification on order channel (fire-and-forget)
+    // Trigger real-time notification on order channel + participant private channels
     notifyNewMessage({
       orderId: id,
       messageId: message.id,
@@ -184,6 +195,9 @@ export async function POST(
       fileSize: file_size,
       mimeType: mime_type,
       createdAt: message.created_at.toISOString(),
+      userId: order.user_id,
+      merchantId: order.merchant_id,
+      buyerMerchantId: order.buyer_merchant_id,
     });
 
     // ── Post-send notifications (fire-and-forget, don't block response) ──

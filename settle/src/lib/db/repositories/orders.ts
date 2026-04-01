@@ -125,7 +125,8 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
 
 export async function getUserOrders(
   userId: string,
-  status?: OrderStatus[]
+  status?: OrderStatus[],
+  days?: number
 ): Promise<OrderWithRelations[]> {
   let sql = `
     SELECT o.*,
@@ -176,7 +177,7 @@ export async function getUserOrders(
     LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
     LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
     LEFT JOIN LATERAL (
-      SELECT COUNT(*) FILTER (WHERE cm.sender_type = 'merchant' AND cm.message_type != 'system' AND cm.is_read = false)::int as unread_count
+      SELECT COUNT(*) FILTER (WHERE cm.sender_type IN ('merchant', 'compliance') AND cm.message_type != 'system' AND cm.is_read = false)::int as unread_count
       FROM chat_messages cm WHERE cm.order_id = o.id
     ) chat_agg ON true
     LEFT JOIN LATERAL (
@@ -192,8 +193,12 @@ export async function getUserOrders(
   const params: unknown[] = [userId];
 
   if (status && status.length > 0) {
-    sql += ` AND o.status = ANY($2)`;
+    sql += ` AND o.status = ANY($${params.length + 1})`;
     params.push(status);
+  }
+
+  if (days && days > 0) {
+    sql += ` AND o.created_at >= NOW() - INTERVAL '${Math.floor(days)} days'`;
   }
 
   sql += ' ORDER BY o.created_at DESC';

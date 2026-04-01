@@ -88,6 +88,7 @@ export interface Merchant {
   max_sinr_exposure: number | null; // Maximum sINR allowed (NULL = unlimited)
   synthetic_rate: number; // Conversion rate: 1 USDT = X INR
   has_ops_access: boolean; // Whether merchant can access /ops debug page
+  has_compliance_access: boolean; // Whether merchant can access /compliance dispute resolution
   created_at: Date;
   updated_at: Date;
 }

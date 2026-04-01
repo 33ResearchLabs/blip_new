@@ -49,56 +49,56 @@ export default function ResolveModal({
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md"
           >
-            <div className="bg-[#151515] rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden">
+            <div className="bg-muted-bg rounded-2xl border border-[var(--color-border-medium)] shadow-2xl overflow-hidden">
               {/* Header */}
-              <div className="px-6 py-4 border-b border-white/[0.04] flex items-center justify-between">
+              <div className="px-6 py-4 border-b border-border flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                    <Scale className="w-5 h-5 text-orange-400" />
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Scale className="w-5 h-5 text-primary" />
                   </div>
                   <div>
                     <h2 className="text-base font-semibold">Resolve Dispute</h2>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-muted">
                       #{selectedDispute.orderNumber} • ${selectedDispute.cryptoAmount.toLocaleString()}
                     </p>
                   </div>
                 </div>
-                <button onClick={onClose} className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors">
-                  <X className="w-5 h-5 text-gray-500" />
+                <button onClick={onClose} className="p-2 hover:bg-card rounded-lg transition-colors">
+                  <X className="w-5 h-5 text-muted" />
                 </button>
               </div>
 
               {/* Body */}
               <div className="p-6 space-y-5">
                 {/* Parties Summary */}
-                <div className="flex items-center gap-4 p-4 bg-[#1a1a1a] rounded-xl">
+                <div className="flex items-center gap-4 p-4 bg-[var(--color-bg-tertiary)] rounded-xl">
                   <div className="flex-1 text-center">
                     <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center text-lg mx-auto mb-2">
                       {getEmoji(selectedDispute.user.name)}
                     </div>
                     <p className="text-xs font-medium">{selectedDispute.user.name}</p>
-                    <p className="text-[10px] text-gray-500">{selectedDispute.user.trades} trades</p>
+                    <p className="text-[10px] text-muted">{selectedDispute.user.trades} trades</p>
                   </div>
-                  <div className="text-gray-600">vs</div>
+                  <div className="text-[var(--color-text-quaternary)]">vs</div>
                   <div className="flex-1 text-center">
                     <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center text-lg mx-auto mb-2">
                       {getEmoji(selectedDispute.merchant.name)}
                     </div>
                     <p className="text-xs font-medium">{selectedDispute.merchant.name}</p>
-                    <p className="text-[10px] text-gray-500">{selectedDispute.merchant.trades} trades</p>
+                    <p className="text-[10px] text-muted">{selectedDispute.merchant.trades} trades</p>
                   </div>
                 </div>
 
                 {/* Resolution Options */}
                 <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-3 block">Resolution</label>
+                  <label className="text-xs text-muted uppercase tracking-wide mb-3 block">Resolution</label>
                   <div className="grid grid-cols-3 gap-3">
                     <button
                       onClick={() => setResolveForm((prev) => ({ ...prev, resolution: "user" }))}
                       className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
                         resolveForm.resolution === "user"
                           ? "border-blue-500/50 bg-blue-500/10"
-                          : "border-white/[0.04] hover:border-white/[0.08] bg-[#1a1a1a]"
+                          : "border-border hover:border-[var(--color-border-medium)] bg-[var(--color-bg-tertiary)]"
                       }`}
                     >
                       <span className="text-2xl">{"\u{1F464}"}</span>
@@ -109,8 +109,8 @@ export default function ResolveModal({
                       onClick={() => setResolveForm((prev) => ({ ...prev, resolution: "split" }))}
                       className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
                         resolveForm.resolution === "split"
-                          ? "border-orange-500/50 bg-orange-500/10"
-                          : "border-white/[0.04] hover:border-white/[0.08] bg-[#1a1a1a]"
+                          ? "border-orange-500/50 bg-primary/10"
+                          : "border-border hover:border-[var(--color-border-medium)] bg-[var(--color-bg-tertiary)]"
                       }`}
                     >
                       <span className="text-2xl">{"\u2696\uFE0F"}</span>
@@ -122,7 +122,7 @@ export default function ResolveModal({
                       className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
                         resolveForm.resolution === "merchant"
                           ? "border-purple-500/50 bg-purple-500/10"
-                          : "border-white/[0.04] hover:border-white/[0.08] bg-[#1a1a1a]"
+                          : "border-border hover:border-[var(--color-border-medium)] bg-[var(--color-bg-tertiary)]"
                       }`}
                     >
                       <span className="text-2xl">{"\u{1F3EA}"}</span>
@@ -135,7 +135,7 @@ export default function ResolveModal({
                 {resolveForm.resolution === "split" && (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs text-gray-500 mb-2 block">User Gets</label>
+                      <label className="text-xs text-muted mb-2 block">User Gets</label>
                       <div className="relative">
                         <input
                           type="number"
@@ -148,13 +148,13 @@ export default function ResolveModal({
                               splitMerchant: 100 - val,
                             }));
                           }}
-                          className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none pr-8"
+                          className="w-full bg-[var(--color-bg-tertiary)] rounded-xl px-4 py-3 text-sm outline-none pr-8"
                         />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">%</span>
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted">%</span>
                       </div>
                     </div>
                     <div>
-                      <label className="text-xs text-gray-500 mb-2 block">Merchant Gets</label>
+                      <label className="text-xs text-muted mb-2 block">Merchant Gets</label>
                       <div className="relative">
                         <input
                           type="number"
@@ -167,9 +167,9 @@ export default function ResolveModal({
                               splitUser: 100 - val,
                             }));
                           }}
-                          className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none pr-8"
+                          className="w-full bg-[var(--color-bg-tertiary)] rounded-xl px-4 py-3 text-sm outline-none pr-8"
                         />
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">%</span>
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted">%</span>
                       </div>
                     </div>
                   </div>
@@ -177,13 +177,13 @@ export default function ResolveModal({
 
                 {/* Notes */}
                 <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Notes (Optional)</label>
+                  <label className="text-xs text-muted uppercase tracking-wide mb-2 block">Notes (Optional)</label>
                   <textarea
                     value={resolveForm.notes}
                     onChange={(e) => setResolveForm((prev) => ({ ...prev, notes: e.target.value }))}
                     placeholder="Add resolution notes..."
                     rows={3}
-                    className="w-full bg-[#1f1f1f] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-gray-600 resize-none focus:ring-1 focus:ring-orange-500/30"
+                    className="w-full bg-[var(--color-bg-tertiary)] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-[var(--color-text-quaternary)] resize-none focus:ring-1 focus:ring-primary/30"
                   />
                 </div>
               </div>
@@ -193,7 +193,7 @@ export default function ResolveModal({
                 <div className="flex gap-3">
                   <button
                     onClick={onClose}
-                    className="flex-1 py-3 rounded-xl text-sm font-medium bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
+                    className="flex-1 py-3 rounded-xl text-sm font-medium bg-card hover:bg-[var(--color-border-medium)] transition-colors"
                   >
                     Cancel
                   </button>
@@ -201,7 +201,7 @@ export default function ResolveModal({
                     whileTap={{ scale: 0.98 }}
                     onClick={onResolve}
                     disabled={!resolveForm.resolution}
-                    className="flex-1 py-3 rounded-xl text-sm font-bold bg-orange-500 text-black hover:bg-orange-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                    className="flex-1 py-3 rounded-xl text-sm font-bold bg-primary text-black hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
                   >
                     <Check className="w-4 h-4" />
                     Propose
@@ -225,7 +225,7 @@ export default function ResolveModal({
                     </>
                   )}
                 </motion.button>
-                <p className="text-[10px] text-gray-500 text-center">
+                <p className="text-[10px] text-muted text-center">
                   {memberWalletAddress && walletConnected ? (
                     <span className="text-purple-400">Wallet connected - will process on-chain automatically</span>
                   ) : (

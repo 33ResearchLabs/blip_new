@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
     const parseResult = userOrdersQuerySchema.safeParse({
       user_id: userId,
       status: searchParams.get('status') || undefined,
+      days: searchParams.get('days') || undefined,
     });
 
     if (!parseResult.success) {
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
       return validationErrorResponse(errors);
     }
 
-    const { user_id } = parseResult.data;
+    const { user_id, status, days } = parseResult.data;
 
     // Authorization: require authenticated user
     const auth = await requireAuth(request);
@@ -55,7 +56,10 @@ export async function GET(request: NextRequest) {
       return forbiddenResponse('You can only access your own orders');
     }
 
-    const orders = await getUserOrders(user_id);
+    // Parse status filter (comma-separated)
+    const statusFilter = status ? status.split(',').filter(Boolean) as any[] : undefined;
+
+    const orders = await getUserOrders(user_id, statusFilter, days);
 
     // Enrich each order with backend-driven UI fields
     const enrichedOrders = (orders || []).map(order => ({

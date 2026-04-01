@@ -50,7 +50,7 @@ BEGIN
 
   v_is_claiming := (p_actor_type = 'merchant'
     AND v_order.status IN ('pending'::order_status, 'escrowed'::order_status)
-    AND v_order.merchant_id != p_actor_id);
+    AND v_order.merchant_id IS DISTINCT FROM p_actor_id);
 
   v_is_m2m := v_is_claiming;
 

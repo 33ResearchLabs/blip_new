@@ -1,7 +1,7 @@
 "use client";
 
 import { LandingPage } from "@/components/user/LandingPage";
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -41,12 +41,13 @@ import {
   CashConfirmScreen,
   MatchingScreen,
   WalletScreen,
+  NotificationsScreen,
 } from "@/components/user/screens";
 
 export default function Home() {
   const { theme, toggleTheme } = useTheme();
   const { playSound } = useSounds();
-  const toast = useToast();
+  const rawToast = useToast();
   const solanaWallet = useSolanaWalletSafe();
 
   const embeddedWallet = (solanaWallet as any)?.embeddedWallet as {
@@ -56,6 +57,42 @@ export default function Home() {
     deleteWallet: () => void;
     setKeypairAndUnlock: (kp: any) => void;
   } | undefined;
+
+  // Persistent notification history (captured from toasts)
+  const [notifications, setNotifications] = useState<Array<{
+    id: string; type: string; title: string; message: string; timestamp: number; read: boolean;
+  }>>([]);
+  const addNotification = useCallback((type: string, title: string, message: string) => {
+    setNotifications(prev => [{
+      id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      type, title, message, timestamp: Date.now(), read: false,
+    }, ...prev].slice(0, 50)); // Keep max 50
+  }, []);
+
+  // Wrapped toast that also persists notification history
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const toast = useMemo(() => {
+    const wrap = (method: (...args: any[]) => void, type: string, titleFn: (...args: any[]) => string, msgFn: (...args: any[]) => string) =>
+      (...args: any[]) => { method(...args); addNotification(type, titleFn(...args), msgFn(...args)); };
+    return {
+      ...rawToast,
+      show: (t: Parameters<typeof rawToast.show>[0]) => {
+        rawToast.show(t); addNotification(t.type, t.title, t.message);
+      },
+      showOrderCreated: wrap(rawToast.showOrderCreated, 'order', () => 'New Order', (i?: string) => i || 'A new order has been placed'),
+      showPaymentSent: wrap(rawToast.showPaymentSent, 'payment', () => 'Payment Sent', () => 'Payment has been marked as sent'),
+      showTradeComplete: wrap(rawToast.showTradeComplete, 'complete', () => 'Trade Complete', (a?: string) => a ? `${a} USDC completed` : 'Trade completed'),
+      showEscrowLocked: wrap(rawToast.showEscrowLocked, 'escrow', () => 'Escrow Locked', (a?: string) => a ? `${a} USDC locked` : 'Funds locked in escrow'),
+      showDisputeOpened: wrap(rawToast.showDisputeOpened, 'dispute', () => 'Dispute Opened', () => 'A dispute has been raised'),
+      showNewMessage: wrap(rawToast.showNewMessage, 'message', (f: string) => `Message from ${f}`, (_f: string, p?: string) => p || 'New message'),
+      showWarning: wrap(rawToast.showWarning, 'warning', () => 'Warning', (m: string) => m),
+      showOrderCancelled: wrap(rawToast.showOrderCancelled, 'warning', () => 'Order Cancelled', () => 'Order has been cancelled'),
+      showOrderExpired: wrap(rawToast.showOrderExpired, 'warning', () => 'Order Expired', () => 'Order has expired'),
+      showEscrowReleased: wrap(rawToast.showEscrowReleased, 'complete', () => 'Escrow Released', () => 'Funds have been released'),
+      showMerchantAccepted: wrap(rawToast.showMerchantAccepted, 'order', () => 'Merchant Accepted', (n?: string) => n ? `${n} accepted your order` : 'Order accepted'),
+      showExtensionRequest: wrap(rawToast.showExtensionRequest, 'system', () => 'Extension Request', (_w: string, m?: number) => m ? `${m} minutes requested` : 'Time extension requested'),
+    };
+  }, [rawToast, addNotification]);
 
   const [screen, setScreen] = useState<Screen>("home");
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
@@ -345,6 +382,24 @@ export default function Home() {
               setActivityTab={setActivityTab}
               pendingOrders={pendingOrders}
               completedOrders={completedOrders}
+              allOrders={orders}
+              maxW={maxW}
+              onFilterChange={(opts) => {
+                if (auth.userId) fetchOrders(auth.userId, opts);
+              }}
+            />
+          </Panel>
+        )}
+
+        {screen === "notifications" && (
+          <Panel k="notifications" style={darkBg}>
+            <NotificationsScreen
+              screen={screen}
+              setScreen={setScreen}
+              notifications={notifications}
+              onMarkRead={(id) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))}
+              onMarkAllRead={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))}
+              unreadCount={notifications.filter(n => !n.read).length}
               maxW={maxW}
             />
           </Panel>
@@ -401,6 +456,7 @@ export default function Home() {
               setActiveOrderId={setActiveOrderId}
               setOrders={setOrders}
               maxW={maxW}
+              notificationCount={notifications.filter(n => !n.read).length}
             />
           </Panel>
         )}

@@ -36,6 +36,8 @@ interface MessageHistoryProps {
   merchantId: string;
   onOpenChat: (orderId: string, user: string, emoji: string) => void;
   onClose?: () => void;
+  /** Incrementing counter — triggers instant refetch when a new message arrives */
+  refreshTrigger?: number;
 }
 
 // Status badge colors
@@ -80,7 +82,7 @@ function truncate(text: string, maxLength: number): string {
   return text.slice(0, maxLength - 3) + '...';
 }
 
-export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHistoryProps) {
+export function MessageHistory({ merchantId, onOpenChat, onClose, refreshTrigger }: MessageHistoryProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -129,6 +131,13 @@ export function MessageHistory({ merchantId, onOpenChat, onClose }: MessageHisto
     }, 10000);
     return () => clearInterval(interval);
   }, [fetchConversations]);
+
+  // Instant refetch when a new message arrives via Pusher
+  useEffect(() => {
+    if (refreshTrigger && refreshTrigger > 0) {
+      fetchConversations();
+    }
+  }, [refreshTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced search
   useEffect(() => {

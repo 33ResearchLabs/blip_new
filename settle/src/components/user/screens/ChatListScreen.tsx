@@ -1,9 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Shield, AlertTriangle, Bell } from "lucide-react";
 import { BottomNav } from "./BottomNav";
 import type { Screen, Order } from "./types";
+
+function getSenderPrefix(order: Order): string {
+  const st = order.lastMessage?.senderType;
+  if (st === 'compliance') return 'Compliance: ';
+  if (st === 'system') return '';
+  if (order.lastMessage?.fromMerchant) return '';
+  return 'You: ';
+}
 
 export interface ChatListScreenProps {
   screen: Screen;
@@ -12,6 +21,7 @@ export interface ChatListScreenProps {
   setActiveOrderId: (id: string) => void;
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
   maxW: string;
+  notificationCount?: number;
 }
 
 export const ChatListScreen = ({
@@ -21,54 +31,180 @@ export const ChatListScreen = ({
   setActiveOrderId,
   setOrders,
   maxW,
+  notificationCount = 0,
 }: ChatListScreenProps) => {
+  const [activeTab, setActiveTab] = useState<'chats' | 'disputes'>('chats');
+  const [timeFilter, setTimeFilter] = useState<'today' | '7d' | '30d' | 'all'>('today');
   const card = { background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' };
+
+  const filterByTime = (list: Order[]) => {
+    if (timeFilter === 'all') return list;
+    const now = Date.now();
+    const cutoff = timeFilter === 'today' ? now - 86400000 : timeFilter === '7d' ? now - 7 * 86400000 : now - 30 * 86400000;
+    return list.filter(o => {
+      const ts = o.lastMessage?.createdAt?.getTime() || o.createdAt?.getTime() || 0;
+      return ts >= cutoff;
+    });
+  };
+
+  const chatOrders = filterByTime(orders.filter(o => o.dbStatus !== 'disputed'));
+  const disputeOrders = filterByTime(orders.filter(o => o.dbStatus === 'disputed'));
+  const disputeUnread = disputeOrders.reduce((sum, o) => sum + (o.unreadCount || 0), 0);
+
+  const displayOrders = activeTab === 'chats' ? chatOrders : disputeOrders;
+
+  const handleOpenChat = (order: Order) => {
+    setActiveOrderId(order.id);
+    setScreen("chat-view");
+    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, unreadCount: 0 } : o));
+  };
 
   return (
     <div className="flex flex-col h-dvh overflow-hidden" style={{ background: '#060606' }}>
 
       {/* ── Header ── */}
-      <header className="px-5 pt-10 pb-4 shrink-0">
-        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', marginBottom: 4 }}>Inbox</p>
-        <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', color: '#fff', lineHeight: 1 }}>Messages</p>
+      <header className="px-5 pt-10 pb-3 shrink-0">
+        <div className="flex items-center justify-between">
+          <div>
+            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', marginBottom: 4 }}>Inbox</p>
+            <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', color: '#fff', lineHeight: 1 }}>Messages</p>
+          </div>
+          <button
+            onClick={() => setScreen("notifications")}
+            className="relative p-2.5 rounded-[14px]"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+          >
+            <Bell size={18} color="rgba(255,255,255,0.4)" />
+            {notificationCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full flex items-center justify-center"
+                style={{ background: '#ef4444', fontSize: 9, fontWeight: 800, color: '#fff', padding: '0 4px' }}>
+                {notificationCount > 9 ? '9+' : notificationCount}
+              </span>
+            )}
+          </button>
+        </div>
       </header>
+
+      {/* ── Tabs ── */}
+      <div className="px-5 pb-2 flex gap-2 shrink-0">
+        <button
+          onClick={() => setActiveTab('chats')}
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all"
+          style={activeTab === 'chats'
+            ? { background: '#fff', color: '#000' }
+            : { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)' }
+          }
+        >
+          <MessageCircle size={13} strokeWidth={2.2} />
+          <span style={{ fontSize: 12, fontWeight: 700 }}>Chats</span>
+          {chatOrders.length > 0 && (
+            <span style={{
+              fontSize: 10, fontWeight: 800, minWidth: 18, textAlign: 'center',
+              background: activeTab === 'chats' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)',
+              borderRadius: 10, padding: '1px 5px',
+            }}>
+              {chatOrders.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('disputes')}
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all"
+          style={activeTab === 'disputes'
+            ? { background: '#ef4444', color: '#fff' }
+            : { background: 'rgba(239,68,68,0.1)', color: 'rgba(239,68,68,0.6)' }
+          }
+        >
+          <Shield size={13} strokeWidth={2.2} />
+          <span style={{ fontSize: 12, fontWeight: 700 }}>Disputes</span>
+          {disputeOrders.length > 0 && (
+            <span style={{
+              fontSize: 10, fontWeight: 800, minWidth: 18, textAlign: 'center',
+              background: activeTab === 'disputes' ? 'rgba(255,255,255,0.2)' : 'rgba(239,68,68,0.15)',
+              borderRadius: 10, padding: '1px 5px',
+            }}>
+              {disputeUnread > 0 ? disputeUnread : disputeOrders.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* ── Time Filter ── */}
+      <div className="px-5 pb-2 flex gap-1.5 shrink-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        {([
+          { key: 'today' as const, label: 'Today' },
+          { key: '7d' as const, label: '7 Days' },
+          { key: '30d' as const, label: '30 Days' },
+          { key: 'all' as const, label: 'All' },
+        ]).map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setTimeFilter(key)}
+            className="shrink-0 px-3 py-1 rounded-full transition-all"
+            style={{
+              fontSize: 10, fontWeight: 700, letterSpacing: '0.05em',
+              background: timeFilter === key ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.03)',
+              color: timeFilter === key ? '#fff' : 'rgba(255,255,255,0.3)',
+              border: `1px solid ${timeFilter === key ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.04)'}`,
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* ── List ── */}
       <div className="flex-1 px-5 pt-2 pb-24 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-        {orders.length === 0 ? (
+        {displayOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4"
-              style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
-              <MessageCircle size={22} color="rgba(0,0,0,0.2)" />
+              style={{ background: activeTab === 'disputes' ? 'rgba(239,68,68,0.1)' : '#ffffff', border: activeTab === 'disputes' ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(0,0,0,0.06)' }}>
+              {activeTab === 'disputes'
+                ? <Shield size={22} color="rgba(239,68,68,0.4)" />
+                : <MessageCircle size={22} color="rgba(0,0,0,0.2)" />
+              }
             </div>
-            <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: '#fff', marginBottom: 6 }}>No messages</p>
-            <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>Start a trade to chat with merchants</p>
+            <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: '#fff', marginBottom: 6 }}>
+              {activeTab === 'disputes' ? 'No disputes' : 'No messages'}
+            </p>
+            <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>
+              {activeTab === 'disputes' ? 'No active disputes on your orders' : 'Start a trade to chat with merchants'}
+            </p>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {orders.map((order, i) => {
+            {displayOrders.map((order, i) => {
               const hasUnread = (order.unreadCount || 0) > 0;
-              const initial = order.merchant.name.charAt(0).toUpperCase();
+              const initial = (order.merchant?.name || 'M').charAt(0).toUpperCase();
+              const isDispute = order.dbStatus === 'disputed';
+
               return (
                 <motion.button key={order.id}
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => {
-                    setActiveOrderId(order.id);
-                    setScreen("chat-view");
-                    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, unreadCount: 0 } : o));
-                  }}
+                  onClick={() => handleOpenChat(order)}
                   className="w-full rounded-[18px] p-3.5 flex items-center gap-3 text-left"
-                  style={hasUnread ? { background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.15)' } : card}>
+                  style={isDispute
+                    ? { background: hasUnread ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.04)', border: `1.5px solid rgba(239,68,68,${hasUnread ? 0.3 : 0.1})` }
+                    : hasUnread
+                      ? { background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.15)' }
+                      : card
+                  }>
                   {/* Avatar */}
                   <div className="relative shrink-0">
                     <div className="w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0"
-                      style={{ background: hasUnread ? '#000' : 'rgba(0,0,0,0.07)' }}>
-                      <span style={{ fontSize: 17, fontWeight: 800, color: hasUnread ? '#fff' : 'rgba(0,0,0,0.5)' }}>{initial}</span>
+                      style={isDispute
+                        ? { background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.2)' }
+                        : { background: hasUnread ? '#000' : 'rgba(0,0,0,0.07)' }
+                      }>
+                      {isDispute
+                        ? <AlertTriangle size={18} color="#ef4444" />
+                        : <span style={{ fontSize: 17, fontWeight: 800, color: hasUnread ? '#fff' : 'rgba(0,0,0,0.5)' }}>{initial}</span>
+                      }
                     </div>
                     {hasUnread && (
                       <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
-                        style={{ background: '#000', border: '2px solid #ffffff' }}>
+                        style={{ background: isDispute ? '#ef4444' : '#000', border: isDispute ? '2px solid #1a0a0a' : '2px solid #ffffff' }}>
                         <span style={{ fontSize: 8, fontWeight: 800, color: '#fff' }}>{order.unreadCount}</span>
                       </div>
                     )}
@@ -76,25 +212,41 @@ export const ChatListScreen = ({
                   {/* Text */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
-                      <p style={{ fontSize: 14, fontWeight: hasUnread ? 800 : 600, color: '#000', letterSpacing: '-0.01em' }}>
-                        {order.merchant.name}
-                      </p>
-                      <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(0,0,0,0.35)' }}>
+                      <div className="flex items-center gap-1.5">
+                        <p style={{ fontSize: 14, fontWeight: hasUnread ? 800 : 600, color: isDispute ? '#fff' : '#000', letterSpacing: '-0.01em' }}>
+                          {order.merchant?.name || 'Merchant'}
+                        </p>
+                        {isDispute && (
+                          <span style={{ fontSize: 8, fontWeight: 700, background: 'rgba(239,68,68,0.2)', color: '#ef4444', padding: '1px 5px', borderRadius: 4 }}>
+                            DISPUTE
+                          </span>
+                        )}
+                      </div>
+                      <p style={{ fontSize: 10, fontWeight: 500, color: isDispute ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.35)' }}>
                         {order.lastMessage
                           ? order.lastMessage.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                           : order.createdAt.toLocaleDateString()}
                       </p>
                     </div>
-                    <p style={{ fontSize: 12, fontWeight: hasUnread ? 600 : 400, color: hasUnread ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {/* Order details — distinguishes multiple orders with same merchant */}
+                    <p style={{ fontSize: 11, fontWeight: 500, color: isDispute ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)', marginBottom: 2 }}>
+                      {order.type === 'buy' ? 'Buying' : 'Selling'} {parseFloat(order.cryptoAmount).toFixed(2)} USDC · {order.createdAt.toLocaleDateString()}
+                    </p>
+                    <p style={{
+                      fontSize: 12,
+                      fontWeight: hasUnread ? 600 : 400,
+                      color: isDispute
+                        ? (hasUnread ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.35)')
+                        : (hasUnread ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.35)'),
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
                       {order.lastMessage
-                        ? (order.lastMessage.fromMerchant ? '' : 'You: ') + order.lastMessage.content
-                        : order.status === 'complete'
-                          ? 'Trade completed'
-                          : `${order.type === 'buy' ? 'Buying' : 'Selling'} ${parseFloat(order.cryptoAmount).toFixed(2)} USDC`}
+                        ? getSenderPrefix(order) + order.lastMessage.content
+                        : `${order.type === 'buy' ? 'Buying' : 'Selling'} ${parseFloat(order.cryptoAmount).toFixed(2)} USDC`}
                     </p>
                   </div>
                   {/* Active indicator */}
-                  {!hasUnread && order.status !== 'complete' && (
+                  {!hasUnread && !isDispute && order.status !== 'complete' && (
                     <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'rgba(0,0,0,0.2)' }} />
                   )}
                 </motion.button>
@@ -104,7 +256,7 @@ export const ChatListScreen = ({
         )}
       </div>
 
-      <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} />
+      <BottomNav screen={screen} setScreen={setScreen} maxW={maxW} notificationCount={notificationCount} />
     </div>
   );
 };

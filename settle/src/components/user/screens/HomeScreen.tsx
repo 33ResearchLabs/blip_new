@@ -438,7 +438,7 @@ export const HomeScreen = ({
             </div>
 
             {/* Bell */}
-            <motion.button whileTap={{ scale: 0.88 }} onClick={() => setScreen('chats')}
+            <motion.button whileTap={{ scale: 0.88 }} onClick={() => setScreen('notifications')}
               className="relative flex items-center justify-center"
               style={{
                 width: 38, height: 38, borderRadius: 13,

@@ -10,6 +10,7 @@ import { parseChannelName } from '@/lib/pusher/channels';
 import {
   canUserAccessOrder,
   canMerchantAccessOrder,
+  canComplianceAccessOrder,
   verifyUser,
   verifyMerchant,
 } from '@/lib/middleware/auth';
@@ -58,10 +59,10 @@ export async function POST(request: NextRequest) {
 
     // Get actor identity from headers (set by Pusher client)
     // DB verification happens per-channel in the switch block below
-    const actorType = request.headers.get('x-actor-type') as 'user' | 'merchant' | null;
+    const actorType = request.headers.get('x-actor-type') as 'user' | 'merchant' | 'compliance' | null;
     const actorId = request.headers.get('x-actor-id');
 
-    if (!actorType || !actorId || !['user', 'merchant'].includes(actorType)) {
+    if (!actorType || !actorId || !['user', 'merchant', 'compliance'].includes(actorType)) {
       return NextResponse.json(
         { error: 'Missing or invalid actor credentials' },
         { status: 401 }
@@ -99,12 +100,14 @@ export async function POST(request: NextRequest) {
 
       case 'order':
       case 'presence-order':
-        // Both user and merchant can subscribe if they're part of the order
+        // User, merchant, or compliance can subscribe if they have access
         if (channelId) {
           if (actorType === 'user') {
             authorized = await canUserAccessOrder(actorId, channelId);
           } else if (actorType === 'merchant') {
             authorized = await canMerchantAccessOrder(actorId, channelId);
+          } else if (actorType === 'compliance') {
+            authorized = await canComplianceAccessOrder(actorId, channelId);
           }
         }
         break;
@@ -122,11 +125,28 @@ export async function POST(request: NextRequest) {
 
     // Generate auth response
     if (channelName.startsWith('presence-')) {
-      // Presence channel requires user info
+      // Presence channel — include actor type and display name
+      let displayName: string = actorType;
+      try {
+        if (actorType === 'user') {
+          const { getUserById } = await import('@/lib/db/repositories/users');
+          const user = await getUserById(actorId);
+          if (user?.username) displayName = user.username;
+        } else if (actorType === 'merchant') {
+          const { getMerchantById } = await import('@/lib/db/repositories/merchants');
+          const merchant = await getMerchantById(actorId);
+          if (merchant?.business_name) displayName = merchant.business_name;
+        } else if (actorType === 'compliance') {
+          displayName = 'Compliance Officer';
+        }
+      } catch {
+        // Name lookup is best-effort — fall back to actorType
+      }
       const presenceData = {
         user_id: actorId,
         user_info: {
           type: actorType,
+          name: displayName,
         },
       };
       const authResponse = pusher.authorizeChannel(socketId, channelName, presenceData);

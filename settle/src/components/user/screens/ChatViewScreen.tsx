@@ -218,10 +218,15 @@ export const ChatViewScreen = ({
             <ChevronLeft className="w-6 h-6 text-white" />
           </button>
           <div className="w-10 h-10 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white font-semibold">
-            {activeOrder.merchant.name.charAt(0)}
+            {(activeOrder.merchant?.name || 'M').charAt(0)}
           </div>
           <div className="flex-1">
-            <p className="text-[15px] font-semibold text-white">{activeOrder.merchant.name}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-[15px] font-semibold text-white">{activeOrder.merchant?.name || 'Merchant'}</p>
+              {activeOrder.dbStatus === 'disputed' && (
+                <span className="text-[9px] font-bold bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded">DISPUTE</span>
+              )}
+            </div>
             <div className="flex items-center gap-1.5">
               <ConnectionIndicator isConnected={activeOrder.merchant.isOnline ?? false} />
               <p className={`text-[12px] ${activeOrder.merchant.isOnline ? 'text-emerald-400/80' : 'text-neutral-500'}`}>
@@ -340,6 +345,7 @@ export const ChatViewScreen = ({
             }
 
             const isMe = msg.from === "me";
+            const isCompliance = msg.from === "compliance";
             const isImageMsg = msg.messageType === 'image' && msg.imageUrl;
 
             return (
@@ -351,9 +357,14 @@ export const ChatViewScreen = ({
                   className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${
                     isMe
                       ? "bg-white/10 text-white rounded-br-md"
-                      : "bg-neutral-800 text-white rounded-bl-md"
+                      : isCompliance
+                        ? "bg-red-500/10 border border-red-500/20 text-white rounded-bl-md"
+                        : "bg-neutral-800 text-white rounded-bl-md"
                   }`}
                 >
+                  {isCompliance && (
+                    <p className="text-[11px] font-semibold text-red-400 mb-1">Compliance Officer</p>
+                  )}
                   {isImageMsg && (
                     <ImageMessage
                       imageUrl={msg.imageUrl!}
