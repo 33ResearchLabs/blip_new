@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Bell, Plus, Loader2, History } from "lucide-react";
+import { Bell, Plus, Loader2, History, X } from "lucide-react";
 import { usePusher } from "@/context/PusherContext";
 import { useSounds } from "@/hooks/useSounds";
 import { useWebSocketChat } from "@/hooks/useWebSocketChat";
@@ -88,8 +88,8 @@ export default function MerchantDashboard() {
   const setCompletedCollapsed = useCallback((v: boolean) => setCollapsed(p => ({ ...p, completed: v })), []);
   const setLeaderboardCollapsed = useCallback((v: boolean) => setCollapsed(p => ({ ...p, leaderboard: v })), []);
   const [mobileView, setMobileView] = useState<
-    "orders" | "escrow" | "chat" | "history" | "marketplace"
-  >("orders");
+    "home" | "orders" | "escrow" | "chat" | "history" | "marketplace"
+  >("home");
   const [tabs, setTabs] = useState({
     market: "browse" as "browse" | "offers",
     leaderboard: "traders" as "traders" | "rated" | "reputation",
@@ -752,6 +752,8 @@ export default function MerchantDashboard() {
         embeddedWalletState={embeddedWallet?.state}
         onLogout={handleLogout}
         onOpenProfile={() => setShowProfileModal(true)}
+        notificationCount={notifications.filter(n => !n.read).length}
+        onOpenNotifications={() => setShowNotifications(!showNotifications)}
         rightActions={
           <>
             <motion.button
@@ -776,34 +778,23 @@ export default function MerchantDashboard() {
       />
 
       {/* Mobile Stats Bar */}
-      <div className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.02] border-b border-white/[0.04]">
+      <div className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-foreground/[0.02] border-b border-foreground/[0.04]">
         <button
           onClick={() => setShowWalletModal(true)}
-          className="flex items-center gap-1 px-2 py-1 bg-white/[0.04] rounded-md border border-white/[0.08] shrink-0"
+          className="flex items-center gap-1 px-2 py-1 bg-foreground/[0.04] rounded-md border border-foreground/[0.08] shrink-0"
         >
-          <span className="text-[11px] font-mono text-white/70">
+          <span className="text-[11px] font-mono text-foreground/70">
             {effectiveBalance !== null
               ? `${effectiveBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
               : "—"}
           </span>
         </button>
-        <div className="flex items-center gap-1 px-2 py-1 bg-white/[0.03] rounded-md shrink-0">
-          <span className="text-[10px] font-mono text-gray-400">
+        <div className="flex items-center gap-1 px-2 py-1 bg-foreground/[0.03] rounded-md shrink-0">
+          <span className="text-[10px] font-mono text-foreground/40">
             ${totalTradedVolume.toLocaleString()}
           </span>
         </div>
         <div className="flex-1" />
-        <button
-          onClick={() => setShowNotifications(!showNotifications)}
-          className="relative p-2.5 bg-white/[0.04] rounded-md shrink-0"
-        >
-          <Bell className="w-4 h-4 text-gray-400" />
-          {notifications.filter((n) => !n.read).length > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full text-[9px] font-bold flex items-center justify-center text-white">
-              {notifications.filter((n) => !n.read).length}
-            </span>
-          )}
-        </button>
       </div>
 
       <MerchantDesktopLayout
@@ -890,8 +881,56 @@ export default function MerchantDashboard() {
         setOpenTradeForm={setOpenTradeForm}
         setShowOpenTradeModal={setShowOpenTradeModal}
         setShowCreateModal={setShowCreateModal}
+        openTradeForm={openTradeForm}
+        isCreatingTrade={isCreatingTrade}
+        onCreateTrade={handleCreateTrade}
+        onShowWalletModal={() => setShowWalletModal(true)}
         totalUnread={totalUnread}
       />
+
+      {/* Mobile Notifications Overlay */}
+      {showNotifications && (
+        <div className="md:hidden fixed inset-0 z-[55]">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowNotifications(false)} />
+          <div className="absolute top-0 right-0 bottom-0 w-full max-w-sm bg-card-solid border-l border-foreground/[0.06] flex flex-col animate-in slide-in-from-right duration-200">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/[0.06]">
+              <h2 className="text-sm font-semibold text-foreground">Notifications</h2>
+              <button onClick={() => setShowNotifications(false)} className="p-1.5 rounded-lg hover:bg-foreground/[0.06] transition-colors">
+                <X className="w-5 h-5 text-foreground/40" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {notifications.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-foreground/20 p-8">
+                  <Bell className="w-8 h-8 mb-2 opacity-30" />
+                  <p className="text-xs">No notifications</p>
+                </div>
+              ) : (
+                <div className="p-2 space-y-1">
+                  {notifications.map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => { markNotificationRead(n.id); }}
+                      className={`w-full text-left p-3 rounded-xl transition-colors ${n.read ? 'opacity-50' : 'bg-foreground/[0.03]'}`}
+                    >
+                      <p className="text-xs text-foreground/80">{n.message}</p>
+                      <p className="text-[10px] text-foreground/30 mt-1">
+                        {(() => {
+                          const sec = Math.floor((Date.now() - n.timestamp) / 1000);
+                          if (sec < 60) return 'Just now';
+                          if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+                          if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+                          return `${Math.floor(sec / 86400)}d ago`;
+                        })()}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <MerchantModals
         merchantId={merchantId}

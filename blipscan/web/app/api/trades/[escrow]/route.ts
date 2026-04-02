@@ -23,12 +23,17 @@ export async function GET(
         state as status,
         created_at,
         locked_at,
+        released_at,
+        refunded_at,
         created_slot::text,
         locked_slot::text,
         released_slot::text,
         'v1' as protocol_version,
         NULL as lane_id,
-        created_signature
+        created_signature,
+        locked_signature,
+        released_signature,
+        refunded_signature
       FROM trades WHERE trade_pda = $1`,
       [escrowAddress]
     );

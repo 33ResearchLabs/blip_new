@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Copy, Check, ExternalLink, Clock, User, CheckCircle2, XCircle, Lock, ChevronRight, Sun, Moon, ArrowRight, Wallet, DollarSign } from 'lucide-react';
+import { useTradeStream } from '../../hooks/useTradeStream';
 
 interface Trade {
   id: string;
@@ -48,6 +49,14 @@ interface Event {
   slot: number;
   block_time: string;
   signer: string;
+}
+
+interface LifecycleEvent {
+  event_type: string;
+  old_status: string;
+  new_status: string;
+  created_at: string;
+  actor_type: string;
 }
 
 function ThemeToggle() {
@@ -114,7 +123,15 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
   const [trade, setTrade] = useState<Trade | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [lifecycleEvents, setLifecycleEvents] = useState<LifecycleEvent[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Real-time: refetch when this trade updates
+  useTradeStream(useCallback((event) => {
+    if (event.type === 'trade_update' && event.data?.trade_pda === params.escrow) {
+      fetchAll();
+    }
+  }, [params.escrow]));
 
   useEffect(() => {
     fetchAll();
@@ -123,19 +140,22 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [tradeRes, txRes, eventsRes] = await Promise.all([
+      const [tradeRes, txRes, eventsRes, lifecycleRes] = await Promise.all([
         fetch(`/api/trades/${params.escrow}`),
         fetch(`/api/transactions?trade_pda=${params.escrow}&limit=50`),
         fetch(`/api/events/${params.escrow}`),
+        fetch(`/api/trades/${params.escrow}/lifecycle`),
       ]);
-      const [tradeData, txData, eventsData] = await Promise.all([
+      const [tradeData, txData, eventsData, lifecycleData] = await Promise.all([
         tradeRes.json(),
         txRes.json(),
         eventsRes.json(),
+        lifecycleRes.json(),
       ]);
       setTrade(tradeData.error ? null : tradeData);
       setTransactions(txData.transactions || []);
       setEvents(eventsData.events || []);
+      setLifecycleEvents(lifecycleData.events || []);
     } catch (error) {
       console.error('Error fetching trade data:', error);
     } finally {
@@ -238,12 +258,92 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
 
   const sc = getStatus(trade.status);
 
-  // Build lifecycle steps from trade data
-  const lifecycle = [
-    { label: 'Created', sig: trade.created_signature, time: trade.created_at, slot: trade.created_slot, active: true },
-    { label: 'Locked', sig: trade.locked_signature, time: trade.locked_at, slot: trade.locked_slot, active: !!trade.locked_at },
-    { label: trade.status === 'refunded' ? 'Refunded' : 'Released', sig: trade.status === 'refunded' ? trade.refunded_signature : trade.released_signature, time: trade.released_at, slot: trade.released_slot, active: trade.status === 'released' || trade.status === 'refunded' },
-  ];
+  // Build full lifecycle from both on-chain + off-chain data
+  const statusLower = trade.status?.toLowerCase();
+  const isReleased = statusLower === 'released';
+  const isRefunded = statusLower === 'refunded';
+  const isLocked = statusLower === 'locked';
+  const hasLocked = !!trade.locked_at || !!trade.locked_signature || isLocked;
+
+  // Off-chain event lookup
+  const offchainMap: Record<string, LifecycleEvent> = {};
+  lifecycleEvents.forEach(e => { offchainMap[e.new_status] = e; });
+
+  const hasOffchain = lifecycleEvents.length > 0;
+
+  // Build unified lifecycle steps
+  interface LifecycleStep { label: string; icon: 'create' | 'accept' | 'escrow' | 'lock' | 'payment' | 'release' | 'refund' | 'dispute'; time: string | null; active: boolean; actor?: string; }
+
+  const lifecycle: LifecycleStep[] = [];
+
+  if (hasOffchain) {
+    // Full off-chain + on-chain lifecycle
+    lifecycle.push({ label: 'Created', icon: 'create', time: trade.created_at, active: true });
+
+    if (offchainMap['accepted']) {
+      lifecycle.push({ label: 'Accepted', icon: 'accept', time: offchainMap['accepted'].created_at, active: true, actor: offchainMap['accepted'].actor_type });
+    }
+
+    if (offchainMap['escrowed'] || trade.created_signature) {
+      lifecycle.push({ label: 'Escrowed', icon: 'escrow', time: offchainMap['escrowed']?.created_at || trade.created_at, active: true });
+    }
+
+    if (offchainMap['payment_sent']) {
+      lifecycle.push({ label: 'Payment Sent', icon: 'payment', time: offchainMap['payment_sent'].created_at, active: true, actor: offchainMap['payment_sent'].actor_type });
+    } else if (!isReleased && !isRefunded) {
+      lifecycle.push({ label: 'Payment Sent', icon: 'payment', time: null, active: false });
+    }
+
+    if (offchainMap['disputed']) {
+      lifecycle.push({ label: 'Disputed', icon: 'dispute', time: offchainMap['disputed'].created_at, active: true });
+    }
+
+    if (isReleased || offchainMap['completed']) {
+      lifecycle.push({ label: 'Completed', icon: 'release', time: offchainMap['completed']?.created_at || trade.released_at, active: true });
+    } else if (isRefunded) {
+      lifecycle.push({ label: 'Refunded', icon: 'refund', time: trade.released_at || (trade as any).refunded_at, active: true });
+    } else if (offchainMap['cancelled']) {
+      lifecycle.push({ label: 'Cancelled', icon: 'refund', time: offchainMap['cancelled'].created_at, active: true });
+    } else {
+      lifecycle.push({ label: 'Completed', icon: 'release', time: null, active: false });
+    }
+  } else {
+    // On-chain only lifecycle
+    lifecycle.push({ label: 'Created', icon: 'create', time: trade.created_at, active: true });
+
+    if (hasLocked) {
+      lifecycle.push({ label: 'Locked', icon: 'lock', time: trade.locked_at, active: true });
+    }
+
+    if (isReleased || isRefunded) {
+      lifecycle.push({
+        label: isRefunded ? 'Refunded' : 'Released',
+        icon: isRefunded ? 'refund' : 'release',
+        time: trade.released_at || (trade as any).refunded_at,
+        active: true,
+      });
+    } else if (!hasLocked) {
+      lifecycle.push({ label: 'Locked', icon: 'lock', time: null, active: false });
+      lifecycle.push({ label: 'Released', icon: 'release', time: null, active: false });
+    } else {
+      lifecycle.push({ label: 'Released', icon: 'release', time: null, active: false });
+    }
+  }
+
+  const getLifecycleIcon = (icon: string, active: boolean) => {
+    const cls = active ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground';
+    switch (icon) {
+      case 'create': return <Wallet size={14} className={cls} />;
+      case 'accept': return <CheckCircle2 size={14} className={cls} />;
+      case 'escrow': return <Lock size={14} className={cls} />;
+      case 'lock': return <Lock size={14} className={cls} />;
+      case 'payment': return <DollarSign size={14} className={cls} />;
+      case 'release': return <CheckCircle2 size={14} className={cls} />;
+      case 'refund': return <XCircle size={14} className={cls} />;
+      case 'dispute': return <XCircle size={14} className={cls} />;
+      default: return <Clock size={14} className={cls} />;
+    }
+  };
 
   // Calculate timing
   const createdMs = new Date(trade.created_at).getTime();
@@ -265,6 +365,13 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
 
   const feeAmount = trade.fee_bps > 0 ? (parseInt(trade.amount) * trade.fee_bps / 10000 / 1_000_000) : 0;
   const netAmount = parseInt(trade.amount) / 1_000_000 - feeAmount;
+
+  // Build fallback signature list from trade record
+  const tradeSigs: { type: string; signature: string; time: string | null; slot: number | null }[] = [];
+  if (trade.created_signature) tradeSigs.push({ type: 'create_trade', signature: trade.created_signature, time: trade.created_at, slot: trade.created_slot });
+  if (trade.locked_signature) tradeSigs.push({ type: 'lock_escrow', signature: trade.locked_signature, time: trade.locked_at, slot: trade.locked_slot });
+  if (trade.released_signature) tradeSigs.push({ type: 'release_escrow', signature: trade.released_signature, time: trade.released_at, slot: trade.released_slot });
+  if (trade.refunded_signature) tradeSigs.push({ type: 'refund_escrow', signature: trade.refunded_signature, time: (trade as any).refunded_at, slot: null });
 
   return (
     <div className="min-h-screen bg-background">
@@ -344,29 +451,41 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
         {/* Escrow lifecycle progress */}
         <div className="rounded-lg border border-border bg-card mb-4 p-4">
           <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider mb-4">Escrow Lifecycle</h2>
-          <div className="flex items-center justify-between">
-            {lifecycle.map((step, i) => (
-              <div key={step.label} className="flex items-center flex-1">
-                <div className="flex flex-col items-center text-center flex-1">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${
-                    step.active ? 'bg-emerald-100 dark:bg-emerald-500/20 border-2 border-emerald-500' : 'bg-secondary border-2 border-border'
-                  }`}>
-                    {step.label === 'Created' && <Wallet size={14} className={step.active ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'} />}
-                    {step.label === 'Locked' && <Lock size={14} className={step.active ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'} />}
-                    {(step.label === 'Released' || step.label === 'Refunded') && <DollarSign size={14} className={step.active ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'} />}
+          <div className="flex items-center justify-between overflow-x-auto">
+            {lifecycle.map((step, i) => {
+              const prevTime = i > 0 && lifecycle[i - 1].time ? new Date(lifecycle[i - 1].time!).getTime() : null;
+              const currTime = step.time ? new Date(step.time).getTime() : null;
+              const stepDuration = prevTime && currTime ? Math.round((currTime - prevTime) / 1000) : null;
+
+              return (
+                <div key={`${step.label}-${i}`} className="flex items-center flex-1 min-w-0">
+                  <div className="flex flex-col items-center text-center flex-1 min-w-[60px]">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 ${
+                      step.active
+                        ? step.icon === 'refund' || step.icon === 'dispute'
+                          ? 'bg-red-100 dark:bg-red-500/20 border-2 border-red-500'
+                          : 'bg-emerald-100 dark:bg-emerald-500/20 border-2 border-emerald-500'
+                        : 'bg-secondary border-2 border-border'
+                    }`}>
+                      {getLifecycleIcon(step.icon, step.active)}
+                    </div>
+                    <p className={`text-xs font-medium ${step.active ? 'text-foreground' : 'text-muted-foreground'}`}>{step.label}</p>
+                    {step.time && <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(step.time)}</p>}
+                    {step.actor && <p className="text-[10px] text-muted-foreground/60 mt-0.5 capitalize">{step.actor}</p>}
                   </div>
-                  <p className={`text-xs font-medium ${step.active ? 'text-foreground' : 'text-muted-foreground'}`}>{step.label}</p>
-                  {step.time && <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(step.time)}</p>}
+                  {i < lifecycle.length - 1 && (
+                    <div className="flex flex-col items-center mx-1 mb-6">
+                      <ArrowRight size={14} className="text-muted-foreground" />
+                      {stepDuration !== null && i < lifecycle.length - 1 && lifecycle[i + 1].time && (
+                        <span className="text-[10px] text-muted-foreground mt-0.5">
+                          {formatDuration(Math.round((new Date(lifecycle[i + 1].time!).getTime() - new Date(step.time!).getTime()) / 1000))}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {i < lifecycle.length - 1 && (
-                  <div className="flex flex-col items-center mx-2 mb-6">
-                    <ArrowRight size={14} className="text-muted-foreground" />
-                    {i === 0 && lockTime !== null && <span className="text-[10px] text-muted-foreground mt-0.5">{formatDuration(lockTime)}</span>}
-                    {i === 1 && releaseTime !== null && <span className="text-[10px] text-muted-foreground mt-0.5">{formatDuration(releaseTime)}</span>}
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -426,7 +545,7 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
         <div className="rounded-lg border border-border bg-card mb-4">
           <div className="px-4 py-3 border-b border-border flex items-center justify-between">
             <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">Transactions</h2>
-            <span className="text-[10px] text-muted-foreground">{transactions.length + (lifecycle.filter(s => s.sig).length)} total</span>
+            <span className="text-[10px] text-muted-foreground">{transactions.length || tradeSigs.length} total</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -473,35 +592,30 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
                     </tr>
                   ))
                 ) : (
-                  /* Fallback: show lifecycle signatures from trade record */
-                  lifecycle.filter(s => s.sig).map((step, idx) => (
-                    <tr key={step.sig} className="border-b border-border/50 last:border-0 hover:bg-card-hover transition-colors">
+                  /* Fallback: show signatures from trade record */
+                  tradeSigs.map((sig, idx) => (
+                    <tr key={sig.signature} className="border-b border-border/50 last:border-0 hover:bg-card-hover transition-colors">
                       <td className="px-4 py-3 text-muted-foreground">{idx + 1}</td>
                       <td className="px-4 py-3">
-                        <span className={`font-medium ${
-                          step.label === 'Created' ? 'text-blue-600 dark:text-blue-400' :
-                          step.label === 'Locked' ? 'text-yellow-600 dark:text-yellow-400' :
-                          step.label === 'Released' ? 'text-emerald-600 dark:text-emerald-400' :
-                          'text-red-600 dark:text-red-400'
-                        }`}>
-                          {step.label}
+                        <span className={`font-medium ${instructionColor(sig.type)}`}>
+                          {instructionLabel(sig.type)}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-mono text-foreground">
                         <div className="flex items-center gap-1.5">
-                          <span>{step.sig!.slice(0, 20)}...{step.sig!.slice(-6)}</span>
-                          <CopyButton text={step.sig!} />
+                          <span>{sig.signature.slice(0, 20)}...{sig.signature.slice(-6)}</span>
+                          <CopyButton text={sig.signature} />
                         </div>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        <div>{formatTime(step.time)}</div>
-                        <div className="text-[10px]">{timeAgo(step.time)}</div>
+                        <div>{formatTime(sig.time)}</div>
+                        <div className="text-[10px]">{timeAgo(sig.time)}</div>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground font-mono hidden sm:table-cell">
-                        {step.slot ? Number(step.slot).toLocaleString() : '—'}
+                        {sig.slot ? Number(sig.slot).toLocaleString() : '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <a href={solscanTx(step.sig!)} target="_blank" rel="noopener noreferrer"
+                        <a href={solscanTx(sig.signature)} target="_blank" rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground">
                           <ExternalLink size={12} />
                         </a>
@@ -509,7 +623,7 @@ export default function TradePage({ params }: { params: { escrow: string } }) {
                     </tr>
                   ))
                 )}
-                {transactions.length === 0 && lifecycle.filter(s => s.sig).length === 0 && (
+                {transactions.length === 0 && tradeSigs.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                       No transactions recorded yet. The indexer may still be catching up.

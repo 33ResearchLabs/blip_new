@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Search, Activity, DollarSign, Clock, CheckCircle, Copy, ChevronRight, BarChart3, Sun, Moon, Users, ExternalLink } from 'lucide-react';
+import { useTradeStream } from './hooks/useTradeStream';
 
 interface Trade {
   id: string;
@@ -153,6 +154,46 @@ export default function HomePage() {
     }
     fetchStats();
   }, [viewMode, fetchTrades, fetchTransactions, fetchLaneOperations, fetchStats]);
+
+  // Real-time trade updates via SSE
+  useTradeStream(useCallback((event) => {
+    if (event.type === 'trade_update' && event.data) {
+      const update = event.data;
+
+      // Update trade in list if it exists, or prepend if new
+      setTrades(prev => {
+        const idx = prev.findIndex(t => t.escrow_address === update.trade_pda);
+        if (idx >= 0) {
+          // Update existing trade status
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], status: update.status };
+          return updated;
+        }
+        // New trade — prepend to list
+        const newTrade: Trade = {
+          id: update.trade_pda,
+          escrow_address: update.trade_pda,
+          merchant_pubkey: update.creator,
+          buyer_pubkey: update.counterparty,
+          amount: update.amount,
+          fee_bps: 0,
+          mint_address: '',
+          status: update.status,
+          created_at: update.created_at,
+          locked_at: null,
+          released_at: null,
+          created_slot: 0,
+          locked_slot: null,
+          released_slot: null,
+          protocol_version: 'v2.2',
+        };
+        return [newTrade, ...prev.slice(0, 49)];
+      });
+
+      // Refresh stats on any update
+      fetchStats();
+    }
+  }, [fetchStats]));
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);

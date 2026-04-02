@@ -30,6 +30,7 @@ import {
   X,
   Palette,
   Lock,
+  Trophy,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -66,7 +67,7 @@ const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/pixel-art/svg?seed=Pixel4',
 ];
 
-type SettingsTab = 'profile' | 'account' | 'security' | 'theme' | 'payments' | 'notifications' | 'liquidity';
+type SettingsTab = 'profile' | 'account' | 'security' | 'theme' | 'payments' | 'notifications' | 'liquidity' | 'reputation';
 
 export default function MerchantSettingsPage() {
   const router = useRouter();
@@ -98,6 +99,10 @@ export default function MerchantSettingsPage() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  // Reputation
+  const [repData, setRepData] = useState<any>(null);
+  const [repLoading, setRepLoading] = useState(false);
 
   // Payment methods
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
@@ -351,6 +356,7 @@ export default function MerchantSettingsPage() {
     { id: 'payments', label: 'Payments', icon: CreditCard },
     { id: 'notifications', label: 'Alerts', icon: Bell },
     { id: 'liquidity', label: 'Liquidity', icon: Droplets },
+    { id: 'reputation', label: 'Reputation', icon: Trophy },
   ];
 
   return (
@@ -937,6 +943,10 @@ export default function MerchantSettingsPage() {
             </div>
           )}
 
+          {activeTab === 'reputation' && (
+            <ReputationTab merchantId={merchantId} />
+          )}
+
           {/* Mobile Logout */}
           <div className="md:hidden mt-8 pt-6 border-t border-white/[0.04]">
             <button
@@ -953,6 +963,231 @@ export default function MerchantSettingsPage() {
           </div>
         </main>
       </div>
+    </div>
+  );
+}
+
+// ============================================
+// REPUTATION TAB COMPONENT
+// ============================================
+
+function ReputationTab({ merchantId }: { merchantId: string | null }) {
+  const [repData, setRepData] = useState<any>(null);
+  const [repLoading, setRepLoading] = useState(true);
+
+  useEffect(() => {
+    const id = merchantId || JSON.parse(localStorage.getItem('blip_merchant') || '{}')?.id;
+    if (!id) {
+      setRepLoading(false);
+      return;
+    }
+    setRepLoading(true);
+    fetch(`/api/reputation?entityId=${id}&entityType=merchant`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.data) {
+          setRepData(data.data);
+        }
+      })
+      .catch(err => console.error('Reputation fetch error:', err))
+      .finally(() => setRepLoading(false));
+  }, [merchantId]);
+
+  const score = repData?.score?.total_score ?? 0;
+  const tier = repData?.score?.tier ?? 'newcomer';
+  const badges = repData?.score?.badges ?? [];
+
+  const tierLabels: Record<string, string> = {
+    diamond: 'Diamond', platinum: 'Platinum', gold: 'Gold',
+    silver: 'Silver', bronze: 'Bronze', newcomer: 'Newcomer',
+  };
+
+  const getColor = (s: number) => {
+    if (s >= 900) return '#06b6d4';
+    if (s >= 800) return '#3b82f6';
+    if (s >= 600) return '#22c55e';
+    if (s >= 400) return '#eab308';
+    if (s >= 200) return '#f97316';
+    return '#ef4444';
+  };
+
+  const segments = [
+    { start: 0, end: 20, color: '#ef4444', label: 'Poor', offset: 30 },
+    { start: 20, end: 40, color: '#f97316', label: 'Fair', offset: 24 },
+    { start: 40, end: 60, color: '#eab308', label: 'Good', offset: 24 },
+    { start: 60, end: 80, color: '#22c55e', label: 'V.Good', offset: 28 },
+    { start: 80, end: 100, color: '#06b6d4', label: 'Excellent', offset: 42 },
+  ];
+
+  const breakdownMap: Record<string, { label: string; key: string }> = {
+    execution_score: { label: 'Reliability', key: 'execution_score' },
+    volume_score: { label: 'Volume', key: 'volume_score' },
+    consistency_score: { label: 'Speed', key: 'consistency_score' },
+    trust_score: { label: 'Liquidity', key: 'trust_score' },
+    review_score: { label: 'Trust', key: 'review_score' },
+  };
+
+  if (repLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-white/30" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-bold mb-1">Reputation Score</h2>
+        <p className="text-sm text-white/40">Your reputation based on trading history, speed, and trust</p>
+      </div>
+
+      {/* Gauge */}
+      <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-6">
+        <div className="flex flex-col items-center">
+          <div className="relative" style={{ width: 340, height: 200 }}>
+            <svg viewBox="0 0 340 200" className="w-full h-full" overflow="visible">
+              {segments.map((seg, i) => {
+                const cx = 170, cy = 170, r = 120;
+                const startAngle = Math.PI + (seg.start / 100) * Math.PI;
+                const endAngle = Math.PI + (seg.end / 100) * Math.PI;
+                const x1 = cx + r * Math.cos(startAngle);
+                const y1 = cy + r * Math.sin(startAngle);
+                const x2 = cx + r * Math.cos(endAngle);
+                const y2 = cy + r * Math.sin(endAngle);
+                const midAngle = Math.PI + ((seg.start + seg.end) / 200) * Math.PI;
+                const lx = cx + (r + seg.offset) * Math.cos(midAngle);
+                const ly = cy + (r + seg.offset) * Math.sin(midAngle);
+                return (
+                  <g key={i}>
+                    <path d={`M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`}
+                      fill="none" stroke={seg.color} strokeWidth="24" strokeLinecap="butt" opacity={0.9} />
+                    <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
+                      fontSize="10" fontWeight="600" fill={seg.color} opacity={0.85}>
+                      {seg.label}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Needle */}
+              {(() => {
+                const cx = 170, cy = 170;
+                const pct = Math.min(100, Math.max(0, score / 10));
+                const angle = Math.PI + (pct / 100) * Math.PI;
+                const len = 90;
+                const tipX = cx + len * Math.cos(angle);
+                const tipY = cy + len * Math.sin(angle);
+                const bw = 7;
+                const pa = angle + Math.PI / 2;
+                const b1x = cx + bw * Math.cos(pa), b1y = cy + bw * Math.sin(pa);
+                const b2x = cx - bw * Math.cos(pa), b2y = cy - bw * Math.sin(pa);
+                const tl = 18;
+                const tailX = cx - tl * Math.cos(angle), tailY = cy - tl * Math.sin(angle);
+                return (
+                  <g>
+                    <defs>
+                      <filter id="ns" x="-20%" y="-20%" width="140%" height="140%">
+                        <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#000" floodOpacity="0.4" />
+                      </filter>
+                    </defs>
+                    <polygon points={`${tipX},${tipY} ${b1x},${b1y} ${tailX},${tailY} ${b2x},${b2y}`}
+                      fill={getColor(score)} filter="url(#ns)" opacity={0.95} />
+                    <circle cx={cx} cy={cy} r="12" fill={getColor(score)} filter="url(#ns)" />
+                    <circle cx={cx} cy={cy} r="6" fill="var(--background, #0a0a0a)" />
+                    <circle cx={cx} cy={cy} r="2.5" fill={getColor(score)} opacity={0.6} />
+                  </g>
+                );
+              })()}
+
+              <text x="42" y="185" fontSize="10" fill="white" opacity={0.3} fontFamily="monospace">0</text>
+              <text x="286" y="185" fontSize="10" fill="white" opacity={0.3} fontFamily="monospace">1000</text>
+            </svg>
+          </div>
+
+          {/* Score */}
+          <div className="flex flex-col items-center -mt-2">
+            <span className="text-5xl font-black" style={{ color: getColor(score) }}>
+              {score}
+            </span>
+            <span className="text-sm font-bold mt-1" style={{ color: getColor(score) }}>
+              {tierLabels[tier] || tier}
+            </span>
+          </div>
+        </div>
+
+        {/* Badges */}
+        {badges.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-2 mt-4">
+            {badges.map((b: string) => (
+              <span key={b} className="px-3 py-1 rounded-full text-[11px] font-medium bg-white/[0.06] border border-white/[0.08] text-white/60">
+                {b.replace(/_/g, ' ')}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Breakdown */}
+      <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5">
+        <h3 className="text-xs font-bold text-white/40 uppercase tracking-wider mb-4">Score Breakdown</h3>
+        <div className="space-y-3">
+          {Object.entries(breakdownMap).map(([key, { label }]) => {
+            const val = repData?.score?.[key] ?? 0;
+            return (
+              <div key={key}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm text-white/60">{label}</span>
+                  <span className="text-sm font-bold text-white/80">{val} / 1000</span>
+                </div>
+                <div className="h-2 rounded-full bg-white/[0.06]">
+                  <div className="h-full rounded-full transition-all" style={{
+                    width: `${Math.min(100, val / 10)}%`,
+                    backgroundColor: getColor(val),
+                  }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 text-center">
+          <p className="text-2xl font-bold text-white/80">{repData?.score?.total_score ?? 0}</p>
+          <p className="text-[11px] text-white/30 mt-1">Score</p>
+        </div>
+        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 text-center">
+          <p className="text-2xl font-bold text-white/80">{tierLabels[tier]}</p>
+          <p className="text-[11px] text-white/30 mt-1">Tier</p>
+        </div>
+        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 text-center">
+          <p className="text-2xl font-bold text-white/80">{repData?.rank ?? '—'}</p>
+          <p className="text-[11px] text-white/30 mt-1">Rank</p>
+        </div>
+        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 text-center">
+          <p className="text-2xl font-bold text-white/80">{badges.length}</p>
+          <p className="text-[11px] text-white/30 mt-1">Badges</p>
+        </div>
+      </div>
+
+      {/* Progress to next tier */}
+      {repData?.progress && (
+        <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5">
+          <h3 className="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">Progress to Next Tier</h3>
+          <p className="text-sm text-white/60 mb-3">
+            {repData.progress.pointsNeeded > 0
+              ? `${repData.progress.pointsNeeded} points to ${tierLabels[repData.progress.nextTier] || repData.progress.nextTier}`
+              : 'Maximum tier reached!'}
+          </p>
+          <div className="h-3 rounded-full bg-white/[0.06]">
+            <div className="h-full rounded-full bg-primary transition-all" style={{
+              width: `${Math.min(100, repData.progress.progressPercent ?? 0)}%`,
+            }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

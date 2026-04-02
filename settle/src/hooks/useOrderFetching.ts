@@ -313,7 +313,8 @@ export function useOrderFetching({
       });
       if (!res.ok) {
         // 403 = not your order (broadcast event for another merchant's order) — silently ignore
-        if (res.status !== 403) {
+        // 404 = order was expired/deleted between broadcast and refetch — silently ignore
+        if (res.status !== 403 && res.status !== 404) {
           console.error('[Merchant] Failed to refetch order:', res.status);
         }
         return;

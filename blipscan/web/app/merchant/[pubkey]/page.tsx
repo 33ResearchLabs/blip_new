@@ -4,6 +4,24 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Copy, Check, ExternalLink, TrendingUp, Clock, CheckCircle2, XCircle, ChevronRight, Sun, Moon } from 'lucide-react';
 
+interface ReputationData {
+  total_score: number;
+  tier: string;
+  badges: string[];
+  breakdown: {
+    reliability: { raw: number; weighted: number; weight: number };
+    volume: { raw: number; weighted: number; weight: number };
+    speed: { raw: number; weighted: number; weight: number };
+    liquidity: { raw: number; weighted: number; weight: number };
+    trust: { raw: number; weighted: number; weight: number };
+  };
+  penalties: { type: string; points: number; count: number }[];
+  abuse_flags: string[];
+  wash_trading_detected: boolean;
+  trade_count: number;
+  cold_start: boolean;
+}
+
 interface MerchantStats {
   merchant_pubkey: string;
   total_trades: number;
@@ -60,6 +78,7 @@ function CopyButton({ text }: { text: string }) {
 
 export default function MerchantPage({ params }: { params: { pubkey: string } }) {
   const [stats, setStats] = useState<MerchantStats | null>(null);
+  const [reputation, setReputation] = useState<ReputationData | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -70,16 +89,19 @@ export default function MerchantPage({ params }: { params: { pubkey: string } })
   const fetchMerchantData = async () => {
     try {
       setLoading(true);
-      const [statsRes, tradesRes] = await Promise.all([
+      const [statsRes, tradesRes, repRes] = await Promise.all([
         fetch(`/api/merchant/${params.pubkey}`),
         fetch(`/api/merchant/${params.pubkey}/trades`),
+        fetch(`/api/reputation/${params.pubkey}`),
       ]);
 
       const statsData = await statsRes.json();
       const tradesData = await tradesRes.json();
+      const repData = await repRes.json();
 
       setStats(statsData);
       setTrades(tradesData.trades || []);
+      if (!repData.error) setReputation(repData);
     } catch (error) {
       console.error('Error fetching merchant data:', error);
     } finally {
@@ -132,36 +154,37 @@ export default function MerchantPage({ params }: { params: { pubkey: string } })
     );
   }
 
-  const completionRate = stats?.completion_rate ?? 0;
-  const avgTime = stats?.avg_completion_time_seconds ?? 0;
-  const completedTrades = stats?.completed_trades ?? 0;
+  const completedTrades = parseInt(String(stats?.completed_trades ?? 0));
 
-  // Compute reputation score client-side
-  const completionPts = completionRate * 0.6;
-  const volumePts = Math.min(20, Math.floor(completedTrades / 5));
-  const speedPts = avgTime > 0 ? Math.max(0, 20 - (avgTime / 3600 * 0.83)) : 0;
-  const reputationScore = Math.min(100, completionPts + volumePts + speedPts);
+  // Use server-side reputation (0-1000 scale) or fallback
+  const reputationScore = reputation?.total_score ?? 0;
+  const reputationTier = reputation?.tier ?? 'newcomer';
 
   const getReputationColor = (score: number) => {
-    if (score >= 80) return 'text-emerald-600 dark:text-emerald-400';
-    if (score >= 60) return 'text-yellow-600 dark:text-yellow-400';
-    if (score >= 40) return 'text-orange-600 dark:text-orange-400';
-    return 'text-red-600 dark:text-red-400';
+    if (score >= 900) return 'text-cyan-500 dark:text-cyan-400';
+    if (score >= 800) return 'text-blue-500 dark:text-blue-300';
+    if (score >= 600) return 'text-yellow-500 dark:text-yellow-400';
+    if (score >= 400) return 'text-gray-500 dark:text-gray-400';
+    if (score >= 200) return 'text-orange-600 dark:text-orange-400';
+    return 'text-white/30';
   };
 
   const getReputationBarColor = (score: number) => {
-    if (score >= 80) return 'bg-emerald-500';
-    if (score >= 60) return 'bg-yellow-500';
-    if (score >= 40) return 'bg-orange-500';
-    return 'bg-red-500';
+    if (score >= 900) return 'bg-cyan-400';
+    if (score >= 800) return 'bg-blue-400';
+    if (score >= 600) return 'bg-yellow-500';
+    if (score >= 400) return 'bg-gray-400';
+    if (score >= 200) return 'bg-orange-500';
+    return 'bg-white/20';
   };
 
-  const getReputationLabel = (score: number) => {
-    if (score >= 90) return 'Excellent';
-    if (score >= 75) return 'Very Good';
-    if (score >= 60) return 'Good';
-    if (score >= 40) return 'Fair';
-    return 'Poor';
+  const tierLabels: Record<string, string> = {
+    diamond: 'Diamond',
+    platinum: 'Platinum',
+    gold: 'Gold',
+    silver: 'Silver',
+    bronze: 'Bronze',
+    newcomer: 'Newcomer',
   };
 
   if (!stats || stats.total_trades === undefined) {
@@ -252,54 +275,174 @@ export default function MerchantPage({ params }: { params: { pubkey: string } })
           <div className="rounded-lg border border-border bg-card px-4 py-3">
             <div className="flex items-center gap-2 mb-1">
               <Clock size={13} className="text-primary" />
-              <span className="text-xs text-muted-foreground">Avg. Time</span>
+              <span className="text-xs text-muted-foreground">Trades</span>
             </div>
-            <p className="text-xl font-semibold text-foreground">{avgTime > 0 ? Math.round(avgTime / 60) : 0}m</p>
+            <p className="text-xl font-semibold text-foreground">{reputation?.trade_count ?? (stats?.total_trades ?? 0)}</p>
           </div>
         </div>
 
-        {/* Reputation section */}
+        {/* Reputation section — Credit Score Gauge */}
         <div className="rounded-lg border border-border bg-card mb-4">
-          <div className="px-4 py-3 border-b border-border">
-            <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">Reputation</h2>
+          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+            <h2 className="text-xs font-semibold text-foreground uppercase tracking-wider">Reputation Score</h2>
+            <div className="flex items-center gap-2">
+              {reputation?.cold_start && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400">
+                  Provisional
+                </span>
+              )}
+              {reputation?.badges.map(badge => (
+                <span key={badge} className="px-2 py-0.5 rounded text-[10px] font-medium bg-secondary text-muted-foreground">
+                  {badge.replace(/_/g, ' ')}
+                </span>
+              ))}
+            </div>
           </div>
-          <div className="px-4 py-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-baseline gap-2">
-                <span className={`text-3xl font-semibold ${getReputationColor(reputationScore)}`}>
-                  {reputationScore.toFixed(1)}
+          <div className="px-4 py-6">
+            {/* Gauge Meter */}
+            <div className="flex flex-col items-center">
+              <div className="relative" style={{ width: 440, height: 250 }}>
+                <svg viewBox="0 0 440 250" className="w-full h-full" overflow="visible">
+                  {/* Gauge arc segments */}
+                  {(() => {
+                    const segments = [
+                      { start: 0, end: 20, color: '#ef4444', label: 'Poor', labelOffset: 30 },
+                      { start: 20, end: 40, color: '#f97316', label: 'Fair', labelOffset: 24 },
+                      { start: 40, end: 60, color: '#eab308', label: 'Good', labelOffset: 24 },
+                      { start: 60, end: 80, color: '#22c55e', label: 'V.Good', labelOffset: 28 },
+                      { start: 80, end: 100, color: '#06b6d4', label: 'Excellent', labelOffset: 42 },
+                    ];
+                    const cx = 220, cy = 210, r = 150;
+                    return segments.map((seg, i) => {
+                      const startAngle = Math.PI + (seg.start / 100) * Math.PI;
+                      const endAngle = Math.PI + (seg.end / 100) * Math.PI;
+                      const x1 = cx + r * Math.cos(startAngle);
+                      const y1 = cy + r * Math.sin(startAngle);
+                      const x2 = cx + r * Math.cos(endAngle);
+                      const y2 = cy + r * Math.sin(endAngle);
+                      const largeArc = seg.end - seg.start > 50 ? 1 : 0;
+                      // Label outside the arc
+                      const midAngle = Math.PI + ((seg.start + seg.end) / 200) * Math.PI;
+                      const lx = cx + (r + seg.labelOffset) * Math.cos(midAngle);
+                      const ly = cy + (r + seg.labelOffset) * Math.sin(midAngle);
+                      return (
+                        <g key={i}>
+                          <path
+                            d={`M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`}
+                            fill="none"
+                            stroke={seg.color}
+                            strokeWidth="28"
+                            strokeLinecap="butt"
+                            opacity={0.9}
+                          />
+                          <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
+                            fontSize="11" fontWeight="600" fill={seg.color} opacity={0.85}>
+                            {seg.label}
+                          </text>
+                        </g>
+                      );
+                    });
+                  })()}
+
+                  {/* Needle — triangular with drop shadow */}
+                  {(() => {
+                    const cx = 220, cy = 210;
+                    const pct = Math.min(100, Math.max(0, reputationScore / 10));
+                    const angle = Math.PI + (pct / 100) * Math.PI;
+                    const needleLen = 115;
+                    // Tip of the needle
+                    const tipX = cx + needleLen * Math.cos(angle);
+                    const tipY = cy + needleLen * Math.sin(angle);
+                    // Base width (perpendicular to needle direction)
+                    const baseWidth = 8;
+                    const perpAngle = angle + Math.PI / 2;
+                    const b1x = cx + baseWidth * Math.cos(perpAngle);
+                    const b1y = cy + baseWidth * Math.sin(perpAngle);
+                    const b2x = cx - baseWidth * Math.cos(perpAngle);
+                    const b2y = cy - baseWidth * Math.sin(perpAngle);
+                    // Tail (short stub behind center)
+                    const tailLen = 22;
+                    const tailX = cx - tailLen * Math.cos(angle);
+                    const tailY = cy - tailLen * Math.sin(angle);
+                    return (
+                      <g>
+                        <defs>
+                          <filter id="needleShadow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#000" floodOpacity="0.3" />
+                          </filter>
+                        </defs>
+                        {/* Needle body */}
+                        <polygon
+                          points={`${tipX},${tipY} ${b1x},${b1y} ${tailX},${tailY} ${b2x},${b2y}`}
+                          className="fill-foreground"
+                          filter="url(#needleShadow)"
+                          opacity={0.9}
+                        />
+                        {/* Center hub — outer ring */}
+                        <circle cx={cx} cy={cy} r="14" className="fill-foreground" filter="url(#needleShadow)" />
+                        {/* Center hub — inner dot */}
+                        <circle cx={cx} cy={cy} r="7" className="fill-card" />
+                        {/* Center hub — tiny accent */}
+                        <circle cx={cx} cy={cy} r="3" className="fill-muted-foreground" opacity={0.5} />
+                      </g>
+                    );
+                  })()}
+
+                  {/* Scale labels */}
+                  <text x="68" y="230" fontSize="11" textAnchor="middle" className="fill-muted-foreground font-mono">0</text>
+                  <text x="372" y="230" fontSize="11" textAnchor="middle" className="fill-muted-foreground font-mono">1000</text>
+                </svg>
+              </div>
+
+              {/* Score below gauge */}
+              <div className="flex flex-col items-center -mt-4">
+                <span className={`text-5xl font-bold ${getReputationColor(reputationScore)}`}>
+                  {reputationScore}
                 </span>
-                <span className="text-sm text-muted-foreground">/ 100</span>
-                <span className={`text-xs font-medium ml-1 ${getReputationColor(reputationScore)}`}>
-                  {getReputationLabel(reputationScore)}
+                <span className={`text-sm font-semibold mt-1 ${getReputationColor(reputationScore)}`}>
+                  {tierLabels[reputationTier] || reputationTier}
                 </span>
               </div>
-              <span className="text-sm text-foreground font-medium">{completionRate.toFixed(1)}% completion</span>
             </div>
 
-            {/* Progress bar */}
-            <div className="w-full h-2 rounded-full bg-secondary mb-4">
-              <div
-                className={`h-full rounded-full transition-all ${getReputationBarColor(reputationScore)}`}
-                style={{ width: `${Math.min(100, reputationScore)}%` }}
-              />
+            {/* 5-component breakdown */}
+            <div className="grid grid-cols-5 gap-2 text-xs mt-6">
+              {reputation?.breakdown ? (
+                Object.entries(reputation.breakdown).map(([key, val]) => (
+                  <div key={key} className="flex flex-col items-center p-2 rounded bg-secondary/50">
+                    <span className="text-muted-foreground capitalize mb-1">{key}</span>
+                    <span className="font-semibold text-foreground text-sm">{val.raw}</span>
+                    <span className="text-[10px] text-muted-foreground">{val.weight}%</span>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-5 text-center text-muted-foreground py-2">Loading breakdown...</div>
+              )}
             </div>
 
-            {/* Breakdown */}
-            <div className="grid grid-cols-3 gap-4 text-xs">
-              <div className="flex items-center justify-between p-2 rounded bg-secondary/50">
-                <span className="text-muted-foreground">Completion</span>
-                <span className="font-medium text-foreground">{completionPts.toFixed(1)} pts</span>
+            {/* Penalties */}
+            {reputation?.penalties && reputation.penalties.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-border">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Penalties Applied</p>
+                <div className="flex flex-wrap gap-2">
+                  {reputation.penalties.map((p, i) => (
+                    <span key={i} className="px-2 py-0.5 rounded text-[10px] bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400">
+                      {p.type.replace(/_/g, ' ')} ({p.points} pts x{p.count})
+                    </span>
+                  ))}
+                </div>
               </div>
-              <div className="flex items-center justify-between p-2 rounded bg-secondary/50">
-                <span className="text-muted-foreground">Volume</span>
-                <span className="font-medium text-foreground">{volumePts.toFixed(1)} pts</span>
+            )}
+
+            {/* Abuse flags */}
+            {reputation?.wash_trading_detected && (
+              <div className="mt-3 pt-3 border-t border-border">
+                <p className="text-[10px] text-red-600 dark:text-red-400 uppercase tracking-wider mb-1">Abuse Flags</p>
+                {reputation.abuse_flags.map((flag, i) => (
+                  <p key={i} className="text-xs text-red-500">{flag}</p>
+                ))}
               </div>
-              <div className="flex items-center justify-between p-2 rounded bg-secondary/50">
-                <span className="text-muted-foreground">Speed</span>
-                <span className="font-medium text-foreground">{speedPts.toFixed(1)} pts</span>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 

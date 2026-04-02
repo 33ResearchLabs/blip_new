@@ -91,8 +91,8 @@ class BlipScanIndexer {
   // Forward cursors (newest seen, for catching new txs)
   private v1NewestSignature: string | null = null;
   private v2NewestSignature: string | null = null;
-  private v1BackfillDone: boolean = false;
-  private v2BackfillDone: boolean = false;
+  private v1BackfillDone: boolean = true;  // Skip backfill — only index new transactions
+  private v2BackfillDone: boolean = true;  // Skip backfill — only index new transactions
   private v1Coder: BorshAccountsCoder;
   private v2Coder: BorshAccountsCoder | null = null;
 
@@ -872,6 +872,7 @@ class BlipScanIndexer {
         `UPDATE v2_trades
         SET status = 'released', released_at = $1, released_signature = $2,
             counterparty_pubkey = COALESCE($3, counterparty_pubkey),
+            locked_at = COALESCE(locked_at, $1),
             updated_at = NOW()
         WHERE trade_pda = $4`,
         [timestamp, signature, counterparty, tradeAddress]

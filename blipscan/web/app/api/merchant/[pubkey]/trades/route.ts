@@ -10,23 +10,29 @@ export async function GET(
     const limit = parseInt(searchParams.get('limit') || '20');
 
     const result = await pool.query(
-      `SELECT
-        trade_pda as escrow_address,
-        trade_id as deal_id,
-        merchant as merchant_pubkey,
-        "user" as buyer_pubkey,
-        arbiter,
-        treasury,
-        mint as mint_address,
-        amount,
-        fee_amount as fee_bps,
-        state as status,
-        created_at,
-        locked_at,
-        created_slot,
-        locked_slot,
-        released_slot
-      FROM trades WHERE merchant = $1 ORDER BY created_at DESC LIMIT $2`,
+      `SELECT * FROM (
+        SELECT
+          trade_pda as escrow_address,
+          trade_id as deal_id,
+          merchant as merchant_pubkey,
+          "user" as buyer_pubkey,
+          amount,
+          state as status,
+          created_at,
+          'v1' as protocol_version
+        FROM trades WHERE merchant = $1
+        UNION ALL
+        SELECT
+          trade_pda as escrow_address,
+          trade_id::text as deal_id,
+          creator_pubkey as merchant_pubkey,
+          counterparty_pubkey as buyer_pubkey,
+          amount,
+          status,
+          created_at,
+          'v2.2' as protocol_version
+        FROM v2_trades WHERE creator_pubkey = $1
+      ) combined ORDER BY created_at DESC LIMIT $2`,
       [params.pubkey, limit]
     );
 

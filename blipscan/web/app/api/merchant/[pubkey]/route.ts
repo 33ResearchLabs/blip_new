@@ -8,19 +8,22 @@ export async function GET(
   try {
     const result = await pool.query(
       `SELECT
-        pubkey as merchant_pubkey,
-        total_trades,
-        total_volume,
-        completed_trades,
-        disputed_trades as cancelled_trades,
-        avg_close_time_seconds as avg_completion_time_seconds,
-        CASE
-          WHEN total_trades > 0
-          THEN (completed_trades::DECIMAL / total_trades * 100)
-          ELSE 0
-        END as completion_rate,
-        updated_at as last_trade_at
-      FROM merchants WHERE pubkey = $1`,
+        m.wallet_address as merchant_pubkey,
+        m.total_trades,
+        m.total_volume,
+        (
+          COALESCE((SELECT COUNT(*) FROM trades WHERE merchant = $1 AND LOWER(state) = 'released'), 0) +
+          COALESCE((SELECT COUNT(*) FROM v2_trades WHERE (creator_pubkey = $1 OR counterparty_pubkey = $1) AND status = 'released'), 0) +
+          COALESCE((SELECT COUNT(*) FROM orders WHERE merchant_id = m.id AND status = 'completed'), 0)
+        )::int as completed_trades,
+        (
+          COALESCE((SELECT COUNT(*) FROM trades WHERE merchant = $1 AND LOWER(state) = 'refunded'), 0) +
+          COALESCE((SELECT COUNT(*) FROM v2_trades WHERE (creator_pubkey = $1 OR counterparty_pubkey = $1) AND status = 'refunded'), 0) +
+          COALESCE((SELECT COUNT(*) FROM orders WHERE merchant_id = m.id AND status = 'cancelled'), 0)
+        )::int as cancelled_trades,
+        COALESCE(m.avg_response_time_mins * 60, 0)::int as avg_completion_time_seconds,
+        m.updated_at as last_trade_at
+      FROM merchants m WHERE m.wallet_address = $1`,
       [params.pubkey]
     );
 
