@@ -2,3 +2,5 @@ packages:
   - 'settle'
   - 'apps/*'
   - 'packages/*'
+  - 'blipscan/web'
+  - 'blipscan/indexer'
