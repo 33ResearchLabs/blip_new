@@ -1,0 +1,350 @@
+{
+  "address": "6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87",
+  "version": "2.3.0",
+  "name": "blip_protocol_v2",
+  "instructions": [
+    {
+      "name": "initializeConfig",
+      "accounts": [
+        { "name": "authority", "isMut": true, "isSigner": true },
+        { "name": "protocolConfig", "isMut": true, "isSigner": false },
+        { "name": "treasury", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "feeBps", "type": "u16" },
+        { "name": "maxFeeBps", "type": "u16" },
+        { "name": "minFeeBps", "type": "u16" }
+      ]
+    },
+    {
+      "name": "createTrade",
+      "accounts": [
+        { "name": "creator", "isMut": true, "isSigner": true },
+        { "name": "protocolConfig", "isMut": false, "isSigner": false },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "tradeId", "type": "u64" },
+        { "name": "amount", "type": "u64" },
+        { "name": "side", "type": { "defined": "TradeSide" } }
+      ]
+    },
+    {
+      "name": "fundEscrow",
+      "accounts": [
+        { "name": "depositor", "isMut": true, "isSigner": true },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": true, "isSigner": false },
+        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
+        { "name": "vaultAta", "isMut": true, "isSigner": false },
+        { "name": "depositorAta", "isMut": true, "isSigner": false },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "associatedTokenProgram", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "acceptTrade",
+      "accounts": [
+        { "name": "acceptor", "isMut": true, "isSigner": true },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "lockEscrow",
+      "accounts": [
+        { "name": "depositor", "isMut": true, "isSigner": true },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": true, "isSigner": false },
+        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
+        { "name": "vaultAta", "isMut": true, "isSigner": false },
+        { "name": "depositorAta", "isMut": true, "isSigner": false },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "associatedTokenProgram", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "counterparty", "type": "publicKey" }
+      ]
+    },
+    {
+      "name": "releaseEscrow",
+      "accounts": [
+        { "name": "signer", "isMut": true, "isSigner": true },
+        { "name": "protocolConfig", "isMut": false, "isSigner": false },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": true, "isSigner": false },
+        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
+        { "name": "vaultAta", "isMut": true, "isSigner": false },
+        { "name": "counterpartyAta", "isMut": true, "isSigner": false },
+        { "name": "treasuryAta", "isMut": true, "isSigner": false },
+        { "name": "creator", "isMut": true, "isSigner": false },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "extendEscrow",
+      "accounts": [
+        { "name": "depositor", "isMut": true, "isSigner": true },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "extensionSeconds", "type": "i64" }
+      ]
+    },
+    {
+      "name": "refundEscrow",
+      "accounts": [
+        { "name": "signer", "isMut": true, "isSigner": true },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": true, "isSigner": false },
+        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
+        { "name": "vaultAta", "isMut": true, "isSigner": false },
+        { "name": "depositorAta", "isMut": true, "isSigner": false },
+        { "name": "creator", "isMut": true, "isSigner": false },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "confirmPayment",
+      "accounts": [
+        { "name": "buyer", "isMut": true, "isSigner": true },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "openDispute",
+      "accounts": [
+        { "name": "initiator", "isMut": true, "isSigner": true },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": false, "isSigner": false }
+      ],
+      "args": []
+    },
+    {
+      "name": "resolveDispute",
+      "accounts": [
+        { "name": "arbiter", "isMut": true, "isSigner": true },
+        { "name": "protocolConfig", "isMut": false, "isSigner": false },
+        { "name": "trade", "isMut": true, "isSigner": false },
+        { "name": "escrow", "isMut": true, "isSigner": false },
+        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
+        { "name": "vaultAta", "isMut": true, "isSigner": false },
+        { "name": "recipientAta", "isMut": true, "isSigner": false },
+        { "name": "treasuryAta", "isMut": true, "isSigner": false },
+        { "name": "creator", "isMut": true, "isSigner": false },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "resolution", "type": { "defined": "DisputeResolution" } }
+      ]
+    },
+    {
+      "name": "createLane",
+      "accounts": [
+        { "name": "merchant", "isMut": true, "isSigner": true },
+        { "name": "lane", "isMut": true, "isSigner": false },
+        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
+        { "name": "vaultAta", "isMut": true, "isSigner": false },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false },
+        { "name": "associatedTokenProgram", "isMut": false, "isSigner": false },
+        { "name": "systemProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "laneId", "type": "u64" },
+        { "name": "minAmount", "type": "u64" },
+        { "name": "maxAmount", "type": "u64" }
+      ]
+    },
+    {
+      "name": "fundLane",
+      "accounts": [
+        { "name": "merchant", "isMut": true, "isSigner": true },
+        { "name": "lane", "isMut": true, "isSigner": false },
+        { "name": "vaultAta", "isMut": true, "isSigner": false },
+        { "name": "merchantAta", "isMut": true, "isSigner": false },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "amount", "type": "u64" }
+      ]
+    },
+    {
+      "name": "withdrawLane",
+      "accounts": [
+        { "name": "merchant", "isMut": true, "isSigner": true },
+        { "name": "lane", "isMut": true, "isSigner": false },
+        { "name": "vaultAuthority", "isMut": false, "isSigner": false },
+        { "name": "vaultAta", "isMut": true, "isSigner": false },
+        { "name": "merchantAta", "isMut": true, "isSigner": false },
+        { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "tokenProgram", "isMut": false, "isSigner": false }
+      ],
+      "args": [
+        { "name": "amount", "type": "u64" }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "ProtocolConfig",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "authority", "type": "publicKey" },
+          { "name": "treasury", "type": "publicKey" },
+          { "name": "feeBps", "type": "u16" },
+          { "name": "maxFeeBps", "type": "u16" },
+          { "name": "minFeeBps", "type": "u16" },
+          { "name": "bump", "type": "u8" },
+          { "name": "isFrozen", "type": "bool" },
+          { "name": "version", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "Trade",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "creator", "type": "publicKey" },
+          { "name": "counterparty", "type": "publicKey" },
+          { "name": "tradeId", "type": "u64" },
+          { "name": "mint", "type": "publicKey" },
+          { "name": "amount", "type": "u64" },
+          { "name": "status", "type": { "defined": "TradeStatus" } },
+          { "name": "feeBps", "type": "u16" },
+          { "name": "escrowBump", "type": "u8" },
+          { "name": "bump", "type": "u8" },
+          { "name": "createdAt", "type": "i64" },
+          { "name": "lockedAt", "type": "i64" },
+          { "name": "settledAt", "type": "i64" },
+          { "name": "side", "type": { "defined": "TradeSide" } },
+          { "name": "expiresAt", "type": "i64" },
+          { "name": "paymentConfirmedAt", "type": "i64" },
+          { "name": "disputedAt", "type": "i64" },
+          { "name": "disputeInitiator", "type": "publicKey" }
+        ]
+      }
+    },
+    {
+      "name": "Escrow",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "trade", "type": "publicKey" },
+          { "name": "vaultAuthority", "type": "publicKey" },
+          { "name": "vaultAta", "type": "publicKey" },
+          { "name": "depositor", "type": "publicKey" },
+          { "name": "amount", "type": "u64" },
+          { "name": "bump", "type": "u8" },
+          { "name": "vaultBump", "type": "u8" }
+        ]
+      }
+    },
+    {
+      "name": "Lane",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          { "name": "merchant", "type": "publicKey" },
+          { "name": "laneId", "type": "u64" },
+          { "name": "mint", "type": "publicKey" },
+          { "name": "vaultAuthority", "type": "publicKey" },
+          { "name": "vaultAta", "type": "publicKey" },
+          { "name": "availableBalance", "type": "u64" },
+          { "name": "minAmount", "type": "u64" },
+          { "name": "maxAmount", "type": "u64" },
+          { "name": "isActive", "type": "bool" },
+          { "name": "bump", "type": "u8" },
+          { "name": "vaultBump", "type": "u8" },
+          { "name": "createdAt", "type": "i64" },
+          { "name": "updatedAt", "type": "i64" }
+        ]
+      }
+    }
+  ],
+  "types": [
+    {
+      "name": "TradeStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          { "name": "Created" },
+          { "name": "Funded" },
+          { "name": "Locked" },
+          { "name": "PaymentSent" },
+          { "name": "Disputed" },
+          { "name": "Released" },
+          { "name": "Refunded" }
+        ]
+      }
+    },
+    {
+      "name": "TradeSide",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          { "name": "Buy" },
+          { "name": "Sell" }
+        ]
+      }
+    },
+    {
+      "name": "DisputeResolution",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          { "name": "ReleaseToBuyer" },
+          { "name": "RefundToSeller" }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    { "code": 6000, "name": "FeeOutOfBounds", "msg": "Fee is outside allowed bounds [min, max]" },
+    { "code": 6001, "name": "InvalidTreasury", "msg": "Treasury account does not match protocol config" },
+    { "code": 6002, "name": "InvalidTradeState", "msg": "Trade is in invalid state for this operation" },
+    { "code": 6003, "name": "Unauthorized", "msg": "Unauthorized signer for this operation" },
+    { "code": 6010, "name": "CannotFund", "msg": "Trade cannot be funded in current state" },
+    { "code": 6011, "name": "CannotAccept", "msg": "Trade cannot be accepted in current state" },
+    { "code": 6012, "name": "CannotAcceptOwnTrade", "msg": "Cannot accept your own trade" },
+    { "code": 6013, "name": "CannotLock", "msg": "Trade cannot be locked in current state" },
+    { "code": 6014, "name": "CannotRelease", "msg": "Trade cannot be released in current state" },
+    { "code": 6015, "name": "CannotRefund", "msg": "Trade cannot be refunded in current state" },
+    { "code": 6020, "name": "EscrowExpired", "msg": "Escrow has expired - auto-refund available" },
+    { "code": 6021, "name": "NotExpired", "msg": "Escrow has not expired yet" },
+    { "code": 6022, "name": "NotDepositor", "msg": "Only the depositor can extend escrow" },
+    { "code": 6023, "name": "CannotExtend", "msg": "Cannot extend - escrow already expired" },
+    { "code": 6030, "name": "CannotConfirmPayment", "msg": "Cannot confirm payment in current state" },
+    { "code": 6031, "name": "NotBuyer", "msg": "Only the buyer can confirm payment" },
+    { "code": 6032, "name": "CannotDispute", "msg": "Cannot dispute in current state" },
+    { "code": 6033, "name": "NotParty", "msg": "Only trade parties can open dispute" },
+    { "code": 6034, "name": "NotDisputed", "msg": "Trade is not in disputed state" },
+    { "code": 6035, "name": "NotArbiter", "msg": "Only authorized arbiters can resolve disputes" },
+    { "code": 6036, "name": "MustUseDispute", "msg": "Must use dispute resolution - payment already confirmed" },
+    { "code": 6037, "name": "BuyerPayWindowActive", "msg": "Buyer payment window still active - cannot cancel yet" }
+  ],
+  "metadata": {
+    "address": "6AG4ccUtM1YPcVmkMrMTuhjEtY8E7p5qwT4nud6mea87"
+  }
+}

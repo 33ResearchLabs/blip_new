@@ -1,0 +1,52 @@
+{
+  "accounts": [
+    {
+      "discriminator": [31, 213, 123, 187, 186, 22, 218, 155],
+      "name": "Escrow"
+    }
+  ],
+  "address": "HZ9ZSXtebTKYGRR7ZNsetroAT7Kh8ymKExcf5FF9dLNq",
+  "instructions": [],
+  "types": [
+    {
+      "name": "Escrow",
+      "type": {
+        "fields": [
+          { "name": "version", "type": "u8" },
+          { "name": "deal_id", "type": { "array": ["u8", 16] } },
+          { "name": "maker", "type": "pubkey" },
+          { "name": "taker", "type": "pubkey" },
+          { "name": "arbiter", "type": "pubkey" },
+          { "name": "treasury", "type": "pubkey" },
+          { "name": "mint", "type": "pubkey" },
+          { "name": "amount", "type": "u64" },
+          { "name": "fee_bps", "type": "u16" },
+          {
+            "name": "status",
+            "type": { "defined": { "name": "EscrowStatus" } }
+          },
+          { "name": "escrow_bump", "type": "u8" },
+          { "name": "signer_bump", "type": "u8" }
+        ],
+        "kind": "struct"
+      }
+    },
+    {
+      "name": "EscrowStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          { "name": "Funded" },
+          { "name": "Locked" },
+          { "name": "Released" },
+          { "name": "Refunded" }
+        ]
+      }
+    }
+  ],
+  "metadata": {
+    "name": "blip_escrow",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  }
+}
