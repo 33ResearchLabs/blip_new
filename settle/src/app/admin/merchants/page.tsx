@@ -14,6 +14,8 @@ import {
   Star,
   RefreshCw,
   LogOut,
+  AlertTriangle,
+  Clock,
 } from "lucide-react";
 import Link from "next/link";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
@@ -38,6 +40,9 @@ interface MerchantItem {
   completedCount: number;
   cancelledCount: number;
   disputedCount: number;
+  disputesTotal: number;
+  disputesRaisedByMerchant: number;
+  disputesAgainstMerchant: number;
   avgResponseTimeMins: number;
   verificationLevel: number;
   autoAcceptEnabled: boolean;
@@ -47,6 +52,8 @@ interface MerchantItem {
   createdAt: string;
   hasOpsAccess: boolean;
   hasComplianceAccess: boolean;
+  riskScore: number;
+  riskLevel: string;
 }
 
 type SortKey =
@@ -62,7 +69,9 @@ type SortKey =
   | "oldest"
   | "name"
   | "status"
-  | "online";
+  | "online"
+  | "risk"
+  | "disputes_total";
 
 // ============================================
 // HELPERS
@@ -108,6 +117,19 @@ const getStatusStyle = (status: string) => {
   }
 };
 
+const getRiskStyle = (level: string) => {
+  switch (level) {
+    case "critical":
+      return "bg-[var(--color-error)]/15 border-[var(--color-error)]/25 text-[var(--color-error)]";
+    case "high":
+      return "bg-primary/12 border-primary/25 text-primary";
+    case "medium":
+      return "bg-[var(--color-warning)]/12 border-[var(--color-warning)]/25 text-[var(--color-warning)]";
+    default:
+      return "bg-[var(--color-success)]/10 border-[var(--color-success)]/20 text-[var(--color-success)]/70";
+  }
+};
+
 // ============================================
 // MAIN PAGE
 // ============================================
@@ -130,6 +152,13 @@ export default function MerchantsPage() {
   const [sortBy, setSortBy] = useState<SortKey>("volume");
   const [statusFilter, setStatusFilter] = useState("");
   const [onlineFilter, setOnlineFilter] = useState("");
+  const [riskFilter, setRiskFilter] = useState("");
+  const [lastActiveFilter, setLastActiveFilter] = useState("");
+  const [verificationFilter, setVerificationFilter] = useState("");
+  const [volumeTierFilter, setVolumeTierFilter] = useState("");
+  const [responseFilter, setResponseFilter] = useState("");
+  const [autoAcceptFilter, setAutoAcceptFilter] = useState("");
+  const [ratingFilter, setRatingFilter] = useState("");
   const [page, setPage] = useState(0);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
@@ -224,6 +253,13 @@ export default function MerchantsPage() {
       if (statusFilter) params.set("status", statusFilter);
       if (onlineFilter) params.set("online", onlineFilter);
       if (debouncedSearch) params.set("search", debouncedSearch);
+      if (riskFilter) params.set("risk", riskFilter);
+      if (lastActiveFilter) params.set("last_active", lastActiveFilter);
+      if (verificationFilter) params.set("verification", verificationFilter);
+      if (volumeTierFilter) params.set("volume_tier", volumeTierFilter);
+      if (responseFilter) params.set("response", responseFilter);
+      if (autoAcceptFilter) params.set("auto_accept", autoAcceptFilter);
+      if (ratingFilter) params.set("rating", ratingFilter);
 
       const res = await fetchWithAuth(`/api/admin/merchants?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -240,7 +276,7 @@ export default function MerchantsPage() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [sortBy, statusFilter, onlineFilter, debouncedSearch, page]);
+  }, [sortBy, statusFilter, onlineFilter, debouncedSearch, page, riskFilter, lastActiveFilter, verificationFilter, volumeTierFilter, responseFilter, autoAcceptFilter, ratingFilter]);
 
   useEffect(() => {
     if (isAuthenticated) fetchMerchants();
@@ -386,12 +422,8 @@ export default function MerchantsPage() {
               >
                 Merchants
               </Link>
-              <Link
-                href="/merchant"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Merchant
-              </Link>
+              <Link href="/admin/users" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Users</Link>
+              <Link href="/admin/disputes" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Disputes</Link>
             </nav>
           </div>
 
@@ -448,16 +480,16 @@ export default function MerchantsPage() {
         </div>
 
         {/* ── Filters ── */}
-        <div className="px-3 py-1.5 border-b border-section-divider flex flex-wrap items-center gap-1.5 shrink-0">
+        <div className="px-3 py-2 border-b border-section-divider flex flex-wrap items-center gap-2 shrink-0">
           {/* Search */}
-          <div className="relative flex-1 min-w-[120px] max-w-[220px]">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-2.5 h-2.5 text-foreground/15" />
+          <div className="relative flex-1 min-w-[140px] max-w-[220px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-foreground/25" />
             <input
               type="text"
               placeholder="Search..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-card border border-border rounded-md pl-6 pr-2 py-1 text-[9px] text-foreground/60 font-mono placeholder:text-foreground/15 focus:border-border-strong focus:outline-none"
+              className="w-full bg-card border border-border rounded-md pl-7 pr-2 py-1.5 text-[10px] text-foreground/70 font-mono placeholder:text-foreground/25 focus:border-border-strong focus:outline-none"
             />
           </div>
 
@@ -467,13 +499,13 @@ export default function MerchantsPage() {
               <button
                 key={f}
                 onClick={() => { setStatusFilter(f); setPage(0); }}
-                className={`px-1.5 py-0.5 text-[8px] font-mono rounded transition-colors ${
+                className={`px-2 py-1 text-[10px] font-mono rounded transition-colors ${
                   statusFilter === f
                     ? f === "banned" ? "bg-[var(--color-error)]/15 text-[var(--color-error)] font-bold" :
                       f === "suspended" ? "bg-primary/10 text-primary font-bold" :
                       f === "active" ? "bg-[var(--color-success)]/10 text-[var(--color-success)] font-bold" :
-                      "bg-accent-subtle text-foreground/70"
-                    : "text-foreground/25 hover:text-foreground/40"
+                      "bg-accent-subtle text-foreground/80"
+                    : "text-foreground/35 hover:text-foreground/60"
                 }`}
               >
                 {f === "" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
@@ -487,12 +519,12 @@ export default function MerchantsPage() {
               <button
                 key={val}
                 onClick={() => { setOnlineFilter(val); setPage(0); }}
-                className={`px-1.5 py-0.5 text-[8px] font-mono rounded transition-colors ${
+                className={`px-2 py-1 text-[10px] font-mono rounded transition-colors ${
                   onlineFilter === val
                     ? val === "true" ? "bg-[var(--color-success)]/10 text-[var(--color-success)] font-bold" :
-                      val === "false" ? "bg-accent-subtle text-foreground/50 font-bold" :
-                      "bg-accent-subtle text-foreground/70"
-                    : "text-foreground/25 hover:text-foreground/40"
+                      val === "false" ? "bg-accent-subtle text-foreground/60 font-bold" :
+                      "bg-accent-subtle text-foreground/80"
+                    : "text-foreground/35 hover:text-foreground/60"
                 }`}
               >
                 {val === "" ? "All" : val === "true" ? "Online" : "Offline"}
@@ -504,55 +536,200 @@ export default function MerchantsPage() {
           <select
             value={sortBy}
             onChange={(e) => { setSortBy(e.target.value as SortKey); setPage(0); }}
-            className="bg-card border border-border rounded-md px-1.5 py-0.5 text-[8px] font-mono text-foreground/40 focus:outline-none cursor-pointer"
+            className="bg-card border border-border rounded-md px-2 py-1 text-[10px] font-mono text-foreground/60 focus:outline-none cursor-pointer"
           >
-            <option value="volume" className="bg-card-solid">Volume</option>
-            <option value="trades" className="bg-card-solid">Trades</option>
-            <option value="rating" className="bg-card-solid">Rating</option>
-            <option value="completed" className="bg-card-solid">Completed</option>
-            <option value="cancelled" className="bg-card-solid">Cancelled</option>
-            <option value="disputed" className="bg-card-solid">Disputed</option>
-            <option value="response_time" className="bg-card-solid">Response</option>
-            <option value="balance" className="bg-card-solid">Balance</option>
-            <option value="newest" className="bg-card-solid">Newest</option>
-            <option value="oldest" className="bg-card-solid">Oldest</option>
-            <option value="name" className="bg-card-solid">Name</option>
-            <option value="online" className="bg-card-solid">Online</option>
+            <option value="volume" className="bg-card-solid text-foreground">Volume</option>
+            <option value="trades" className="bg-card-solid text-foreground">Trades</option>
+            <option value="rating" className="bg-card-solid text-foreground">Rating</option>
+            <option value="completed" className="bg-card-solid text-foreground">Completed</option>
+            <option value="cancelled" className="bg-card-solid text-foreground">Cancelled</option>
+            <option value="disputed" className="bg-card-solid text-foreground">Disputed (Active)</option>
+            <option value="disputes_total" className="bg-card-solid text-foreground">Disputes (All)</option>
+            <option value="response_time" className="bg-card-solid text-foreground">Response</option>
+            <option value="balance" className="bg-card-solid text-foreground">Balance</option>
+            <option value="newest" className="bg-card-solid text-foreground">Newest</option>
+            <option value="oldest" className="bg-card-solid text-foreground">Oldest</option>
+            <option value="name" className="bg-card-solid text-foreground">Name</option>
+            <option value="online" className="bg-card-solid text-foreground">Online</option>
+            <option value="risk" className="bg-card-solid text-foreground">Risk Score</option>
           </select>
         </div>
 
+        {/* ── Advanced Filters Row ── */}
+        <div className="px-3 py-1.5 border-b border-section-divider flex flex-wrap items-center gap-2 shrink-0">
+
+          {/* Risk */}
+          <div className="flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3 text-[var(--color-error)]/40" />
+            <select
+              value={riskFilter}
+              onChange={(e) => { setRiskFilter(e.target.value); setPage(0); }}
+              className={`bg-card border rounded-md px-2 py-1 text-[10px] font-mono focus:outline-none cursor-pointer ${
+                riskFilter ? "border-[var(--color-error)]/30 text-[var(--color-error)]" : "border-border text-foreground/60"
+              }`}
+            >
+              <option value="" className="bg-card-solid text-foreground">Risk: All</option>
+              <option value="critical" className="bg-card-solid text-foreground">Critical (&ge;80)</option>
+              <option value="high_risk" className="bg-card-solid text-foreground">High Risk (&gt;60)</option>
+              <option value="high_dispute" className="bg-card-solid text-foreground">High Dispute (&gt;10%)</option>
+              <option value="high_cancel" className="bg-card-solid text-foreground">High Cancel (&gt;20%)</option>
+              <option value="zero_trades" className="bg-card-solid text-foreground">Zero Trades</option>
+            </select>
+          </div>
+
+          {/* Last Active */}
+          <div className="flex items-center gap-1">
+            <Clock className="w-3 h-3 text-foreground/30" />
+            <select
+              value={lastActiveFilter}
+              onChange={(e) => { setLastActiveFilter(e.target.value); setPage(0); }}
+              className={`bg-card border rounded-md px-2 py-1 text-[10px] font-mono focus:outline-none cursor-pointer ${
+                lastActiveFilter ? "border-primary/30 text-primary" : "border-border text-foreground/60"
+              }`}
+            >
+              <option value="" className="bg-card-solid text-foreground">Active: All</option>
+              <option value="1d" className="bg-card-solid text-foreground">Last 24h</option>
+              <option value="7d" className="bg-card-solid text-foreground">Last 7d</option>
+              <option value="30d" className="bg-card-solid text-foreground">Last 30d</option>
+              <option value="90d" className="bg-card-solid text-foreground">Last 90d</option>
+              <option value="inactive" className="bg-card-solid text-foreground">Inactive (&gt;30d)</option>
+              <option value="never" className="bg-card-solid text-foreground">Never Seen</option>
+            </select>
+          </div>
+
+          {/* Verification Level */}
+          <div className="flex items-center gap-1">
+            <Shield className="w-3 h-3 text-foreground/30" />
+            <select
+              value={verificationFilter}
+              onChange={(e) => { setVerificationFilter(e.target.value); setPage(0); }}
+              className={`bg-card border rounded-md px-2 py-1 text-[10px] font-mono focus:outline-none cursor-pointer ${
+                verificationFilter ? "border-[var(--color-info)]/30 text-[var(--color-info)]" : "border-border text-foreground/60"
+              }`}
+            >
+              <option value="" className="bg-card-solid text-foreground">KYC: All</option>
+              <option value="0" className="bg-card-solid text-foreground">Level 0 (None)</option>
+              <option value="1" className="bg-card-solid text-foreground">Level 1</option>
+              <option value="2" className="bg-card-solid text-foreground">Level 2</option>
+              <option value="3" className="bg-card-solid text-foreground">Level 3</option>
+            </select>
+          </div>
+
+          {/* Volume Tier */}
+          <select
+            value={volumeTierFilter}
+            onChange={(e) => { setVolumeTierFilter(e.target.value); setPage(0); }}
+            className={`bg-card border rounded-md px-2 py-1 text-[10px] font-mono focus:outline-none cursor-pointer ${
+              volumeTierFilter ? "border-[var(--color-success)]/30 text-[var(--color-success)]" : "border-border text-foreground/60"
+            }`}
+          >
+            <option value="" className="bg-card-solid text-foreground">Vol: All</option>
+            <option value="0" className="bg-card-solid text-foreground">$0 (No vol)</option>
+            <option value="1k" className="bg-card-solid text-foreground">&lt;$1K</option>
+            <option value="10k" className="bg-card-solid text-foreground">$1K–$10K</option>
+            <option value="100k" className="bg-card-solid text-foreground">$10K–$100K</option>
+            <option value="whale" className="bg-card-solid text-foreground">$100K+</option>
+          </select>
+
+          {/* Response Time */}
+          <select
+            value={responseFilter}
+            onChange={(e) => { setResponseFilter(e.target.value); setPage(0); }}
+            className={`bg-card border rounded-md px-2 py-1 text-[10px] font-mono focus:outline-none cursor-pointer ${
+              responseFilter ? "border-[var(--color-warning)]/30 text-[var(--color-warning)]" : "border-border text-foreground/60"
+            }`}
+          >
+            <option value="" className="bg-card-solid text-foreground">Resp: All</option>
+            <option value="fast" className="bg-card-solid text-foreground">&lt;5m (Fast)</option>
+            <option value="medium" className="bg-card-solid text-foreground">5–15m (Med)</option>
+            <option value="slow" className="bg-card-solid text-foreground">&gt;15m (Slow)</option>
+          </select>
+
+          {/* Rating */}
+          <select
+            value={ratingFilter}
+            onChange={(e) => { setRatingFilter(e.target.value); setPage(0); }}
+            className={`bg-card border rounded-md px-2 py-1 text-[10px] font-mono focus:outline-none cursor-pointer ${
+              ratingFilter ? "border-primary/30 text-primary" : "border-border text-foreground/60"
+            }`}
+          >
+            <option value="" className="bg-card-solid text-foreground">Rating: All</option>
+            <option value="top" className="bg-card-solid text-foreground">4.5+ (Top)</option>
+            <option value="high" className="bg-card-solid text-foreground">4.0–4.5</option>
+            <option value="mid" className="bg-card-solid text-foreground">3.0–4.0</option>
+            <option value="low" className="bg-card-solid text-foreground">&lt;3.0</option>
+            <option value="unrated" className="bg-card-solid text-foreground">Unrated</option>
+          </select>
+
+          {/* Auto-Accept */}
+          <div className="flex gap-0.5 bg-card rounded-md p-0.5">
+            {(["", "true", "false"] as const).map((val) => (
+              <button
+                key={`aa-${val}`}
+                onClick={() => { setAutoAcceptFilter(val); setPage(0); }}
+                className={`px-2 py-1 text-[10px] font-mono rounded transition-colors ${
+                  autoAcceptFilter === val
+                    ? val === "true" ? "bg-[var(--color-info)]/10 text-[var(--color-info)] font-bold" :
+                      val === "false" ? "bg-accent-subtle text-foreground/60 font-bold" :
+                      "bg-accent-subtle text-foreground/80"
+                    : "text-foreground/35 hover:text-foreground/60"
+                }`}
+              >
+                {val === "" ? "Auto: All" : val === "true" ? "Auto ON" : "Manual"}
+              </button>
+            ))}
+          </div>
+
+          {/* Clear all filters */}
+          {(riskFilter || lastActiveFilter || verificationFilter || volumeTierFilter || responseFilter || autoAcceptFilter || ratingFilter) && (
+            <button
+              onClick={() => {
+                setRiskFilter(""); setLastActiveFilter(""); setVerificationFilter("");
+                setVolumeTierFilter(""); setResponseFilter(""); setAutoAcceptFilter("");
+                setRatingFilter(""); setPage(0);
+              }}
+              className="px-2 py-1 text-[10px] font-mono font-medium text-[var(--color-error)]/70 hover:text-[var(--color-error)] rounded hover:bg-[var(--color-error)]/10 transition-colors"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+
         {/* ── Table Header ── */}
-        <div className="px-3 py-1.5 border-b border-border shrink-0 bg-card">
-          <div className="grid grid-cols-[32px_1fr_70px_60px_72px_52px_52px_52px_52px_52px_60px_52px_60px] gap-1 items-center">
-            <span className="text-[8px] font-mono text-foreground/20 uppercase tracking-wider">#</span>
-            <span className="text-[8px] font-mono text-foreground/20 uppercase tracking-wider">Merchant</span>
-            <span className="text-[8px] font-mono text-foreground/20 uppercase tracking-wider">Status</span>
-            <button onClick={() => { setSortBy("rating"); setPage(0); }} className="text-[8px] font-mono text-foreground/20 uppercase tracking-wider text-right hover:text-foreground/40 flex items-center justify-end gap-0.5">
-              Rating {sortBy === "rating" && <ChevronDown className="w-2 h-2" />}
+        <div className="px-3 py-2 border-b border-border shrink-0 bg-card">
+          <div className="grid grid-cols-[32px_1fr_70px_62px_60px_72px_52px_52px_52px_72px_52px_60px_56px_64px] gap-1 items-center">
+            <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider">#</span>
+            <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider">Merchant</span>
+            <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider">Status</span>
+            <button onClick={() => { setSortBy("risk"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+              Risk {sortBy === "risk" && <ChevronDown className="w-2.5 h-2.5" />}
             </button>
-            <button onClick={() => { setSortBy("volume"); setPage(0); }} className="text-[8px] font-mono text-foreground/20 uppercase tracking-wider text-right hover:text-foreground/40 flex items-center justify-end gap-0.5">
-              Volume {sortBy === "volume" && <ChevronDown className="w-2 h-2" />}
+            <button onClick={() => { setSortBy("rating"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+              Rating {sortBy === "rating" && <ChevronDown className="w-2.5 h-2.5" />}
             </button>
-            <button onClick={() => { setSortBy("trades"); setPage(0); }} className="text-[8px] font-mono text-foreground/20 uppercase tracking-wider text-right hover:text-foreground/40 flex items-center justify-end gap-0.5">
-              Trades {sortBy === "trades" && <ChevronDown className="w-2 h-2" />}
+            <button onClick={() => { setSortBy("volume"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+              Volume {sortBy === "volume" && <ChevronDown className="w-2.5 h-2.5" />}
             </button>
-            <button onClick={() => { setSortBy("completed"); setPage(0); }} className="text-[8px] font-mono text-foreground/20 uppercase tracking-wider text-right hover:text-foreground/40 flex items-center justify-end gap-0.5">
-              Done {sortBy === "completed" && <ChevronDown className="w-2 h-2" />}
+            <button onClick={() => { setSortBy("trades"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+              Trades {sortBy === "trades" && <ChevronDown className="w-2.5 h-2.5" />}
             </button>
-            <button onClick={() => { setSortBy("cancelled"); setPage(0); }} className="text-[8px] font-mono text-foreground/20 uppercase tracking-wider text-right hover:text-foreground/40 flex items-center justify-end gap-0.5">
-              Cancel {sortBy === "cancelled" && <ChevronDown className="w-2 h-2" />}
+            <button onClick={() => { setSortBy("completed"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+              Done {sortBy === "completed" && <ChevronDown className="w-2.5 h-2.5" />}
             </button>
-            <button onClick={() => { setSortBy("disputed"); setPage(0); }} className="text-[8px] font-mono text-foreground/20 uppercase tracking-wider text-right hover:text-foreground/40 flex items-center justify-end gap-0.5">
-              Disp {sortBy === "disputed" && <ChevronDown className="w-2 h-2" />}
+            <button onClick={() => { setSortBy("cancelled"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+              Cancel {sortBy === "cancelled" && <ChevronDown className="w-2.5 h-2.5" />}
             </button>
-            <button onClick={() => { setSortBy("response_time"); setPage(0); }} className="text-[8px] font-mono text-foreground/20 uppercase tracking-wider text-right hover:text-foreground/40 flex items-center justify-end gap-0.5">
-              Resp {sortBy === "response_time" && <ChevronDown className="w-2 h-2" />}
+            <button onClick={() => { setSortBy("disputes_total"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+              Disputes {sortBy === "disputes_total" && <ChevronDown className="w-2.5 h-2.5" />}
             </button>
-            <button onClick={() => { setSortBy("balance"); setPage(0); }} className="text-[8px] font-mono text-foreground/20 uppercase tracking-wider text-right hover:text-foreground/40 flex items-center justify-end gap-0.5">
-              Balance {sortBy === "balance" && <ChevronDown className="w-2 h-2" />}
+            <button onClick={() => { setSortBy("response_time"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+              Resp {sortBy === "response_time" && <ChevronDown className="w-2.5 h-2.5" />}
             </button>
-            <span className="text-[8px] font-mono text-foreground/20 uppercase tracking-wider text-right">Seen</span>
-            <span className="text-[8px] font-mono text-foreground/20 uppercase tracking-wider text-right">Joined</span>
+            <button onClick={() => { setSortBy("balance"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+              Balance {sortBy === "balance" && <ChevronDown className="w-2.5 h-2.5" />}
+            </button>
+            <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right">Seen</span>
+            <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right">Joined</span>
           </div>
         </div>
 
@@ -575,14 +752,14 @@ export default function MerchantsPage() {
               return (
                 <div
                   key={m.id}
-                  className={`grid grid-cols-[32px_1fr_70px_60px_72px_52px_52px_52px_52px_52px_60px_52px_60px] gap-1 items-center px-3 py-1.5 border-b border-section-divider hover:bg-accent-subtle transition-colors ${
+                  className={`grid grid-cols-[32px_1fr_70px_62px_60px_72px_52px_52px_52px_72px_52px_60px_56px_64px] gap-1 items-center px-3 py-2 border-b border-section-divider hover:bg-accent-subtle transition-colors cursor-pointer ${
                     m.status === "banned" ? "bg-[var(--color-error)]/[0.01]" :
                     m.status === "suspended" ? "bg-primary/[0.01]" : ""
                   }`}
                 >
                   {/* Rank */}
-                  <span className={`text-[9px] font-mono font-bold ${
-                    rank === 1 ? "text-primary" : rank <= 3 ? "text-foreground/40" : "text-foreground/15"
+                  <span className={`text-[10px] font-mono font-bold ${
+                    rank === 1 ? "text-primary" : rank <= 3 ? "text-foreground/50" : "text-foreground/30"
                   }`}>
                     {rank}
                   </span>
@@ -595,21 +772,43 @@ export default function MerchantsPage() {
                         <span className="text-[10px] font-medium text-foreground/60 truncate">{m.name}</span>
                         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${m.isOnline ? "bg-[var(--color-success)]" : "bg-foreground/10"}`} />
                         {m.autoAcceptEnabled && (
-                          <span className="text-[7px] px-1 py-0 rounded bg-[var(--color-info)]/10 text-[var(--color-info)]/60 border border-[var(--color-info)]/15 font-mono font-bold">AUTO</span>
+                          <span className="text-[8px] px-1 py-0.5 rounded bg-[var(--color-info)]/10 text-[var(--color-info)]/70 border border-[var(--color-info)]/20 font-mono font-bold">AUTO</span>
                         )}
                       </div>
                       <div className="flex items-center gap-1">
-                        <span className="text-[8px] text-foreground/20 font-mono truncate">{m.email || m.id.slice(0, 8)}</span>
+                        <span className="text-[9px] text-foreground/30 font-mono truncate">{m.email || m.id.slice(0, 8)}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Status */}
                   <div>
-                    <span className={`px-1 py-0 rounded text-[7px] font-bold border ${getStatusStyle(m.status)}`}>
+                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold border ${getStatusStyle(m.status)}`}>
                       {m.status.toUpperCase()}
                     </span>
                   </div>
+
+                  {/* Risk */}
+                  <Link
+                    href={`/admin/risk-profile/${m.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center justify-end gap-1 group"
+                    title={`Risk score: ${m.riskScore} — Click for full profile`}
+                  >
+                    <span className={`text-[9px] font-mono font-bold tabular-nums ${
+                      m.riskScore >= 80 ? "text-[var(--color-error)]" :
+                      m.riskScore >= 60 ? "text-primary" :
+                      m.riskScore >= 30 ? "text-[var(--color-warning)]" :
+                      "text-foreground/30"
+                    }`}>
+                      {m.riskScore > 0 ? m.riskScore : "—"}
+                    </span>
+                    {m.riskScore > 0 && (
+                      <span className={`px-1 py-0.5 rounded text-[7px] font-bold border leading-none ${getRiskStyle(m.riskLevel)}`}>
+                        {m.riskLevel === "critical" ? "CRIT" : m.riskLevel.toUpperCase().slice(0, 3)}
+                      </span>
+                    )}
+                  </Link>
 
                   {/* Rating */}
                   <div className="text-right">
@@ -617,10 +816,10 @@ export default function MerchantsPage() {
                       <div className="flex items-center justify-end gap-0.5">
                         <Star className="w-2 h-2 text-primary/40 fill-primary/40" />
                         <span className="text-[9px] font-mono text-foreground/60">{m.rating.toFixed(1)}</span>
-                        <span className="text-[7px] text-foreground/15 font-mono">({m.ratingCount})</span>
+                        <span className="text-[8px] text-foreground/30 font-mono">({m.ratingCount})</span>
                       </div>
                     ) : (
-                      <span className="text-[9px] text-foreground/10 font-mono">—</span>
+                      <span className="text-[9px] text-foreground/25 font-mono">—</span>
                     )}
                   </div>
 
@@ -639,42 +838,48 @@ export default function MerchantsPage() {
                   {/* Completed */}
                   <div className="text-right">
                     <span className="text-[9px] font-mono text-[var(--color-success)]/60 tabular-nums">{m.completedCount}</span>
-                    <span className="text-[7px] text-foreground/10 font-mono ml-0.5">{winRate}%</span>
+                    <span className="text-[8px] text-foreground/25 font-mono ml-0.5">{winRate}%</span>
                   </div>
 
                   {/* Cancelled */}
                   <div className="text-right">
-                    <span className={`text-[9px] font-mono tabular-nums ${m.cancelledCount > 0 ? "text-primary/60" : "text-foreground/10"}`}>
+                    <span className={`text-[9px] font-mono tabular-nums ${m.cancelledCount > 0 ? "text-primary/60" : "text-foreground/25"}`}>
                       {m.cancelledCount}
                     </span>
                   </div>
 
-                  {/* Disputed */}
+                  {/* Disputes */}
                   <div className="text-right">
-                    <span className={`text-[9px] font-mono tabular-nums ${m.disputedCount > 0 ? "text-[var(--color-error)]/60" : "text-foreground/10"}`}>
-                      {m.disputedCount}
+                    <span className={`text-[10px] font-mono font-bold tabular-nums ${m.disputesTotal > 0 ? "text-[var(--color-error)]" : "text-foreground/25"}`}>
+                      {m.disputesTotal}
                     </span>
+                    {m.disputesTotal > 0 && (
+                      <div className="flex items-center justify-end gap-1 mt-0.5">
+                        <span className="text-[8px] font-mono text-primary/50" title="Raised by merchant">{m.disputesRaisedByMerchant}&#8593;</span>
+                        <span className="text-[8px] font-mono text-[var(--color-error)]/50" title="Against merchant">{m.disputesAgainstMerchant}&#8595;</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Response Time */}
-                  <div className="text-right text-[9px] font-mono text-foreground/25 tabular-nums">
+                  <div className="text-right text-[10px] font-mono text-foreground/40 tabular-nums">
                     {m.avgResponseTimeMins > 0 ? formatTime(m.avgResponseTimeMins) : "—"}
                   </div>
 
                   {/* Balance */}
                   <div className="text-right">
-                    <span className={`text-[9px] font-mono tabular-nums ${m.balance > 0 ? "text-foreground/40" : "text-foreground/10"}`}>
+                    <span className={`text-[9px] font-mono tabular-nums ${m.balance > 0 ? "text-foreground/40" : "text-foreground/25"}`}>
                       {m.balance > 0 ? formatVolume(m.balance) : "—"}
                     </span>
                   </div>
 
                   {/* Last Seen */}
-                  <div className="text-right text-[8px] font-mono text-foreground/15 tabular-nums">
+                  <div className="text-right text-[10px] font-mono text-foreground/45 tabular-nums">
                     {formatTimeAgo(m.lastSeenAt)}
                   </div>
 
                   {/* Joined */}
-                  <div className="text-right text-[8px] font-mono text-foreground/15 tabular-nums">
+                  <div className="text-right text-[10px] font-mono text-foreground/40 tabular-nums">
                     {m.createdAt ? new Date(m.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—"}
                   </div>
                 </div>
@@ -686,7 +891,7 @@ export default function MerchantsPage() {
         {/* ── Pagination Footer ── */}
         {totalPages > 1 && (
           <div className="px-3 py-2 border-t border-border flex items-center justify-between shrink-0 bg-card">
-            <span className="text-[8px] text-foreground/20 font-mono tabular-nums">
+            <span className="text-[10px] text-foreground/40 font-mono tabular-nums">
               {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
             </span>
             <div className="flex items-center gap-0.5">

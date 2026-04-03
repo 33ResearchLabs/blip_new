@@ -83,7 +83,40 @@ function getAuthHeaders(): Record<string, string> {
     // SSR or corrupt — skip
   }
 
+  // 5. Device fingerprint — cached in sessionStorage after first compute
+  try {
+    const cached = sessionStorage.getItem('blip_device_id');
+    if (cached) {
+      headers['x-device-id'] = cached;
+      const meta = sessionStorage.getItem('blip_device_meta');
+      if (meta) headers['x-device-meta'] = meta;
+    }
+  } catch {
+    // SSR — skip
+  }
+
   return headers;
+}
+
+/**
+ * Compute device fingerprint and cache it in sessionStorage.
+ * Called once on app load — async but non-blocking.
+ */
+let _deviceInitialized = false;
+async function initDeviceFingerprint(): Promise<void> {
+  if (_deviceInitialized) return;
+  _deviceInitialized = true;
+  try {
+    if (typeof window === 'undefined') return;
+    // Skip if already cached
+    if (sessionStorage.getItem('blip_device_id')) return;
+    const { getDeviceInfo } = await import('@/lib/device/fingerprint');
+    const { deviceId, metadata } = await getDeviceInfo();
+    sessionStorage.setItem('blip_device_id', deviceId);
+    sessionStorage.setItem('blip_device_meta', JSON.stringify(metadata));
+  } catch {
+    // Non-critical — tracking will work without it
+  }
 }
 
 /**
@@ -171,6 +204,9 @@ export function fetchWithAuth(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
+  // Lazily init device fingerprint (non-blocking, runs once)
+  initDeviceFingerprint().catch(() => {});
+
   const method = (init?.method || 'GET').toUpperCase();
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 

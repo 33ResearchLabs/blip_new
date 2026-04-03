@@ -10,6 +10,7 @@ import { getOrderById } from '../db/repositories/orders';
 import { getUserById } from '../db/repositories/users';
 import { getMerchantById } from '../db/repositories/merchants';
 import { verifySessionToken } from '../auth/sessionToken';
+import { checkBlacklist } from './blacklist';
 
 // Admin auth secret - MUST be configured via environment variable
 const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
@@ -342,6 +343,11 @@ export async function requireAuth(
 ): Promise<AuthContext | NextResponse> {
   const auth = await getVerifiedAuthContext(request);
   if (!auth) return unauthorizedResponse('Authentication required');
+
+  // Blacklist check — blocks hard-banned users/devices/IPs
+  const blacklistResult = await checkBlacklist(request, auth);
+  if (blacklistResult) return blacklistResult;
+
   return auth;
 }
 
@@ -363,6 +369,10 @@ export async function requireTokenAuth(
 ): Promise<AuthContext | NextResponse> {
   const auth = await getVerifiedAuthContext(request);
   if (!auth) return unauthorizedResponse('Authentication required');
+
+  // Blacklist check — blocks hard-banned users/devices/IPs
+  const blacklistResult = await checkBlacklist(request, auth);
+  if (blacklistResult) return blacklistResult;
 
   const hasValidToken = !!request.headers.get('authorization')?.startsWith('Bearer ');
 

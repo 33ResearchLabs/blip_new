@@ -13,6 +13,7 @@ import { verifyWalletSignature } from '@/lib/solana/verifySignature';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { validateUsername } from '@/lib/validation/username';
 import { generateSessionToken, generateAccessToken, setSessionOnResponse } from '@/lib/auth/sessionToken';
+import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
 
 /**
  * POST /api/auth/user
@@ -89,6 +90,16 @@ export async function POST(request: NextRequest) {
       }
 
       console.log('[API] User authenticated via wallet:', user.id, user.username, { isNewUser, needsUsername });
+
+      // Fire-and-forget: device + IP tracking (never blocks auth)
+      trackRequest(request, {
+        entityId: user.id,
+        entityType: 'user',
+        action: isNewUser ? 'signup' : 'login',
+      }).catch(() => {});
+      if (!isNewUser) {
+        checkDeviceChangeFrequency(user.id, 'user').catch(() => {});
+      }
 
       // 2FA gate: if enabled and not a new user, return pendingToken
       if (!isNewUser) {
@@ -237,6 +248,10 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] User login successful:', user.id, user.username);
 
+      // Fire-and-forget: device + IP tracking
+      trackRequest(request, { entityId: user.id, entityType: 'user', action: 'login' }).catch(() => {});
+      checkDeviceChangeFrequency(user.id, 'user').catch(() => {});
+
       // 2FA gate: if enabled, return pendingToken instead of real tokens
       const { getTotpStatus, createPendingLoginToken } = await import('@/lib/auth/totp');
       const totpStatus = await getTotpStatus(user.id, 'user');
@@ -323,6 +338,9 @@ export async function POST(request: NextRequest) {
       }
 
       console.log('[API] New user registered:', user.id, user.username);
+
+      // Fire-and-forget: device + IP tracking for signup
+      trackRequest(request, { entityId: user.id, entityType: 'user', action: 'signup' }).catch(() => {});
 
       const regPayload = { actorId: user.id, actorType: 'user' as const };
       const registerToken = generateSessionToken(regPayload);

@@ -984,7 +984,10 @@ export async function updateOrderStatus(
           break;
         case 'disputed':
           // Set auto-resolve deadline: 24 hours from now to prevent infinite stall
-          timestampField = ", disputed_at = NOW(), dispute_auto_resolve_at = NOW() + INTERVAL '24 hours'";
+          // Track who raised the dispute (user or merchant)
+          timestampField = `, disputed_at = NOW(), dispute_auto_resolve_at = NOW() + INTERVAL '24 hours', disputed_by = $${nextParam}::TEXT, disputed_by_id = $${nextParam + 1}::UUID`;
+          dynamicParams.push(actorType, actorId);
+          nextParam += 2;
           break;
       }
 
@@ -1183,6 +1186,18 @@ export async function updateOrderStatus(
         } catch (contactErr) {
           logger.warn('Failed to upsert merchant contact', { orderId, error: contactErr });
         }
+
+        // Update avg completion time (fire-and-forget, never blocks order flow)
+        try {
+          const { updateAvgCompletionTime } = await import('./risk');
+          if (currentOrder.created_at) {
+            const completionMs = Date.now() - new Date(currentOrder.created_at).getTime();
+            updateAvgCompletionTime(currentOrder.user_id, 'user', completionMs).catch(() => {});
+            updateAvgCompletionTime(currentOrder.merchant_id, 'merchant', completionMs).catch(() => {});
+          }
+        } catch {
+          // risk module not available — non-fatal
+        }
       }
 
       // Handle side effects: cancellation
@@ -1204,6 +1219,25 @@ export async function updateOrderStatus(
           );
         } catch (repErr) {
           logger.warn('Failed to record reputation events for cancelled order', { orderId, error: repErr });
+        }
+
+        // Increment cancelled_orders stats (fire-and-forget, never blocks order flow)
+        try {
+          const { incrementCancelledOrders } = await import('./risk');
+          incrementCancelledOrders(currentOrder.user_id, currentOrder.merchant_id).catch(() => {});
+        } catch {
+          // risk module not available — non-fatal
+        }
+      }
+
+      // Handle side effects: dispute
+      if (newStatus === 'disputed') {
+        // Increment dispute_count stats (fire-and-forget, never blocks order flow)
+        try {
+          const { incrementDisputeCount } = await import('./risk');
+          incrementDisputeCount(currentOrder.user_id, currentOrder.merchant_id).catch(() => {});
+        } catch {
+          // risk module not available — non-fatal
         }
       }
 

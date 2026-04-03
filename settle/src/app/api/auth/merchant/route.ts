@@ -8,6 +8,7 @@ import { generateSessionToken, generateAccessToken, setSessionOnResponse } from 
 import { validateUsername } from '@/lib/validation/username';
 import crypto from 'crypto';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
+import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
 
 // Password hashing — PBKDF2 with 100k iterations (OWASP minimum for SHA-512)
 const PBKDF2_ITERATIONS = 100_000;
@@ -240,6 +241,10 @@ export async function POST(request: NextRequest) {
 
         console.log('[API] Merchant login successful:', merchant.id, merchant.username);
 
+        // Fire-and-forget: device + IP tracking
+        trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'login' }).catch(() => {});
+        checkDeviceChangeFrequency(merchant.id, 'merchant').catch(() => {});
+
         // 2FA gate: if enabled, return pendingToken instead of real tokens
         if (merchant.totp_enabled) {
           const { createPendingLoginToken } = await import('@/lib/auth/totp');
@@ -372,6 +377,9 @@ export async function POST(request: NextRequest) {
       };
 
       console.log('[API] New merchant created:', merchant.id, merchant.username, MOCK_MODE ? `(mock balance: ${merchantBalance})` : '');
+
+      // Fire-and-forget: device + IP tracking for signup
+      trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'signup' }).catch(() => {});
 
       // Auto-create default offers for new merchant (so they can start receiving orders immediately)
       await createDefaultMerchantOffers(merchant.id, username);
@@ -673,6 +681,10 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] Merchant email login successful:', merchant.id, merchant.email);
 
+      // Fire-and-forget: device + IP tracking
+      trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'login' }).catch(() => {});
+      checkDeviceChangeFrequency(merchant.id, 'merchant').catch(() => {});
+
       // 2FA gate: if enabled, return pendingToken instead of real tokens
       if (merchant.totp_enabled) {
         const { createPendingLoginToken } = await import('@/lib/auth/totp');
@@ -806,6 +818,9 @@ export async function POST(request: NextRequest) {
       };
 
       console.log('[API] New merchant registered:', merchant.id, merchant.email);
+
+      // Fire-and-forget: device + IP tracking for signup
+      trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'signup' }).catch(() => {});
 
       // Auto-create default offers
       await createDefaultMerchantOffers(merchant.id, merchant.display_name);
