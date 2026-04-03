@@ -115,6 +115,7 @@
         { "name": "depositorAta", "isMut": true, "isSigner": false },
         { "name": "creator", "isMut": true, "isSigner": false },
         { "name": "mint", "isMut": false, "isSigner": false },
+        { "name": "protocolConfig", "isMut": false, "isSigner": false, "isOptional": true },
         { "name": "tokenProgram", "isMut": false, "isSigner": false }
       ],
       "args": []

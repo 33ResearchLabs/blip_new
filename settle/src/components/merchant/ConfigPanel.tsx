@@ -151,7 +151,7 @@ export const ConfigPanel = memo(function ConfigPanel({
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-1.5">
               <ArrowRightLeft className="w-3.5 h-3.5 text-primary/60" />
-              <span className="text-[11px] font-bold text-white/50 uppercase tracking-wider">Amount</span>
+              <span className="text-[11px] font-bold text-foreground/50 uppercase tracking-wider">Amount</span>
             </div>
             <button
               onClick={() => setOpenTradeForm({ ...openTradeForm, cryptoAmount: maxAmount.toFixed(0) })}
@@ -166,14 +166,14 @@ export const ConfigPanel = memo(function ConfigPanel({
               value={openTradeForm.cryptoAmount}
               onChange={(e) => setOpenTradeForm({ ...openTradeForm, cryptoAmount: e.target.value })}
               placeholder="0"
-              className="w-full bg-white/[0.03] border border-white/[0.08] rounded-xl px-4 py-3 text-xl font-bold text-white placeholder:text-white/10 outline-none focus:border-primary/30 focus:bg-white/[0.04] transition-all font-mono tabular-nums"
+              className="w-full bg-foreground/[0.03] border border-foreground/[0.08] rounded-xl px-4 py-3 text-xl font-bold text-foreground placeholder:text-foreground/10 outline-none focus:border-primary/30 focus:bg-foreground/[0.04] transition-all font-mono tabular-nums"
             />
-            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-white/25 font-mono">USDT</span>
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-foreground/25 font-mono">USDT</span>
           </div>
           {cryptoAmount > 0 && (
             <div className="flex items-center justify-between mt-1.5 px-1 text-[10px] font-mono">
-              <span className="text-white/30">≈ {(cryptoAmount * currentRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AED</span>
-              <span className="text-white/20">@ {currentRate.toFixed(4)}</span>
+              <span className="text-foreground/30">≈ {(cryptoAmount * currentRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} AED</span>
+              <span className="text-foreground/20">@ {currentRate.toFixed(4)}</span>
             </div>
           )}
         </div>
@@ -186,8 +186,8 @@ export const ConfigPanel = memo(function ConfigPanel({
               onClick={() => setOpenTradeForm({ ...openTradeForm, paymentMethod: method })}
               className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all border ${
                 openTradeForm.paymentMethod === method
-                  ? 'bg-white/[0.08] text-white/90 border-white/[0.12]'
-                  : 'bg-white/[0.02] text-white/30 hover:bg-white/[0.05] border-white/[0.04]'
+                  ? 'bg-foreground/[0.08] text-foreground/90 border-foreground/[0.12]'
+                  : 'bg-foreground/[0.02] text-foreground/30 hover:bg-foreground/[0.05] border-foreground/[0.04]'
               }`}
             >
               {method === 'bank' ? 'Bank Transfer' : 'Cash'}
@@ -197,7 +197,7 @@ export const ConfigPanel = memo(function ConfigPanel({
 
         {/* Spread Tier */}
         <div>
-          <label className="text-[10px] text-white/30 mb-1.5 block font-mono uppercase tracking-wider font-bold">Spread</label>
+          <label className="text-[10px] text-foreground/30 mb-1.5 block font-mono uppercase tracking-wider font-bold">Spread</label>
           <div className="flex gap-1.5">
             {(Object.entries(PRICING_TIERS) as [keyof typeof PRICING_TIERS, typeof PRICING_TIERS[keyof typeof PRICING_TIERS]][]).map(([key, t]) => {
               const isSelected = openTradeForm.spreadPreference === key;
@@ -209,12 +209,12 @@ export const ConfigPanel = memo(function ConfigPanel({
                   className={`flex-1 py-2 px-1.5 rounded-xl transition-all border text-center ${
                     isSelected
                       ? 'bg-primary/[0.08] border-primary/20'
-                      : 'bg-white/[0.02] hover:bg-white/[0.04] border-white/[0.04]'
+                      : 'bg-foreground/[0.02] hover:bg-foreground/[0.04] border-foreground/[0.04]'
                   }`}
                 >
                   <div className="flex items-center justify-center gap-1 mb-0.5">
-                    <TierIcon className={`w-3 h-3 ${isSelected ? 'text-primary' : 'text-white/20'}`} />
-                    <span className={`text-[10px] font-bold ${isSelected ? 'text-white' : 'text-white/35'}`}>{t.label}</span>
+                    <TierIcon className={`w-3 h-3 ${isSelected ? 'text-primary' : 'text-foreground/20'}`} />
+                    <span className={`text-[10px] font-bold ${isSelected ? 'text-foreground' : 'text-foreground/35'}`}>{t.label}</span>
                   </div>
                   <div className={`text-[11px] font-black font-mono tabular-nums ${isSelected ? 'text-primary' : 'text-white/25'}`}>
                     +{t.base}%
@@ -228,7 +228,7 @@ export const ConfigPanel = memo(function ConfigPanel({
         {/* Priority Fee / Boost */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <label className="text-[10px] text-white/30 font-mono uppercase tracking-wider font-bold flex items-center gap-1">
+            <label className="text-[10px] text-foreground/30 font-mono uppercase tracking-wider font-bold flex items-center gap-1">
               <Flame className="w-3 h-3 text-primary/40" />
               Boost
             </label>
@@ -246,8 +246,8 @@ export const ConfigPanel = memo(function ConfigPanel({
                 onClick={() => setPriorityFee(val)}
                 className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold font-mono transition-all border ${
                   priorityFee === val
-                    ? 'bg-white/[0.08] text-white/90 border-white/[0.12]'
-                    : 'bg-white/[0.02] text-white/25 hover:bg-white/[0.05] border-white/[0.04]'
+                    ? 'bg-foreground/[0.08] text-foreground/90 border-foreground/[0.12]'
+                    : 'bg-foreground/[0.02] text-foreground/25 hover:bg-foreground/[0.05] border-foreground/[0.04]'
                 }`}
               >
                 {val === 0 ? '0' : `${val}%`}
@@ -257,7 +257,7 @@ export const ConfigPanel = memo(function ConfigPanel({
 
           {showPriorityInput && (
             <div className="flex items-center gap-1.5 mt-1.5">
-              <button onClick={() => handlePriorityChange(priorityFee - 0.5)} className="p-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white/30">
+              <button onClick={() => handlePriorityChange(priorityFee - 0.5)} className="p-1 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.06] text-foreground/30">
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>
               <input
@@ -265,19 +265,19 @@ export const ConfigPanel = memo(function ConfigPanel({
                 value={priorityFee}
                 onChange={(e) => handlePriorityChange(parseFloat(e.target.value) || 0)}
                 min={0} max={50} step={0.5}
-                className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded-lg px-2 py-1 text-[11px] text-white font-mono text-center outline-none focus:border-white/15"
+                className="flex-1 bg-foreground/[0.03] border border-foreground/[0.06] rounded-lg px-2 py-1 text-[11px] text-foreground font-mono text-center outline-none focus:border-foreground/15"
               />
-              <button onClick={() => handlePriorityChange(priorityFee + 0.5)} className="p-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white/30">
+              <button onClick={() => handlePriorityChange(priorityFee + 0.5)} className="p-1 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.06] text-foreground/30">
                 <ChevronUp className="w-3.5 h-3.5" />
               </button>
-              <span className="text-[10px] text-white/20 font-mono font-bold">%</span>
+              <span className="text-[10px] text-foreground/20 font-mono font-bold">%</span>
             </div>
           )}
 
           {priorityFee > 0 && (
-            <div className="mt-1.5 rounded-xl bg-white/[0.02] border border-white/[0.04] p-1.5">
+            <div className="mt-1.5 rounded-xl bg-foreground/[0.02] border border-foreground/[0.04] p-1.5">
               <div className="flex items-center justify-between px-1 mb-0.5">
-                <span className="text-[9px] text-white/15 font-mono font-bold">DECAY</span>
+                <span className="text-[9px] text-foreground/15 font-mono font-bold">DECAY</span>
                 <span className="text-[9px] text-primary/50 font-mono font-bold">{priorityFee}% → 0%</span>
               </div>
               <DecayChart maxFee={priorityFee} />
@@ -293,7 +293,7 @@ export const ConfigPanel = memo(function ConfigPanel({
               onCreateOrder('buy', priorityFee);
             }}
             disabled={isDisabled}
-            className="flex-1 py-3 rounded-xl text-black font-bold transition-all disabled:opacity-20 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5"
+            className="flex-1 py-3 rounded-xl text-white font-bold transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect flex flex-col items-center justify-center gap-0.5"
             style={{ backgroundColor: 'var(--primary)', boxShadow: '0 2px 12px var(--primary-dim)' }}
           >
             {isCreatingTrade && openTradeForm.tradeType === 'buy' ? (
@@ -313,7 +313,7 @@ export const ConfigPanel = memo(function ConfigPanel({
               onCreateOrder('sell', priorityFee);
             }}
             disabled={isDisabled}
-            className="flex-1 py-3 rounded-xl bg-white/[0.06] text-white font-bold hover:bg-white/[0.10] transition-all disabled:opacity-20 disabled:cursor-not-allowed press-effect border border-white/[0.08] flex flex-col items-center justify-center gap-0.5"
+            className="flex-1 py-3 rounded-xl bg-foreground/[0.06] text-foreground font-bold hover:bg-foreground/[0.10] transition-all disabled:opacity-30 disabled:cursor-not-allowed press-effect border border-foreground/[0.08] flex flex-col items-center justify-center gap-0.5"
           >
             {isCreatingTrade && openTradeForm.tradeType === 'sell' ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -321,7 +321,7 @@ export const ConfigPanel = memo(function ConfigPanel({
               <>
                 <span className="text-sm font-black tracking-wide">SELL</span>
                 {cryptoAmount > 0 && (
-                  <span className="text-[10px] font-mono font-bold text-white/40">{pricing.sellAed.toFixed(2)} AED</span>
+                  <span className="text-[10px] font-mono font-bold text-foreground/40">{pricing.sellAed.toFixed(2)} AED</span>
                 )}
               </>
             )}
@@ -330,7 +330,7 @@ export const ConfigPanel = memo(function ConfigPanel({
 
         {/* Spread summary */}
         {cryptoAmount > 0 && (
-          <div className="flex items-center justify-between px-1 text-[9px] font-mono text-white/20">
+          <div className="flex items-center justify-between px-1 text-[9px] font-mono text-foreground/20">
             <span>+{pricing.totalSpread.toFixed(1)}% spread</span>
             <span className="tabular-nums">B {pricing.buyRate.toFixed(4)} · S {pricing.sellRate.toFixed(4)}</span>
           </div>
@@ -339,18 +339,18 @@ export const ConfigPanel = memo(function ConfigPanel({
         {/* My Offers Toggle */}
         <button
           onClick={() => setShowOffers(!showOffers)}
-          className="w-full flex items-center justify-between px-3 py-2.5 mt-1 rounded-xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] transition-all"
+          className="w-full flex items-center justify-between px-3 py-2.5 mt-1 rounded-xl bg-foreground/[0.03] hover:bg-foreground/[0.06] border border-foreground/[0.06] transition-all"
         >
           <div className="flex items-center gap-2">
             <Package className="w-4 h-4 text-primary/60" />
-            <span className="text-[11px] font-semibold text-white/70">My Offers</span>
+            <span className="text-[11px] font-semibold text-foreground/70">My Offers</span>
           </div>
-          <ChevronRight className={`w-4 h-4 text-white/30 transition-transform duration-200 ${showOffers ? 'rotate-90' : ''}`} />
+          <ChevronRight className={`w-4 h-4 text-foreground/30 transition-transform duration-200 ${showOffers ? 'rotate-90' : ''}`} />
         </button>
 
         {/* My Offers Panel (inline) */}
         {showOffers && merchantId && (
-          <div className="mt-1 rounded-xl border border-white/[0.06] bg-white/[0.02] p-2 overflow-y-auto max-h-[400px]">
+          <div className="mt-1 rounded-xl border border-foreground/[0.06] bg-foreground/[0.02] p-2 overflow-y-auto max-h-[400px]">
             <MyOffers merchantId={merchantId} />
           </div>
         )}

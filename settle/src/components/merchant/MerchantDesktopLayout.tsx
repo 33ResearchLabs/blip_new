@@ -119,9 +119,9 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
           maxSize={isWideScreen ? "30%" : "35%"}
           id="left"
         >
-          <div className="flex flex-col h-full bg-background overflow-y-auto p-2 gap-2 scrollbar-thin scrollbar-thumb-white/10">
+          <div className="flex flex-col h-full bg-background overflow-y-auto p-2 gap-2 scrollbar-thin scrollbar-thumb-white/10 border-r border-border">
             <div
-              className="glass-card rounded-xl overflow-hidden flex-shrink-0 border border-white/[0.06]"
+              className="glass-card rounded-xl overflow-hidden flex-shrink-0 border border-foreground/[0.06]"
               style={{ minHeight: "220px" }}
             >
               <DashboardWidgets
@@ -138,7 +138,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 onOpenCorridor={() => window.open("/merchant/mempool", "_blank")}
               />
             </div>
-            <div className="glass-card rounded-xl overflow-hidden flex-1 min-h-0 border border-white/[0.06]">
+            <div className="glass-card rounded-xl overflow-hidden flex-1 min-h-0 border border-foreground/[0.06]">
               <ConfigPanel
                 merchantId={merchantId}
                 merchantInfo={merchantInfo}
@@ -159,7 +159,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
           maxSize={isWideScreen ? "35%" : "40%"}
           id="center-left"
         >
-          <div className="flex flex-col h-full bg-background">
+          <div className="flex flex-col h-full bg-background border-r border-border">
             {isWideScreen ? (
               <PendingOrdersPanel
                 orders={pendingOrders}
@@ -177,7 +177,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
               <>
                 <div
                   style={{ height: "60%" }}
-                  className="flex flex-col border-b border-white/[0.04]"
+                  className="flex flex-col border-b border-section-divider"
                 >
                   <PendingOrdersPanel
                     orders={pendingOrders}
@@ -210,9 +210,9 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
           maxSize={isWideScreen ? "32%" : "40%"}
           id="center-right"
         >
-          <div className="flex flex-col h-full bg-background">
+          <div className="flex flex-col h-full bg-background border-r border-border">
             <div
-              className={`flex flex-col border-b border-white/[0.04] transition-all duration-200 ${inProgressCollapsed ? "" : "flex-1 min-h-0"}`}
+              className={`flex flex-col border-b border-foreground/[0.08] transition-all duration-200 ${inProgressCollapsed ? "" : "flex-1 min-h-0"}`}
             >
               <InProgressPanel
                 orders={ongoingOrders}
@@ -225,7 +225,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
               />
             </div>
             <div
-              className={`flex flex-col border-b border-white/[0.04] transition-all duration-200 ${completedCollapsed ? "" : "flex-1 min-h-0"}`}
+              className={`flex flex-col border-b border-section-divider transition-all duration-200 ${completedCollapsed ? "" : "flex-1 min-h-0"}`}
             >
               <CompletedOrdersPanel
                 orders={completedOrders}
@@ -268,9 +268,9 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
               maxSize="30%"
               id="transactions"
             >
-              <div className="flex flex-col h-full bg-background">
+              <div className="flex flex-col h-full bg-background border-r border-border">
                 <div
-                  className={`flex flex-col border-b border-white/[0.04] transition-all duration-200 ${leaderboardCollapsed ? "" : "flex-1 min-h-0"}`}
+                  className={`flex flex-col border-b border-section-divider transition-all duration-200 ${leaderboardCollapsed ? "" : "flex-1 min-h-0"}`}
                 >
                   <LeaderboardPanel
                     leaderboardData={leaderboardData}
@@ -313,7 +313,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
           maxSize={isWideScreen ? "30%" : "35%"}
           id="right"
         >
-          <div className="flex flex-col h-full bg-background overflow-hidden">
+          <div className="flex flex-col h-full bg-background overflow-hidden border-l border-border">
             <NotificationsPanel
               notifications={notifications}
               onMarkRead={markNotificationRead}

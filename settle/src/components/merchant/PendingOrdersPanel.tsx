@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { CountdownRing } from "./CountdownRing";
 import { useMerchantStore } from "@/stores/merchantStore";
 
 interface PendingOrdersPanelProps {
@@ -71,14 +72,14 @@ const OrderList = memo(function OrderList({
     return (
       <div className="flex-1 overflow-y-auto p-1.5">
         <div className="flex flex-col items-center justify-center h-full gap-3">
-          <div className="w-10 h-10 rounded-full border border-white/[0.06] bg-white/[0.02] flex items-center justify-center">
-            <TrendingUp className="w-5 h-5 text-white/20" />
+          <div className="w-10 h-10 rounded-full border border-foreground/[0.06] bg-foreground/[0.02] flex items-center justify-center">
+            <TrendingUp className="w-5 h-5 text-foreground/20" />
           </div>
           <div className="text-center">
-            <p className="text-[11px] font-medium text-white/30 mb-0.5">
+            <p className="text-[11px] font-medium text-foreground/30 mb-0.5">
               No pending orders
             </p>
-            <p className="text-[9px] text-white/15 font-mono">
+            <p className="text-[9px] text-foreground/15 font-mono">
               New orders from the network show here
             </p>
           </div>
@@ -160,7 +161,7 @@ const OrderList = memo(function OrderList({
                   onClick={() => onSelectMempoolOrder(mOrder)}
                   className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
                     isMyMempoolOrder
-                      ? "bg-white/[0.01] border-white/[0.04] opacity-50"
+                      ? "bg-white/[0.01] border-foreground/[0.04] opacity-50"
                       : "glass-card border-white/[0.10] hover:border-primary/30 ring-1 ring-white/[0.04]"
                   }`}
                 >
@@ -175,9 +176,9 @@ const OrderList = memo(function OrderList({
                   )}
                   {/* Waiting banner for own orders */}
                   {isMyMempoolOrder && !acceptingOrderId && (
-                    <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-white/[0.02] border border-white/[0.04]">
+                    <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-foreground/[0.02] border border-foreground/[0.04]">
                       <div className="w-1 h-1 bg-white/20 rounded-full animate-breathe" />
-                      <span className="text-[9px] text-white/30 font-mono font-bold tracking-wider uppercase">
+                      <span className="text-[9px] text-foreground/30 font-mono font-bold tracking-wider uppercase">
                         Waiting for acceptance
                       </span>
                     </div>
@@ -199,7 +200,7 @@ const OrderList = memo(function OrderList({
                         PRIORITY
                       </span>
                       {isMyMempoolOrder && (
-                        <span className="px-1 py-0.5 bg-white/[0.04] border border-white/[0.06] rounded text-[9px] font-bold text-white/40">
+                        <span className="px-1 py-0.5 bg-foreground/[0.04] border border-foreground/[0.06] rounded text-[9px] font-bold text-foreground/40">
                           YOURS
                         </span>
                       )}
@@ -232,7 +233,7 @@ const OrderList = memo(function OrderList({
                     <span className="text-sm font-bold text-white tabular-nums">
                       {Math.round(amount).toLocaleString()} USDC
                     </span>
-                    <ArrowRight className="w-3 h-3 text-white/20" />
+                    <ArrowRight className="w-3 h-3 text-foreground/20" />
                     <span className="text-sm font-bold text-primary tabular-nums">
                       {fiatTotal.toLocaleString()} AED
                     </span>
@@ -245,7 +246,7 @@ const OrderList = memo(function OrderList({
 
                   {/* Row 3: Rate + action button */}
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-white/40 font-mono">
+                    <span className="text-[10px] text-foreground/40 font-mono">
                       @ {livePrice}
                     </span>
                     {livePremiumPct > 0 && (
@@ -310,12 +311,12 @@ const OrderList = memo(function OrderList({
                 onClick={() => onSelectOrder(order)}
                 className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
                   isMyOwnOrder
-                    ? "bg-white/[0.01] border-white/[0.04] opacity-50"
+                    ? "bg-white/[0.01] border-foreground/[0.04] opacity-50"
                     : isMineable
                       ? "glass-card border-white/[0.10] hover:border-primary/30 ring-1 ring-white/[0.04]"
                       : isHighPremium
-                        ? "glass-card border-white/[0.08] hover:border-white/[0.12]"
-                        : "glass-card hover:border-white/[0.08]"
+                        ? "glass-card border-foreground/[0.08] hover:border-white/[0.12]"
+                        : "glass-card hover:border-foreground/[0.08]"
                 }`}
               >
                 {/* Processing banner */}
@@ -329,9 +330,9 @@ const OrderList = memo(function OrderList({
                 )}
                 {/* Waiting banner — top of card for own orders */}
                 {isMyOwnOrder && acceptingOrderId !== order.id && (
-                  <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-white/[0.02] border border-white/[0.04]">
+                  <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-foreground/[0.02] border border-foreground/[0.04]">
                     <div className="w-1 h-1 bg-white/20 rounded-full animate-breathe" />
-                    <span className="text-[9px] text-white/30 font-mono font-bold tracking-wider uppercase">
+                    <span className="text-[9px] text-foreground/30 font-mono font-bold tracking-wider uppercase">
                       Waiting for acceptance
                     </span>
                   </div>
@@ -339,7 +340,7 @@ const OrderList = memo(function OrderList({
                 {/* Row 1: User + tags on left, timer on right */}
                 <div className="flex items-center justify-between mb-1.5">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <div className="w-7 h-7 rounded-lg bg-white/[0.02] flex items-center justify-center shrink-0 text-sm border border-white/[0.04]">
+                    <div className="w-7 h-7 rounded-lg bg-foreground/[0.02] flex items-center justify-center shrink-0 text-sm border border-foreground/[0.04]">
                       {order.emoji}
                     </div>
                     <span className="text-xs font-medium text-white truncate">
@@ -349,7 +350,7 @@ const OrderList = memo(function OrderList({
                       className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
                         order.orderType === "buy"
                           ? "bg-primary/10 border-primary/20 text-primary"
-                          : "bg-white/[0.06] border-white/[0.08] text-white/50"
+                          : "bg-foreground/[0.06] border-foreground/[0.08] text-foreground/50"
                       }`}
                     >
                       {order.orderType === "buy" ? "SEND" : "RECEIVE"}
@@ -395,7 +396,7 @@ const OrderList = memo(function OrderList({
                       </span>
                     )}
                     {isMyOwnOrder && (
-                      <span className="px-1 py-0.5 bg-white/[0.04] border border-white/[0.06] rounded text-[9px] font-bold text-white/40">
+                      <span className="px-1 py-0.5 bg-foreground/[0.04] border border-foreground/[0.06] rounded text-[9px] font-bold text-foreground/40">
                         YOURS
                       </span>
                     )}
@@ -412,9 +413,31 @@ const OrderList = memo(function OrderList({
                     }`}
                   >
                     {order.expiresIn <= 0 ? "Expired" : order.expiresIn >= 3600 ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m` : order.expiresIn >= 60 ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s` : `${order.expiresIn}s`}
-                    <span className="animate-pulse" style={{ filter: order.expiresIn <= 120 ? 'drop-shadow(0 0 6px #ef4444)' : 'drop-shadow(0 0 4px #f97316)' }}>🔥</span>
+                    <CountdownRing remaining={order.expiresIn} total={900} size={18} strokeWidth={2.5} />
                   </div>
                 </div>
+
+                {/* Payment method badge with icon */}
+                {(() => {
+                  const pmType = order.lockedPaymentMethod?.type
+                    || order.dbOrder?.payment_method
+                    || (order.userBankDetails ? 'bank' : null);
+                  if (!pmType) return null;
+                  const config: Record<string, { label: string; icon: string }> = {
+                    bank: { label: 'Bank', icon: '🏦' },
+                    cash: { label: 'Cash', icon: '💵' },
+                    upi:  { label: 'UPI',  icon: '📱' },
+                  };
+                  const { label, icon } = config[pmType] || { label: pmType.toUpperCase(), icon: '💳' };
+                  return (
+                    <div className="flex justify-end mb-1.5">
+                      <span className="flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded border border-border text-secondary">
+                        <span className="text-[10px]">{icon}</span>
+                        {label}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 {/* Row 2: Amount + profit */}
                 <div className="flex items-center gap-1.5 mb-1">
@@ -422,7 +445,7 @@ const OrderList = memo(function OrderList({
                     {Math.round(order.amount).toLocaleString()}{" "}
                     {order.fromCurrency}
                   </span>
-                  <ArrowRight className="w-3 h-3 text-white/20" />
+                  <ArrowRight className="w-3 h-3 text-foreground/20" />
                   <span className="text-sm font-bold text-primary tabular-nums">
                     {Math.round(order.total).toLocaleString()}{" "}
                     {order.toCurrency}
@@ -441,7 +464,7 @@ const OrderList = memo(function OrderList({
 
                 {/* Row 3: Rate + premium ... small action button on right */}
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] text-white/40 font-mono">
+                  <span className="text-[10px] text-foreground/40 font-mono">
                     @ {order.rate.toFixed(2)}
                   </span>
                   {order.protocolFeePercent != null &&
@@ -635,7 +658,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="px-3 py-2 border-b border-white/[0.04]">
+      <div className="px-3 py-2 border-b border-section-divider">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1">
             <button
@@ -643,7 +666,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
               className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
                 orderViewFilter === "new"
                   ? "bg-white/[0.08] text-white border border-white/[0.12]"
-                  : "text-white/30 hover:text-white/50"
+                  : "text-foreground/30 hover:text-foreground/50"
               }`}
             >
               Pending
@@ -653,7 +676,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
               className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
                 orderViewFilter === "all"
                   ? "bg-white/[0.08] text-white border border-white/[0.12]"
-                  : "text-white/30 hover:text-white/50"
+                  : "text-foreground/30 hover:text-foreground/50"
               }`}
             >
               All
@@ -661,35 +684,35 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           </div>
 
           <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.02] rounded border border-white/[0.06]">
+            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-foreground/[0.02] rounded border border-foreground/[0.06]">
               <div className="w-1.5 h-1.5 bg-primary rounded-full animate-live-dot" />
               <span className="text-[9px] text-white/35 font-mono">Live</span>
             </div>
             <button
               onClick={() => setSoundEnabled(!soundEnabled)}
-              className="p-1 hover:bg-white/[0.04] rounded transition-colors text-[10px] text-white/30"
+              className="p-1 hover:bg-foreground/[0.04] rounded transition-colors text-[10px] text-foreground/30"
               title={soundEnabled ? "Mute" : "Unmute"}
             >
               {soundEnabled ? "🔊" : "🔇"}
             </button>
             <button
               onClick={fetchOrders}
-              className="p-1 hover:bg-white/[0.04] rounded transition-colors"
+              className="p-1 hover:bg-foreground/[0.04] rounded transition-colors"
             >
-              <RotateCcw className="w-3 h-3 text-white/25 hover:text-white/50" />
+              <RotateCcw className="w-3 h-3 text-foreground/25 hover:text-foreground/50" />
             </button>
             <button
               onClick={() => setShowOrderFilters(!showOrderFilters)}
               className={`p-1 rounded transition-all ${
                 showOrderFilters ||
                 Object.values(orderFilters).some((v) => v !== "all")
-                  ? "bg-white/[0.08] text-white/60"
-                  : "hover:bg-white/[0.04] text-white/25"
+                  ? "bg-white/[0.08] text-foreground/60"
+                  : "hover:bg-foreground/[0.04] text-foreground/25"
               }`}
             >
               <SlidersHorizontal className="w-3 h-3" />
             </button>
-            <span className="text-[10px] border border-white/[0.08] text-white/50 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
+            <span className="text-[10px] border border-foreground/[0.08] text-foreground/50 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
               {filteredOrders.length}
             </span>
           </div>
@@ -704,8 +727,8 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                 onClick={() => setPendingFilter(f)}
                 className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
                   pendingFilter === f
-                    ? "bg-white/[0.08] text-white/80 border border-white/[0.10]"
-                    : "text-white/25 hover:text-white/40"
+                    ? "bg-white/[0.08] text-foreground/80 border border-white/[0.10]"
+                    : "text-foreground/25 hover:text-foreground/40"
                 }`}
               >
                 {f === "all"
@@ -724,20 +747,20 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
 
         {/* Search + Sort */}
         <div className="flex items-center gap-1.5">
-          <div className="flex-1 flex items-center gap-1.5 bg-white/[0.02] border border-white/[0.06] rounded-lg px-2.5 py-1.5">
-            <Search className="w-3 h-3 text-white/20" />
+          <div className="flex-1 flex items-center gap-1.5 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-2.5 py-1.5">
+            <Search className="w-3 h-3 text-foreground/20" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search orders..."
-              className="flex-1 bg-transparent text-[11px] text-white placeholder:text-white/15 outline-none font-mono"
+              className="flex-1 bg-transparent text-[11px] text-white placeholder:text-foreground/15 outline-none font-mono"
             />
           </div>
           <div className="relative" ref={sortDropdownRef}>
             <button
               onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
-              className="flex items-center gap-1 text-[9px] font-mono text-white/35 bg-white/[0.02] border border-white/[0.06] rounded-lg px-1.5 py-1.5 cursor-pointer hover:border-white/[0.10] transition-colors"
+              className="flex items-center gap-1 text-[9px] font-mono text-white/35 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-1.5 py-1.5 cursor-pointer hover:border-white/[0.10] transition-colors"
             >
               {{ time: "Time", premium: "Premium", amount: "Size", rating: "Rating" }[pendingSortBy]}
               <ChevronDown className={`w-2.5 h-2.5 transition-transform ${sortDropdownOpen ? "rotate-180" : ""}`} />
@@ -749,7 +772,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute right-0 top-full mt-1 z-50 min-w-[100px] bg-[#1a1a1a] border border-white/[0.08] rounded-lg shadow-xl overflow-hidden"
+                  className="absolute right-0 top-full mt-1 z-50 min-w-[100px] bg-[#1a1a1a] border border-foreground/[0.08] rounded-lg shadow-xl overflow-hidden"
                 >
                   {([
                     { value: "time", label: "Time" },
@@ -765,13 +788,13 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                       }}
                       className={`w-full flex items-center justify-between px-2.5 py-1.5 text-[10px] font-mono transition-colors ${
                         pendingSortBy === option.value
-                          ? "text-white/70 bg-white/[0.06]"
-                          : "text-white/35 hover:text-white/50 hover:bg-white/[0.04]"
+                          ? "text-foreground/70 bg-foreground/[0.06]"
+                          : "text-white/35 hover:text-foreground/50 hover:bg-foreground/[0.04]"
                       }`}
                     >
                       {option.label}
                       {pendingSortBy === option.value && (
-                        <Check className="w-2.5 h-2.5 text-white/50" />
+                        <Check className="w-2.5 h-2.5 text-foreground/50" />
                       )}
                     </button>
                   ))}
@@ -790,9 +813,9 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden mt-1.5"
             >
-              <div className="flex flex-wrap items-center gap-1 p-1.5 bg-white/[0.015] rounded-lg border border-white/[0.04]">
+              <div className="flex flex-wrap items-center gap-1 p-1.5 bg-white/[0.015] rounded-lg border border-foreground/[0.04]">
                 {/* Type */}
-                <div className="flex items-center gap-0.5 bg-white/[0.02] rounded p-0.5">
+                <div className="flex items-center gap-0.5 bg-foreground/[0.02] rounded p-0.5">
                   {(["all", "buy", "sell"] as const).map((t) => (
                     <button
                       key={t}
@@ -801,8 +824,8 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                       }
                       className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
                         orderFilters.type === t
-                          ? "bg-white/[0.08] text-white/80"
-                          : "text-white/25 hover:text-white/40"
+                          ? "bg-white/[0.08] text-foreground/80"
+                          : "text-foreground/25 hover:text-foreground/40"
                       }`}
                     >
                       {t === "all" ? "Type" : t.toUpperCase()}
@@ -811,7 +834,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                 </div>
 
                 {/* Amount */}
-                <div className="flex items-center gap-0.5 bg-white/[0.02] rounded p-0.5">
+                <div className="flex items-center gap-0.5 bg-foreground/[0.02] rounded p-0.5">
                   {[
                     { key: "all", label: "Amt" },
                     { key: "small", label: "<500" },
@@ -825,8 +848,8 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                       }
                       className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
                         orderFilters.amount === key
-                          ? "bg-white/[0.08] text-white/80"
-                          : "text-white/25 hover:text-white/40"
+                          ? "bg-white/[0.08] text-foreground/80"
+                          : "text-foreground/25 hover:text-foreground/40"
                       }`}
                     >
                       {label}
@@ -835,7 +858,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                 </div>
 
                 {/* Method */}
-                <div className="flex items-center gap-0.5 bg-white/[0.02] rounded p-0.5">
+                <div className="flex items-center gap-0.5 bg-foreground/[0.02] rounded p-0.5">
                   {[
                     { key: "all", label: "Method" },
                     { key: "bank", label: "Bank" },
@@ -848,8 +871,8 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                       }
                       className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
                         orderFilters.method === key
-                          ? "bg-white/[0.08] text-white/80"
-                          : "text-white/25 hover:text-white/40"
+                          ? "bg-white/[0.08] text-foreground/80"
+                          : "text-foreground/25 hover:text-foreground/40"
                       }`}
                     >
                       {label}
@@ -858,7 +881,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                 </div>
 
                 {/* Escrow */}
-                <div className="flex items-center gap-0.5 bg-white/[0.02] rounded p-0.5">
+                <div className="flex items-center gap-0.5 bg-foreground/[0.02] rounded p-0.5">
                   {[
                     { key: "all", label: "Escrow" },
                     { key: "yes", label: "Secured" },
@@ -871,8 +894,8 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                       }
                       className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
                         orderFilters.secured === key
-                          ? "bg-white/[0.08] text-white/80"
-                          : "text-white/25 hover:text-white/40"
+                          ? "bg-white/[0.08] text-foreground/80"
+                          : "text-foreground/25 hover:text-foreground/40"
                       }`}
                     >
                       {label}
@@ -890,7 +913,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                         secured: "all",
                       })
                     }
-                    className="px-1.5 py-0.5 text-[9px] font-medium text-white/40 hover:text-white/60 transition-colors"
+                    className="px-1.5 py-0.5 text-[9px] font-medium text-foreground/40 hover:text-foreground/60 transition-colors"
                   >
                     Clear
                   </button>

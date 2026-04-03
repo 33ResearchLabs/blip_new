@@ -219,7 +219,7 @@ export const StatusCard = memo(function StatusCard({
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <Loader2 className="w-5 h-5 text-white/20 animate-spin" />
+        <Loader2 className="w-5 h-5 text-foreground/20 animate-spin" />
       </div>
     );
   }
@@ -227,7 +227,7 @@ export const StatusCard = memo(function StatusCard({
   return (
     <div className="flex flex-col h-full">
       {/* Live ticker strip — taller with more info */}
-      <div className="flex items-center justify-between px-3 py-2.5 bg-white/[0.02] border-b border-white/[0.04] text-[9px] font-mono relative overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2.5 bg-foreground/[0.02] border-b border-foreground/[0.04] text-[9px] font-mono relative overflow-hidden">
         <div className="absolute inset-0 shimmer pointer-events-none" />
         <div className="flex items-center gap-4 relative z-10">
           <div className="flex items-center gap-1.5">
@@ -241,9 +241,9 @@ export const StatusCard = memo(function StatusCard({
                 <span className="text-primary/70 font-bold uppercase">{reputationTier.name}</span>
               </span>
             )}
-            <span className="text-white/25">RNK <span className="text-white/70 font-bold">{rank > 0 ? `#${rank}` : '—'}</span></span>
-            <span className="text-white/25">WIN <span className="text-white/70 font-bold">{winRate > 0 ? `${winRate.toFixed(0)}%` : '—'}</span></span>
-            <span className="text-white/25">FILL <span className="text-white/70 font-bold">{corridor?.avg_fill_time_sec ? `${corridor.avg_fill_time_sec}s` : '—'}</span></span>
+            <span className="text-foreground/25">RNK <span className="text-foreground/70 font-bold">{rank > 0 ? `#${rank}` : '—'}</span></span>
+            <span className="text-foreground/25">WIN <span className="text-foreground/70 font-bold">{winRate > 0 ? `${winRate.toFixed(0)}%` : '—'}</span></span>
+            <span className="text-foreground/25">FILL <span className="text-foreground/70 font-bold">{corridor?.avg_fill_time_sec ? `${corridor.avg_fill_time_sec}s` : '—'}</span></span>
           </div>
         </div>
         {/* Active toggle */}
@@ -252,7 +252,7 @@ export const StatusCard = memo(function StatusCard({
           className={`relative z-10 flex items-center justify-center w-6 h-6 rounded-full transition-all border ${
             isOnline
               ? 'bg-primary/10 border-primary/30 text-primary'
-              : 'bg-white/[0.03] border-white/[0.08] text-white/30'
+              : 'bg-foreground/[0.03] border-foreground/[0.08] text-foreground/30'
           }`}
           title={isOnline ? 'ACTIVE' : 'OFFLINE'}
         >
@@ -269,8 +269,8 @@ export const StatusCard = memo(function StatusCard({
 
         {/* USDT Label */}
         <div className="flex items-center gap-1.5 mb-1 relative z-10">
-          <Wallet className="w-3 h-3 text-white/20" />
-          <span className="text-[10px] text-white/30 font-mono uppercase tracking-widest">Available Balance</span>
+          <Wallet className="w-3 h-3 text-foreground/20" />
+          <span className="text-[10px] text-foreground/30 font-mono uppercase tracking-widest">Available Balance</span>
         </div>
 
         {/* Big USDT Amount */}
@@ -278,7 +278,7 @@ export const StatusCard = memo(function StatusCard({
           <div className="text-4xl font-black text-white font-mono tabular-nums tracking-tight leading-none">
             {balance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </div>
-          <div className="text-[11px] text-white/20 font-mono mt-1 tabular-nums">
+          <div className="text-[11px] text-foreground/20 font-mono mt-1 tabular-nums">
             ≈ {aedEquivalent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} AED
           </div>
         </div>
@@ -296,7 +296,7 @@ export const StatusCard = memo(function StatusCard({
 
         {/* Locked escrow indicator */}
         {lockedInEscrow > 0 && (
-          <div className="mt-1.5 text-[9px] text-white/15 font-mono relative z-10">
+          <div className="mt-1.5 text-[9px] text-foreground/15 font-mono relative z-10">
             {lockedInEscrow.toFixed(0)} locked in escrow
           </div>
         )}
@@ -309,17 +309,17 @@ export const StatusCard = memo(function StatusCard({
           {/* INR */}
           <div className="glass-card rounded-lg p-2">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[9px] text-white/25 font-mono">INR CASH</span>
+              <span className="text-[9px] text-foreground/25 font-mono">INR CASH</span>
               <div className="flex gap-0.5">
                 <button
                   onClick={() => { setInrInputMode('add'); setShowInrInput(true); }}
-                  className="p-0.5 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white/25 transition-all"
+                  className="p-0.5 rounded bg-foreground/[0.04] hover:bg-white/[0.08] border border-foreground/[0.06] text-foreground/25 transition-all"
                 >
                   <Plus className="w-2 h-2" />
                 </button>
                 <button
                   onClick={() => { setInrInputMode('subtract'); setShowInrInput(true); }}
-                  className="p-0.5 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white/25 transition-all"
+                  className="p-0.5 rounded bg-foreground/[0.04] hover:bg-white/[0.08] border border-foreground/[0.06] text-foreground/25 transition-all"
                 >
                   <Minus className="w-2 h-2" />
                 </button>
@@ -327,20 +327,20 @@ export const StatusCard = memo(function StatusCard({
             </div>
             {showInrInput ? (
               <div className="flex items-center gap-1">
-                <span className="text-[9px] text-white/25 font-mono">{inrInputMode === 'add' ? '+' : '-'}</span>
+                <span className="text-[9px] text-foreground/25 font-mono">{inrInputMode === 'add' ? '+' : '-'}</span>
                 <input
                   type="number"
                   value={inrInputValue}
                   onChange={(e) => setInrInputValue(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleInrSubmit(); if (e.key === 'Escape') setShowInrInput(false); }}
                   placeholder="0"
-                  className="w-14 bg-white/[0.03] border border-white/[0.08] rounded px-1 py-0.5 text-[10px] text-white font-mono outline-none focus:border-white/20"
+                  className="w-14 bg-foreground/[0.03] border border-foreground/[0.08] rounded px-1 py-0.5 text-[10px] text-white font-mono outline-none focus:border-white/20"
                   autoFocus
                 />
-                <button onClick={handleInrSubmit} className="px-1 py-0.5 rounded bg-white/[0.06] border border-white/[0.08] text-[8px] text-white/50 font-bold">OK</button>
+                <button onClick={handleInrSubmit} className="px-1 py-0.5 rounded bg-foreground/[0.06] border border-foreground/[0.08] text-[8px] text-foreground/50 font-bold">OK</button>
               </div>
             ) : (
-              <span className="text-sm font-bold text-white/70 font-mono tabular-nums">
+              <span className="text-sm font-bold text-foreground/70 font-mono tabular-nums">
                 {inrBalance > 0 ? `₹${inrBalance.toLocaleString()}` : '₹0'}
               </span>
             )}
@@ -360,12 +360,12 @@ export const StatusCard = memo(function StatusCard({
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-1.5 mb-1">
-                <span className="text-[9px] text-white/25 font-mono uppercase tracking-wider">Market Rate</span>
+                <span className="text-[9px] text-foreground/25 font-mono uppercase tracking-wider">Market Rate</span>
                 {corridor?.confidence && (
                   <span className={`text-[8px] font-mono px-1 py-0.5 rounded flex items-center gap-0.5 ${
-                    corridor.confidence === 'high' ? 'bg-white/[0.04] text-white/50' :
-                    corridor.confidence === 'medium' ? 'bg-white/[0.03] text-white/35' :
-                    'bg-white/[0.02] text-white/20'
+                    corridor.confidence === 'high' ? 'bg-foreground/[0.04] text-foreground/50' :
+                    corridor.confidence === 'medium' ? 'bg-foreground/[0.03] text-white/35' :
+                    'bg-foreground/[0.02] text-foreground/20'
                   }`}>
                     <span className={`w-1 h-1 rounded-full ${corridor.confidence === 'high' ? 'bg-primary animate-live-dot' : 'bg-white/20'}`} />
                     {corridor.confidence === 'high' ? 'LIVE' : corridor.confidence === 'medium' ? 'CALC' : 'EST'}
@@ -375,13 +375,13 @@ export const StatusCard = memo(function StatusCard({
               <div className="text-lg font-bold text-white font-mono tabular-nums">
                 {corridor ? Number(corridor.ref_price).toFixed(4) : '—'}
               </div>
-              <div className="text-[9px] text-white/20 font-mono mt-0.5">USDT/AED</div>
+              <div className="text-[9px] text-foreground/20 font-mono mt-0.5">USDT/AED</div>
             </div>
             <div className="flex flex-col gap-1 items-end">
               {!showRefPriceInput && (
                 <button
                   onClick={() => setShowRefPriceInput(true)}
-                  className="px-2 py-1 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-primary/20 text-[9px] text-primary font-bold transition-all"
+                  className="px-2 py-1 rounded bg-foreground/[0.04] hover:bg-white/[0.08] border border-primary/20 text-[9px] text-primary font-bold transition-all"
                 >
                   {customRefPrice ? `${customRefPrice.toFixed(4)}` : 'SET PRICE'}
                 </button>
@@ -396,7 +396,7 @@ export const StatusCard = memo(function StatusCard({
                 onChange={(e) => setRefPriceInputValue(e.target.value)}
                 placeholder="3.6730"
                 step="0.0001"
-                className="flex-1 bg-white/[0.02] border border-white/[0.06] rounded px-2 py-1 text-xs text-white font-mono outline-none focus:border-white/15"
+                className="flex-1 bg-foreground/[0.02] border border-foreground/[0.06] rounded px-2 py-1 text-xs text-white font-mono outline-none focus:border-white/15"
                 autoFocus
               />
               <button
@@ -408,13 +408,13 @@ export const StatusCard = memo(function StatusCard({
                     setShowRefPriceInput(false);
                   }
                 }}
-                className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] border border-primary/30 rounded text-[9px] text-primary font-medium"
+                className="px-2 py-1 bg-foreground/[0.04] hover:bg-white/[0.08] border border-primary/30 rounded text-[9px] text-primary font-medium"
               >
                 Set
               </button>
               <button
                 onClick={() => { setCustomRefPrice(null); setRefPriceInputValue(''); setShowRefPriceInput(false); }}
-                className="px-1 py-1 text-white/15 hover:text-white/30"
+                className="px-1 py-1 text-foreground/15 hover:text-foreground/30"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -425,22 +425,22 @@ export const StatusCard = memo(function StatusCard({
         {/* Corridor button */}
         <button
           onClick={onOpenCorridor}
-          className="w-full flex items-center justify-between py-1.5 px-2.5 glass-card rounded-lg hover:bg-white/[0.04] transition-all group"
+          className="w-full flex items-center justify-between py-1.5 px-2.5 glass-card rounded-lg hover:bg-foreground/[0.04] transition-all group"
         >
           <div className="flex items-center gap-1.5">
-            <Activity className="w-3 h-3 text-white/20" />
-            <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider">Corridor</span>
+            <Activity className="w-3 h-3 text-foreground/20" />
+            <span className="text-[9px] text-foreground/30 font-mono uppercase tracking-wider">Corridor</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[9px] text-white/40 font-mono tabular-nums">
+            <span className="text-[9px] text-foreground/40 font-mono tabular-nums">
               {corridor?.active_merchants_count || 0} online · vol {corridor?.volume_5m ? corridor.volume_5m.toFixed(0) : '0'}
             </span>
-            <ChevronRight className="w-3 h-3 text-white/15 group-hover:text-white/30 transition-colors" />
+            <ChevronRight className="w-3 h-3 text-foreground/15 group-hover:text-foreground/30 transition-colors" />
           </div>
         </button>
 
         {/* Quick stats row */}
-        <div className="flex items-center justify-between px-1 text-[9px] font-mono text-white/20">
+        <div className="flex items-center justify-between px-1 text-[9px] font-mono text-foreground/20">
           <span>{completedOrders} done</span>
           <span className="text-white/10">·</span>
           <span>{cancelledOrders} cancelled</span>

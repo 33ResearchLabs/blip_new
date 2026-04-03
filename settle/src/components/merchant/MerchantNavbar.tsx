@@ -86,7 +86,7 @@ export function MerchantNavbar({
 
   return (
     <>
-      <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-2xl border-b border-foreground/[0.05]">
+      <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-2xl border-b border-border-strong">
         <div className="h-12 md:h-[50px] flex items-center px-3 md:px-4 gap-3">
           {/* Left: Logo — always visible */}
           <div className="flex items-center shrink-0">

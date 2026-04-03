@@ -892,39 +892,74 @@ export default function MerchantDashboard() {
       {showNotifications && (
         <div className="md:hidden fixed inset-0 z-[55]">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowNotifications(false)} />
-          <div className="absolute top-0 right-0 bottom-0 w-full max-w-sm bg-card-solid border-l border-foreground/[0.06] flex flex-col animate-in slide-in-from-right duration-200">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/[0.06]">
-              <h2 className="text-sm font-semibold text-foreground">Notifications</h2>
+          <div className="absolute inset-0 bg-card-solid flex flex-col animate-in slide-in-from-right duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-section-divider">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-foreground/40" />
+                <h2 className="text-sm font-semibold text-foreground">Notifications</h2>
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span className="text-[10px] bg-primary text-white font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                    {notifications.filter(n => !n.read).length}
+                  </span>
+                )}
+              </div>
               <button onClick={() => setShowNotifications(false)} className="p-1.5 rounded-lg hover:bg-foreground/[0.06] transition-colors">
                 <X className="w-5 h-5 text-foreground/40" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            {/* List */}
+            <div className="flex-1 overflow-y-auto p-2">
               {notifications.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-foreground/20 p-8">
                   <Bell className="w-8 h-8 mb-2 opacity-30" />
                   <p className="text-xs">No notifications</p>
                 </div>
               ) : (
-                <div className="p-2 space-y-1">
-                  {notifications.map((n) => (
-                    <button
-                      key={n.id}
-                      onClick={() => { markNotificationRead(n.id); }}
-                      className={`w-full text-left p-3 rounded-xl transition-colors ${n.read ? 'opacity-50' : 'bg-foreground/[0.03]'}`}
-                    >
-                      <p className="text-xs text-foreground/80">{n.message}</p>
-                      <p className="text-[10px] text-foreground/30 mt-1">
-                        {(() => {
-                          const sec = Math.floor((Date.now() - n.timestamp) / 1000);
-                          if (sec < 60) return 'Just now';
-                          if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
-                          if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
-                          return `${Math.floor(sec / 86400)}d ago`;
-                        })()}
-                      </p>
-                    </button>
-                  ))}
+                <div className="space-y-1.5">
+                  {notifications.map((n) => {
+                    const iconBg =
+                      n.type === 'complete' ? 'bg-emerald-500/10' :
+                      n.type === 'escrow' ? 'bg-primary/10' :
+                      n.type === 'payment' ? 'bg-blue-500/10' :
+                      n.type === 'dispute' ? 'bg-red-500/10' :
+                      n.type === 'order' ? 'bg-primary/10' :
+                      'bg-foreground/[0.04]';
+                    const iconColor =
+                      n.type === 'complete' ? 'text-emerald-400' :
+                      n.type === 'escrow' ? 'text-primary' :
+                      n.type === 'payment' ? 'text-blue-400' :
+                      n.type === 'dispute' ? 'text-red-400' :
+                      n.type === 'order' ? 'text-primary' :
+                      'text-foreground/40';
+                    const secAgo = Math.floor((Date.now() - n.timestamp) / 1000);
+                    const relTime = secAgo < 60 ? 'Just now' : secAgo < 3600 ? `${Math.floor(secAgo / 60)}m ago` : secAgo < 86400 ? `${Math.floor(secAgo / 3600)}h ago` : `${Math.floor(secAgo / 86400)}d ago`;
+
+                    return (
+                      <button
+                        key={n.id}
+                        onClick={() => { markNotificationRead(n.id); }}
+                        className={`w-full text-left p-3 rounded-xl border transition-colors ${
+                          n.read
+                            ? 'opacity-50 border-transparent'
+                            : 'bg-foreground/[0.02] border-foreground/[0.06] hover:border-foreground/[0.10]'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <div className={`w-7 h-7 rounded-lg ${iconBg} flex items-center justify-center shrink-0 mt-0.5`}>
+                            <div className={`w-2 h-2 rounded-full ${iconColor.replace('text-', 'bg-')}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] text-text-primary leading-snug">{n.message}</p>
+                            <p className="text-[11px] text-text-secondary mt-1">{relTime}</p>
+                          </div>
+                          {!n.read && (
+                            <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>

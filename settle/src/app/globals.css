@@ -22,6 +22,8 @@
 
   /* Borders — neutral */
   --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --section-divider: rgba(255, 255, 255, 0.06);
   --color-border-subtle: rgba(255, 255, 255, 0.05);
   --color-border-medium: rgba(255, 255, 255, 0.09);
 
@@ -67,6 +69,8 @@
   --card: rgba(0, 0, 0, 0.025);
   --card-solid: #EEE8D5;
   --border: rgba(0, 0, 0, 0.07);
+  --border-strong: rgba(0, 0, 0, 0.15);
+  --section-divider: rgba(0, 0, 0, 0.08);
   --color-border-subtle: rgba(0, 0, 0, 0.05);
   --color-border-medium: rgba(0, 0, 0, 0.09);
   --muted: #586E75;
@@ -99,6 +103,8 @@
   --card: rgba(0, 0, 0, 0.02);
   --card-solid: #F9FAFB;
   --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.15);
+  --section-divider: rgba(0, 0, 0, 0.08);
   --color-border-subtle: rgba(0, 0, 0, 0.05);
   --color-border-medium: rgba(0, 0, 0, 0.10);
   --muted: #6B7280;
@@ -130,6 +136,8 @@
   --card: rgba(255, 255, 255, 0.04);
   --card-solid: #161E31;
   --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --section-divider: rgba(255, 255, 255, 0.07);
   --color-border-subtle: rgba(255, 255, 255, 0.05);
   --color-border-medium: rgba(255, 255, 255, 0.10);
   --muted: #94A3B8;
@@ -161,6 +169,8 @@
   --card: rgba(255, 255, 255, 0.03);
   --card-solid: #0D1410;
   --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --section-divider: rgba(255, 255, 255, 0.06);
   --color-border-subtle: rgba(255, 255, 255, 0.04);
   --color-border-medium: rgba(255, 255, 255, 0.08);
   --muted: #6B7280;
@@ -192,6 +202,8 @@
   --card: rgba(255, 255, 255, 0.04);
   --card-solid: #16213E;
   --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --section-divider: rgba(255, 255, 255, 0.07);
   --color-border-subtle: rgba(255, 255, 255, 0.05);
   --color-border-medium: rgba(255, 255, 255, 0.10);
   --muted: #94A3B8;
@@ -223,6 +235,8 @@
   --card: rgba(255, 255, 255, 0.04);
   --card-solid: #2D2D2D;
   --border: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.14);
+  --section-divider: rgba(255, 255, 255, 0.07);
   --color-border-subtle: rgba(255, 255, 255, 0.05);
   --color-border-medium: rgba(255, 255, 255, 0.10);
   --muted: #888888;
@@ -243,9 +257,15 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-tertiary: var(--color-text-tertiary);
+  --color-text-quaternary: var(--color-text-quaternary);
   --color-card: var(--card);
   --color-card-solid: var(--card-solid);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-section-divider: var(--section-divider);
   --color-muted: var(--muted);
   --color-muted-bg: var(--muted-bg);
   --color-accent: var(--accent);

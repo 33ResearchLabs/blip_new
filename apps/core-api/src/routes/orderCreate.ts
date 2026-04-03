@@ -156,6 +156,26 @@ function buildOrderInsertParams(data: CreateOrderPayload) {
   if (data.escrow_tx_hash) {
     fields.push('escrowed_at');
     values.push(new Date());
+
+    // Populate escrow_debited_* fields for pre-locked escrow (v2 escrow-first flow).
+    // These fields track who funded the escrow so refund logic knows where to return funds.
+    // For on-chain escrow, no DB balance was deducted — the amount is informational only.
+    // Payer logic mirrors determineEscrowPayer in escrowLock.ts:
+    //   sell order → user funded escrow, buy order → merchant funded escrow
+    const isM2M = !!data.buyer_merchant_id;
+    if (isM2M) {
+      // M2M: merchant_id is always the seller (escrow funder)
+      fields.push('escrow_debited_entity_type', 'escrow_debited_entity_id', 'escrow_debited_amount', 'escrow_debited_at');
+      values.push('merchant', data.merchant_id, data.crypto_amount, new Date());
+    } else if (data.type === 'sell') {
+      // User selling crypto → user locked escrow
+      fields.push('escrow_debited_entity_type', 'escrow_debited_entity_id', 'escrow_debited_amount', 'escrow_debited_at');
+      values.push('user', data.user_id, data.crypto_amount, new Date());
+    } else {
+      // User buying crypto → merchant locked escrow
+      fields.push('escrow_debited_entity_type', 'escrow_debited_entity_id', 'escrow_debited_amount', 'escrow_debited_at');
+      values.push('merchant', data.merchant_id, data.crypto_amount, new Date());
+    }
   }
 
   // expires_at uses raw SQL to avoid JS Date / Postgres timezone mismatch

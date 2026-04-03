@@ -39,20 +39,20 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({
     <div className={`flex flex-col ${collapsed ? "" : "h-full"}`}>
       {/* Header */}
       <div
-        className="px-3 py-2 border-b border-white/[0.04] cursor-pointer select-none hover:bg-white/[0.02] transition-colors"
+        className="px-3 py-2 border-b border-section-divider cursor-pointer select-none hover:bg-foreground/[0.02] transition-colors"
         onClick={() => onCollapseChange?.(!collapsed)}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ChevronDown
-              className={`w-3 h-3 text-white/30 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
+              className={`w-3 h-3 text-foreground/30 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
             />
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500/50" />
-            <h2 className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">
+            <h2 className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase">
               Completed
             </h2>
           </div>
-          <span className="text-[10px] border border-white/[0.08] text-white/50 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
+          <span className="text-[10px] border border-foreground/[0.08] text-foreground/50 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
             {orders.length}
           </span>
         </div>
@@ -63,14 +63,14 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({
         (orders.length === 0 ? (
           <div className="flex-1 overflow-y-auto p-1.5">
             <div className="flex flex-col items-center justify-center h-full gap-3">
-              <div className="w-10 h-10 rounded-full border border-white/[0.06] bg-white/[0.02] flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5 text-white/20" />
+              <div className="w-10 h-10 rounded-full border border-foreground/[0.06] bg-foreground/[0.02] flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5 text-foreground/20" />
               </div>
               <div className="text-center">
-                <p className="text-[11px] font-medium text-white/30 mb-0.5">
+                <p className="text-[11px] font-medium text-foreground/30 mb-0.5">
                   No completed trades
                 </p>
-                <p className="text-[9px] text-white/15 font-mono">
+                <p className="text-[9px] text-foreground/15 font-mono">
                   Finished orders appear here
                 </p>
               </div>
@@ -111,13 +111,13 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({
                   >
                     <div
                       onClick={() => onSelectOrder(order)}
-                      className="px-3 py-2.5 glass-card rounded-lg hover:border-white/[0.10] transition-colors cursor-pointer"
+                      className="px-3 py-2.5 glass-card rounded-lg hover:border-foreground/[0.10] transition-colors cursor-pointer"
                     >
                       <div className="flex items-start gap-2.5">
                         {/* Swap icon with status badge */}
                         <div className="relative flex-shrink-0 mt-0.5">
-                          <div className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center">
-                            <ArrowUpDown className="w-4 h-4 text-white/50" />
+                          <div className="w-8 h-8 rounded-full bg-foreground/[0.06] flex items-center justify-center">
+                            <ArrowUpDown className="w-4 h-4 text-foreground/50" />
                           </div>
                           <div className="absolute -bottom-0.5 -left-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500/20 flex items-center justify-center">
                             <CheckCircle2 className="w-3 h-3 text-emerald-400" />
@@ -127,12 +127,12 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({
                         {/* Content: stacks vertically */}
                         <div className="flex flex-col gap-1 min-w-0 flex-1">
                           {/* Name */}
-                          <span className="text-sm font-semibold text-white truncate">
+                          <span className="text-sm font-semibold text-foreground truncate">
                             {order.user || "Unknown"}
                           </span>
 
                           {/* Date */}
-                          <div className="flex items-center gap-1 text-white/40">
+                          <div className="flex items-center gap-1 text-foreground/40">
                             <Clock className="w-3 h-3 flex-shrink-0" />
                             <span className="text-[10px] font-mono whitespace-nowrap">
                               {completedDate
@@ -145,11 +145,11 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({
                         {/* Amounts + status: stacks vertically, right-aligned */}
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-medium text-white/60 tabular-nums whitespace-nowrap">
+                            <span className="text-xs font-medium text-foreground/60 tabular-nums whitespace-nowrap">
                               {Math.round(order.amount).toLocaleString()}{" "}
                               {order.fromCurrency}
                             </span>
-                            <ChevronRight className="w-3 h-3 text-white/20" />
+                            <ChevronRight className="w-3 h-3 text-foreground/20" />
                             <span className="text-sm font-bold text-emerald-400 tabular-nums whitespace-nowrap">
                               +{Math.round(
                                 order.amount * (order.rate || 3.67),
@@ -157,7 +157,7 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({
                               {order.toCurrency || "AED"}
                             </span>
                           </div>
-                          <span className="text-[9px] font-mono text-white/30 tracking-wider uppercase">
+                          <span className="text-[9px] font-mono text-foreground/30 tracking-wider uppercase">
                             Status: Completed
                           </span>
                         </div>
