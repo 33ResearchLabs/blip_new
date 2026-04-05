@@ -1138,12 +1138,12 @@ function ReputationTab({ merchantId }: { merchantId: string | null }) {
               <div key={key}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm text-white/60">{label}</span>
-                  <span className="text-sm font-bold text-white/80">{val} / 1000</span>
+                  <span className="text-sm font-bold text-white/80">{val} / 100</span>
                 </div>
                 <div className="h-2 rounded-full bg-white/[0.06]">
                   <div className="h-full rounded-full transition-all" style={{
-                    width: `${Math.min(100, val / 10)}%`,
-                    backgroundColor: getColor(val),
+                    width: `${Math.min(100, val)}%`,
+                    backgroundColor: getColor(val * 10),
                   }} />
                 </div>
               </div>
