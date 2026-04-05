@@ -110,6 +110,7 @@ function isPublicRoute(pathname: string, method: string): boolean {
   if (method === 'GET') {
     if (pathname === '/api/offers' || pathname.startsWith('/api/offers/')) return true;
     if (pathname.startsWith('/api/marketplace/')) return true;
+    if (pathname === '/api/reputation') return true;
   }
   return false;
 }
