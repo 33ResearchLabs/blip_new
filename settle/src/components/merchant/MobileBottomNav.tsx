@@ -9,8 +9,8 @@ import {
 } from "lucide-react";
 
 export interface MobileBottomNavProps {
-  mobileView: 'home' | 'orders' | 'escrow' | 'chat' | 'history';
-  setMobileView: (view: 'home' | 'orders' | 'escrow' | 'chat' | 'history') => void;
+  mobileView: 'home' | 'orders' | 'escrow' | 'chat' | 'history' | 'marketplace';
+  setMobileView: (view: 'home' | 'orders' | 'escrow' | 'chat' | 'history' | 'marketplace') => void;
   pendingCount: number;
   ongoingCount: number;
   totalUnread: number;

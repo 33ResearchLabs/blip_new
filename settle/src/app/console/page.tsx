@@ -491,7 +491,7 @@ export default function ConsolePage() {
       {/* Bottom Safe Area */}
       <div className="h-20" />
 
-      <style jsx>{`
+      <style>{`
         .glass-card {
           background: rgba(255, 255, 255, 0.03);
           backdrop-filter: blur(20px);
