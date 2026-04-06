@@ -213,7 +213,18 @@ export async function PATCH(
       );
     }
 
-    // Update dispute status - use investigating which is in the enum
+    // Resolve assigned_to: the FK references compliance_team(id).
+    // For merchants with compliance access, find their compliance_team entry.
+    // If none exists, skip assigned_to (nullable) rather than failing.
+    const complianceRow = await queryOne<{ id: string }>(
+      `SELECT id FROM compliance_team
+       WHERE id = $1
+          OR wallet_address = (SELECT wallet_address FROM merchants WHERE id = $1 LIMIT 1)
+       LIMIT 1`,
+      [complianceId]
+    );
+
+    // Update dispute status
     const result = await query(
       `UPDATE disputes
        SET status = 'investigating'::dispute_status,
@@ -221,7 +232,7 @@ export async function PATCH(
            resolution_notes = COALESCE(resolution_notes || E'\n', '') || $2
        WHERE order_id = $3
        RETURNING *`,
-      [complianceId, notes ? `[${new Date().toISOString()}] ${notes}` : '', orderId]
+      [complianceRow?.id || null, notes ? `[${new Date().toISOString()}] ${notes}` : '', orderId]
     );
 
     if (result.length === 0) {
