@@ -1232,6 +1232,24 @@ export async function updateOrderStatus(
 
       // Handle side effects: dispute
       if (newStatus === 'disputed') {
+        // Create disputes table row if one doesn't already exist
+        // The compliance resolve endpoint requires this row to function.
+        try {
+          await client.query(
+            `INSERT INTO disputes (order_id, raised_by, raiser_id, reason, description, status, created_at)
+             SELECT $1, $2, $3, 'non_responsive'::dispute_reason, $4, 'open', NOW()
+             WHERE NOT EXISTS (SELECT 1 FROM disputes WHERE order_id = $1)`,
+            [
+              orderId,
+              actorType || 'system',
+              actorId || currentOrder.user_id,
+              metadata?.reason || 'Order disputed',
+            ]
+          );
+        } catch (disputeErr) {
+          logger.error('Failed to create disputes row (non-fatal)', { orderId, error: disputeErr });
+        }
+
         // Increment dispute_count stats (fire-and-forget, never blocks order flow)
         try {
           const { incrementDisputeCount } = await import('./risk');
@@ -1828,6 +1846,31 @@ export async function expireOldOrders(): Promise<number> {
       [acceptedIds]
     );
     totalExpired += updateResult?.length || 0;
+
+    // Create disputes rows for orders that moved to disputed (escrow was locked)
+    // The compliance resolve endpoint requires a disputes row to function.
+    const disputedOrders = acceptedExpired.filter(o =>
+      ['escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'releasing'].includes(o.status)
+    );
+    if (disputedOrders.length > 0) {
+      try {
+        const dVals: string[] = [];
+        const dParams: unknown[] = [];
+        let di = 0;
+        for (const o of disputedOrders) {
+          dVals.push(`($${++di}, 'system', $${++di}, 'non_responsive'::dispute_reason, $${++di}, 'open', NOW())`);
+          dParams.push(o.id, o.user_id, `Order timeout - auto-disputed (was in ${o.status} status)`);
+        }
+        await query(
+          `INSERT INTO disputes (order_id, raised_by, raiser_id, reason, description, status, created_at)
+           VALUES ${dVals.join(', ')}
+           ON CONFLICT (order_id) DO NOTHING`,
+          dParams
+        );
+      } catch (disputeErr) {
+        console.error('[expireOrders] Failed to create dispute rows (non-fatal):', disputeErr);
+      }
+    }
   }
 
   // Batch insert system messages + reputation events (avoids N+1 per-order DB calls)

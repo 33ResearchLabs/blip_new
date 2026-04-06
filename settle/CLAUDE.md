@@ -84,7 +84,44 @@ DISPUTE          → disputed         | escrowed,payment_sent  | any
 - Payment actions: explicit `Idempotency-Key` header required for financial transitions
 - Protected actions: `create_order`, `payment_sent`, `release_escrow`, `cancel_order`
 
+**Role system** (`resolveTradeRole` / `resolveRoles` in `handleOrderAction.ts`):
+
+Seller ALWAYS locks crypto. Buyer ALWAYS sends fiat.
+
+```
+Order Type  | user_id       | merchant_id          | buyer_merchant_id
+BUY (U2M)   | buyer (user)  | seller (merchant)    | —
+SELL (U2M)  | seller (user) | buyer (merchant)     | —
+M2M (any)   | placeholder   | ALWAYS seller        | ALWAYS buyer
+```
+
+Escrow funding follows the same rule:
+- SELL order → user funded escrow (user is seller)
+- BUY order → merchant funded escrow (merchant is seller)
+- M2M → merchant_id funded escrow (merchant_id is always seller)
+
+**Claim / Accept logic** (`updateOrderStatus` in `repositories/orders.ts`):
+
+```
+Scenario                          | What happens on ACCEPT
+Non-M2M, merchant_id pre-set     | isMerchantClaiming=true → merchant_id REASSIGNED to acceptor
+Non-M2M, merchant_id NULL         | isMerchantClaiming=true → merchant_id SET to acceptor
+M2M SELL (buyer_merchant_id NULL) | isM2MAcceptance=true → buyer_merchant_id SET to acceptor
+M2M BUY (buyer_merchant_id set)   | isM2MAcceptance=true → merchant_id REASSIGNED to acceptor (seller)
+```
+
+Key: `isPlaceholderUser` (username starts with `open_order_` or `m2m_`) determines M2M vs non-M2M at accept time.
+
+**Claim transition auth** (`orders/[id]/route.ts` PATCH):
+- `accepted` and `payment_pending` are claim transitions — skip `canAccessOrder`
+- Anti-hijack: only block if `buyer_merchant_id` is set AND doesn't match actor (M2M guard)
+- For non-M2M: do NOT check `merchant_id` — it may be the pre-assigned seller being replaced
+- `payment_sent` is NOT a claim transition — goes through normal `canAccessOrder`
+
 **DO NOT:**
+- Treat `payment_sent` as a claim transition (breaks regular user payment flow)
+- Check `merchant_id` in the claim guard for non-M2M orders (blocks merchant accept on sell orders)
+- Use `buyer_merchant_id || merchant_id` as the "assigned merchant" — these are different roles
 - Skip access control for claim transitions (always verify order is unclaimed)
 - Allow `completed` without escrow being locked (check `escrow_debited_entity_id`)
 - Use hardcoded fallback rates — reject orders when corridor price unavailable
@@ -260,4 +297,5 @@ const result = await transaction(async (client) => { ... });
 | New env var needed at build | Add as ARG in `Dockerfile` |
 | New API route | Consider rate limiting, auth, Zod validation |
 | Status transition change | Update `handleOrderAction.ts` ACTION_RULES |
+| Claim/accept auth change | Check all 3 flows: U2M buy, U2M sell, M2M — test with pre-assigned AND broadcast orders |
 | New actor type check | Verify `x-merchant-id` header isn't trusted from wrong token type |
