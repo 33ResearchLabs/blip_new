@@ -181,7 +181,7 @@ export async function PATCH(
     // Verify access to this order (now with correct actor identity resolved above)
     // For claim transitions: skip canAccessOrder (merchant isn't assigned yet),
     // but verify the order is actually unclaimed to prevent hijacking.
-    const isClaimTransition = ["accepted", "payment_pending", "payment_sent"].includes(body.status);
+    const isClaimTransition = ["accepted", "payment_pending"].includes(body.status);
     if (isClaimTransition) {
       // Validate the order is claimable — don't skip auth entirely
       const { query: checkQuery } = await import("@/lib/db");
