@@ -1198,6 +1198,12 @@ interface SessionData {
   id: string;
   device: string | null;
   ip: string | null;
+  browser: string | null;
+  browserVersion: string | null;
+  os: string | null;
+  osVersion: string | null;
+  deviceName: string | null;
+  deviceType: 'mobile' | 'tablet' | 'desktop';
   lastUsed: string;
   createdAt: string;
   expiresAt: string;
@@ -1575,43 +1581,70 @@ function ActiveSessionsSection() {
         <div className="space-y-2">
           {sessions.map((session, idx) => {
             const isCurrent = idx === 0;
+            const isMobile = session.deviceType === 'mobile' || session.deviceType === 'tablet';
+            const browserLabel = session.browser
+              ? `${session.browser}${session.browserVersion ? ` ${session.browserVersion}` : ''}`
+              : session.device || 'Unknown Browser';
+            const osLabel = session.os
+              ? `${session.os}${session.osVersion ? ` ${session.osVersion}` : ''}`
+              : null;
+            const deviceLabel = session.deviceName || session.device || 'Unknown Device';
+
             return (
               <div
                 key={session.id}
-                className={`p-3 rounded-xl border ${isCurrent ? 'bg-primary/[0.05] border-primary/20' : 'bg-white/[0.03] border-white/[0.04]'}`}
+                className={`p-4 rounded-xl border ${isCurrent ? 'bg-primary/[0.05] border-primary/20' : 'bg-white/[0.03] border-white/[0.04]'}`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isCurrent ? 'bg-primary/10' : 'bg-white/[0.06]'}`}>
-                      {session.device?.includes('Mobile') || session.device?.includes('iPhone') || session.device?.includes('Android')
-                        ? <Smartphone className={`w-4 h-4 ${isCurrent ? 'text-primary' : 'text-white/40'}`} />
-                        : <Monitor className={`w-4 h-4 ${isCurrent ? 'text-primary' : 'text-white/40'}`} />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    {/* Device icon */}
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isCurrent ? 'bg-primary/10' : 'bg-white/[0.06]'}`}>
+                      {isMobile
+                        ? <Smartphone className={`w-5 h-5 ${isCurrent ? 'text-primary' : 'text-white/40'}`} />
+                        : <Monitor className={`w-5 h-5 ${isCurrent ? 'text-primary' : 'text-white/40'}`} />
                       }
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
+                      {/* Row 1: Browser + Current badge */}
                       <div className="flex items-center gap-2">
-                        <p className="text-xs font-medium text-white/80 truncate">{session.device || 'Unknown Device'}</p>
+                        <p className="text-[13px] font-semibold text-white/85 truncate">{browserLabel}</p>
                         {isCurrent && (
-                          <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-primary/15 text-primary">Current</span>
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-primary/15 text-primary tracking-wide">CURRENT</span>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 mt-0.5 text-[10px] text-white/35">
+
+                      {/* Row 2: OS + Device */}
+                      <div className="flex items-center gap-2 mt-1">
+                        {osLabel && (
+                          <span className="text-[11px] text-white/50 font-medium">{osLabel}</span>
+                        )}
+                        {osLabel && deviceLabel && <span className="text-white/15">·</span>}
+                        <span className="text-[11px] text-white/35">{deviceLabel}</span>
+                      </div>
+
+                      {/* Row 3: IP + Times */}
+                      <div className="flex items-center gap-3 mt-1.5 text-[10px] text-white/30">
                         {session.ip && (
                           <span className="flex items-center gap-1">
-                            <Globe className="w-2.5 h-2.5" />
-                            {session.ip}
+                            <Globe className="w-3 h-3 text-white/20" />
+                            <span className="font-mono">{session.ip}</span>
                           </span>
                         )}
-                        <span>Active {formatTime(session.lastUsed)}</span>
+                        <span className="flex items-center gap-1">
+                          <span className={`w-1.5 h-1.5 rounded-full ${isCurrent ? 'bg-green-400 animate-pulse' : 'bg-white/20'}`} />
+                          Active {formatTime(session.lastUsed)}
+                        </span>
                         <span>Created {formatTime(session.createdAt)}</span>
                       </div>
                     </div>
                   </div>
+
+                  {/* Revoke button */}
                   {!isCurrent && (
                     <button
                       onClick={() => handleRevoke(session.id)}
                       disabled={isRevoking === session.id}
-                      className="px-3 py-1.5 rounded-lg text-[10px] font-medium bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors flex-shrink-0 flex items-center gap-1.5"
+                      className="px-3 py-1.5 rounded-lg text-[10px] font-medium bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors flex-shrink-0 flex items-center gap-1.5 mt-1"
                     >
                       {isRevoking === session.id
                         ? <Loader2 className="w-3 h-3 animate-spin" />

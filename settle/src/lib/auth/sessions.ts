@@ -32,6 +32,16 @@ export interface Session {
   is_revoked: boolean;
 }
 
+// Extended session with parsed device details for API responses
+export interface SessionWithDetails extends Session {
+  browser: string | null;
+  browserVersion: string | null;
+  os: string | null;
+  osVersion: string | null;
+  deviceName: string | null;
+  deviceType: 'mobile' | 'tablet' | 'desktop';
+}
+
 /**
  * Create a new session and return the refresh token.
  * Called on login.
@@ -180,6 +190,20 @@ export async function getActiveSessions(entityId: string, entityType: string): P
 }
 
 /**
+ * Check if ALL sessions for an entity are revoked (no active sessions remain).
+ * Used by auth middleware to reject access tokens after "logout everywhere".
+ * Returns true if the entity has ZERO active sessions → token should be rejected.
+ */
+export async function hasNoActiveSessions(entityId: string, entityType: string): Promise<boolean> {
+  const result = await queryOne<{ count: string }>(
+    `SELECT COUNT(*)::text as count FROM sessions
+     WHERE entity_id = $1 AND entity_type = $2 AND is_revoked = false AND expires_at > NOW()`,
+    [entityId, entityType]
+  );
+  return !result || parseInt(result.count) === 0;
+}
+
+/**
  * Clean up expired sessions (call from worker/cron)
  */
 export async function cleanupExpiredSessions(): Promise<number> {
@@ -201,4 +225,77 @@ function parseDeviceInfo(ua: string): string {
   if (ua.includes('Firefox')) return 'Firefox Desktop';
   if (ua.includes('Safari')) return 'Safari Desktop';
   return 'Desktop';
+}
+
+/** Parse user-agent into detailed device info */
+export function parseDeviceDetails(ua: string): {
+  browser: string;
+  browserVersion: string;
+  os: string;
+  osVersion: string;
+  device: string;
+  deviceType: 'mobile' | 'tablet' | 'desktop';
+} {
+  let browser = 'Unknown';
+  let browserVersion = '';
+  let os = 'Unknown';
+  let osVersion = '';
+  let device = 'Desktop';
+  let deviceType: 'mobile' | 'tablet' | 'desktop' = 'desktop';
+
+  // Browser detection (order matters — Chrome includes Safari in UA)
+  if (ua.includes('Edg/')) {
+    browser = 'Edge';
+    browserVersion = ua.match(/Edg\/([\d.]+)/)?.[1] || '';
+  } else if (ua.includes('OPR/') || ua.includes('Opera')) {
+    browser = 'Opera';
+    browserVersion = ua.match(/(?:OPR|Opera)\/([\d.]+)/)?.[1] || '';
+  } else if (ua.includes('Firefox/')) {
+    browser = 'Firefox';
+    browserVersion = ua.match(/Firefox\/([\d.]+)/)?.[1] || '';
+  } else if (ua.includes('Chrome/') && !ua.includes('Edg/')) {
+    browser = 'Chrome';
+    browserVersion = ua.match(/Chrome\/([\d.]+)/)?.[1] || '';
+  } else if (ua.includes('Safari/') && !ua.includes('Chrome')) {
+    browser = 'Safari';
+    browserVersion = ua.match(/Version\/([\d.]+)/)?.[1] || '';
+  }
+
+  // OS detection
+  if (ua.includes('iPhone')) {
+    os = 'iOS';
+    osVersion = ua.match(/iPhone OS ([\d_]+)/)?.[1]?.replace(/_/g, '.') || '';
+    device = 'iPhone';
+    deviceType = 'mobile';
+  } else if (ua.includes('iPad')) {
+    os = 'iPadOS';
+    osVersion = ua.match(/CPU OS ([\d_]+)/)?.[1]?.replace(/_/g, '.') || '';
+    device = 'iPad';
+    deviceType = 'tablet';
+  } else if (ua.includes('Android')) {
+    os = 'Android';
+    osVersion = ua.match(/Android ([\d.]+)/)?.[1] || '';
+    device = ua.match(/;\s*([^;)]+)\s*Build/)?.[1]?.trim() || 'Android Device';
+    deviceType = ua.includes('Mobile') ? 'mobile' : 'tablet';
+  } else if (ua.includes('Mac OS X')) {
+    os = 'macOS';
+    osVersion = ua.match(/Mac OS X ([\d_.]+)/)?.[1]?.replace(/_/g, '.') || '';
+    device = 'Mac';
+  } else if (ua.includes('Windows NT')) {
+    os = 'Windows';
+    const ntVersion = ua.match(/Windows NT ([\d.]+)/)?.[1] || '';
+    const winVersions: Record<string, string> = { '10.0': '10/11', '6.3': '8.1', '6.2': '8', '6.1': '7' };
+    osVersion = winVersions[ntVersion] || ntVersion;
+    device = 'PC';
+  } else if (ua.includes('Linux')) {
+    os = 'Linux';
+    device = 'PC';
+  }
+
+  // Shorten browser version to major.minor
+  if (browserVersion.includes('.')) {
+    browserVersion = browserVersion.split('.').slice(0, 2).join('.');
+  }
+
+  return { browser, browserVersion, os, osVersion, device, deviceType };
 }

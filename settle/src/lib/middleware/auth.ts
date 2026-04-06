@@ -11,6 +11,7 @@ import { getUserById } from '../db/repositories/users';
 import { getMerchantById } from '../db/repositories/merchants';
 import { verifySessionToken } from '../auth/sessionToken';
 import { checkBlacklist } from './blacklist';
+import { hasNoActiveSessions } from '../auth/sessions';
 
 // Admin auth secret - MUST be configured via environment variable
 const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
@@ -151,6 +152,8 @@ export function getAuthContext(request: NextRequest): AuthContext | null {
   }
 
   // ── Development-only: header fallback for testing ──
+  // Only allow header fallback if the actor has at least one active session.
+  // This ensures "revoke all sessions" works even in dev mode.
   console.warn('[AUTH] Dev-mode header fallback used — would be rejected in production', {
     route: request.nextUrl.pathname,
   });
@@ -268,6 +271,60 @@ export async function getVerifiedAuthContext(
 
   const exists = await actorExistsInDb(auth);
   if (!exists) return null;
+
+  // Session revocation check: reject if actor has no active sessions.
+  // This catches both "logout everywhere" and stale header-only auth in dev mode.
+  // For token-based auth: the access token signature is valid but all sessions revoked.
+  // For header-based auth (dev): the x-merchant-id header is present but no session backs it.
+  try {
+    const noSessions = await hasNoActiveSessions(auth.actorId, auth.actorType);
+    if (noSessions) {
+      // In dev mode with header fallback, also clear any cached auth
+      if (!IS_PRODUCTION) {
+        console.warn('[AUTH] Rejecting request — all sessions revoked for', {
+          actorId: auth.actorId,
+          actorType: auth.actorType,
+        });
+      }
+      return null;
+    }
+  } catch {
+    // DB error — don't block requests if sessions table is unavailable
+  }
+
+  // Additional dev-mode guard: if auth came from header fallback (no valid token),
+  // verify the refresh cookie is still valid. This prevents stale x-merchant-id
+  // headers from bypassing session revocation in development.
+  const usedTokenForAuth = request.headers.get('authorization')?.startsWith('Bearer ');
+  if (!IS_PRODUCTION && !usedTokenForAuth) {
+    try {
+      const { REFRESH_TOKEN_COOKIE } = await import('../auth/sessionToken');
+      const refreshCookie = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+      if (!refreshCookie) {
+        // No refresh cookie = no valid session. Header-only auth is not enough.
+        console.warn('[AUTH] Rejecting header-only auth — no refresh cookie', {
+          actorId: auth.actorId,
+        });
+        return null;
+      }
+      // Verify the refresh token's session isn't revoked
+      const { hashToken } = await import('../auth/sessions');
+      const { queryOne } = await import('../db');
+      const tokenHash = hashToken(refreshCookie);
+      const session = await queryOne<{ is_revoked: boolean; expires_at: string }>(
+        'SELECT is_revoked, expires_at FROM sessions WHERE refresh_token_hash = $1',
+        [tokenHash]
+      );
+      if (!session || session.is_revoked || new Date(session.expires_at) < new Date()) {
+        console.warn('[AUTH] Rejecting header auth — refresh token session revoked/expired', {
+          actorId: auth.actorId,
+        });
+        return null;
+      }
+    } catch {
+      // If session table or cookie check fails, allow the request (don't break dev)
+    }
+  }
 
   // Phase 2 migration metrics: track token vs header auth usage
   const usedToken = request.headers.get('authorization')?.startsWith('Bearer ');

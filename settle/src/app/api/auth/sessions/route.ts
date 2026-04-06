@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/middleware/auth';
-import { getActiveSessions, revokeAllSessions, revokeSession } from '@/lib/auth/sessions';
+import { getActiveSessions, revokeAllSessions, revokeSession, parseDeviceDetails } from '@/lib/auth/sessions';
 
 // GET — List active sessions
 export async function GET(request: NextRequest) {
@@ -19,14 +19,23 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: sessions.map(s => ({
-        id: s.id,
-        device: s.device_info,
-        ip: s.ip_address,
-        lastUsed: s.last_used_at,
-        createdAt: s.created_at,
-        expiresAt: s.expires_at,
-      })),
+      data: sessions.map(s => {
+        const details = s.user_agent ? parseDeviceDetails(s.user_agent) : null;
+        return {
+          id: s.id,
+          device: s.device_info,
+          ip: s.ip_address,
+          browser: details?.browser || null,
+          browserVersion: details?.browserVersion || null,
+          os: details?.os || null,
+          osVersion: details?.osVersion || null,
+          deviceName: details?.device || null,
+          deviceType: details?.deviceType || 'desktop',
+          lastUsed: s.last_used_at,
+          createdAt: s.created_at,
+          expiresAt: s.expires_at,
+        };
+      }),
     });
   } catch {
     return NextResponse.json(
