@@ -1,0 +1,262 @@
+/**
+ * USDT Price Engine — Tick-based, multi-pair
+ *
+ * - Worker stores a price_tick every 25s (CoinGecko → Binance fallback)
+ * - API reads ticks from DB to compute avg price + chart over a timeframe
+ * - In-memory cache (keyed pair+timeframe, TTL 20s) prevents repeated DB hits
+ */
+
+import { query, queryOne } from '@/lib/db';
+
+// ---------------------------------------------------------------------------
+// Pair registry — add new pairs here
+// ---------------------------------------------------------------------------
+
+export interface PairConfig {
+  id: string;
+  label: string;
+  fiat: string;                   // CoinGecko vs_currency (lowercase)
+  binanceSymbol: string | null;   // Binance ticker, null if unsupported
+}
+
+export const SUPPORTED_PAIRS: PairConfig[] = [
+  { id: 'usdt_inr', label: 'USDT / INR', fiat: 'inr', binanceSymbol: 'USDTINR' },
+  { id: 'usdt_aed', label: 'USDT / AED', fiat: 'aed', binanceSymbol: null },
+];
+
+export function getPairConfig(pairId: string): PairConfig | undefined {
+  return SUPPORTED_PAIRS.find((p) => p.id === pairId);
+}
+
+// ---------------------------------------------------------------------------
+// Timeframes
+// ---------------------------------------------------------------------------
+
+export const TIMEFRAMES = {
+  '1m':  { label: '1 min',  seconds: 60 },
+  '5m':  { label: '5 min',  seconds: 300 },
+  '15m': { label: '15 min', seconds: 900 },
+  '1h':  { label: '1 hour', seconds: 3600 },
+} as const;
+
+export type Timeframe = keyof typeof TIMEFRAMES;
+
+export function isValidTimeframe(tf: string): tf is Timeframe {
+  return tf in TIMEFRAMES;
+}
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export type PriceSource = 'coingecko' | 'binance' | 'cache' | 'db';
+
+export interface PriceResponse {
+  pair: string;
+  label: string;
+  livePrice: number;
+  avgPrice: number;
+  timeframe: Timeframe;
+  source: PriceSource;
+  history: { time: string; value: number }[];
+  tickCount: number;
+}
+
+// ---------------------------------------------------------------------------
+// In-memory cache  (key = `${pair}:${timeframe}`)
+// ---------------------------------------------------------------------------
+
+interface CacheEntry {
+  data: PriceResponse;
+  expiresAt: number;
+}
+
+const CACHE_TTL_MS = 20_000; // 20 seconds
+const cacheMap = new Map<string, CacheEntry>();
+
+function cacheKey(pair: string, tf: Timeframe) { return `${pair}:${tf}`; }
+
+function getCached(pair: string, tf: Timeframe): PriceResponse | null {
+  const e = cacheMap.get(cacheKey(pair, tf));
+  if (e && Date.now() < e.expiresAt) return e.data;
+  return null;
+}
+
+function setCache(pair: string, tf: Timeframe, data: PriceResponse): void {
+  cacheMap.set(cacheKey(pair, tf), { data, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
+// ---------------------------------------------------------------------------
+// External API fetchers  (used by the worker, exported for reuse)
+// ---------------------------------------------------------------------------
+
+const FETCH_TIMEOUT = 8_000;
+
+export async function fetchCoinGeckoPrice(fiat: string): Promise<number | null> {
+  try {
+    const res = await fetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=${fiat}`,
+      { signal: AbortSignal.timeout(FETCH_TIMEOUT) },
+    );
+    if (!res.ok) throw new Error(`CoinGecko status ${res.status}`);
+    const json = await res.json();
+    const price = json?.tether?.[fiat];
+    if (typeof price !== 'number' || price <= 0) throw new Error('Invalid price');
+    return price;
+  } catch (err) {
+    console.error(`[PriceTick:${fiat}] CoinGecko failed:`, err);
+    return null;
+  }
+}
+
+export async function fetchBinancePrice(symbol: string): Promise<number | null> {
+  try {
+    const res = await fetch(
+      `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`,
+      { signal: AbortSignal.timeout(FETCH_TIMEOUT) },
+    );
+    if (!res.ok) throw new Error(`Binance status ${res.status}`);
+    const json = await res.json();
+    const price = parseFloat(json?.price);
+    if (!price || price <= 0) throw new Error('Invalid price');
+    return price;
+  } catch (err) {
+    console.error(`[PriceTick:${symbol}] Binance failed:`, err);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DB: store tick (used by worker)
+// ---------------------------------------------------------------------------
+
+export async function storeTick(pair: string, price: number, source: string): Promise<void> {
+  await query(
+    `INSERT INTO price_ticks (pair, price, source) VALUES ($1, $2, $3)`,
+    [pair, price, source],
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DB: cleanup old ticks (called by worker periodically)
+// ---------------------------------------------------------------------------
+
+export async function cleanupOldTicks(hoursToKeep: number = 24): Promise<number> {
+  const res = await query<{ count: string }>(
+    `WITH deleted AS (
+       DELETE FROM price_ticks WHERE created_at < NOW() - make_interval(hours => $1) RETURNING 1
+     ) SELECT COUNT(*)::text as count FROM deleted`,
+    [hoursToKeep],
+  );
+  return parseInt(res[0]?.count || '0');
+}
+
+// ---------------------------------------------------------------------------
+// DB: read ticks for a timeframe
+// ---------------------------------------------------------------------------
+
+interface TickRow {
+  price: string;
+  source: string;
+  created_at: string;
+}
+
+async function getTicksForTimeframe(pair: string, tf: Timeframe): Promise<TickRow[]> {
+  const secs = TIMEFRAMES[tf].seconds;
+  return query<TickRow>(
+    `SELECT price, source, created_at
+     FROM price_ticks
+     WHERE pair = $1 AND created_at >= NOW() - make_interval(secs => $2)
+     ORDER BY created_at ASC`,
+    [pair, secs],
+  );
+}
+
+async function getLatestTick(pair: string): Promise<{ price: number; source: string } | null> {
+  const row = await queryOne<{ price: string; source: string }>(
+    `SELECT price, source FROM price_ticks WHERE pair = $1 ORDER BY created_at DESC LIMIT 1`,
+    [pair],
+  );
+  if (!row) return null;
+  return { price: parseFloat(row.price), source: row.source };
+}
+
+// ---------------------------------------------------------------------------
+// Main query: price data for a pair + timeframe
+// ---------------------------------------------------------------------------
+
+export async function getPriceData(pairId: string, tf: Timeframe): Promise<PriceResponse> {
+  const pair = getPairConfig(pairId);
+  if (!pair) throw new Error(`Unsupported pair: ${pairId}`);
+  if (!isValidTimeframe(tf)) throw new Error(`Invalid timeframe: ${tf}`);
+
+  // 1. Cache check
+  const cached = getCached(pairId, tf);
+  if (cached) return { ...cached, source: 'cache' };
+
+  // 2. Get ticks from DB for the selected timeframe
+  const ticks = await getTicksForTimeframe(pairId, tf);
+
+  // 3. Live price = latest tick
+  const latest = ticks.length > 0
+    ? { price: parseFloat(ticks[ticks.length - 1].price), source: ticks[ticks.length - 1].source }
+    : await getLatestTick(pairId);
+
+  // 3b. If no ticks at all → live-fetch from external API as fallback
+  if (!latest) {
+    console.warn(`[PriceEngine:${pairId}] No ticks in DB — fetching live`);
+    let fallbackPrice: number | null = null;
+    let fallbackSource: PriceSource = 'coingecko';
+
+    fallbackPrice = await fetchCoinGeckoPrice(pair.fiat);
+    if (fallbackPrice === null && pair.binanceSymbol) {
+      fallbackPrice = await fetchBinancePrice(pair.binanceSymbol);
+      fallbackSource = 'binance';
+    }
+
+    if (fallbackPrice === null) {
+      throw new Error(`No price data for ${pairId} and external APIs failed. Start the worker: npm run worker:price`);
+    }
+
+    // Store the tick so next request has data
+    storeTick(pairId, fallbackPrice, fallbackSource);
+
+    const response: PriceResponse = {
+      pair: pairId,
+      label: pair.label,
+      livePrice: fallbackPrice,
+      avgPrice: fallbackPrice,
+      timeframe: tf,
+      source: fallbackSource,
+      history: [{ time: new Date().toISOString(), value: fallbackPrice }],
+      tickCount: 0,
+    };
+    setCache(pairId, tf, response);
+    return response;
+  }
+
+  // 4. Avg price from ticks in timeframe
+  const sum = ticks.reduce((s, t) => s + parseFloat(t.price), 0);
+  const avgPrice = ticks.length > 0 ? sum / ticks.length : latest.price;
+
+  // 5. Chart data
+  const history = ticks.map((t) => ({
+    time: new Date(t.created_at).toISOString(),
+    value: parseFloat(parseFloat(t.price).toFixed(4)),
+  }));
+
+  // 6. Build & cache
+  const response: PriceResponse = {
+    pair: pairId,
+    label: pair.label,
+    livePrice: latest.price,
+    avgPrice: parseFloat(avgPrice.toFixed(4)),
+    timeframe: tf,
+    source: latest.source as PriceSource,
+    history,
+    tickCount: ticks.length,
+  };
+
+  setCache(pairId, tf, response);
+  return response;
+}

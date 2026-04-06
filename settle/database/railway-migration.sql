@@ -594,9 +594,24 @@ CREATE INDEX IF NOT EXISTS idx_security_alerts_timestamp ON security_alerts (tim
 CREATE INDEX IF NOT EXISTS idx_security_alerts_severity ON security_alerts (severity, timestamp DESC);
 
 -- ============================================================================
+-- Migration 074: USDT price tick system
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS price_ticks (
+  id            BIGSERIAL PRIMARY KEY,
+  pair          VARCHAR(50) NOT NULL,
+  price         DECIMAL(20, 6) NOT NULL,
+  source        VARCHAR(20) NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_price_ticks_pair_created
+  ON price_ticks (pair, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_price_ticks_created
+  ON price_ticks (created_at);
+
+-- ============================================================================
 -- Verification Query
 -- ============================================================================
--- Run this to verify all columns exist:
--- SELECT column_name, data_type FROM information_schema.columns
--- WHERE table_name = 'orders' AND column_name IN ('spread_preference', 'protocol_fee_percentage', 'protocol_fee_amount', 'merchant_spread_percentage', 'is_auto_cancelled', 'escrow_trade_id', 'corridor_id', 'premium_bps_current');
--- SELECT tablename FROM pg_tables WHERE tablename = 'security_alerts';
+-- SELECT tablename FROM pg_tables WHERE tablename IN ('security_alerts', 'price_ticks');

@@ -24,7 +24,8 @@
     "worker:autobump": "tsx src/workers/auto-bump-worker.ts",
     "worker:refprice": "tsx src/workers/refprice-updater.ts",
     "worker:outbox": "tsx src/workers/notificationOutbox.ts",
-    "workers": "npm run worker:autobump & npm run worker:refprice & npm run worker:outbox"
+    "worker:price": "tsx src/workers/price-tick-collector.ts",
+    "workers": "npm run worker:autobump & npm run worker:refprice & npm run worker:outbox & npm run worker:price"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.29.0",
