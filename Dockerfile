@@ -58,6 +58,7 @@ COPY --from=builder /app/settle/server.js settle/server.js
 COPY --from=builder /app/settle/websocket-server.js settle/websocket-server.js
 COPY --from=builder /app/settle/package.json settle/package.json
 COPY --from=builder /app/settle/next.config.ts settle/next.config.ts
+COPY --from=builder /app/settle/tsconfig.json settle/tsconfig.json
 COPY --from=builder /app/settle/src/ settle/src/
 COPY --from=builder /app/pnpm-workspace.yaml pnpm-workspace.yaml
 COPY --from=builder /app/package.json package.json
