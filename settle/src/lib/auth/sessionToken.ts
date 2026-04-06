@@ -10,9 +10,14 @@
 
 import { createHmac, timingSafeEqual } from 'crypto';
 
-const TOKEN_SECRET = process.env.ADMIN_SECRET || process.env.SESSION_TOKEN_SECRET;
-if (!TOKEN_SECRET && process.env.NODE_ENV === 'production') {
-  throw new Error('FATAL: Set ADMIN_SECRET or SESSION_TOKEN_SECRET — token signing disabled without it');
+// Resolve at first use, not at import time. Next.js build evaluates this module
+// during page data collection where env vars aren't available — crashes the build.
+function getTokenSecret(): string {
+  const s = process.env.ADMIN_SECRET || process.env.SESSION_TOKEN_SECRET || '';
+  if (!s && process.env.NODE_ENV === 'production') {
+    throw new Error('FATAL: Set ADMIN_SECRET or SESSION_TOKEN_SECRET — token signing disabled');
+  }
+  return s;
 }
 const ACCESS_TOKEN_MAX_AGE = 15 * 60; // 15 minutes
 const REFRESH_TOKEN_MAX_AGE = 7 * 24 * 60 * 60; // 7 days
@@ -32,20 +37,20 @@ export interface TokenPayload {
  * Otherwise generates v1 format (5 parts) for backward compatibility.
  */
 export function generateAccessToken(payload: TokenPayload): string | null {
-  if (!TOKEN_SECRET) return null;
+  if (!getTokenSecret()) return null;
 
   const ts = Math.floor(Date.now() / 1000);
 
   // v2 format with sessionId: access:actorType:actorId:sessionId:ts:sig
   if (payload.sessionId) {
     const data = `access:${payload.actorType}:${payload.actorId}:${payload.sessionId}:${ts}`;
-    const sig = createHmac('sha256', TOKEN_SECRET).update(data).digest('hex');
+    const sig = createHmac('sha256', getTokenSecret()).update(data).digest('hex');
     return Buffer.from(`${data}:${sig}`).toString('base64');
   }
 
   // v1 format without sessionId: access:actorType:actorId:ts:sig
   const data = `access:${payload.actorType}:${payload.actorId}:${ts}`;
-  const sig = createHmac('sha256', TOKEN_SECRET).update(data).digest('hex');
+  const sig = createHmac('sha256', getTokenSecret()).update(data).digest('hex');
   return Buffer.from(`${data}:${sig}`).toString('base64');
 }
 
@@ -63,11 +68,11 @@ export function verifyAccessToken(token: string): TokenPayload | null {
  * Stored as httpOnly cookie — never exposed to JavaScript.
  */
 export function generateRefreshToken(payload: TokenPayload): string | null {
-  if (!TOKEN_SECRET) return null;
+  if (!getTokenSecret()) return null;
 
   const ts = Math.floor(Date.now() / 1000);
   const data = `refresh:${payload.actorType}:${payload.actorId}:${ts}`;
-  const sig = createHmac('sha256', TOKEN_SECRET).update(data).digest('hex');
+  const sig = createHmac('sha256', getTokenSecret()).update(data).digest('hex');
   return Buffer.from(`${data}:${sig}`).toString('base64');
 }
 
@@ -87,11 +92,11 @@ export function verifyRefreshToken(token: string): TokenPayload | null {
  * @deprecated Use generateAccessToken() for new code
  */
 export function generateSessionToken(payload: TokenPayload): string | null {
-  if (!TOKEN_SECRET) return null;
+  if (!getTokenSecret()) return null;
 
   const ts = Math.floor(Date.now() / 1000);
   const data = `${payload.actorType}:${payload.actorId}:${ts}`;
-  const sig = createHmac('sha256', TOKEN_SECRET).update(data).digest('hex');
+  const sig = createHmac('sha256', getTokenSecret()).update(data).digest('hex');
   return Buffer.from(`${data}:${sig}`).toString('base64');
 }
 
@@ -104,7 +109,7 @@ export function generateSessionToken(payload: TokenPayload): string | null {
  * This is called by the auth middleware for Bearer tokens.
  */
 export function verifySessionToken(token: string): TokenPayload | null {
-  if (!TOKEN_SECRET || !token) return null;
+  if (!getTokenSecret() || !token) return null;
 
   try {
     const decoded = Buffer.from(token, 'base64').toString();
@@ -143,7 +148,7 @@ function verifyTokenInternal(
   expectedKind: 'access' | 'access-v2' | 'refresh' | 'legacy',
   maxAge: number
 ): TokenPayload | null {
-  if (!TOKEN_SECRET || !token) return null;
+  if (!getTokenSecret() || !token) return null;
 
   try {
     const decoded = Buffer.from(token, 'base64').toString();
@@ -184,7 +189,7 @@ function verifyTokenInternal(
     if (!['user', 'merchant', 'compliance'].includes(actorType)) return null;
 
     // Verify signature
-    const expected = createHmac('sha256', TOKEN_SECRET).update(signedData).digest('hex');
+    const expected = createHmac('sha256', getTokenSecret()).update(signedData).digest('hex');
     if (sig.length !== expected.length) return null;
     if (!timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) return null;
 
