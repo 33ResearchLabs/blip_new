@@ -565,14 +565,14 @@ ORDER BY o.premium_bps_current DESC, o.created_at ASC;
 -- Migration 072: Security hardening indexes
 -- ============================================================================
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_buyer_merchant_active
+CREATE INDEX IF NOT EXISTS idx_orders_buyer_merchant_active
   ON orders (buyer_merchant_id, status, created_at DESC)
   WHERE buyer_merchant_id IS NOT NULL AND status NOT IN ('expired', 'cancelled');
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_buyer_merchant_lookup
+CREATE INDEX IF NOT EXISTS idx_orders_buyer_merchant_lookup
   ON orders (buyer_merchant_id) WHERE buyer_merchant_id IS NOT NULL;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_merchant_offers_lookup
+CREATE INDEX IF NOT EXISTS idx_merchant_offers_lookup
   ON merchant_offers (type, payment_method, min_amount, max_amount)
   WHERE is_active = true;
 
