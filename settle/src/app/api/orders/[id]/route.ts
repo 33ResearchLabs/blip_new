@@ -185,14 +185,20 @@ export async function PATCH(
     if (isClaimTransition) {
       // Validate the order is claimable — don't skip auth entirely
       const { query: checkQuery } = await import("@/lib/db");
-      const [targetOrder] = await checkQuery<{ merchant_id: string | null; buyer_merchant_id: string | null; status: string }>(
-        `SELECT merchant_id, buyer_merchant_id, status FROM orders WHERE id = $1`,
+      const [targetOrder] = await checkQuery<{ merchant_id: string | null; buyer_merchant_id: string | null; status: string; type: string }>(
+        `SELECT merchant_id, buyer_merchant_id, status, type FROM orders WHERE id = $1`,
         [id]
       );
       if (!targetOrder) return notFoundResponse("Order");
-      // Block if already assigned to a DIFFERENT merchant
-      const assignedMerchant = targetOrder.buyer_merchant_id || targetOrder.merchant_id;
-      if (assignedMerchant && assignedMerchant !== auth.actorId) {
+      // Anti-hijack: only block if M2M buyer slot is already taken by someone else.
+      //
+      // For non-M2M orders, merchant_id may be pre-assigned (the seller on SELL orders,
+      // or the matched merchant on BUY orders). The accept handler in updateOrderStatus
+      // reassigns merchant_id when isMerchantClaiming is true — so we must NOT block here.
+      //
+      // For M2M orders (buyer_merchant_id is set), block if a different buyer already claimed.
+      // This prevents a second merchant from hijacking an already-claimed M2M order.
+      if (targetOrder.buyer_merchant_id && targetOrder.buyer_merchant_id !== auth.actorId) {
         return forbiddenResponse("Order already assigned to another merchant");
       }
     } else {
