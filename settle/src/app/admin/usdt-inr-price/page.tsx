@@ -227,7 +227,9 @@ export default function UsdtPricePage() {
   const values = chartData.map((p) => p.value);
   const minVal = values.length ? Math.min(...values) : 0;
   const maxVal = values.length ? Math.max(...values) : 100;
-  const padding = (maxVal - minVal) * 0.1 || 0.01;
+  const range = maxVal - minVal;
+  // When price is flat (stablecoin), use 0.5% of value as padding so the line is visible mid-chart
+  const padding = range > 0 ? range * 0.15 : (minVal || 1) * 0.005;
   const yMin = parseFloat((minVal - padding).toFixed(4));
   const yMax = parseFloat((maxVal + padding).toFixed(4));
 
