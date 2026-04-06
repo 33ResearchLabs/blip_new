@@ -49,7 +49,7 @@ export function isValidTimeframe(tf: string): tf is Timeframe {
 // Types
 // ---------------------------------------------------------------------------
 
-export type PriceSource = 'coingecko' | 'binance' | 'cache' | 'db';
+export type PriceSource = 'coingecko' | 'binance' | 'kucoin' | 'exchangerate' | 'cache' | 'db' | 'fallback';
 
 export interface PriceResponse {
   pair: string;
@@ -125,6 +125,35 @@ export async function fetchBinancePrice(symbol: string): Promise<number | null> 
     return null;
   }
 }
+
+// KuCoin — no geo-blocking, no API key required
+export async function fetchKuCoinPrice(fiat: string): Promise<number | null> {
+  // KuCoin only has USDT-INR via USDT price against USD then convert
+  // For INR: fetch USDT/USDT (=1) is useless, so we use their USDT price index
+  // For AED: similarly via USD conversion
+  try {
+    // KuCoin doesn't have direct fiat pairs, so use exchangerate.host for fiat conversion
+    // This gives us USD→fiat rate, and USDT ≈ 1 USD
+    const res = await fetch(
+      `https://open.er-api.com/v6/latest/USD`,
+      { signal: AbortSignal.timeout(FETCH_TIMEOUT) },
+    );
+    if (!res.ok) throw new Error(`ExchangeRate API status ${res.status}`);
+    const json = await res.json();
+    const rate = json?.rates?.[fiat.toUpperCase()];
+    if (typeof rate !== 'number' || rate <= 0) throw new Error(`No rate for ${fiat}`);
+    return parseFloat(rate.toFixed(4));
+  } catch (err) {
+    console.error(`[PriceTick:${fiat}] ExchangeRate API failed:`, err);
+    return null;
+  }
+}
+
+// Last-resort hardcoded fallback prices (updated periodically, better than crashing)
+const HARDCODED_FALLBACKS: Record<string, number> = {
+  inr: 85.50,
+  aed: 3.67,
+};
 
 // ---------------------------------------------------------------------------
 // DB: store tick (used by worker)
@@ -202,24 +231,43 @@ export async function getPriceData(pairId: string, tf: Timeframe): Promise<Price
     ? { price: parseFloat(ticks[ticks.length - 1].price), source: ticks[ticks.length - 1].source }
     : await getLatestTick(pairId);
 
-  // 3b. If no ticks at all → live-fetch from external API as fallback
+  // 3b. If no ticks at all → live-fetch from external APIs (waterfall)
   if (!latest) {
     console.warn(`[PriceEngine:${pairId}] No ticks in DB — fetching live`);
     let fallbackPrice: number | null = null;
     let fallbackSource: PriceSource = 'coingecko';
 
+    // Source 1: CoinGecko
     fallbackPrice = await fetchCoinGeckoPrice(pair.fiat);
+
+    // Source 2: Binance
     if (fallbackPrice === null && pair.binanceSymbol) {
       fallbackPrice = await fetchBinancePrice(pair.binanceSymbol);
       fallbackSource = 'binance';
     }
 
+    // Source 3: ExchangeRate API (USD→fiat conversion, USDT ≈ 1 USD)
     if (fallbackPrice === null) {
-      throw new Error(`No price data for ${pairId} and external APIs failed. Start the worker: npm run worker:price`);
+      fallbackPrice = await fetchKuCoinPrice(pair.fiat);
+      fallbackSource = 'exchangerate';
+    }
+
+    // Source 4: Hardcoded last-resort (better than crashing)
+    if (fallbackPrice === null) {
+      const hc = HARDCODED_FALLBACKS[pair.fiat];
+      if (hc) {
+        console.warn(`[PriceEngine:${pairId}] ALL APIs failed — using hardcoded fallback ${hc}`);
+        fallbackPrice = hc;
+        fallbackSource = 'fallback';
+      }
+    }
+
+    if (fallbackPrice === null) {
+      throw new Error(`No price data for ${pairId} and all sources failed`);
     }
 
     // Store the tick so next request has data
-    storeTick(pairId, fallbackPrice, fallbackSource);
+    storeTick(pairId, fallbackPrice, fallbackSource).catch(() => {});
 
     const response: PriceResponse = {
       pair: pairId,

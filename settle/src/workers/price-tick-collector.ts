@@ -15,6 +15,7 @@ import {
   SUPPORTED_PAIRS,
   fetchCoinGeckoPrice,
   fetchBinancePrice,
+  fetchKuCoinPrice,
   storeTick,
   cleanupOldTicks,
 } from '@/lib/price/usdtInrPrice';
@@ -36,11 +37,18 @@ async function collectTicks() {
       // Primary: CoinGecko
       price = await fetchCoinGeckoPrice(pair.fiat);
 
-      // Fallback: Binance
+      // Fallback 1: Binance
       if (price === null && pair.binanceSymbol) {
         console.warn(`[price-tick] ${pair.id}: CoinGecko failed, trying Binance`);
         price = await fetchBinancePrice(pair.binanceSymbol);
         source = 'binance';
+      }
+
+      // Fallback 2: ExchangeRate API (USD→fiat, USDT ≈ 1 USD)
+      if (price === null) {
+        console.warn(`[price-tick] ${pair.id}: Binance failed, trying ExchangeRate API`);
+        price = await fetchKuCoinPrice(pair.fiat);
+        source = 'exchangerate';
       }
 
       if (price === null) {
