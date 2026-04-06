@@ -76,7 +76,7 @@ export const StatusCard = memo(function StatusCard({
   // Smart Market Price Panel state
   const [marketPair, setMarketPair] = useState<'usdt_aed' | 'usdt_inr'>('usdt_aed');
   const [marketTimeframe, setMarketTimeframe] = useState<'1m' | '5m' | '15m' | '1h'>('5m');
-  const [marketData, setMarketData] = useState<{ avg_5m: number; last_price: number; currency: string; tickCount: number; source: string } | null>(null);
+  const [marketData, setMarketData] = useState<{ avg_5m: number; last_price: number; final_price: number; price_mode: string; currency: string; tickCount: number; source: string } | null>(null);
   const [marketLoading, setMarketLoading] = useState(false);
   const [marketError, setMarketError] = useState(false);
   const prevAvgRef = useRef<number | null>(null);
@@ -442,14 +442,23 @@ export const StatusCard = memo(function StatusCard({
             <div className="text-[9px] text-foreground/25 font-mono text-center py-2">Market unavailable</div>
           ) : marketData ? (
             <div className="space-y-1.5">
-              {/* Avg price — primary */}
+              {/* Final price — admin-set, primary */}
               <div>
-                <div className="text-[8px] text-foreground/25 font-mono mb-0.5">
-                  Avg ({marketTimeframe})
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="text-[8px] text-foreground/25 font-mono">Price</span>
+                  <span className={`text-[7px] font-mono px-1 py-[1px] rounded ${
+                    marketData.price_mode === 'MANUAL'
+                      ? 'bg-orange-500/10 text-orange-400 border border-orange-500/15'
+                      : 'bg-green-500/10 text-green-400 border border-green-500/15'
+                  }`}>
+                    {marketData.price_mode}
+                  </span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-lg font-bold text-white font-mono tabular-nums">
-                    {marketPair === 'usdt_inr' ? '₹' : ''}{marketData.avg_5m.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}
+                  <span className={`text-lg font-bold font-mono tabular-nums ${
+                    marketData.price_mode === 'MANUAL' ? 'text-orange-400' : 'text-white'
+                  }`}>
+                    {marketPair === 'usdt_inr' ? '₹' : ''}{marketData.final_price.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}
                     {marketPair === 'usdt_aed' ? ' AED' : ''}
                   </span>
                   {prevAvgRef.current !== null && prevAvgRef.current !== marketData.avg_5m && (
@@ -460,7 +469,14 @@ export const StatusCard = memo(function StatusCard({
                 </div>
               </div>
 
-              {/* Last price — secondary */}
+              {/* Avg + Last price — secondary row */}
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] text-foreground/20 font-mono">Avg ({marketTimeframe})</span>
+                <span className="text-[10px] text-foreground/40 font-mono tabular-nums">
+                  {marketPair === 'usdt_inr' ? '₹' : ''}{marketData.avg_5m.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}
+                  {marketPair === 'usdt_aed' ? ' AED' : ''}
+                </span>
+              </div>
               <div className="flex items-center justify-between">
                 <span className="text-[8px] text-foreground/20 font-mono">Last Price</span>
                 <span className="text-[10px] text-foreground/40 font-mono tabular-nums">

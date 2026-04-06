@@ -51,6 +51,25 @@ export function isValidTimeframe(tf: string): tf is Timeframe {
 
 export type PriceSource = 'coingecko' | 'binance' | 'kucoin' | 'exchangerate' | 'cache' | 'db' | 'fallback';
 
+export type PriceMode = 'LIVE' | 'MANUAL';
+
+export interface PriceConfigRow {
+  key: string;
+  price_mode: PriceMode;
+  admin_price: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface FinalPrice {
+  pair: string;
+  label: string;
+  price: number;
+  mode: PriceMode;
+  livePrice: number;
+  adminPrice: number | null;
+}
+
 export interface PriceResponse {
   pair: string;
   label: string;
@@ -307,4 +326,69 @@ export async function getPriceData(pairId: string, tf: Timeframe): Promise<Price
 
   setCache(pairId, tf, response);
   return response;
+}
+
+// ---------------------------------------------------------------------------
+// Price Config: LIVE / MANUAL mode
+// ---------------------------------------------------------------------------
+
+export async function getPriceConfig(pairId: string): Promise<PriceConfigRow | null> {
+  const row = await queryOne<PriceConfigRow>(
+    `SELECT key, price_mode, admin_price, updated_at, updated_by FROM price_config WHERE key = $1`,
+    [pairId],
+  );
+  return row || null;
+}
+
+export async function setPriceConfig(
+  pairId: string,
+  mode: PriceMode,
+  adminPrice: number | null,
+  updatedBy: string,
+): Promise<void> {
+  await query(
+    `INSERT INTO price_config (key, price_mode, admin_price, updated_at, updated_by)
+     VALUES ($1, $2, $3, NOW(), $4)
+     ON CONFLICT (key) DO UPDATE SET
+       price_mode = $2,
+       admin_price = $3,
+       updated_at = NOW(),
+       updated_by = $4`,
+    [pairId, mode, adminPrice, updatedBy],
+  );
+}
+
+// ---------------------------------------------------------------------------
+// getFinalPrice — single source of truth for all consumers
+// ---------------------------------------------------------------------------
+
+export async function getFinalPrice(pairId: string): Promise<FinalPrice> {
+  const pair = getPairConfig(pairId);
+  if (!pair) throw new Error(`Unsupported pair: ${pairId}`);
+
+  // 1. Get config
+  const config = await getPriceConfig(pairId);
+  const mode: PriceMode = (config?.price_mode as PriceMode) || 'LIVE';
+  const adminPrice = config?.admin_price ? parseFloat(config.admin_price) : null;
+
+  // 2. Get live price (latest tick)
+  const latest = await queryOne<{ price: string }>(
+    `SELECT price FROM price_ticks WHERE pair = $1 ORDER BY created_at DESC LIMIT 1`,
+    [pairId],
+  );
+  const livePrice = latest ? parseFloat(latest.price) : 0;
+
+  // 3. Final price based on mode
+  const price = mode === 'MANUAL' && adminPrice !== null && adminPrice > 0
+    ? adminPrice
+    : livePrice;
+
+  return {
+    pair: pairId,
+    label: pair.label,
+    price,
+    mode,
+    livePrice,
+    adminPrice,
+  };
 }

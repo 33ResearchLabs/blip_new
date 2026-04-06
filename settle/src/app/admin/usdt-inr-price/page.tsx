@@ -11,6 +11,9 @@ import {
   Globe,
   Zap,
   Clock,
+  ToggleLeft,
+  ToggleRight,
+  Save,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -124,8 +127,19 @@ export default function UsdtPricePage() {
   // Secondary pair quick-glance
   const [secondaryPrice, setSecondaryPrice] = useState<PriceData | null>(null);
 
+  // Price mode (LIVE / MANUAL)
+  const [priceMode, setPriceMode] = useState<"LIVE" | "MANUAL">("LIVE");
+  const [adminPrice, setAdminPrice] = useState<string>("");
+  const [adminPriceSaved, setAdminPriceSaved] = useState<number | null>(null);
+  const [isSavingMode, setIsSavingMode] = useState(false);
+  const [modeSaveMsg, setModeSaveMsg] = useState<string | null>(null);
+  const [inputError, setInputError] = useState(false);
+  const [priceModeExpanded, setPriceModeExpanded] = useState(false);
+
   // ---------- Auth ----------
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -155,58 +169,131 @@ export default function UsdtPricePage() {
   }, []);
 
   // ---------- Data fetching ----------
-  const fetchPrice = useCallback(async (silent = false) => {
+  const fetchPrice = useCallback(
+    async (silent = false) => {
+      const token = adminTokenRef.current;
+      if (!token) return;
+
+      if (!silent) setIsRefreshing(true);
+      try {
+        const headers = { Authorization: `Bearer ${token}` };
+
+        // Fetch active pair + secondary pair in parallel
+        const otherPair = PAIRS.find((p) => p.id !== activePair)?.id;
+        const [mainRes, secRes] = await Promise.all([
+          fetchWithAuth(
+            `/api/admin/usdt-inr-price?pair=${activePair}&timeframe=${activeTimeframe}`,
+            { headers },
+          ),
+          otherPair
+            ? fetchWithAuth(
+                `/api/admin/usdt-inr-price?pair=${otherPair}&timeframe=${activeTimeframe}`,
+                { headers },
+              )
+            : Promise.resolve(null),
+        ]);
+
+        const mainJson = await mainRes.json();
+        if (mainJson.success && mainJson.data) {
+          setPriceData((prev) => {
+            if (prev && prev.pair === mainJson.data.pair) {
+              setPrevLivePrice(prev.livePrice);
+            } else {
+              setPrevLivePrice(null);
+            }
+            return mainJson.data;
+          });
+          setError(null);
+        } else {
+          setError(mainJson.error || "Failed to fetch price");
+        }
+
+        if (secRes) {
+          const secJson = await secRes.json();
+          if (secJson.success && secJson.data) setSecondaryPrice(secJson.data);
+        }
+
+        setLastRefresh(new Date());
+      } catch {
+        setError("Connection failed");
+      } finally {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    },
+    [activePair, activeTimeframe],
+  );
+
+  // Fetch price config (LIVE/MANUAL mode) for active pair
+  const fetchPriceConfig = useCallback(async () => {
     const token = adminTokenRef.current;
     if (!token) return;
-
-    if (!silent) setIsRefreshing(true);
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-
-      // Fetch active pair + secondary pair in parallel
-      const otherPair = PAIRS.find((p) => p.id !== activePair)?.id;
-      const [mainRes, secRes] = await Promise.all([
-        fetchWithAuth(`/api/admin/usdt-inr-price?pair=${activePair}&timeframe=${activeTimeframe}`, { headers }),
-        otherPair
-          ? fetchWithAuth(`/api/admin/usdt-inr-price?pair=${otherPair}&timeframe=${activeTimeframe}`, { headers })
-          : Promise.resolve(null),
-      ]);
-
-      const mainJson = await mainRes.json();
-      if (mainJson.success && mainJson.data) {
-        setPriceData((prev) => {
-          if (prev && prev.pair === mainJson.data.pair) {
-            setPrevLivePrice(prev.livePrice);
-          } else {
-            setPrevLivePrice(null);
-          }
-          return mainJson.data;
-        });
-        setError(null);
-      } else {
-        setError(mainJson.error || "Failed to fetch price");
+      const res = await fetchWithAuth(
+        `/api/prices/current?pair=${activePair}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      const json = await res.json();
+      if (json.success && json.data) {
+        setPriceMode(json.data.mode || "LIVE");
+        if (json.data.adminPrice != null && json.data.adminPrice > 0) {
+          setAdminPrice(String(json.data.adminPrice));
+          setAdminPriceSaved(json.data.adminPrice);
+        }
       }
-
-      if (secRes) {
-        const secJson = await secRes.json();
-        if (secJson.success && secJson.data) setSecondaryPrice(secJson.data);
-      }
-
-      setLastRefresh(new Date());
     } catch {
-      setError("Connection failed");
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      /* non-critical */
     }
-  }, [activePair, activeTimeframe]);
+  }, [activePair]);
+
+  // Save price mode
+  const savePriceMode = async (mode: "LIVE" | "MANUAL", price?: number) => {
+    const token = adminTokenRef.current;
+    if (!token) return;
+    setIsSavingMode(true);
+    setModeSaveMsg(null);
+    try {
+      const res = await fetchWithAuth("/api/admin/set-price-mode", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          pair: activePair,
+          price_mode: mode,
+          admin_price: mode === "MANUAL" ? price : null,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setPriceMode(mode);
+        if (mode === "MANUAL" && price) setAdminPriceSaved(price);
+        setModeSaveMsg(
+          mode === "MANUAL"
+            ? `Manual price set: ${price}`
+            : "Switched to LIVE mode",
+        );
+        setTimeout(() => setModeSaveMsg(null), 3000);
+      } else {
+        setModeSaveMsg(json.error || "Failed to save");
+      }
+    } catch {
+      setModeSaveMsg("Connection failed");
+    } finally {
+      setIsSavingMode(false);
+    }
+  };
 
   useEffect(() => {
     if (isAuthenticated) {
       setIsLoading(true);
       fetchPrice();
+      fetchPriceConfig();
     }
-  }, [isAuthenticated, fetchPrice]);
+  }, [isAuthenticated, fetchPrice, fetchPriceConfig]);
 
   // Auto-refresh
   useEffect(() => {
@@ -235,16 +322,20 @@ export default function UsdtPricePage() {
 
   const priceDirection =
     prevLivePrice !== null && priceData
-      ? priceData.livePrice > prevLivePrice ? "up"
-      : priceData.livePrice < prevLivePrice ? "down"
-      : "flat"
+      ? priceData.livePrice > prevLivePrice
+        ? "up"
+        : priceData.livePrice < prevLivePrice
+          ? "down"
+          : "flat"
       : "flat";
 
   // ---------- Render guards ----------
   if (!mounted || isCheckingSession) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-foreground/40 text-sm">Loading...</div>
+        <div className="animate-pulse text-foreground/40 text-sm">
+          Loading...
+        </div>
       </div>
     );
   }
@@ -254,7 +345,9 @@ export default function UsdtPricePage() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-foreground/60">Admin authentication required</p>
-          <Link href="/admin" className="text-primary underline text-sm">Go to Admin Login</Link>
+          <Link href="/admin" className="text-primary underline text-sm">
+            Go to Admin Login
+          </Link>
         </div>
       </div>
     );
@@ -279,15 +372,60 @@ export default function UsdtPricePage() {
 
           <div className="flex items-center gap-2 mx-auto">
             <nav className="flex items-center gap-0.5 bg-card rounded-lg p-[3px]">
-              <Link href="/admin" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Console</Link>
-              <Link href="/admin/live" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Live Feed</Link>
-              <Link href="/admin/ops-access" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Ops Access</Link>
-              <Link href="/admin/compliance-access" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Compliance Access</Link>
-              <Link href="/admin/merchants" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Merchants</Link>
-              <Link href="/admin/users" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Users</Link>
-              <Link href="/admin/disputes" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Disputes</Link>
-              <Link href="/admin/monitor" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Monitor</Link>
-              <Link href="/admin/usdt-inr-price" className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-accent-subtle text-foreground transition-colors">Price</Link>
+              <Link
+                href="/admin"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Console
+              </Link>
+              <Link
+                href="/admin/live"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Live Feed
+              </Link>
+              <Link
+                href="/admin/ops-access"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Ops Access
+              </Link>
+              <Link
+                href="/admin/compliance-access"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Compliance Access
+              </Link>
+              <Link
+                href="/admin/merchants"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Merchants
+              </Link>
+              <Link
+                href="/admin/users"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Users
+              </Link>
+              <Link
+                href="/admin/disputes"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Disputes
+              </Link>
+              <Link
+                href="/admin/monitor"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Monitor
+              </Link>
+              <Link
+                href="/admin/usdt-inr-price"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-accent-subtle text-foreground transition-colors"
+              >
+                Price
+              </Link>
             </nav>
           </div>
 
@@ -299,10 +437,20 @@ export default function UsdtPricePage() {
               </div>
             )}
             <div className="flex items-center gap-1.5 text-xs">
-              {error ? <WifiOff className="w-3.5 h-3.5 text-red-400" /> : <Wifi className="w-3.5 h-3.5 text-green-400" />}
+              {error ? (
+                <WifiOff className="w-3.5 h-3.5 text-red-400" />
+              ) : (
+                <Wifi className="w-3.5 h-3.5 text-green-400" />
+              )}
             </div>
-            <button onClick={() => fetchPrice()} disabled={isRefreshing} className="p-2 hover:bg-card rounded-lg transition-colors disabled:opacity-50">
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            <button
+              onClick={() => fetchPrice()}
+              disabled={isRefreshing}
+              className="p-2 hover:bg-card rounded-lg transition-colors disabled:opacity-50"
+            >
+              <RefreshCw
+                className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`}
+              />
             </button>
           </div>
         </div>
@@ -311,13 +459,29 @@ export default function UsdtPricePage() {
       {/* ===== CONTENT ===== */}
       <div className="p-6 max-w-6xl mx-auto space-y-5">
         {error && !priceData && (
-          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-sm text-red-400">{error}</div>
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-sm text-red-400">
+            {error}
+          </div>
         )}
 
         {isLoading ? (
           <div className="space-y-4">
-            <div className="flex gap-2">{[1, 2].map((i) => <div key={i} className="h-9 w-28 rounded-lg bg-card border border-border animate-pulse" />)}</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{[1, 2].map((i) => <div key={i} className="h-32 rounded-xl bg-card border border-border animate-pulse" />)}</div>
+            <div className="flex gap-2">
+              {[1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="h-9 w-28 rounded-lg bg-card border border-border animate-pulse"
+                />
+              ))}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="h-32 rounded-xl bg-card border border-border animate-pulse"
+                />
+              ))}
+            </div>
             <div className="h-80 rounded-xl bg-card border border-border animate-pulse" />
           </div>
         ) : priceData ? (
@@ -328,11 +492,28 @@ export default function UsdtPricePage() {
               <div className="flex items-center gap-2">
                 {PAIRS.map((p) => {
                   const isActive = activePair === p.id;
-                  const pData = p.id === priceData.pair ? priceData : secondaryPrice?.pair === p.id ? secondaryPrice : null;
+                  const pData =
+                    p.id === priceData.pair
+                      ? priceData
+                      : secondaryPrice?.pair === p.id
+                        ? secondaryPrice
+                        : null;
                   return (
                     <button
                       key={p.id}
-                      onClick={() => { setActivePair(p.id); setPrevLivePrice(null); }}
+                      onClick={() => {
+                        if (p.id === activePair) return;
+                        // Clear everything so loading shows immediately
+                        setPriceData(null);
+                        setIsLoading(true);
+                        setPrevLivePrice(null);
+                        setPriceMode("LIVE");
+                        setAdminPrice("");
+                        setAdminPriceSaved(null);
+                        setModeSaveMsg(null);
+                        setPriceModeExpanded(false);
+                        setActivePair(p.id);
+                      }}
                       className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                         isActive
                           ? "bg-card border border-primary/30 text-foreground shadow-sm"
@@ -342,7 +523,9 @@ export default function UsdtPricePage() {
                       <span>{p.label}</span>
                       {pData && (
                         <span className="text-xs font-mono tabular-nums text-foreground/40">
-                          {formatPrice(p.id, pData.livePrice)}
+                          {isActive && priceMode === "MANUAL" && adminPriceSaved
+                            ? formatPrice(p.id, adminPriceSaved)
+                            : formatPrice(p.id, pData.livePrice)}
                         </span>
                       )}
                     </button>
@@ -374,51 +557,199 @@ export default function UsdtPricePage() {
               {/* Live Price */}
               <div className="rounded-xl bg-card border border-border p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-medium text-foreground/40 uppercase tracking-wider">Live Price</span>
+                  <span className="text-xs font-medium text-foreground/40 uppercase tracking-wider">
+                    Live Price
+                  </span>
                   {priceDirection === "up" ? (
                     <TrendingUp className="w-3.5 h-3.5 text-green-400" />
                   ) : priceDirection === "down" ? (
                     <TrendingDown className="w-3.5 h-3.5 text-red-400" />
                   ) : null}
                 </div>
-                <div className={`text-2xl font-bold tabular-nums transition-colors duration-300 ${
-                  priceDirection === "up" ? "text-green-400" : priceDirection === "down" ? "text-red-400" : "text-foreground"
-                }`}>
+                <div
+                  className={`text-2xl font-bold tabular-nums transition-colors duration-300 ${
+                    priceDirection === "up"
+                      ? "text-green-400"
+                      : priceDirection === "down"
+                        ? "text-red-400"
+                        : "text-foreground"
+                  }`}
+                >
                   {formatPrice(priceData.pair, priceData.livePrice)}
                 </div>
                 <div className="text-[10px] text-foreground/30 mt-1">
-                  Source: {sourceLabel[priceData.source]} &middot; {priceData.tickCount} ticks in window
+                  Source: {sourceLabel[priceData.source]} &middot;{" "}
+                  {priceData.tickCount} ticks in window
                 </div>
               </div>
 
-              {/* Avg Price */}
-              <div className="rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 p-5">
+              {/* Final Price — what all users/merchants see */}
+              <div className={`rounded-xl p-5 border ${
+                priceMode === "MANUAL"
+                  ? "bg-gradient-to-br from-orange-500/10 to-orange-500/5 border-orange-500/20"
+                  : "bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20"
+              }`}>
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-medium text-primary/60 uppercase tracking-wider">
-                    Avg Price ({TIMEFRAMES.find((t) => t.id === activeTimeframe)?.label})
+                  <span className={`text-xs font-medium uppercase tracking-wider ${
+                    priceMode === "MANUAL" ? "text-orange-400/60" : "text-primary/60"
+                  }`}>
+                    Final Price
+                  </span>
+                  <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
+                    priceMode === "MANUAL"
+                      ? "bg-orange-500/10 text-orange-400 border border-orange-500/20"
+                      : "bg-green-500/10 text-green-400 border border-green-500/20"
+                  }`}>
+                    {priceMode}
                   </span>
                 </div>
-                <div className="text-2xl font-bold tabular-nums text-primary">
-                  {formatPrice(priceData.pair, priceData.avgPrice)}
+                <div className={`text-2xl font-bold tabular-nums ${
+                  priceMode === "MANUAL" ? "text-orange-400" : "text-primary"
+                }`}>
+                  {priceMode === "MANUAL" && adminPriceSaved
+                    ? formatPrice(priceData.pair, adminPriceSaved)
+                    : formatPrice(priceData.pair, priceData.livePrice)}
                 </div>
-                <div className="text-[10px] text-primary/40 mt-1">
-                  Computed from {priceData.tickCount} ticks over last {TIMEFRAMES.find((t) => t.id === activeTimeframe)?.label}
+                <div className={`text-[10px] mt-1 ${
+                  priceMode === "MANUAL" ? "text-orange-400/40" : "text-primary/40"
+                }`}>
+                  {priceMode === "MANUAL"
+                    ? "Admin-set manual price"
+                    : `Live from ${priceData.tickCount} ticks`}
                 </div>
               </div>
+            </div>
+
+            {/* ===== PRICE MODE CONTROL (collapsible) ===== */}
+            <div className="rounded-xl bg-card border border-border overflow-hidden">
+              {/* Collapsed header — always visible, click to expand */}
+              <button
+                onClick={() => setPriceModeExpanded((v) => !v)}
+                className="w-full flex items-center justify-between px-5 py-3 hover:bg-foreground/[0.02] transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <h2 className="text-sm font-semibold">Price Mode</h2>
+                  <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
+                    priceMode === "MANUAL"
+                      ? "bg-orange-500/10 text-orange-400 border border-orange-500/20"
+                      : "bg-green-500/10 text-green-400 border border-green-500/20"
+                  }`}>
+                    {priceMode}
+                  </span>
+                  {priceMode === "MANUAL" && adminPriceSaved && (
+                    <span className="text-xs font-mono tabular-nums text-orange-400">
+                      {formatPrice(priceData.pair, adminPriceSaved)}
+                    </span>
+                  )}
+                  {modeSaveMsg && (
+                    <span className="text-[10px] text-primary/70">{modeSaveMsg}</span>
+                  )}
+                </div>
+                <svg className={`w-4 h-4 text-foreground/30 transition-transform ${priceModeExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+
+              {/* Expandable body */}
+              {priceModeExpanded && (
+                <div className="px-5 pb-5 pt-2 border-t border-foreground/[0.04] space-y-4">
+                  <p className="text-[10px] text-foreground/30">
+                    Controls the final price shown to all merchants and users
+                  </p>
+
+                  <div className="flex items-center gap-4">
+                    {/* Toggle */}
+                    <button
+                      onClick={() => {
+                        if (priceMode === "LIVE") {
+                          const price = parseFloat(adminPrice);
+                          if (!price || price <= 0) {
+                            setModeSaveMsg("Enter a valid price first");
+                            setInputError(true);
+                            setTimeout(() => { setModeSaveMsg(null); setInputError(false); }, 2000);
+                            return;
+                          }
+                          savePriceMode("MANUAL", price);
+                        } else {
+                          savePriceMode("LIVE");
+                          setAdminPrice("");
+                          setAdminPriceSaved(null);
+                        }
+                      }}
+                      disabled={isSavingMode}
+                      className="flex items-center gap-2 shrink-0"
+                    >
+                      {priceMode === "LIVE" ? (
+                        <ToggleLeft className="w-10 h-10 text-foreground/30" />
+                      ) : (
+                        <ToggleRight className="w-10 h-10 text-primary" />
+                      )}
+                      <span className={`text-xs font-bold uppercase tracking-wider ${
+                        priceMode === "MANUAL" ? "text-primary" : "text-foreground/40"
+                      }`}>
+                        {priceMode}
+                      </span>
+                    </button>
+
+                    {/* Manual price input */}
+                    <div className="flex items-center gap-2 flex-1">
+                      <input
+                        type="number"
+                        value={adminPrice}
+                        onChange={(e) => { setAdminPrice(e.target.value); setInputError(false); }}
+                        placeholder={
+                          priceMode === "MANUAL"
+                            ? "Enter manual price..."
+                            : priceData ? priceData.livePrice.toFixed(4) : "0.0000"
+                        }
+                        step={activePair === "usdt_aed" ? "0.0001" : "0.01"}
+                        disabled={priceMode === "LIVE" && !inputError}
+                        className={`flex-1 rounded-lg px-3 py-2 text-sm font-mono outline-none transition-all ${
+                          inputError
+                            ? "bg-green-500/[0.08] border-2 border-green-500/50 text-green-400 ring-1 ring-green-500/20 animate-pulse placeholder-green-400/60"
+                            : priceMode === "MANUAL"
+                              ? "bg-green-500/[0.06] border-2 border-green-500/40 text-green-400 ring-1 ring-green-500/20 focus:border-green-500/60 placeholder-green-400/40"
+                              : "bg-foreground/[0.02] border border-foreground/[0.05] text-foreground/20 cursor-not-allowed opacity-40"
+                        }`}
+                      />
+                      <button
+                        onClick={() => {
+                          const price = parseFloat(adminPrice);
+                          if (price && price > 0) {
+                            savePriceMode("MANUAL", price);
+                          }
+                        }}
+                        disabled={isSavingMode || !adminPrice}
+                        className="px-4 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/30 text-xs font-bold text-primary transition-all disabled:opacity-30"
+                      >
+                        Set
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* ===== CHART ===== */}
             <div className="rounded-xl bg-card border border-border p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-sm font-semibold">{priceData.label} &mdash; {TIMEFRAMES.find((t) => t.id === activeTimeframe)?.label} Chart</h2>
+                  <h2 className="text-sm font-semibold">
+                    {priceData.label} &mdash;{" "}
+                    {TIMEFRAMES.find((t) => t.id === activeTimeframe)?.label}{" "}
+                    Chart
+                  </h2>
                   <p className="text-[10px] text-foreground/30 mt-0.5">
                     Tick-based &middot; 1 point every 25s
                   </p>
                 </div>
                 {lastRefresh && (
                   <span className="text-[10px] text-foreground/30">
-                    Updated {lastRefresh.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false })}
+                    Updated{" "}
+                    {lastRefresh.toLocaleTimeString("en-IN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                      hour12: false,
+                    })}
                   </span>
                 )}
               </div>
@@ -426,7 +757,10 @@ export default function UsdtPricePage() {
               {chartData.length > 1 ? (
                 <ResponsiveContainer width="100%" height={340}>
                   <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="rgba(255,255,255,0.04)"
+                    />
                     <XAxis
                       dataKey="displayTime"
                       tick={{ fontSize: 10, fill: "rgba(255,255,255,0.3)" }}
@@ -451,7 +785,10 @@ export default function UsdtPricePage() {
                         fontSize: "12px",
                         color: "#fff",
                       }}
-                      formatter={(value: number) => [formatPrice(priceData.pair, value), "Price"]}
+                      formatter={(value: number) => [
+                        formatPrice(priceData.pair, value),
+                        "Price",
+                      ]}
                       labelFormatter={(label: string) => `Time: ${label}`}
                     />
                     {/* Avg price reference line */}
@@ -460,7 +797,12 @@ export default function UsdtPricePage() {
                       stroke="#6366f1"
                       strokeDasharray="6 4"
                       strokeOpacity={0.5}
-                      label={{ value: `Avg ${priceData.avgPrice.toFixed(2)}`, position: "right", fill: "#6366f1", fontSize: 10 }}
+                      label={{
+                        value: `Avg ${priceData.avgPrice.toFixed(2)}`,
+                        position: "right",
+                        fill: "#6366f1",
+                        fontSize: 10,
+                      }}
                     />
                     <Line
                       type="monotone"
@@ -476,8 +818,12 @@ export default function UsdtPricePage() {
               ) : (
                 <div className="h-80 flex flex-col items-center justify-center text-foreground/20 text-sm gap-2">
                   <Clock className="w-6 h-6" />
-                  <span>Waiting for ticks... Worker collects data every 25s.</span>
-                  <span className="text-[10px]">Switch to a longer timeframe or wait for more data.</span>
+                  <span>
+                    Waiting for ticks... Worker collects data every 25s.
+                  </span>
+                  <span className="text-[10px]">
+                    Switch to a longer timeframe or wait for more data.
+                  </span>
                 </div>
               )}
             </div>
@@ -485,18 +831,35 @@ export default function UsdtPricePage() {
             {/* ===== SECONDARY PAIR CARD ===== */}
             {secondaryPrice && (
               <button
-                onClick={() => { setActivePair(secondaryPrice.pair); setPrevLivePrice(null); }}
+                onClick={() => {
+                  setPriceData(null);
+                  setIsLoading(true);
+                  setPrevLivePrice(null);
+                  setPriceMode("LIVE");
+                  setAdminPrice("");
+                  setAdminPriceSaved(null);
+                  setModeSaveMsg(null);
+                  setPriceModeExpanded(false);
+                  setActivePair(secondaryPrice.pair);
+                }}
                 className="w-full rounded-xl bg-card/50 border border-border p-4 flex items-center justify-between hover:bg-card/70 transition-colors text-left"
               >
                 <div>
-                  <div className="text-[10px] text-foreground/40 uppercase tracking-wider mb-1">{secondaryPrice.label}</div>
-                  <div className="text-lg font-bold tabular-nums">{formatPrice(secondaryPrice.pair, secondaryPrice.livePrice)}</div>
+                  <div className="text-[10px] text-foreground/40 uppercase tracking-wider mb-1">
+                    {secondaryPrice.label}
+                  </div>
+                  <div className="text-lg font-bold tabular-nums">
+                    {formatPrice(secondaryPrice.pair, secondaryPrice.livePrice)}
+                  </div>
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] text-foreground/40 uppercase tracking-wider mb-1">
-                    Avg ({TIMEFRAMES.find((t) => t.id === activeTimeframe)?.label})
+                    Avg (
+                    {TIMEFRAMES.find((t) => t.id === activeTimeframe)?.label})
                   </div>
-                  <div className="text-lg font-bold tabular-nums text-primary">{formatPrice(secondaryPrice.pair, secondaryPrice.avgPrice)}</div>
+                  <div className="text-lg font-bold tabular-nums text-primary">
+                    {formatPrice(secondaryPrice.pair, secondaryPrice.avgPrice)}
+                  </div>
                 </div>
               </button>
             )}

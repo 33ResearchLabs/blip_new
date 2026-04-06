@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   ChevronLeft,
@@ -12,6 +13,7 @@ import {
   TrendingUp,
   TrendingDown,
 } from "lucide-react";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import type { Screen, TradeType, TradePreference, PaymentMethod } from "./types";
 import { PaymentMethodSelector, type PaymentMethodItem } from "../PaymentMethodSelector";
 import { BottomNav } from "./BottomNav";
@@ -114,7 +116,37 @@ export const TradeCreationScreen = ({
   selectedPaymentMethodId,
   onSelectPaymentMethod,
 }: TradeCreationScreenProps) => {
-  const ratePositive = true;
+  const [ratePair, setRatePair] = useState<'usdt_aed' | 'usdt_inr'>('usdt_aed');
+  const [rateData, setRateData] = useState<{ price: number; mode: string } | null>(null);
+  const [prevRate, setPrevRate] = useState<number | null>(null);
+
+  const fetchRate = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth(`/api/prices/current?pair=${ratePair}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          setRateData(prev => {
+            if (prev) setPrevRate(prev.price);
+            return { price: json.data.price, mode: json.data.mode };
+          });
+        }
+      }
+    } catch { /* silent */ }
+  }, [ratePair]);
+
+  useEffect(() => {
+    setRateData(null);
+    fetchRate();
+    const id = setInterval(fetchRate, 25_000);
+    return () => clearInterval(id);
+  }, [fetchRate]);
+
+  const displayRate = rateData?.price ?? (ratePair === 'usdt_aed' ? 3.67 : 92.5);
+  const ratePositive = prevRate !== null ? displayRate >= prevRate : true;
+  const rateCurrency = ratePair === 'usdt_aed' ? 'AED' : 'INR';
+  const rateSymbol = ratePair === 'usdt_inr' ? '₹' : '';
+  const rateDecimals = ratePair === 'usdt_aed' ? 3 : 2;
   const hasAmount = !!amount && parseFloat(amount) > 0;
 
   return (
@@ -170,8 +202,8 @@ export const TradeCreationScreen = ({
         {/* ── Buy / Sell — big cards ───────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-3 shrink-0">
           {([
-            { type: 'buy' as const, label: 'Buy USDT', sub: 'Pay AED, get USDT', Icon: ArrowDownLeft, activeColor: '#10b981' },
-            { type: 'sell' as const, label: 'Sell USDT', sub: 'Send USDT, get AED', Icon: ArrowUpRight, activeColor: '#ef4444' },
+            { type: 'buy' as const, label: 'Buy USDT', sub: `Pay ${rateCurrency}, get USDT`, Icon: ArrowDownLeft, activeColor: '#10b981' },
+            { type: 'sell' as const, label: 'Sell USDT', sub: `Send USDT, get ${rateCurrency}`, Icon: ArrowUpRight, activeColor: '#ef4444' },
           ] as const).map(({ type, label, sub, Icon, activeColor }) => {
             const on = tradeType === type;
             return (
@@ -231,18 +263,39 @@ export const TradeCreationScreen = ({
         >
           <div className="flex items-center justify-between px-4 pt-3 pb-2">
             <div className="flex-1 min-w-0">
-              <p
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  letterSpacing: "0.22em",
-                  color: "rgba(0,0,0,0.35)",
-                  textTransform: "uppercase",
-                  marginBottom: 5,
-                }}
-              >
-                Live Rate {'\u00B7'} USDT / AED
-              </p>
+              {/* Pair toggle + label */}
+              <div className="flex items-center gap-2 mb-1.5">
+                <p
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: "0.22em",
+                    color: "rgba(0,0,0,0.35)",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {rateData?.mode === 'MANUAL' ? 'Rate' : 'Live Rate'}
+                </p>
+                <div className="flex rounded-full overflow-hidden" style={{ border: '1px solid rgba(0,0,0,0.08)' }}>
+                  {(['usdt_aed', 'usdt_inr'] as const).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setRatePair(p)}
+                      style={{
+                        fontSize: 8,
+                        fontWeight: 700,
+                        letterSpacing: '0.1em',
+                        padding: '2px 8px',
+                        background: ratePair === p ? 'rgba(0,0,0,0.08)' : 'transparent',
+                        color: ratePair === p ? '#000' : 'rgba(0,0,0,0.3)',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {p === 'usdt_aed' ? 'AED' : 'INR'}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="flex items-baseline gap-2">
                 <span
                   style={{
@@ -253,12 +306,7 @@ export const TradeCreationScreen = ({
                     lineHeight: 1.1,
                   }}
                 >
-                  {fiatAmount &&
-                  parseFloat(fiatAmount) > 0 &&
-                  amount &&
-                  parseFloat(amount) > 0
-                    ? (parseFloat(fiatAmount) / parseFloat(amount)).toFixed(3)
-                    : "3.672"}
+                  {rateSymbol}{displayRate.toFixed(rateDecimals)}
                 </span>
                 <span
                   style={{
@@ -267,7 +315,7 @@ export const TradeCreationScreen = ({
                     color: "rgba(0,0,0,0.35)",
                   }}
                 >
-                  AED
+                  {rateCurrency}
                 </span>
               </div>
               <div className="flex items-center gap-1 mt-1">
@@ -283,12 +331,12 @@ export const TradeCreationScreen = ({
                     color: ratePositive ? "#059669" : "#dc2626",
                   }}
                 >
-                  {ratePositive ? "+0.24%" : "-0.18%"} today
+                  {ratePositive ? "+" : ""}{prevRate !== null ? (((displayRate - prevRate) / prevRate) * 100).toFixed(2) : "0.00"}%
                 </span>
               </div>
             </div>
             <div className="shrink-0" style={{ opacity: 0.9 }}>
-              <RateSparkline rate={3.672} positive={ratePositive} />
+              <RateSparkline rate={displayRate} positive={ratePositive} />
             </div>
           </div>
           <div
@@ -306,7 +354,7 @@ export const TradeCreationScreen = ({
                 letterSpacing: "0.08em",
               }}
             >
-              7D LOW 3.651
+              7D LOW {ratePair === 'usdt_aed' ? '3.651' : '92.10'}
             </span>
             <div
               className="flex-1 mx-4 h-1 rounded-full"
@@ -329,7 +377,7 @@ export const TradeCreationScreen = ({
                 letterSpacing: "0.08em",
               }}
             >
-              HIGH 3.694
+              HIGH {ratePair === 'usdt_aed' ? '3.694' : '93.50'}
             </span>
           </div>
         </motion.div>
@@ -400,9 +448,9 @@ export const TradeCreationScreen = ({
                 color: hasAmount ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.15)",
               }}
             >
-              {'\u062F.\u0625'}{" "}
+              {ratePair === 'usdt_inr' ? '₹' : '\u062F.\u0625'}{" "}
               {hasAmount
-                ? parseFloat(fiatAmount).toLocaleString(undefined, {
+                ? (parseFloat(amount) * displayRate).toLocaleString(undefined, {
                     maximumFractionDigits: 2,
                   })
                 : '0'}
@@ -414,7 +462,7 @@ export const TradeCreationScreen = ({
                 color: "rgba(0,0,0,0.25)",
               }}
             >
-              AED
+              {rateCurrency}
             </span>
           </div>
 
@@ -503,7 +551,7 @@ export const TradeCreationScreen = ({
                 <p style={{ fontSize: 15, fontWeight: 800, color: "#000" }}>
                   {tradeType === "buy"
                     ? `${parseFloat(amount || "0").toFixed(2)} USDT`
-                    : `${'\u062F.\u0625'}${parseFloat(fiatAmount || "0").toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                    : `${ratePair === 'usdt_inr' ? '₹' : '\u062F.\u0625'}${(parseFloat(amount || "0") * displayRate).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                 </p>
               </div>
             </motion.div>
