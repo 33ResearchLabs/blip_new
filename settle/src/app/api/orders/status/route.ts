@@ -17,9 +17,13 @@ export async function GET(request: NextRequest) {
 
   const numbers = orderNumbers.split(',').slice(0, 20); // max 20 at once
 
+  // Only return statuses for orders the authenticated user is a participant in
+  const actorId = auth.actorId;
   const rows = await query<{ order_number: string; status: string }>(
-    `SELECT order_number, status FROM orders WHERE order_number = ANY($1)`,
-    [numbers]
+    `SELECT order_number, status FROM orders
+     WHERE order_number = ANY($1)
+       AND (user_id = $2 OR merchant_id = $2 OR buyer_merchant_id = $2)`,
+    [numbers, actorId]
   );
 
   const statuses: Record<string, string> = {};

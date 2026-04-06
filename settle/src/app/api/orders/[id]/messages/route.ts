@@ -111,7 +111,13 @@ export async function POST(
     const senderMatchesUserId = sender_type === 'user' && sender_id === auth.userId;
     const senderMatchesMerchantId = sender_type === 'merchant' && sender_id === auth.merchantId;
     // Merchant with compliance access sending as compliance (sender_id = merchant ID)
-    const senderMatchesComplianceMerchant = sender_type === 'compliance' && auth.actorType === 'merchant' && sender_id === auth.actorId;
+    // Verify has_compliance_access BEFORE accepting sender_type to prevent spoofing
+    let senderMatchesComplianceMerchant = false;
+    if (sender_type === 'compliance' && auth.actorType === 'merchant' && sender_id === auth.actorId) {
+      const { getMerchantById } = await import('@/lib/db/repositories/merchants');
+      const merchant = await getMerchantById(auth.actorId);
+      senderMatchesComplianceMerchant = !!merchant?.has_compliance_access;
+    }
     if (!senderMatchesAuth && !senderMatchesUserId && !senderMatchesMerchantId && !senderMatchesComplianceMerchant) {
       logger.auth.forbidden(`POST /api/orders/${id}/messages`, sender_id, 'Sender identity mismatch with authenticated actor');
       return forbiddenResponse('Sender identity does not match authenticated user');

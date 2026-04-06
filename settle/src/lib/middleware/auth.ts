@@ -139,7 +139,10 @@ export function getAuthContext(request: NextRequest): AuthContext | null {
       if (headerMerchantId && !ctx.merchantId && tokenPayload.actorType === 'merchant') {
         ctx.merchantId = headerMerchantId;
       }
-      if (headerUserId && !ctx.userId) ctx.userId = headerUserId;
+      // Only accept x-user-id from user tokens (prevent merchant spoofing user identity)
+      if (headerUserId && !ctx.userId && tokenPayload.actorType === 'user') {
+        ctx.userId = headerUserId;
+      }
 
       return ctx;
     }
