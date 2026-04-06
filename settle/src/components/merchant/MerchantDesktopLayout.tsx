@@ -121,8 +121,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
         >
           <div className="flex flex-col h-full bg-background overflow-y-auto p-2 gap-2 scrollbar-thin scrollbar-thumb-white/10 border-r border-border">
             <div
-              className="glass-card rounded-xl overflow-hidden flex-shrink-0 border border-foreground/[0.06]"
-              style={{ minHeight: "220px" }}
+              className="glass-card rounded-xl overflow-hidden border border-foreground/[0.06]"
             >
               <DashboardWidgets
                 todayEarnings={todayEarnings}
@@ -138,7 +137,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 onOpenCorridor={() => window.open("/merchant/mempool", "_blank")}
               />
             </div>
-            <div className="glass-card rounded-xl overflow-hidden flex-1 min-h-0 border border-foreground/[0.06]">
+            <div className="glass-card rounded-xl overflow-hidden border border-foreground/[0.06]">
               <ConfigPanel
                 merchantId={merchantId}
                 merchantInfo={merchantInfo}

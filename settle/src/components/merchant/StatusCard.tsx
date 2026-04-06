@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
   Wallet,
   Loader2,
@@ -10,10 +10,12 @@ import {
   Plus,
   Minus,
   TrendingUp,
+  TrendingDown,
   Activity,
   Radio,
   ChevronRight,
   Shield,
+  Clock,
 } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
@@ -71,6 +73,14 @@ export const StatusCard = memo(function StatusCard({
 
   const [reputationTier, setReputationTier] = useState<{ name: string; tier: string; score: number } | null>(null);
 
+  // Smart Market Price Panel state
+  const [marketPair, setMarketPair] = useState<'usdt_aed' | 'usdt_inr'>('usdt_aed');
+  const [marketTimeframe, setMarketTimeframe] = useState<'1m' | '5m' | '15m' | '1h'>('5m');
+  const [marketData, setMarketData] = useState<{ avg_5m: number; last_price: number; currency: string; tickCount: number; source: string } | null>(null);
+  const [marketLoading, setMarketLoading] = useState(false);
+  const [marketError, setMarketError] = useState(false);
+  const prevAvgRef = useRef<number | null>(null);
+
   const [inrBalance, setInrBalance] = useState<number>(() => {
     if (typeof window !== 'undefined' && merchantId) {
       const saved = localStorage.getItem(`inr_cash_${merchantId}`);
@@ -87,6 +97,34 @@ export const StatusCard = memo(function StatusCard({
       localStorage.setItem(`inr_cash_${merchantId}`, inrBalance.toString());
     }
   }, [inrBalance, merchantId]);
+
+  // Market price: fetch on pair/timeframe change + poll every 25s
+  const fetchMarketPrice = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth(`/api/price?pair=${marketPair}&timeframe=${marketTimeframe}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          setMarketData(prev => {
+            if (prev) prevAvgRef.current = prev.avg_5m;
+            return json.data;
+          });
+          setMarketError(false);
+        }
+      }
+    } catch {
+      setMarketError(true);
+    } finally {
+      setMarketLoading(false);
+    }
+  }, [marketPair, marketTimeframe]);
+
+  useEffect(() => {
+    setMarketLoading(true);
+    fetchMarketPrice();
+    const id = setInterval(fetchMarketPrice, 25_000);
+    return () => clearInterval(id);
+  }, [fetchMarketPrice]);
 
   // Reputation: fetch once on mount per merchantId (changes rarely, no polling needed)
   useEffect(() => {
@@ -225,9 +263,9 @@ export const StatusCard = memo(function StatusCard({
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Live ticker strip — taller with more info */}
-      <div className="flex items-center justify-between px-3 py-2.5 bg-foreground/[0.02] border-b border-foreground/[0.04] text-[9px] font-mono relative overflow-hidden">
+    <div className="flex flex-col">
+      {/* Live ticker strip — sticky at top while sidebar scrolls */}
+      <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2.5 bg-background border-b border-foreground/[0.04] text-[9px] font-mono relative overflow-hidden">
         <div className="absolute inset-0 shimmer pointer-events-none" />
         <div className="flex items-center gap-4 relative z-10">
           <div className="flex items-center gap-1.5">
@@ -261,7 +299,7 @@ export const StatusCard = memo(function StatusCard({
       </div>
 
       {/* Main balance hero */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-3 relative">
+      <div className="flex flex-col items-center justify-center px-4 py-3 relative">
         {/* Ambient glow behind amount */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-48 h-24 bg-primary/[0.03] rounded-full blur-[60px]" />
@@ -355,71 +393,162 @@ export const StatusCard = memo(function StatusCard({
           </div>
         )}
 
-        {/* Market Rate — prominent display */}
-        <div className="glass-card rounded-lg p-2.5">
+        {/* Smart Market Price Panel */}
+        <div className="glass-card rounded-lg p-2.5 space-y-2">
+          {/* Header: title + pair tabs */}
           <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className="text-[9px] text-foreground/25 font-mono uppercase tracking-wider">Market Rate</span>
-                {corridor?.confidence && (
-                  <span className={`text-[8px] font-mono px-1 py-0.5 rounded flex items-center gap-0.5 ${
-                    corridor.confidence === 'high' ? 'bg-foreground/[0.04] text-foreground/50' :
-                    corridor.confidence === 'medium' ? 'bg-foreground/[0.03] text-white/35' :
-                    'bg-foreground/[0.02] text-foreground/20'
-                  }`}>
-                    <span className={`w-1 h-1 rounded-full ${corridor.confidence === 'high' ? 'bg-primary animate-live-dot' : 'bg-white/20'}`} />
-                    {corridor.confidence === 'high' ? 'LIVE' : corridor.confidence === 'medium' ? 'CALC' : 'EST'}
-                  </span>
-                )}
-              </div>
-              <div className="text-lg font-bold text-white font-mono tabular-nums">
-                {corridor ? Number(corridor.ref_price).toFixed(4) : '—'}
-              </div>
-              <div className="text-[9px] text-foreground/20 font-mono mt-0.5">USDT/AED</div>
-            </div>
-            <div className="flex flex-col gap-1 items-end">
-              {!showRefPriceInput && (
+            <span className="text-[9px] text-foreground/25 font-mono uppercase tracking-wider">Market</span>
+            <div className="flex items-center gap-0.5 bg-foreground/[0.03] rounded-md p-[2px]">
+              {(['usdt_aed', 'usdt_inr'] as const).map(pair => (
                 <button
-                  onClick={() => setShowRefPriceInput(true)}
-                  className="px-2 py-1 rounded bg-foreground/[0.04] hover:bg-white/[0.08] border border-primary/20 text-[9px] text-primary font-bold transition-all"
+                  key={pair}
+                  onClick={() => { if (pair !== marketPair) { setMarketData(null); setMarketPair(pair); } }}
+                  className={`px-2 py-[3px] rounded text-[8px] font-mono font-bold transition-all ${
+                    marketPair === pair
+                      ? 'bg-foreground/[0.08] text-foreground/70'
+                      : 'text-foreground/25 hover:text-foreground/40'
+                  }`}
                 >
-                  {customRefPrice ? `${customRefPrice.toFixed(4)}` : 'SET PRICE'}
+                  {pair === 'usdt_aed' ? 'USDT/AED' : 'USDT/INR'}
                 </button>
-              )}
+              ))}
             </div>
           </div>
-          {showRefPriceInput && (
-            <div className="flex items-center gap-1 mt-2">
-              <input
-                type="number"
-                value={refPriceInputValue}
-                onChange={(e) => setRefPriceInputValue(e.target.value)}
-                placeholder="3.6730"
-                step="0.0001"
-                className="flex-1 bg-foreground/[0.02] border border-foreground/[0.06] rounded px-2 py-1 text-xs text-white font-mono outline-none focus:border-white/15"
-                autoFocus
-              />
+
+          {/* Timeframe pills */}
+          <div className="flex items-center gap-0.5">
+            <Clock className="w-2.5 h-2.5 text-foreground/15 mr-0.5" />
+            {(['1m', '5m', '15m', '1h'] as const).map(tf => (
               <button
-                onClick={() => {
-                  const price = parseFloat(refPriceInputValue);
-                  if (!isNaN(price)) {
-                    setCustomRefPrice(price);
-                    setRefPriceInputValue('');
-                    setShowRefPriceInput(false);
-                  }
-                }}
-                className="px-2 py-1 bg-foreground/[0.04] hover:bg-white/[0.08] border border-primary/30 rounded text-[9px] text-primary font-medium"
+                key={tf}
+                onClick={() => { if (tf !== marketTimeframe) { setMarketData(null); setMarketTimeframe(tf); } }}
+                className={`px-1.5 py-[2px] rounded text-[8px] font-mono font-bold transition-all ${
+                  marketTimeframe === tf
+                    ? 'bg-primary/10 text-primary border border-primary/20'
+                    : 'text-foreground/20 hover:text-foreground/35'
+                }`}
               >
-                Set
+                {tf}
               </button>
-              <button
-                onClick={() => { setCustomRefPrice(null); setRefPriceInputValue(''); setShowRefPriceInput(false); }}
-                className="px-1 py-1 text-foreground/15 hover:text-foreground/30"
-              >
-                <X className="w-3 h-3" />
-              </button>
+            ))}
+          </div>
+
+          {/* Price display */}
+          {marketLoading && !marketData ? (
+            <div className="flex items-center justify-center py-2">
+              <Loader2 className="w-3.5 h-3.5 text-foreground/15 animate-spin" />
             </div>
-          )}
+          ) : marketError && !marketData ? (
+            <div className="text-[9px] text-foreground/25 font-mono text-center py-2">Market unavailable</div>
+          ) : marketData ? (
+            <div className="space-y-1.5">
+              {/* Avg price — primary */}
+              <div>
+                <div className="text-[8px] text-foreground/25 font-mono mb-0.5">
+                  Avg ({marketTimeframe})
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-lg font-bold text-white font-mono tabular-nums">
+                    {marketPair === 'usdt_inr' ? '₹' : ''}{marketData.avg_5m.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}
+                    {marketPair === 'usdt_aed' ? ' AED' : ''}
+                  </span>
+                  {prevAvgRef.current !== null && prevAvgRef.current !== marketData.avg_5m && (
+                    marketData.avg_5m > prevAvgRef.current
+                      ? <TrendingUp className="w-3 h-3 text-green-400" />
+                      : <TrendingDown className="w-3 h-3 text-red-400" />
+                  )}
+                </div>
+              </div>
+
+              {/* Last price — secondary */}
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] text-foreground/20 font-mono">Last Price</span>
+                <span className="text-[10px] text-foreground/40 font-mono tabular-nums">
+                  {marketPair === 'usdt_inr' ? '₹' : ''}{marketData.last_price.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}
+                  {marketPair === 'usdt_aed' ? ' AED' : ''}
+                </span>
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-foreground/[0.04]" />
+
+              {/* Your Price input */}
+              {!showRefPriceInput ? (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[8px] text-foreground/20 font-mono">Your Price</span>
+                    {customRefPrice && marketData.avg_5m > 0 && (
+                      <span className={`ml-1.5 text-[8px] font-mono font-bold ${
+                        ((customRefPrice - marketData.avg_5m) / marketData.avg_5m) * 100 > 0
+                          ? 'text-red-400' : 'text-green-400'
+                      }`}>
+                        {((customRefPrice - marketData.avg_5m) / marketData.avg_5m * 100) > 0 ? '+' : ''}
+                        {((customRefPrice - marketData.avg_5m) / marketData.avg_5m * 100).toFixed(2)}%
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setShowRefPriceInput(true)}
+                    className="px-2 py-1 rounded bg-foreground/[0.04] hover:bg-white/[0.08] border border-primary/20 text-[9px] text-primary font-bold transition-all"
+                  >
+                    {customRefPrice
+                      ? `${marketPair === 'usdt_inr' ? '₹' : ''}${customRefPrice.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}${marketPair === 'usdt_aed' ? ' AED' : ''}`
+                      : 'SET PRICE'}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      value={refPriceInputValue}
+                      onChange={(e) => setRefPriceInputValue(e.target.value)}
+                      placeholder={marketData.avg_5m.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}
+                      step={marketPair === 'usdt_aed' ? '0.0001' : '0.01'}
+                      className="flex-1 bg-foreground/[0.02] border border-foreground/[0.06] rounded px-2 py-1 text-xs text-white font-mono outline-none focus:border-primary/30"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => {
+                        const price = parseFloat(refPriceInputValue);
+                        if (!isNaN(price) && price > 0) {
+                          setCustomRefPrice(price);
+                          setRefPriceInputValue('');
+                          setShowRefPriceInput(false);
+                        }
+                      }}
+                      className="px-2 py-1 bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded text-[9px] text-primary font-bold"
+                    >
+                      Set
+                    </button>
+                    <button
+                      onClick={() => { setCustomRefPrice(null); setRefPriceInputValue(''); setShowRefPriceInput(false); }}
+                      className="px-1 py-1 text-foreground/15 hover:text-foreground/30"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {/* Live spread preview */}
+                  {refPriceInputValue && marketData.avg_5m > 0 && (
+                    <div className="text-[8px] font-mono text-foreground/25">
+                      Spread: <span className={`font-bold ${
+                        ((parseFloat(refPriceInputValue) - marketData.avg_5m) / marketData.avg_5m) * 100 > 0
+                          ? 'text-red-400' : 'text-green-400'
+                      }`}>
+                        {((parseFloat(refPriceInputValue) - marketData.avg_5m) / marketData.avg_5m * 100) > 0 ? '+' : ''}
+                        {((parseFloat(refPriceInputValue) - marketData.avg_5m) / marketData.avg_5m * 100).toFixed(2)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tick count indicator */}
+              <div className="text-[7px] text-foreground/10 font-mono text-right">
+                {marketData.tickCount} ticks · {marketData.source}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Corridor button */}
