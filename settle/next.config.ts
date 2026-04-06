@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // TypeScript errors MUST be fixed — do not set ignoreBuildErrors: true
+  // Expose a non-secret flag so Edge Runtime middleware knows dev-lock is enabled.
+  // The actual password stays in DEV_ACCESS_PASSWORD (only accessible in Node.js API routes).
+  env: {
+    DEV_LOCK_ENABLED: process.env.DEV_ACCESS_PASSWORD ? 'true' : '',
+  },
   compress: true,
   poweredByHeader: false,
   reactStrictMode: true,

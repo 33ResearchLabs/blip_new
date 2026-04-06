@@ -38,7 +38,7 @@ const escrowDepositSchema = z.object({
 // Schema for escrow release
 const escrowReleaseSchema = z.object({
   tx_hash: z.string().min(1, "Transaction hash is required"),
-  actor_type: z.enum(["user", "merchant", "system"]),
+  actor_type: z.enum(["user", "merchant"]),
   actor_id: z.string().uuid(),
 });
 
@@ -68,9 +68,9 @@ export async function GET(
 
     // Check authorization
     const canAccess = await canAccessOrder(auth, id);
-    // if (!canAccess) {
-    //   return forbiddenResponse('You do not have access to this order');
-    // }
+    if (!canAccess) {
+      return forbiddenResponse('You do not have access to this order');
+    }
 
     // Return escrow details with minimal_status
     const escrowData = serializeOrder({
@@ -524,17 +524,13 @@ export async function PATCH(
       );
     }
 
-    // TASK 1: Only the seller or system can trigger release
+    // TASK 1: Only the seller can trigger release via API
     // The seller is whoever locked escrow (escrow_debited_entity_id).
-    // For buy orders: merchant_id is the seller
-    // For sell orders: user_id is the seller
-    // For M2M (any type): merchant_id is ALWAYS the seller
-    const isSystem = actor_type === "system";
+    // System-level releases are internal only (not exposed via this API).
     const isEscrowLocker =
       order.escrow_debited_entity_id &&
       actor_id === order.escrow_debited_entity_id;
-    const isSeller = isEscrowLocker;
-    if (!isSystem && !isSeller) {
+    if (!isEscrowLocker) {
       logger.warn("[Release] Rejected — actor is not seller or system", {
         orderId: id,
         actorId: actor_id,

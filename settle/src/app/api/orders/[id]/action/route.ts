@@ -37,6 +37,7 @@ import {
   type OrderAction,
 } from '@/lib/orders/handleOrderAction';
 import { denormalizeStatus } from '@/lib/orders/statusNormalizer';
+import { guardOrderClaim, guardPaymentRetry } from '@/lib/guards';
 import { fireInstantNotification } from '@/lib/notifications/instantNotify';
 import { invalidateOrderCache, updateOrderCache, invalidateMerchantOrderListCache } from '@/lib/cache';
 import { enrichOrderResponse } from '@/lib/orders/enrichOrderResponse';
@@ -106,16 +107,16 @@ export async function POST(
     // 4. Security: enforce actor matches authenticated identity
     const headerMerchantId = request.headers.get('x-merchant-id');
     const actorMatchesAuth = actor_id === auth.actorId;
+    // Only trust x-merchant-id if the authenticated token is a merchant token
     const actorMatchesMerchant =
-      actor_type === 'merchant' && headerMerchantId && actor_id === headerMerchantId;
+      actor_type === 'merchant' && auth.actorType === 'merchant' && headerMerchantId && actor_id === headerMerchantId;
 
     if (!actorMatchesAuth && !actorMatchesMerchant) {
       return forbiddenResponse('actor_id does not match authenticated identity');
     }
 
-    // Override auth context if merchant is acting
+    // Override auth context if merchant is acting via their own merchant token
     if (!actorMatchesAuth && actorMatchesMerchant) {
-      auth.actorType = 'merchant';
       auth.actorId = headerMerchantId;
       auth.merchantId = headerMerchantId;
     }
@@ -322,6 +323,7 @@ export async function POST(
 
     // ── CLAIM: atomic claim of an escrowed order (broadcast model) ──
     if (action === 'CLAIM') {
+      guardOrderClaim(id, actor_id);
       const claimResult = await claimOrder(
         id,
         actor_id,
@@ -367,6 +369,8 @@ export async function POST(
     // Skip if actor is already merchant_id — they're already assigned, just do normal SEND_PAYMENT.
     const isUnclaimed = !order.buyer_merchant_id && order.merchant_id !== actor_id;
     if (action === 'SEND_PAYMENT' && order.status === 'escrowed' && isUnclaimed) {
+      guardOrderClaim(id, actor_id);
+      guardPaymentRetry(id, 'SEND_PAYMENT', actor_id);
       // Merchant is trying to send payment on an unclaimed order — do atomic claim+pay
       const claimPayResult = await claimAndPayOrder(
         id,

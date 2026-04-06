@@ -44,8 +44,8 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
-    // Issue new access token
-    const accessToken = generateAccessToken(result.payload);
+    // Issue new access token with session tracking
+    const accessToken = generateAccessToken({ ...result.payload, sessionId: result.sessionId });
     if (!accessToken) {
       return NextResponse.json(
         { success: false, error: 'Token generation failed' },

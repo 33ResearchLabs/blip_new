@@ -162,6 +162,9 @@ export async function revokeSession(sessionId: string): Promise<boolean> {
     `UPDATE sessions SET is_revoked = true, revoked_at = NOW() WHERE id = $1 AND is_revoked = false RETURNING id`,
     [sessionId]
   );
+  if (result.length > 0) {
+    invalidateSessionCache(sessionId);
+  }
   return result.length > 0;
 }
 
@@ -173,6 +176,8 @@ export async function revokeAllSessions(entityId: string, entityType: string): P
     `UPDATE sessions SET is_revoked = true, revoked_at = NOW() WHERE entity_id = $1 AND entity_type = $2 AND is_revoked = false RETURNING id`,
     [entityId, entityType]
   );
+  // Clear entire cache — all sessions for this entity are now invalid
+  invalidateAllSessionCaches();
   return result.length;
 }
 
@@ -189,9 +194,75 @@ export async function getActiveSessions(entityId: string, entityType: string): P
   );
 }
 
+// ── Per-session validation with cache ─────────────────────────────────
+
+// In-memory cache: sessionId → { valid: boolean, expiresAt: number }
+// Avoids DB hit on every request. 30-second TTL ensures revocations propagate quickly.
+const sessionValidityCache = new Map<string, { valid: boolean; cachedAt: number }>();
+const SESSION_CACHE_TTL = 30_000; // 30 seconds
+
+/**
+ * Check if a specific session is valid (not revoked, not expired).
+ * Used by auth middleware for v2 tokens that embed a sessionId.
+ * Cached for 30 seconds to avoid DB hit on every request.
+ */
+export async function isSessionValid(sessionId: string): Promise<boolean> {
+  // Check cache first
+  const cached = sessionValidityCache.get(sessionId);
+  if (cached && Date.now() - cached.cachedAt < SESSION_CACHE_TTL) {
+    return cached.valid;
+  }
+
+  const session = await queryOne<{ is_revoked: boolean; expires_at: string }>(
+    'SELECT is_revoked, expires_at FROM sessions WHERE id = $1',
+    [sessionId]
+  );
+
+  const valid = !!session && !session.is_revoked && new Date(session.expires_at) > new Date();
+
+  // Cache the result (including negative results — invalid sessions stay invalid)
+  sessionValidityCache.set(sessionId, { valid, cachedAt: Date.now() });
+
+  // Prune cache if it grows too large (prevent memory leak from expired entries)
+  if (sessionValidityCache.size > 10_000) {
+    const now = Date.now();
+    for (const [key, entry] of sessionValidityCache) {
+      if (now - entry.cachedAt > SESSION_CACHE_TTL) sessionValidityCache.delete(key);
+    }
+  }
+
+  return valid;
+}
+
+/** Invalidate a session from the cache (call after revocation) */
+export function invalidateSessionCache(sessionId: string): void {
+  sessionValidityCache.delete(sessionId);
+}
+
+/** Invalidate all cached sessions for an entity (call after revokeAll) */
+export function invalidateAllSessionCaches(): void {
+  sessionValidityCache.clear();
+}
+
+/**
+ * Look up a session by refresh token hash (for check_session flow).
+ * Returns the session_id if found and valid, null otherwise.
+ */
+export async function getSessionIdFromRefreshCookie(refreshToken: string): Promise<string | null> {
+  const tokenHash = hashToken(refreshToken);
+  const session = await queryOne<{ id: string; is_revoked: boolean; expires_at: string }>(
+    'SELECT id, is_revoked, expires_at FROM sessions WHERE refresh_token_hash = $1',
+    [tokenHash]
+  );
+  if (!session || session.is_revoked || new Date(session.expires_at) < new Date()) {
+    return null;
+  }
+  return session.id;
+}
+
 /**
  * Check if ALL sessions for an entity are revoked (no active sessions remain).
- * Used by auth middleware to reject access tokens after "logout everywhere".
+ * Used by auth middleware as fallback for old tokens without sessionId.
  * Returns true if the entity has ZERO active sessions → token should be rejected.
  */
 export async function hasNoActiveSessions(entityId: string, entityType: string): Promise<boolean> {

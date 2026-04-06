@@ -101,7 +101,7 @@ function checkRate(ip: string, bucket: string, maxReqs: number, windowSec: numbe
 // Route Classification
 // =============================================================================
 
-const PUBLIC_EXACT = new Set(['/api/health', '/api/convert', '/api/pusher/auth']);
+const PUBLIC_EXACT = new Set(['/api/health', '/api/convert', '/api/pusher/auth', '/api/dev-unlock']);
 
 function isPublicRoute(pathname: string, method: string): boolean {
   if (PUBLIC_EXACT.has(pathname)) return true;
@@ -231,6 +231,51 @@ export function middleware(request: NextRequest) {
   const method = request.method;
   const ip = getClientIP(request);
 
+  // ── Skip static assets (catch-all matcher can't exclude them) ─────────
+  if (
+    pathname.startsWith('/_next/') ||
+    pathname === '/favicon.ico' ||
+    pathname.startsWith('/icons/') ||
+    pathname === '/manifest.json'
+  ) {
+    return NextResponse.next();
+  }
+
+  // ── 0. Development Access Lock ────────────────────────────────────────
+  // When DEV_ACCESS_PASSWORD is set, gate ALL routes behind a shared password.
+  // Opt-in: if the env var is empty/missing, this layer is completely skipped.
+  // Note: DEV_LOCK_ENABLED is a non-secret flag exposed via next.config.ts env{}
+  // because Edge Runtime (Turbopack) can't read raw process.env vars at runtime.
+  const devLockEnabled = process.env.DEV_LOCK_ENABLED === 'true';
+  if (devLockEnabled) {
+    const isDevExempt =
+      pathname === '/dev-lock' ||
+      pathname === '/api/dev-unlock';
+
+    if (!isDevExempt) {
+      const devCookie = request.cookies.get('dev_access_granted');
+      if (!devCookie || devCookie.value !== 'true') {
+        // API routes get a 401; page routes redirect to /dev-lock
+        if (pathname.startsWith('/api/')) {
+          return applySecurityHeaders(
+            NextResponse.json(
+              { success: false, error: 'Dev access required' },
+              { status: 401 }
+            )
+          );
+        }
+        const url = request.nextUrl.clone();
+        url.pathname = '/dev-lock';
+        return NextResponse.redirect(url);
+      }
+    }
+  }
+
+  // Non-API routes — no further middleware processing needed
+  if (!pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+
   // ── 1. Rate Limiting ──────────────────────────────────────────────────
   if (!isMockMode) {
     let rateLimitResult: NextResponse | null = null;
@@ -322,6 +367,6 @@ export function middleware(request: NextRequest) {
 // Matcher — only run on API routes
 // =============================================================================
 
-export const config = {
-  matcher: '/api/:path*',
-};
+// No matcher — middleware runs on every request.
+// Static assets are skipped early in the function body.
+// This avoids Turbopack issues with complex regex matchers.

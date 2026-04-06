@@ -15,7 +15,8 @@ import {
   recordAttempt,
   isRateLimited,
 } from '@/lib/auth/totp';
-import { generateSessionToken, generateAccessToken, setSessionOnResponse } from '@/lib/auth/sessionToken';
+import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { createSession } from '@/lib/auth/sessions';
 import { queryOne } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
@@ -58,10 +59,19 @@ export async function POST(request: NextRequest) {
       return errorResponse('Invalid authenticator code. Please try again.', 401);
     }
 
-    // Issue real tokens
+    // Issue real tokens with session tracking
     const payload = { actorId, actorType: actorType as 'user' | 'merchant' };
+
+    // Create session first to get sessionId for v2 token
+    let sessionId: string | undefined;
+    let refreshToken: string | null = null;
+    try {
+      const sess = await createSession(payload, request as any);
+      if (sess) { sessionId = sess.sessionId; refreshToken = sess.refreshToken; }
+    } catch { /* proceed without session tracking */ }
+
     const token = generateSessionToken(payload);
-    const accessToken = generateAccessToken(payload);
+    const accessToken = generateAccessToken({ ...payload, sessionId });
 
     // Get actor profile for response
     let actorData: Record<string, unknown> | null = null;
@@ -89,7 +99,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    await setSessionOnResponse(response, payload, request);
+    if (refreshToken) response.cookies.set(REFRESH_TOKEN_COOKIE, refreshToken, REFRESH_COOKIE_OPTIONS);
     return response;
   } catch (error) {
     console.error('[2FA Login Verify] Error:', error);

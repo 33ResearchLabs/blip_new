@@ -21,6 +21,9 @@ import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import { transaction, query as dbQuery } from '@/lib/db';
 import { enrichOrderResponse } from '@/lib/orders/enrichOrderResponse';
 import { auditLog } from '@/lib/auditLog';
+import { getIdempotencyKey, withIdempotency } from '@/lib/idempotency';
+import { createHash } from 'crypto';
+import { guardOrderCreation } from '@/lib/guards';
 
 // Prevent Next.js from caching this route
 export const dynamic = 'force-dynamic';
@@ -123,6 +126,18 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(['User not found']);
     }
 
+    // Detection guard: log warning if user is creating orders too fast
+    guardOrderCreation(user_id, type, crypto_amount);
+
+    // Idempotency: prevent duplicate order creation (double-click, network retry)
+    // Use explicit header if provided, otherwise auto-generate from order params + 30s window
+    const explicitKey = getIdempotencyKey(request);
+    const timeWindow = Math.floor(Date.now() / 30000); // 30-second buckets
+    const autoKey = createHash('sha256')
+      .update(`create_order:${user_id}:${type}:${crypto_amount}:${payment_method || 'bank'}:${timeWindow}`)
+      .digest('hex');
+    const idempotencyKey = explicitKey || autoKey;
+
     // Buy orders require buyer_wallet_address so merchant can release escrow
     if (type === 'buy' && !buyer_wallet_address) {
       return validationErrorResponse(['buyer_wallet_address is required for buy orders. Please connect your wallet.']);
@@ -148,8 +163,8 @@ export async function POST(request: NextRequest) {
         ]);
       }
 
-      // Get corridor rate for fiat calculation
-      let sellRate = 3.67; // fallback
+      // Get corridor rate for fiat calculation — reject if unavailable
+      let sellRate: number | null = null;
       try {
         const corridorRows = await dbQuery<{ ref_price: string }>(
           'SELECT ref_price FROM corridor_prices WHERE corridor_id = $1',
@@ -158,7 +173,10 @@ export async function POST(request: NextRequest) {
         if (corridorRows[0]) {
           sellRate = parseFloat(corridorRows[0].ref_price);
         }
-      } catch { /* use fallback */ }
+      } catch { /* sellRate stays null */ }
+      if (!sellRate || sellRate <= 0) {
+        return errorResponse('Exchange rate temporarily unavailable. Please try again in a moment.');
+      }
 
       const fiatAmount = crypto_amount * sellRate;
 
@@ -171,38 +189,50 @@ export async function POST(request: NextRequest) {
         } catch { parsedUserBank = user_bank_account; }
       }
 
-      const createResponse = await proxyCoreApi('/v1/orders', {
-        method: 'POST',
-        body: {
-          user_id,
-          merchant_id: null,       // NO merchant assigned — broadcast to all
-          offer_id: null,          // No offer matching
-          type: 'sell',
-          payment_method: payment_method || 'bank',
-          crypto_amount,
-          fiat_amount: fiatAmount,
-          rate: sellRate,
-          payment_details: { user_bank_account: parsedUserBank },
-          accepted_at: null,       // NOT accepted — merchant must claim
-          ref_price_at_create: sellRate,
-          payment_method_id: verifiedPaymentMethodId,
-          escrow_tx_hash,
-          escrow_trade_id,
-          escrow_trade_pda,
-          escrow_pda,
-          escrow_creator_wallet,
-        },
-      });
+      const idempResult = await withIdempotency(
+        idempotencyKey,
+        'create_order',
+        null,
+        async () => {
+          const resp = await proxyCoreApi('/v1/orders', {
+            method: 'POST',
+            body: {
+              user_id,
+              merchant_id: null,
+              offer_id: null,
+              type: 'sell',
+              payment_method: payment_method || 'bank',
+              crypto_amount,
+              fiat_amount: fiatAmount,
+              rate: sellRate,
+              payment_details: { user_bank_account: parsedUserBank },
+              accepted_at: null,
+              ref_price_at_create: sellRate,
+              payment_method_id: verifiedPaymentMethodId,
+              escrow_tx_hash,
+              escrow_trade_id,
+              escrow_trade_pda,
+              escrow_pda,
+              escrow_creator_wallet,
+            },
+          });
+          const data = await resp.json();
+          return { data, statusCode: resp.status };
+        }
+      );
 
-      return createResponse;
+      if (idempResult.cached) {
+        logger.info('[Orders] Returning cached sell order (idempotency)', { userId: user_id });
+      }
+      return NextResponse.json(idempResult.data, { status: idempResult.statusCode });
     }
 
     // ── BUY ORDERS: manual merchant-claim model (no offer matching) ────
     // Same as sell orders — broadcast to all merchants, first to claim wins.
     // Offer-based flow commented out below for easy revert.
 
-    // Get corridor rate for fiat calculation
-    let buyRate = 3.67; // fallback
+    // Get corridor rate for fiat calculation — reject if unavailable
+    let buyRate: number | null = null;
     try {
       const corridorRows = await dbQuery<{ ref_price: string }>(
         'SELECT ref_price FROM corridor_prices WHERE corridor_id = $1',
@@ -211,28 +241,40 @@ export async function POST(request: NextRequest) {
       if (corridorRows[0]) {
         buyRate = parseFloat(corridorRows[0].ref_price);
       }
-    } catch { /* use fallback */ }
+    } catch { /* buyRate stays null */ }
+    if (!buyRate || buyRate <= 0) {
+      return errorResponse('Exchange rate temporarily unavailable. Please try again in a moment.');
+    }
 
     const fiatAmount = crypto_amount * buyRate;
 
-    const createResponse = await proxyCoreApi('/v1/orders', {
-      method: 'POST',
-      body: {
-        user_id,
-        merchant_id: null,          // NO merchant assigned — broadcast to all
-        offer_id: null,             // No offer matching
-        type: 'buy',
-        payment_method: payment_method || 'bank',
-        crypto_amount,
-        fiat_amount: fiatAmount,
-        rate: buyRate,
-        payment_details: {},
-        buyer_wallet_address: buyer_wallet_address,
-        accepted_at: null,          // NOT accepted — merchant must claim
-        ref_price_at_create: buyRate,
-        payment_method_id: verifiedPaymentMethodId,
-      },
-    });
+    const idempResult = await withIdempotency(
+      idempotencyKey,
+      'create_order',
+      null,
+      async () => {
+        const resp = await proxyCoreApi('/v1/orders', {
+          method: 'POST',
+          body: {
+            user_id,
+            merchant_id: null,
+            offer_id: null,
+            type: 'buy',
+            payment_method: payment_method || 'bank',
+            crypto_amount,
+            fiat_amount: fiatAmount,
+            rate: buyRate,
+            payment_details: {},
+            buyer_wallet_address: buyer_wallet_address,
+            accepted_at: null,
+            ref_price_at_create: buyRate,
+            payment_method_id: verifiedPaymentMethodId,
+          },
+        });
+        const data = await resp.json();
+        return { data, statusCode: resp.status };
+      }
+    );
 
     // ── OFFER-BASED BUY FLOW (commented out — re-enable when ready) ──
     // let offer;
@@ -257,14 +299,18 @@ export async function POST(request: NextRequest) {
     //   },
     // });
 
-    if (createResponse.status < 400) {
-      auditLog('order.created', user_id, 'user', undefined, {
-        type,
-        crypto_amount,
-      });
+    if (idempResult.statusCode < 400) {
+      if (idempResult.cached) {
+        logger.info('[Orders] Returning cached buy order (idempotency)', { userId: user_id });
+      } else {
+        auditLog('order.created', user_id, 'user', undefined, {
+          type,
+          crypto_amount,
+        });
+      }
     }
 
-    return createResponse;
+    return NextResponse.json(idempResult.data, { status: idempResult.statusCode });
   } catch (error) {
     const err = error as Error;
     console.error('[API] POST /api/orders error:', {

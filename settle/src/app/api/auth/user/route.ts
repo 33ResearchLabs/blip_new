@@ -12,7 +12,8 @@ import {
 import { verifyWalletSignature } from '@/lib/solana/verifySignature';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { validateUsername } from '@/lib/validation/username';
-import { generateSessionToken, generateAccessToken, setSessionOnResponse } from '@/lib/auth/sessionToken';
+import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { createSession, getSessionIdFromRefreshCookie } from '@/lib/auth/sessions';
 import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
 
 /**
@@ -122,7 +123,18 @@ export async function POST(request: NextRequest) {
 
       const userPayload = { actorId: user.id, actorType: 'user' as const };
       const token = generateSessionToken(userPayload);
-      const userAccessTk = generateAccessToken(userPayload);
+
+      let walletSessionId: string | null = null;
+      let walletRefreshToken: string | null = null;
+      try {
+        const sessionResult = await createSession(userPayload, request as any);
+        if (sessionResult) {
+          walletSessionId = sessionResult.sessionId;
+          walletRefreshToken = sessionResult.refreshToken;
+        }
+      } catch { /* session creation failed, proceed without sessionId */ }
+
+      const userAccessTk = generateAccessToken({ ...userPayload, ...(walletSessionId && { sessionId: walletSessionId }) });
 
       const walletRes = NextResponse.json({
         success: true,
@@ -134,7 +146,9 @@ export async function POST(request: NextRequest) {
           ...(userAccessTk && { accessToken: userAccessTk }),
         },
       });
-      await setSessionOnResponse(walletRes, userPayload, request);
+      if (walletRefreshToken) {
+        walletRes.cookies.set(REFRESH_TOKEN_COOKIE, walletRefreshToken, REFRESH_COOKIE_OPTIONS);
+      }
       return walletRes;
     }
 
@@ -215,7 +229,18 @@ export async function POST(request: NextRequest) {
 
       const setUnPayload = { actorId: user.id, actorType: 'user' as const };
       const setUsernameToken = generateSessionToken(setUnPayload);
-      const setUnAccessTk = generateAccessToken(setUnPayload);
+
+      let setUnSessionId: string | null = null;
+      let setUnRefreshToken: string | null = null;
+      try {
+        const sessionResult = await createSession(setUnPayload, request as any);
+        if (sessionResult) {
+          setUnSessionId = sessionResult.sessionId;
+          setUnRefreshToken = sessionResult.refreshToken;
+        }
+      } catch { /* session creation failed, proceed without sessionId */ }
+
+      const setUnAccessTk = generateAccessToken({ ...setUnPayload, ...(setUnSessionId && { sessionId: setUnSessionId }) });
 
       const setUnRes = NextResponse.json({
         success: true,
@@ -225,7 +250,9 @@ export async function POST(request: NextRequest) {
           ...(setUnAccessTk && { accessToken: setUnAccessTk }),
         },
       });
-      await setSessionOnResponse(setUnRes, setUnPayload, request);
+      if (setUnRefreshToken) {
+        setUnRes.cookies.set(REFRESH_TOKEN_COOKIE, setUnRefreshToken, REFRESH_COOKIE_OPTIONS);
+      }
       return setUnRes;
     }
 
@@ -269,7 +296,18 @@ export async function POST(request: NextRequest) {
 
       const loginPayload = { actorId: user.id, actorType: 'user' as const };
       const loginToken = generateSessionToken(loginPayload);
-      const loginAccessTk = generateAccessToken(loginPayload);
+
+      let loginSessionId: string | null = null;
+      let loginRefreshToken: string | null = null;
+      try {
+        const sessionResult = await createSession(loginPayload, request as any);
+        if (sessionResult) {
+          loginSessionId = sessionResult.sessionId;
+          loginRefreshToken = sessionResult.refreshToken;
+        }
+      } catch { /* session creation failed, proceed without sessionId */ }
+
+      const loginAccessTk = generateAccessToken({ ...loginPayload, ...(loginSessionId && { sessionId: loginSessionId }) });
 
       const loginRes = NextResponse.json({
         success: true,
@@ -280,7 +318,9 @@ export async function POST(request: NextRequest) {
           ...(loginAccessTk && { accessToken: loginAccessTk }),
         },
       });
-      await setSessionOnResponse(loginRes, loginPayload, request);
+      if (loginRefreshToken) {
+        loginRes.cookies.set(REFRESH_TOKEN_COOKIE, loginRefreshToken, REFRESH_COOKIE_OPTIONS);
+      }
       return loginRes;
     }
 
@@ -344,7 +384,18 @@ export async function POST(request: NextRequest) {
 
       const regPayload = { actorId: user.id, actorType: 'user' as const };
       const registerToken = generateSessionToken(regPayload);
-      const regAccessTk = generateAccessToken(regPayload);
+
+      let regSessionId: string | null = null;
+      let regRefreshToken: string | null = null;
+      try {
+        const sessionResult = await createSession(regPayload, request as any);
+        if (sessionResult) {
+          regSessionId = sessionResult.sessionId;
+          regRefreshToken = sessionResult.refreshToken;
+        }
+      } catch { /* session creation failed, proceed without sessionId */ }
+
+      const regAccessTk = generateAccessToken({ ...regPayload, ...(regSessionId && { sessionId: regSessionId }) });
 
       const regRes = NextResponse.json({
         success: true,
@@ -355,7 +406,9 @@ export async function POST(request: NextRequest) {
           ...(regAccessTk && { accessToken: regAccessTk }),
         },
       });
-      await setSessionOnResponse(regRes, regPayload, request);
+      if (regRefreshToken) {
+        regRes.cookies.set(REFRESH_TOKEN_COOKIE, regRefreshToken, REFRESH_COOKIE_OPTIONS);
+      }
       return regRes;
     }
 
@@ -458,11 +511,29 @@ export async function GET(request: NextRequest) {
       }
 
       const checkPayload = { actorId: user.id, actorType: 'user' as const };
-      const checkToken = generateSessionToken(checkPayload);
-      const checkAccessTk = generateAccessToken(checkPayload);
 
-      // check_session: issue new access tokens but do NOT create a new DB session.
-      return NextResponse.json({
+      // Look up existing session from refresh cookie for v2 token
+      let checkSessionId: string | undefined;
+      const refreshCookie = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+      if (refreshCookie) {
+        try {
+          const existingId = await getSessionIdFromRefreshCookie(refreshCookie);
+          if (existingId) checkSessionId = existingId;
+        } catch { /* proceed without sessionId */ }
+      }
+      // No valid refresh session → create one
+      let checkRefreshToken: string | null = null;
+      if (!checkSessionId) {
+        try {
+          const sess = await createSession(checkPayload, request as any);
+          if (sess) { checkSessionId = sess.sessionId; checkRefreshToken = sess.refreshToken; }
+        } catch { /* proceed without session tracking */ }
+      }
+
+      const checkToken = generateSessionToken(checkPayload);
+      const checkAccessTk = generateAccessToken({ ...checkPayload, sessionId: checkSessionId });
+
+      const checkResponse = NextResponse.json({
         success: true,
         data: {
           valid: true,
@@ -471,6 +542,8 @@ export async function GET(request: NextRequest) {
           ...(checkAccessTk && { accessToken: checkAccessTk }),
         },
       });
+      if (checkRefreshToken) checkResponse.cookies.set(REFRESH_TOKEN_COOKIE, checkRefreshToken, REFRESH_COOKIE_OPTIONS);
+      return checkResponse;
     }
 
     if (!userId) {

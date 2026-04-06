@@ -87,6 +87,14 @@ export async function POST(
       );
     }
 
+    // Prevent overwriting an existing proposed resolution (idempotency guard)
+    if (dispute.status === 'investigating') {
+      return NextResponse.json(
+        { success: false, error: 'Resolution already proposed — awaiting confirmation from parties' },
+        { status: 409 }
+      );
+    }
+
     // Ensure the pending_confirmation status exists, or use investigating as fallback
     // We'll store the status as a string since we might not have the enum value
     try {

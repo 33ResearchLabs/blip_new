@@ -129,6 +129,11 @@ export async function POST(request: NextRequest) {
     let rated_type: 'merchant' | 'user';
     let rated_id: string;
 
+    // Prevent self-rating (merchant creating orders with placeholder users)
+    if (rater_id === order.merchant_id && rater_id === order.buyer_merchant_id) {
+      return forbiddenResponse('You cannot rate yourself');
+    }
+
     if (rater_type === 'merchant' && rater_id === order.merchant_id) {
       // Merchant is rating the counterparty
       if (order.buyer_merchant_id) {

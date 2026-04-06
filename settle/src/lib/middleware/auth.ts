@@ -11,7 +11,7 @@ import { getUserById } from '../db/repositories/users';
 import { getMerchantById } from '../db/repositories/merchants';
 import { verifySessionToken } from '../auth/sessionToken';
 import { checkBlacklist } from './blacklist';
-import { hasNoActiveSessions } from '../auth/sessions';
+import { hasNoActiveSessions, isSessionValid } from '../auth/sessions';
 
 // Admin auth secret - MUST be configured via environment variable
 const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
@@ -95,6 +95,7 @@ export interface AuthContext {
   complianceId?: string;
   actorType: 'user' | 'merchant' | 'system' | 'compliance';
   actorId: string;
+  sessionId?: string; // Present when token contains session_id (v2 tokens)
 }
 
 // Production mode: token is the ONLY trusted identity source
@@ -122,6 +123,7 @@ export function getAuthContext(request: NextRequest): AuthContext | null {
       const ctx: AuthContext = {
         actorType: tokenPayload.actorType,
         actorId: tokenPayload.actorId,
+        ...(tokenPayload.sessionId && { sessionId: tokenPayload.sessionId }),
       };
       if (tokenPayload.actorType === 'user') ctx.userId = tokenPayload.actorId;
       if (tokenPayload.actorType === 'merchant') ctx.merchantId = tokenPayload.actorId;
@@ -272,58 +274,55 @@ export async function getVerifiedAuthContext(
   const exists = await actorExistsInDb(auth);
   if (!exists) return null;
 
-  // Session revocation check: reject if actor has no active sessions.
-  // This catches both "logout everywhere" and stale header-only auth in dev mode.
-  // For token-based auth: the access token signature is valid but all sessions revoked.
-  // For header-based auth (dev): the x-merchant-id header is present but no session backs it.
+  // ── Session validation ──────────────────────────────────────────────
+  // v2 tokens (with sessionId): validate the specific session — enables per-session revocation.
+  // v1/legacy tokens (no sessionId): fallback to "has any active session" check.
+  // Dev-mode header auth: validate via refresh cookie's session.
   try {
-    const noSessions = await hasNoActiveSessions(auth.actorId, auth.actorType);
-    if (noSessions) {
-      // In dev mode with header fallback, also clear any cached auth
-      if (!IS_PRODUCTION) {
-        console.warn('[AUTH] Rejecting request — all sessions revoked for', {
+    if (auth.sessionId) {
+      // v2 token: check this specific session (cached, 30s TTL)
+      const valid = await isSessionValid(auth.sessionId);
+      if (!valid) {
+        console.warn('[AUTH] Rejecting request — session revoked or expired', {
+          sessionId: auth.sessionId,
+          actorId: auth.actorId,
+        });
+        return null;
+      }
+    } else {
+      // v1/legacy token or header-only auth: blunt check — does this actor have ANY active session?
+      const noSessions = await hasNoActiveSessions(auth.actorId, auth.actorType);
+      if (noSessions) {
+        console.warn('[AUTH] Rejecting request — no active sessions for actor', {
           actorId: auth.actorId,
           actorType: auth.actorType,
         });
+        return null;
       }
-      return null;
+
+      // Dev-mode header-only auth: also verify refresh cookie backs this request
+      const usedTokenForAuth = request.headers.get('authorization')?.startsWith('Bearer ');
+      if (!IS_PRODUCTION && !usedTokenForAuth) {
+        try {
+          const { REFRESH_TOKEN_COOKIE } = await import('../auth/sessionToken');
+          const { getSessionIdFromRefreshCookie } = await import('../auth/sessions');
+          const refreshCookie = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+          if (!refreshCookie) {
+            console.warn('[AUTH] Rejecting header-only auth — no refresh cookie', { actorId: auth.actorId });
+            return null;
+          }
+          const cookieSessionId = await getSessionIdFromRefreshCookie(refreshCookie);
+          if (!cookieSessionId) {
+            console.warn('[AUTH] Rejecting header auth — refresh cookie session invalid', { actorId: auth.actorId });
+            return null;
+          }
+        } catch {
+          // If session check fails, allow the request (don't break dev)
+        }
+      }
     }
   } catch {
     // DB error — don't block requests if sessions table is unavailable
-  }
-
-  // Additional dev-mode guard: if auth came from header fallback (no valid token),
-  // verify the refresh cookie is still valid. This prevents stale x-merchant-id
-  // headers from bypassing session revocation in development.
-  const usedTokenForAuth = request.headers.get('authorization')?.startsWith('Bearer ');
-  if (!IS_PRODUCTION && !usedTokenForAuth) {
-    try {
-      const { REFRESH_TOKEN_COOKIE } = await import('../auth/sessionToken');
-      const refreshCookie = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
-      if (!refreshCookie) {
-        // No refresh cookie = no valid session. Header-only auth is not enough.
-        console.warn('[AUTH] Rejecting header-only auth — no refresh cookie', {
-          actorId: auth.actorId,
-        });
-        return null;
-      }
-      // Verify the refresh token's session isn't revoked
-      const { hashToken } = await import('../auth/sessions');
-      const { queryOne } = await import('../db');
-      const tokenHash = hashToken(refreshCookie);
-      const session = await queryOne<{ is_revoked: boolean; expires_at: string }>(
-        'SELECT is_revoked, expires_at FROM sessions WHERE refresh_token_hash = $1',
-        [tokenHash]
-      );
-      if (!session || session.is_revoked || new Date(session.expires_at) < new Date()) {
-        console.warn('[AUTH] Rejecting header auth — refresh token session revoked/expired', {
-          actorId: auth.actorId,
-        });
-        return null;
-      }
-    } catch {
-      // If session table or cookie check fails, allow the request (don't break dev)
-    }
   }
 
   // Phase 2 migration metrics: track token vs header auth usage
@@ -378,8 +377,11 @@ const legacyAuthLogTimestamps = new Map<string, number>();
 // In-memory counters for auth method adoption tracking
 const authMigrationMetrics = { tokenAuth: 0, headerAuth: 0, sensitiveTokenAuth: 0, sensitiveHeaderAuth: 0 };
 
-// Phase 3 env flag — when true, sensitive routes REQUIRE a valid token
-const AUTH_TOKEN_REQUIRED = process.env.AUTH_TOKEN_REQUIRED === 'true';
+// Phase 3 env flag — sensitive routes REQUIRE a valid token
+// Defaults to true in production; set AUTH_TOKEN_REQUIRED=false to opt out (dev only)
+const AUTH_TOKEN_REQUIRED = process.env.NODE_ENV === 'production'
+  ? process.env.AUTH_TOKEN_REQUIRED !== 'false'
+  : process.env.AUTH_TOKEN_REQUIRED === 'true';
 
 /**
  * One-liner auth gate for routes.

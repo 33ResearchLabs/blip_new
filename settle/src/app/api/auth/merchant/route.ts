@@ -4,7 +4,8 @@ import { verifyWalletSignature } from '@/lib/solana/verifySignature';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { requireTokenAuth } from '@/lib/middleware/auth';
 import { updateMerchantOnlineStatus, createDefaultMerchantOffers, serializeMerchant } from '@/lib/db/repositories/merchants';
-import { generateSessionToken, generateAccessToken, setSessionOnResponse } from '@/lib/auth/sessionToken';
+import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { createSession, getSessionIdFromRefreshCookie } from '@/lib/auth/sessions';
 import { validateUsername } from '@/lib/validation/username';
 import crypto from 'crypto';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
@@ -90,12 +91,30 @@ export async function GET(request: NextRequest) {
       console.log('[API] Merchant session restored, set online:', merchant.id);
 
       const payload = { actorId: merchant.id, actorType: 'merchant' as const };
-      const sessionToken = generateSessionToken(payload);
-      const accessToken = generateAccessToken(payload);
 
-      // check_session: issue new access tokens but do NOT create a new DB session.
-      // The refresh cookie from the original login is still valid.
-      return NextResponse.json({
+      // Look up existing session from refresh cookie to embed sessionId in v2 token.
+      // If no refresh cookie, create a new session (ensures session exists for revocation).
+      let checkSessionId: string | undefined;
+      const refreshCookie = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+      if (refreshCookie) {
+        try {
+          const existingSessionId = await getSessionIdFromRefreshCookie(refreshCookie);
+          if (existingSessionId) checkSessionId = existingSessionId;
+        } catch { /* proceed without sessionId */ }
+      }
+      // If no valid refresh cookie session, create a new one
+      let checkRefreshToken: string | null = null;
+      if (!checkSessionId) {
+        try {
+          const sess = await createSession(payload, request as any);
+          if (sess) { checkSessionId = sess.sessionId; checkRefreshToken = sess.refreshToken; }
+        } catch { /* proceed without session tracking */ }
+      }
+
+      const sessionToken = generateSessionToken(payload);
+      const accessToken = generateAccessToken({ ...payload, sessionId: checkSessionId });
+
+      const checkResponse = NextResponse.json({
         success: true,
         data: {
           valid: true,
@@ -104,6 +123,9 @@ export async function GET(request: NextRequest) {
           ...(accessToken && { accessToken }),
         },
       });
+      // Set new refresh cookie if we created a new session
+      if (checkRefreshToken) checkResponse.cookies.set(REFRESH_TOKEN_COOKIE, checkRefreshToken, REFRESH_COOKIE_OPTIONS);
+      return checkResponse;
     }
 
     if (action === 'wallet_login' && wallet_address) {
@@ -263,7 +285,19 @@ export async function POST(request: NextRequest) {
 
         const walletPayload = { actorId: merchant.id, actorType: 'merchant' as const };
         const token = generateSessionToken(walletPayload);
-        const walletAccessToken = generateAccessToken(walletPayload);
+
+        // Create session first to get sessionId for v2 access token
+        let walletSessionId: string | undefined;
+        let walletRefreshToken: string | undefined;
+        try {
+          const session = await createSession(walletPayload, request);
+          if (session) {
+            walletSessionId = session.sessionId;
+            walletRefreshToken = session.refreshToken;
+          }
+        } catch { /* fallback: no sessionId */ }
+
+        const walletAccessToken = generateAccessToken({ ...walletPayload, sessionId: walletSessionId });
 
         const walletResponse = NextResponse.json({
           success: true,
@@ -275,7 +309,10 @@ export async function POST(request: NextRequest) {
             ...(walletAccessToken && { accessToken: walletAccessToken }),
           },
         });
-        await setSessionOnResponse(walletResponse, walletPayload, request);
+
+        if (walletRefreshToken) {
+          walletResponse.cookies.set(REFRESH_TOKEN_COOKIE, walletRefreshToken, REFRESH_COOKIE_OPTIONS);
+        }
         return walletResponse;
       }
     }
@@ -386,7 +423,19 @@ export async function POST(request: NextRequest) {
 
       const createPayload = { actorId: merchant.id, actorType: 'merchant' as const };
       const createToken = generateSessionToken(createPayload);
-      const createAccessTk = generateAccessToken(createPayload);
+
+      // Create session first to get sessionId for v2 access token
+      let createSessionId: string | undefined;
+      let createRefreshToken: string | undefined;
+      try {
+        const session = await createSession(createPayload, request);
+        if (session) {
+          createSessionId = session.sessionId;
+          createRefreshToken = session.refreshToken;
+        }
+      } catch { /* fallback: no sessionId */ }
+
+      const createAccessTk = generateAccessToken({ ...createPayload, sessionId: createSessionId });
       const createResponse = NextResponse.json({
         success: true,
         data: {
@@ -395,7 +444,10 @@ export async function POST(request: NextRequest) {
           ...(createAccessTk && { accessToken: createAccessTk }),
         },
       });
-      await setSessionOnResponse(createResponse, createPayload, request);
+
+      if (createRefreshToken) {
+        createResponse.cookies.set(REFRESH_TOKEN_COOKIE, createRefreshToken, REFRESH_COOKIE_OPTIONS);
+      }
       return createResponse;
     }
 
@@ -701,7 +753,19 @@ export async function POST(request: NextRequest) {
 
       const emailPayload = { actorId: merchant.id, actorType: 'merchant' as const };
       const emailLoginToken = generateSessionToken(emailPayload);
-      const emailAccessTk = generateAccessToken(emailPayload);
+
+      // Create session first to get sessionId for v2 access token
+      let emailSessionId: string | undefined;
+      let emailRefreshToken: string | undefined;
+      try {
+        const session = await createSession(emailPayload, request);
+        if (session) {
+          emailSessionId = session.sessionId;
+          emailRefreshToken = session.refreshToken;
+        }
+      } catch { /* fallback: no sessionId */ }
+
+      const emailAccessTk = generateAccessToken({ ...emailPayload, sessionId: emailSessionId });
 
       const emailResponse = NextResponse.json({
         success: true,
@@ -711,7 +775,10 @@ export async function POST(request: NextRequest) {
           ...(emailAccessTk && { accessToken: emailAccessTk }),
         },
       });
-      await setSessionOnResponse(emailResponse, emailPayload, request);
+
+      if (emailRefreshToken) {
+        emailResponse.cookies.set(REFRESH_TOKEN_COOKIE, emailRefreshToken, REFRESH_COOKIE_OPTIONS);
+      }
       return emailResponse;
     }
 

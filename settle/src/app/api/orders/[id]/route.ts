@@ -72,9 +72,9 @@ export async function GET(
 
     // Resolve merchant identity: when x-merchant-id header is present,
     // the caller may be acting as a merchant (M2M buyer).
-    // Override auth context so canAccessOrder checks the right identity.
+    // Only trust the header if the authenticated actor is already a merchant.
     const getMerchantId = request.headers.get("x-merchant-id");
-    if (getMerchantId && auth.actorType === "user") {
+    if (getMerchantId && auth.actorType === "merchant") {
       auth.merchantId = getMerchantId;
     }
 
@@ -162,6 +162,7 @@ export async function PATCH(
     const actorMatchesAuth = actor_id === auth.actorId;
     const actorMatchesMerchantHeader =
       actor_type === "merchant" &&
+      auth.actorType === "merchant" &&
       headerMerchantId &&
       actor_id === headerMerchantId;
     if (!actorMatchesAuth && !actorMatchesMerchantHeader) {
@@ -178,16 +179,23 @@ export async function PATCH(
     }
 
     // Verify access to this order (now with correct actor identity resolved above)
-    // Skip access check when a merchant is joining/claiming an order they're not yet assigned to:
-    // - 'accepted': merchant accepting a pending order
-    // - 'payment_pending': merchant claiming an escrowed order (signToClaimOrder)
-    // - 'payment_sent': merchant claiming + paying an escrowed order in one step
-    const isSkipAccessCheck = [
-      "accepted",
-      "payment_pending",
-      "payment_sent",
-    ].includes(body.status);
-    if (!isSkipAccessCheck) {
+    // For claim transitions: skip canAccessOrder (merchant isn't assigned yet),
+    // but verify the order is actually unclaimed to prevent hijacking.
+    const isClaimTransition = ["accepted", "payment_pending", "payment_sent"].includes(body.status);
+    if (isClaimTransition) {
+      // Validate the order is claimable — don't skip auth entirely
+      const { query: checkQuery } = await import("@/lib/db");
+      const [targetOrder] = await checkQuery<{ merchant_id: string | null; buyer_merchant_id: string | null; status: string }>(
+        `SELECT merchant_id, buyer_merchant_id, status FROM orders WHERE id = $1`,
+        [id]
+      );
+      if (!targetOrder) return notFoundResponse("Order");
+      // Block if already assigned to a DIFFERENT merchant
+      const assignedMerchant = targetOrder.buyer_merchant_id || targetOrder.merchant_id;
+      if (assignedMerchant && assignedMerchant !== auth.actorId) {
+        return forbiddenResponse("Order already assigned to another merchant");
+      }
+    } else {
       const canAccess = await canAccessOrder(auth, id);
       if (!canAccess) {
         logger.auth.forbidden(

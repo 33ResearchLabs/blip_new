@@ -7,10 +7,16 @@ import {
   successResponse,
   errorResponse,
 } from '@/lib/middleware/auth';
+import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
 import { logger } from '@/lib/logger';
+import { guardAuthVelocity } from '@/lib/guards';
 
 // Connect wallet - creates user if not exists
 export async function POST(request: NextRequest) {
+  // Rate limit: prevent brute-force wallet connection attempts
+  const rateLimitResponse = await checkRateLimit(request, 'auth:wallet', AUTH_LIMIT);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body = await request.json();
 
@@ -22,6 +28,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { wallet_address, type, name } = parseResult.data;
+
+    // Detection guard: log warning for suspicious auth velocity
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim()
+      || request.headers.get('x-real-ip') || 'unknown';
+    guardAuthVelocity(ip, wallet_address);
 
     if (type === 'merchant') {
       // Check if merchant exists
