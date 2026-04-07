@@ -34,9 +34,19 @@ import {
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/context/ModalContext";
-import { colors, sectionLabel, cardLabel as cardLabelStyle, mono } from "@/lib/design/theme";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
+
+// Reusable class strings — mirror Card / SectionLabel / CardLabel conventions
+const CARD = "bg-surface-card border border-border-subtle";
+const CARD_STRONG = "bg-white/[0.08] border border-white/10";
+const AMBER_CARD = "bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.2)]";
+const AMBER_CARD_STRONG = "bg-[rgba(245,158,11,0.12)] border border-[rgba(245,158,11,0.25)]";
+const RED_CARD = "bg-[rgba(239,68,68,0.10)] border border-[rgba(239,68,68,0.20)]";
+const SHEET_BG = "bg-surface-card"; // use as overlay on surface-base (sheet bg = base + card overlay); approximated
+const PRIMARY_BTN = "bg-white text-surface-base";
+const SECONDARY_BTN = "bg-white/[0.08] text-text-primary border border-white/10";
+const MUTED_BTN = "bg-white/[0.08] text-text-secondary";
 
 export interface OrderDetailScreenProps {
   setScreen: (s: Screen) => void;
@@ -191,6 +201,8 @@ export const OrderDetailScreen = ({
   playSound,
   maxW,
 }: OrderDetailScreenProps) => {
+  // Suppress unused-param lint: `copied` is part of the prop API but not rendered here.
+  void copied;
   const [showEmojiPicker, setShowEmojiPicker] = useLocalState(false);
   const [isUploading, setIsUploading] = useLocalState(false);
   const [copiedField, setCopiedField] = useLocalState<string | null>(null);
@@ -335,71 +347,44 @@ export const OrderDetailScreen = ({
   }, []);
 
   return (
-    <div style={{ background: colors.bg.primary, minHeight: "100%" }}>
+    <div className="min-h-full bg-surface-base">
       <div className="h-12" />
 
       <div className="px-5 py-4 flex items-center">
         <button
           onClick={() => setScreen(previousScreen || "home")}
-          className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1"
-          style={{
-            background: colors.bg.secondary,
-            border: `1px solid ${colors.border.subtle}`,
-          }}
+          className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle"
         >
-          <ChevronLeft
-            className="w-5 h-5"
-            style={{ color: colors.text.secondary }}
-          />
+          <ChevronLeft className="w-5 h-5 text-text-secondary" />
         </button>
-        <h1 className="flex-1 text-center text-[17px] font-semibold pr-8" style={{ color: colors.text.primary }}>
+        <h1 className="flex-1 text-center text-[17px] font-semibold pr-8 text-text-primary">
           Order Details
         </h1>
       </div>
 
       <div className="flex-1 px-5 overflow-auto pb-6">
         {/* Order Summary */}
-        <div
-          className="rounded-2xl p-4 mb-4"
-          style={{
-            background: colors.surface.card,
-            border: `1px solid ${colors.border.subtle}`,
-          }}
-        >
+        <div className={`rounded-2xl p-4 mb-4 ${CARD}`}>
           <div className="flex items-center gap-3 mb-4">
             <div
-              className="w-10 h-10 rounded-full flex items-center justify-center"
-              style={{
-                background:
-                  activeOrder.type === "buy"
-                    ? "rgba(16,185,129,0.15)"
-                    : "rgba(239,68,68,0.15)",
-              }}
+              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                activeOrder.type === "buy"
+                  ? "bg-[rgba(16,185,129,0.15)]"
+                  : "bg-[rgba(239,68,68,0.15)]"
+              }`}
             >
               {activeOrder.type === "buy" ? (
-                <ArrowDownLeft
-                  className="w-5 h-5"
-                  style={{ color: "#10b981" }}
-                />
+                <ArrowDownLeft className="w-5 h-5 text-[#10b981]" />
               ) : (
-                <ArrowUpRight
-                  className="w-5 h-5"
-                  style={{ color: "#ef4444" }}
-                />
+                <ArrowUpRight className="w-5 h-5 text-[#ef4444]" />
               )}
             </div>
             <div>
-              <p
-                className="text-[17px] font-semibold"
-                style={{ color: colors.text.primary }}
-              >
+              <p className="text-[17px] font-semibold text-text-primary">
                 {activeOrder.type === "buy" ? "Buying" : "Selling"}{" "}
                 {parseFloat(activeOrder.cryptoAmount).toFixed(2)} USDC
               </p>
-              <p
-                className="text-[13px]"
-                style={{ color: colors.text.secondary }}
-              >
+              <p className="text-[13px] text-text-secondary">
                 {"\u062F.\u0625"}{" "}
                 {parseFloat(activeOrder.fiatAmount).toLocaleString()}
               </p>
@@ -408,26 +393,24 @@ export const OrderDetailScreen = ({
 
           {/* Progress */}
           <div className="flex items-center gap-1.5 mb-2">
-            {[1, 2, 3, 4].map((step) => (
-              <div
-                key={step}
-                className="flex-1 h-1.5 rounded-full"
-                style={{
-                  background:
-                    activeOrder.status === "cancelled" ||
-                    activeOrder.status === "expired"
-                      ? "rgba(239,68,68,0.4)"
-                      : step <= activeOrder.step
-                        ? colors.text.primary
-                        : colors.text.quaternary,
-                }}
-              />
-            ))}
+            {[1, 2, 3, 4].map((step) => {
+              // Dynamic: per-step computed background color based on status/step.
+              const bg =
+                activeOrder.status === "cancelled" ||
+                activeOrder.status === "expired"
+                  ? "bg-[rgba(239,68,68,0.4)]"
+                  : step <= activeOrder.step
+                    ? "bg-text-primary"
+                    : "bg-text-quaternary";
+              return (
+                <div
+                  key={step}
+                  className={`flex-1 h-1.5 rounded-full ${bg}`}
+                />
+              );
+            })}
           </div>
-          <p
-            className="text-[13px]"
-            style={{ color: colors.text.secondary }}
-          >
+          <p className="text-[13px] text-text-secondary">
             {activeOrder.status === "cancelled"
               ? "Order Cancelled"
               : activeOrder.status === "expired"
@@ -438,70 +421,41 @@ export const OrderDetailScreen = ({
 
         {/* Escrow Status Section - Show for sell orders with escrow */}
         {activeOrder.type === "sell" && activeOrder.escrowTxHash && (
-          <div
-            className="rounded-2xl p-4 mb-4"
-            style={{
-              background: colors.surface.card,
-              border: `1px solid ${colors.border.subtle}`,
-            }}
-          >
+          <div className={`rounded-2xl p-4 mb-4 ${CARD}`}>
             <div className="flex items-center gap-3 mb-3">
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center"
-                style={{ background: colors.surface.active }}
-              >
-                <Lock
-                  className="w-5 h-5"
-                  style={{ color: colors.text.secondary }}
-                />
+              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]">
+                <Lock className="w-5 h-5 text-text-secondary" />
               </div>
               <div className="flex-1">
-                <p
-                  className="text-[15px] font-semibold"
-                  style={{ color: colors.text.primary }}
-                >
+                <p className="text-[15px] font-semibold text-text-primary">
                   Escrow Locked
                 </p>
-                <p
-                  className="text-[13px]"
-                  style={{ color: colors.text.secondary }}
-                >
+                <p className="text-[13px] text-text-secondary">
                   Your USDC is secured on-chain
                 </p>
               </div>
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center"
-                style={{ background: colors.surface.active }}
-              >
-                <Check className="w-4 h-4" style={{ color: colors.text.primary }} />
+              <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/[0.08]">
+                <Check className="w-4 h-4 text-text-primary" />
               </div>
             </div>
 
             <div className="space-y-2 text-[13px]">
               {activeOrder.escrowTradeId && (
                 <div className="flex items-center justify-between">
-                  <span style={{ color: colors.text.tertiary }}>
-                    Trade ID
-                  </span>
-                  <span
-                    className="font-mono font-semibold"
-                    style={{ color: colors.text.primary }}
-                  >
+                  <span className="text-text-tertiary">Trade ID</span>
+                  <span className="font-mono font-semibold text-text-primary">
                     #{activeOrder.escrowTradeId}
                   </span>
                 </div>
               )}
               {activeOrder.escrowTxHash && (
                 <div className="flex items-center justify-between">
-                  <span style={{ color: colors.text.tertiary }}>
-                    Transaction
-                  </span>
+                  <span className="text-text-tertiary">Transaction</span>
                   <a
                     href={`https://explorer.solana.com/tx/${activeOrder.escrowTxHash}?cluster=devnet`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1"
-                    style={{ color: colors.text.secondary }}
+                    className="flex items-center gap-1 text-text-secondary"
                   >
                     <span className="font-mono">
                       {activeOrder.escrowTxHash.slice(0, 8)}...
@@ -522,33 +476,17 @@ export const OrderDetailScreen = ({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl p-4 mb-4"
-              style={{
-                background: colors.surface.card,
-                border: `1px solid ${colors.border.subtle}`,
-              }}
+              className={`rounded-2xl p-4 mb-4 ${CARD}`}
             >
               <div className="flex items-center gap-3 mb-3">
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ background: colors.surface.active }}
-                >
-                  <Clock
-                    className="w-5 h-5"
-                    style={{ color: colors.text.secondary }}
-                  />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]">
+                  <Clock className="w-5 h-5 text-text-secondary" />
                 </div>
                 <div className="flex-1">
-                  <p
-                    className="text-[15px] font-semibold"
-                    style={{ color: colors.text.primary }}
-                  >
+                  <p className="text-[15px] font-semibold text-text-primary">
                     Extension Requested
                   </p>
-                  <p
-                    className="text-[13px]"
-                    style={{ color: colors.text.secondary }}
-                  >
+                  <p className="text-[13px] text-text-secondary">
                     Merchant wants +
                     {extensionRequest.extensionMinutes >= 60
                       ? `${Math.round(extensionRequest.extensionMinutes / 60)} hour${Math.round(extensionRequest.extensionMinutes / 60) > 1 ? "s" : ""}`
@@ -561,8 +499,7 @@ export const OrderDetailScreen = ({
                   whileTap={{ scale: 0.97 }}
                   onClick={() => respondToExtension(true)}
                   disabled={requestingExtension}
-                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50"
-                  style={{ background: colors.accent.primary, color: colors.accent.text }}
+                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-white text-surface-base"
                 >
                   {requestingExtension ? (
                     <Loader2 className="w-4 h-4 animate-spin mx-auto" />
@@ -574,19 +511,12 @@ export const OrderDetailScreen = ({
                   whileTap={{ scale: 0.97 }}
                   onClick={() => respondToExtension(false)}
                   disabled={requestingExtension}
-                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50"
-                  style={{
-                    background: colors.surface.active,
-                    color: colors.text.secondary,
-                  }}
+                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-white/[0.08] text-text-secondary"
                 >
                   Decline
                 </motion.button>
               </div>
-              <p
-                className="text-[11px] text-center mt-2"
-                style={{ color: colors.text.tertiary }}
-              >
+              <p className="text-[11px] text-center mt-2 text-text-tertiary">
                 Extensions used: {extensionRequest.extensionCount}/
                 {extensionRequest.maxExtensions}
               </p>
@@ -601,18 +531,17 @@ export const OrderDetailScreen = ({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl p-4 mb-4"
-              style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
+              className={`rounded-2xl p-4 mb-4 ${AMBER_CARD}`}
             >
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.15)' }}>
-                  <X className="w-5 h-5" style={{ color: '#f59e0b' }} />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(245,158,11,0.15)]">
+                  <X className="w-5 h-5 text-[#f59e0b]" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-[15px] font-semibold" style={{ color: '#f59e0b' }}>
+                  <p className="text-[15px] font-semibold text-[#f59e0b]">
                     Cancel Requested
                   </p>
-                  <p className="text-[13px]" style={{ color: 'rgba(245,158,11,0.7)' }}>
+                  <p className="text-[13px] text-[rgba(245,158,11,0.7)]">
                     Merchant wants to cancel: {activeOrder.cancelRequest.reason}
                   </p>
                 </div>
@@ -622,8 +551,7 @@ export const OrderDetailScreen = ({
                   whileTap={{ scale: 0.97 }}
                   onClick={() => respondToCancelRequest(true)}
                   disabled={isRequestingCancel}
-                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50"
-                  style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}
+                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-[rgba(245,158,11,0.15)] text-[#f59e0b]"
                 >
                   {isRequestingCancel ? (
                     <Loader2 className="w-4 h-4 animate-spin mx-auto" />
@@ -635,11 +563,7 @@ export const OrderDetailScreen = ({
                   whileTap={{ scale: 0.97 }}
                   onClick={() => respondToCancelRequest(false)}
                   disabled={isRequestingCancel}
-                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50"
-                  style={{
-                    background: colors.surface.active,
-                    color: colors.text.secondary,
-                  }}
+                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-white/[0.08] text-text-secondary"
                 >
                   Continue Order
                 </motion.button>
@@ -655,18 +579,17 @@ export const OrderDetailScreen = ({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl p-4 mb-4"
-              style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
+              className={`rounded-2xl p-4 mb-4 ${AMBER_CARD}`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.15)' }}>
-                  <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#f59e0b' }} />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(245,158,11,0.15)]">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#f59e0b]" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-[15px] font-semibold" style={{ color: '#f59e0b' }}>
+                  <p className="text-[15px] font-semibold text-[#f59e0b]">
                     Cancel Request Sent
                   </p>
-                  <p className="text-[13px]" style={{ color: 'rgba(245,158,11,0.7)' }}>
+                  <p className="text-[13px] text-[rgba(245,158,11,0.7)]">
                     Waiting for merchant to approve
                   </p>
                 </div>
@@ -683,18 +606,17 @@ export const OrderDetailScreen = ({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl p-4 mb-4"
-              style={{ background: colors.warningDim, border: `1px solid ${colors.warningBorder}` }}
+              className={`rounded-2xl p-4 mb-4 ${AMBER_CARD_STRONG}`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.15)' }}>
-                  <AlertTriangle className="w-5 h-5" style={{ color: colors.warning }} />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(245,158,11,0.15)]">
+                  <AlertTriangle className="w-5 h-5 text-[#F59E0B]" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-[15px] font-semibold" style={{ color: colors.warning }}>
+                  <p className="text-[15px] font-semibold text-[#F59E0B]">
                     Inactivity Warning
                   </p>
-                  <p className="text-[13px]" style={{ color: 'rgba(245,158,11,0.7)' }}>
+                  <p className="text-[13px] text-[rgba(245,158,11,0.7)]">
                     No activity for 15+ minutes. Complete this order soon or it
                     will be auto-cancelled/disputed.
                   </p>
@@ -709,18 +631,17 @@ export const OrderDetailScreen = ({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl p-4 mb-4"
-              style={{ background: colors.errorDim, border: `1px solid ${colors.errorBorder}` }}
+              className={`rounded-2xl p-4 mb-4 ${RED_CARD}`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)' }}>
-                  <Clock className="w-5 h-5" style={{ color: colors.error }} />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(239,68,68,0.15)]">
+                  <Clock className="w-5 h-5 text-[#EF4444]" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-[15px] font-semibold" style={{ color: colors.error }}>
+                  <p className="text-[15px] font-semibold text-[#EF4444]">
                     Dispute Timer
                   </p>
-                  <p className="text-[13px]" style={{ color: 'rgba(239,68,68,0.7)' }}>
+                  <p className="text-[13px] text-[rgba(239,68,68,0.7)]">
                     {new Date(activeOrder.disputeAutoResolveAt) > new Date()
                       ? `Auto-refund to escrow funder in ${Math.max(0, Math.round((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) / 3600000))}h ${Math.max(0, Math.round(((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) % 3600000) / 60000))}m`
                       : "Auto-refund processing..."}
@@ -737,10 +658,7 @@ export const OrderDetailScreen = ({
           (activeOrder.step === 3 ? (
             /* Payment sent: fiat sender picks duration */
             <div className="mb-4">
-              <p
-                className="text-[12px] font-medium mb-2 flex items-center gap-1.5"
-                style={{ color: colors.text.tertiary }}
-              >
+              <p className="text-[12px] font-medium mb-2 flex items-center gap-1.5 text-text-tertiary">
                 <Clock className="w-3.5 h-3.5" />
                 Request Time Extension
               </p>
@@ -755,12 +673,7 @@ export const OrderDetailScreen = ({
                     whileTap={{ scale: 0.95 }}
                     onClick={() => requestExtension(opt.minutes)}
                     disabled={requestingExtension}
-                    className="flex-1 py-2.5 rounded-xl text-[13px] font-medium flex items-center justify-center gap-1 disabled:opacity-50 transition-colors"
-                    style={{
-                      background: colors.surface.card,
-                      border: `1px solid ${colors.border.subtle}`,
-                      color: colors.text.secondary,
-                    }}
+                    className={`flex-1 py-2.5 rounded-xl text-[13px] font-medium flex items-center justify-center gap-1 disabled:opacity-50 transition-colors text-text-secondary ${CARD}`}
                   >
                     {requestingExtension ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -777,12 +690,7 @@ export const OrderDetailScreen = ({
               whileTap={{ scale: 0.97 }}
               onClick={() => requestExtension()}
               disabled={requestingExtension}
-              className="w-full py-3 rounded-xl text-[13px] font-medium mb-4 flex items-center justify-center gap-2 disabled:opacity-50"
-              style={{
-                background: colors.surface.card,
-                border: `1px solid ${colors.border.subtle}`,
-                color: colors.text.secondary,
-              }}
+              className={`w-full py-3 rounded-xl text-[13px] font-medium mb-4 flex items-center justify-center gap-2 disabled:opacity-50 text-text-secondary ${CARD}`}
             >
               {requestingExtension ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -798,18 +706,18 @@ export const OrderDetailScreen = ({
         {/* Cancelled/Expired Banner */}
         {(activeOrder.status === "cancelled" ||
           activeOrder.status === "expired") && (
-          <div className="mb-4 p-4 rounded-2xl" style={{ background: colors.errorDim, border: `1px solid ${colors.errorBorder}` }}>
+          <div className={`mb-4 p-4 rounded-2xl ${RED_CARD}`}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)' }}>
-                <X className="w-5 h-5" style={{ color: '#ef4444' }} />
+              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(239,68,68,0.15)]">
+                <X className="w-5 h-5 text-[#ef4444]" />
               </div>
               <div>
-                <p className="text-[15px] font-semibold" style={{ color: '#ef4444' }}>
+                <p className="text-[15px] font-semibold text-[#ef4444]">
                   {activeOrder.status === "cancelled"
                     ? "Order Cancelled"
                     : "Order Expired"}
                 </p>
-                <p className="text-[13px]" style={{ color: 'rgba(239,68,68,0.7)' }}>
+                <p className="text-[13px] text-[rgba(239,68,68,0.7)]">
                   {activeOrder.status === "cancelled"
                     ? "This trade was cancelled and did not complete."
                     : "This order expired before it could be completed."}
@@ -824,49 +732,29 @@ export const OrderDetailScreen = ({
           activeOrder.status !== "expired" && (
             <div className="space-y-3">
               {/* Step 1 */}
-              <div
-                className="p-4 rounded-2xl"
-                style={
-                  activeOrder.step >= 1
-                    ? {
-                        background: colors.surface.card,
-                        border: `1px solid ${colors.border.subtle}`,
-                      }
-                    : {
-                        background: colors.surface.card,
-                        border: `1px solid ${colors.border.subtle}`,
-                      }
-                }
-              >
+              <div className={`p-4 rounded-2xl ${CARD}`}>
                 <div className="flex items-center gap-3">
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0"
-                    style={
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
                       activeOrder.step >= 1
-                        ? { background: colors.accent.primary, color: colors.accent.text }
-                        : {
-                            background: colors.surface.card,
-                            color: colors.text.tertiary,
-                          }
-                    }
+                        ? "bg-white text-surface-base"
+                        : "bg-surface-card text-text-tertiary"
+                    }`}
                   >
                     {activeOrder.step > 1 ? <Check className="w-4 h-4" /> : "1"}
                   </div>
                   <div>
                     <p
-                      className="text-[15px] font-medium"
-                      style={{
-                        color:
-                          activeOrder.step >= 1 ? colors.text.primary : colors.text.tertiary,
-                      }}
+                      className={`text-[15px] font-medium ${
+                        activeOrder.step >= 1
+                          ? "text-text-primary"
+                          : "text-text-tertiary"
+                      }`}
                     >
                       Order created
                     </p>
                     {activeOrder.step >= 1 && (
-                      <p
-                        className="text-[13px]"
-                        style={{ color: colors.text.secondary }}
-                      >
+                      <p className="text-[13px] text-text-secondary">
                         {activeOrder.dbStatus === "pending"
                           ? "Waiting for merchant..."
                           : `Matched with ${activeOrder.merchant.name}`}
@@ -876,43 +764,22 @@ export const OrderDetailScreen = ({
                     {activeOrder.step === 1 &&
                       activeOrder.type === "sell" &&
                       activeOrder.dbStatus === "escrowed" && (
-                        <div
-                          className="mt-3 rounded-xl p-4"
-                          style={{
-                            background: colors.surface.active,
-                            border: `1px solid ${colors.border.medium}`,
-                          }}
-                        >
+                        <div className={`mt-3 rounded-xl p-4 ${CARD_STRONG}`}>
                           <div className="flex items-center gap-3 mb-2">
-                            <div
-                              className="w-8 h-8 rounded-full flex items-center justify-center"
-                              style={{ background: colors.surface.active }}
-                            >
-                              <Loader2
-                                className="w-4 h-4 animate-spin"
-                                style={{ color: colors.text.secondary }}
-                              />
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/[0.08]">
+                              <Loader2 className="w-4 h-4 animate-spin text-text-secondary" />
                             </div>
                             <div>
-                              <p
-                                className="text-[14px] font-medium"
-                                style={{ color: colors.text.primary }}
-                              >
+                              <p className="text-[14px] font-medium text-text-primary">
                                 Waiting for Merchant
                               </p>
-                              <p
-                                className="text-[12px]"
-                                style={{ color: colors.text.secondary }}
-                              >
+                              <p className="text-[12px] text-text-secondary">
                                 Your USDT is locked. Waiting for merchant to
                                 claim
                               </p>
                             </div>
                           </div>
-                          <p
-                            className="text-[12px]"
-                            style={{ color: colors.text.tertiary }}
-                          >
+                          <p className="text-[12px] text-text-tertiary">
                             Your USDT is secured in escrow on-chain. A merchant
                             will claim this order and send fiat to your bank
                             account.
@@ -924,41 +791,24 @@ export const OrderDetailScreen = ({
               </div>
 
               {/* Step 2 */}
-              <div
-                className="p-4 rounded-2xl"
-                style={
-                  activeOrder.step >= 2
-                    ? {
-                        background: colors.surface.card,
-                        border: `1px solid ${colors.border.subtle}`,
-                      }
-                    : {
-                        background: colors.surface.card,
-                        border: `1px solid ${colors.border.subtle}`,
-                      }
-                }
-              >
+              <div className={`p-4 rounded-2xl ${CARD}`}>
                 <div className="flex items-start gap-3">
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0"
-                    style={
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
                       activeOrder.step >= 2
-                        ? { background: colors.accent.primary, color: colors.accent.text }
-                        : {
-                            background: colors.surface.card,
-                            color: colors.text.tertiary,
-                          }
-                    }
+                        ? "bg-white text-surface-base"
+                        : "bg-surface-card text-text-tertiary"
+                    }`}
                   >
                     {activeOrder.step > 2 ? <Check className="w-4 h-4" /> : "2"}
                   </div>
                   <div className="flex-1">
                     <p
-                      className="text-[15px] font-medium"
-                      style={{
-                        color:
-                          activeOrder.step >= 2 ? colors.text.primary : colors.text.tertiary,
-                      }}
+                      className={`text-[15px] font-medium ${
+                        activeOrder.step >= 2
+                          ? "text-text-primary"
+                          : "text-text-tertiary"
+                      }`}
                     >
                       {activeOrder.type === "buy"
                         ? activeOrder.merchant.paymentMethod === "cash"
@@ -970,26 +820,11 @@ export const OrderDetailScreen = ({
                     {/* Funds Locked indicator - show when escrow is locked */}
                     {activeOrder.step === 2 &&
                       activeOrder.dbStatus === "escrowed" && (
-                        <div
-                          className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2"
-                          style={{
-                            background: colors.surface.active,
-                            border: `1px solid ${colors.border.medium}`,
-                          }}
-                        >
-                          <div
-                            className="w-5 h-5 rounded-full flex items-center justify-center"
-                            style={{ background: colors.surface.active }}
-                          >
-                            <Lock
-                              className="w-3 h-3"
-                              style={{ color: colors.text.primary }}
-                            />
+                        <div className={`mt-2 flex items-center gap-2 rounded-lg px-3 py-2 ${CARD_STRONG}`}>
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center bg-white/[0.08]">
+                            <Lock className="w-3 h-3 text-text-primary" />
                           </div>
-                          <span
-                            className="text-[13px] font-medium"
-                            style={{ color: colors.text.primary }}
-                          >
+                          <span className="text-[13px] font-medium text-text-primary">
                             {activeOrder.type === "buy"
                               ? "Funds locked in escrow"
                               : "Your USDT locked in escrow"}
@@ -1002,48 +837,24 @@ export const OrderDetailScreen = ({
                       activeOrder.type === "buy" &&
                       activeOrder.dbStatus !== "escrowed" && (
                         <div className="mt-3 space-y-3">
-                          <div
-                            className="rounded-xl p-4"
-                            style={{
-                              background: colors.surface.active,
-                              border: `1px solid ${colors.border.medium}`,
-                            }}
-                          >
+                          <div className={`rounded-xl p-4 ${CARD_STRONG}`}>
                             <div className="flex items-center gap-3 mb-3">
-                              <div
-                                className="w-10 h-10 rounded-full flex items-center justify-center"
-                                style={{ background: colors.surface.active }}
-                              >
-                                <Loader2
-                                  className="w-5 h-5 animate-spin"
-                                  style={{ color: colors.text.secondary }}
-                                />
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]">
+                                <Loader2 className="w-5 h-5 animate-spin text-text-secondary" />
                               </div>
                               <div>
-                                <p
-                                  className="text-[15px] font-medium"
-                                  style={{ color: colors.text.primary }}
-                                >
+                                <p className="text-[15px] font-medium text-text-primary">
                                   Escrow Funding in Progress
                                 </p>
-                                <p
-                                  className="text-[12px]"
-                                  style={{ color: colors.text.secondary }}
-                                >
+                                <p className="text-[12px] text-text-secondary">
                                   Merchant is locking USDT in escrow
                                 </p>
                               </div>
                             </div>
-                            <div
-                              className="h-1.5 rounded-full overflow-hidden"
-                              style={{ background: colors.surface.active }}
-                            >
+                            <div className="h-1.5 rounded-full overflow-hidden bg-white/[0.08]">
                               <motion.div
-                                className="h-full"
-                                style={{
-                                  background: colors.text.tertiary,
-                                  width: "40%",
-                                }}
+                                className="h-full bg-text-tertiary"
+                                style={{ width: "40%" }}
                                 animate={{ x: ["-100%", "100%"] }}
                                 transition={{
                                   duration: 1.5,
@@ -1052,22 +863,14 @@ export const OrderDetailScreen = ({
                                 }}
                               />
                             </div>
-                            <p
-                              className="mt-3 text-[12px]"
-                              style={{ color: colors.text.tertiary }}
-                            >
+                            <p className="mt-3 text-[12px] text-text-tertiary">
                               Once the merchant funds the escrow, you&apos;ll be
                               able to send your payment.
                             </p>
                           </div>
                           <button
                             onClick={handleOpenChat}
-                            className="w-full py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
-                            style={{
-                              background: colors.surface.active,
-                              color: colors.text.primary,
-                              border: `1px solid ${colors.border.medium}`,
-                            }}
+                            className={`w-full py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
                             <MessageCircle className="w-4 h-4" />
                             Message Merchant
@@ -1086,48 +889,26 @@ export const OrderDetailScreen = ({
                               {/* Map Preview */}
                               <div className="relative rounded-xl overflow-hidden">
                                 <div
-                                  className="h-40 relative"
+                                  className="h-40 relative bg-surface-raised bg-cover bg-center"
                                   style={{
-                                    background: colors.bg.secondary,
+                                    // Dynamic: mapbox URL built from merchant lat/lng.
                                     backgroundImage: `url('https://api.mapbox.com/styles/v1/mapbox/light-v11/static/pin-s+000000(${activeOrder.merchant.lng},${activeOrder.merchant.lat})/${activeOrder.merchant.lng},${activeOrder.merchant.lat},14,0/400x200@2x?access_token=pk.placeholder')`,
-                                    backgroundSize: "cover",
-                                    backgroundPosition: "center",
                                   }}
                                 >
                                   {/* Fallback map UI */}
-                                  <div
-                                    className="absolute inset-0"
-                                    style={{
-                                      background: colors.surface.card,
-                                    }}
-                                  />
+                                  <div className="absolute inset-0 bg-surface-card" />
                                   <div className="absolute inset-0 flex items-center justify-center">
                                     <div className="flex flex-col items-center">
-                                      <div
-                                        className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg mb-1"
-                                        style={{ background: colors.bg.secondary }}
-                                      >
+                                      <div className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg mb-1 bg-surface-raised">
                                         <MapPin className="w-5 h-5 text-white" />
                                       </div>
-                                      <div
-                                        className="w-1 h-3 rounded-b-full"
-                                        style={{
-                                          background: colors.text.tertiary,
-                                        }}
-                                      />
+                                      <div className="w-1 h-3 rounded-b-full bg-text-tertiary" />
                                     </div>
                                   </div>
                                   {/* Grid pattern for map feel */}
-                                  <div className="absolute inset-0 opacity-10">
-                                    <div
-                                      className="w-full h-full"
-                                      style={{
-                                        backgroundImage:
-                                          "linear-gradient(rgba(0,0,0,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.15) 1px, transparent 1px)",
-                                        backgroundSize: "40px 40px",
-                                      }}
-                                    />
-                                  </div>
+                                  <div
+                                    className="absolute inset-0 opacity-10 bg-[linear-gradient(rgba(0,0,0,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.15)_1px,transparent_1px)] bg-[length:40px_40px]"
+                                  />
                                 </div>
                                 <button
                                   onClick={() =>
@@ -1136,8 +917,7 @@ export const OrderDetailScreen = ({
                                       "_blank",
                                     )
                                   }
-                                  className="absolute top-3 right-3 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-1.5"
-                                  style={{ background: colors.bg.secondary }}
+                                  className="absolute top-3 right-3 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-1.5 bg-surface-raised"
                                 >
                                   <ExternalLink className="w-3.5 h-3.5 text-white" />
                                   <span className="text-[12px] font-medium text-white">
@@ -1147,76 +927,35 @@ export const OrderDetailScreen = ({
                               </div>
 
                               {/* Meeting Details */}
-                              <div
-                                className="rounded-xl p-3 space-y-3"
-                                style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}` }}
-                              >
+                              <div className={`rounded-xl p-3 space-y-3 ${CARD}`}>
                                 <div>
-                                  <p
-                                    className="text-[11px] uppercase tracking-wide mb-1"
-                                    style={{ color: colors.text.tertiary }}
-                                  >
+                                  <p className="text-[11px] uppercase tracking-wide mb-1 text-text-tertiary">
                                     Meeting Location
                                   </p>
-                                  <p
-                                    className="text-[15px] font-medium"
-                                    style={{ color: colors.text.primary }}
-                                  >
+                                  <p className="text-[15px] font-medium text-text-primary">
                                     {activeOrder.merchant.location}
                                   </p>
-                                  <p
-                                    className="text-[13px]"
-                                    style={{ color: colors.text.secondary }}
-                                  >
+                                  <p className="text-[13px] text-text-secondary">
                                     {activeOrder.merchant.address}
                                   </p>
                                 </div>
-                                <div
-                                  className="pt-2"
-                                  style={{
-                                    borderTop:
-                                      `1px solid ${colors.border.medium}`,
-                                  }}
-                                >
-                                  <p
-                                    className="text-[11px] uppercase tracking-wide mb-1"
-                                    style={{ color: colors.text.tertiary }}
-                                  >
+                                <div className="pt-2 border-t border-white/10">
+                                  <p className="text-[11px] uppercase tracking-wide mb-1 text-text-tertiary">
                                     Meeting Spot
                                   </p>
                                   <div className="flex items-start gap-2">
-                                    <Navigation
-                                      className="w-4 h-4 flex-shrink-0 mt-0.5"
-                                      style={{ color: colors.text.secondary }}
-                                    />
-                                    <p
-                                      className="text-[13px]"
-                                      style={{ color: colors.text.primary }}
-                                    >
+                                    <Navigation className="w-4 h-4 flex-shrink-0 mt-0.5 text-text-secondary" />
+                                    <p className="text-[13px] text-text-primary">
                                       {activeOrder.merchant.meetingSpot}
                                     </p>
                                   </div>
                                 </div>
-                                <div
-                                  className="pt-2"
-                                  style={{
-                                    borderTop:
-                                      `1px solid ${colors.border.medium}`,
-                                  }}
-                                >
+                                <div className="pt-2 border-t border-white/10">
                                   <div className="flex items-center justify-between">
-                                    <span
-                                      className="text-[13px]"
-                                      style={{
-                                        color: colors.text.secondary,
-                                      }}
-                                    >
+                                    <span className="text-[13px] text-text-secondary">
                                       Cash Amount
                                     </span>
-                                    <span
-                                      className="text-[17px] font-semibold"
-                                      style={{ color: colors.text.primary }}
-                                    >
+                                    <span className="text-[17px] font-semibold text-text-primary">
                                       {"\u062F.\u0625"}{" "}
                                       {parseFloat(
                                         activeOrder.fiatAmount,
@@ -1230,12 +969,7 @@ export const OrderDetailScreen = ({
                               <div className="flex gap-2">
                                 <button
                                   onClick={handleOpenChat}
-                                  className="flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
-                                  style={{
-                                    background: colors.surface.active,
-                                    color: colors.text.primary,
-                                    border: `1px solid ${colors.border.medium}`,
-                                  }}
+                                  className={`flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                                 >
                                   <MessageCircle className="w-4 h-4" />
                                   Chat
@@ -1243,8 +977,7 @@ export const OrderDetailScreen = ({
                                 <motion.button
                                   whileTap={{ scale: 0.98 }}
                                   onClick={markPaymentSent}
-                                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold"
-                                  style={{ background: colors.accent.primary, color: colors.accent.text }}
+                                  className={`flex-[2] py-3 rounded-xl text-[15px] font-semibold ${PRIMARY_BTN}`}
                                 >
                                   I&apos;m at the location
                                 </motion.button>
@@ -1252,19 +985,10 @@ export const OrderDetailScreen = ({
                             </>
                           ) : (
                             <>
-                              <div
-                                className="rounded-xl p-3 space-y-2"
-                                style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}` }}
-                              >
+                              <div className={`rounded-xl p-3 space-y-2 ${CARD}`}>
                                 {/* Locked payment method header */}
                                 {activeOrder.lockedPaymentMethod && (
-                                  <div
-                                    className="flex items-center gap-1.5 pb-2"
-                                    style={{
-                                      borderBottom:
-                                        `1px solid ${colors.border.medium}`,
-                                    }}
-                                  >
+                                  <div className="flex items-center gap-1.5 pb-2 border-b border-white/10">
                                     <Lock className="w-3 h-3 text-orange-400" />
                                     <span className="text-[10px] text-orange-400 font-bold uppercase tracking-wide">
                                       Send payment to this method only
@@ -1275,19 +999,11 @@ export const OrderDetailScreen = ({
                                 {activeOrder.merchantPaymentMethod ? (
                                   <>
                                     <div className="flex items-center justify-between">
-                                      <span
-                                        className="text-[13px]"
-                                        style={{
-                                          color: colors.text.secondary,
-                                        }}
-                                      >
+                                      <span className="text-[13px] text-text-secondary">
                                         Method
                                       </span>
                                       <div className="flex items-center gap-1.5">
-                                        <span
-                                          className="text-[13px] font-medium"
-                                          style={{ color: colors.text.primary }}
-                                        >
+                                        <span className="text-[13px] font-medium text-text-primary">
                                           {
                                             activeOrder.merchantPaymentMethod
                                               .name
@@ -1306,12 +1022,7 @@ export const OrderDetailScreen = ({
                                           {copiedField === "method" ? (
                                             <Check className="w-3.5 h-3.5 text-green-500" />
                                           ) : (
-                                            <Copy
-                                              className="w-3.5 h-3.5"
-                                              style={{
-                                                color: colors.text.tertiary,
-                                              }}
-                                            />
+                                            <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                           )}
                                         </button>
                                       </div>
@@ -1319,19 +1030,11 @@ export const OrderDetailScreen = ({
                                     {activeOrder.merchantPaymentMethod
                                       .details && (
                                       <div className="flex items-center justify-between">
-                                        <span
-                                          className="text-[13px]"
-                                          style={{
-                                            color: colors.text.secondary,
-                                          }}
-                                        >
+                                        <span className="text-[13px] text-text-secondary">
                                           Details
                                         </span>
                                         <div className="flex items-center gap-1.5">
-                                          <span
-                                            className="text-[13px] font-mono"
-                                            style={{ color: colors.text.primary }}
-                                          >
+                                          <span className="text-[13px] font-mono text-text-primary">
                                             {
                                               activeOrder.merchantPaymentMethod
                                                 .details
@@ -1351,13 +1054,7 @@ export const OrderDetailScreen = ({
                                             {copiedField === "details" ? (
                                               <Check className="w-3.5 h-3.5 text-green-500" />
                                             ) : (
-                                              <Copy
-                                                className="w-3.5 h-3.5"
-                                                style={{
-                                                  color:
-                                                    colors.text.tertiary,
-                                                }}
-                                              />
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
                                           </button>
                                         </div>
@@ -1369,19 +1066,11 @@ export const OrderDetailScreen = ({
                                     {activeOrder.lockedPaymentMethod.details
                                       .bank_name && (
                                       <div className="flex items-center justify-between">
-                                        <span
-                                          className="text-[13px]"
-                                          style={{
-                                            color: colors.text.secondary,
-                                          }}
-                                        >
+                                        <span className="text-[13px] text-text-secondary">
                                           Bank
                                         </span>
                                         <div className="flex items-center gap-1.5">
-                                          <span
-                                            className="text-[13px]"
-                                            style={{ color: colors.text.primary }}
-                                          >
+                                          <span className="text-[13px] text-text-primary">
                                             {
                                               activeOrder.lockedPaymentMethod
                                                 .details.bank_name
@@ -1400,13 +1089,7 @@ export const OrderDetailScreen = ({
                                             {copiedField === "bank" ? (
                                               <Check className="w-3.5 h-3.5 text-green-500" />
                                             ) : (
-                                              <Copy
-                                                className="w-3.5 h-3.5"
-                                                style={{
-                                                  color:
-                                                    colors.text.tertiary,
-                                                }}
-                                              />
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
                                           </button>
                                         </div>
@@ -1415,19 +1098,11 @@ export const OrderDetailScreen = ({
                                     {activeOrder.lockedPaymentMethod.details
                                       .iban && (
                                       <div className="flex items-center justify-between">
-                                        <span
-                                          className="text-[13px]"
-                                          style={{
-                                            color: colors.text.secondary,
-                                          }}
-                                        >
+                                        <span className="text-[13px] text-text-secondary">
                                           IBAN
                                         </span>
                                         <div className="flex items-center gap-1.5">
-                                          <span
-                                            className="text-[13px] font-mono"
-                                            style={{ color: colors.text.primary }}
-                                          >
+                                          <span className="text-[13px] font-mono text-text-primary">
                                             {
                                               activeOrder.lockedPaymentMethod
                                                 .details.iban
@@ -1446,13 +1121,7 @@ export const OrderDetailScreen = ({
                                             {copiedField === "iban" ? (
                                               <Check className="w-3.5 h-3.5 text-green-500" />
                                             ) : (
-                                              <Copy
-                                                className="w-3.5 h-3.5"
-                                                style={{
-                                                  color:
-                                                    colors.text.tertiary,
-                                                }}
-                                              />
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
                                           </button>
                                         </div>
@@ -1461,19 +1130,11 @@ export const OrderDetailScreen = ({
                                     {activeOrder.lockedPaymentMethod.details
                                       .account_name && (
                                       <div className="flex items-center justify-between">
-                                        <span
-                                          className="text-[13px]"
-                                          style={{
-                                            color: colors.text.secondary,
-                                          }}
-                                        >
+                                        <span className="text-[13px] text-text-secondary">
                                           Name
                                         </span>
                                         <div className="flex items-center gap-1.5">
-                                          <span
-                                            className="text-[13px]"
-                                            style={{ color: colors.text.primary }}
-                                          >
+                                          <span className="text-[13px] text-text-primary">
                                             {
                                               activeOrder.lockedPaymentMethod
                                                 .details.account_name
@@ -1492,13 +1153,7 @@ export const OrderDetailScreen = ({
                                             {copiedField === "name" ? (
                                               <Check className="w-3.5 h-3.5 text-green-500" />
                                             ) : (
-                                              <Copy
-                                                className="w-3.5 h-3.5"
-                                                style={{
-                                                  color:
-                                                    colors.text.tertiary,
-                                                }}
-                                              />
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
                                           </button>
                                         </div>
@@ -1507,19 +1162,11 @@ export const OrderDetailScreen = ({
                                     {activeOrder.lockedPaymentMethod.details
                                       .upi_id && (
                                       <div className="flex items-center justify-between">
-                                        <span
-                                          className="text-[13px]"
-                                          style={{
-                                            color: colors.text.secondary,
-                                          }}
-                                        >
+                                        <span className="text-[13px] text-text-secondary">
                                           UPI
                                         </span>
                                         <div className="flex items-center gap-1.5">
-                                          <span
-                                            className="text-[13px] font-mono"
-                                            style={{ color: colors.text.primary }}
-                                          >
+                                          <span className="text-[13px] font-mono text-text-primary">
                                             {
                                               activeOrder.lockedPaymentMethod
                                                 .details.upi_id
@@ -1538,13 +1185,7 @@ export const OrderDetailScreen = ({
                                             {copiedField === "upi" ? (
                                               <Check className="w-3.5 h-3.5 text-green-500" />
                                             ) : (
-                                              <Copy
-                                                className="w-3.5 h-3.5"
-                                                style={{
-                                                  color:
-                                                    colors.text.tertiary,
-                                                }}
-                                              />
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
                                           </button>
                                         </div>
@@ -1555,19 +1196,11 @@ export const OrderDetailScreen = ({
                                   <>
                                     {activeOrder.merchant.bank && (
                                       <div className="flex items-center justify-between">
-                                        <span
-                                          className="text-[13px]"
-                                          style={{
-                                            color: colors.text.secondary,
-                                          }}
-                                        >
+                                        <span className="text-[13px] text-text-secondary">
                                           Bank
                                         </span>
                                         <div className="flex items-center gap-1.5">
-                                          <span
-                                            className="text-[13px]"
-                                            style={{ color: colors.text.primary }}
-                                          >
+                                          <span className="text-[13px] text-text-primary">
                                             {activeOrder.merchant.bank}
                                           </span>
                                           <button
@@ -1582,13 +1215,7 @@ export const OrderDetailScreen = ({
                                             {copiedField === "bank" ? (
                                               <Check className="w-3.5 h-3.5 text-green-500" />
                                             ) : (
-                                              <Copy
-                                                className="w-3.5 h-3.5"
-                                                style={{
-                                                  color:
-                                                    colors.text.tertiary,
-                                                }}
-                                              />
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
                                           </button>
                                         </div>
@@ -1596,19 +1223,11 @@ export const OrderDetailScreen = ({
                                     )}
                                     {activeOrder.merchant.iban && (
                                       <div className="flex items-center justify-between">
-                                        <span
-                                          className="text-[13px]"
-                                          style={{
-                                            color: colors.text.secondary,
-                                          }}
-                                        >
+                                        <span className="text-[13px] text-text-secondary">
                                           IBAN
                                         </span>
                                         <div className="flex items-center gap-1.5">
-                                          <span
-                                            className="text-[13px] font-mono"
-                                            style={{ color: colors.text.primary }}
-                                          >
+                                          <span className="text-[13px] font-mono text-text-primary">
                                             {activeOrder.merchant.iban}
                                           </span>
                                           <button
@@ -1623,13 +1242,7 @@ export const OrderDetailScreen = ({
                                             {copiedField === "iban" ? (
                                               <Check className="w-3.5 h-3.5 text-green-500" />
                                             ) : (
-                                              <Copy
-                                                className="w-3.5 h-3.5"
-                                                style={{
-                                                  color:
-                                                    colors.text.tertiary,
-                                                }}
-                                              />
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
                                           </button>
                                         </div>
@@ -1637,19 +1250,11 @@ export const OrderDetailScreen = ({
                                     )}
                                     {activeOrder.merchant.accountName && (
                                       <div className="flex items-center justify-between">
-                                        <span
-                                          className="text-[13px]"
-                                          style={{
-                                            color: colors.text.secondary,
-                                          }}
-                                        >
+                                        <span className="text-[13px] text-text-secondary">
                                           Name
                                         </span>
                                         <div className="flex items-center gap-1.5">
-                                          <span
-                                            className="text-[13px]"
-                                            style={{ color: colors.text.primary }}
-                                          >
+                                          <span className="text-[13px] text-text-primary">
                                             {activeOrder.merchant.accountName}
                                           </span>
                                           <button
@@ -1665,13 +1270,7 @@ export const OrderDetailScreen = ({
                                             {copiedField === "name" ? (
                                               <Check className="w-3.5 h-3.5 text-green-500" />
                                             ) : (
-                                              <Copy
-                                                className="w-3.5 h-3.5"
-                                                style={{
-                                                  color:
-                                                    colors.text.tertiary,
-                                                }}
-                                              />
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
                                           </button>
                                         </div>
@@ -1679,27 +1278,13 @@ export const OrderDetailScreen = ({
                                     )}
                                   </>
                                 )}
-                                <div
-                                  className="pt-2"
-                                  style={{
-                                    borderTop:
-                                      `1px solid ${colors.border.medium}`,
-                                  }}
-                                >
+                                <div className="pt-2 border-t border-white/10">
                                   <div className="flex items-center justify-between">
-                                    <span
-                                      className="text-[13px]"
-                                      style={{
-                                        color: colors.text.secondary,
-                                      }}
-                                    >
+                                    <span className="text-[13px] text-text-secondary">
                                       Amount
                                     </span>
                                     <div className="flex items-center gap-1.5">
-                                      <span
-                                        className="text-[17px] font-semibold"
-                                        style={{ color: colors.text.primary }}
-                                      >
+                                      <span className="text-[17px] font-semibold text-text-primary">
                                         {"\u062F.\u0625"}{" "}
                                         {parseFloat(
                                           activeOrder.fiatAmount,
@@ -1719,12 +1304,7 @@ export const OrderDetailScreen = ({
                                         {copiedField === "amount" ? (
                                           <Check className="w-3.5 h-3.5 text-green-500" />
                                         ) : (
-                                          <Copy
-                                            className="w-3.5 h-3.5"
-                                            style={{
-                                              color: colors.text.tertiary,
-                                            }}
-                                          />
+                                          <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                         )}
                                       </button>
                                     </div>
@@ -1734,12 +1314,7 @@ export const OrderDetailScreen = ({
                               <div className="flex gap-2">
                                 <button
                                   onClick={handleOpenChat}
-                                  className="flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
-                                  style={{
-                                    background: colors.surface.active,
-                                    color: colors.text.primary,
-                                    border: `1px solid ${colors.border.medium}`,
-                                  }}
+                                  className={`flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                                 >
                                   <MessageCircle className="w-4 h-4" />
                                   Chat
@@ -1748,8 +1323,7 @@ export const OrderDetailScreen = ({
                                   whileTap={{ scale: 0.98 }}
                                   onClick={markPaymentSent}
                                   disabled={isLoading}
-                                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                                  style={{ background: colors.accent.primary, color: colors.accent.text }}
+                                  className={`flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${PRIMARY_BTN}`}
                                 >
                                   {isLoading
                                     ? "Processing..."
@@ -1767,43 +1341,22 @@ export const OrderDetailScreen = ({
                       activeOrder.dbStatus === "accepted" &&
                       !activeOrder.escrowTxHash && (
                         <div className="mt-3 space-y-3">
-                          <div
-                            className="rounded-xl p-4"
-                            style={{
-                              background: colors.surface.active,
-                              border: `1px solid ${colors.border.medium}`,
-                            }}
-                          >
+                          <div className={`rounded-xl p-4 ${CARD_STRONG}`}>
                             <div className="flex items-center gap-3 mb-3">
-                              <div
-                                className="w-10 h-10 rounded-full flex items-center justify-center"
-                                style={{ background: colors.surface.active }}
-                              >
-                                <Lock
-                                  className="w-5 h-5"
-                                  style={{ color: colors.text.primary }}
-                                />
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]">
+                                <Lock className="w-5 h-5 text-text-primary" />
                               </div>
                               <div>
-                                <p
-                                  className="text-[15px] font-medium"
-                                  style={{ color: colors.text.primary }}
-                                >
+                                <p className="text-[15px] font-medium text-text-primary">
                                   Merchant Accepted - Lock Escrow
                                 </p>
-                                <p
-                                  className="text-[12px]"
-                                  style={{ color: colors.text.secondary }}
-                                >
+                                <p className="text-[12px] text-text-secondary">
                                   Merchant verified their wallet. Lock funds to
                                   proceed.
                                 </p>
                               </div>
                             </div>
-                            <p
-                              className="text-[12px] mb-3"
-                              style={{ color: colors.text.tertiary }}
-                            >
+                            <p className="text-[12px] mb-3 text-text-tertiary">
                               The merchant has signed with their wallet (
                               {activeOrder.acceptorWalletAddress?.slice(0, 4)}
                               ...{activeOrder.acceptorWalletAddress?.slice(-4)}
@@ -1907,8 +1460,7 @@ export const OrderDetailScreen = ({
                                 (solanaWallet.connected &&
                                   !solanaWallet.programReady)
                               }
-                              className="w-full py-3 rounded-xl text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                              style={{ background: colors.accent.primary, color: colors.accent.text }}
+                              className={`w-full py-3 rounded-xl text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50 ${PRIMARY_BTN}`}
                             >
                               {isLoading ? (
                                 <>
@@ -1936,12 +1488,7 @@ export const OrderDetailScreen = ({
                           </div>
                           <button
                             onClick={handleOpenChat}
-                            className="w-full py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
-                            style={{
-                              background: colors.surface.active,
-                              color: colors.text.primary,
-                              border: `1px solid ${colors.border.medium}`,
-                            }}
+                            className={`w-full py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
                             <MessageCircle className="w-4 h-4" />
                             Message Merchant
@@ -1955,29 +1502,17 @@ export const OrderDetailScreen = ({
                       (activeOrder.dbStatus === "escrowed" ||
                         activeOrder.escrowTxHash) && (
                         <div className="mt-2">
-                          <p
-                            className="text-[13px]"
-                            style={{ color: colors.text.secondary }}
-                          >
+                          <p className="text-[13px] text-text-secondary">
                             Your USDT is locked in escrow. Waiting for merchant
                             to send AED payment...
                           </p>
 
-                          <div
-                            className="mt-3 rounded-xl p-3"
-                            style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}` }}
-                          >
+                          <div className={`mt-3 rounded-xl p-3 ${CARD}`}>
                             <div className="flex items-center justify-between mb-2">
-                              <span
-                                className="text-[12px]"
-                                style={{ color: colors.text.secondary }}
-                              >
+                              <span className="text-[12px] text-text-secondary">
                                 Expected payment
                               </span>
-                              <span
-                                className="text-[15px] font-semibold"
-                                style={{ color: colors.text.primary }}
-                              >
+                              <span className="text-[15px] font-semibold text-text-primary">
                                 {"\u062F.\u0625"}{" "}
                                 {parseFloat(
                                   activeOrder.fiatAmount,
@@ -1985,22 +1520,14 @@ export const OrderDetailScreen = ({
                               </span>
                             </div>
                             {activeOrder.lockedPaymentMethod ? (
-                              <div
-                                className="pt-2 space-y-1.5"
-                                style={{
-                                  borderTop: `1px solid ${colors.border.medium}`,
-                                }}
-                              >
+                              <div className="pt-2 space-y-1.5 border-t border-white/10">
                                 <div className="flex items-center gap-1.5">
                                   <Lock className="w-3 h-3 text-orange-400" />
                                   <span className="text-[11px] text-orange-400 font-semibold uppercase tracking-wide">
                                     Locked Payment Method
                                   </span>
                                 </div>
-                                <p
-                                  className="text-[13px] font-medium"
-                                  style={{ color: colors.text.primary }}
-                                >
+                                <p className="text-[13px] font-medium text-text-primary">
                                   {activeOrder.lockedPaymentMethod.label}
                                 </p>
                                 {activeOrder.lockedPaymentMethod.type ===
@@ -2008,11 +1535,7 @@ export const OrderDetailScreen = ({
                                   <div className="space-y-1 text-[12px]">
                                     {activeOrder.lockedPaymentMethod.details
                                       .bank_name && (
-                                      <p
-                                        style={{
-                                          color: colors.text.secondary,
-                                        }}
-                                      >
+                                      <p className="text-text-secondary">
                                         {
                                           activeOrder.lockedPaymentMethod
                                             .details.bank_name
@@ -2021,12 +1544,7 @@ export const OrderDetailScreen = ({
                                     )}
                                     {activeOrder.lockedPaymentMethod.details
                                       .iban && (
-                                      <p
-                                        className="font-mono"
-                                        style={{
-                                          color: colors.text.secondary,
-                                        }}
-                                      >
+                                      <p className="font-mono text-text-secondary">
                                         {
                                           activeOrder.lockedPaymentMethod
                                             .details.iban
@@ -2039,38 +1557,26 @@ export const OrderDetailScreen = ({
                                   "upi" &&
                                   activeOrder.lockedPaymentMethod.details
                                     .upi_id && (
-                                    <p
-                                      className="text-[12px] font-mono"
-                                      style={{ color: colors.text.secondary }}
-                                    >
+                                    <p className="text-[12px] font-mono text-text-secondary">
                                       {
                                         activeOrder.lockedPaymentMethod.details
                                           .upi_id
                                       }
                                     </p>
                                   )}
-                                <p
-                                  className="text-[10px]"
-                                  style={{ color: colors.text.tertiary }}
-                                >
+                                <p className="text-[10px] text-text-tertiary">
                                   Merchant will send payment to this method
                                 </p>
                               </div>
                             ) : (
-                              <p
-                                className="text-[11px]"
-                                style={{ color: colors.text.tertiary }}
-                              >
+                              <p className="text-[11px] text-text-tertiary">
                                 Merchant will send this amount to your bank
                                 account
                               </p>
                             )}
                           </div>
 
-                          <div
-                            className="mt-3 h-1 rounded-full overflow-hidden"
-                            style={{ background: colors.surface.active }}
-                          >
+                          <div className="mt-3 h-1 rounded-full overflow-hidden bg-white/[0.08]">
                             <motion.div
                               className="h-full bg-orange-400"
                               animate={{ x: ["-100%", "100%"] }}
@@ -2084,12 +1590,7 @@ export const OrderDetailScreen = ({
                           </div>
                           <button
                             onClick={handleOpenChat}
-                            className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2"
-                            style={{
-                              background: colors.surface.active,
-                              color: colors.text.primary,
-                              border: `1px solid ${colors.border.medium}`,
-                            }}
+                            className={`mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
                             <MessageCircle className="w-4 h-4" />
                             Message Merchant
@@ -2101,41 +1602,24 @@ export const OrderDetailScreen = ({
               </div>
 
               {/* Step 3 */}
-              <div
-                className="p-4 rounded-2xl"
-                style={
-                  activeOrder.step >= 3
-                    ? {
-                        background: colors.surface.card,
-                        border: `1px solid ${colors.border.subtle}`,
-                      }
-                    : {
-                        background: colors.surface.card,
-                        border: `1px solid ${colors.border.subtle}`,
-                      }
-                }
-              >
+              <div className={`p-4 rounded-2xl ${CARD}`}>
                 <div className="flex items-start gap-3">
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0"
-                    style={
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
                       activeOrder.step >= 3
-                        ? { background: colors.accent.primary, color: colors.accent.text }
-                        : {
-                            background: colors.surface.card,
-                            color: colors.text.tertiary,
-                          }
-                    }
+                        ? "bg-white text-surface-base"
+                        : "bg-surface-card text-text-tertiary"
+                    }`}
                   >
                     {activeOrder.step > 3 ? <Check className="w-4 h-4" /> : "3"}
                   </div>
                   <div className="flex-1">
                     <p
-                      className="text-[15px] font-medium"
-                      style={{
-                        color:
-                          activeOrder.step >= 3 ? colors.text.primary : colors.text.tertiary,
-                      }}
+                      className={`text-[15px] font-medium ${
+                        activeOrder.step >= 3
+                          ? "text-text-primary"
+                          : "text-text-tertiary"
+                      }`}
                     >
                       {activeOrder.dbStatus === "disputed"
                         ? "Dispute"
@@ -2148,21 +1632,13 @@ export const OrderDetailScreen = ({
                       activeOrder.type === "buy" &&
                       activeOrder.dbStatus === "disputed" && (
                         <div className="mt-2">
-                          <p
-                            className="text-[13px]"
-                            style={{ color: colors.text.secondary }}
-                          >
+                          <p className="text-[13px] text-text-secondary">
                             This order is under dispute. Our team is reviewing
                             the case.
                           </p>
                           <button
                             onClick={handleOpenChat}
-                            className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2"
-                            style={{
-                              background: colors.surface.active,
-                              color: colors.text.primary,
-                              border: `1px solid ${colors.border.medium}`,
-                            }}
+                            className={`mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
                             <MessageCircle className="w-4 h-4" />
                             Message Seller
@@ -2174,22 +1650,13 @@ export const OrderDetailScreen = ({
                       activeOrder.type === "buy" &&
                       activeOrder.dbStatus !== "disputed" && (
                         <div className="mt-2">
-                          <p
-                            className="text-[13px]"
-                            style={{ color: colors.text.secondary }}
-                          >
+                          <p className="text-[13px] text-text-secondary">
                             Seller is verifying your payment...
                           </p>
-                          <div
-                            className="mt-2 h-1 rounded-full overflow-hidden"
-                            style={{ background: colors.surface.active }}
-                          >
+                          <div className="mt-2 h-1 rounded-full overflow-hidden bg-white/[0.08]">
                             <motion.div
-                              className="h-full"
-                              style={{
-                                background: colors.text.tertiary,
-                                width: "30%",
-                              }}
+                              className="h-full bg-text-tertiary"
+                              style={{ width: "30%" }}
                               animate={{ x: ["-100%", "100%"] }}
                               transition={{
                                 duration: 1.5,
@@ -2200,12 +1667,7 @@ export const OrderDetailScreen = ({
                           </div>
                           <button
                             onClick={handleOpenChat}
-                            className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2"
-                            style={{
-                              background: colors.surface.active,
-                              color: colors.text.primary,
-                              border: `1px solid ${colors.border.medium}`,
-                            }}
+                            className={`mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
                             <MessageCircle className="w-4 h-4" />
                             Message Seller
@@ -2217,21 +1679,13 @@ export const OrderDetailScreen = ({
                       activeOrder.type === "sell" &&
                       activeOrder.dbStatus === "disputed" && (
                         <div className="mt-2">
-                          <p
-                            className="text-[13px]"
-                            style={{ color: colors.text.secondary }}
-                          >
+                          <p className="text-[13px] text-text-secondary">
                             This order is under dispute. Our team is reviewing
                             the case.
                           </p>
                           <button
                             onClick={handleOpenChat}
-                            className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2"
-                            style={{
-                              background: colors.surface.active,
-                              color: colors.text.primary,
-                              border: `1px solid ${colors.border.medium}`,
-                            }}
+                            className={`mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
                             <MessageCircle className="w-4 h-4" />
                             Message Merchant
@@ -2243,39 +1697,22 @@ export const OrderDetailScreen = ({
                       activeOrder.type === "sell" &&
                       activeOrder.dbStatus !== "disputed" && (
                         <div className="mt-3">
-                          <div
-                            className="rounded-xl p-3 mb-3"
-                            style={{
-                              background: colors.surface.active,
-                              border: `1px solid ${colors.border.medium}`,
-                            }}
-                          >
-                            <p
-                              className="text-[13px]"
-                              style={{ color: colors.text.primary }}
-                            >
+                          <div className={`rounded-xl p-3 mb-3 ${CARD_STRONG}`}>
+                            <p className="text-[13px] text-text-primary">
                               Merchant has sent {"\u062F.\u0625"}{" "}
                               {parseFloat(
                                 activeOrder.fiatAmount,
                               ).toLocaleString()}{" "}
                               to your bank.
                             </p>
-                            <p
-                              className="text-[12px] mt-1"
-                              style={{ color: colors.text.secondary }}
-                            >
+                            <p className="text-[12px] mt-1 text-text-secondary">
                               Check your bank account before confirming.
                             </p>
                           </div>
                           <div className="flex gap-2">
                             <button
                               onClick={handleOpenChat}
-                              className="flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
-                              style={{
-                                background: colors.surface.active,
-                                color: colors.text.primary,
-                                border: `1px solid ${colors.border.medium}`,
-                              }}
+                              className={`flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                             >
                               <MessageCircle className="w-4 h-4" />
                               Chat
@@ -2284,8 +1721,7 @@ export const OrderDetailScreen = ({
                               whileTap={{ scale: 0.98 }}
                               onClick={confirmFiatReceived}
                               disabled={isLoading}
-                              className="flex-[2] py-3 rounded-xl text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                              style={{ background: colors.accent.primary, color: colors.accent.text }}
+                              className={`flex-[2] py-3 rounded-xl text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50 ${PRIMARY_BTN}`}
                             >
                               {isLoading ? (
                                 <>
@@ -2300,10 +1736,7 @@ export const OrderDetailScreen = ({
                               )}
                             </motion.button>
                           </div>
-                          <p
-                            className="text-[11px] mt-2 text-center"
-                            style={{ color: colors.text.tertiary }}
-                          >
+                          <p className="text-[11px] mt-2 text-center text-text-tertiary">
                             This will sign a wallet transaction to release
                             escrow to merchant
                           </p>
@@ -2314,34 +1747,30 @@ export const OrderDetailScreen = ({
               </div>
 
               {/* Step 4 */}
-              <div
-                className="p-4 rounded-2xl"
-                style={activeOrder.step >= 4
-                  ? { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }
-                  : { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
-              >
+              <div className={`p-4 rounded-2xl ${CARD}`}>
                 <div className="flex items-center gap-3">
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold"
-                    style={activeOrder.step >= 4
-                      ? { background: colors.accent.primary, color: colors.accent.text }
-                      : { background: colors.surface.card, color: colors.text.tertiary }}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold ${
+                      activeOrder.step >= 4
+                        ? "bg-white text-surface-base"
+                        : "bg-surface-card text-text-tertiary"
+                    }`}
                   >
                     {activeOrder.step >= 4 ? <Check className="w-4 h-4" /> : "4"}
                   </div>
                   <div>
                     <p
-                      className="text-[15px] font-medium"
-                      style={{ color: activeOrder.step >= 4 ? colors.text.primary : colors.text.tertiary }}
+                      className={`text-[15px] font-medium ${
+                        activeOrder.step >= 4
+                          ? "text-text-primary"
+                          : "text-text-tertiary"
+                      }`}
                     >
                       Complete
                     </p>
                     {activeOrder.status === "complete" &&
                       activeOrder.step >= 4 && (
-                        <p
-                          className="text-[13px]"
-                          style={{ color: colors.text.secondary }}
-                        >
+                        <p className="text-[13px] text-text-secondary">
                           Trade completed successfully
                         </p>
                       )}
@@ -2354,29 +1783,20 @@ export const OrderDetailScreen = ({
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="rounded-2xl p-4 text-center"
-                  style={{
-                    background: colors.surface.card,
-                    border: `1px solid ${colors.border.subtle}`,
-                  }}
+                  className={`rounded-2xl p-4 text-center ${CARD}`}
                 >
-                  <p
-                    className="text-[15px] mb-3"
-                    style={{ color: colors.text.secondary }}
-                  >
+                  <p className="text-[15px] mb-3 text-text-secondary">
                     Rate your experience
                   </p>
                   <div className="flex justify-center gap-2">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <button key={star} onClick={() => setRating(star)}>
                         <Star
-                          className={`w-8 h-8 ${star <= rating ? "fill-amber-400 text-amber-400" : ""}`}
-                          style={{
-                            color:
-                              star <= rating
-                                ? undefined
-                                : colors.text.quaternary,
-                          }}
+                          className={`w-8 h-8 ${
+                            star <= rating
+                              ? "fill-amber-400 text-amber-400"
+                              : "text-text-quaternary"
+                          }`}
                         />
                       </button>
                     ))}
@@ -2387,36 +1807,18 @@ export const OrderDetailScreen = ({
           )}
 
         {/* Merchant */}
-        <div
-          className="mt-4 rounded-2xl p-4"
-          style={{
-            background: colors.surface.card,
-            border: `1px solid ${colors.border.subtle}`,
-          }}
-        >
+        <div className={`mt-4 rounded-2xl p-4 ${CARD}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center font-semibold"
-                style={{ background: colors.accent.primary, color: colors.accent.text }}
-              >
+              <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold bg-white text-surface-base">
                 {activeOrder.merchant.name.charAt(0)}
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <p
-                    className="text-[15px] font-medium"
-                    style={{ color: colors.text.primary }}
-                  >
+                  <p className="text-[15px] font-medium text-text-primary">
                     {activeOrder.merchant.name}
                   </p>
-                  <span
-                    className="px-2 py-0.5 rounded-full text-[10px] font-medium"
-                    style={{
-                      background: colors.surface.active,
-                      color: colors.text.secondary,
-                    }}
-                  >
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/[0.08] text-text-secondary">
                     {activeOrder.merchant.paymentMethod === "cash"
                       ? "Cash"
                       : "Bank"}
@@ -2424,10 +1826,7 @@ export const OrderDetailScreen = ({
                 </div>
                 <div className="flex items-center gap-1">
                   <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                  <span
-                    className="text-[13px]"
-                    style={{ color: colors.text.secondary }}
-                  >
+                  <span className="text-[13px] text-text-secondary">
                     {activeOrder.merchant.rating} {"\u00b7"}{" "}
                     {activeOrder.merchant.trades} trades
                   </span>
@@ -2436,13 +1835,9 @@ export const OrderDetailScreen = ({
             </div>
             <button
               onClick={handleOpenChat}
-              className="w-10 h-10 rounded-full flex items-center justify-center"
-              style={{ background: colors.surface.active }}
+              className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]"
             >
-              <MessageCircle
-                className="w-5 h-5"
-                style={{ color: colors.text.secondary }}
-              />
+              <MessageCircle className="w-5 h-5 text-text-secondary" />
             </button>
           </div>
         </div>
@@ -2455,8 +1850,7 @@ export const OrderDetailScreen = ({
             <button
               onClick={() => requestCancelOrder()}
               disabled={isRequestingCancel}
-              className="w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-              style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b' }}
+              className={`w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2 disabled:opacity-50 text-[#f59e0b] ${AMBER_CARD}`}
             >
               {isRequestingCancel ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -2471,8 +1865,7 @@ export const OrderDetailScreen = ({
           activeOrder.status !== "disputed" && (
             <button
               onClick={() => setShowDisputeModal(true)}
-              className="w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2"
-              style={{ background: colors.errorDim, border: `1px solid ${colors.errorBorder}`, color: '#ef4444' }}
+              className={`w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2 text-[#ef4444] ${RED_CARD}`}
             >
               <AlertTriangle className="w-4 h-4" />
               Report Issue
@@ -2481,14 +1874,14 @@ export const OrderDetailScreen = ({
 
         {/* Already Disputed */}
         {activeOrder.status === "disputed" && (
-          <div className="mt-3 py-3 px-4 rounded-2xl" style={{ background: colors.errorDim, border: `1px solid ${colors.errorBorder}` }}>
-            <div className="flex items-center gap-2" style={{ color: '#ef4444' }}>
+          <div className={`mt-3 py-3 px-4 rounded-2xl ${RED_CARD}`}>
+            <div className="flex items-center gap-2 text-[#ef4444]">
               <AlertTriangle className="w-4 h-4" />
               <span className="text-[14px] font-medium">
                 Dispute in Progress
               </span>
             </div>
-            <p className="text-[12px] mt-1" style={{ color: 'rgba(239,68,68,0.7)' }}>
+            <p className="text-[12px] mt-1 text-[rgba(239,68,68,0.7)]">
               Our team is reviewing this case.
             </p>
           </div>
@@ -2502,12 +1895,7 @@ export const OrderDetailScreen = ({
             animate={{ opacity: 1 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setScreen(previousScreen || "home")}
-            className="w-full mt-4 py-4 rounded-2xl text-[17px] font-semibold"
-            style={{
-              background: colors.bg.secondary,
-              border: `1px solid ${colors.border.medium}`,
-              color: colors.text.primary,
-            }}
+            className="w-full mt-4 py-4 rounded-2xl text-[17px] font-semibold bg-surface-raised border border-white/10 text-text-primary"
           >
             Done
           </motion.button>
@@ -2530,51 +1918,33 @@ export const OrderDetailScreen = ({
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30 }}
-              className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl p-6`}
-              style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}` }}
+              className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl p-6 ${SHEET_BG}`}
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-red-500" />
-                  <h3
-                    className="text-[17px] font-semibold"
-                    style={{ color: colors.text.primary }}
-                  >
+                  <h3 className="text-[17px] font-semibold text-text-primary">
                     Report Issue
                   </h3>
                 </div>
                 <button onClick={() => setShowDisputeModal(false)}>
-                  <X
-                    className="w-5 h-5"
-                    style={{ color: colors.text.tertiary }}
-                  />
+                  <X className="w-5 h-5 text-text-tertiary" />
                 </button>
               </div>
 
-              <p
-                className="text-[13px] mb-4"
-                style={{ color: colors.text.secondary }}
-              >
+              <p className="text-[13px] mb-4 text-text-secondary">
                 If you&apos;re having a problem with this trade, let us know and
                 our support team will help resolve it.
               </p>
 
               <div className="mb-4">
-                <label
-                  className="text-[12px] uppercase tracking-wide mb-2 block"
-                  style={{ color: colors.text.tertiary }}
-                >
+                <label className="text-[12px] uppercase tracking-wide mb-2 block text-text-tertiary">
                   Reason
                 </label>
                 <select
                   value={disputeReason}
                   onChange={(e) => setDisputeReason(e.target.value)}
-                  className="w-full rounded-xl px-4 py-3 text-[15px] outline-none appearance-none"
-                  style={{
-                    background: colors.bg.secondary,
-                    color: colors.text.primary,
-                    border: `1px solid ${colors.border.medium}`,
-                  }}
+                  className="w-full rounded-xl px-4 py-3 text-[15px] outline-none appearance-none bg-surface-raised text-text-primary border border-white/10"
                 >
                   <option value="">Select a reason...</option>
                   <option value="payment_not_received">
@@ -2590,10 +1960,7 @@ export const OrderDetailScreen = ({
               </div>
 
               <div className="mb-6">
-                <label
-                  className="text-[12px] uppercase tracking-wide mb-2 block"
-                  style={{ color: colors.text.tertiary }}
-                >
+                <label className="text-[12px] uppercase tracking-wide mb-2 block text-text-tertiary">
                   Description
                 </label>
                 <textarea
@@ -2601,23 +1968,14 @@ export const OrderDetailScreen = ({
                   onChange={(e) => setDisputeDescription(e.target.value)}
                   placeholder="Describe the issue in detail..."
                   rows={3}
-                  className="w-full rounded-xl px-4 py-3 text-[15px] outline-none resize-none"
-                  style={{
-                    background: colors.bg.secondary,
-                    color: colors.text.primary,
-                    border: `1px solid ${colors.border.medium}`,
-                  }}
+                  className="w-full rounded-xl px-4 py-3 text-[15px] outline-none resize-none bg-surface-raised text-text-primary border border-white/10"
                 />
               </div>
 
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowDisputeModal(false)}
-                  className="flex-1 py-3 rounded-xl text-[15px] font-medium"
-                  style={{
-                    background: colors.surface.active,
-                    color: colors.text.secondary,
-                  }}
+                  className={`flex-1 py-3 rounded-xl text-[15px] font-medium ${MUTED_BTN}`}
                 >
                   Cancel
                 </button>
@@ -2625,8 +1983,7 @@ export const OrderDetailScreen = ({
                   whileTap={{ scale: 0.98 }}
                   onClick={submitDispute}
                   disabled={!disputeReason || isSubmittingDispute}
-                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-                  style={{ background: '#ef4444', color: '#fff' }}
+                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 flex items-center justify-center gap-2 bg-[#ef4444] text-white"
                 >
                   {isSubmittingDispute ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -2657,23 +2014,13 @@ export const OrderDetailScreen = ({
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30 }}
-              className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl h-[70vh] flex flex-col`}
-              style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}` }}
+              className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl h-[70vh] flex flex-col ${SHEET_BG}`}
             >
-              <div
-                className="flex items-center justify-between p-4"
-                style={{ borderBottom: `1px solid ${colors.border.medium}` }}
-              >
+              <div className="flex items-center justify-between p-4 border-b border-white/10">
                 <div className="flex items-center gap-3">
-                  <div
-                    className="w-8 h-8 rounded-full"
-                    style={{ background: colors.accent.primary }}
-                  />
+                  <div className="w-8 h-8 rounded-full bg-white" />
                   <div>
-                    <p
-                      className="text-[15px] font-medium"
-                      style={{ color: colors.text.primary }}
-                    >
+                    <p className="text-[15px] font-medium text-text-primary">
                       {activeOrder.merchant.name}
                     </p>
                     <div className="flex items-center gap-1.5">
@@ -2683,10 +2030,7 @@ export const OrderDetailScreen = ({
                   </div>
                 </div>
                 <button onClick={() => setShowChat(false)} className="p-2">
-                  <X
-                    className="w-5 h-5"
-                    style={{ color: colors.text.tertiary }}
-                  />
+                  <X className="w-5 h-5 text-text-tertiary" />
                 </button>
               </div>
               <div
@@ -2701,36 +2045,25 @@ export const OrderDetailScreen = ({
                         const data = JSON.parse(msg.text);
                         return (
                           <div key={msg.id} className="flex justify-center">
-                            <div className="w-full max-w-[90%] rounded-2xl p-4" style={{ background: colors.errorDim, border: `1px solid ${colors.errorBorder}` }}>
+                            <div className={`w-full max-w-[90%] rounded-2xl p-4 ${RED_CARD}`}>
                               <div className="flex items-center gap-2 mb-2">
-                                <AlertTriangle className="w-4 h-4" style={{ color: '#ef4444' }} />
-                                <span className="text-[13px] font-semibold" style={{ color: '#ef4444' }}>
+                                <AlertTriangle className="w-4 h-4 text-[#ef4444]" />
+                                <span className="text-[13px] font-semibold text-[#ef4444]">
                                   Dispute Opened
                                 </span>
                               </div>
-                              <p
-                                className="text-[14px] mb-1"
-                                style={{ color: colors.text.primary }}
-                              >
-                                <span
-                                  style={{ color: colors.text.tertiary }}
-                                >
+                              <p className="text-[14px] mb-1 text-text-primary">
+                                <span className="text-text-tertiary">
                                   Reason:
                                 </span>{" "}
                                 {data.reason?.replace(/_/g, " ")}
                               </p>
                               {data.description && (
-                                <p
-                                  className="text-[13px]"
-                                  style={{ color: colors.text.secondary }}
-                                >
+                                <p className="text-[13px] text-text-secondary">
                                   {data.description}
                                 </p>
                               )}
-                              <p
-                                className="text-[11px] mt-2"
-                                style={{ color: colors.text.tertiary }}
-                              >
+                              <p className="text-[11px] mt-2 text-text-tertiary">
                                 Our support team will review this case
                               </p>
                             </div>
@@ -2746,43 +2079,23 @@ export const OrderDetailScreen = ({
                         const data = JSON.parse(msg.text);
                         return (
                           <div key={msg.id} className="flex justify-center">
-                            <div
-                              className="w-full max-w-[90%] rounded-2xl p-4"
-                              style={{
-                                background: colors.surface.active,
-                                border: `1px solid ${colors.border.medium}`,
-                              }}
-                            >
+                            <div className={`w-full max-w-[90%] rounded-2xl p-4 ${CARD_STRONG}`}>
                               <div className="flex items-center gap-2 mb-2">
-                                <Shield
-                                  className="w-4 h-4"
-                                  style={{ color: colors.text.secondary }}
-                                />
-                                <span
-                                  className="text-[13px] font-semibold"
-                                  style={{ color: colors.text.secondary }}
-                                >
+                                <Shield className="w-4 h-4 text-text-secondary" />
+                                <span className="text-[13px] font-semibold text-text-secondary">
                                   {data.type === "resolution_proposed"
                                     ? "Resolution Proposed"
                                     : "Resolution Finalized"}
                                 </span>
                               </div>
-                              <p
-                                className="text-[14px] mb-1"
-                                style={{ color: colors.text.primary }}
-                              >
-                                <span
-                                  style={{ color: colors.text.tertiary }}
-                                >
+                              <p className="text-[14px] mb-1 text-text-primary">
+                                <span className="text-text-tertiary">
                                   Decision:
                                 </span>{" "}
                                 {data.resolution?.replace(/_/g, " ")}
                               </p>
                               {data.notes && (
-                                <p
-                                  className="text-[13px] mb-2"
-                                  style={{ color: colors.text.secondary }}
-                                >
+                                <p className="text-[13px] mb-2 text-text-secondary">
                                   {data.notes}
                                 </p>
                               )}
@@ -2794,11 +2107,7 @@ export const OrderDetailScreen = ({
                                         respondToResolution("reject")
                                       }
                                       disabled={isRespondingToResolution}
-                                      className="flex-1 py-2 rounded-xl text-[13px] font-medium disabled:opacity-50"
-                                      style={{
-                                        background: colors.surface.active,
-                                        color: colors.text.secondary,
-                                      }}
+                                      className={`flex-1 py-2 rounded-xl text-[13px] font-medium disabled:opacity-50 ${MUTED_BTN}`}
                                     >
                                       Reject
                                     </button>
@@ -2807,11 +2116,7 @@ export const OrderDetailScreen = ({
                                         respondToResolution("accept")
                                       }
                                       disabled={isRespondingToResolution}
-                                      className="flex-1 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-50"
-                                      style={{
-                                        background: colors.accent.primary,
-                                        color: colors.white,
-                                      }}
+                                      className="flex-1 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-50 bg-white text-white"
                                     >
                                       Accept
                                     </button>
@@ -2819,10 +2124,7 @@ export const OrderDetailScreen = ({
                                 )}
                               {disputeInfo?.user_confirmed &&
                                 !disputeInfo?.merchant_confirmed && (
-                                  <p
-                                    className="text-[11px] mt-2"
-                                    style={{ color: colors.text.secondary }}
-                                  >
+                                  <p className="text-[11px] mt-2 text-text-secondary">
                                     You accepted. Waiting for merchant
                                     confirmation...
                                   </p>
@@ -2841,35 +2143,17 @@ export const OrderDetailScreen = ({
                         const data = JSON.parse(msg.text);
                         return (
                           <div key={msg.id} className="flex justify-center">
-                            <div
-                              className="w-full max-w-[90%] rounded-2xl p-4"
-                              style={{
-                                background: colors.surface.active,
-                                border: `1px solid ${colors.border.medium}`,
-                              }}
-                            >
+                            <div className={`w-full max-w-[90%] rounded-2xl p-4 ${CARD_STRONG}`}>
                               <div className="flex items-center gap-2 mb-2">
-                                <Check
-                                  className="w-4 h-4"
-                                  style={{ color: colors.text.primary }}
-                                />
-                                <span
-                                  className="text-[13px] font-semibold"
-                                  style={{ color: colors.text.primary }}
-                                >
+                                <Check className="w-4 h-4 text-text-primary" />
+                                <span className="text-[13px] font-semibold text-text-primary">
                                   Resolution Finalized
                                 </span>
                               </div>
-                              <p
-                                className="text-[14px]"
-                                style={{ color: colors.text.primary }}
-                              >
+                              <p className="text-[14px] text-text-primary">
                                 Decision: {data.resolution?.replace(/_/g, " ")}
                               </p>
-                              <p
-                                className="text-[11px] mt-2"
-                                style={{ color: colors.text.tertiary }}
-                              >
+                              <p className="text-[11px] mt-2 text-text-tertiary">
                                 Both parties confirmed. Case closed.
                               </p>
                             </div>
@@ -2891,18 +2175,11 @@ export const OrderDetailScreen = ({
                         return (
                           <div key={msg.id} className="flex justify-center">
                             <div
-                              className="px-4 py-2 rounded-2xl text-[13px]"
-                              style={
+                              className={`px-4 py-2 rounded-2xl text-[13px] ${
                                 isAccepted
-                                  ? {
-                                      background: colors.surface.active,
-                                      color: colors.text.secondary,
-                                    }
-                                  : {
-                                      background: colors.errorDim,
-                                      color: '#ef4444',
-                                    }
-                              }
+                                  ? "bg-white/[0.08] text-text-secondary"
+                                  : "bg-[rgba(239,68,68,0.10)] text-[#ef4444]"
+                              }`}
                             >
                               {data.party === "user" ? "You" : "Merchant"}{" "}
                               {isAccepted ? "accepted" : "rejected"} the
@@ -2944,10 +2221,7 @@ export const OrderDetailScreen = ({
                                 activeOrder?.dbStatus || activeOrder?.status
                               }
                             />
-                            <p
-                              className="text-[10px] mt-1 text-center"
-                              style={{ color: colors.text.tertiary }}
-                            >
+                            <p className="text-[10px] mt-1 text-center text-text-tertiary">
                               {msg.timestamp.toLocaleTimeString([], {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -2970,26 +2244,18 @@ export const OrderDetailScreen = ({
                           {msg.from !== "me" &&
                             msg.from !== "system" &&
                             msg.senderName && (
-                              <span
-                                className="text-[11px] mb-0.5 px-1"
-                                style={{ color: colors.text.tertiary }}
-                              >
+                              <span className="text-[11px] mb-0.5 px-1 text-text-tertiary">
                                 {msg.senderName}
                               </span>
                             )}
                           <div
-                            className={`px-4 py-2 rounded-2xl text-[15px]`}
-                            style={
+                            className={`px-4 py-2 rounded-2xl ${
                               msg.from === "me"
-                                ? { background: colors.accent.primary, color: colors.accent.text }
+                                ? "bg-white text-surface-base text-[15px]"
                                 : msg.from === "system"
-                                  ? {
-                                      background: colors.surface.active,
-                                      color: colors.text.secondary,
-                                      fontSize: 13,
-                                    }
-                                  : { background: colors.surface.card, color: colors.text.primary }
-                            }
+                                  ? "bg-white/[0.08] text-text-secondary text-[13px]"
+                                  : "bg-surface-card text-text-primary text-[15px]"
+                            }`}
                           >
                             {msg.messageType === "image" && msg.imageUrl && (
                               <a
@@ -3013,10 +2279,7 @@ export const OrderDetailScreen = ({
                   })
                 ) : (
                   <div className="flex-1 flex items-center justify-center h-full">
-                    <p
-                      className="text-[15px]"
-                      style={{ color: colors.text.tertiary }}
-                    >
+                    <p className="text-[15px] text-text-tertiary">
                       No messages yet
                     </p>
                   </div>
@@ -3029,33 +2292,21 @@ export const OrderDetailScreen = ({
                     (m) => m.messageType === "resolution",
                   ) && (
                     <div className="flex justify-center">
-                      <div className="w-full max-w-[90%] rounded-2xl p-4" style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}>
+                      <div className={`w-full max-w-[90%] rounded-2xl p-4 ${CARD}`}>
                         <div className="flex items-center gap-2 mb-2">
-                          <Shield
-                            className="w-4 h-4"
-                            style={{ color: colors.text.secondary }}
-                          />
-                          <span
-                            className="text-[13px] font-semibold"
-                            style={{ color: colors.text.secondary }}
-                          >
+                          <Shield className="w-4 h-4 text-text-secondary" />
+                          <span className="text-[13px] font-semibold text-text-secondary">
                             Resolution Proposed
                           </span>
                         </div>
-                        <p
-                          className="text-[14px] mb-1"
-                          style={{ color: colors.text.primary }}
-                        >
-                          <span style={{ color: colors.text.tertiary }}>
+                        <p className="text-[14px] mb-1 text-text-primary">
+                          <span className="text-text-tertiary">
                             Decision:
                           </span>{" "}
                           {disputeInfo.proposed_resolution.replace(/_/g, " ")}
                         </p>
                         {disputeInfo.resolution_notes && (
-                          <p
-                            className="text-[13px] mb-2"
-                            style={{ color: colors.text.secondary }}
-                          >
+                          <p className="text-[13px] mb-2 text-text-secondary">
                             {disputeInfo.resolution_notes}
                           </p>
                         )}
@@ -3064,19 +2315,14 @@ export const OrderDetailScreen = ({
                             <button
                               onClick={() => respondToResolution("reject")}
                               disabled={isRespondingToResolution}
-                              className="flex-1 py-2 rounded-xl text-[13px] font-medium disabled:opacity-50"
-                              style={{
-                                background: colors.surface.active,
-                                color: colors.text.secondary,
-                              }}
+                              className={`flex-1 py-2 rounded-xl text-[13px] font-medium disabled:opacity-50 ${MUTED_BTN}`}
                             >
                               Reject
                             </button>
                             <button
                               onClick={() => respondToResolution("accept")}
                               disabled={isRespondingToResolution}
-                              className="flex-1 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-50"
-                              style={{ background: colors.accent.primary, color: colors.accent.text }}
+                              className="flex-1 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-50 bg-white text-surface-base"
                             >
                               Accept
                             </button>
@@ -3084,10 +2330,7 @@ export const OrderDetailScreen = ({
                         )}
                         {disputeInfo.user_confirmed &&
                           !disputeInfo.merchant_confirmed && (
-                            <p
-                              className="text-[11px] mt-2"
-                              style={{ color: colors.text.secondary }}
-                            >
+                            <p className="text-[11px] mt-2 text-text-secondary">
                               You accepted. Waiting for merchant confirmation...
                             </p>
                           )}
@@ -3101,31 +2344,19 @@ export const OrderDetailScreen = ({
                   <div className="flex items-center gap-2">
                     <div className="flex gap-1">
                       <div
-                        className="w-1.5 h-1.5 rounded-full animate-bounce"
-                        style={{
-                          background: colors.text.tertiary,
-                          animationDelay: "0ms",
-                        }}
+                        className="w-1.5 h-1.5 rounded-full animate-bounce bg-text-tertiary"
+                        style={{ animationDelay: "0ms" }}
                       />
                       <div
-                        className="w-1.5 h-1.5 rounded-full animate-bounce"
-                        style={{
-                          background: colors.text.tertiary,
-                          animationDelay: "150ms",
-                        }}
+                        className="w-1.5 h-1.5 rounded-full animate-bounce bg-text-tertiary"
+                        style={{ animationDelay: "150ms" }}
                       />
                       <div
-                        className="w-1.5 h-1.5 rounded-full animate-bounce"
-                        style={{
-                          background: colors.text.tertiary,
-                          animationDelay: "300ms",
-                        }}
+                        className="w-1.5 h-1.5 rounded-full animate-bounce bg-text-tertiary"
+                        style={{ animationDelay: "300ms" }}
                       />
                     </div>
-                    <span
-                      className="text-[11px]"
-                      style={{ color: colors.text.tertiary }}
-                    >
+                    <span className="text-[11px] text-text-tertiary">
                       {activeOrder.merchant.name} is typing...
                     </span>
                   </div>
@@ -3162,44 +2393,32 @@ export const OrderDetailScreen = ({
 
               {/* Image preview bar */}
               {pendingImage && (
-                <div
-                  className="px-4 py-2 flex items-center gap-3"
-                  style={{ borderTop: `1px solid ${colors.border.medium}` }}
-                >
+                <div className="px-4 py-2 flex items-center gap-3 border-t border-white/10">
                   <div className="relative">
                     <img
                       src={pendingImage.previewUrl}
                       alt="Preview"
-                      className="w-16 h-16 rounded-xl object-cover"
-                      style={{ border: `1px solid ${colors.border.medium}` }}
+                      className="w-16 h-16 rounded-xl object-cover border border-white/10"
                     />
                     <button
                       onClick={clearPendingImage}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center"
-                      style={{ background: colors.text.tertiary }}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center bg-text-tertiary"
                     >
                       <X className="w-3 h-3 text-white" />
                     </button>
                   </div>
-                  <span
-                    className="text-[13px] flex-1"
-                    style={{ color: colors.text.secondary }}
-                  >
+                  <span className="text-[13px] flex-1 text-text-secondary">
                     Image ready to send
                   </span>
                 </div>
               )}
 
-              <div
-                className="p-4 pb-8"
-                style={{ borderTop: `1px solid ${colors.border.medium}` }}
-              >
+              <div className="p-4 pb-8 border-t border-white/10">
                 <div className="flex items-center gap-2">
                   {/* Emoji button */}
                   <button
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: colors.bg.secondary }}
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-surface-raised"
                   >
                     <span className="text-lg">😊</span>
                   </button>
@@ -3207,19 +2426,12 @@ export const OrderDetailScreen = ({
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50"
-                    style={{ background: colors.bg.secondary }}
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50 bg-surface-raised"
                   >
                     {isUploading ? (
-                      <Loader2
-                        className="w-4 h-4 animate-spin"
-                        style={{ color: colors.text.tertiary }}
-                      />
+                      <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
                     ) : (
-                      <ArrowUpRight
-                        className="w-4 h-4"
-                        style={{ color: colors.text.tertiary }}
-                      />
+                      <ArrowUpRight className="w-4 h-4 text-text-tertiary" />
                     )}
                   </button>
                   <input
@@ -3240,8 +2452,7 @@ export const OrderDetailScreen = ({
                     placeholder={
                       pendingImage ? "Add a caption..." : "Message..."
                     }
-                    className="flex-1 rounded-xl px-4 py-3 text-[15px] outline-none"
-                    style={{ background: colors.bg.secondary, color: colors.text.primary }}
+                    className="flex-1 rounded-xl px-4 py-3 text-[15px] outline-none bg-surface-raised text-text-primary"
                   />
                   <button
                     onClick={() => {
@@ -3253,16 +2464,14 @@ export const OrderDetailScreen = ({
                       setShowEmojiPicker(false);
                     }}
                     disabled={isUploading}
-                    className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50"
-                    style={{ background: pendingImage ? '#f97316' : colors.accent.primary }}
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50 ${
+                      pendingImage ? "bg-[#f97316]" : "bg-white"
+                    }`}
                   >
                     {isUploading ? (
-                      <Loader2 className="w-5 h-5 animate-spin" style={{ color: colors.white }} />
+                      <Loader2 className="w-5 h-5 animate-spin text-white" />
                     ) : (
-                      <ChevronRight
-                        className="w-5 h-5"
-                        style={{ color: colors.white }}
-                      />
+                      <ChevronRight className="w-5 h-5 text-white" />
                     )}
                   </button>
                 </div>

@@ -17,11 +17,12 @@ import { useState as useStateHook, useEffect } from "react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
 import { HomeSparkline } from "./HomeDecorations";
 import { BottomNav } from "./BottomNav";
-import { colors, card as cardPreset, sectionLabel, mono } from "@/lib/design/theme";
 import type { Screen, Order } from "./types";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 const IS_MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
+
+const SECTION_LABEL = "text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase";
 
 export interface HomeScreenProps {
   userName: string;
@@ -64,23 +65,16 @@ function TxRow({ order, index, onPress, avatarUrl }: { order: Order; index: numb
     <motion.button
       whileTap={{ scale: 0.985 }}
       onClick={onPress}
-      className="w-full flex items-center gap-4 text-left"
-      style={{ padding: '14px 0' }}
+      className="w-full flex items-center gap-4 text-left py-[14px]"
     >
       {/* Avatar */}
-      <div className="relative shrink-0"
-        style={{
-          width: 48, height: 48, borderRadius: 16, overflow: 'hidden',
-          background: colors.bg.secondary,
-          border: `1px solid ${colors.border.subtle}`,
-          flexShrink: 0,
-        }}>
+      <div className="relative shrink-0 w-12 h-12 rounded-[16px] overflow-hidden bg-surface-raised border border-border-subtle">
         {avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl} alt={order.merchant.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <img src={avatarUrl} alt={order.merchant.name} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <span style={{ fontSize: 18, fontWeight: 800, color: colors.text.primary }}>
+            <span className="text-[18px] font-extrabold text-text-primary">
               {order.merchant.name?.charAt(0)?.toUpperCase() ?? 'T'}
             </span>
           </div>
@@ -89,31 +83,27 @@ function TxRow({ order, index, onPress, avatarUrl }: { order: Order; index: numb
           <motion.div
             animate={{ scale: [1, 1.3, 1], opacity: [1, 0.4, 1] }}
             transition={{ duration: 2, repeat: Infinity }}
-            style={{
-              position: 'absolute', bottom: -2, right: -2,
-              width: 10, height: 10, borderRadius: '50%',
-              background: colors.success, border: `2px solid ${colors.bg.primary}`,
-            }}
+            className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success border-2 border-surface-base"
           />
         )}
       </div>
 
       {/* Name + date */}
       <div className="flex-1 min-w-0">
-        <p style={{ fontSize: 15, fontWeight: 700, color: colors.text.primary, letterSpacing: '-0.01em', marginBottom: 3 }}>
+        <p className="text-[15px] font-bold text-text-primary tracking-[-0.01em] mb-[3px]">
           {isBuy ? 'Buy USDT' : 'Sell USDT'}
         </p>
-        <p style={{ fontSize: 12, fontWeight: 500, color: colors.text.tertiary }}>
+        <p className="text-[12px] font-medium text-text-tertiary">
           {order.merchant.name} · {formatDate(order.createdAt)}
         </p>
       </div>
 
       {/* Amount */}
       <div className="text-right shrink-0">
-        <p style={{ fontSize: 15, fontWeight: 700, color: colors.text.primary, letterSpacing: '-0.015em', ...mono }}>
+        <p className="text-[15px] font-bold text-text-primary tracking-[-0.015em] font-mono">
           {isBuy ? '-' : '+'}{'\u062F.\u0625'}{amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
         </p>
-        <p style={{ fontSize: 11, fontWeight: 500, color: colors.text.tertiary, marginTop: 2, ...mono }}>
+        <p className="text-[11px] font-medium text-text-tertiary mt-0.5 font-mono">
           {parseFloat(order.cryptoAmount).toFixed(2)} USDT
         </p>
       </div>
@@ -147,16 +137,14 @@ function WalletBalanceSection({
   return (
     <>
       {/* ── Balance ── */}
-      <div style={{ marginBottom: 8 }}>
+      <div className="mb-2">
         {/* Label row */}
-        <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
-          <p style={{ ...sectionLabel, margin: 0 }}>
-            Total Balance
-          </p>
+        <div className="flex items-center justify-between mb-2">
+          <p className={SECTION_LABEL}>Total Balance</p>
           <div className="flex items-center gap-1.5">
             <motion.div animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.8, repeat: Infinity }}
-              style={{ width: 5, height: 5, borderRadius: '50%', background: colors.success }} />
-            <span style={{ fontSize: 10, fontWeight: 600, color: colors.text.tertiary, letterSpacing: '0.05em', ...mono }}>
+              className="w-[5px] h-[5px] rounded-full bg-success" />
+            <span className="text-[10px] font-semibold text-text-tertiary tracking-[0.05em] font-mono">
               {currentRate} AED
             </span>
           </div>
@@ -166,46 +154,46 @@ function WalletBalanceSection({
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
 
             {/* Balance number */}
-            <div className="flex items-baseline gap-1" style={{ marginBottom: 6 }}>
-              <span style={{ fontSize: 58, fontWeight: 800, letterSpacing: '-0.045em', lineHeight: 1, color: colors.text.primary, ...mono }}>
+            <div className="flex items-baseline gap-1 mb-1.5">
+              <span className="text-[58px] font-extrabold tracking-[-0.045em] leading-none text-text-primary font-mono">
                 {balWhole}
               </span>
-              <span style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', color: colors.text.quaternary, lineHeight: 1, ...mono }}>
+              <span className="text-[28px] font-bold tracking-[-0.02em] text-text-quaternary leading-none font-mono">
                 {balDec}
               </span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: colors.text.quaternary, marginLeft: 4, letterSpacing: '0.04em' }}>
+              <span className="text-[13px] font-semibold text-text-quaternary ml-1 tracking-[0.04em]">
                 USDT
               </span>
             </div>
 
             {/* Profit */}
-            <div className="flex items-center gap-1.5" style={{ marginBottom: 12 }}>
-              <TrendingUp size={11} style={{ color: colors.success }} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: colors.success, letterSpacing: '0.01em', ...mono }}>+$557.00 today</span>
+            <div className="flex items-center gap-1.5 mb-3">
+              <TrendingUp size={11} className="text-success" />
+              <span className="text-[12px] font-bold text-success tracking-[0.01em] font-mono">+$557.00 today</span>
             </div>
 
             {/* Sparkline */}
-            <div style={{ marginLeft: -4, marginRight: -4 }}>
-              <div className="flex justify-between mb-1" style={{ paddingLeft: 4, paddingRight: 4 }}>
-                <span style={{ fontSize: 8, fontWeight: 600, color: colors.text.quaternary, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            <div className="-mx-1">
+              <div className="flex justify-between mb-1 px-1">
+                <span className="text-[8px] font-semibold text-text-quaternary tracking-[0.1em] uppercase">
                   7D
                 </span>
-                <span style={{ fontSize: 8, fontWeight: 700, color: colors.success, letterSpacing: '0.06em', ...mono }}>
+                <span className="text-[8px] font-bold text-success tracking-[0.06em] font-mono">
                   ↑ 3.6%
                 </span>
               </div>
               <HomeSparkline height={72} />
-              <div className="flex justify-between mt-1" style={{ paddingLeft: 4, paddingRight: 4 }}>
-                <span style={{ fontSize: 8, color: colors.text.quaternary, fontWeight: 500 }}>Mar 13</span>
-                <span style={{ fontSize: 8, color: colors.text.quaternary, fontWeight: 500 }}>Today</span>
+              <div className="flex justify-between mt-1 px-1">
+                <span className="text-[8px] text-text-quaternary font-medium">Mar 13</span>
+                <span className="text-[8px] text-text-quaternary font-medium">Today</span>
               </div>
             </div>
 
           </motion.div>
         ) : (
           <div className="flex flex-col items-start gap-4">
-            <p style={{ fontSize: 52, fontWeight: 800, letterSpacing: '-0.04em', color: colors.text.quaternary, lineHeight: 1 }}>——</p>
-            <p style={{ fontSize: 14, color: colors.text.secondary, lineHeight: 1.5 }}>
+            <p className="text-[52px] font-extrabold tracking-[-0.04em] text-text-quaternary leading-none">——</p>
+            <p className="text-[14px] text-text-secondary leading-[1.5]">
               {IS_EMBEDDED_WALLET
                 ? embeddedWallet?.state === 'locked' ? 'Unlock your wallet' : 'Set up a wallet to start trading'
                 : 'Connect your Solana wallet to trade'}
@@ -217,8 +205,7 @@ function WalletBalanceSection({
                   else setShowWalletSetup(true);
                 } else { setShowWalletModal(true); }
               }}
-              className="px-6 py-3 rounded-2xl"
-              style={{ background: colors.accent.primary, color: colors.accent.text, fontSize: 14, fontWeight: 700 }}>
+              className="px-6 py-3 rounded-2xl bg-accent text-accent-text text-[14px] font-bold">
               {IS_EMBEDDED_WALLET
                 ? embeddedWallet?.state === 'locked' ? 'Unlock Wallet' : 'Create Wallet'
                 : 'Connect Wallet'}
@@ -230,8 +217,7 @@ function WalletBalanceSection({
       {/* ── Action buttons ── */}
       <motion.div
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.12 }}
-        className="flex justify-around"
-        style={{ marginTop: 28 }}
+        className="flex justify-around mt-7"
       >
         {([
           { label: 'Send',     Icon: ArrowUpRight,  primary: false,  fn: () => { setTradeType('sell'); setScreen('trade'); } },
@@ -241,18 +227,17 @@ function WalletBalanceSection({
         ] as const).map(({ label, Icon, primary, fn }) => (
           <motion.button key={label} whileTap={{ scale: 0.91 }} onClick={fn}
             className="flex flex-col items-center gap-2 cursor-pointer">
-            <div className="flex items-center justify-center"
-              style={{
-                width: 56, height: 56,
-                borderRadius: 18,
-                ...(primary
-                  ? { background: colors.accent.primary, boxShadow: `0 4px 20px ${colors.accent.glow}` }
-                  : { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }),
-              }}>
+            <div className={`flex items-center justify-center w-14 h-14 rounded-[18px] ${
+              primary
+                ? 'bg-accent shadow-[0_4px_20px_rgba(255,255,255,0.08)]'
+                : 'bg-surface-card border border-border-subtle'
+            }`}>
               <Icon size={22} strokeWidth={2}
-                style={{ color: primary ? colors.white : colors.text.secondary }} />
+                className={primary ? 'text-white' : 'text-text-secondary'} />
             </div>
-            <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: primary ? colors.text.primary : colors.text.secondary }}>
+            <span className={`text-[9px] font-bold uppercase tracking-[0.12em] ${
+              primary ? 'text-text-primary' : 'text-text-secondary'
+            }`}>
               {label}
             </span>
           </motion.button>
@@ -320,97 +305,86 @@ export const HomeScreen = ({
   }
 
   return (
-    <div className="relative flex flex-col" style={{ minHeight: '100dvh', background: colors.bg.primary }}>
+    <div className="relative flex flex-col min-h-[100dvh] bg-surface-base">
 
       {/* ══════════════════════════════════════════════
           HERO CARD — gradient dark surface
          ══════════════════════════════════════════════ */}
-      <div className="relative shrink-0" style={{
-        minHeight: cardH ? cardH : '50svh',
-        paddingBottom: 12,
-        borderRadius: '0 0 32px 32px',
-        background: `linear-gradient(168deg, ${colors.bg.secondary} 0%, ${colors.bg.primary} 100%)`,
-      }}>
+      <div
+        className="relative shrink-0 pb-3 rounded-b-[32px] bg-gradient-to-b from-surface-raised to-surface-base"
+        style={{ minHeight: cardH ? `${cardH}px` : '50svh' }}
+      >
 
         {/* ── Ambient decorations ── */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-b-[32px]">
           {/* Accent glow top-left */}
-          <div style={{
-            position: 'absolute', top: '-20%', left: '-15%',
-            width: '65%', height: '65%',
-            background: `radial-gradient(ellipse, ${colors.accent.glow} 0%, transparent 65%)`,
-            filter: 'blur(60px)',
-          }} />
+          <div
+            className="absolute -top-[20%] -left-[15%] w-[65%] h-[65%] blur-[60px]"
+            style={{ background: 'radial-gradient(ellipse, rgba(255,255,255,0.08) 0%, transparent 65%)' }}
+          />
 
           {/* Accent glow bottom-right */}
-          <div style={{
-            position: 'absolute', bottom: '-15%', right: '-10%',
-            width: '60%', height: '60%',
-            background: 'radial-gradient(ellipse, rgba(16,185,129,0.04) 0%, transparent 65%)',
-            filter: 'blur(55px)',
-          }} />
+          <div
+            className="absolute -bottom-[15%] -right-[10%] w-[60%] h-[60%] blur-[55px]"
+            style={{ background: 'radial-gradient(ellipse, rgba(16,185,129,0.04) 0%, transparent 65%)' }}
+          />
 
           {/* Shimmer */}
           <motion.div
             animate={{ x: ['-100%', '200%'] }}
             transition={{ duration: 6, repeat: Infinity, repeatDelay: 8, ease: 'easeInOut' }}
-            style={{
-              position: 'absolute', top: 0, bottom: 0,
-              left: 0, width: '35%',
-              background: 'linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.015) 50%, transparent 100%)',
-              transform: 'skewX(-12deg)',
-            }}
+            className="absolute top-0 bottom-0 left-0 w-[35%] -skew-x-12"
+            style={{ background: 'linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.015) 50%, transparent 100%)' }}
           />
 
           {/* Dot grid */}
-          <div style={{
-            position: 'absolute', inset: 0,
-            backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.025) 1px, transparent 1px)',
-            backgroundSize: '26px 26px',
-          }} />
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.025) 1px, transparent 1px)',
+              backgroundSize: '26px 26px',
+            }}
+          />
 
           {/* Bottom rule */}
-          <div style={{
-            position: 'absolute', bottom: 0, left: 0, right: 0,
-            height: 1,
-            background: `linear-gradient(90deg, transparent, ${colors.border.subtle} 30%, ${colors.border.subtle} 70%, transparent)`,
-          }} />
+          <div
+            className="absolute bottom-0 left-0 right-0 h-px"
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.06) 70%, transparent)' }}
+          />
         </div>
 
         {/* ── Header ── */}
-        <div className={`${maxW} mx-auto relative z-10`} style={{ padding: '16px 24px 0' }}>
-          <div className="flex items-center justify-between" style={{ marginBottom: 16 }}>
+        <div className={`${maxW} mx-auto relative z-10 px-6 pt-4`}>
+          <div className="flex items-center justify-between mb-4">
 
             {/* Avatar + name + wallet */}
             <div className="flex items-center gap-3">
               <motion.button whileTap={{ scale: 0.92 }} onClick={() => setScreen('profile')}>
-                <div className="relative w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ background: colors.accent.primary }}>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: colors.accent.text }}>
+                <div className="relative w-10 h-10 rounded-full flex items-center justify-center bg-accent">
+                  <span className="text-[15px] font-extrabold text-accent-text">
                     {userName.charAt(0).toUpperCase()}
                   </span>
                   {/* <ConnectionIndicator isConnected={!!userId} /> */}
                 </div>
               </motion.button>
               <div className="flex flex-col gap-0.5">
-                <span style={{ fontSize: 17, fontWeight: 700, color: colors.text.primary, letterSpacing: '-0.02em' }}>
+                <span className="text-[17px] font-bold text-text-primary tracking-[-0.02em]">
                   {userName}
                 </span>
                 {solanaWallet.walletAddress && (
                   <div className="flex items-center gap-1.5">
-                    <span style={{ fontSize: 10, color: colors.text.tertiary, letterSpacing: '0.04em', ...mono }}>
+                    <span className="text-[10px] text-text-tertiary tracking-[0.04em] font-mono">
                       {solanaWallet.walletAddress.slice(0, 6)}…{solanaWallet.walletAddress.slice(-6)}
                     </span>
                     <motion.button whileTap={{ scale: 0.88 }} onClick={copyNavWallet}
-                      className="flex items-center justify-center"
-                      style={{
-                        width: 18, height: 18, borderRadius: 5,
-                        background: navCopied ? colors.successDim : colors.surface.card,
-                        border: navCopied ? `1px solid ${colors.successBorder}` : `1px solid ${colors.border.subtle}`,
-                      }}>
+                      className={`flex items-center justify-center w-[18px] h-[18px] rounded-[5px] ${
+                        navCopied
+                          ? 'bg-success-dim border border-success-border'
+                          : 'bg-surface-card border border-border-subtle'
+                      }`}>
                       {navCopied
-                        ? <Check size={9} style={{ color: colors.success }} />
-                        : <Copy size={9} style={{ color: colors.text.tertiary }} />}
+                        ? <Check size={9} className="text-success" />
+                        : <Copy size={9} className="text-text-tertiary" />}
                     </motion.button>
                   </div>
                 )}
@@ -419,28 +393,18 @@ export const HomeScreen = ({
 
             {/* Bell */}
             <motion.button whileTap={{ scale: 0.88 }} onClick={() => setScreen('chats')}
-              className="relative flex items-center justify-center"
-              style={{
-                width: 38, height: 38, borderRadius: 13,
-                background: colors.surface.card,
-                border: `1px solid ${colors.border.subtle}`,
-              }}>
-              <Bell size={17} strokeWidth={1.8} style={{ color: colors.text.secondary }} />
+              className="relative flex items-center justify-center w-[38px] h-[38px] rounded-[13px] bg-surface-card border border-border-subtle">
+              <Bell size={17} strokeWidth={1.8} className="text-text-secondary" />
               {unreadCount > 0 && (
-                <div className="absolute flex items-center justify-center"
-                  style={{
-                    top: -3, right: -3,
-                    width: 15, height: 15, borderRadius: '50%',
-                    background: colors.accent.primary, border: `2px solid ${colors.bg.primary}`,
-                  }}>
-                  <span style={{ fontSize: 7, fontWeight: 800, color: colors.white }}>{unreadCount}</span>
+                <div className="absolute -top-[3px] -right-[3px] flex items-center justify-center w-[15px] h-[15px] rounded-full bg-accent border-2 border-surface-base">
+                  <span className="text-[7px] font-extrabold text-white">{unreadCount}</span>
                 </div>
               )}
             </motion.button>
           </div>
 
           {/* ── Balance section ── */}
-          <div style={{ marginTop: 32 }} />
+          <div className="mt-8" />
           <WalletBalanceSection
             displayBalance={displayBalance}
             isWalletReady={isWalletReady}
@@ -465,22 +429,18 @@ export const HomeScreen = ({
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.18, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="flex-1 relative z-10"
-        style={{
-          background: colors.bg.primary,
-          paddingBottom: 96,
-        }}
+        className="flex-1 relative z-10 bg-surface-base pb-24"
       >
         <div className={`${maxW} mx-auto px-5 pt-4`}>
 
           <div className="mb-6">
             <div className="flex justify-between items-center mb-3">
-              <p style={{ ...sectionLabel }}>Circle</p>
+              <p className={SECTION_LABEL}>Circle</p>
             </div>
             {orders.length === 0 ? (
-              <p style={{ fontSize: 12, color: colors.text.tertiary, fontWeight: 600 }}>No trading partners yet</p>
+              <p className="text-[12px] text-text-tertiary font-semibold">No trading partners yet</p>
             ) : (
-              <div className="flex gap-3 overflow-x-auto no-scrollbar" style={{ marginLeft: -4, paddingLeft: 4, paddingRight: 4 }}>
+              <div className="flex gap-3 overflow-x-auto no-scrollbar -ml-1 px-1">
                 {(() => {
                   const seen = new Set<string>();
                   return orders.filter(o => { if (seen.has(o.merchant.id)) return false; seen.add(o.merchant.id); return true; }).slice(0, 6);
@@ -492,32 +452,19 @@ export const HomeScreen = ({
                       initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.18 + i * 0.06 }}
                       whileTap={{ scale: 0.93 }} className="flex flex-col items-center gap-1.5 shrink-0">
                       <div className="relative">
-                        <div style={{
-                          padding: 2, borderRadius: 22,
-                          background: 'transparent',
-                          border: `1.5px solid ${colors.border.medium}`,
-                        }}>
-                          <div style={{
-                            width: 52, height: 52, borderRadius: 19,
-                            background: colors.bg.secondary,
-                            border: `1px solid ${colors.border.subtle}`,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}>
-                            <span style={{ fontSize: 20, fontWeight: 800, color: colors.text.primary }}>{initial}</span>
+                        <div className="p-0.5 rounded-[22px] bg-transparent border-[1.5px] border-border-medium">
+                          <div className="w-[52px] h-[52px] rounded-[19px] bg-surface-raised border border-border-subtle flex items-center justify-center">
+                            <span className="text-[20px] font-extrabold text-text-primary">{initial}</span>
                           </div>
                         </div>
                         {isActive && (
                           <motion.div animate={{ scale: [1, 1.35, 1] }} transition={{ duration: 2, repeat: Infinity }}
-                            className="absolute flex items-center justify-center"
-                            style={{
-                              bottom: -3, right: -3, width: 14, height: 14, borderRadius: '50%',
-                              background: colors.success, border: `2px solid ${colors.bg.primary}`,
-                            }}>
+                            className="absolute -bottom-[3px] -right-[3px] flex items-center justify-center w-[14px] h-[14px] rounded-full bg-success border-2 border-surface-base">
                             <Zap size={6} className="fill-white text-white" />
                           </motion.div>
                         )}
                       </div>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: colors.text.tertiary }}>
+                      <span className="text-[10px] font-semibold text-text-tertiary">
                         {order.merchant.name?.split(' ')?.[0] ?? 'Trader'}
                       </span>
                     </motion.div>
@@ -529,14 +476,13 @@ export const HomeScreen = ({
 
           {/* Section title */}
           <div className="flex items-center justify-between mb-1">
-            <h2 style={{ fontSize: 20, fontWeight: 800, color: colors.text.primary, letterSpacing: '-0.025em' }}>
+            <h2 className="text-[20px] font-extrabold text-text-primary tracking-[-0.025em]">
               Transactions
             </h2>
             {orders.length > 0 && (
               <motion.button whileTap={{ scale: 0.94 }} onClick={() => setScreen('orders')}
-                className="flex items-center gap-0.5"
-                style={{ fontSize: 13, fontWeight: 600, color: colors.text.tertiary }}>
-                See all <ChevronRight size={14} strokeWidth={2} style={{ marginTop: 1 }} />
+                className="flex items-center gap-0.5 text-[13px] font-semibold text-text-tertiary">
+                See all <ChevronRight size={14} strokeWidth={2} className="mt-px" />
               </motion.button>
             )}
           </div>
@@ -554,20 +500,19 @@ export const HomeScreen = ({
                   setScreen('matching');
                 } else { setScreen('order'); }
               }}
-              className="w-full flex items-center gap-3 text-left rounded-[18px] mt-3 mb-1"
-              style={{ padding: '13px 15px', background: colors.accent.subtle, border: `1px solid ${colors.accent.border}` }}
+              className="w-full flex items-center gap-3 text-left rounded-[18px] mt-3 mb-1 py-[13px] px-[15px] bg-white/[0.06] border border-white/15"
             >
               <motion.div animate={{ opacity: [1, 0.25, 1] }} transition={{ duration: 1.4, repeat: Infinity }}
-                style={{ width: 7, height: 7, borderRadius: '50%', background: colors.accent.primary, flexShrink: 0 }} />
+                className="w-[7px] h-[7px] rounded-full bg-white shrink-0" />
               <div className="flex-1">
-                <p style={{ fontSize: 14, fontWeight: 700, color: colors.text.primary, marginBottom: 2, letterSpacing: '-0.01em' }}>
+                <p className="text-[14px] font-bold text-text-primary mb-0.5 tracking-[-0.01em]">
                   {pendingOrders[0].type === 'buy' ? 'Buying' : 'Selling'} {parseFloat(pendingOrders[0].cryptoAmount).toFixed(2)} USDT
                 </p>
-                <p style={{ fontSize: 11, color: colors.text.tertiary, fontWeight: 500 }}>
+                <p className="text-[11px] text-text-tertiary font-medium">
                   {pendingOrders[0].status === 'pending' ? 'Finding merchant...' : `Step ${pendingOrders[0].step} of 4 · Tap to continue`}
                 </p>
               </div>
-              <ChevronRight size={17} strokeWidth={2} style={{ color: colors.text.tertiary, flexShrink: 0 }} />
+              <ChevronRight size={17} strokeWidth={2} className="text-text-tertiary shrink-0" />
             </motion.button>
           )}
 
@@ -614,7 +559,7 @@ export const HomeScreen = ({
                       }}
                     />
                     {i < rows.length - 1 && (
-                      <div style={{ height: 1, background: colors.border.subtle, marginLeft: 64 }} />
+                      <div className="h-px bg-border-subtle ml-16" />
                     )}
                   </motion.div>
                 ))}
@@ -626,11 +571,11 @@ export const HomeScreen = ({
                     transition={{ delay: 0.55 }}
                     className="flex items-center justify-center gap-2 mt-4 mb-2"
                   >
-                    <div style={{ flex: 1, height: 1, background: colors.border.subtle }} />
-                    <span style={{ fontSize: 10, fontWeight: 600, color: colors.text.quaternary, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                    <div className="flex-1 h-px bg-border-subtle" />
+                    <span className="text-[10px] font-semibold text-text-quaternary tracking-[0.1em] uppercase">
                       Sample data
                     </span>
-                    <div style={{ flex: 1, height: 1, background: colors.border.subtle }} />
+                    <div className="flex-1 h-px bg-border-subtle" />
                   </motion.div>
                 )}
               </div>
