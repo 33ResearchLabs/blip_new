@@ -517,70 +517,40 @@ export const HomeScreen = ({
           )}
 
           {/* Transaction rows */}
-          {(() => {
-            const DUMMY: {
-              id: string; type: 'buy' | 'sell'; cryptoAmount: string; fiatAmount: string;
-              cryptoCode: string; fiatCode: string;
-              merchant: { id: string; name: string; rating: number; trades: number; rate: number; paymentMethod: 'bank' | 'cash' };
-              status: 'complete'; step: 4; createdAt: Date; expiresAt: Date;
-              avatar: string;
-            }[] = [
-              { id: 'd1', type: 'buy',  cryptoAmount: '120',  fiatAmount: '440.64',  cryptoCode: 'USDC', fiatCode: 'KES', merchant: { id: 'm1', name: 'AlphaTrader',  rating: 4.9, trades: 312, rate: 3.672, paymentMethod: 'bank' }, status: 'complete', step: 4, createdAt: new Date('2024-03-18'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=11' },
-              { id: 'd2', type: 'sell', cryptoAmount: '85',   fiatAmount: '312.12',  cryptoCode: 'USDC', fiatCode: 'KES', merchant: { id: 'm2', name: 'FastMerchant', rating: 4.7, trades: 198, rate: 3.672, paymentMethod: 'bank' }, status: 'complete', step: 4, createdAt: new Date('2024-03-16'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=32' },
-              { id: 'd3', type: 'buy',  cryptoAmount: '200',  fiatAmount: '734.40',  cryptoCode: 'USDC', fiatCode: 'KES', merchant: { id: 'm3', name: 'VaultFX',      rating: 5.0, trades: 540, rate: 3.672, paymentMethod: 'bank' }, status: 'complete', step: 4, createdAt: new Date('2024-03-14'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=47' },
-              { id: 'd4', type: 'sell', cryptoAmount: '50',   fiatAmount: '183.60',  cryptoCode: 'USDC', fiatCode: 'KES', merchant: { id: 'm4', name: 'SwiftPay',     rating: 4.8, trades: 87,  rate: 3.672, paymentMethod: 'cash' }, status: 'complete', step: 4, createdAt: new Date('2024-03-11'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=23' },
-              { id: 'd5', type: 'buy',  cryptoAmount: '300',  fiatAmount: '1101.60', cryptoCode: 'USDC', fiatCode: 'KES', merchant: { id: 'm5', name: 'NovaTrade',    rating: 4.6, trades: 231, rate: 3.672, paymentMethod: 'bank' }, status: 'complete', step: 4, createdAt: new Date('2024-03-09'), expiresAt: new Date(), avatar: 'https://i.pravatar.cc/150?img=58' },
-            ];
-
-            const rows = orders.length > 0
-              ? orders.slice(0, 8)
-              : (DUMMY as typeof orders);
-
-            return (
-              <div className="mt-2">
-                {rows.map((order, i) => (
-                  <motion.div
-                    key={order.id}
-                    initial={{ opacity: 0, x: -12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.1 + i * 0.07, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                  >
-                    <TxRow
-                      order={order}
-                      index={i}
-                      avatarUrl={orders.length === 0 ? (DUMMY[i] as typeof DUMMY[0])?.avatar : undefined}
-                      onPress={() => {
-                        if (orders.length > 0) {
-                          setActiveOrderId(order.id);
-                          setScreen('order');
-                        } else {
-                          setScreen('trade');
-                        }
-                      }}
-                    />
-                    {i < rows.length - 1 && (
-                      <div className="h-px bg-border-subtle ml-16" />
-                    )}
-                  </motion.div>
-                ))}
-
-                {orders.length === 0 && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.55 }}
-                    className="flex items-center justify-center gap-2 mt-4 mb-2"
-                  >
-                    <div className="flex-1 h-px bg-border-subtle" />
-                    <span className="text-[10px] font-semibold text-text-quaternary tracking-[0.1em] uppercase">
-                      Sample data
-                    </span>
-                    <div className="flex-1 h-px bg-border-subtle" />
-                  </motion.div>
-                )}
-              </div>
-            );
-          })()}
+          {orders.length > 0 ? (
+            <div className="mt-2">
+              {orders.slice(0, 8).map((order, i, arr) => (
+                <motion.div
+                  key={order.id}
+                  initial={{ opacity: 0, x: -12 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 + i * 0.07, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <TxRow
+                    order={order}
+                    index={i}
+                    onPress={() => {
+                      setActiveOrderId(order.id);
+                      setScreen('order');
+                    }}
+                  />
+                  {i < arr.length - 1 && (
+                    <div className="h-px bg-border-subtle ml-16" />
+                  )}
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2 }}
+              className="mt-4 py-8 flex flex-col items-center justify-center text-center"
+            >
+              <p className="text-[13px] font-semibold text-text-secondary mb-1">No transactions yet</p>
+              <p className="text-[11px] text-text-tertiary">Your trades will appear here</p>
+            </motion.div>
+          )}
         </div>
       </motion.div>
 

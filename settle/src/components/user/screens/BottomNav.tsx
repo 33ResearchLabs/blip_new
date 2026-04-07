@@ -20,10 +20,10 @@ const TABS = [
 
 export const BottomNav = ({ screen, setScreen }: BottomNavProps) => (
   <div
-    className="fixed bottom-0 left-0 right-0 z-50 bg-surface-base/85 backdrop-blur-[20px] border-t border-border-subtle"
-    style={{ paddingBottom: 'env(safe-area-inset-bottom, 12px)' }}
+    className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full max-w-110 px-3 bg-surface-base "
+    style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 12px), 12px)' }}
   >
-    <div className="flex items-center justify-around px-4 pt-2.5 pb-1 max-w-[430px] mx-auto">
+    <div className="flex items-center justify-around px-4 pt-2.5 pb-1 rounded-2xl bg-surface-base/90 backdrop-blur-[20px] border border-border-subtle shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
       {TABS.map(({ key, Icon, label }) => {
         const on = (screen as string) === key;
         return (
@@ -31,7 +31,7 @@ export const BottomNav = ({ screen, setScreen }: BottomNavProps) => (
             key={key}
             whileTap={{ scale: 0.88 }}
             onClick={() => setScreen(key as Screen)}
-            className="flex flex-col items-center gap-1 min-w-[52px]"
+            className="flex flex-col items-center gap-1 min-w-13"
           >
             <div className="relative flex items-center justify-center w-7 h-7">
               <Icon

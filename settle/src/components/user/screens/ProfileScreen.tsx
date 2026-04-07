@@ -434,13 +434,13 @@ export const ProfileScreen = ({
               onClick={() => setShowAddBank(false)}
             >
               <div
-                className={`w-full ${maxW} rounded-2xl shadow-2xl bg-surface-card border border-border-subtle`}
+                className={`w-full ${maxW} rounded-2xl shadow-2xl bg-surface-base border border-border-medium`}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
                   <p className="text-[17px] font-extrabold text-text-primary tracking-[-0.02em]">Add Bank Account</p>
                   <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowAddBank(false)}
-                    className="w-8 h-8 rounded-[10px] flex items-center justify-center bg-surface-card">
+                    className="w-8 h-8 rounded-[10px] flex items-center justify-center bg-surface-hover">
                     <X size={15} className="text-text-tertiary" />
                   </motion.button>
                 </div>
@@ -451,7 +451,7 @@ export const ProfileScreen = ({
                       value={newBank.bank}
                       onChange={(e) => setNewBank(p => ({ ...p, bank: e.target.value }))}
                       placeholder="Emirates NBD"
-                      className="w-full bg-surface-card border border-border-subtle rounded-[12px] px-3.5 py-2.5 text-[14px] font-semibold text-text-primary outline-none"
+                      className="w-full bg-surface-hover border border-border-medium rounded-[12px] px-3.5 py-2.5 text-[14px] font-semibold text-text-primary placeholder:text-text-tertiary outline-none focus:border-border-strong"
                     />
                   </div>
                   <div>
@@ -460,7 +460,7 @@ export const ProfileScreen = ({
                       value={newBank.iban}
                       onChange={(e) => setNewBank(p => ({ ...p, iban: e.target.value }))}
                       placeholder="AE12 0345 0000 0012 3456 789"
-                      className="w-full bg-surface-card border border-border-subtle rounded-[12px] px-3.5 py-2.5 text-[14px] font-semibold text-text-primary outline-none"
+                      className="w-full bg-surface-hover border border-border-medium rounded-[12px] px-3.5 py-2.5 text-[14px] font-semibold text-text-primary placeholder:text-text-tertiary outline-none focus:border-border-strong"
                     />
                   </div>
                   <div>
@@ -469,7 +469,7 @@ export const ProfileScreen = ({
                       value={newBank.name}
                       onChange={(e) => setNewBank(p => ({ ...p, name: e.target.value }))}
                       placeholder="John Doe"
-                      className="w-full bg-surface-card border border-border-subtle rounded-[12px] px-3.5 py-2.5 text-[14px] font-semibold text-text-primary outline-none"
+                      className="w-full bg-surface-hover border border-border-medium rounded-[12px] px-3.5 py-2.5 text-[14px] font-semibold text-text-primary placeholder:text-text-tertiary outline-none focus:border-border-strong"
                     />
                   </div>
                 </div>
@@ -480,7 +480,7 @@ export const ProfileScreen = ({
                     className={`w-full h-12 rounded-[14px] text-[14px] font-extrabold tracking-[-0.01em] ${
                       newBank.bank && newBank.iban && newBank.name
                         ? 'bg-accent text-accent-text'
-                        : 'bg-surface-card text-text-quaternary'
+                        : 'bg-surface-hover text-text-quaternary'
                     }`}>
                     Add Account
                   </motion.button>
