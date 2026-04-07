@@ -1,0 +1,155 @@
+/* ==========================================================================
+   USER-SCREEN THEME — scoped light mode
+   --------------------------------------------------------------------------
+   All rules in this file affect ONLY descendants of `.user-scope`.
+   The `.user-light` modifier on the same wrapper element activates light
+   mode for the user route without touching admin / merchant / arbiter UIs.
+
+   Imported by:  src/app/page.tsx (the user route)
+   Wrapper:      <div class="user-scope user-light?"> ... </div>
+   ========================================================================== */
+
+/* ----- Light-mode design tokens (scoped) ----- */
+.user-scope.user-light {
+  --background: #ffffff;
+  --foreground: #0f172a;
+
+  /* Background hierarchy */
+  --color-bg-primary:   #ffffff;
+  --color-bg-secondary: #f7f8fa;
+  --color-bg-tertiary:  #eef0f3;
+
+  /* Text hierarchy — dark on white */
+  --color-text-primary:    rgba(15, 23, 42, 0.95);
+  --color-text-secondary:  rgba(15, 23, 42, 0.60);
+  --color-text-tertiary:   rgba(15, 23, 42, 0.38);
+  --color-text-quaternary: rgba(15, 23, 42, 0.18);
+
+  /* Borders */
+  --border:                  rgba(15, 23, 42, 0.08);
+  --color-border-subtle:     rgba(15, 23, 42, 0.06);
+  --color-border-medium:     rgba(15, 23, 42, 0.10);
+  --color-border-strong:     rgba(15, 23, 42, 0.16);
+
+  /* Glass surfaces */
+  --color-surface-card:   rgba(15, 23, 42, 0.035);
+  --color-surface-hover:  rgba(15, 23, 42, 0.055);
+  --color-surface-active: rgba(15, 23, 42, 0.075);
+
+  --card: rgba(15, 23, 42, 0.035);
+  --card-solid: #ffffff;
+
+  --muted: #64748b;
+  --muted-bg: #f1f5f9;
+
+  /* Accent CTA flips to dark on white */
+  --accent: #0f172a;
+  --accent-bright: #1e293b;
+  --accent-dark: #020617;
+  --accent-dim: rgba(15, 23, 42, 0.70);
+  --accent-subtle: rgba(15, 23, 42, 0.06);
+  --accent-glow: rgba(15, 23, 42, 0.08);
+  --accent-text: #ffffff;
+
+  /* Semantic — slightly deeper for AA contrast on white */
+  --color-success: #059669;
+  --color-success-dim:    rgba(5,150,105,0.10);
+  --color-success-border: rgba(5,150,105,0.28);
+  --color-warning: #d97706;
+  --color-warning-dim:    rgba(217,119,6,0.10);
+  --color-warning-border: rgba(217,119,6,0.28);
+  --color-error: #dc2626;
+  --color-error-dim:      rgba(220,38,38,0.08);
+  --color-error-border:   rgba(220,38,38,0.22);
+  --color-info: #2563eb;
+
+  /* Dark "desk" around the white phone column */
+  --user-frame: #0B0F14;
+}
+
+/* ----- Raw class overrides for hardcoded dark-mode markup ----- */
+.user-scope.user-light .bg-neutral-950 { background-color: #f8fafc !important; }
+.user-scope.user-light .bg-neutral-900 { background-color: #f1f5f9 !important; }
+.user-scope.user-light .bg-neutral-800 { background-color: #e2e8f0 !important; }
+.user-scope.user-light .bg-neutral-700 { background-color: #cbd5e1 !important; }
+.user-scope.user-light .text-white { color: #0f172a !important; }
+.user-scope.user-light .text-neutral-300 { color: #475569 !important; }
+.user-scope.user-light .text-neutral-400 { color: #64748b !important; }
+.user-scope.user-light .text-neutral-500 { color: #64748b !important; }
+.user-scope.user-light .text-neutral-600 { color: #475569 !important; }
+.user-scope.user-light .border-neutral-800 { border-color: #e2e8f0 !important; }
+.user-scope.user-light .border-neutral-900 { border-color: #e2e8f0 !important; }
+.user-scope.user-light .border-black { border-color: #e2e8f0 !important; }
+.user-scope.user-light input::placeholder { color: #94a3b8 !important; }
+
+/* Opacity-based white text → dark on light */
+.user-scope.user-light .text-white\/95 { color: rgba(15, 23, 42, 0.95) !important; }
+.user-scope.user-light .text-white\/90 { color: rgba(15, 23, 42, 0.92) !important; }
+.user-scope.user-light .text-white\/85 { color: rgba(15, 23, 42, 0.88) !important; }
+.user-scope.user-light .text-white\/80 { color: rgba(15, 23, 42, 0.85) !important; }
+.user-scope.user-light .text-white\/75 { color: rgba(15, 23, 42, 0.78) !important; }
+.user-scope.user-light .text-white\/70 { color: rgba(15, 23, 42, 0.72) !important; }
+.user-scope.user-light .text-white\/65 { color: rgba(15, 23, 42, 0.68) !important; }
+.user-scope.user-light .text-white\/60 { color: rgba(15, 23, 42, 0.62) !important; }
+.user-scope.user-light .text-white\/55 { color: rgba(15, 23, 42, 0.58) !important; }
+.user-scope.user-light .text-white\/50 { color: rgba(15, 23, 42, 0.52) !important; }
+.user-scope.user-light .text-white\/45 { color: rgba(15, 23, 42, 0.48) !important; }
+.user-scope.user-light .text-white\/40 { color: rgba(15, 23, 42, 0.42) !important; }
+.user-scope.user-light .text-white\/35 { color: rgba(15, 23, 42, 0.38) !important; }
+.user-scope.user-light .text-white\/30 { color: rgba(15, 23, 42, 0.32) !important; }
+.user-scope.user-light .text-white\/25 { color: rgba(15, 23, 42, 0.28) !important; }
+.user-scope.user-light .text-white\/20 { color: rgba(15, 23, 42, 0.22) !important; }
+.user-scope.user-light .text-white\/15 { color: rgba(15, 23, 42, 0.18) !important; }
+.user-scope.user-light .text-white\/10 { color: rgba(15, 23, 42, 0.12) !important; }
+
+/* Opacity-based white surfaces → subtle gray on white */
+.user-scope.user-light .bg-white\/\[0\.02\],
+.user-scope.user-light .bg-white\/\[0\.025\],
+.user-scope.user-light .bg-white\/\[0\.03\],
+.user-scope.user-light .bg-white\/\[0\.04\] { background-color: rgba(15, 23, 42, 0.035) !important; }
+.user-scope.user-light .bg-white\/\[0\.05\],
+.user-scope.user-light .bg-white\/\[0\.06\],
+.user-scope.user-light .bg-white\/\[0\.07\] { background-color: rgba(15, 23, 42, 0.05) !important; }
+.user-scope.user-light .bg-white\/\[0\.08\],
+.user-scope.user-light .bg-white\/10  { background-color: rgba(15, 23, 42, 0.07) !important; }
+.user-scope.user-light .bg-white\/15,
+.user-scope.user-light .bg-white\/20  { background-color: rgba(15, 23, 42, 0.10) !important; }
+
+/* Opacity-based white borders → dark hairlines */
+.user-scope.user-light .border-white\/\[0\.04\],
+.user-scope.user-light .border-white\/\[0\.06\],
+.user-scope.user-light .border-white\/\[0\.08\],
+.user-scope.user-light .border-white\/10 { border-color: rgba(15, 23, 42, 0.08) !important; }
+.user-scope.user-light .border-white\/15,
+.user-scope.user-light .border-white\/20 { border-color: rgba(15, 23, 42, 0.12) !important; }
+
+/* Black-on-black patterns flip to white-on-light */
+.user-scope.user-light .text-black { color: rgba(15, 23, 42, 0.92) !important; }
+.user-scope.user-light .text-black\/60 { color: rgba(15, 23, 42, 0.60) !important; }
+.user-scope.user-light .text-black\/35 { color: rgba(15, 23, 42, 0.38) !important; }
+.user-scope.user-light .bg-black\/\[0\.04\],
+.user-scope.user-light .bg-black\/\[0\.06\] { background-color: rgba(15, 23, 42, 0.04) !important; }
+
+/* Active CTA — dark-mode uses white pill + black text; flip to dark pill + white text */
+.user-scope.user-light .bg-white.text-black { background-color: #0f172a !important; color: #ffffff !important; }
+
+/* Glass card — light variant */
+.user-scope.user-light .glass-card {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+/* Wallet adapter — light variant (scoped to user route only) */
+.user-scope.user-light .wallet-adapter-modal {
+  background-color: #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+.user-scope.user-light .wallet-adapter-modal-title { color: #0f172a !important; }
+.user-scope.user-light .wallet-adapter-dropdown-list {
+  background-color: #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+.user-scope.user-light .wallet-adapter-dropdown-list-item { color: #0f172a !important; }
+.user-scope.user-light .wallet-adapter-dropdown-list-item:hover {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}

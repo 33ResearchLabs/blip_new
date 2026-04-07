@@ -330,12 +330,12 @@ export const HomeScreen = ({
           />
 
           {/* Shimmer */}
-          <motion.div
+          {/* <motion.div
             animate={{ x: ['-100%', '200%'] }}
             transition={{ duration: 6, repeat: Infinity, repeatDelay: 8, ease: 'easeInOut' }}
             className="absolute top-0 bottom-0 left-0 w-[35%] -skew-x-12"
             style={{ background: 'linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.015) 50%, transparent 100%)' }}
-          />
+          /> */}
 
           {/* Dot grid */}
           <div

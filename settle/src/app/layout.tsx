@@ -38,17 +38,9 @@ export const viewport: Viewport = {
   themeColor: "#0B0F14",
 };
 
-// Script to prevent theme flash and register service worker - runs before React hydrates
-const themeScript = `
-  (function() {
-    try {
-      var theme = localStorage.getItem('theme');
-      if (theme === 'light') {
-        document.documentElement.classList.add('light');
-      }
-    } catch (e) {}
-  })();
-`;
+// Theme flash-prevention is no longer needed: light mode is scoped to the
+// user route via .user-scope.user-light (see src/app/user-theme.css), and
+// the user page applies the class itself based on saved theme.
 
 // Service worker DISABLED - just cleanup, no registration
 const swScript = `
@@ -74,7 +66,6 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <script dangerouslySetInnerHTML={{ __html: swScript }} />
         <link rel="apple-touch-icon" href="/icons/icon.svg" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

@@ -17,30 +17,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('dark');
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load saved theme on mount - run immediately to prevent flash
+  // Load saved theme on mount.
+  // The light/dark class is applied by the user route's wrapper element
+  // (see src/app/page.tsx + src/app/user-theme.css). We do NOT touch
+  // <html> here, so admin / merchant / arbiter routes are unaffected.
   useEffect(() => {
-    // Add no-transitions class to prevent flash
-    document.documentElement.classList.add('no-transitions');
-
     const savedTheme = localStorage.getItem('theme') as Theme | null;
-    if (savedTheme) {
-      setThemeState(savedTheme);
-      document.documentElement.classList.toggle('light', savedTheme === 'light');
-    }
-
-    // Remove no-transitions after a frame to enable smooth transitions
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        document.documentElement.classList.remove('no-transitions');
-        setIsLoaded(true);
-      });
-    });
+    if (savedTheme) setThemeState(savedTheme);
+    setIsLoaded(true);
   }, []);
 
   const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme);
     localStorage.setItem('theme', newTheme);
-    document.documentElement.classList.toggle('light', newTheme === 'light');
   }, []);
 
   const toggleTheme = useCallback(() => {

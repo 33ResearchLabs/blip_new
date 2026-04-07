@@ -13,6 +13,7 @@ import {
   TrendingUp,
   ChevronRight,
   LogOut,
+  Currency,
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { BottomNav } from "./BottomNav";
@@ -176,12 +177,12 @@ export const ProfileScreen = ({
         <div className="grid grid-cols-3 gap-2 mb-3">
           {[
             { label: 'Trades', value: completedOrders.length.toString() },
-            { label: 'Volume', value: completedOrders.reduce((s, o) => s + parseFloat(o.cryptoAmount), 0).toFixed(0) + ' USDT' },
+            { label: 'Volume', value: completedOrders.reduce((s, o) => s + parseFloat(o.cryptoAmount), 0).toFixed(0) , currency:'USDT'  } ,
             { label: 'Score', value: completedOrders.length > 0 ? (completedOrders.length / (completedOrders.length + timedOutOrders.length) * 100).toFixed(0) + '%' : '\u2014' },
           ].map(stat => (
             <div key={stat.label} className={`rounded-[18px] flex flex-col items-center py-3 ${CARD}`}>
               <p className={`${CARD_LABEL} mb-1`}>{stat.label}</p>
-              <p className="text-[20px] font-extrabold tracking-[-0.03em] text-white">{stat.value}</p>
+              <p className="text-[20px] font-extrabold tracking-[-0.03em] text-white">{stat.value}{" "}<span className="text-sm">{stat.currency}</span></p>
             </div>
           ))}
         </div>
