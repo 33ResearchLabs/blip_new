@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useMemo } from "react";
-import { Bell, Shield, DollarSign, AlertTriangle, CheckCircle2, ShoppingBag } from "lucide-react";
+import { Bell, Shield, DollarSign, AlertTriangle, CheckCircle2, ShoppingBag, MessageCircle } from "lucide-react";
 import type { Notification } from "@/types/merchant";
 
 interface NotificationsPanelProps {
@@ -98,6 +98,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                         notif.type === 'dispute' ? 'bg-red-500/10' :
                         notif.type === 'complete' ? 'bg-emerald-500/10' :
                         notif.type === 'payment' ? 'bg-blue-500/10' :
+                        notif.type === 'message' ? 'bg-purple-500/10' :
                         'bg-foreground/[0.04]'
                       }`}>
                         {notif.type === 'order' && <ShoppingBag className="w-3 h-3 text-foreground/40" />}
@@ -105,6 +106,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                         {notif.type === 'payment' && <DollarSign className="w-3 h-3 text-blue-400/60" />}
                         {notif.type === 'dispute' && <AlertTriangle className="w-3 h-3 text-red-400" />}
                         {notif.type === 'complete' && <CheckCircle2 className="w-3 h-3 text-emerald-400/60" />}
+                        {notif.type === 'message' && <MessageCircle className="w-3 h-3 text-purple-400/60" />}
                         {notif.type === 'system' && <Bell className="w-3 h-3 text-foreground/40" />}
                       </div>
                       <div className="flex-1 min-w-0">

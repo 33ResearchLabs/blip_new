@@ -133,5 +133,29 @@ export function useMerchantRealtimeEvents({
         }
       }
     },
+    // Inbox preview refresh on incoming chat messages, regardless of whether
+    // the chat window is open. The user-side useRealtimeChat hook only
+    // subscribes to a per-order channel when a chat window is OPEN, so
+    // closed-window updates have to come through the merchant's private
+    // channel binding inside useRealtimeOrders. Without this callback the
+    // conversation list keeps showing the stale last message until a manual
+    // refresh.
+    onChatMessage: (data) => {
+      // Skip our own outgoing messages — server publishes to recipient
+      // channel only, but be defensive in case the contract changes.
+      if (data.senderType === 'merchant' && data.senderId === merchantId) return;
+
+      debouncedFetchConversations();
+
+      // Light-weight notification so the merchant gets the same alert UX as
+      // for status events. Falls back to a generic label if we can't find
+      // the order in the local store yet.
+      const order = orders.find(o => o.id === data.orderId);
+      const userLabel = order?.user || (data.senderType === 'user' ? 'User' : 'Merchant');
+      const preview = (data.content || '').substring(0, 80);
+      addNotification('message', preview ? `${userLabel}: ${preview}` : `New message from ${userLabel}`, data.orderId);
+      playSound('message');
+      toast.showNewMessage?.(userLabel, preview);
+    },
   });
 }
