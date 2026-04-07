@@ -1,61 +1,62 @@
-// ─── Premium Dark-First Design System ────────────────────────────────────
-// Inspired by Stripe, Revolut, Coinbase
-// Consistent across all user screens
+// ─── Theme-aware Design Tokens ───────────────────────────────────────────
+// All values are CSS variable references defined in globals.css.
+// Inline styles using these will automatically respect the active theme
+// (dark / light) — no component refactor needed.
 
 export const colors = {
   // Background hierarchy
   bg: {
-    primary:   '#0B0F14',    // main app background
-    secondary: '#111827',    // card background
-    tertiary:  '#1F2937',    // elevated / hover
-    elevated:  '#374151',    // inputs, active states
+    primary:   'var(--color-bg-primary)',
+    secondary: 'var(--color-bg-secondary)',
+    tertiary:  'var(--color-bg-tertiary)',
+    elevated:  'var(--color-bg-tertiary)',
   },
 
-  // Accent — monochrome white (matches dark-glass theme)
+  // Accent — flips white (dark mode) ↔ navy (light mode)
   accent: {
-    primary:   '#FFFFFF',    // white — primary CTA
-    bright:    'rgba(255,255,255,0.85)',  // hover
-    dim:       'rgba(255,255,255,0.70)',  // pressed
-    subtle:    'rgba(255,255,255,0.06)',  // tinted bg
-    glow:      'rgba(255,255,255,0.08)',  // glow effect
-    border:    'rgba(255,255,255,0.15)',  // accent border
-    text:      '#0B0F14',   // dark text on white CTA
+    primary:   'var(--accent)',
+    bright:    'var(--accent-bright)',
+    dim:       'var(--accent-dim)',
+    subtle:    'var(--accent-subtle)',
+    glow:      'var(--accent-glow)',
+    border:    'var(--color-border-strong)',
+    text:      'var(--accent-text)',
   },
 
   // Semantic
-  success:     '#10B981',
-  successDim:  'rgba(16,185,129,0.12)',
-  successBorder: 'rgba(16,185,129,0.25)',
-  warning:     '#F59E0B',
-  warningDim:  'rgba(245,158,11,0.12)',
-  warningBorder: 'rgba(245,158,11,0.25)',
-  error:       '#EF4444',
-  errorDim:    'rgba(239,68,68,0.10)',
-  errorBorder: 'rgba(239,68,68,0.20)',
-  info:        '#60A5FA',
+  success:       'var(--color-success)',
+  successDim:    'var(--color-success-dim)',
+  successBorder: 'var(--color-success-border)',
+  warning:       'var(--color-warning)',
+  warningDim:    'var(--color-warning-dim)',
+  warningBorder: 'var(--color-warning-border)',
+  error:         'var(--color-error)',
+  errorDim:      'var(--color-error-dim)',
+  errorBorder:   'var(--color-error-border)',
+  info:          'var(--color-info)',
 
   // Text
   text: {
-    primary:    'rgba(255,255,255,0.92)',
-    secondary:  'rgba(255,255,255,0.55)',
-    tertiary:   'rgba(255,255,255,0.30)',
-    quaternary: 'rgba(255,255,255,0.15)',
-    inverse:    '#0B0F14',
+    primary:    'var(--color-text-primary)',
+    secondary:  'var(--color-text-secondary)',
+    tertiary:   'var(--color-text-tertiary)',
+    quaternary: 'var(--color-text-quaternary)',
+    inverse:    'var(--accent-text)',
   },
 
   // Borders
   border: {
-    subtle:  'rgba(255,255,255,0.06)',
-    medium:  'rgba(255,255,255,0.10)',
-    strong:  'rgba(255,255,255,0.16)',
+    subtle:  'var(--color-border-subtle)',
+    medium:  'var(--color-border-medium)',
+    strong:  'var(--color-border-strong)',
   },
 
-  // Surfaces (for glass cards)
+  // Surfaces (glass cards)
   surface: {
-    glass:   'rgba(255,255,255,0.03)',
-    card:    'rgba(255,255,255,0.04)',
-    hover:   'rgba(255,255,255,0.06)',
-    active:  'rgba(255,255,255,0.08)',
+    glass:   'var(--color-surface-card)',
+    card:    'var(--color-surface-card)',
+    hover:   'var(--color-surface-hover)',
+    active:  'var(--color-surface-active)',
   },
 
   white: '#ffffff',

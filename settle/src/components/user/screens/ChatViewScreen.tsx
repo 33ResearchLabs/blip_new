@@ -340,7 +340,7 @@ export const ChatViewScreen = ({
               >
                 <div
                   className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${
-                    isMe ? "rounded-br-md bg-white text-black" : "rounded-bl-md bg-surface-card text-text-primary"
+                    isMe ? "rounded-br-md bg-accent text-accent-text" : "rounded-bl-md bg-surface-card text-text-primary"
                   }`}
                 >
                   {isImageMsg && (

@@ -267,8 +267,8 @@ export const ProfileScreen = ({
                   setShowWalletModal(true);
                 }
               }}
-              className="w-full py-3 rounded-[14px] flex items-center justify-center gap-2 mt-2 bg-accent text-black text-[14px] font-extrabold tracking-[-0.01em]">
-              <Wallet size={16} className="text-white" /> Connect Wallet
+              className="w-full py-3 rounded-[14px] flex items-center justify-center gap-2 mt-2 bg-accent text-accent-text text-[14px] font-extrabold tracking-[-0.01em]">
+              <Wallet size={16} className="text-accent-text" /> Connect Wallet
             </motion.button>
           )}
         </div>
@@ -368,7 +368,7 @@ export const ProfileScreen = ({
             ) : (
               <Sun size={16} className="text-black/60" />
             )}
-            <span className="text-[14px] font-bold text-black">
+            <span className="text-[14px] font-bold ">
               {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
             </span>
           </div>

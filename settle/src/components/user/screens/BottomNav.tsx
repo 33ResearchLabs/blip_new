@@ -20,7 +20,7 @@ const TABS = [
 
 export const BottomNav = ({ screen, setScreen }: BottomNavProps) => (
   <div
-    className="fixed bottom-0 left-0 right-0 z-50 bg-[rgba(11,15,20,0.85)] backdrop-blur-[20px] border-t border-border-subtle"
+    className="fixed bottom-0 left-0 right-0 z-50 bg-surface-base/85 backdrop-blur-[20px] border-t border-border-subtle"
     style={{ paddingBottom: 'env(safe-area-inset-bottom, 12px)' }}
   >
     <div className="flex items-center justify-around px-4 pt-2.5 pb-1 max-w-[430px] mx-auto">
@@ -37,18 +37,18 @@ export const BottomNav = ({ screen, setScreen }: BottomNavProps) => (
               <Icon
                 size={22}
                 strokeWidth={on ? 2.4 : 1.6}
-                className={on ? "text-white" : "text-text-tertiary"}
+                className={on ? "text-text-primary" : "text-text-tertiary"}
               />
               {on && (
                 <motion.div
                   layoutId="nav-indicator"
-                  className="absolute -bottom-1 w-1 h-1 rounded-full bg-white"
+                  className="absolute -bottom-1 w-1 h-1 rounded-full bg-text-primary"
                 />
               )}
             </div>
             <span
               className={`text-[9px] tracking-[0.05em] uppercase ${
-                on ? "font-bold text-white" : "font-medium text-text-tertiary"
+                on ? "font-bold text-text-primary" : "font-medium text-text-tertiary"
               }`}
             >
               {label}

@@ -325,7 +325,7 @@ export const TradeCreationScreen = ({
                       <p className="text-[10px] font-medium text-text-tertiary">{sub}</p>
                     </div>
                   </div>
-                  {on && <div className="w-2 h-2 rounded-full bg-white" />}
+                  {on && <div className="w-2 h-2 rounded-full bg-accent" />}
                 </motion.button>
               );
             })}

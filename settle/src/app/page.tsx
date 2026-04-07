@@ -172,7 +172,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-dvh flex flex-col items-center overflow-y-auto relative" style={{ background: '#ffffff' }}>
+    <div className="min-h-dvh flex flex-col items-center overflow-y-auto relative" style={{ background: 'var(--user-frame)' }}>
       <NotificationToastContainer position="top-right" />
       <AnimatePresence mode="wait">
         {screen === "welcome" && (

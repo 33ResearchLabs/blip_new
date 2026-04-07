@@ -63,13 +63,13 @@ export const ChatListScreen = ({
                   {/* Avatar */}
                   <div className="relative shrink-0">
                     <div className={`w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 ${
-                      hasUnread ? 'bg-white' : 'bg-white/10'
+                      hasUnread ? 'bg-accent' : 'bg-surface-active'
                     }`}>
-                      <span className={`text-[17px] font-extrabold ${hasUnread ? 'text-black' : 'text-white/50'}`}>{initial}</span>
+                      <span className={`text-[17px] font-extrabold ${hasUnread ? 'text-accent-text' : 'text-text-tertiary'}`}>{initial}</span>
                     </div>
                     {hasUnread && (
-                      <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center bg-white border-2 border-surface-base">
-                        <span className="text-[8px] font-extrabold text-white">{order.unreadCount}</span>
+                      <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center bg-accent border-2 border-surface-base">
+                        <span className="text-[8px] font-extrabold text-accent-text">{order.unreadCount}</span>
                       </div>
                     )}
                   </div>

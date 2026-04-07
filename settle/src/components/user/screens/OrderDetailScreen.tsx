@@ -44,7 +44,7 @@ const AMBER_CARD = "bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.
 const AMBER_CARD_STRONG = "bg-[rgba(245,158,11,0.12)] border border-[rgba(245,158,11,0.25)]";
 const RED_CARD = "bg-[rgba(239,68,68,0.10)] border border-[rgba(239,68,68,0.20)]";
 const SHEET_BG = "bg-surface-card"; // use as overlay on surface-base (sheet bg = base + card overlay); approximated
-const PRIMARY_BTN = "bg-white text-surface-base";
+const PRIMARY_BTN = "bg-accent text-accent-text";
 const SECONDARY_BTN = "bg-white/[0.08] text-text-primary border border-white/10";
 const MUTED_BTN = "bg-white/[0.08] text-text-secondary";
 
@@ -499,7 +499,7 @@ export const OrderDetailScreen = ({
                   whileTap={{ scale: 0.97 }}
                   onClick={() => respondToExtension(true)}
                   disabled={requestingExtension}
-                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-white text-surface-base"
+                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-accent text-accent-text"
                 >
                   {requestingExtension ? (
                     <Loader2 className="w-4 h-4 animate-spin mx-auto" />
@@ -737,7 +737,7 @@ export const OrderDetailScreen = ({
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
                       activeOrder.step >= 1
-                        ? "bg-white text-surface-base"
+                        ? "bg-accent text-accent-text"
                         : "bg-surface-card text-text-tertiary"
                     }`}
                   >
@@ -796,7 +796,7 @@ export const OrderDetailScreen = ({
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
                       activeOrder.step >= 2
-                        ? "bg-white text-surface-base"
+                        ? "bg-accent text-accent-text"
                         : "bg-surface-card text-text-tertiary"
                     }`}
                   >
@@ -1607,7 +1607,7 @@ export const OrderDetailScreen = ({
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
                       activeOrder.step >= 3
-                        ? "bg-white text-surface-base"
+                        ? "bg-accent text-accent-text"
                         : "bg-surface-card text-text-tertiary"
                     }`}
                   >
@@ -1752,7 +1752,7 @@ export const OrderDetailScreen = ({
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold ${
                       activeOrder.step >= 4
-                        ? "bg-white text-surface-base"
+                        ? "bg-accent text-accent-text"
                         : "bg-surface-card text-text-tertiary"
                     }`}
                   >
@@ -1810,7 +1810,7 @@ export const OrderDetailScreen = ({
         <div className={`mt-4 rounded-2xl p-4 ${CARD}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold bg-white text-surface-base">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold bg-accent text-accent-text">
                 {activeOrder.merchant.name.charAt(0)}
               </div>
               <div>
@@ -2018,7 +2018,7 @@ export const OrderDetailScreen = ({
             >
               <div className="flex items-center justify-between p-4 border-b border-white/10">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-white" />
+                  <div className="w-8 h-8 rounded-full bg-accent" />
                   <div>
                     <p className="text-[15px] font-medium text-text-primary">
                       {activeOrder.merchant.name}
@@ -2116,7 +2116,7 @@ export const OrderDetailScreen = ({
                                         respondToResolution("accept")
                                       }
                                       disabled={isRespondingToResolution}
-                                      className="flex-1 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-50 bg-white text-white"
+                                      className="flex-1 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-50 bg-accent text-accent-text"
                                     >
                                       Accept
                                     </button>
@@ -2251,7 +2251,7 @@ export const OrderDetailScreen = ({
                           <div
                             className={`px-4 py-2 rounded-2xl ${
                               msg.from === "me"
-                                ? "bg-white text-surface-base text-[15px]"
+                                ? "bg-accent text-accent-text text-[15px]"
                                 : msg.from === "system"
                                   ? "bg-white/[0.08] text-text-secondary text-[13px]"
                                   : "bg-surface-card text-text-primary text-[15px]"
@@ -2322,7 +2322,7 @@ export const OrderDetailScreen = ({
                             <button
                               onClick={() => respondToResolution("accept")}
                               disabled={isRespondingToResolution}
-                              className="flex-1 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-50 bg-white text-surface-base"
+                              className="flex-1 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-50 bg-accent text-accent-text"
                             >
                               Accept
                             </button>
@@ -2465,7 +2465,7 @@ export const OrderDetailScreen = ({
                     }}
                     disabled={isUploading}
                     className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50 ${
-                      pendingImage ? "bg-[#f97316]" : "bg-white"
+                      pendingImage ? "bg-[#f97316]" : "bg-accent"
                     }`}
                   >
                     {isUploading ? (

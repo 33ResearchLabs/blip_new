@@ -503,7 +503,7 @@ export const HomeScreen = ({
               className="w-full flex items-center gap-3 text-left rounded-[18px] mt-3 mb-1 py-[13px] px-[15px] bg-white/[0.06] border border-white/15"
             >
               <motion.div animate={{ opacity: [1, 0.25, 1] }} transition={{ duration: 1.4, repeat: Infinity }}
-                className="w-[7px] h-[7px] rounded-full bg-white shrink-0" />
+                className="w-[7px] h-[7px] rounded-full bg-accent shrink-0" />
               <div className="flex-1">
                 <p className="text-[14px] font-bold text-text-primary mb-0.5 tracking-[-0.01em]">
                   {pendingOrders[0].type === 'buy' ? 'Buying' : 'Selling'} {parseFloat(pendingOrders[0].cryptoAmount).toFixed(2)} USDT
