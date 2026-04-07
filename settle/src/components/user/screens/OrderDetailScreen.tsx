@@ -347,7 +347,7 @@ export const OrderDetailScreen = ({
   }, []);
 
   return (
-    <div className="min-h-full bg-surface-base">
+    <div className="min-h-[100dvh] bg-surface-base">
       <div className="h-12" />
 
       <div className="px-5 py-4 flex items-center">

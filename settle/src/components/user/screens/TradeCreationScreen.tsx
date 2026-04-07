@@ -168,7 +168,7 @@ export const TradeCreationScreen = ({
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className={`w-full rounded-[24px] shrink-0 ${CARD}`}
+          className={`w-full rounded-[24px] shrink-0 overflow-hidden ${CARD}`}
         >
           <div className="flex items-center justify-between px-4 pt-3 pb-2">
             <div className="flex-1 min-w-0">
@@ -198,13 +198,10 @@ export const TradeCreationScreen = ({
               <RateSparkline rate={3.672} positive={ratePositive} />
             </div>
           </div>
-          <div className="flex items-center justify-between px-5 py-2.5 border-t border-border-subtle bg-white/[0.03]">
+          <div className="flex items-center justify-between px-5 py-2.5 border-t border-border-subtle bg-surface-hover">
             <span className="text-[10px] font-semibold text-text-tertiary tracking-[0.08em]">7D LOW 3.651</span>
-            <div className="flex-1 mx-4 h-1 rounded-full bg-border-medium">
-              <div
-                className="h-1 rounded-full w-[68%]"
-                style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.2), rgba(255,255,255,0.5))' }}
-              />
+            <div className="flex-1 mx-4 h-1 rounded-full bg-border-medium overflow-hidden">
+              <div className="h-1 rounded-full w-[68%] bg-text-primary/40" />
             </div>
             <span className="text-[10px] font-semibold text-text-tertiary tracking-[0.08em]">HIGH 3.694</span>
           </div>
@@ -216,17 +213,17 @@ export const TradeCreationScreen = ({
             {tradeType === 'buy' ? 'You Pay (USDT)' : 'You Sell (USDT)'}
           </p>
 
-          <div className="flex items-center justify-center gap-2">
+          <div className="flex items-baseline justify-center gap-1.5">
             <input
               type="text"
               inputMode="decimal"
               value={amount}
               onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
               placeholder="0"
-              className={`text-[52px] font-extrabold tracking-[-0.04em] leading-none bg-transparent border-0 outline-none text-center min-w-[72px] max-w-[240px] ${
+              className={`text-[52px] font-extrabold tracking-[-0.06em] leading-none bg-transparent border-0 outline-none text-right max-w-64 ${
                 hasAmount ? 'text-text-primary' : 'text-text-quaternary'
               }`}
-              style={{ width: amount ? `${Math.max(72, amount.length * 44)}px` : '72px' }}
+              style={{ width: `${Math.max(38, (amount.length || 1) * 30)}px` }}
             />
             <span className="text-[20px] font-bold text-text-tertiary tracking-[-0.01em]">
               USDT

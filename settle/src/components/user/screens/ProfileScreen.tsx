@@ -364,20 +364,18 @@ export const ProfileScreen = ({
         <div className={`rounded-[16px] px-4 py-3 flex items-center justify-between mb-3 ${CARD}`}>
           <div className="flex items-center gap-3">
             {theme === 'dark' ? (
-              <Moon size={16} className="text-black/60" />
+              <Moon size={16} className="text-text-secondary" />
             ) : (
-              <Sun size={16} className="text-black/60" />
+              <Sun size={16} className="text-text-secondary" />
             )}
-            <span className="text-[14px] font-bold ">
+            <span className="text-[14px] font-bold text-text-primary">
               {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
             </span>
           </div>
           <button onClick={toggleTheme}>
-            <div className={`w-12 h-7 rounded-[14px] p-0.5 flex items-center transition-colors duration-200 ${
-              theme === 'light' ? 'bg-black' : 'bg-black/[0.12]'
-            }`}>
-              <div className={`w-6 h-6 rounded-full transition-transform duration-200 ${
-                theme === 'light' ? 'bg-white translate-x-5' : 'bg-black/30 translate-x-0'
+            <div className="w-12 h-7 rounded-[14px] p-0.5 flex items-center transition-colors duration-200 bg-accent">
+              <div className={`w-6 h-6 rounded-full bg-surface-base transition-transform duration-200 ${
+                theme === 'light' ? 'translate-x-5' : 'translate-x-0'
               }`} />
             </div>
           </button>
