@@ -13,7 +13,7 @@
 
 import {
   SUPPORTED_PAIRS,
-  fetchCoinGeckoPrice,
+  fetchCoinGeckoPricesBatch,
   fetchBinancePrice,
   fetchKuCoinPrice,
   storeTick,
@@ -26,42 +26,61 @@ const HOURS_TO_KEEP = 24;
 
 // ---------------------------------------------------------------------------
 // Collect one round of ticks for all pairs
+//
+// Strategy:
+//   1. Single batched CoinGecko call for ALL fiats (one HTTP request).
+//   2. Per-pair fallback to Binance for any pair CoinGecko didn't return
+//      (Binance is auto-skipped after the first 451 — see usdtInrPrice.ts).
+//   3. Final fallback to ExchangeRate API (USD→fiat, USDT ≈ 1 USD).
+//   4. Store the tick. One concise summary log per cycle, not per pair.
 // ---------------------------------------------------------------------------
 
 async function collectTicks() {
+  // Step 1: one batched CoinGecko call covering every supported fiat
+  const fiats = Array.from(new Set(SUPPORTED_PAIRS.map((p) => p.fiat.toLowerCase())));
+  const cgPrices = await fetchCoinGeckoPricesBatch(fiats);
+
+  const results: Array<{ pair: string; price: number; source: string } | { pair: string; failed: true }> = [];
+
   for (const pair of SUPPORTED_PAIRS) {
     try {
-      let price: number | null = null;
+      let price: number | null = cgPrices[pair.fiat.toLowerCase()] ?? null;
       let source = 'coingecko';
 
-      // Primary: CoinGecko
-      price = await fetchCoinGeckoPrice(pair.fiat);
-
-      // Fallback 1: Binance
+      // Fallback 1: Binance (no-op if region-blocked)
       if (price === null && pair.binanceSymbol) {
-        console.warn(`[price-tick] ${pair.id}: CoinGecko failed, trying Binance`);
         price = await fetchBinancePrice(pair.binanceSymbol);
-        source = 'binance';
+        if (price !== null) source = 'binance';
       }
 
-      // Fallback 2: ExchangeRate API (USD→fiat, USDT ≈ 1 USD)
+      // Fallback 2: ExchangeRate API
       if (price === null) {
-        console.warn(`[price-tick] ${pair.id}: Binance failed, trying ExchangeRate API`);
         price = await fetchKuCoinPrice(pair.fiat);
-        source = 'exchangerate';
+        if (price !== null) source = 'exchangerate';
       }
 
       if (price === null) {
         console.error(`[price-tick] ${pair.id}: ALL sources failed — no tick stored`);
+        results.push({ pair: pair.id, failed: true });
         continue;
       }
 
       await storeTick(pair.id, price, source);
-      console.log(`[price-tick] ${pair.id}: ${price} (${source})`);
+      results.push({ pair: pair.id, price, source });
     } catch (err) {
-      console.error(`[price-tick] ${pair.id}: error:`, err);
+      console.error(
+        `[price-tick] ${pair.id}: tick storage error:`,
+        err instanceof Error ? err.message : err,
+      );
+      results.push({ pair: pair.id, failed: true });
     }
   }
+
+  // One concise summary log per cycle instead of per-pair noise
+  const summary = results
+    .map((r) => ('failed' in r ? `${r.pair}=FAIL` : `${r.pair}=${r.price}(${r.source})`))
+    .join(' ');
+  console.log(`[price-tick] ${summary}`);
 }
 
 // ---------------------------------------------------------------------------

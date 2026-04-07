@@ -111,36 +111,83 @@ function setCache(pair: string, tf: Timeframe, data: PriceResponse): void {
 
 const FETCH_TIMEOUT = 8_000;
 
-export async function fetchCoinGeckoPrice(fiat: string): Promise<number | null> {
+/**
+ * Batched CoinGecko fetch — pulls all requested fiats in ONE HTTP call.
+ * Halves CoinGecko traffic vs. fetching pairs one-by-one, which matters on
+ * shared cloud IPs (Railway, Vercel) where the free-tier rate limit is
+ * pooled across tenants and trips 429 easily.
+ *
+ * Returns a map { fiat → price }; missing fiats are absent from the map.
+ */
+export async function fetchCoinGeckoPricesBatch(
+  fiats: string[],
+): Promise<Record<string, number>> {
+  if (fiats.length === 0) return {};
   try {
+    const vs = fiats.map((f) => f.toLowerCase()).join(',');
     const res = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=${fiat}`,
+      `https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=${vs}`,
       { signal: AbortSignal.timeout(FETCH_TIMEOUT) },
     );
-    if (!res.ok) throw new Error(`CoinGecko status ${res.status}`);
+    if (!res.ok) {
+      // Quiet warning — caller handles fallback. No stack trace for expected upstream failures.
+      console.warn(`[PriceTick] CoinGecko ${res.status} (rate-limited or unavailable)`);
+      return {};
+    }
     const json = await res.json();
-    const price = json?.tether?.[fiat];
-    if (typeof price !== 'number' || price <= 0) throw new Error('Invalid price');
-    return price;
+    const out: Record<string, number> = {};
+    for (const f of fiats) {
+      const v = json?.tether?.[f.toLowerCase()];
+      if (typeof v === 'number' && v > 0) out[f.toLowerCase()] = v;
+    }
+    return out;
   } catch (err) {
-    console.error(`[PriceTick:${fiat}] CoinGecko failed:`, err);
-    return null;
+    console.warn(
+      `[PriceTick] CoinGecko fetch error: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return {};
   }
 }
 
+// Single-fiat helper kept for callers that still want the old signature.
+// Internally uses the batched call so caching/rate behaviour stays consistent.
+export async function fetchCoinGeckoPrice(fiat: string): Promise<number | null> {
+  const map = await fetchCoinGeckoPricesBatch([fiat]);
+  return map[fiat.toLowerCase()] ?? null;
+}
+
+// Binance is geo-blocked on most cloud providers (Railway, Fly, AWS us-east).
+// Once we see 451 once, we stop trying for the lifetime of this process —
+// the policy isn't going to flip mid-session and every retry just adds latency
+// and log noise to the tick cycle.
+let binancePermanentlyBlocked = false;
+
 export async function fetchBinancePrice(symbol: string): Promise<number | null> {
+  if (binancePermanentlyBlocked) return null;
   try {
     const res = await fetch(
       `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`,
       { signal: AbortSignal.timeout(FETCH_TIMEOUT) },
     );
-    if (!res.ok) throw new Error(`Binance status ${res.status}`);
+    if (!res.ok) {
+      if (res.status === 451 || res.status === 403) {
+        binancePermanentlyBlocked = true;
+        console.warn(
+          `[PriceTick] Binance ${res.status} — region-blocked, disabling for this process`,
+        );
+      } else {
+        console.warn(`[PriceTick] Binance ${symbol} status ${res.status}`);
+      }
+      return null;
+    }
     const json = await res.json();
     const price = parseFloat(json?.price);
-    if (!price || price <= 0) throw new Error('Invalid price');
+    if (!price || price <= 0) return null;
     return price;
   } catch (err) {
-    console.error(`[PriceTick:${symbol}] Binance failed:`, err);
+    console.warn(
+      `[PriceTick] Binance ${symbol} fetch error: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return null;
   }
 }
@@ -157,13 +204,18 @@ export async function fetchKuCoinPrice(fiat: string): Promise<number | null> {
       `https://open.er-api.com/v6/latest/USD`,
       { signal: AbortSignal.timeout(FETCH_TIMEOUT) },
     );
-    if (!res.ok) throw new Error(`ExchangeRate API status ${res.status}`);
+    if (!res.ok) {
+      console.warn(`[PriceTick] ExchangeRate ${fiat} status ${res.status}`);
+      return null;
+    }
     const json = await res.json();
     const rate = json?.rates?.[fiat.toUpperCase()];
-    if (typeof rate !== 'number' || rate <= 0) throw new Error(`No rate for ${fiat}`);
+    if (typeof rate !== 'number' || rate <= 0) return null;
     return parseFloat(rate.toFixed(4));
   } catch (err) {
-    console.error(`[PriceTick:${fiat}] ExchangeRate API failed:`, err);
+    console.warn(
+      `[PriceTick] ExchangeRate ${fiat} fetch error: ${err instanceof Error ? err.message : String(err)}`,
+    );
     return null;
   }
 }
