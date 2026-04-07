@@ -105,11 +105,11 @@ export function useUserEffects({
   } = useRealtimeChat({
     actorType: "user",
     actorId: userId || undefined,
-    onNewMessage: (chatId, message) => {
+    onNewMessage: (orderId, message) => {
       playSound('message');
 
       setOrders(prev => prev.map(o => {
-        if (o.id === chatId && message.from === 'them') {
+        if (o.id === orderId && message.from === 'them') {
           return {
             ...o,
             unreadCount: (o.unreadCount || 0) + 1,
@@ -123,14 +123,14 @@ export function useUserEffects({
         return o;
       }));
 
-      if (message.from === 'them' && (screen !== 'order' || activeOrderId !== chatId)) {
-        const order = orders.find(o => o.id === chatId);
+      if (message.from === 'them' && (screen !== 'order' || activeOrderId !== orderId)) {
+        const order = orders.find(o => o.id === orderId);
         const merchantName = order?.merchant?.name || 'Merchant';
         toast.showNewMessage(merchantName, message.text?.substring(0, 80));
         showBrowserNotification(
           `New message from ${merchantName}`,
           message.text.substring(0, 100),
-          chatId
+          orderId
         );
       }
     },

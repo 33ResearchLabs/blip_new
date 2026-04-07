@@ -108,7 +108,10 @@ const SYSTEM_MESSAGE_TYPES = new Set([
 
 interface UseRealtimeChatOptions {
   maxWindows?: number;
-  onNewMessage?: (chatId: string, message: ChatMessage) => void;
+  // First param is the ORDER id (UUID), not the synthetic chat-window id.
+  // Consumers (e.g. inbox preview) need to look up the order to update its
+  // lastMessage / unreadCount, so they need the real order id.
+  onNewMessage?: (orderId: string, message: ChatMessage) => void;
   actorType?: 'user' | 'merchant' | 'compliance';
   actorId?: string;
 }
@@ -297,7 +300,9 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
               message.from !== 'me' && w.minimized ? w.unread + 1 : w.unread;
 
             if (message.from !== 'me') {
-              onNewMessage?.(w.id, message);
+              // Pass the real order id, not the synthetic chat-window id —
+              // consumers use this to update orders[].lastMessage / unreadCount.
+              onNewMessage?.(w.orderId, message);
             }
 
             return {
