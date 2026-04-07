@@ -24,6 +24,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { folder = 'blip/chat', orderId } = body;
 
+    // Validate folder — prevent path traversal
+    const ALLOWED_FOLDERS = ['blip/chat', 'blip/orders', 'blip/receipts', 'blip/profiles'];
+    const baseFolder = folder.split('/')[0] + '/' + (folder.split('/')[1] || '');
+    if (!ALLOWED_FOLDERS.includes(baseFolder)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid upload folder' },
+        { status: 400 }
+      );
+    }
+
     // Validate Cloudinary is configured
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD_NAME;
     if (!process.env.CLOUDINARY_API_SECRET || !process.env.CLOUDINARY_API_KEY || !cloudName) {
@@ -40,9 +50,12 @@ export async function POST(request: NextRequest) {
     const uploadFolder = orderId ? `${folder}/${orderId}` : folder;
 
     // Parameters to sign — must match exactly what the client sends in the upload FormData
+    // Cloudinary enforces these server-side: allowed types + max file size (50MB)
     const params: Record<string, string | number> = {
       timestamp,
       folder: uploadFolder,
+      allowed_formats: 'jpg,jpeg,png,webp,gif,mp4,pdf',
+      max_file_size: 50_000_000, // 50MB
     };
 
     // Generate signature

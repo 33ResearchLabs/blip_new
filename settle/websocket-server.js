@@ -40,6 +40,9 @@ const poolConfig = process.env.DATABASE_URL
   ? {
       connectionString: process.env.DATABASE_URL,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      max: 20,
+      statement_timeout: 5000,  // 5s timeout — prevent WebSocket queries from blocking
+      connectionTimeoutMillis: 3000,
     }
   : {
       host: process.env.DB_HOST || 'localhost',
@@ -47,6 +50,9 @@ const poolConfig = process.env.DATABASE_URL
       database: process.env.DB_NAME || 'settle',
       user: process.env.DB_USER || undefined,
       password: process.env.DB_PASSWORD || undefined,
+      max: 10,
+      statement_timeout: 5000,
+      connectionTimeoutMillis: 3000,
     };
 const pool = new Pool(poolConfig);
 

@@ -196,7 +196,7 @@ export interface MerchantInfo {
 
 export interface Notification {
   id: string;
-  type: 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system';
+  type: 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system' | 'message';
   message: string;
   timestamp: number;
   read: boolean;

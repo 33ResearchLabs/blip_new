@@ -38,9 +38,9 @@ export async function POST(
     const auth = await requireAuth(request);
     if (auth instanceof NextResponse) return auth;
 
-    // Resolve merchant identity from header
+    // Resolve merchant identity from header — only trust if authenticated as merchant
     const postMerchantId = request.headers.get('x-merchant-id');
-    if (postMerchantId && !auth.merchantId) {
+    if (postMerchantId && auth.actorType === 'merchant' && !auth.merchantId) {
       auth.merchantId = postMerchantId;
     }
 
@@ -53,8 +53,8 @@ export async function POST(
       return validationErrorResponse(errors);
     }
 
-    // Security: enforce actor matches authenticated identity (with merchant header fallback)
-    if (parseResult.data.actor_id !== auth.actorId && !(parseResult.data.actor_type === 'merchant' && postMerchantId && parseResult.data.actor_id === postMerchantId)) {
+    // Security: enforce actor matches authenticated identity
+    if (parseResult.data.actor_id !== auth.actorId && !(parseResult.data.actor_type === 'merchant' && auth.actorType === 'merchant' && postMerchantId && parseResult.data.actor_id === postMerchantId)) {
       return forbiddenResponse('actor_id does not match authenticated identity');
     }
 

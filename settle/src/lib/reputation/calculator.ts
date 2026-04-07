@@ -13,6 +13,7 @@ import {
   ReputationScore,
   ReputationBreakdown,
   ReputationBadge,
+  ReputationFlag,
   EntityType,
   REPUTATION_WEIGHTS,
   SCORE_PARAMS,
@@ -44,6 +45,12 @@ export interface EntityStats {
   total_volume_usd: number;
   last_30_days_volume: number;
   last_7_days_volume: number;
+
+  // Volume intelligence (for anti-farming + fair scoring)
+  weighted_volume: number;         // sum(trade_amount * size_weight * time_decay)
+  unique_counterparties: number;   // distinct counterparty count
+  top_counterparty_pct: number;    // % of volume with single counterparty (0-100)
+  repeat_pair_count: number;       // pairs with >5 trades between same entities
 
   // Review stats
   review_count: number;
@@ -141,6 +148,23 @@ export function calculateExecutionScore(stats: EntityStats): number {
 
 /**
  * Calculate volume component score (0-100)
+ *
+ * Uses logarithmic scaling + trade-size weighting + time decay + counterparty
+ * diversity + anti-farming protection to prevent domination by high-volume
+ * or self-trading entities.
+ *
+ * Formula:
+ *   base       = min(70, log10(weighted_volume + 1) * SCALE)
+ *   diversity  = min(20, log10(unique_counterparties + 1) * CP_SCALE)
+ *   recency    = min(10, recent_activity_bonus)
+ *   farming    = penalty for concentration + repeat pairs
+ *   score      = base + diversity + recency - farming
+ *
+ * Example calculations:
+ *   $500 weighted, 3 counterparties, no farming  → ~38
+ *   $5K  weighted, 8 counterparties, no farming  → ~62
+ *   $50K weighted, 15 counterparties, no farming → ~82
+ *   $50K weighted, 1 counterparty (farming)      → ~35 (heavily penalised)
  */
 export function calculateVolumeScore(stats: EntityStats): number {
   const { VOLUME } = SCORE_PARAMS;
@@ -149,26 +173,44 @@ export function calculateVolumeScore(stats: EntityStats): number {
     return 0;
   }
 
-  let score = 0;
+  // 1. Base score from logarithmic weighted volume (0-70)
+  //    weighted_volume already has size weighting + time decay baked in from SQL
+  const effectiveVolume = stats.weighted_volume || stats.total_volume_usd;
+  const logVolume = Math.log10(effectiveVolume + 1);
+  const baseScore = Math.min(VOLUME.LOG_BASE_CAP, logVolume * VOLUME.LOG_SCALE);
 
-  // Volume tier score
-  for (const tier of VOLUME.VOLUME_TIERS) {
-    if (stats.total_volume_usd >= tier.min && stats.total_volume_usd < tier.max) {
-      // Interpolate within tier
-      const tierRange = tier.max === Infinity ? 100000 : tier.max - tier.min;
-      const positionInTier = (stats.total_volume_usd - tier.min) / tierRange;
-      const prevTierPoints = VOLUME.VOLUME_TIERS[VOLUME.VOLUME_TIERS.indexOf(tier) - 1]?.points || 0;
-      score = prevTierPoints + positionInTier * (tier.points - prevTierPoints);
-      break;
-    }
-  }
+  // 2. Counterparty diversity bonus (0-20)
+  //    Rewards trading with many different people
+  const uniqueCPs = stats.unique_counterparties || 0;
+  const diversityScore = Math.min(
+    VOLUME.DIVERSITY_CAP,
+    Math.log10(uniqueCPs + 1) * VOLUME.DIVERSITY_SCALE
+  );
 
-  // Recent activity bonus (traded in last 7 days)
+  // 3. Recent activity bonus (0-10)
+  let recencyScore = 0;
   if (stats.last_7_days_volume > 0) {
-    score += VOLUME.RECENT_ACTIVITY_BONUS * (Math.min(stats.last_7_days_volume, 1000) / 1000);
+    recencyScore = Math.min(VOLUME.RECENCY_CAP, VOLUME.RECENCY_CAP * (Math.min(stats.last_7_days_volume, 5000) / 5000));
   }
 
-  return Math.max(0, Math.min(100, score));
+  // 4. Anti-farming penalty
+  let farmingPenalty = 0;
+
+  // 4a. Concentration penalty: if >60% volume with single counterparty, penalise
+  const concentration = stats.top_counterparty_pct || 0;
+  if (concentration > VOLUME.CONCENTRATION_THRESHOLD) {
+    // Scale penalty: 60%→0, 80%→10, 100%→25
+    farmingPenalty += Math.min(25, ((concentration - VOLUME.CONCENTRATION_THRESHOLD) / 40) * 25);
+  }
+
+  // 4b. Repeat pair penalty: each farming pair reduces score
+  const repeatPairs = stats.repeat_pair_count || 0;
+  if (repeatPairs > 0) {
+    farmingPenalty += Math.min(15, repeatPairs * VOLUME.REPEAT_PAIR_PENALTY);
+  }
+
+  const score = baseScore + diversityScore + recencyScore - farmingPenalty;
+  return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 /**
@@ -231,6 +273,8 @@ export function calculateTrustScore(stats: EntityStats): number {
  * Calculate complete reputation score
  */
 export function calculateReputationScore(stats: EntityStats): ReputationScore {
+  const { GATES } = SCORE_PARAMS;
+
   // Calculate component scores
   const reviewScore = calculateReviewScore(stats);
   const executionScore = calculateExecutionScore(stats);
@@ -238,8 +282,8 @@ export function calculateReputationScore(stats: EntityStats): ReputationScore {
   const consistencyScore = calculateConsistencyScore(stats);
   const trustScore = calculateTrustScore(stats);
 
-  // Calculate weighted total (0-1000 scale)
-  const totalScore =
+  // Calculate raw weighted total (0-1000 scale)
+  let totalScore =
     (reviewScore * REPUTATION_WEIGHTS.REVIEW +
       executionScore * REPUTATION_WEIGHTS.EXECUTION +
       volumeScore * REPUTATION_WEIGHTS.VOLUME +
@@ -247,8 +291,70 @@ export function calculateReputationScore(stats: EntityStats): ReputationScore {
       trustScore * REPUTATION_WEIGHTS.TRUST) *
     10;
 
-  // Determine tier
-  const tier = getTierFromScore(totalScore);
+  // ── GATING LOGIC ─────────────────────────────────────────────────────
+  // Reliability and trust act as dominant gates. High volume/consistency
+  // cannot compensate for poor reliability or trust.
+
+  const flags: ReputationFlag[] = [];
+  let forceRisky = false;
+
+  // 1. Reliability hard gate: review_score < 20 → 50% penalty + cap
+  if (reviewScore < GATES.RELIABILITY_HARD_THRESHOLD) {
+    flags.push('low_reliability');
+    totalScore *= 0.5;
+    if (totalScore > GATES.LOW_RELIABILITY_SCORE_CAP) {
+      totalScore = GATES.LOW_RELIABILITY_SCORE_CAP;
+      flags.push('score_capped');
+    }
+  }
+  // Reliability soft gate: review_score < 40 → 20% penalty
+  else if (reviewScore < GATES.RELIABILITY_SOFT_THRESHOLD) {
+    flags.push('low_reliability');
+    totalScore *= 0.8;
+  }
+
+  // 2. Trust gate: trust_score < 40 → 30% penalty + cap
+  if (trustScore < GATES.TRUST_HARD_THRESHOLD) {
+    flags.push('low_trust');
+    totalScore *= 0.7;
+    if (totalScore > GATES.LOW_TRUST_SCORE_CAP) {
+      totalScore = GATES.LOW_TRUST_SCORE_CAP;
+      flags.push('score_capped');
+    }
+  }
+
+  // 3. Completion rate gate: < 50% → forced "risky" tier
+  const completionRate = stats.total_orders > 0
+    ? stats.completed_orders / stats.total_orders
+    : 1; // no orders = not risky
+  if (stats.total_orders >= MIN_REQUIREMENTS.MIN_ORDERS_FOR_EXECUTION_SCORE && completionRate < GATES.COMPLETION_RATE_RISKY) {
+    flags.push('low_completion_rate');
+    forceRisky = true;
+  }
+
+  // 4. High dispute rate flag
+  const disputeRate = stats.total_orders > 0
+    ? stats.disputed_orders / stats.total_orders
+    : 0;
+  if (stats.total_orders >= MIN_REQUIREMENTS.MIN_ORDERS_FOR_EXECUTION_SCORE && disputeRate > GATES.DISPUTE_RATE_FLAG) {
+    flags.push('high_dispute_rate');
+    forceRisky = true;
+  }
+
+  // 5. Critical override: if reliability OR trust is dangerously low → risky
+  if (reviewScore < GATES.RELIABILITY_HARD_THRESHOLD && stats.total_orders >= MIN_REQUIREMENTS.MIN_ORDERS_FOR_EXECUTION_SCORE) {
+    forceRisky = true;
+  }
+  if (trustScore < GATES.TRUST_HARD_THRESHOLD) {
+    forceRisky = true;
+  }
+
+  // Deduplicate flags
+  const uniqueFlags = [...new Set(flags)];
+
+  // Determine tier (force risky if gated)
+  totalScore = Math.max(0, Math.round(totalScore));
+  const tier = forceRisky ? 'risky' : getTierFromScore(totalScore);
 
   // Calculate badges
   const badges = calculateBadges(stats);
@@ -256,7 +362,7 @@ export function calculateReputationScore(stats: EntityStats): ReputationScore {
   return {
     entity_id: stats.entity_id,
     entity_type: stats.entity_type,
-    total_score: Math.round(totalScore),
+    total_score: totalScore,
     review_score: Math.round(reviewScore),
     execution_score: Math.round(executionScore),
     volume_score: Math.round(volumeScore),
@@ -264,6 +370,7 @@ export function calculateReputationScore(stats: EntityStats): ReputationScore {
     trust_score: Math.round(trustScore),
     tier,
     badges,
+    flags: uniqueFlags,
     calculated_at: new Date(),
   };
 }

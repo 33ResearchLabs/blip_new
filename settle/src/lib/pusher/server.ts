@@ -249,15 +249,21 @@ interface ChatMessageData {
   mimeType?: string | null;
   createdAt: string;
   senderName?: string;
+  // Optional participant IDs — when provided, the message is also pushed
+  // to their private channels so they receive it even without the chat open.
+  userId?: string | null;
+  merchantId?: string | null;
+  buyerMerchantId?: string | null;
 }
 
 /**
- * Notify when a new chat message is sent
+ * Notify when a new chat message is sent.
+ * Always pushes to the order channel (subscribers with chat open).
+ * When participant IDs are provided, also pushes to their private channels
+ * so they receive the message even without the chat window open.
  */
 export async function notifyNewMessage(data: ChatMessageData): Promise<void> {
-  const channel = getOrderChannel(data.orderId);
-
-  await triggerEvent(channel, CHAT_EVENTS.MESSAGE_NEW, {
+  const payload = {
     messageId: data.messageId,
     orderId: data.orderId,
     senderType: data.senderType,
@@ -271,7 +277,30 @@ export async function notifyNewMessage(data: ChatMessageData): Promise<void> {
     fileSize: data.fileSize,
     mimeType: data.mimeType,
     createdAt: data.createdAt,
-  });
+  };
+
+  // 1. Order channel (existing — for open chat windows)
+  const orderChannel = getOrderChannel(data.orderId);
+  await triggerEvent(orderChannel, CHAT_EVENTS.MESSAGE_NEW, payload);
+
+  // 2. Private channels (new — for closed chat windows)
+  // Skip the sender's own channel to avoid echo
+  const privateChannels: string[] = [];
+  if (data.userId && !(data.senderType === 'user' && data.senderId === data.userId)) {
+    privateChannels.push(getUserChannel(data.userId));
+  }
+  if (data.merchantId && !(data.senderType === 'merchant' && data.senderId === data.merchantId)) {
+    privateChannels.push(getMerchantChannel(data.merchantId));
+  }
+  if (data.buyerMerchantId && data.buyerMerchantId !== data.merchantId &&
+      !(data.senderType === 'merchant' && data.senderId === data.buyerMerchantId)) {
+    privateChannels.push(getMerchantChannel(data.buyerMerchantId));
+  }
+
+  if (privateChannels.length > 0) {
+    // Fire-and-forget — don't block on private channel delivery
+    triggerEvent(privateChannels, CHAT_EVENTS.MESSAGE_NEW, payload).catch(() => {});
+  }
 }
 
 /**

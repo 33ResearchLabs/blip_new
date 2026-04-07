@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { copyToClipboard } from '@/lib/clipboard';
 import {
@@ -24,12 +24,20 @@ import {
   Zap,
   Settings,
   Droplets,
+  Monitor,
+  Smartphone,
+  Globe,
+  X,
+  Palette,
+  Lock,
+  Trophy,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMerchantStore } from '@/stores/merchantStore';
 import { CorridorProviderSettings } from '@/components/merchant/CorridorProviderSettings';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { useTheme, THEMES, type Theme } from '@/context/ThemeContext';
 
 // Avatar presets (same as profile modal)
 const PRESET_AVATARS = [
@@ -59,7 +67,7 @@ const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/pixel-art/svg?seed=Pixel4',
 ];
 
-type SettingsTab = 'profile' | 'account' | 'payments' | 'notifications' | 'liquidity';
+type SettingsTab = 'profile' | 'account' | 'security' | 'theme' | 'payments' | 'notifications' | 'liquidity' | 'reputation';
 
 export default function MerchantSettingsPage() {
   const router = useRouter();
@@ -91,6 +99,10 @@ export default function MerchantSettingsPage() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  // Reputation
+  const [repData, setRepData] = useState<any>(null);
+  const [repLoading, setRepLoading] = useState(false);
 
   // Payment methods
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
@@ -330,7 +342,7 @@ export default function MerchantSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#060606] text-white flex items-center justify-center">
+      <div className="min-h-screen bg-background text-white flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-white/40" />
       </div>
     );
@@ -339,15 +351,18 @@ export default function MerchantSettingsPage() {
   const tabs: { id: SettingsTab; label: string; icon: any }[] = [
     { id: 'profile', label: 'Profile', icon: User },
     { id: 'account', label: 'Account', icon: Shield },
+    { id: 'security', label: 'Security', icon: Lock },
+    { id: 'theme', label: 'Theme', icon: Palette },
     { id: 'payments', label: 'Payments', icon: CreditCard },
     { id: 'notifications', label: 'Alerts', icon: Bell },
     { id: 'liquidity', label: 'Liquidity', icon: Droplets },
+    { id: 'reputation', label: 'Reputation', icon: Trophy },
   ];
 
   return (
-    <div className="min-h-screen bg-[#060606] text-white">
+    <div className="min-h-screen bg-background text-white">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-black/60 backdrop-blur-2xl border-b border-white/[0.05]">
+      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-2xl border-b border-white/[0.05]">
         <div className="h-[50px] flex items-center px-4 gap-3 max-w-5xl mx-auto">
           <Link
             href="/merchant"
@@ -461,7 +476,7 @@ export default function MerchantSettingsPage() {
                       onClick={() => setSelectedAvatar(url)}
                       className={`relative aspect-square rounded-full overflow-hidden border-2 transition-all ${
                         selectedAvatar === url
-                          ? 'border-orange-500 ring-2 ring-orange-500/30 scale-110'
+                          ? 'border-primary ring-2 ring-primary/30 scale-110'
                           : 'border-white/10 hover:border-white/30'
                       }`}
                     >
@@ -481,7 +496,7 @@ export default function MerchantSettingsPage() {
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Your display name"
                     maxLength={50}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-orange-500/30 transition-colors"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
                   />
                 </div>
 
@@ -493,7 +508,7 @@ export default function MerchantSettingsPage() {
                     onChange={(e) => setBusinessName(e.target.value)}
                     placeholder="Your business name (optional)"
                     maxLength={100}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-orange-500/30 transition-colors"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
                   />
                 </div>
 
@@ -504,7 +519,7 @@ export default function MerchantSettingsPage() {
                     onChange={(e) => setBio(e.target.value.slice(0, 200))}
                     placeholder="Tell traders about yourself..."
                     rows={3}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-orange-500/30 resize-none transition-colors"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 resize-none transition-colors"
                   />
                   <span className="text-[10px] text-white/20 font-mono mt-1 block text-right">{bio.length}/200</span>
                 </div>
@@ -517,7 +532,7 @@ export default function MerchantSettingsPage() {
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+971 50 123 4567"
                     maxLength={20}
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-orange-500/30 transition-colors"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
                   />
                 </div>
               </div>
@@ -527,7 +542,7 @@ export default function MerchantSettingsPage() {
                 whileTap={{ scale: 0.98 }}
                 onClick={handleSaveProfile}
                 disabled={isSaving}
-                className="w-full py-3 rounded-xl bg-orange-500 text-black font-bold text-sm hover:bg-orange-400 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-primary text-black font-bold text-sm hover:bg-primary transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isSaving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -555,7 +570,7 @@ export default function MerchantSettingsPage() {
             <div className="space-y-6">
               <div>
                 <h2 className="text-lg font-bold mb-1">Account</h2>
-                <p className="text-sm text-white/40">Account details and security</p>
+                <p className="text-sm text-white/40">Account details and trading stats</p>
               </div>
 
               {/* Account Info */}
@@ -629,7 +644,7 @@ export default function MerchantSettingsPage() {
                   </div>
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
                     <p className="text-[10px] text-white/30 font-mono uppercase">Rating</p>
-                    <p className="text-lg font-bold text-white/80 font-mono">{merchant?.rating?.toFixed(2) || '5.00'}</p>
+                    <p className="text-lg font-bold text-white/80 font-mono">{parseFloat(String(merchant?.rating || 5)).toFixed(2)}</p>
                   </div>
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
                     <p className="text-[10px] text-white/30 font-mono uppercase">Status</p>
@@ -644,6 +659,17 @@ export default function MerchantSettingsPage() {
                     </p>
                   </div>
                 </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* Security Tab */}
+          {activeTab === 'security' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-bold mb-1">Security</h2>
+                <p className="text-sm text-white/40">Password, two-factor authentication, and sessions</p>
               </div>
 
               {/* Change Password */}
@@ -670,7 +696,7 @@ export default function MerchantSettingsPage() {
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="Current password"
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder:text-white/20 outline-none focus:border-orange-500/30 transition-colors"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
                   />
                   <button
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
@@ -686,7 +712,7 @@ export default function MerchantSettingsPage() {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="New password (min 6 chars)"
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder:text-white/20 outline-none focus:border-orange-500/30 transition-colors"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
                   />
                   <button
                     onClick={() => setShowNewPassword(!showNewPassword)}
@@ -701,7 +727,7 @@ export default function MerchantSettingsPage() {
                   value={confirmNewPassword}
                   onChange={(e) => setConfirmNewPassword(e.target.value)}
                   placeholder="Confirm new password"
-                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-orange-500/30 transition-colors"
+                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
                 />
 
                 <button
@@ -714,6 +740,12 @@ export default function MerchantSettingsPage() {
                 </button>
               </div>
 
+              {/* Two-Factor Authentication */}
+              <TwoFactorSection merchantId={merchantId} />
+
+              {/* Active Sessions */}
+              <ActiveSessionsSection />
+
               {/* Danger Zone */}
               <div className="bg-red-500/[0.03] rounded-2xl border border-red-500/[0.08] p-5">
                 <label className="text-xs text-red-400/60 font-mono uppercase tracking-wider mb-3 block">Danger Zone</label>
@@ -725,6 +757,18 @@ export default function MerchantSettingsPage() {
                   Log Out
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Theme Tab */}
+          {activeTab === 'theme' && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-lg font-bold mb-1">Theme</h2>
+                <p className="text-sm text-white/40">Customize the look of your dashboard</p>
+              </div>
+
+              <ThemeSection />
             </div>
           )}
 
@@ -744,7 +788,7 @@ export default function MerchantSettingsPage() {
                     <p className="text-sm text-white/40 mb-4">No bank accounts added yet</p>
                     <button
                       onClick={() => setShowAddBank(true)}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-orange-500/10 border border-orange-500/20 text-sm text-orange-400 font-medium hover:bg-orange-500/20 transition-colors"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 border border-primary/20 text-sm text-primary font-medium hover:bg-primary/20 transition-colors"
                     >
                       <Plus className="w-4 h-4" />
                       Add Bank Account
@@ -808,7 +852,7 @@ export default function MerchantSettingsPage() {
                     value={newBank.bank_name}
                     onChange={(e) => setNewBank(prev => ({ ...prev, bank_name: e.target.value }))}
                     placeholder="Bank name (e.g. Emirates NBD)"
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-orange-500/30 transition-colors"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
                   />
 
                   <input
@@ -816,7 +860,7 @@ export default function MerchantSettingsPage() {
                     value={newBank.account_name}
                     onChange={(e) => setNewBank(prev => ({ ...prev, account_name: e.target.value }))}
                     placeholder="Account holder name"
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-orange-500/30 transition-colors"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
                   />
 
                   <input
@@ -824,13 +868,13 @@ export default function MerchantSettingsPage() {
                     value={newBank.iban}
                     onChange={(e) => setNewBank(prev => ({ ...prev, iban: e.target.value.toUpperCase() }))}
                     placeholder="IBAN (e.g. AE07033...)"
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-white/20 outline-none focus:border-orange-500/30 transition-colors"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
                   />
 
                   <button
                     onClick={handleAddBank}
                     disabled={isAddingBank || !newBank.bank_name || !newBank.account_name || !newBank.iban}
-                    className="w-full py-3 rounded-xl bg-orange-500 text-black font-bold text-sm hover:bg-orange-400 transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl bg-primary text-black font-bold text-sm hover:bg-primary transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
                   >
                     {isAddingBank && <Loader2 className="w-4 h-4 animate-spin" />}
                     {isAddingBank ? 'Adding...' : 'Add Bank Account'}
@@ -864,7 +908,7 @@ export default function MerchantSettingsPage() {
                       onClick={() => setNotifSettings(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
                       className={`w-11 h-6 rounded-full transition-all relative ${
                         notifSettings[item.key]
-                          ? 'bg-orange-500'
+                          ? 'bg-primary'
                           : 'bg-white/[0.08]'
                       }`}
                     >
@@ -878,7 +922,7 @@ export default function MerchantSettingsPage() {
 
               <button
                 onClick={handleSaveNotifications}
-                className="w-full py-3 rounded-xl bg-orange-500 text-black font-bold text-sm hover:bg-orange-400 transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-primary text-black font-bold text-sm hover:bg-primary transition-colors flex items-center justify-center gap-2"
               >
                 Save Preferences
               </button>
@@ -899,6 +943,10 @@ export default function MerchantSettingsPage() {
             </div>
           )}
 
+          {activeTab === 'reputation' && (
+            <ReputationTab merchantId={merchantId} />
+          )}
+
           {/* Mobile Logout */}
           <div className="md:hidden mt-8 pt-6 border-t border-white/[0.04]">
             <button
@@ -914,6 +962,830 @@ export default function MerchantSettingsPage() {
             </p>
           </div>
         </main>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// REPUTATION TAB COMPONENT
+// ============================================
+
+function ReputationTab({ merchantId }: { merchantId: string | null }) {
+  const [repData, setRepData] = useState<any>(null);
+  const [repLoading, setRepLoading] = useState(true);
+
+  useEffect(() => {
+    const id = merchantId || JSON.parse(localStorage.getItem('blip_merchant') || '{}')?.id;
+    if (!id) {
+      setRepLoading(false);
+      return;
+    }
+    setRepLoading(true);
+    fetch(`/api/reputation?entityId=${id}&entityType=merchant`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.data) {
+          setRepData(data.data);
+        }
+      })
+      .catch(err => console.error('Reputation fetch error:', err))
+      .finally(() => setRepLoading(false));
+  }, [merchantId]);
+
+  const score = repData?.score?.total_score ?? 0;
+  const tier = repData?.score?.tier ?? 'newcomer';
+  const badges = repData?.score?.badges ?? [];
+
+  const tierLabels: Record<string, string> = {
+    diamond: 'Diamond', platinum: 'Platinum', gold: 'Gold',
+    silver: 'Silver', bronze: 'Bronze', newcomer: 'Newcomer',
+  };
+
+  const getColor = (s: number) => {
+    if (s >= 900) return '#06b6d4';
+    if (s >= 800) return '#3b82f6';
+    if (s >= 600) return '#22c55e';
+    if (s >= 400) return '#eab308';
+    if (s >= 200) return '#f97316';
+    return '#ef4444';
+  };
+
+  const segments = [
+    { start: 0, end: 20, color: '#ef4444', label: 'Poor', offset: 30 },
+    { start: 20, end: 40, color: '#f97316', label: 'Fair', offset: 24 },
+    { start: 40, end: 60, color: '#eab308', label: 'Good', offset: 24 },
+    { start: 60, end: 80, color: '#22c55e', label: 'V.Good', offset: 28 },
+    { start: 80, end: 100, color: '#06b6d4', label: 'Excellent', offset: 42 },
+  ];
+
+  const breakdownMap: Record<string, { label: string; key: string }> = {
+    execution_score: { label: 'Reliability', key: 'execution_score' },
+    volume_score: { label: 'Volume', key: 'volume_score' },
+    consistency_score: { label: 'Speed', key: 'consistency_score' },
+    trust_score: { label: 'Liquidity', key: 'trust_score' },
+    review_score: { label: 'Trust', key: 'review_score' },
+  };
+
+  if (repLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-white/30" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-bold mb-1">Reputation Score</h2>
+        <p className="text-sm text-white/40">Your reputation based on trading history, speed, and trust</p>
+      </div>
+
+      {/* Gauge */}
+      <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-6">
+        <div className="flex flex-col items-center">
+          <div className="relative" style={{ width: 340, height: 200 }}>
+            <svg viewBox="0 0 340 200" className="w-full h-full" overflow="visible">
+              {segments.map((seg, i) => {
+                const cx = 170, cy = 170, r = 120;
+                const startAngle = Math.PI + (seg.start / 100) * Math.PI;
+                const endAngle = Math.PI + (seg.end / 100) * Math.PI;
+                const x1 = cx + r * Math.cos(startAngle);
+                const y1 = cy + r * Math.sin(startAngle);
+                const x2 = cx + r * Math.cos(endAngle);
+                const y2 = cy + r * Math.sin(endAngle);
+                const midAngle = Math.PI + ((seg.start + seg.end) / 200) * Math.PI;
+                const lx = cx + (r + seg.offset) * Math.cos(midAngle);
+                const ly = cy + (r + seg.offset) * Math.sin(midAngle);
+                return (
+                  <g key={i}>
+                    <path d={`M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`}
+                      fill="none" stroke={seg.color} strokeWidth="24" strokeLinecap="butt" opacity={0.9} />
+                    <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
+                      fontSize="10" fontWeight="600" fill={seg.color} opacity={0.85}>
+                      {seg.label}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Needle */}
+              {(() => {
+                const cx = 170, cy = 170;
+                const pct = Math.min(100, Math.max(0, score / 10));
+                const angle = Math.PI + (pct / 100) * Math.PI;
+                const len = 90;
+                const tipX = cx + len * Math.cos(angle);
+                const tipY = cy + len * Math.sin(angle);
+                const bw = 7;
+                const pa = angle + Math.PI / 2;
+                const b1x = cx + bw * Math.cos(pa), b1y = cy + bw * Math.sin(pa);
+                const b2x = cx - bw * Math.cos(pa), b2y = cy - bw * Math.sin(pa);
+                const tl = 18;
+                const tailX = cx - tl * Math.cos(angle), tailY = cy - tl * Math.sin(angle);
+                return (
+                  <g>
+                    <defs>
+                      <filter id="ns" x="-20%" y="-20%" width="140%" height="140%">
+                        <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#000" floodOpacity="0.4" />
+                      </filter>
+                    </defs>
+                    <polygon points={`${tipX},${tipY} ${b1x},${b1y} ${tailX},${tailY} ${b2x},${b2y}`}
+                      fill={getColor(score)} filter="url(#ns)" opacity={0.95} />
+                    <circle cx={cx} cy={cy} r="12" fill={getColor(score)} filter="url(#ns)" />
+                    <circle cx={cx} cy={cy} r="6" fill="var(--background, #0a0a0a)" />
+                    <circle cx={cx} cy={cy} r="2.5" fill={getColor(score)} opacity={0.6} />
+                  </g>
+                );
+              })()}
+
+              <text x="42" y="185" fontSize="10" fill="white" opacity={0.3} fontFamily="monospace">0</text>
+              <text x="286" y="185" fontSize="10" fill="white" opacity={0.3} fontFamily="monospace">1000</text>
+            </svg>
+          </div>
+
+          {/* Score */}
+          <div className="flex flex-col items-center -mt-2">
+            <span className="text-5xl font-black" style={{ color: getColor(score) }}>
+              {score}
+            </span>
+            <span className="text-sm font-bold mt-1" style={{ color: getColor(score) }}>
+              {tierLabels[tier] || tier}
+            </span>
+          </div>
+        </div>
+
+        {/* Badges */}
+        {badges.length > 0 && (
+          <div className="flex flex-wrap justify-center gap-2 mt-4">
+            {badges.map((b: string) => (
+              <span key={b} className="px-3 py-1 rounded-full text-[11px] font-medium bg-white/[0.06] border border-white/[0.08] text-white/60">
+                {b.replace(/_/g, ' ')}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Breakdown */}
+      <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5">
+        <h3 className="text-xs font-bold text-white/40 uppercase tracking-wider mb-4">Score Breakdown</h3>
+        <div className="space-y-3">
+          {Object.entries(breakdownMap).map(([key, { label }]) => {
+            const val = repData?.score?.[key] ?? 0;
+            return (
+              <div key={key}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm text-white/60">{label}</span>
+                  <span className="text-sm font-bold text-white/80">{val} / 100</span>
+                </div>
+                <div className="h-2 rounded-full bg-white/[0.06]">
+                  <div className="h-full rounded-full transition-all" style={{
+                    width: `${Math.min(100, val)}%`,
+                    backgroundColor: getColor(val * 10),
+                  }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 text-center">
+          <p className="text-2xl font-bold text-white/80">{repData?.score?.total_score ?? 0}</p>
+          <p className="text-[11px] text-white/30 mt-1">Score</p>
+        </div>
+        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 text-center">
+          <p className="text-2xl font-bold text-white/80">{tierLabels[tier]}</p>
+          <p className="text-[11px] text-white/30 mt-1">Tier</p>
+        </div>
+        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 text-center">
+          <p className="text-2xl font-bold text-white/80">{repData?.rank ?? '—'}</p>
+          <p className="text-[11px] text-white/30 mt-1">Rank</p>
+        </div>
+        <div className="bg-white/[0.02] rounded-xl border border-white/[0.06] p-4 text-center">
+          <p className="text-2xl font-bold text-white/80">{badges.length}</p>
+          <p className="text-[11px] text-white/30 mt-1">Badges</p>
+        </div>
+      </div>
+
+      {/* Progress to next tier */}
+      {repData?.progress && (
+        <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5">
+          <h3 className="text-xs font-bold text-white/40 uppercase tracking-wider mb-2">Progress to Next Tier</h3>
+          <p className="text-sm text-white/60 mb-3">
+            {repData.progress.pointsNeeded > 0
+              ? `${repData.progress.pointsNeeded} points to ${tierLabels[repData.progress.nextTier] || repData.progress.nextTier}`
+              : 'Maximum tier reached!'}
+          </p>
+          <div className="h-3 rounded-full bg-white/[0.06]">
+            <div className="h-full rounded-full bg-primary transition-all" style={{
+              width: `${Math.min(100, repData.progress.progressPercent ?? 0)}%`,
+            }} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Active Sessions Component ────────────────────────────────────────
+
+interface SessionData {
+  id: string;
+  device: string | null;
+  ip: string | null;
+  browser: string | null;
+  browserVersion: string | null;
+  os: string | null;
+  osVersion: string | null;
+  deviceName: string | null;
+  deviceType: 'mobile' | 'tablet' | 'desktop';
+  lastUsed: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
+  const [is2FAEnabled, setIs2FAEnabled] = useState(false);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(true);
+  const [step, setStep] = useState<'idle' | 'setup' | 'verify' | 'disable'>('idle');
+  const [qrDataUrl, setQrDataUrl] = useState('');
+  const [manualSecret, setManualSecret] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [disablePassword, setDisablePassword] = useState('');
+  const [disableCode, setDisableCode] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  // Fetch 2FA status on mount (with timeout)
+  useEffect(() => {
+    if (!merchantId) { setIsLoadingStatus(false); return; }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    fetchWithAuth('/api/2fa/status', { signal: controller.signal })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) setIs2FAEnabled(data.data?.enabled ?? false);
+      })
+      .catch(() => {})
+      .finally(() => { clearTimeout(timeout); setIsLoadingStatus(false); });
+  }, [merchantId]);
+
+  const handleSetup = async () => {
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth('/api/2fa/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountName: merchantId?.slice(0, 8) }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setQrDataUrl(data.data.qrDataUrl);
+        setManualSecret(data.data.secret);
+        setStep('verify');
+      } else {
+        setError(data.error || 'Failed to start 2FA setup');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (!/^\d{6}$/.test(otpCode)) { setError('Enter a 6-digit code'); return; }
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth('/api/2fa/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: otpCode }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIs2FAEnabled(true);
+        setStep('idle');
+        setSuccess('Two-factor authentication enabled!');
+        setOtpCode('');
+        setTimeout(() => setSuccess(null), 4000);
+      } else {
+        setError(data.error || 'Invalid code');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDisable = async () => {
+    if (!/^\d{6}$/.test(disableCode)) { setError('Enter a 6-digit code'); return; }
+    if (!disablePassword) { setError('Password is required'); return; }
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth('/api/2fa/disable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: disablePassword, code: disableCode }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIs2FAEnabled(false);
+        setStep('idle');
+        setSuccess('Two-factor authentication disabled.');
+        setDisablePassword('');
+        setDisableCode('');
+        setTimeout(() => setSuccess(null), 4000);
+      } else {
+        setError(data.error || 'Failed to disable 2FA');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isLoadingStatus) {
+    return (
+      <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 flex items-center justify-center">
+        <Loader2 className="w-4 h-4 animate-spin text-white/30" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <label className="text-xs text-white/40 font-mono uppercase tracking-wider block">Two-Factor Authentication</label>
+          <p className="text-[11px] text-white/25 mt-0.5">Secure your account with Google Authenticator</p>
+        </div>
+        <div className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+          is2FAEnabled
+            ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+            : 'bg-white/[0.04] text-white/30 border border-white/[0.06]'
+        }`}>
+          {is2FAEnabled ? 'ENABLED' : 'OFF'}
+        </div>
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-sm text-emerald-400">
+          <Check className="w-4 h-4 shrink-0" />
+          {success}
+        </div>
+      )}
+
+      {/* Idle — show enable/disable button */}
+      {step === 'idle' && (
+        is2FAEnabled ? (
+          <button
+            onClick={() => { setStep('disable'); setError(null); }}
+            className="w-full py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
+          >
+            <Shield className="w-4 h-4" />
+            Disable 2FA
+          </button>
+        ) : (
+          <button
+            onClick={handleSetup}
+            disabled={isSubmitting}
+            className="w-full py-3 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white/80 font-medium text-sm hover:bg-white/[0.10] transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+            {isSubmitting ? 'Setting up...' : 'Enable 2FA'}
+          </button>
+        )
+      )}
+
+      {/* Setup — show QR code and verify */}
+      {step === 'verify' && (
+        <div className="space-y-4">
+          <div className="text-xs text-white/50 space-y-1">
+            <p>1. Open <span className="text-white/70 font-medium">Google Authenticator</span> on your phone</p>
+            <p>2. Scan the QR code below or enter the key manually</p>
+            <p>3. Enter the 6-digit code to confirm</p>
+          </div>
+
+          {/* QR Code */}
+          <div className="flex justify-center py-3">
+            <div className="bg-white rounded-xl p-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qrDataUrl} alt="2FA QR Code" className="w-[180px] h-[180px]" />
+            </div>
+          </div>
+
+          {/* Manual Key */}
+          <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-3">
+            <p className="text-[10px] text-white/30 font-mono uppercase tracking-wider mb-1">Manual Entry Key</p>
+            <p className="text-sm text-white/80 font-mono break-all select-all">{manualSecret}</p>
+          </div>
+
+          {/* OTP Input */}
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            value={otpCode}
+            onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="Enter 6-digit code"
+            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white text-center font-mono tracking-[0.3em] placeholder:text-white/20 placeholder:tracking-normal outline-none focus:border-primary/30 transition-colors"
+            autoFocus
+          />
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setStep('idle'); setError(null); setOtpCode(''); }}
+              className="flex-1 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white/50 font-medium text-sm hover:bg-white/[0.08] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleVerify}
+              disabled={isSubmitting || otpCode.length !== 6}
+              className="flex-1 py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 font-medium text-sm hover:bg-emerald-500/25 transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+            >
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              {isSubmitting ? 'Verifying...' : 'Confirm'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Disable — require password + OTP */}
+      {step === 'disable' && (
+        <div className="space-y-3">
+          <p className="text-xs text-white/40">Enter your password and current authenticator code to disable 2FA.</p>
+
+          <input
+            type="password"
+            value={disablePassword}
+            onChange={(e) => setDisablePassword(e.target.value)}
+            placeholder="Current password"
+            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
+          />
+
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            value={disableCode}
+            onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="6-digit authenticator code"
+            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white text-center font-mono tracking-[0.3em] placeholder:text-white/20 placeholder:tracking-normal outline-none focus:border-primary/30 transition-colors"
+          />
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setStep('idle'); setError(null); setDisablePassword(''); setDisableCode(''); }}
+              className="flex-1 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white/50 font-medium text-sm hover:bg-white/[0.08] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDisable}
+              disabled={isSubmitting || !disablePassword || disableCode.length !== 6}
+              className="flex-1 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-red-500/20 transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+            >
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+              {isSubmitting ? 'Disabling...' : 'Disable 2FA'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ActiveSessionsSection() {
+  const [sessions, setSessions] = useState<SessionData[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isRevoking, setIsRevoking] = useState<string | null>(null);
+  const [isRevokingAll, setIsRevokingAll] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchSessions = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetchWithAuth('/api/auth/sessions');
+      const data = await res.json();
+      if (data.success) {
+        setSessions(data.data || []);
+      } else {
+        setError(data.error || 'Failed to load sessions');
+      }
+    } catch {
+      setError('Failed to load sessions');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
+
+  const handleRevoke = async (sessionId: string) => {
+    setIsRevoking(sessionId);
+    try {
+      const res = await fetchWithAuth(`/api/auth/sessions?session_id=${sessionId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setSessions(prev => prev.filter(s => s.id !== sessionId));
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsRevoking(null);
+    }
+  };
+
+  const handleRevokeAll = async () => {
+    setIsRevokingAll(true);
+    try {
+      const res = await fetchWithAuth('/api/auth/sessions', { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setSessions([]);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsRevokingAll(false);
+    }
+  };
+
+  const formatTime = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    const diffDay = Math.floor(diffHr / 24);
+    return `${diffDay}d ago`;
+  };
+
+  return (
+    <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <label className="text-xs text-white/40 font-mono uppercase tracking-wider">Active Sessions</label>
+        {sessions.length > 1 && (
+          <button
+            onClick={handleRevokeAll}
+            disabled={isRevokingAll}
+            className="text-[10px] text-red-400/70 hover:text-red-400 font-medium transition-colors flex items-center gap-1"
+          >
+            {isRevokingAll ? <Loader2 className="w-3 h-3 animate-spin" /> : <LogOut className="w-3 h-3" />}
+            Logout All Devices
+          </button>
+        )}
+      </div>
+
+      {isLoading && (
+        <div className="flex items-center justify-center py-6">
+          <Loader2 className="w-5 h-5 text-white/20 animate-spin" />
+        </div>
+      )}
+
+      {error && !isLoading && (
+        <p className="text-xs text-white/30 text-center py-4">{error}</p>
+      )}
+
+      {!isLoading && !error && sessions.length === 0 && (
+        <p className="text-xs text-white/30 text-center py-4">No active sessions</p>
+      )}
+
+      {!isLoading && sessions.length > 0 && (
+        <div className="space-y-2">
+          {sessions.map((session, idx) => {
+            const isCurrent = idx === 0;
+            const isMobile = session.deviceType === 'mobile' || session.deviceType === 'tablet';
+            const browserLabel = session.browser
+              ? `${session.browser}${session.browserVersion ? ` ${session.browserVersion}` : ''}`
+              : session.device || 'Unknown Browser';
+            const osLabel = session.os
+              ? `${session.os}${session.osVersion ? ` ${session.osVersion}` : ''}`
+              : null;
+            const deviceLabel = session.deviceName || session.device || 'Unknown Device';
+
+            return (
+              <div
+                key={session.id}
+                className={`p-4 rounded-xl border ${isCurrent ? 'bg-primary/[0.05] border-primary/20' : 'bg-white/[0.03] border-white/[0.04]'}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    {/* Device icon */}
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isCurrent ? 'bg-primary/10' : 'bg-white/[0.06]'}`}>
+                      {isMobile
+                        ? <Smartphone className={`w-5 h-5 ${isCurrent ? 'text-primary' : 'text-white/40'}`} />
+                        : <Monitor className={`w-5 h-5 ${isCurrent ? 'text-primary' : 'text-white/40'}`} />
+                      }
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {/* Row 1: Browser + Current badge */}
+                      <div className="flex items-center gap-2">
+                        <p className="text-[13px] font-semibold text-white/85 truncate">{browserLabel}</p>
+                        {isCurrent && (
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-primary/15 text-primary tracking-wide">CURRENT</span>
+                        )}
+                      </div>
+
+                      {/* Row 2: OS + Device */}
+                      <div className="flex items-center gap-2 mt-1">
+                        {osLabel && (
+                          <span className="text-[11px] text-white/50 font-medium">{osLabel}</span>
+                        )}
+                        {osLabel && deviceLabel && <span className="text-white/15">·</span>}
+                        <span className="text-[11px] text-white/35">{deviceLabel}</span>
+                      </div>
+
+                      {/* Row 3: IP + Times */}
+                      <div className="flex items-center gap-3 mt-1.5 text-[10px] text-white/30">
+                        {session.ip && (
+                          <span className="flex items-center gap-1">
+                            <Globe className="w-3 h-3 text-white/20" />
+                            <span className="font-mono">{session.ip}</span>
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <span className={`w-1.5 h-1.5 rounded-full ${isCurrent ? 'bg-green-400 animate-pulse' : 'bg-white/20'}`} />
+                          Active {formatTime(session.lastUsed)}
+                        </span>
+                        <span>Created {formatTime(session.createdAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Revoke button */}
+                  {!isCurrent && (
+                    <button
+                      onClick={() => handleRevoke(session.id)}
+                      disabled={isRevoking === session.id}
+                      className="px-3 py-1.5 rounded-lg text-[10px] font-medium bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors flex-shrink-0 flex items-center gap-1.5 mt-1"
+                    >
+                      {isRevoking === session.id
+                        ? <Loader2 className="w-3 h-3 animate-spin" />
+                        : <LogOut className="w-3 h-3" />
+                      }
+                      Revoke
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Theme Section Component ──────────────────────────────────────────
+
+const THEME_PREVIEWS: Record<string, { bg: string; sidebar: string; card: string; accent: string; text: string; muted: string }> = {
+  dark:    { bg: '#000000', sidebar: '#060606', card: '#0c0c0c', accent: '#F97316', text: '#ffffff', muted: '#525252' },
+  navy:    { bg: '#0B1120', sidebar: '#131D35', card: '#161E31', accent: '#38BDF8', text: '#F1F5F9', muted: '#94A3B8' },
+  emerald: { bg: '#050705', sidebar: '#0A120E', card: '#0D1410', accent: '#10B981', text: '#ECFDF5', muted: '#6B7280' },
+  orchid:  { bg: '#1A1A2E', sidebar: '#16213E', card: '#1F2B4D', accent: '#E94560', text: '#FFFFFF', muted: '#94A3B8' },
+  gold:    { bg: '#1C1C1C', sidebar: '#252525', card: '#2D2D2D', accent: '#D4AF37', text: '#E0E0E0', muted: '#888888' },
+  clean:   { bg: '#FFFFFF', sidebar: '#F9FAFB', card: '#F3F4F6', accent: '#3B82F6', text: '#111827', muted: '#6B7280' },
+  light:   { bg: '#FDF6E3', sidebar: '#EEE8D5', card: '#E0DAC8', accent: '#268BD2', text: '#073642', muted: '#586E75' },
+};
+
+function ThemePreviewCard({ colors, isActive }: { colors: typeof THEME_PREVIEWS['dark']; isActive: boolean }) {
+  return (
+    <div className={`rounded-lg overflow-hidden border-2 transition-all ${isActive ? 'border-[var(--primary)] ring-2 ring-[var(--primary)]/20' : 'border-white/[0.08] hover:border-white/[0.15]'}`}>
+      <div className="flex h-[72px]" style={{ backgroundColor: colors.bg }}>
+        <div className="w-[28%] flex flex-col p-1 gap-0.5" style={{ backgroundColor: colors.sidebar }}>
+          <div className="h-1.5 w-8 rounded-full" style={{ backgroundColor: colors.muted, opacity: 0.4 }} />
+          <div className="h-6 rounded" style={{ backgroundColor: colors.card }} />
+          <div className="flex gap-1 mt-auto">
+            <div className="flex-1 h-3 rounded" style={{ backgroundColor: colors.accent }} />
+            <div className="flex-1 h-3 rounded" style={{ backgroundColor: colors.card, border: `1px solid ${colors.muted}33` }} />
+          </div>
+        </div>
+        <div className="flex-1 flex flex-col p-1 gap-0.5">
+          <div className="h-1.5 w-12 rounded-full" style={{ backgroundColor: colors.muted, opacity: 0.3 }} />
+          <div className="flex-1 rounded" style={{ backgroundColor: colors.card }} />
+          <div className="flex gap-0.5">
+            <div className="h-2 flex-1 rounded-full" style={{ backgroundColor: colors.accent, opacity: 0.2 }} />
+            <div className="h-2 flex-1 rounded-full" style={{ backgroundColor: colors.card }} />
+          </div>
+        </div>
+        <div className="w-[25%] flex flex-col p-1 gap-0.5">
+          <div className="h-1.5 w-8 rounded-full" style={{ backgroundColor: colors.muted, opacity: 0.3 }} />
+          <div className="space-y-0.5 flex-1">
+            <div className="h-2 rounded" style={{ backgroundColor: colors.card }} />
+            <div className="h-2 rounded" style={{ backgroundColor: colors.card }} />
+            <div className="h-2 rounded" style={{ backgroundColor: colors.card }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ThemeSection() {
+  const { theme, setTheme } = useTheme();
+  const [previewing, setPreviewing] = useState<Theme | null>(null);
+  const originalThemeRef = useRef<Theme>(theme);
+
+  const handlePreview = (themeId: Theme) => {
+    if (!previewing) {
+      originalThemeRef.current = theme;
+    }
+    setPreviewing(themeId);
+    setTheme(themeId);
+  };
+
+  const handleApply = () => {
+    setPreviewing(null);
+  };
+
+  const handleCancel = () => {
+    setTheme(originalThemeRef.current);
+    setPreviewing(null);
+  };
+
+  const handleSelect = (themeId: Theme) => {
+    if (previewing) setPreviewing(null);
+    setTheme(themeId);
+  };
+
+  return (
+    <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 space-y-4">
+      <div>
+        <label className="text-xs text-white/40 font-mono uppercase tracking-wider block">Theme</label>
+        <p className="text-[11px] text-white/25 mt-1">Customize the look of your dashboard. Only you see this.</p>
+      </div>
+
+      {previewing && (
+        <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--primary-dim)' }}>
+          <span className="text-xs text-white/70">
+            Previewing <span className="font-semibold" style={{ color: 'var(--primary)' }}>{THEMES.find(t => t.id === previewing)?.label}</span>
+          </span>
+          <div className="flex gap-2">
+            <button onClick={handleApply} className="px-3 py-1 rounded-lg text-[11px] font-medium text-black" style={{ backgroundColor: 'var(--primary)' }}>
+              Apply
+            </button>
+            <button onClick={handleCancel} className="px-3 py-1 rounded-lg text-[11px] font-medium bg-white/[0.06] text-white/60 hover:text-white transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-3">
+        {THEMES.map(t => {
+          const colors = THEME_PREVIEWS[t.id];
+          const isActive = (previewing || theme) === t.id;
+          return (
+            <div key={t.id} className="space-y-1.5">
+              <button onClick={() => handleSelect(t.id)} className="w-full text-left cursor-pointer">
+                <ThemePreviewCard colors={colors} isActive={isActive} />
+              </button>
+              <div className="flex items-center justify-between px-0.5">
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-3 h-3 rounded-full border-2 flex items-center justify-center transition-colors`}
+                    style={{ borderColor: isActive ? 'var(--primary)' : 'rgba(255,255,255,0.2)' }}>
+                    {isActive && <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: 'var(--primary)' }} />}
+                  </div>
+                  <span className={`text-[10px] font-medium ${isActive ? 'text-white/90' : 'text-white/40'}`}>
+                    {t.label}
+                  </span>
+                </div>
+                {!isActive && (
+                  <button onClick={() => handlePreview(t.id)} className="text-[9px] text-white/30 hover:text-white/60 font-medium transition-colors">
+                    Preview
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

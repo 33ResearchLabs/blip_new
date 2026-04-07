@@ -57,7 +57,7 @@ export function TopRatedSellers() {
       <div className="flex-1 overflow-y-auto p-2">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
+            <Loader2 className="w-6 h-6 text-primary animate-spin" />
           </div>
         ) : sellers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
@@ -79,7 +79,7 @@ export function TopRatedSellers() {
                 transition={{ delay: index * 0.03 }}
                 className={`p-2.5 rounded-lg border transition-all ${
                   seller.rank <= 3
-                    ? 'bg-orange-500/10 border-orange-500/20'
+                    ? 'bg-primary/10 border-primary/20'
                     : 'bg-white/[0.02] border-white/[0.04] hover:border-white/[0.08]'
                 }`}
               >
@@ -103,7 +103,7 @@ export function TopRatedSellers() {
                         {seller.display_name || seller.username}
                       </span>
                       {seller.rank <= 3 && (
-                        <span className="text-[9px] px-1 py-0.5 bg-orange-500/20 text-orange-400 rounded font-bold">
+                        <span className="text-[9px] px-1 py-0.5 bg-primary/20 text-primary rounded font-bold">
                           TOP {seller.rank}
                         </span>
                       )}
@@ -113,8 +113,8 @@ export function TopRatedSellers() {
                       <span className="text-[10px] text-white/30">{seller.total_trades} trades</span>
                       <span className="text-[10px] text-white/20">·</span>
                       <div className="flex items-center gap-0.5">
-                        <Star className="w-2.5 h-2.5 text-orange-400 fill-orange-400" />
-                        <span className="text-[10px] text-orange-400 font-bold">
+                        <Star className="w-2.5 h-2.5 text-primary fill-primary" />
+                        <span className="text-[10px] text-primary font-bold">
                           {seller.rating.toFixed(2)}
                         </span>
                         <span className="text-[10px] text-white/20">

@@ -1,11 +1,13 @@
 import bs58 from 'bs58';
+import { randomBytes } from 'crypto';
 
 /**
- * Generate a login message for the user to sign
+ * Generate a login message for the user to sign.
+ * Uses crypto.randomBytes for a cryptographically secure nonce.
  */
 export function generateLoginMessage(walletAddress: string): string {
   const timestamp = Date.now();
-  const nonce = Math.random().toString(36).substring(7);
+  const nonce = randomBytes(16).toString('hex');
 
   return `Sign this message to authenticate with Blip Money\n\nWallet: ${walletAddress}\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
 }

@@ -299,6 +299,10 @@ export function useEscrowOperations({
               const data = await res.json();
               if (data.success) recorded = true;
               else console.error(`[Escrow] Attempt ${attempt + 1} — server returned success:false`, data);
+            } else if (res.status === 409) {
+              // 409 = already escrowed (idempotent) — treat as success
+              console.log(`[Escrow] Attempt ${attempt + 1} — already escrowed (409), treating as success`);
+              recorded = true;
             } else {
               const errData = await res.json().catch(() => ({}));
               console.error(`[Escrow] Attempt ${attempt + 1} — HTTP ${res.status}`, errData);

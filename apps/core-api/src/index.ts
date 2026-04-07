@@ -15,6 +15,7 @@ import { expireRoutes } from './routes/expire';
 import { debugRoutes } from './routes/debug';
 import { conversionRoutes } from './routes/conversion';
 import { corridorRoutes } from './routes/corridor';
+import { reputationRoutes } from './routes/reputation';
 import { authHook } from './hooks/auth';
 import { initWebSocketServer, closeWebSocketServer } from './ws/broadcast';
 import { startOutboxWorker, stopOutboxWorker } from './workers/notificationOutbox';
@@ -26,6 +27,7 @@ import { startReceiptWorker, stopReceiptWorker } from './workers/receiptWorker';
 import { startIdempotencyCleanupWorker, stopIdempotencyCleanupWorker } from './workers/idempotencyCleanupWorker';
 import { startOutboxEventWorker, stopOutboxEventWorker } from './workers/outboxEventWorker';
 import { closeReceiptQueue } from './queues/receiptQueue';
+import { startReputationWorker, stopReputationWorker } from './workers/reputationWorker';
 import { registerAllListeners } from './events';
 import { closePool } from 'settlement-core';
 import { runPendingMigrations } from './migrationRunner';
@@ -73,6 +75,7 @@ await fastify.register(cancelRequestRoutes, { prefix: '/v1' });
 await fastify.register(expireRoutes, { prefix: '/v1' });
 await fastify.register(conversionRoutes, { prefix: '/v1' });
 await fastify.register(corridorRoutes, { prefix: '/v1' });
+await fastify.register(reputationRoutes, { prefix: '/v1' });
 await fastify.register(debugRoutes);
 
 // Pre-flight: log DB target, run migrations, validate schema
@@ -112,6 +115,7 @@ try {
     startUnhappyPathWorker();
     startIdempotencyCleanupWorker();
     startOutboxEventWorker();
+    startReputationWorker();
     await startReceiptWorker();
   }
 } catch (err) {
@@ -129,6 +133,7 @@ const shutdown = async (signal: string) => {
     stopUnhappyPathWorker();
     stopIdempotencyCleanupWorker();
     stopOutboxEventWorker();
+    stopReputationWorker();
     await stopReceiptWorker();
     await closeReceiptQueue();
     closeWebSocketServer();

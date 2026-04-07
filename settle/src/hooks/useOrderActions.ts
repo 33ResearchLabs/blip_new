@@ -683,38 +683,14 @@ export function useOrderActions({
 
     try {
       if (effectiveTradeType === "sell") {
-        // SELL order flow: Lock escrow first, then create order
+        // SELL order flow: Lock escrow first, then broadcast order for ANY merchant to accept
         if (effectiveBalance !== null && effectiveBalance < parseFloat(openTradeForm.cryptoAmount)) {
           addNotification('system', `Insufficient balance. You have ${effectiveBalance.toFixed(2)} USDC.`);
           setIsCreatingTrade(false);
           return;
         }
 
-        const offerParams = new URLSearchParams({
-          amount: openTradeForm.cryptoAmount,
-          type: 'buy',
-          payment_method: openTradeForm.paymentMethod,
-          exclude_merchant: merchantId,
-        });
-        const offerRes = await fetchWithAuth(`/api/offers?${offerParams}`);
-        const offerData = await offerRes.json();
-
-        let matchedOffer: { id: string; merchant?: { wallet_address?: string; display_name?: string } } | null = null;
-        if (offerRes.ok && offerData.success && offerData.data) {
-          matchedOffer = offerData.data;
-        }
-
-        // Validate counterparty wallet (skip in embedded wallet mode)
-        if (!IS_EMBEDDED_WALLET) {
-          const counterpartyWallet = matchedOffer?.merchant?.wallet_address;
-          if (!isValidSolanaAddress(counterpartyWallet)) {
-            addNotification('system', 'No matching merchant with wallet found. Try a different amount.');
-            setIsCreatingTrade(false);
-            return;
-          }
-        }
-
-        // Store trade params for manual escrow locking
+        // Store trade params for escrow locking — NO pre-matched counterparty
         (window as any).__pendingSellOrder = {
           merchantId,
           tradeType: effectiveTradeType,
@@ -722,15 +698,13 @@ export function useOrderActions({
           paymentMethod: openTradeForm.paymentMethod,
           spreadPreference: openTradeForm.spreadPreference,
           priorityFee: priorityFee || 0,
-          matchedOfferId: matchedOffer?.id,
-          counterpartyWallet: matchedOffer?.merchant?.wallet_address,
         };
 
-        // Create temporary order for escrow modal
+        // Create temporary order for escrow modal — counterparty is TBD
         const tempOrder: Order = {
           id: 'temp-' + Date.now(),
-          user: matchedOffer?.merchant?.display_name || 'Merchant',
-          emoji: '🏪',
+          user: 'Open Order',
+          emoji: '📢',
           amount: parseFloat(openTradeForm.cryptoAmount),
           fromCurrency: 'USDC',
           toCurrency: 'AED',
@@ -740,7 +714,6 @@ export function useOrderActions({
           status: 'pending',
           expiresIn: 900,
           orderType: 'sell',
-          userWallet: matchedOffer?.merchant?.wallet_address,
         };
 
         openEscrowModalForSell(tempOrder);
@@ -778,7 +751,6 @@ export function useOrderActions({
           const newOrder = mapDbOrderToUI(data.data, merchantId);
           setOrders((prev: Order[]) => [newOrder, ...prev]);
           playSound('trade_complete');
-          addNotification('order', `Buy order created for ${parseFloat(openTradeForm.cryptoAmount)} USDC`, data.data?.id);
         }
 
         setOpenTradeForm({

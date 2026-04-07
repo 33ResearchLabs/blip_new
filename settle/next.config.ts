@@ -2,6 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // TypeScript errors MUST be fixed — do not set ignoreBuildErrors: true
+  // Dev-lock flag: set DEV_LOCK_ENABLED=true as a separate env var.
+  // The actual password stays in DEV_ACCESS_PASSWORD (Node.js API routes only).
+  env: {
+    DEV_LOCK_ENABLED: process.env.DEV_LOCK_ENABLED || (process.env.DEV_ACCESS_PASSWORD ? 'true' : ''),
+  },
   compress: true,
   poweredByHeader: false,
   reactStrictMode: true,

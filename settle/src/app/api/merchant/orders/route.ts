@@ -70,18 +70,26 @@ export async function GET(request: NextRequest) {
 
     // If include_all_pending is true, fetch ALL pending orders (broadcast model)
     // Otherwise, fetch only orders for this specific merchant
-    let orders;
-    if (includeAllPending) {
-      // Get merchant's own orders + ALL pending orders from any merchant
-      orders = await getAllPendingOrdersForMerchant(merchant_id, status as any);
-      console.log('[API] /api/merchant/orders (broadcast mode) - all pending orders:', orders?.length || 0);
-    } else {
-      orders = await getMerchantOrders(merchant_id, status as any);
-      console.log('[API] /api/merchant/orders - merchant_id:', merchant_id, 'orders found:', orders?.length || 0);
+    const { getMerchantOrdersCache, setMerchantOrdersCache } = await import('@/lib/cache/cacheService');
+
+    // Broadcast lists are NOT cached — they change every time any merchant creates/accepts an order.
+    // Only per-merchant lists (non-broadcast) are cached.
+    if (!includeAllPending) {
+      const cached = await getMerchantOrdersCache<any>(merchant_id);
+      if (cached) {
+        logger.api.request('GET', '/api/merchant/orders (cache hit)', merchant_id);
+        const res = NextResponse.json({ success: true, data: cached });
+        res.headers.set('Cache-Control', 'private, max-age=1, stale-while-revalidate=3');
+        return res;
+      }
     }
 
-    if (orders && orders.length > 0) {
-      console.log('[API] Orders:', orders.map(o => ({ id: o.id, status: o.status, merchant_id: o.merchant_id })));
+    // Fetch from DB
+    let orders;
+    if (includeAllPending) {
+      orders = await getAllPendingOrdersForMerchant(merchant_id, status as any);
+    } else {
+      orders = await getMerchantOrders(merchant_id, status as any);
     }
 
     // Enrich each order with backend-driven UI fields
@@ -90,6 +98,11 @@ export async function GET(request: NextRequest) {
       minimal_status: normalizeStatus(order.status),
       ...enrichOrderResponse(order, merchant_id),
     }));
+
+    // Cache per-merchant list only (NOT broadcast — broadcast changes too frequently)
+    if (!includeAllPending) {
+      await setMerchantOrdersCache(merchant_id, enrichedOrders);
+    }
 
     logger.api.request('GET', '/api/merchant/orders', merchant_id);
     const res = NextResponse.json({ success: true, data: enrichedOrders });
@@ -250,110 +263,16 @@ export async function POST(request: NextRequest) {
       return errorResponse('Failed to create order after multiple attempts');
     }
 
-    // Determine which merchant's offer to use
-    const offerMerchantId = isM2MTrade ? target_merchant_id : merchant_id;
+    // ── DIRECT ORDER CREATION (no offer matching) ───────────────────────
+    // Offer matching is disabled. Orders are created with corridor ref_price
+    // and broadcast to all merchants for manual acceptance.
 
-    // Get merchant's offer
-    let offer;
-    if (offer_id) {
-      // Use specific offer if provided
-      offer = await getOfferWithMerchant(offer_id);
-      if (!offer || offer.merchant_id !== offerMerchantId) {
-        return validationErrorResponse([`Offer not found or does not belong to ${isM2MTrade ? 'target' : 'this'} merchant`]);
-      }
-    } else {
-      // Find merchant's active offer matching the type and payment method
-      const offerTypeToFind = isM2MTrade ? type : type;
-      const merchantOffers = await getMerchantOffers(offerMerchantId);
-      console.log('[API] Looking for offer type:', offerTypeToFind, 'payment_method:', payment_method);
-      console.log('[API] Merchant offers found:', merchantOffers.map(o => ({ id: o.id, type: o.type, payment_method: o.payment_method, is_active: o.is_active })));
-
-      offer = merchantOffers.find(
-        o => o.type === offerTypeToFind && o.payment_method === payment_method && o.is_active
-      );
-
-      if (!offer) {
-        // For merchant-initiated orders with escrow already locked (SELL orders from balance widget),
-        // try to find ANY active offer from this merchant as a fallback
-        if (escrow_tx_hash && merchantOffers.length > 0) {
-          console.log('[API] No exact match, using first active offer as fallback for escrowed order');
-          offer = merchantOffers.find(o => o.is_active) || merchantOffers[0];
-          if (offer) {
-            offer = await getOfferWithMerchant(offer.id);
-          }
-        }
-
-        if (!offer) {
-          console.error('[API] No matching offer found for merchant:', offerMerchantId);
-          return NextResponse.json(
-            { success: false, error: `No active ${offerTypeToFind} offer found with ${payment_method} payment method${isM2MTrade ? ' from target merchant' : ''}. ${isM2MTrade ? 'The target merchant needs to create a corridor first.' : 'Please create a corridor first.'}` },
-            { status: 404 }
-          );
-        }
-      } else {
-        console.log('[API] Found matching offer:', offer.id);
-        // Get full offer with merchant data
-        offer = await getOfferWithMerchant(offer.id);
-      }
-    }
-
-    if (!offer) {
-      return NextResponse.json(
-        { success: false, error: 'No matching offer found' },
-        { status: 404 }
-      );
-    }
-
-    // Check if offer has enough liquidity
-    if (offer.available_amount < crypto_amount) {
-      return validationErrorResponse([
-        `Insufficient liquidity. Available: ${offer.available_amount}, Requested: ${crypto_amount}`,
-      ]);
-    }
-
-    // Check amount bounds
-    if (crypto_amount < offer.min_amount || crypto_amount > offer.max_amount) {
-      return validationErrorResponse([
-        `Amount must be between ${offer.min_amount} and ${offer.max_amount}`,
-      ]);
-    }
-
-    // --- Price engine: resolve effective rate ---
+    // --- Price engine: resolve rate from corridor ---
     const corridorData = await fetchCorridorRefPrice('USDT_AED');
+    const FALLBACK_RATE = 3.67;
+    let effectiveRate = corridorData?.ref_price ?? FALLBACK_RATE;
+    effectiveRate = Math.round(effectiveRate * 10000) / 10000;
 
-    // Market margin mode: rate floats as ref_price + margin%
-    // Fixed mode (default): use offer.rate as-is
-    let effectiveRate = Number(offer.rate);
-    if (
-      offer.rate_type === 'market_margin' &&
-      offer.margin_percent != null &&
-      corridorData &&
-      !corridorData.is_stale
-    ) {
-      effectiveRate = corridorData.ref_price * (1 + Number(offer.margin_percent) / 100);
-      effectiveRate = Math.round(effectiveRate * 10000) / 10000; // 4 decimal places
-    }
-
-    // Guardrail: reject if rate deviates too far from ref_price
-    let deviationBps = 0;
-    if (corridorData) {
-      const deviation = Math.abs(effectiveRate - corridorData.ref_price) / corridorData.ref_price;
-      deviationBps = Math.round(deviation * 10000);
-
-      if (PRICE_GUARDRAILS_ENABLED && !corridorData.is_stale && deviation > PRICE_MAX_DEVIATION) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: `Rate ${effectiveRate.toFixed(4)} deviates ${(deviation * 100).toFixed(1)}% from corridor ref ${corridorData.ref_price.toFixed(4)}. Max allowed: ${(PRICE_MAX_DEVIATION * 100).toFixed(0)}%.`,
-            deviation_bps: deviationBps,
-            ref_price: corridorData.ref_price,
-          },
-          { status: 422 }
-        );
-      }
-    }
-
-    // Sign price proof (always, even when guardrails disabled — for audit trail)
     let priceProofSig: string | null = null;
     const priceProofRefPrice: number | null = corridorData?.ref_price ?? null;
     let priceProofExpiresAt: string | null = null;
@@ -363,88 +282,70 @@ export async function POST(request: NextRequest) {
         corridor_id: 'USDT_AED',
         ref_price: corridorData.ref_price,
         order_rate: effectiveRate,
-        deviation_bps: deviationBps,
+        deviation_bps: 0,
         timestamp: Date.now(),
       });
       priceProofSig = proof.sig;
       priceProofExpiresAt = new Date(proof.expires_at).toISOString();
     }
 
-    // Calculate fiat amount using effective rate
     const fiatAmount = crypto_amount * effectiveRate;
 
-    // Calculate protocol fee based on spread preference + priority fee
+    // Protocol fee
     const baseFee = spread_preference === 'best' ? 2.00
       : spread_preference === 'fastest' ? 2.50
-      : 1.50; // cheap
+      : 1.50;
     const protocolFeePercentage = baseFee + (priority_fee || 0);
     const protocolFeeAmount = crypto_amount * (protocolFeePercentage / 100);
 
-    // Bump/decay fields — priority_fee (%) → premium_bps_cap (basis points)
+    // Bump/decay fields
     const priorityFeePct = priority_fee || 0;
-    const premiumBpsCap = Math.round(priorityFeePct * 100); // 2% → 200 bps
+    const premiumBpsCap = Math.round(priorityFeePct * 100);
     const autoBumpEnabled = premiumBpsCap > 0;
-    const bumpStepBps = 10;  // +0.10% per bump
-    const bumpIntervalSec = 30; // bump every 30s
+    const bumpStepBps = 10;
+    const bumpIntervalSec = 30;
 
-    logger.info('Order pricing calculated', {
+    logger.info('Order created (direct, no offer matching)', {
+      merchant_id,
+      type,
       crypto_amount,
       fiat_amount: fiatAmount,
       effective_rate: effectiveRate,
-      offer_rate: offer.rate,
-      rate_type: offer.rate_type || 'fixed',
       ref_price: corridorData?.ref_price,
-      deviation_bps: deviationBps,
       spread_preference,
-      protocol_fee_percentage: protocolFeePercentage,
-      protocol_fee_amount: protocolFeeAmount,
     });
 
-    // Build payment details snapshot
-    const paymentDetails =
-      offer.payment_method === 'bank'
-        ? {
-            bank_name: offer.bank_name,
-            bank_account_name: offer.bank_account_name,
-            bank_iban: offer.bank_iban,
-          }
-        : {
-            location_name: offer.location_name,
-            location_address: offer.location_address,
-            location_lat: offer.location_lat,
-            location_lng: offer.location_lng,
-            meeting_instructions: offer.meeting_instructions,
-          };
-
     // For merchant-initiated orders, the type from merchant's perspective:
-    // - 'sell' = merchant sells USDC to user (user buys USDC) -> order type is 'buy' (from user perspective)
-    // - 'buy' = merchant buys USDC from user (user sells USDC) -> order type is 'sell' (from user perspective)
-    // Orders are stored from user's perspective, so we invert the type
+    // - 'sell' = merchant sells USDC → order type is 'buy' (user perspective)
+    // - 'buy' = merchant buys USDC → order type is 'sell' (user perspective)
     const orderType = type === 'sell' ? 'buy' : 'sell';
 
-    // For M2M trades:
-    // - merchant_id = target merchant (the one fulfilling the order)
-    // - buyer_merchant_id = creating merchant (the one placing the order)
     const orderMerchantId = isM2MTrade ? target_merchant_id : merchant_id;
-    // buyer_merchant_id is ONLY for M2M trades (merchant-to-merchant).
-    // For user-created orders, buyer_merchant_id must NOT be set —
-    // the user is the buyer (buy orders) or seller (sell orders),
-    // and merchant_id is the counterparty.
     const buyerMerchantId = isM2MTrade ? merchant_id : undefined;
 
-    // Forward to core-api (single writer for all mutations)
+    // Get merchant's first active offer ID (required by DB schema, but not used for matching)
+    let fallbackOfferId: string | null = null;
+    try {
+      const merchantOffers = await getMerchantOffers(orderMerchantId);
+      const activeOffer = merchantOffers.find(o => o.is_active);
+      fallbackOfferId = activeOffer?.id || merchantOffers[0]?.id || null;
+    } catch {
+      // No offers — will use null
+    }
+
+    // Forward to core-api
     const response = await proxyCoreApi('/v1/merchant/orders', {
       method: 'POST',
       body: {
         merchant_id: orderMerchantId,
         user_id: user.id,
-        offer_id: offer.id,
+        offer_id: fallbackOfferId,
         type: orderType,
-        payment_method: offer.payment_method,
+        payment_method,
         crypto_amount,
         fiat_amount: fiatAmount,
         rate: effectiveRate,
-        payment_details: paymentDetails,
+        payment_details: {},
         spread_preference,
         protocol_fee_percentage: protocolFeePercentage,
         protocol_fee_amount: protocolFeeAmount,
@@ -454,7 +355,6 @@ export async function POST(request: NextRequest) {
         escrow_trade_pda,
         escrow_pda,
         escrow_creator_wallet,
-        // Price engine fields
         ref_price_at_create: priceProofRefPrice ?? effectiveRate,
         price_proof_sig: priceProofSig,
         price_proof_ref_price: priceProofRefPrice,
@@ -468,6 +368,12 @@ export async function POST(request: NextRequest) {
         expiry_minutes: expiry_minutes || 15,
       },
     });
+
+    // Invalidate creating merchant's order list cache
+    if (response.status < 400) {
+      const { invalidateMerchantOrderListCache } = await import('@/lib/cache/cacheService');
+      await invalidateMerchantOrderListCache(orderMerchantId);
+    }
 
     // Pusher notifications are now triggered by Core API directly
     return response;

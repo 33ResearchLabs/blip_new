@@ -98,6 +98,7 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
     lastMessage: dbOrder.last_message ? {
       content: dbOrder.last_message.content,
       fromMerchant: dbOrder.last_message.sender_type === 'merchant',
+      senderType: dbOrder.last_message.sender_type,
       createdAt: new Date(dbOrder.last_message.created_at),
     } : null,
     // Escrow on-chain references for release

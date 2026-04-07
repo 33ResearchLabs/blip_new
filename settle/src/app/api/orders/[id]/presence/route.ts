@@ -37,30 +37,35 @@ export async function GET(
       return forbiddenResponse('You do not have access to this order');
     }
 
-    // Get presence for all order participants
-    const presenceRows = await query<{
-      actor_type: string;
-      actor_id: string;
-      is_online: boolean;
-      last_seen: Date | null;
-    }>(
-      `SELECT cp.actor_type, cp.actor_id, cp.is_online, cp.last_seen
-       FROM chat_presence cp
-       WHERE (cp.actor_type = 'user' AND cp.actor_id = $1)
-          OR (cp.actor_type = 'merchant' AND cp.actor_id = ANY($2::uuid[]))
-          OR cp.actor_type = 'compliance'`,
-      [
-        order.user_id,
-        [order.merchant_id, order.buyer_merchant_id].filter(Boolean),
-      ]
-    );
-
-    const members = presenceRows.map(row => ({
-      actorType: row.actor_type,
-      actorId: row.actor_id,
-      isOnline: row.is_online,
-      lastSeen: row.last_seen?.toISOString() || null,
-    }));
+    // Presence is now handled by Pusher presence channels (presence-order-{id}).
+    // This endpoint is a fallback — returns empty if chat_presence table doesn't exist.
+    let members: { actorType: string; actorId: string; isOnline: boolean; lastSeen: string | null }[] = [];
+    try {
+      const presenceRows = await query<{
+        actor_type: string;
+        actor_id: string;
+        is_online: boolean;
+        last_seen: Date | null;
+      }>(
+        `SELECT cp.actor_type, cp.actor_id, cp.is_online, cp.last_seen
+         FROM chat_presence cp
+         WHERE (cp.actor_type = 'user' AND cp.actor_id = $1)
+            OR (cp.actor_type = 'merchant' AND cp.actor_id = ANY($2::uuid[]))
+            OR cp.actor_type = 'compliance'`,
+        [
+          order.user_id,
+          [order.merchant_id, order.buyer_merchant_id].filter(Boolean),
+        ]
+      );
+      members = presenceRows.map(row => ({
+        actorType: row.actor_type,
+        actorId: row.actor_id,
+        isOnline: row.is_online,
+        lastSeen: row.last_seen?.toISOString() || null,
+      }));
+    } catch {
+      // Table may not exist — Pusher presence handles this instead
+    }
 
     return successResponse({ orderId: id, members });
   } catch (error) {

@@ -32,6 +32,8 @@ ARG NEXT_PUBLIC_PUSHER_CLUSTER=ap2
 ARG NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
 ARG NEXT_PUBLIC_BLIPSCAN_URL
 ARG NEXT_PUBLIC_EMBEDDED_WALLET=true
+ARG DEV_LOCK_ENABLED=true
+ENV DEV_LOCK_ENABLED=$DEV_LOCK_ENABLED
 ENV NEXT_PUBLIC_MOCK_MODE=false
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 ENV NEXT_PUBLIC_CORE_WS_URL=$NEXT_PUBLIC_CORE_WS_URL
@@ -56,6 +58,7 @@ COPY --from=builder /app/settle/server.js settle/server.js
 COPY --from=builder /app/settle/websocket-server.js settle/websocket-server.js
 COPY --from=builder /app/settle/package.json settle/package.json
 COPY --from=builder /app/settle/next.config.ts settle/next.config.ts
+COPY --from=builder /app/settle/tsconfig.json settle/tsconfig.json
 COPY --from=builder /app/settle/src/ settle/src/
 COPY --from=builder /app/pnpm-workspace.yaml pnpm-workspace.yaml
 COPY --from=builder /app/package.json package.json

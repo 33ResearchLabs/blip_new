@@ -1,5 +1,5 @@
 // Types
-export type Screen = "home" | "order" | "escrow" | "orders" | "profile" | "chats" | "chat-view" | "create-offer" | "cash-confirm" | "matching" | "welcome" | "trade" | "wallet";
+export type Screen = "home" | "order" | "escrow" | "orders" | "profile" | "chats" | "chat-view" | "create-offer" | "cash-confirm" | "matching" | "welcome" | "trade" | "wallet" | "notifications";
 export type TradeType = "buy" | "sell";
 export type TradePreference = "fast" | "cheap" | "best";
 export type PaymentMethod = "bank" | "cash";
@@ -125,6 +125,7 @@ export interface Order {
   lastMessage?: {
     content: string;
     fromMerchant: boolean;
+    senderType?: 'user' | 'merchant' | 'compliance' | 'system';
     createdAt: Date;
   } | null;
   // Escrow on-chain references for release

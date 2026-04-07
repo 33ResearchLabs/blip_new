@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Bell, Plus, Loader2, History } from "lucide-react";
+import { Bell, Plus, Loader2, History, X } from "lucide-react";
 import { usePusher } from "@/context/PusherContext";
 import { useSounds } from "@/hooks/useSounds";
 import { useWebSocketChat } from "@/hooks/useWebSocketChat";
@@ -88,8 +88,8 @@ export default function MerchantDashboard() {
   const setCompletedCollapsed = useCallback((v: boolean) => setCollapsed(p => ({ ...p, completed: v })), []);
   const setLeaderboardCollapsed = useCallback((v: boolean) => setCollapsed(p => ({ ...p, leaderboard: v })), []);
   const [mobileView, setMobileView] = useState<
-    "orders" | "escrow" | "chat" | "history" | "marketplace"
-  >("orders");
+    "home" | "orders" | "escrow" | "chat" | "history" | "marketplace"
+  >("home");
   const [tabs, setTabs] = useState({
     market: "browse" as "browse" | "offers",
     leaderboard: "traders" as "traders" | "rated" | "reputation",
@@ -181,6 +181,15 @@ export default function MerchantDashboard() {
     setLoginError,
     isLoggingIn,
     isRegistering,
+    unverifiedMerchantId,
+    isResendingVerification,
+    resendVerificationEmail,
+    pending2FA,
+    totpCode,
+    setTotpCode,
+    isVerifying2FA,
+    handle2FAVerify,
+    cancel2FA,
     handleLogin,
     handleRegister,
     handleLogout,
@@ -541,11 +550,19 @@ export default function MerchantDashboard() {
       const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
       return !o.dbOrder?.accepted_at && !(buyerMid && buyerMid !== merchantId);
     };
+    // Unclaimed escrowed orders (no accepted_at, no buyer_merchant_id) are still "pending" for claimers
+    const isUnclaimedEscrow = (o: Order) => {
+      const status = getEffectiveStatus(o);
+      if (status !== "escrow") return false;
+      const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
+      return !o.dbOrder?.accepted_at && !buyerMid;
+    };
     return orders.filter((o) => {
       if (isOrderExpired(o)) return false;
       const status = getEffectiveStatus(o);
       if (status === "pending") return true;
       if (status === "escrow" && isSelfUnaccepted(o)) return true;
+      if (isUnclaimedEscrow(o)) return true;
       return false;
     });
   }, [orders, merchantId]);
@@ -563,10 +580,16 @@ export default function MerchantDashboard() {
       const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
       return !o.dbOrder?.accepted_at && !(buyerMid && buyerMid !== merchantId);
     };
+    // Unclaimed escrowed orders go to Pending, not In Progress
+    const isUnclaimedEscrow = (o: Order) => {
+      const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
+      return !o.dbOrder?.accepted_at && !buyerMid;
+    };
     return orders.filter((o) => {
       const status = getEffectiveStatus(o);
       if (status !== "escrow") return false;
       if (isSelfUnaccepted(o)) return false;
+      if (isUnclaimedEscrow(o)) return false;
       if (hasMyEscrow(o)) return true;
       return !isOrderExpired(o);
     });
@@ -615,7 +638,7 @@ export default function MerchantDashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#060606] text-white flex items-center justify-center p-4">
+      <div className="min-h-screen bg-background text-white flex items-center justify-center p-4">
         <div className="text-center">
           <div className="w-16 h-16 rounded-2xl bg-white/[0.08] border border-white/[0.08] flex items-center justify-center mx-auto mb-4">
             <Loader2 className="w-8 h-8 text-white animate-spin" />
@@ -627,6 +650,59 @@ export default function MerchantDashboard() {
   }
 
   if (!isLoggedIn) {
+    // 2FA challenge screen
+    if (pending2FA) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <div className="w-full max-w-sm space-y-6">
+            <div className="text-center">
+              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
+                <svg className="w-7 h-7 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+              </div>
+              <h1 className="text-xl font-bold text-white">Two-Factor Authentication</h1>
+              <p className="text-sm text-white/40 mt-1">Enter the 6-digit code from your authenticator app</p>
+            </div>
+
+            {loginError && (
+              <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-red-400">
+                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                {loginError}
+              </div>
+            )}
+
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={totpCode}
+              onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="000000"
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-4 text-2xl text-white text-center font-mono tracking-[0.4em] placeholder:text-white/10 outline-none focus:border-orange-500/30 transition-colors"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === 'Enter' && totpCode.length === 6) handle2FAVerify(); }}
+            />
+
+            <button
+              onClick={handle2FAVerify}
+              disabled={isVerifying2FA || totpCode.length !== 6}
+              className="w-full py-3.5 rounded-xl bg-orange-500/15 border border-orange-500/25 text-orange-400 font-semibold text-sm hover:bg-orange-500/25 transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+            >
+              {isVerifying2FA ? (
+                <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> Verifying...</>
+              ) : 'Verify & Login'}
+            </button>
+
+            <button
+              onClick={cancel2FA}
+              className="w-full py-2.5 text-sm text-white/30 hover:text-white/50 transition-colors"
+            >
+              Back to login
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <LoginScreen
         authTab={authTab}
@@ -642,6 +718,8 @@ export default function MerchantDashboard() {
         isAuthenticating={false}
         onLogin={handleLogin}
         onRegister={handleRegister}
+        onResendVerification={resendVerificationEmail}
+        isResendingVerification={isResendingVerification}
       />
     );
   }
@@ -660,7 +738,7 @@ export default function MerchantDashboard() {
   return (
     <div
       data-testid="merchant-dashboard"
-      className="h-screen bg-[#060606] text-white flex flex-col overflow-hidden"
+      className="h-screen bg-background text-white flex flex-col overflow-hidden"
     >
       <NotificationToastContainer position="top-right" />
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
@@ -674,6 +752,8 @@ export default function MerchantDashboard() {
         embeddedWalletState={embeddedWallet?.state}
         onLogout={handleLogout}
         onOpenProfile={() => setShowProfileModal(true)}
+        notificationCount={notifications.filter(n => !n.read).length}
+        onOpenNotifications={() => setShowNotifications(!showNotifications)}
         rightActions={
           <>
             <motion.button
@@ -698,34 +778,23 @@ export default function MerchantDashboard() {
       />
 
       {/* Mobile Stats Bar */}
-      <div className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.02] border-b border-white/[0.04]">
+      <div className="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-foreground/[0.02] border-b border-foreground/[0.04]">
         <button
           onClick={() => setShowWalletModal(true)}
-          className="flex items-center gap-1 px-2 py-1 bg-white/[0.04] rounded-md border border-white/[0.08] shrink-0"
+          className="flex items-center gap-1 px-2 py-1 bg-foreground/[0.04] rounded-md border border-foreground/[0.08] shrink-0"
         >
-          <span className="text-[11px] font-mono text-white/70">
+          <span className="text-[11px] font-mono text-foreground/70">
             {effectiveBalance !== null
               ? `${effectiveBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
               : "—"}
           </span>
         </button>
-        <div className="flex items-center gap-1 px-2 py-1 bg-white/[0.03] rounded-md shrink-0">
-          <span className="text-[10px] font-mono text-gray-400">
+        <div className="flex items-center gap-1 px-2 py-1 bg-foreground/[0.03] rounded-md shrink-0">
+          <span className="text-[10px] font-mono text-foreground/40">
             ${totalTradedVolume.toLocaleString()}
           </span>
         </div>
         <div className="flex-1" />
-        <button
-          onClick={() => setShowNotifications(!showNotifications)}
-          className="relative p-2.5 bg-white/[0.04] rounded-md shrink-0"
-        >
-          <Bell className="w-4 h-4 text-gray-400" />
-          {notifications.filter((n) => !n.read).length > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full text-[9px] font-bold flex items-center justify-center text-white">
-              {notifications.filter((n) => !n.read).length}
-            </span>
-          )}
-        </button>
       </div>
 
       <MerchantDesktopLayout
@@ -812,8 +881,91 @@ export default function MerchantDashboard() {
         setOpenTradeForm={setOpenTradeForm}
         setShowOpenTradeModal={setShowOpenTradeModal}
         setShowCreateModal={setShowCreateModal}
+        openTradeForm={openTradeForm}
+        isCreatingTrade={isCreatingTrade}
+        onCreateTrade={handleCreateTrade}
+        onShowWalletModal={() => setShowWalletModal(true)}
         totalUnread={totalUnread}
       />
+
+      {/* Mobile Notifications Overlay */}
+      {showNotifications && (
+        <div className="md:hidden fixed inset-0 z-[55]">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowNotifications(false)} />
+          <div className="absolute inset-0 bg-card-solid flex flex-col animate-in slide-in-from-right duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-section-divider">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-foreground/40" />
+                <h2 className="text-sm font-semibold text-foreground">Notifications</h2>
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span className="text-[10px] bg-primary text-white font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                    {notifications.filter(n => !n.read).length}
+                  </span>
+                )}
+              </div>
+              <button onClick={() => setShowNotifications(false)} className="p-1.5 rounded-lg hover:bg-foreground/[0.06] transition-colors">
+                <X className="w-5 h-5 text-foreground/40" />
+              </button>
+            </div>
+            {/* List */}
+            <div className="flex-1 overflow-y-auto p-2">
+              {notifications.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-foreground/20 p-8">
+                  <Bell className="w-8 h-8 mb-2 opacity-30" />
+                  <p className="text-xs">No notifications</p>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {notifications.map((n) => {
+                    const iconBg =
+                      n.type === 'complete' ? 'bg-emerald-500/10' :
+                      n.type === 'escrow' ? 'bg-primary/10' :
+                      n.type === 'payment' ? 'bg-blue-500/10' :
+                      n.type === 'dispute' ? 'bg-red-500/10' :
+                      n.type === 'order' ? 'bg-primary/10' :
+                      'bg-foreground/[0.04]';
+                    const iconColor =
+                      n.type === 'complete' ? 'text-emerald-400' :
+                      n.type === 'escrow' ? 'text-primary' :
+                      n.type === 'payment' ? 'text-blue-400' :
+                      n.type === 'dispute' ? 'text-red-400' :
+                      n.type === 'order' ? 'text-primary' :
+                      'text-foreground/40';
+                    const secAgo = Math.floor((Date.now() - n.timestamp) / 1000);
+                    const relTime = secAgo < 60 ? 'Just now' : secAgo < 3600 ? `${Math.floor(secAgo / 60)}m ago` : secAgo < 86400 ? `${Math.floor(secAgo / 3600)}h ago` : `${Math.floor(secAgo / 86400)}d ago`;
+
+                    return (
+                      <button
+                        key={n.id}
+                        onClick={() => { markNotificationRead(n.id); }}
+                        className={`w-full text-left p-3 rounded-xl border transition-colors ${
+                          n.read
+                            ? 'opacity-50 border-transparent'
+                            : 'bg-foreground/[0.02] border-foreground/[0.06] hover:border-foreground/[0.10]'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <div className={`w-7 h-7 rounded-lg ${iconBg} flex items-center justify-center shrink-0 mt-0.5`}>
+                            <div className={`w-2 h-2 rounded-full ${iconColor.replace('text-', 'bg-')}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] text-text-primary leading-snug">{n.message}</p>
+                            <p className="text-[11px] text-text-secondary mt-1">{relTime}</p>
+                          </div>
+                          {!n.read && (
+                            <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <MerchantModals
         merchantId={merchantId}

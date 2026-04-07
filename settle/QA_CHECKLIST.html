@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blip Money — QA Testing Checklist</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #141414;
+    --surface2: #1a1a1a;
+    --border: #222;
+    --border-light: #333;
+    --text: #e5e5e5;
+    --text-dim: #888;
+    --text-muted: #555;
+    --green: #22c55e;
+    --green-bg: rgba(34,197,94,0.08);
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,0.08);
+    --orange: #f97316;
+    --orange-bg: rgba(249,115,22,0.08);
+    --blue: #3b82f6;
+    --blue-bg: rgba(59,130,246,0.08);
+    --purple: #a855f7;
+    --purple-bg: rgba(168,85,247,0.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding: 20px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    padding: 30px 20px;
+    margin-bottom: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+  }
+  .header h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+  .header p { color: var(--text-dim); font-size: 13px; margin-top: 6px; }
+
+  /* Progress bar */
+  .progress-bar-container {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg);
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+  .progress-stats {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .progress-stats .total { color: var(--text-dim); }
+  .progress-stats .pct { font-weight: 700; font-size: 14px; }
+  .progress-track {
+    width: 100%;
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--green);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+  .stat-chips {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .stat-chip {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-family: monospace;
+    font-weight: 600;
+  }
+  .stat-chip.pass { background: var(--green-bg); color: var(--green); }
+  .stat-chip.fail { background: var(--red-bg); color: var(--red); }
+  .stat-chip.skip { background: var(--orange-bg); color: var(--orange); }
+
+  /* Section */
+  .section {
+    margin-bottom: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid transparent;
+    transition: background 0.15s;
+  }
+  .section-header:hover { background: var(--surface2); }
+  .section.open .section-header { border-bottom-color: var(--border); }
+  .section-header .left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-header .icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+  .section-header h2 {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .section-header .badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-family: monospace;
+    font-weight: 700;
+    background: var(--surface2);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+  .section-header .chevron {
+    font-size: 14px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+  }
+  .section.open .section-header .chevron { transform: rotate(180deg); }
+  .section-body { display: none; }
+  .section.open .section-body { display: block; }
+
+  /* Test row */
+  .test-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+    font-size: 13px;
+  }
+  .test-row:last-child { border-bottom: none; }
+  .test-row:hover { background: rgba(255,255,255,0.015); }
+  .test-row.checked { opacity: 0.5; }
+  .test-row.checked .test-label { text-decoration: line-through; }
+  .test-row.fail-row { background: var(--red-bg); }
+
+  .test-row input[type="checkbox"] {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border-light);
+    border-radius: 5px;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-top: 1px;
+    position: relative;
+    transition: all 0.15s;
+  }
+  .test-row input[type="checkbox"]:checked {
+    background: var(--green);
+    border-color: var(--green);
+  }
+  .test-row input[type="checkbox"]:checked::after {
+    content: '\2713';
+    position: absolute;
+    top: -1px;
+    left: 2px;
+    font-size: 13px;
+    font-weight: 900;
+    color: #000;
+  }
+
+  .test-id {
+    font-family: monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    min-width: 70px;
+    padding-top: 2px;
+  }
+  .test-label { flex: 1; color: var(--text); }
+  .test-priority {
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 800;
+    font-family: monospace;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .test-priority.p0 { background: var(--red-bg); color: var(--red); }
+  .test-priority.p1 { background: var(--orange-bg); color: var(--orange); }
+  .test-priority.p2 { background: var(--blue-bg); color: var(--blue); }
+
+  .test-status {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .test-status button {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.15s;
+  }
+  .test-status button:hover { border-color: var(--text-muted); }
+  .test-status button.active-pass { background: var(--green-bg); color: var(--green); border-color: var(--green); }
+  .test-status button.active-fail { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+  .test-status button.active-skip { background: var(--orange-bg); color: var(--orange); border-color: var(--orange); }
+
+  /* Notes */
+  .test-notes {
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 11px;
+    font-family: monospace;
+    resize: vertical;
+    min-height: 28px;
+    display: none;
+  }
+  .test-row.has-note .test-notes,
+  .test-row.fail-row .test-notes { display: block; }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 24px;
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-top: 32px;
+  }
+
+  /* Actions bar */
+  .actions-bar {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .actions-bar button {
+    padding: 6px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-dim);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .actions-bar button:hover { background: var(--surface2); color: var(--text); }
+
+  /* Print */
+  @media print {
+    .progress-bar-container, .actions-bar, .test-status button { display: none; }
+    body { background: #fff; color: #000; }
+    .section, .header { border-color: #ccc; background: #fff; }
+    .test-row { border-color: #eee; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Blip Money — QA Testing Checklist</h1>
+  <p>P2P USDC/AED Trading Platform &middot; Pre-Production Release &middot; 2026-03-31</p>
+</div>
+
+<div class="progress-bar-container" id="progressBar">
+  <div class="progress-stats">
+    <span class="total" id="progressText">0 / 0 checked</span>
+    <span class="pct" id="progressPct" style="color:var(--green)">0%</span>
+  </div>
+  <div class="progress-track">
+    <div class="progress-fill" id="progressFill"></div>
+  </div>
+  <div class="stat-chips">
+    <span class="stat-chip pass" id="passCount">0 Pass</span>
+    <span class="stat-chip fail" id="failCount">0 Fail</span>
+    <span class="stat-chip skip" id="skipCount">0 Skip</span>
+  </div>
+</div>
+
+<div class="actions-bar">
+  <button onclick="expandAll()">Expand All</button>
+  <button onclick="collapseAll()">Collapse All</button>
+  <button onclick="showFails()">Show Fails Only</button>
+  <button onclick="showAll()">Show All</button>
+  <button onclick="resetAll()">Reset All</button>
+  <button onclick="exportResults()">Export Results</button>
+</div>
+
+<div id="sections"></div>
+
+<div class="footer">
+  Generated for Blip Money Settle v1.0 &middot; Checklist auto-saves to localStorage
+</div>
+
+<script>
+const DATA = [
+  {
+    title: "Authentication — Merchant Login",
+    color: "var(--blue)",
+    bg: "var(--blue-bg)",
+    tests: [
+      { id: "AUTH-001", label: "Valid email + password login loads dashboard", p: "p0" },
+      { id: "AUTH-002", label: "Wrong password shows 'Incorrect email or password'", p: "p0" },
+      { id: "AUTH-003", label: "Non-existent email shows error, no crash", p: "p1" },
+      { id: "AUTH-004", label: "Empty fields — button disabled or validation error", p: "p1" },
+      { id: "AUTH-005", label: "Session persists after closing and reopening tab", p: "p0" },
+      { id: "AUTH-006", label: "Logout clears session, redirects to login", p: "p0" },
+      { id: "AUTH-007", label: "Login in Tab A, open /merchant in Tab B — both show dashboard", p: "p1" },
+      { id: "AUTH-008", label: "Wallet-based login (Phantom) — merchant recognized", p: "p1" },
+      { id: "AUTH-009", label: "New wallet login prompts for username setup", p: "p1" },
+    ]
+  },
+  {
+    title: "Authentication — Registration",
+    color: "var(--blue)",
+    bg: "var(--blue-bg)",
+    tests: [
+      { id: "AUTH-010", label: "Valid registration creates account + logs in", p: "p0" },
+      { id: "AUTH-011", label: "Duplicate email shows error", p: "p1" },
+      { id: "AUTH-012", label: "Password < 6 chars rejected", p: "p1" },
+      { id: "AUTH-013", label: "Password mismatch shows error", p: "p1" },
+      { id: "AUTH-014", label: "Password reset email flow works end-to-end", p: "p1" },
+    ]
+  },
+  {
+    title: "Two-Factor Authentication (2FA)",
+    color: "var(--purple)",
+    bg: "var(--purple-bg)",
+    tests: [
+      { id: "2FA-001", label: "Enable 2FA: QR code displayed, scannable by Google Authenticator", p: "p0" },
+      { id: "2FA-002", label: "Manual secret key shown and copyable", p: "p1" },
+      { id: "2FA-003", label: "Valid 6-digit code enables 2FA, badge shows ENABLED", p: "p0" },
+      { id: "2FA-004", label: "Login with 2FA: password accepted, then 2FA screen shown", p: "p0" },
+      { id: "2FA-005", label: "Valid 2FA code on login completes authentication", p: "p0" },
+      { id: "2FA-006", label: "Invalid 2FA code shows error, does NOT log in", p: "p0" },
+      { id: "2FA-007", label: "Expired pending token (wait 5+ min) rejected", p: "p1" },
+      { id: "2FA-008", label: "5 wrong codes in 15 min triggers rate limit", p: "p1" },
+      { id: "2FA-009", label: "Disable 2FA: requires password + current code", p: "p0" },
+      { id: "2FA-010", label: "Disable with wrong password rejected", p: "p1" },
+      { id: "2FA-011", label: "'Back to login' from 2FA screen works", p: "p2" },
+      { id: "2FA-012", label: "Cancel during setup returns to idle (not enabled)", p: "p2" },
+      { id: "2FA-013", label: "Re-enable after disable generates NEW QR/secret", p: "p1" },
+    ]
+  },
+  {
+    title: "Authorization — Role-Based Access",
+    color: "var(--red)",
+    bg: "var(--red-bg)",
+    tests: [
+      { id: "RBAC-001", label: "User token cannot access /api/merchant/orders for another merchant", p: "p0" },
+      { id: "RBAC-002", label: "Merchant A cannot fetch Merchant B's orders", p: "p0" },
+      { id: "RBAC-003", label: "No token → 401 on protected endpoints", p: "p0" },
+      { id: "RBAC-004", label: "Admin endpoints require Bearer admin token", p: "p0" },
+      { id: "RBAC-005", label: "Compliance can access disputed orders only", p: "p1" },
+      { id: "RBAC-006", label: "Expired access token triggers auto-refresh", p: "p1" },
+      { id: "RBAC-007", label: "Expired refresh token returns 401 (must re-login)", p: "p1" },
+    ]
+  },
+  {
+    title: "Order Lifecycle — Happy Path",
+    color: "var(--green)",
+    bg: "var(--green-bg)",
+    tests: [
+      { id: "ORD-001", label: "User creates buy order (100 USDC) — appears in merchant Pending", p: "p0" },
+      { id: "ORD-002", label: "Merchant accepts order — status moves to accepted", p: "p0" },
+      { id: "ORD-003", label: "Escrow locked (mock) — balance deducted, status = escrowed", p: "p0" },
+      { id: "ORD-004", label: "Buyer marks payment sent — status = payment_sent", p: "p0" },
+      { id: "ORD-005", label: "Merchant confirms payment — status = payment_confirmed", p: "p0" },
+      { id: "ORD-006", label: "Escrow released — order completed, balance credited to buyer", p: "p0" },
+      { id: "ORD-007", label: "Order appears in Completed section for both parties", p: "p0" },
+      { id: "ORD-008", label: "Post-trade rating prompt shown, rating saved", p: "p1" },
+      { id: "ORD-009", label: "No 'No action available' button shown on completed order", p: "p1" },
+    ]
+  },
+  {
+    title: "Order Lifecycle — Sell Order",
+    color: "var(--green)",
+    bg: "var(--green-bg)",
+    tests: [
+      { id: "ORD-020", label: "Merchant creates sell order with escrow lock", p: "p0" },
+      { id: "ORD-021", label: "User claims sell order, pays fiat", p: "p0" },
+      { id: "ORD-022", label: "Merchant confirms, releases escrow", p: "p0" },
+      { id: "ORD-023", label: "Spread tier affects rate correctly (Fast/Best/Cheap)", p: "p1" },
+      { id: "ORD-024", label: "Priority fee / Boost visible in mempool", p: "p2" },
+    ]
+  },
+  {
+    title: "Order Lifecycle — Cancel & Expiry",
+    color: "var(--orange)",
+    bg: "var(--orange-bg)",
+    tests: [
+      { id: "ORD-030", label: "Cancel pending order (before acceptance) — removed from list", p: "p0" },
+      { id: "ORD-031", label: "Cancel request after escrow — counterparty must approve", p: "p0" },
+      { id: "ORD-032", label: "Counterparty approves cancel — escrow refunded", p: "p0" },
+      { id: "ORD-033", label: "Counterparty rejects cancel — order continues", p: "p1" },
+      { id: "ORD-034", label: "Pending order expires after 15 min — removed from UI", p: "p1" },
+      { id: "ORD-035", label: "Accepted order expires if no escrow lock — both notified", p: "p1" },
+      { id: "ORD-036", label: "Countdown timer accuracy matches server time", p: "p2" },
+    ]
+  },
+  {
+    title: "Order Lifecycle — Disputes",
+    color: "var(--red)",
+    bg: "var(--red-bg)",
+    tests: [
+      { id: "ORD-040", label: "Raise dispute after escrow — reason required", p: "p0" },
+      { id: "ORD-041", label: "Order status changes to 'disputed'", p: "p0" },
+      { id: "ORD-042", label: "Compliance sees dispute in their panel", p: "p0" },
+      { id: "ORD-043", label: "Compliance can view full chat history", p: "p1" },
+      { id: "ORD-044", label: "Compliance can freeze chat", p: "p1" },
+      { id: "ORD-045", label: "Compliance proposes resolution", p: "p1" },
+      { id: "ORD-046", label: "Resolution finalized — funds released or refunded", p: "p0" },
+    ]
+  },
+  {
+    title: "Balance & Transactions",
+    color: "var(--green)",
+    bg: "var(--green-bg)",
+    tests: [
+      { id: "BAL-001", label: "Dashboard shows correct available balance", p: "p0" },
+      { id: "BAL-002", label: "Balance decreases after locking escrow", p: "p0" },
+      { id: "BAL-003", label: "Balance increases after receiving release", p: "p0" },
+      { id: "BAL-004", label: "Balance increases after escrow refund", p: "p0" },
+      { id: "BAL-005", label: "MAX button fills amount field with full balance", p: "p1" },
+      { id: "BAL-006", label: "Cannot create order exceeding available balance", p: "p0" },
+      { id: "BAL-007", label: "Transaction history shows completed trades", p: "p1" },
+      { id: "BAL-008", label: "Transaction history Total In / Total Out correct", p: "p1" },
+    ]
+  },
+  {
+    title: "Chat System",
+    color: "var(--blue)",
+    bg: "var(--blue-bg)",
+    tests: [
+      { id: "CHAT-001", label: "Send text message — appears instantly (optimistic)", p: "p0" },
+      { id: "CHAT-002", label: "Receive message real-time without page refresh", p: "p0" },
+      { id: "CHAT-003", label: "Typing indicator shows for counterparty", p: "p2" },
+      { id: "CHAT-004", label: "Unread count resets when chat opened", p: "p1" },
+      { id: "CHAT-005", label: "Image upload in chat works", p: "p1" },
+      { id: "CHAT-006", label: "System messages (order status) appear in chat", p: "p1" },
+      { id: "CHAT-007", label: "Chat works when Pusher is disconnected (polling fallback)", p: "p2" },
+    ]
+  },
+  {
+    title: "Notifications",
+    color: "var(--orange)",
+    bg: "var(--orange-bg)",
+    tests: [
+      { id: "NOTIF-001", label: "Order accepted → notification appears for creator", p: "p0" },
+      { id: "NOTIF-002", label: "Payment sent → notification + sound for merchant", p: "p0" },
+      { id: "NOTIF-003", label: "Trade completed → notification + balance refresh", p: "p0" },
+      { id: "NOTIF-004", label: "Creating own order does NOT trigger notification for self", p: "p1" },
+      { id: "NOTIF-005", label: "Notification count badge visible (solid orange bg)", p: "p1" },
+      { id: "NOTIF-006", label: "Click notification marks it as read", p: "p2" },
+      { id: "NOTIF-007", label: "No duplicate notifications for same event", p: "p1" },
+    ]
+  },
+  {
+    title: "Payment Methods",
+    color: "var(--purple)",
+    bg: "var(--purple-bg)",
+    tests: [
+      { id: "PAY-001", label: "Add bank account (name + IBAN) — saved successfully", p: "p0" },
+      { id: "PAY-002", label: "Add UPI method — saved successfully", p: "p1" },
+      { id: "PAY-003", label: "Add cash location — saved successfully", p: "p2" },
+      { id: "PAY-004", label: "Select payment method in order dropdown", p: "p0" },
+      { id: "PAY-005", label: "Dropdown text is readable (not invisible)", p: "p0" },
+      { id: "PAY-006", label: "Selected method locked to order after creation", p: "p0" },
+      { id: "PAY-007", label: "Counterparty sees locked payment details", p: "p0" },
+      { id: "PAY-008", label: "'Add New Payment Method' button visible in dropdown", p: "p1" },
+    ]
+  },
+  {
+    title: "Merchant Settings",
+    color: "var(--blue)",
+    bg: "var(--blue-bg)",
+    tests: [
+      { id: "SET-001", label: "Profile tab: edit display name, bio, avatar", p: "p1" },
+      { id: "SET-002", label: "Account tab: shows username, email, merchant ID", p: "p1" },
+      { id: "SET-003", label: "Change password works with correct current password", p: "p1" },
+      { id: "SET-004", label: "2FA section visible in Account tab", p: "p0" },
+      { id: "SET-005", label: "Active sessions list loads", p: "p2" },
+      { id: "SET-006", label: "Logout from settings works", p: "p0" },
+      { id: "SET-007", label: "Payment methods tab: add/list bank accounts", p: "p1" },
+    ]
+  },
+  {
+    title: "Admin Panel",
+    color: "var(--red)",
+    bg: "var(--red-bg)",
+    tests: [
+      { id: "ADM-001", label: "Admin login with correct credentials", p: "p0" },
+      { id: "ADM-002", label: "Admin login with wrong password rejected", p: "p0" },
+      { id: "ADM-003", label: "System stats page loads with correct data", p: "p1" },
+      { id: "ADM-004", label: "All orders visible across all merchants", p: "p1" },
+      { id: "ADM-005", label: "Reconciliation report balances correctly", p: "p1" },
+      { id: "ADM-006", label: "Activity/audit log shows recent events", p: "p2" },
+    ]
+  },
+  {
+    title: "UI / UX Quality",
+    color: "var(--text-dim)",
+    bg: "rgba(255,255,255,0.03)",
+    tests: [
+      { id: "UI-001", label: "No horizontal scroll on mobile (375px)", p: "p1" },
+      { id: "UI-002", label: "Order detail modal fits within viewport (max-w-lg)", p: "p1" },
+      { id: "UI-003", label: "'Add Account' button not hidden by bottom nav", p: "p1" },
+      { id: "UI-004", label: "All modals have working close (X) button", p: "p1" },
+      { id: "UI-005", label: "Loading spinners shown during data fetch", p: "p2" },
+      { id: "UI-006", label: "Empty states shown when no data ('No active trades')", p: "p2" },
+      { id: "UI-007", label: "Disabled buttons have reduced opacity", p: "p2" },
+      { id: "UI-008", label: "Form inputs show focus ring", p: "p2" },
+      { id: "UI-009", label: "Wallet unlock 'Import key' / 'New wallet' text visible", p: "p1" },
+      { id: "UI-010", label: "No console errors on main flows", p: "p1" },
+    ]
+  },
+  {
+    title: "Security",
+    color: "var(--red)",
+    bg: "var(--red-bg)",
+    tests: [
+      { id: "SEC-001", label: "SQL injection in login email field — no DB error", p: "p0" },
+      { id: "SEC-002", label: "XSS in chat message — script NOT executed", p: "p0" },
+      { id: "SEC-003", label: "Modify order ID in URL — cannot access other's order", p: "p0" },
+      { id: "SEC-004", label: "Auth header manipulation — cannot impersonate another user", p: "p0" },
+      { id: "SEC-005", label: "Rate limit on login (5 attempts/min)", p: "p1" },
+      { id: "SEC-006", label: "Rate limit on 2FA verify (5 attempts/15min)", p: "p1" },
+      { id: "SEC-007", label: "Refresh token is httpOnly cookie (not in JS)", p: "p1" },
+      { id: "SEC-008", label: "TOTP secret encrypted in database (not plaintext)", p: "p0" },
+      { id: "SEC-009", label: "/api/setup/* and /api/test/* disabled in production", p: "p0" },
+    ]
+  },
+  {
+    title: "Performance (Manual Observation)",
+    color: "var(--text-dim)",
+    bg: "rgba(255,255,255,0.03)",
+    tests: [
+      { id: "PERF-001", label: "Login to dashboard load < 3 seconds", p: "p1" },
+      { id: "PERF-002", label: "Order creation to appearance in list < 2 seconds", p: "p1" },
+      { id: "PERF-003", label: "Chat message send to display < 500ms", p: "p1" },
+      { id: "PERF-004", label: "Real-time order update via Pusher < 1 second", p: "p1" },
+      { id: "PERF-005", label: "Settings page load < 2 seconds", p: "p2" },
+    ]
+  },
+  {
+    title: "Pre-Production Release",
+    color: "var(--orange)",
+    bg: "var(--orange-bg)",
+    tests: [
+      { id: "REL-001", label: "MOCK_MODE=false in production env", p: "p0" },
+      { id: "REL-002", label: "Solana RPC URL points to mainnet", p: "p0" },
+      { id: "REL-003", label: "ADMIN_SECRET is strong random value (not dev value)", p: "p0" },
+      { id: "REL-004", label: "AUTH_TOKEN_REQUIRED=true in production", p: "p0" },
+      { id: "REL-005", label: "TOTP_ENCRYPTION_KEY is set (32 bytes)", p: "p0" },
+      { id: "REL-006", label: "Pusher credentials are production keys", p: "p0" },
+      { id: "REL-007", label: "All DB migrations applied (001-067)", p: "p0" },
+      { id: "REL-008", label: "/api/health returns 200", p: "p0" },
+      { id: "REL-009", label: "HTTPS enforced", p: "p0" },
+      { id: "REL-010", label: ".env.local is NOT in git", p: "p0" },
+      { id: "REL-011", label: "No test/seed endpoints accessible", p: "p0" },
+      { id: "REL-012", label: "Error monitoring configured", p: "p1" },
+    ]
+  },
+];
+
+const STORAGE_KEY = 'blip_qa_checklist_v1';
+
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
+}
+function saveState(state) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+let state = loadState();
+
+function render() {
+  const container = document.getElementById('sections');
+  container.innerHTML = '';
+
+  DATA.forEach((section, si) => {
+    const div = document.createElement('div');
+    div.className = 'section' + (state[`sec_${si}_open`] !== false ? ' open' : '');
+    div.dataset.si = si;
+
+    const checkedCount = section.tests.filter((t) => state[t.id]?.checked).length;
+    const total = section.tests.length;
+
+    div.innerHTML = `
+      <div class="section-header" onclick="toggleSection(${si})">
+        <div class="left">
+          <div class="icon" style="background:${section.bg};color:${section.color}">${checkedCount === total ? '\u2713' : checkedCount}</div>
+          <h2>${section.title}</h2>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="badge">${checkedCount}/${total}</span>
+          <span class="chevron">\u25BC</span>
+        </div>
+      </div>
+      <div class="section-body">
+        ${section.tests.map(t => {
+          const ts = state[t.id] || {};
+          const checked = ts.checked ? 'checked' : '';
+          const rowClass = ts.status === 'fail' ? 'fail-row' : '';
+          const noteClass = ts.note ? 'has-note' : '';
+          return `
+            <div class="test-row ${checked ? 'checked' : ''} ${rowClass} ${noteClass}" data-id="${t.id}">
+              <input type="checkbox" ${checked} onchange="toggleCheck('${t.id}', this)" />
+              <span class="test-id">${t.id}</span>
+              <div style="flex:1">
+                <span class="test-label">${t.label}</span>
+                <textarea class="test-notes" placeholder="Notes / bug details..." oninput="setNote('${t.id}', this.value)">${ts.note || ''}</textarea>
+              </div>
+              <span class="test-priority ${t.p}">${t.p.toUpperCase()}</span>
+              <div class="test-status">
+                <button class="${ts.status === 'pass' ? 'active-pass' : ''}" onclick="setStatus('${t.id}','pass')">Pass</button>
+                <button class="${ts.status === 'fail' ? 'active-fail' : ''}" onclick="setStatus('${t.id}','fail')">Fail</button>
+                <button class="${ts.status === 'skip' ? 'active-skip' : ''}" onclick="setStatus('${t.id}','skip')">Skip</button>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+    container.appendChild(div);
+  });
+
+  updateProgress();
+}
+
+function toggleSection(si) {
+  const key = `sec_${si}_open`;
+  state[key] = state[key] === false ? true : false;
+  saveState(state);
+  render();
+}
+
+function toggleCheck(id, el) {
+  if (!state[id]) state[id] = {};
+  state[id].checked = el.checked;
+  if (el.checked && !state[id].status) state[id].status = 'pass';
+  saveState(state);
+  render();
+}
+
+function setStatus(id, status) {
+  if (!state[id]) state[id] = {};
+  state[id].status = state[id].status === status ? null : status;
+  if (status === 'pass' || status === 'fail') state[id].checked = true;
+  saveState(state);
+  render();
+}
+
+function setNote(id, note) {
+  if (!state[id]) state[id] = {};
+  state[id].note = note;
+  saveState(state);
+}
+
+function updateProgress() {
+  let total = 0, checked = 0, pass = 0, fail = 0, skip = 0;
+  DATA.forEach(s => s.tests.forEach(t => {
+    total++;
+    const ts = state[t.id] || {};
+    if (ts.checked) checked++;
+    if (ts.status === 'pass') pass++;
+    if (ts.status === 'fail') fail++;
+    if (ts.status === 'skip') skip++;
+  }));
+
+  const pct = total ? Math.round((checked / total) * 100) : 0;
+  document.getElementById('progressText').textContent = `${checked} / ${total} checked`;
+  document.getElementById('progressPct').textContent = pct + '%';
+  document.getElementById('progressPct').style.color = pct === 100 ? 'var(--green)' : pct > 70 ? 'var(--orange)' : 'var(--text)';
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('passCount').textContent = pass + ' Pass';
+  document.getElementById('failCount').textContent = fail + ' Fail';
+  document.getElementById('skipCount').textContent = skip + ' Skip';
+}
+
+function expandAll() { DATA.forEach((_, i) => { state[`sec_${i}_open`] = true; }); saveState(state); render(); }
+function collapseAll() { DATA.forEach((_, i) => { state[`sec_${i}_open`] = false; }); saveState(state); render(); }
+function showFails() {
+  document.querySelectorAll('.test-row').forEach(r => {
+    r.style.display = r.classList.contains('fail-row') ? '' : 'none';
+  });
+}
+function showAll() {
+  document.querySelectorAll('.test-row').forEach(r => { r.style.display = ''; });
+}
+function resetAll() {
+  if (!confirm('Reset all checklist progress? This cannot be undone.')) return;
+  state = {};
+  saveState(state);
+  render();
+}
+function exportResults() {
+  let csv = 'ID,Test,Priority,Status,Notes\n';
+  DATA.forEach(s => s.tests.forEach(t => {
+    const ts = state[t.id] || {};
+    csv += `"${t.id}","${t.label}","${t.p}","${ts.status || 'pending'}","${(ts.note || '').replace(/"/g, '""')}"\n`;
+  }));
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `blip_qa_results_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+render();
+</script>
+</body>
+</html>

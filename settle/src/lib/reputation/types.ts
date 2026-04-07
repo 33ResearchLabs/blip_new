@@ -35,17 +35,28 @@ export interface ReputationScore {
   // Badge earned
   badges: ReputationBadge[];
 
+  // Warning flags for UI (e.g. low reliability, risky behavior)
+  flags: ReputationFlag[];
+
   // Last calculation timestamp
   calculated_at: Date;
 }
 
 export type ReputationTier =
+  | 'risky'         // forced when reliability/trust too low
   | 'newcomer'      // 0-199
   | 'bronze'        // 200-399
   | 'silver'        // 400-599
   | 'gold'          // 600-799
   | 'platinum'      // 800-899
   | 'diamond';      // 900+
+
+export type ReputationFlag =
+  | 'low_reliability'        // review_score < 20
+  | 'low_trust'              // trust_score < 40
+  | 'low_completion_rate'    // completion rate < 50%
+  | 'high_dispute_rate'      // dispute rate > 15%
+  | 'score_capped';          // final score was capped due to gating
 
 export type ReputationBadge =
   | 'fast_trader'           // Avg completion time < 15 mins
@@ -168,6 +179,7 @@ export const REPUTATION_WEIGHTS = {
  * Tier thresholds (total score out of 1000)
  */
 export const TIER_THRESHOLDS = {
+  risky: 0,
   newcomer: 0,
   bronze: 200,
   silver: 400,
@@ -180,6 +192,11 @@ export const TIER_THRESHOLDS = {
  * Tier display info
  */
 export const TIER_INFO: Record<ReputationTier, { name: string; color: string; description: string }> = {
+  risky: {
+    name: 'Risky',
+    color: '#EF4444',
+    description: 'Low reliability or trust — trade with caution'
+  },
   newcomer: {
     name: 'Newcomer',
     color: '#9CA3AF',
@@ -280,16 +297,15 @@ export const SCORE_PARAMS = {
     CANCEL_PENALTY: 2,           // Points lost per cancellation
   },
 
-  // Volume score params
+  // Volume score params (logarithmic + counterparty diversity + anti-farming)
   VOLUME: {
-    VOLUME_TIERS: [
-      { min: 0, max: 1000, points: 20 },
-      { min: 1000, max: 5000, points: 40 },
-      { min: 5000, max: 25000, points: 60 },
-      { min: 25000, max: 100000, points: 80 },
-      { min: 100000, max: Infinity, points: 100 },
-    ],
-    RECENT_ACTIVITY_BONUS: 20,   // Bonus for recent trading
+    LOG_SCALE: 14,                 // log10(vol+1) * scale → maps $100K to ~70
+    LOG_BASE_CAP: 70,             // max points from raw volume
+    DIVERSITY_SCALE: 16,          // log10(counterparties+1) * scale
+    DIVERSITY_CAP: 20,            // max points from counterparty diversity
+    RECENCY_CAP: 10,              // max points from recent activity
+    CONCENTRATION_THRESHOLD: 60,  // % with single counterparty before penalty kicks in
+    REPEAT_PAIR_PENALTY: 5,       // penalty per farming pair (>5 trades same entity)
   },
 
   // Consistency score params
@@ -307,6 +323,17 @@ export const SCORE_PARAMS = {
     DISPUTE_LOSS_PENALTY: 15,    // Penalty per dispute lost
     KYC_BONUS_PER_LEVEL: 10,     // Bonus per KYC level (max 3)
     VERIFIED_BONUS: 10,          // Bonus for verified status
+  },
+
+  // Gating thresholds — reliability + trust act as hard gates
+  GATES: {
+    RELIABILITY_HARD_THRESHOLD: 20,   // review_score below this → 50% penalty + cap at 300
+    RELIABILITY_SOFT_THRESHOLD: 40,   // review_score below this → 20% penalty
+    TRUST_HARD_THRESHOLD: 40,         // trust_score below this → 30% penalty
+    COMPLETION_RATE_RISKY: 0.5,       // below 50% → forced "risky" tier
+    DISPUTE_RATE_FLAG: 0.15,          // above 15% → flag
+    LOW_RELIABILITY_SCORE_CAP: 300,   // max total_score when reliability hard-gated
+    LOW_TRUST_SCORE_CAP: 500,         // max total_score when trust hard-gated
   },
 } as const;
 
@@ -340,7 +367,7 @@ export function getTierFromScore(score: number): ReputationTier {
  */
 export function getProgressToNextTier(score: number): { currentTier: ReputationTier; nextTier: ReputationTier | null; progress: number } {
   const currentTier = getTierFromScore(score);
-  const tiers: ReputationTier[] = ['newcomer', 'bronze', 'silver', 'gold', 'platinum', 'diamond'];
+  const tiers: ReputationTier[] = ['risky', 'newcomer', 'bronze', 'silver', 'gold', 'platinum', 'diamond'];
   const currentIndex = tiers.indexOf(currentTier);
 
   if (currentIndex === tiers.length - 1) {

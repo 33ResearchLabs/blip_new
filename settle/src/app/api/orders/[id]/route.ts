@@ -58,6 +58,12 @@ export async function GET(
     // NOTE: GET always uses local query (read-only) because core-api
     // doesn't return joined merchant/user/offer objects needed by the UI.
     // Core-api proxy is used only for mutations (PATCH).
+    // If _fresh param present, bypass cache for immediate consistency after mutations
+    const wantsFresh = request.nextUrl.searchParams.has('_fresh');
+    if (wantsFresh) {
+      const { invalidateOrderCache } = await import('@/lib/cache/cacheService');
+      await invalidateOrderCache(id);
+    }
     // Fetch order
     const order = await getOrderWithRelations(id);
     if (!order) {
@@ -66,9 +72,9 @@ export async function GET(
 
     // Resolve merchant identity: when x-merchant-id header is present,
     // the caller may be acting as a merchant (M2M buyer).
-    // Override auth context so canAccessOrder checks the right identity.
+    // Only trust the header if the authenticated actor is already a merchant.
     const getMerchantId = request.headers.get("x-merchant-id");
-    if (getMerchantId && auth.actorType === "user") {
+    if (getMerchantId && auth.actorType === "merchant") {
       auth.merchantId = getMerchantId;
     }
 
@@ -156,6 +162,7 @@ export async function PATCH(
     const actorMatchesAuth = actor_id === auth.actorId;
     const actorMatchesMerchantHeader =
       actor_type === "merchant" &&
+      auth.actorType === "merchant" &&
       headerMerchantId &&
       actor_id === headerMerchantId;
     if (!actorMatchesAuth && !actorMatchesMerchantHeader) {
@@ -172,16 +179,29 @@ export async function PATCH(
     }
 
     // Verify access to this order (now with correct actor identity resolved above)
-    // Skip access check when a merchant is joining/claiming an order they're not yet assigned to:
-    // - 'accepted': merchant accepting a pending order
-    // - 'payment_pending': merchant claiming an escrowed order (signToClaimOrder)
-    // - 'payment_sent': merchant claiming + paying an escrowed order in one step
-    const isSkipAccessCheck = [
-      "accepted",
-      "payment_pending",
-      "payment_sent",
-    ].includes(body.status);
-    if (!isSkipAccessCheck) {
+    // For claim transitions: skip canAccessOrder (merchant isn't assigned yet),
+    // but verify the order is actually unclaimed to prevent hijacking.
+    const isClaimTransition = ["accepted", "payment_pending"].includes(body.status);
+    if (isClaimTransition) {
+      // Validate the order is claimable — don't skip auth entirely
+      const { query: checkQuery } = await import("@/lib/db");
+      const [targetOrder] = await checkQuery<{ merchant_id: string | null; buyer_merchant_id: string | null; status: string; type: string }>(
+        `SELECT merchant_id, buyer_merchant_id, status, type FROM orders WHERE id = $1`,
+        [id]
+      );
+      if (!targetOrder) return notFoundResponse("Order");
+      // Anti-hijack: only block if M2M buyer slot is already taken by someone else.
+      //
+      // For non-M2M orders, merchant_id may be pre-assigned (the seller on SELL orders,
+      // or the matched merchant on BUY orders). The accept handler in updateOrderStatus
+      // reassigns merchant_id when isMerchantClaiming is true — so we must NOT block here.
+      //
+      // For M2M orders (buyer_merchant_id is set), block if a different buyer already claimed.
+      // This prevents a second merchant from hijacking an already-claimed M2M order.
+      if (targetOrder.buyer_merchant_id && targetOrder.buyer_merchant_id !== auth.actorId) {
+        return forbiddenResponse("Order already assigned to another merchant");
+      }
+    } else {
       const canAccess = await canAccessOrder(auth, id);
       if (!canAccess) {
         logger.auth.forbidden(

@@ -11,4 +11,7 @@ export {
   invalidateOrderCache,
   invalidateMerchantCache,
   invalidateOrderRelatedCaches,
+  getMerchantOrdersCache,
+  setMerchantOrdersCache,
+  invalidateMerchantOrderListCache,
 } from './cacheService';

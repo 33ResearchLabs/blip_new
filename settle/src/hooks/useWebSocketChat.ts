@@ -83,7 +83,9 @@ interface DbMessage {
 
 interface UseWebSocketChatOptions {
   maxWindows?: number;
-  onNewMessage?: (chatId: string, message: ChatMessage) => void;
+  // First param is the ORDER id (UUID), not the synthetic chat-window id.
+  // See useRealtimeChat.ts for the same contract.
+  onNewMessage?: (orderId: string, message: ChatMessage) => void;
   actorType?: ActorType;
   actorId?: string;
 }
@@ -242,7 +244,8 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
           const newUnread = message.from !== 'me' && w.minimized ? w.unread + 1 : w.unread;
 
           if (message.from !== 'me') {
-            onNewMessage?.(w.id, message);
+            // Pass the real order id, not the synthetic chat-window id.
+            onNewMessage?.(w.orderId, message);
           }
 
           return {

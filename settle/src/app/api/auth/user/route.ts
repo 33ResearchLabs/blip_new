@@ -12,7 +12,9 @@ import {
 import { verifyWalletSignature } from '@/lib/solana/verifySignature';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { validateUsername } from '@/lib/validation/username';
-import { generateSessionToken, generateAccessToken, generateRefreshToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { createSession, getSessionIdFromRefreshCookie } from '@/lib/auth/sessions';
+import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
 
 /**
  * POST /api/auth/user
@@ -90,10 +92,49 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] User authenticated via wallet:', user.id, user.username, { isNewUser, needsUsername });
 
+      // Fire-and-forget: device + IP tracking (never blocks auth)
+      trackRequest(request, {
+        entityId: user.id,
+        entityType: 'user',
+        action: isNewUser ? 'signup' : 'login',
+      }).catch(() => {});
+      if (!isNewUser) {
+        checkDeviceChangeFrequency(user.id, 'user').catch(() => {});
+      }
+
+      // 2FA gate: if enabled and not a new user, return pendingToken
+      if (!isNewUser) {
+        const { getTotpStatus: getWalletTotpStatus, createPendingLoginToken: createWalletPendingToken } = await import('@/lib/auth/totp');
+        const walletTotpStatus = await getWalletTotpStatus(user.id, 'user');
+        if (walletTotpStatus.enabled) {
+          const pendingToken = await createWalletPendingToken(user.id, 'user');
+          return NextResponse.json({
+            success: true,
+            data: {
+              requires2FA: true,
+              pendingToken,
+              user: { id: user.id, username: user.username },
+              isNewUser,
+              needsUsername,
+            },
+          });
+        }
+      }
+
       const userPayload = { actorId: user.id, actorType: 'user' as const };
       const token = generateSessionToken(userPayload);
-      const userAccessTk = generateAccessToken(userPayload);
-      const userRefreshTk = generateRefreshToken(userPayload);
+
+      let walletSessionId: string | null = null;
+      let walletRefreshToken: string | null = null;
+      try {
+        const sessionResult = await createSession(userPayload, request as any);
+        if (sessionResult) {
+          walletSessionId = sessionResult.sessionId;
+          walletRefreshToken = sessionResult.refreshToken;
+        }
+      } catch { /* session creation failed, proceed without sessionId */ }
+
+      const userAccessTk = generateAccessToken({ ...userPayload, ...(walletSessionId && { sessionId: walletSessionId }) });
 
       const walletRes = NextResponse.json({
         success: true,
@@ -105,8 +146,8 @@ export async function POST(request: NextRequest) {
           ...(userAccessTk && { accessToken: userAccessTk }),
         },
       });
-      if (userRefreshTk) {
-        walletRes.cookies.set(REFRESH_TOKEN_COOKIE, userRefreshTk, REFRESH_COOKIE_OPTIONS);
+      if (walletRefreshToken) {
+        walletRes.cookies.set(REFRESH_TOKEN_COOKIE, walletRefreshToken, REFRESH_COOKIE_OPTIONS);
       }
       return walletRes;
     }
@@ -188,8 +229,18 @@ export async function POST(request: NextRequest) {
 
       const setUnPayload = { actorId: user.id, actorType: 'user' as const };
       const setUsernameToken = generateSessionToken(setUnPayload);
-      const setUnAccessTk = generateAccessToken(setUnPayload);
-      const setUnRefreshTk = generateRefreshToken(setUnPayload);
+
+      let setUnSessionId: string | null = null;
+      let setUnRefreshToken: string | null = null;
+      try {
+        const sessionResult = await createSession(setUnPayload, request as any);
+        if (sessionResult) {
+          setUnSessionId = sessionResult.sessionId;
+          setUnRefreshToken = sessionResult.refreshToken;
+        }
+      } catch { /* session creation failed, proceed without sessionId */ }
+
+      const setUnAccessTk = generateAccessToken({ ...setUnPayload, ...(setUnSessionId && { sessionId: setUnSessionId }) });
 
       const setUnRes = NextResponse.json({
         success: true,
@@ -199,8 +250,8 @@ export async function POST(request: NextRequest) {
           ...(setUnAccessTk && { accessToken: setUnAccessTk }),
         },
       });
-      if (setUnRefreshTk) {
-        setUnRes.cookies.set(REFRESH_TOKEN_COOKIE, setUnRefreshTk, REFRESH_COOKIE_OPTIONS);
+      if (setUnRefreshToken) {
+        setUnRes.cookies.set(REFRESH_TOKEN_COOKIE, setUnRefreshToken, REFRESH_COOKIE_OPTIONS);
       }
       return setUnRes;
     }
@@ -224,10 +275,39 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] User login successful:', user.id, user.username);
 
+      // Fire-and-forget: device + IP tracking
+      trackRequest(request, { entityId: user.id, entityType: 'user', action: 'login' }).catch(() => {});
+      checkDeviceChangeFrequency(user.id, 'user').catch(() => {});
+
+      // 2FA gate: if enabled, return pendingToken instead of real tokens
+      const { getTotpStatus, createPendingLoginToken } = await import('@/lib/auth/totp');
+      const totpStatus = await getTotpStatus(user.id, 'user');
+      if (totpStatus.enabled) {
+        const pendingToken = await createPendingLoginToken(user.id, 'user');
+        return NextResponse.json({
+          success: true,
+          data: {
+            requires2FA: true,
+            pendingToken,
+            user: { id: user.id, username: user.username },
+          },
+        });
+      }
+
       const loginPayload = { actorId: user.id, actorType: 'user' as const };
       const loginToken = generateSessionToken(loginPayload);
-      const loginAccessTk = generateAccessToken(loginPayload);
-      const loginRefreshTk = generateRefreshToken(loginPayload);
+
+      let loginSessionId: string | null = null;
+      let loginRefreshToken: string | null = null;
+      try {
+        const sessionResult = await createSession(loginPayload, request as any);
+        if (sessionResult) {
+          loginSessionId = sessionResult.sessionId;
+          loginRefreshToken = sessionResult.refreshToken;
+        }
+      } catch { /* session creation failed, proceed without sessionId */ }
+
+      const loginAccessTk = generateAccessToken({ ...loginPayload, ...(loginSessionId && { sessionId: loginSessionId }) });
 
       const loginRes = NextResponse.json({
         success: true,
@@ -238,8 +318,8 @@ export async function POST(request: NextRequest) {
           ...(loginAccessTk && { accessToken: loginAccessTk }),
         },
       });
-      if (loginRefreshTk) {
-        loginRes.cookies.set(REFRESH_TOKEN_COOKIE, loginRefreshTk, REFRESH_COOKIE_OPTIONS);
+      if (loginRefreshToken) {
+        loginRes.cookies.set(REFRESH_TOKEN_COOKIE, loginRefreshToken, REFRESH_COOKIE_OPTIONS);
       }
       return loginRes;
     }
@@ -299,10 +379,23 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] New user registered:', user.id, user.username);
 
+      // Fire-and-forget: device + IP tracking for signup
+      trackRequest(request, { entityId: user.id, entityType: 'user', action: 'signup' }).catch(() => {});
+
       const regPayload = { actorId: user.id, actorType: 'user' as const };
       const registerToken = generateSessionToken(regPayload);
-      const regAccessTk = generateAccessToken(regPayload);
-      const regRefreshTk = generateRefreshToken(regPayload);
+
+      let regSessionId: string | null = null;
+      let regRefreshToken: string | null = null;
+      try {
+        const sessionResult = await createSession(regPayload, request as any);
+        if (sessionResult) {
+          regSessionId = sessionResult.sessionId;
+          regRefreshToken = sessionResult.refreshToken;
+        }
+      } catch { /* session creation failed, proceed without sessionId */ }
+
+      const regAccessTk = generateAccessToken({ ...regPayload, ...(regSessionId && { sessionId: regSessionId }) });
 
       const regRes = NextResponse.json({
         success: true,
@@ -313,8 +406,8 @@ export async function POST(request: NextRequest) {
           ...(regAccessTk && { accessToken: regAccessTk }),
         },
       });
-      if (regRefreshTk) {
-        regRes.cookies.set(REFRESH_TOKEN_COOKIE, regRefreshTk, REFRESH_COOKIE_OPTIONS);
+      if (regRefreshToken) {
+        regRes.cookies.set(REFRESH_TOKEN_COOKIE, regRefreshToken, REFRESH_COOKIE_OPTIONS);
       }
       return regRes;
     }
@@ -418,11 +511,29 @@ export async function GET(request: NextRequest) {
       }
 
       const checkPayload = { actorId: user.id, actorType: 'user' as const };
-      const checkToken = generateSessionToken(checkPayload);
-      const checkAccessTk = generateAccessToken(checkPayload);
-      const checkRefreshTk = generateRefreshToken(checkPayload);
 
-      const checkRes = NextResponse.json({
+      // Look up existing session from refresh cookie for v2 token
+      let checkSessionId: string | undefined;
+      const refreshCookie = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+      if (refreshCookie) {
+        try {
+          const existingId = await getSessionIdFromRefreshCookie(refreshCookie);
+          if (existingId) checkSessionId = existingId;
+        } catch { /* proceed without sessionId */ }
+      }
+      // No valid refresh session → create one
+      let checkRefreshToken: string | null = null;
+      if (!checkSessionId) {
+        try {
+          const sess = await createSession(checkPayload, request as any);
+          if (sess) { checkSessionId = sess.sessionId; checkRefreshToken = sess.refreshToken; }
+        } catch { /* proceed without session tracking */ }
+      }
+
+      const checkToken = generateSessionToken(checkPayload);
+      const checkAccessTk = generateAccessToken({ ...checkPayload, sessionId: checkSessionId });
+
+      const checkResponse = NextResponse.json({
         success: true,
         data: {
           valid: true,
@@ -431,10 +542,8 @@ export async function GET(request: NextRequest) {
           ...(checkAccessTk && { accessToken: checkAccessTk }),
         },
       });
-      if (checkRefreshTk) {
-        checkRes.cookies.set(REFRESH_TOKEN_COOKIE, checkRefreshTk, REFRESH_COOKIE_OPTIONS);
-      }
-      return checkRes;
+      if (checkRefreshToken) checkResponse.cookies.set(REFRESH_TOKEN_COOKIE, checkRefreshToken, REFRESH_COOKIE_OPTIONS);
+      return checkResponse;
     }
 
     if (!userId) {

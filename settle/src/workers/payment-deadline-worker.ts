@@ -1,7 +1,7 @@
 /**
- * Payment Deadline, Escrow Expiry & Dispute Auto-Resolve Worker
+ * Payment Deadline, Escrow Expiry, Dispute Auto-Resolve & On-Chain Refund Worker
  *
- * Three jobs in one worker:
+ * Four jobs in one worker:
  *
  * 1. Payment Deadline Expiry:
  *    Moves orders stuck in 'payment_sent' past their payment_deadline to 'disputed'.
@@ -12,6 +12,11 @@
  *
  * 3. Dispute Auto-Resolve:
  *    Auto-cancels + refunds orders in 'disputed' past their dispute_auto_resolve_at.
+ *
+ * 4. Stuck On-Chain Escrow Refund (FUND SAFETY):
+ *    For orders that expired/cancelled with USDC still locked on-chain,
+ *    auto-submits a refundEscrow transaction using the backend signer.
+ *    Requires BACKEND_SIGNER_KEYPAIR env var.
  *
  * Distribution-safe: uses FOR UPDATE SKIP LOCKED inside a transaction
  * so multiple worker instances never process the same orders.
@@ -301,18 +306,100 @@ async function processDisputeAutoResolve(): Promise<void> {
   }
 }
 
+// ── Job 4: Stuck on-chain escrow refund (FUND SAFETY) ─────────────────
+
+async function processStuckOnChainEscrows(): Promise<void> {
+  try {
+    const { query } = await import('@/lib/db');
+    const { getBackendKeypair } = await import('@/lib/solana/backendSigner');
+
+    // Skip if backend signer is not configured
+    if (!getBackendKeypair()) return;
+
+    // Find expired/cancelled orders that have on-chain escrow but no refund tx recorded
+    const stuckOrders = await query<{
+      id: string; order_number: string; status: string;
+      escrow_creator_wallet: string; escrow_trade_id: string;
+    }>(
+      `SELECT id, order_number, status, escrow_creator_wallet, escrow_trade_id
+       FROM orders
+       WHERE status IN ('expired', 'cancelled')
+         AND escrow_tx_hash IS NOT NULL
+         AND release_tx_hash IS NULL
+         AND escrow_creator_wallet IS NOT NULL
+         AND escrow_trade_id IS NOT NULL
+       LIMIT $1`,
+      [BATCH_SIZE]
+    );
+
+    if (stuckOrders.length === 0) return;
+
+    const { refundEscrowFromBackend } = await import('@/lib/solana/backendRefund');
+
+    let refundedCount = 0;
+
+    for (const order of stuckOrders) {
+      try {
+        const result = await refundEscrowFromBackend(
+          order.escrow_creator_wallet,
+          Number(order.escrow_trade_id),
+        );
+
+        if (result.success && result.txHash) {
+          // Record the refund tx hash on the order
+          await query(
+            `UPDATE orders SET release_tx_hash = $1 WHERE id = $2`,
+            [result.txHash, order.id]
+          );
+          invalidateOrderCache(order.id);
+          refundedCount++;
+
+          logger.info('[OnChainRefund] Escrow refunded automatically', {
+            orderId: order.id,
+            orderNumber: order.order_number,
+            txHash: result.txHash,
+          });
+        } else if (result.error) {
+          logger.warn('[OnChainRefund] Could not auto-refund', {
+            orderId: order.id,
+            orderNumber: order.order_number,
+            error: result.error,
+          });
+        }
+      } catch (orderErr) {
+        logger.error('[OnChainRefund] Failed to process stuck escrow', {
+          orderId: order.id,
+          error: orderErr instanceof Error ? orderErr.message : String(orderErr),
+        });
+      }
+    }
+
+    if (refundedCount > 0) {
+      logger.info('[OnChainRefund] Stuck escrows refunded', {
+        count: refundedCount,
+        total: stuckOrders.length,
+      });
+    }
+  } catch (error) {
+    logger.error('[OnChainRefund] Worker error', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 // ── Worker lifecycle ────────────────────────────────────────────────────
 
 async function runCycle(): Promise<void> {
   await processDeadlineExpiries();
   await processEscrowExpiries();
   await processDisputeAutoResolve();
+  await processStuckOnChainEscrows();
 }
 
 async function start() {
   console.log('[payment-deadline] Worker started');
   console.log(`[payment-deadline] Checking every ${WORKER_INTERVAL_MS}ms`);
-  console.log('[payment-deadline] Jobs: payment deadline expiry + escrow expiry + dispute auto-resolve');
+  console.log('[payment-deadline] Jobs: payment deadline expiry + escrow expiry + dispute auto-resolve + on-chain escrow refund');
 
   // Initial run
   await runCycle();
@@ -340,4 +427,4 @@ if (require.main === module) {
   });
 }
 
-export { start, processDeadlineExpiries, processEscrowExpiries, processDisputeAutoResolve };
+export { start, processDeadlineExpiries, processEscrowExpiries, processDisputeAutoResolve, processStuckOnChainEscrows };

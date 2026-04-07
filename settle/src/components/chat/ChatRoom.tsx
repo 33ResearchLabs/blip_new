@@ -290,12 +290,16 @@ export function ChatRoom({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Mark as read when messages change
+  // Mark as read when new messages arrive (stable ref to avoid re-render loops)
+  const onMarkReadRef = useRef(onMarkRead);
+  onMarkReadRef.current = onMarkRead;
+  const prevMessageCountRef = useRef(0);
   useEffect(() => {
-    if (messages.length > 0) {
-      onMarkRead?.();
+    if (messages.length > 0 && messages.length !== prevMessageCountRef.current) {
+      prevMessageCountRef.current = messages.length;
+      onMarkReadRef.current?.();
     }
-  }, [messages.length, onMarkRead]);
+  }, [messages.length]);
 
   // Typing indicator debounce
   const handleTypingChange = useCallback((value: string) => {

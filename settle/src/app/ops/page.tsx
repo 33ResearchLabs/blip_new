@@ -102,9 +102,9 @@ export default function OpsPage() {
 
   if (blocked && needsAuth) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <div className="bg-[#111] border border-white/10 rounded-xl p-6 w-full max-w-sm space-y-4">
-          <h2 className="text-white font-mono font-bold">Ops Access</h2>
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="bg-card-solid border border-border rounded-xl p-6 w-full max-w-sm space-y-4">
+          <h2 className="text-foreground font-mono font-bold">Ops Access</h2>
           <input
             type="password"
             value={secretInput}
@@ -119,7 +119,7 @@ export default function OpsPage() {
               }
             }}
             placeholder="Admin secret"
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white font-mono placeholder:text-white/20 focus:outline-none focus:border-orange-500/50"
+            className="w-full px-3 py-2 bg-card border border-border rounded-lg text-sm text-foreground font-mono placeholder:text-muted focus:outline-none focus:border-primary/50"
             autoFocus
           />
           <button
@@ -131,7 +131,7 @@ export default function OpsPage() {
               setNeedsAuth(false);
               fetchData(tab);
             }}
-            className="w-full py-2 bg-orange-500 text-black font-bold font-mono rounded-lg hover:bg-orange-400"
+            className="w-full py-2 bg-primary text-black font-bold font-mono rounded-lg hover:bg-primary/80"
           >
             Unlock
           </button>
@@ -142,8 +142,8 @@ export default function OpsPage() {
 
   if (blocked) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <p className="text-gray-500">Not found</p>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted">Not found</p>
       </div>
     );
   }
@@ -153,20 +153,20 @@ export default function OpsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Merchant Navbar (only if merchant with ops access) */}
       {isMerchant && (
         <MerchantNavbar activePage="ops" merchantInfo={merchantInfo} />
       )}
 
       {/* Header */}
-      <div className="border-b border-white/10 px-6 py-4">
+      <div className="border-b border-border px-6 py-4">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div>
             <h1 className="text-lg font-mono font-bold tracking-tight">ops</h1>
-            <p className="text-xs text-gray-500 mt-0.5">localhost debug panel</p>
+            <p className="text-xs text-muted mt-0.5">localhost debug panel</p>
           </div>
-          <div className="flex items-center gap-1 text-xs text-gray-600">
+          <div className="flex items-center gap-1 text-xs text-[var(--color-text-quaternary)]">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             dev
           </div>
@@ -174,7 +174,7 @@ export default function OpsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-white/10 px-6">
+      <div className="border-b border-border px-6">
         <div className="max-w-7xl mx-auto flex gap-0">
           {(['outbox', 'stuck', 'workers', 'search'] as Tab[]).map((t) => (
             <button
@@ -182,8 +182,8 @@ export default function OpsPage() {
               onClick={() => setTab(t)}
               className={`px-4 py-2.5 text-sm font-mono border-b-2 transition-colors ${
                 tab === t
-                  ? 'border-white text-white'
-                  : 'border-transparent text-gray-500 hover:text-gray-300'
+                  ? 'border-foreground text-foreground'
+                  : 'border-transparent text-muted hover:text-[var(--color-text-primary)]'
               }`}
             >
               {t}
@@ -194,7 +194,7 @@ export default function OpsPage() {
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-6 py-6">
-        {loading && !data && <p className="text-gray-500 text-sm">Loading...</p>}
+        {loading && !data && <p className="text-muted text-sm">Loading...</p>}
         {error && <p className="text-red-400 text-sm">Error: {error}</p>}
 
         {tab === 'outbox' && data?.tab === 'outbox' && <OutboxPanel data={data} />}
@@ -224,20 +224,20 @@ function OutboxPanel({ data }: { data: any }) {
     <div>
       <div className="flex gap-4 mb-4">
         {Object.entries(counts).map(([status, count]) => (
-          <div key={status} className="bg-gray-900 border border-white/10 rounded px-3 py-2">
-            <div className="text-xs text-gray-500">{status}</div>
+          <div key={status} className="bg-card-solid border border-border rounded px-3 py-2">
+            <div className="text-xs text-muted">{status}</div>
             <div className="text-lg font-mono">{count as number}</div>
           </div>
         ))}
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-gray-500 text-sm">No pending outbox rows.</p>
+        <p className="text-muted text-sm">No pending outbox rows.</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm font-mono">
             <thead>
-              <tr className="text-gray-500 text-left border-b border-white/10">
+              <tr className="text-muted text-left border-b border-border">
                 <th className="py-2 pr-3">order_id</th>
                 <th className="py-2 pr-3">event</th>
                 <th className="py-2 pr-3">attempts</th>
@@ -247,11 +247,11 @@ function OutboxPanel({ data }: { data: any }) {
             </thead>
             <tbody>
               {rows.map((row: any) => (
-                <tr key={row.id} className="border-b border-white/5 hover:bg-gray-900/50">
+                <tr key={row.id} className="border-b border-border hover:bg-card-solid/50">
                   <td className="py-1.5 pr-3 text-blue-400">{row.order_id?.slice(0, 8)}</td>
                   <td className="py-1.5 pr-3">{row.event_type}</td>
                   <td className="py-1.5 pr-3">{row.attempts}/{row.max_attempts}</td>
-                  <td className="py-1.5 pr-3 text-gray-400">{formatAge(row.age_sec)}</td>
+                  <td className="py-1.5 pr-3 text-[var(--color-text-secondary)]">{formatAge(row.age_sec)}</td>
                   <td className="py-1.5 pr-3 text-red-400 truncate max-w-xs">{row.last_error || '-'}</td>
                 </tr>
               ))}
@@ -275,22 +275,22 @@ function StuckPanel({ data }: { data: any }) {
       {/* Totals */}
       <div className="flex gap-4 mb-6">
         {Object.entries(totals).map(([status, count]) => (
-          <div key={status} className="bg-gray-900 border border-white/10 rounded px-3 py-2">
-            <div className="text-xs text-gray-500">{status}</div>
+          <div key={status} className="bg-card-solid border border-border rounded px-3 py-2">
+            <div className="text-xs text-muted">{status}</div>
             <div className="text-lg font-mono">{count as number}</div>
           </div>
         ))}
       </div>
 
       {/* Age buckets */}
-      <h3 className="text-sm text-gray-400 mb-2">Age Buckets</h3>
+      <h3 className="text-sm text-[var(--color-text-secondary)] mb-2">Age Buckets</h3>
       {buckets.length === 0 ? (
-        <p className="text-gray-500 text-sm mb-6">No active orders.</p>
+        <p className="text-muted text-sm mb-6">No active orders.</p>
       ) : (
         <div className="overflow-x-auto mb-6">
           <table className="w-full text-sm font-mono">
             <thead>
-              <tr className="text-gray-500 text-left border-b border-white/10">
+              <tr className="text-muted text-left border-b border-border">
                 <th className="py-2 pr-3">status</th>
                 <th className="py-2 pr-3">bucket</th>
                 <th className="py-2 pr-3">count</th>
@@ -300,7 +300,7 @@ function StuckPanel({ data }: { data: any }) {
             </thead>
             <tbody>
               {buckets.map((b: any, i: number) => (
-                <tr key={i} className="border-b border-white/5">
+                <tr key={i} className="border-b border-border">
                   <td className="py-1.5 pr-3">{b.status}</td>
                   <td className="py-1.5 pr-3">
                     <span className={`px-1.5 py-0.5 rounded text-xs ${bucketColor(b.bucket)}`}>
@@ -308,8 +308,8 @@ function StuckPanel({ data }: { data: any }) {
                     </span>
                   </td>
                   <td className="py-1.5 pr-3">{b.count}</td>
-                  <td className="py-1.5 pr-3 text-gray-400">{b.oldest_age_min}m</td>
-                  <td className="py-1.5 pr-3 text-gray-400">{b.newest_age_min}m</td>
+                  <td className="py-1.5 pr-3 text-[var(--color-text-secondary)]">{b.oldest_age_min}m</td>
+                  <td className="py-1.5 pr-3 text-[var(--color-text-secondary)]">{b.newest_age_min}m</td>
                 </tr>
               ))}
             </tbody>
@@ -324,7 +324,7 @@ function StuckPanel({ data }: { data: any }) {
           <div className="overflow-x-auto">
             <table className="w-full text-sm font-mono">
               <thead>
-                <tr className="text-gray-500 text-left border-b border-white/10">
+                <tr className="text-muted text-left border-b border-border">
                   <th className="py-2 pr-3">order</th>
                   <th className="py-2 pr-3">status</th>
                   <th className="py-2 pr-3">expires_at</th>
@@ -332,7 +332,7 @@ function StuckPanel({ data }: { data: any }) {
               </thead>
               <tbody>
                 {expired.map((o: any) => (
-                  <tr key={o.id} className="border-b border-white/5">
+                  <tr key={o.id} className="border-b border-border">
                     <td className="py-1.5 pr-3 text-blue-400">{o.order_number || o.id.slice(0, 8)}</td>
                     <td className="py-1.5 pr-3">
                       <StatusBadge status={o.status} />
@@ -362,7 +362,7 @@ function WorkersPanel({ data }: { data: any }) {
           : null;
 
         return (
-          <div key={name} className="bg-gray-900 border border-white/10 rounded-lg p-4">
+          <div key={name} className="bg-card-solid border border-border rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-mono text-sm">{name}</h3>
               <span className={`inline-flex items-center gap-1.5 text-xs ${
@@ -377,30 +377,30 @@ function WorkersPanel({ data }: { data: any }) {
             {isRunning ? (
               <div className="grid grid-cols-2 gap-3 text-sm font-mono">
                 <div>
-                  <div className="text-xs text-gray-500">last run</div>
-                  <div className="text-gray-300">{ageSec}s ago</div>
+                  <div className="text-xs text-muted">last run</div>
+                  <div className="text-[var(--color-text-primary)]">{ageSec}s ago</div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-muted">
                     {name === 'outbox' ? 'total processed' : 'total expired'}
                   </div>
-                  <div className="text-gray-300">
+                  <div className="text-[var(--color-text-primary)]">
                     {name === 'outbox' ? w.totalProcessed ?? '-' : w.totalExpired ?? '-'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500">last batch</div>
-                  <div className="text-gray-300">{w.lastBatchSize ?? '-'}</div>
+                  <div className="text-xs text-muted">last batch</div>
+                  <div className="text-[var(--color-text-primary)]">{w.lastBatchSize ?? '-'}</div>
                 </div>
                 {w.pid && (
                   <div>
-                    <div className="text-xs text-gray-500">pid</div>
-                    <div className="text-gray-300">{w.pid}</div>
+                    <div className="text-xs text-muted">pid</div>
+                    <div className="text-[var(--color-text-primary)]">{w.pid}</div>
                   </div>
                 )}
               </div>
             ) : (
-              <p className="text-gray-500 text-sm">Worker not running or no heartbeat file.</p>
+              <p className="text-muted text-sm">Worker not running or no heartbeat file.</p>
             )}
           </div>
         );
@@ -433,12 +433,12 @@ function SearchPanel({
           onChange={(e) => setSearchInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && onSearch()}
           placeholder="Order ID or order number..."
-          className="flex-1 bg-gray-900 border border-white/10 rounded px-3 py-2 text-sm font-mono text-white placeholder-gray-600 focus:outline-none focus:border-white/30"
+          className="flex-1 bg-card-solid border border-border rounded px-3 py-2 text-sm font-mono text-foreground placeholder-muted focus:outline-none focus:border-[var(--color-border-medium)]"
         />
         <button
           onClick={onSearch}
           disabled={loading}
-          className="px-4 py-2 bg-white/10 rounded text-sm font-mono hover:bg-white/20 transition-colors disabled:opacity-50"
+          className="px-4 py-2 bg-[var(--color-border-medium)] rounded text-sm font-mono hover:bg-[var(--color-border-medium)] transition-colors disabled:opacity-50"
         >
           search
         </button>
@@ -447,16 +447,16 @@ function SearchPanel({
       {data && (
         <>
           {data.orders?.length === 0 ? (
-            <p className="text-gray-500 text-sm">No orders found.</p>
+            <p className="text-muted text-sm">No orders found.</p>
           ) : (
             <>
               {/* Order details */}
               {data.orders?.map((order: any) => (
-                <div key={order.id} className="bg-gray-900 border border-white/10 rounded-lg p-4 mb-4">
+                <div key={order.id} className="bg-card-solid border border-border rounded-lg p-4 mb-4">
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <span className="font-mono text-sm text-blue-400">{order.order_number}</span>
-                      <span className="text-gray-500 text-xs ml-2">{order.id}</span>
+                      <span className="text-muted text-xs ml-2">{order.id}</span>
                     </div>
                     <StatusBadge status={order.status} />
                   </div>
@@ -486,24 +486,24 @@ function SearchPanel({
               {/* Event timeline */}
               {data.events?.length > 0 && (
                 <div>
-                  <h3 className="text-sm text-gray-400 mb-2 font-mono">Event Timeline</h3>
+                  <h3 className="text-sm text-[var(--color-text-secondary)] mb-2 font-mono">Event Timeline</h3>
                   <div className="space-y-0">
                     {data.events.map((ev: any, i: number) => (
                       <div
                         key={ev.id}
-                        className="flex items-start gap-3 border-l-2 border-white/10 pl-3 py-2 hover:bg-gray-900/30"
+                        className="flex items-start gap-3 border-l-2 border-border pl-3 py-2 hover:bg-card-solid/30"
                       >
-                        <span className="text-xs text-gray-500 font-mono w-4 shrink-0">{i + 1}</span>
+                        <span className="text-xs text-muted font-mono w-4 shrink-0">{i + 1}</span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-mono">{ev.event_type}</span>
                             {ev.old_status && ev.new_status && (
-                              <span className="text-xs text-gray-500">
+                              <span className="text-xs text-muted">
                                 {ev.old_status} → {ev.new_status}
                               </span>
                             )}
                           </div>
-                          <div className="text-xs text-gray-500 mt-0.5">
+                          <div className="text-xs text-muted mt-0.5">
                             {ev.actor_type}:{ev.actor_id?.slice(0, 8)} at {formatTimestamp(ev.created_at)}
                           </div>
                         </div>
@@ -525,27 +525,27 @@ function SearchPanel({
 function Field({ label, value }: { label: string; value: any }) {
   return (
     <div>
-      <div className="text-xs text-gray-500">{label}</div>
-      <div className="text-gray-300 truncate">{value ?? '-'}</div>
+      <div className="text-xs text-muted">{label}</div>
+      <div className="text-[var(--color-text-primary)] truncate">{value ?? '-'}</div>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
-    pending: 'bg-gray-700 text-gray-300',
+    pending: 'bg-muted-bg text-[var(--color-text-primary)]',
     accepted: 'bg-blue-900/50 text-blue-300',
     escrowed: 'bg-purple-900/50 text-purple-300',
     payment_sent: 'bg-amber-900/50 text-amber-300',
     payment_confirmed: 'bg-amber-900/50 text-amber-300',
     completed: 'bg-emerald-900/50 text-emerald-300',
     cancelled: 'bg-red-900/50 text-red-300',
-    expired: 'bg-gray-800 text-gray-400',
+    expired: 'bg-muted-bg text-[var(--color-text-secondary)]',
     disputed: 'bg-red-900/50 text-red-300',
   };
 
   return (
-    <span className={`px-2 py-0.5 rounded text-xs font-mono ${colors[status] || 'bg-gray-800 text-gray-400'}`}>
+    <span className={`px-2 py-0.5 rounded text-xs font-mono ${colors[status] || 'bg-muted-bg text-[var(--color-text-secondary)]'}`}>
       {status}
     </span>
   );
@@ -577,6 +577,6 @@ function bucketColor(bucket: string): string {
     case '15m-1h': return 'bg-amber-900/50 text-amber-300';
     case '1h-24h': return 'bg-red-900/50 text-red-300';
     case '24h+': return 'bg-red-800 text-red-200';
-    default: return 'bg-gray-800 text-gray-400';
+    default: return 'bg-muted-bg text-[var(--color-text-secondary)]';
   }
 }

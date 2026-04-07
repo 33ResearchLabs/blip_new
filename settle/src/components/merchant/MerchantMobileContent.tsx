@@ -9,11 +9,12 @@ import { MobileEscrowView } from "@/components/merchant/MobileEscrowView";
 import { MobileChatView } from "@/components/merchant/MobileChatView";
 import { MobileHistoryView } from "@/components/merchant/MobileHistoryView";
 import { MobileMarketplaceView } from "@/components/merchant/MobileMarketplaceView";
+import { MobileHomeView } from "@/components/merchant/MobileHomeView";
 import { MobileBottomNav } from "@/components/merchant/MobileBottomNav";
 
 export interface MerchantMobileContentProps {
-  mobileView: "orders" | "escrow" | "chat" | "history" | "marketplace";
-  setMobileView: (v: "orders" | "escrow" | "chat" | "history" | "marketplace") => void;
+  mobileView: "home" | "orders" | "escrow" | "chat" | "history" | "marketplace";
+  setMobileView: (v: "home" | "orders" | "escrow" | "chat" | "history" | "marketplace") => void;
 
   // Order data
   pendingOrders: Order[];
@@ -61,6 +62,12 @@ export interface MerchantMobileContentProps {
   setShowOpenTradeModal: (v: boolean) => void;
   setShowCreateModal: (v: boolean) => void;
 
+  // Home view — trade form
+  openTradeForm: any;
+  isCreatingTrade: boolean;
+  onCreateTrade: () => void;
+  onShowWalletModal: () => void;
+
   // Bottom nav counts
   totalUnread: number;
 }
@@ -77,6 +84,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
     effectiveBalance, totalTradedVolume, todayEarnings, pendingEarnings,
     setShowAnalytics, setShowWalletModal, handleLogout,
     marketSubTab, setMarketSubTab, setOpenTradeForm, setShowOpenTradeModal, setShowCreateModal,
+    openTradeForm, isCreatingTrade, onCreateTrade, onShowWalletModal,
     totalUnread,
   } = props;
 
@@ -85,6 +93,25 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
       {/* Mobile View Content */}
       <div className="md:hidden flex-1 flex flex-col overflow-hidden">
         <main className="flex-1 overflow-auto p-3 pb-20">
+          {mobileView === "home" && (
+            <MobileHomeView
+              effectiveBalance={effectiveBalance}
+              totalTradedVolume={totalTradedVolume}
+              todayEarnings={todayEarnings}
+              pendingEarnings={pendingEarnings}
+              merchantInfo={merchantInfo}
+              pendingOrders={pendingOrders}
+              ongoingOrders={ongoingOrders}
+              completedOrders={completedOrders}
+              openTradeForm={openTradeForm}
+              setOpenTradeForm={setOpenTradeForm}
+              isCreatingTrade={isCreatingTrade}
+              onCreateTrade={onCreateTrade}
+              setShowOpenTradeModal={setShowOpenTradeModal}
+              setMobileView={setMobileView}
+              onShowWalletModal={onShowWalletModal}
+            />
+          )}
           {mobileView === "orders" && (
             <MobileOrdersView
               pendingOrders={pendingOrders}
@@ -155,14 +182,16 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
         </main>
       </div>
 
-      {/* Mobile FAB */}
-      <motion.button
-        whileTap={{ scale: 0.9 }}
-        onClick={() => setShowOpenTradeModal(true)}
-        className="md:hidden fixed right-4 bottom-[88px] z-40 w-14 h-14 rounded-full bg-orange-500 shadow-lg shadow-orange-500/25 flex items-center justify-center"
-      >
-        <Plus className="w-6 h-6 text-black" />
-      </motion.button>
+      {/* Mobile FAB — hidden on home view (has its own trade button) */}
+      {mobileView !== "home" && (
+        <motion.button
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setShowOpenTradeModal(true)}
+          className="md:hidden fixed right-4 bottom-[88px] z-40 w-14 h-14 rounded-full bg-primary shadow-lg shadow-primary/25 flex items-center justify-center"
+        >
+          <Plus className="w-6 h-6 text-white" />
+        </motion.button>
+      )}
 
       <MobileBottomNav
         mobileView={mobileView}

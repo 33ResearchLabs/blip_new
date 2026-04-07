@@ -562,8 +562,56 @@ WHERE o.status = 'pending'
 ORDER BY o.premium_bps_current DESC, o.created_at ASC;
 
 -- ============================================================================
+-- Migration 072: Security hardening indexes
+-- ============================================================================
+
+CREATE INDEX IF NOT EXISTS idx_orders_buyer_merchant_active
+  ON orders (buyer_merchant_id, status, created_at DESC)
+  WHERE buyer_merchant_id IS NOT NULL AND status NOT IN ('expired', 'cancelled');
+
+CREATE INDEX IF NOT EXISTS idx_orders_buyer_merchant_lookup
+  ON orders (buyer_merchant_id) WHERE buyer_merchant_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_merchant_offers_lookup
+  ON merchant_offers (type, payment_method, min_amount, max_amount)
+  WHERE is_active = true;
+
+-- ============================================================================
+-- Migration 073: Security alerts table for admin monitor dashboard
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS security_alerts (
+  id            SERIAL PRIMARY KEY,
+  timestamp     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  type          VARCHAR(30) NOT NULL,
+  severity      VARCHAR(10) NOT NULL CHECK (severity IN ('HIGH', 'MEDIUM')),
+  message       TEXT NOT NULL,
+  metadata      JSONB NOT NULL DEFAULT '{}',
+  acknowledged  BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE INDEX IF NOT EXISTS idx_security_alerts_timestamp ON security_alerts (timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_security_alerts_severity ON security_alerts (severity, timestamp DESC);
+
+-- ============================================================================
+-- Migration 074: USDT price tick system
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS price_ticks (
+  id            BIGSERIAL PRIMARY KEY,
+  pair          VARCHAR(50) NOT NULL,
+  price         DECIMAL(20, 6) NOT NULL,
+  source        VARCHAR(20) NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_price_ticks_pair_created
+  ON price_ticks (pair, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_price_ticks_created
+  ON price_ticks (created_at);
+
+-- ============================================================================
 -- Verification Query
 -- ============================================================================
--- Run this to verify all columns exist:
--- SELECT column_name, data_type FROM information_schema.columns
--- WHERE table_name = 'orders' AND column_name IN ('spread_preference', 'protocol_fee_percentage', 'protocol_fee_amount', 'merchant_spread_percentage', 'is_auto_cancelled', 'escrow_trade_id', 'corridor_id', 'premium_bps_current');
+-- SELECT tablename FROM pg_tables WHERE tablename IN ('security_alerts', 'price_ticks');

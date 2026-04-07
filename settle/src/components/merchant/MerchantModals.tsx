@@ -4,8 +4,10 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import type { Order } from "@/types/merchant";
+import { useState } from "react";
 import { DirectChatView } from "@/components/merchant/DirectChatView";
 import { MerchantChatTabs } from "@/components/merchant/MerchantChatTabs";
+import { DisputeChatView } from "@/components/merchant/DisputeChatView";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
 
 const OrderDetailsPanel = dynamic(
@@ -210,6 +212,8 @@ export interface MerchantModalsProps {
 }
 
 export const MerchantModals = React.memo(function MerchantModals(props: MerchantModalsProps) {
+  const [activeDisputeOrderId, setActiveDisputeOrderId] = useState<string | null>(null);
+  const [activeDisputeUserName, setActiveDisputeUserName] = useState<string>('');
   const {
     merchantId, orders,
     showDisputeModal, disputeReason, setDisputeReason, disputeDescription, setDisputeDescription,
@@ -321,6 +325,8 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
         isOpen={showTransactionHistory}
         onClose={() => setShowTransactionHistory(false)}
         merchantId={merchantId || ""}
+        orders={orders}
+        effectiveBalance={effectiveBalance}
       />
       <PaymentMethodModal
         isOpen={showPaymentMethods}
@@ -400,6 +406,7 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
         onRespondToCancel={respondToCancelRequest}
         onOpenChat={handleOpenChat}
         onViewFullDetails={(orderId) => setSelectedOrderId(orderId)}
+        onOpenDispute={openDisputeModal}
       />
 
       {selectedOrderId && merchantId && (
@@ -458,9 +465,17 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
             initial={{ opacity: 0, x: 300 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 300 }}
-            className="fixed right-0 top-0 h-full w-full max-w-md z-50 shadow-2xl bg-[#060606] border-l border-white/[0.04]"
+            className="fixed right-0 top-0 h-full w-full max-w-md z-50 shadow-2xl bg-background border-l border-white/[0.04]"
           >
-            {directChat.activeContactId ? (
+            {activeDisputeOrderId ? (
+              <DisputeChatView
+                orderId={activeDisputeOrderId}
+                merchantId={merchantId}
+                userName={activeDisputeUserName}
+                onBack={() => { setActiveDisputeOrderId(null); setActiveDisputeUserName(''); }}
+                onSendSound={() => playSound("send")}
+              />
+            ) : directChat.activeContactId ? (
               <DirectChatView
                 contactName={directChat.activeContactName}
                 contactType={directChat.activeContactType}
@@ -477,6 +492,10 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
                 totalUnread={directChat.totalUnread}
                 isLoading={directChat.isLoadingConversations}
                 onOpenChat={(targetId, targetType, username) => directChat.openChat(targetId, targetType, username)}
+                onOpenDisputeChat={(orderId, userName) => {
+                  setActiveDisputeOrderId(orderId);
+                  setActiveDisputeUserName(userName);
+                }}
                 onClose={() => setShowMessageHistory(false)}
               />
             )}

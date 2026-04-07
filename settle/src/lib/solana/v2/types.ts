@@ -140,6 +140,8 @@ export interface ReleaseEscrowParams {
 export interface RefundEscrowParams {
   tradePda: PublicKey;
   mint: PublicKey;
+  /** Pass protocol_config PDA for authority-initiated refunds (backend signer). */
+  protocolConfigPda?: PublicKey;
 }
 
 // Extend escrow params (depositor only)

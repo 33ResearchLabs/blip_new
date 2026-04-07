@@ -22,12 +22,12 @@ interface PaymentMethodModalProps {
 const PAYMENT_METHOD_TYPES = [
   { type: 'bank' as const, label: 'Bank Account', desc: 'Wire & local transfers', icon: Building2, gradient: 'from-blue-500/20 to-blue-600/5', border: 'border-blue-500/30', text: 'text-blue-400', ring: 'ring-blue-500/20' },
   { type: 'cash' as const, label: 'Cash Meeting', desc: 'In-person exchange', icon: DollarSign, gradient: 'from-emerald-500/20 to-emerald-600/5', border: 'border-emerald-500/30', text: 'text-emerald-400', ring: 'ring-emerald-500/20' },
-  { type: 'crypto' as const, label: 'Crypto Wallet', desc: 'On-chain address', icon: Wallet, gradient: 'from-orange-500/20 to-orange-600/5', border: 'border-orange-500/30', text: 'text-orange-400', ring: 'ring-orange-500/20' },
+  { type: 'crypto' as const, label: 'Crypto Wallet', desc: 'On-chain address', icon: Wallet, gradient: 'from-primary/20 to-primary/5', border: 'border-primary/30', text: 'text-primary', ring: 'ring-primary/20' },
   { type: 'card' as const, label: 'Card Payment', desc: 'Debit or credit card', icon: CreditCard, gradient: 'from-purple-500/20 to-purple-600/5', border: 'border-purple-500/30', text: 'text-purple-400', ring: 'ring-purple-500/20' },
   { type: 'mobile' as const, label: 'Mobile Money', desc: 'Digital wallet apps', icon: Smartphone, gradient: 'from-pink-500/20 to-pink-600/5', border: 'border-pink-500/30', text: 'text-pink-400', ring: 'ring-pink-500/20' },
 ];
 
-const inputClass = "w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-orange-500/40 focus:ring-1 focus:ring-orange-500/20 transition-all";
+const inputClass = "w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all";
 
 export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMethodModalProps) {
   const [showAddForm, setShowAddForm] = useState(false);
@@ -264,17 +264,17 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 10 }}
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="relative w-full max-w-lg bg-[#0a0a0a] rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/60 max-h-[85vh] flex flex-col overflow-hidden"
+          className="relative w-full max-w-lg bg-card-solid rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/60 max-h-[85vh] flex flex-col overflow-hidden"
         >
           {/* Ambient glow */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[120px] bg-orange-500/[0.04] rounded-full blur-[80px] pointer-events-none" />
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[120px] bg-primary/[0.04] rounded-full blur-[80px] pointer-events-none" />
 
           {/* Header */}
           <div className="relative px-6 pt-6 pb-4 border-b border-white/[0.06]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-orange-600/5 border border-orange-500/20 flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 text-orange-400" />
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-primary" />
                 </div>
                 <div>
                   <h2 className="text-[15px] font-bold text-white">Payment Methods</h2>
@@ -324,7 +324,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                           transition={{ delay: i * 0.05 }}
                           className={`group relative p-3.5 rounded-xl border transition-all ${
                             method.is_default
-                              ? 'bg-gradient-to-r from-orange-500/[0.06] to-transparent border-orange-500/20'
+                              ? 'bg-gradient-to-r from-primary/[0.06] to-transparent border-primary/20'
                               : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.10]'
                           }`}
                         >
@@ -336,9 +336,9 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                               <div className="flex items-center gap-2">
                                 <p className="text-[13px] font-semibold text-white">{method.name}</p>
                                 {method.is_default && (
-                                  <span className="flex items-center gap-1 px-1.5 py-0.5 bg-orange-500/10 border border-orange-500/20 rounded-md">
-                                    <Star className="w-2.5 h-2.5 text-orange-400 fill-orange-400" />
-                                    <span className="text-[9px] text-orange-400 font-bold uppercase tracking-wider">Default</span>
+                                  <span className="flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 border border-primary/20 rounded-md">
+                                    <Star className="w-2.5 h-2.5 text-primary fill-primary" />
+                                    <span className="text-[9px] text-primary font-bold uppercase tracking-wider">Default</span>
                                   </span>
                                 )}
                               </div>
@@ -351,7 +351,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                                   className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors"
                                   title="Set as default"
                                 >
-                                  <Star className="w-3.5 h-3.5 text-white/30 hover:text-orange-400" />
+                                  <Star className="w-3.5 h-3.5 text-white/30 hover:text-primary" />
                                 </button>
                               )}
                               <button
@@ -371,7 +371,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                   {/* Add button */}
                   <button
                     onClick={() => { setShowAddForm(true); resetForm(); }}
-                    className="w-full py-3 rounded-xl border border-dashed border-white/[0.10] hover:border-orange-500/30 bg-white/[0.01] hover:bg-orange-500/[0.04] text-white/40 hover:text-orange-400 font-medium transition-all flex items-center justify-center gap-2 text-[13px]"
+                    className="w-full py-3 rounded-xl border border-dashed border-white/[0.10] hover:border-primary/30 bg-white/[0.01] hover:bg-primary/[0.04] text-white/40 hover:text-primary font-medium transition-all flex items-center justify-center gap-2 text-[13px]"
                   >
                     <Plus className="w-4 h-4" />
                     Add Payment Method
@@ -439,7 +439,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                     <button
                       onClick={handleAddMethod}
                       disabled={isLoading}
-                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 rounded-xl text-[12px] text-black font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20"
+                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-primary to-primary hover:from-primary/90 hover:to-primary/90 rounded-xl text-[12px] text-black font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
                     >
                       {isLoading ? (
                         <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Adding...</>

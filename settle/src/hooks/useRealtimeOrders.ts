@@ -11,7 +11,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { usePusherOptional } from '@/context/PusherContext';
 import { getUserChannel, getMerchantChannel, getAllMerchantsChannel } from '@/lib/pusher/channels';
-import { ORDER_EVENTS } from '@/lib/pusher/events';
+import { ORDER_EVENTS, CHAT_EVENTS } from '@/lib/pusher/events';
 import { shouldAcceptUpdate } from '@/lib/orders/statusResolver';
 
 interface OrderData {
@@ -64,6 +64,8 @@ interface UseRealtimeOrdersOptions {
   onExtensionResponse?: (data: ExtensionResponseData) => void;
   onPriceUpdate?: (data: CorridorPriceData) => void;
   onNotification?: (data: { type: string; orderId?: string; content: string; senderName: string }) => void;
+  /** Fired when a chat message arrives on the personal channel (chat not open) */
+  onChatMessage?: (data: { messageId: string; orderId: string; senderType: string; senderId: string | null; content: string; messageType: string; createdAt: string }) => void;
 }
 
 interface UseRealtimeOrdersReturn {
@@ -85,7 +87,7 @@ const BATCH_WINDOW_MS = 100; // Coalesce events within 100ms
 export function useRealtimeOrders(
   options: UseRealtimeOrdersOptions
 ): UseRealtimeOrdersReturn {
-  const { actorType, actorId, onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse, onPriceUpdate, onNotification } = options;
+  const { actorType, actorId, onOrderCreated, onOrderStatusUpdated, onExtensionRequested, onExtensionResponse, onPriceUpdate, onNotification, onChatMessage } = options;
 
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -400,12 +402,44 @@ export function useRealtimeOrders(
       }
     };
 
+    // Handle chat messages arriving on private channel (chat window may be closed)
+    const chatMessageSeenIds = new Set<string>();
+    const handlePrivateChannelChatMessage = (rawData: unknown) => {
+      const data = rawData as { messageId?: string; orderId?: string; senderType?: string; senderId?: string | null; content?: string; messageType?: string; createdAt?: string };
+      if (!data.messageId || !data.orderId) return;
+      // Dedup — the same message may also arrive via the order channel
+      if (chatMessageSeenIds.has(data.messageId)) return;
+      chatMessageSeenIds.add(data.messageId);
+      // Evict old entries to stay bounded
+      if (chatMessageSeenIds.size > 200) {
+        const iter = chatMessageSeenIds.values();
+        for (let i = 0; i < 100; i++) iter.next();
+        // Keep only the newest half
+      }
+      onChatMessage?.({
+        messageId: data.messageId,
+        orderId: data.orderId,
+        senderType: data.senderType || 'unknown',
+        senderId: data.senderId ?? null,
+        content: data.content || '',
+        messageType: data.messageType || 'text',
+        createdAt: data.createdAt || new Date().toISOString(),
+      });
+    };
+
     if (personalChannel) {
       personalChannel.bind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
       personalChannel.bind(ORDER_EVENTS.CANCELLED, handleCancelled);
       personalChannel.bind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
       personalChannel.bind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
       personalChannel.bind('notification:new', handleNotification);
+      personalChannel.bind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateChannelChatMessage);
+    }
+
+    // For users, their private channel IS the primary channel
+    if (actorType === 'user') {
+      primaryChannel.bind('notification:new', handleNotification);
+      primaryChannel.bind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateChannelChatMessage);
     }
 
     return () => {
@@ -414,6 +448,10 @@ export function useRealtimeOrders(
       primaryChannel.unbind(ORDER_EVENTS.CANCELLED, handleCancelled);
       primaryChannel.unbind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
       primaryChannel.unbind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
+      if (actorType === 'user') {
+        primaryChannel.unbind('notification:new', handleNotification);
+        primaryChannel.unbind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateChannelChatMessage);
+      }
       pusher.unsubscribe(primaryChannelName);
 
       if (personalChannel && personalChannelName) {
@@ -422,6 +460,7 @@ export function useRealtimeOrders(
         personalChannel.unbind(ORDER_EVENTS.EXTENSION_REQUESTED, handleExtensionRequested);
         personalChannel.unbind(ORDER_EVENTS.EXTENSION_RESPONSE, handleExtensionResponse);
         personalChannel.unbind('notification:new', handleNotification);
+        personalChannel.unbind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateChannelChatMessage);
         pusher.unsubscribe(personalChannelName);
       }
 

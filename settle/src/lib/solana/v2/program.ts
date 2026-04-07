@@ -628,19 +628,22 @@ export async function buildRefundEscrowTx(
   }
 
   // refundEscrow takes no args per IDL
+  const accounts: Record<string, any> = {
+    signer: refunder,
+    trade: tradePda,
+    escrow: escrowPda,
+    vaultAuthority,
+    vaultAta,
+    depositorAta,
+    creator,
+    mint,
+    tokenProgram: TOKEN_PROGRAM_ID,
+    protocolConfig: params.protocolConfigPda ?? null,
+  };
+
   const refundIx = await (program.methods as any)
     .refundEscrow()
-    .accounts({
-      signer: refunder,
-      trade: tradePda,
-      escrow: escrowPda,
-      vaultAuthority,
-      vaultAta,
-      depositorAta,
-      creator,
-      mint,
-      tokenProgram: TOKEN_PROGRAM_ID,
-    })
+    .accounts(accounts)
     .instruction();
 
   const transaction = new Transaction().add(refundIx);

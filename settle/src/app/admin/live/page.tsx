@@ -63,29 +63,29 @@ interface LiveStats {
 const getStatusConfig = (status: string) => {
   switch (status) {
     case "pending":
-      return { label: "PENDING", color: "text-white/40", bg: "bg-white/[0.04] border-white/[0.06]", dot: "bg-white/30" };
+      return { label: "PENDING", color: "text-foreground/40", bg: "bg-card border-border", dot: "bg-foreground/30" };
     case "accepted":
-      return { label: "ACCEPTED", color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20", dot: "bg-orange-400" };
+      return { label: "ACCEPTED", color: "text-primary", bg: "bg-primary/10 border-primary/20", dot: "bg-primary" };
     case "escrow_pending":
-      return { label: "LOCKING", color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20", dot: "bg-orange-400 animate-pulse" };
+      return { label: "LOCKING", color: "text-primary", bg: "bg-primary/10 border-primary/20", dot: "bg-primary animate-pulse" };
     case "escrowed":
-      return { label: "ESCROWED", color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20", dot: "bg-orange-400" };
+      return { label: "ESCROWED", color: "text-primary", bg: "bg-primary/10 border-primary/20", dot: "bg-primary" };
     case "payment_pending":
     case "payment_sent":
-      return { label: "PAYMENT SENT", color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20", dot: "bg-orange-400 animate-pulse" };
+      return { label: "PAYMENT SENT", color: "text-primary", bg: "bg-primary/10 border-primary/20", dot: "bg-primary animate-pulse" };
     case "payment_confirmed":
-      return { label: "CONFIRMED", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20", dot: "bg-emerald-400 animate-pulse" };
+      return { label: "CONFIRMED", color: "text-[var(--color-success)]", bg: "bg-[var(--color-success)]/10 border-[var(--color-success)]/20", dot: "bg-[var(--color-success)] animate-pulse" };
     case "releasing":
-      return { label: "RELEASING", color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20", dot: "bg-emerald-400 animate-pulse" };
+      return { label: "RELEASING", color: "text-[var(--color-success)]", bg: "bg-[var(--color-success)]/10 border-[var(--color-success)]/20", dot: "bg-[var(--color-success)] animate-pulse" };
     case "completed":
-      return { label: "COMPLETED", color: "text-emerald-400/60", bg: "bg-emerald-500/[0.06] border-emerald-500/10", dot: "bg-emerald-400/50" };
+      return { label: "COMPLETED", color: "text-[var(--color-success)]/60", bg: "bg-[var(--color-success)]/[0.06] border-[var(--color-success)]/10", dot: "bg-[var(--color-success)]/50" };
     case "disputed":
-      return { label: "DISPUTED", color: "text-red-400", bg: "bg-red-500/10 border-red-500/20", dot: "bg-red-400 animate-pulse" };
+      return { label: "DISPUTED", color: "text-[var(--color-error)]", bg: "bg-[var(--color-error)]/10 border-[var(--color-error)]/20", dot: "bg-[var(--color-error)] animate-pulse" };
     case "cancelled":
     case "expired":
-      return { label: status.toUpperCase(), color: "text-white/20", bg: "bg-white/[0.02] border-white/[0.03]", dot: "bg-white/15" };
+      return { label: status.toUpperCase(), color: "text-foreground/20", bg: "bg-card border-section-divider", dot: "bg-foreground/15" };
     default:
-      return { label: status.toUpperCase(), color: "text-white/40", bg: "bg-white/[0.04] border-white/[0.06]", dot: "bg-white/30" };
+      return { label: status.toUpperCase(), color: "text-foreground/40", bg: "bg-card border-border", dot: "bg-foreground/30" };
   }
 };
 
@@ -198,59 +198,81 @@ export default function LiveDashboardPage() {
 
   if (noAuth) {
     return (
-      <div className="min-h-screen bg-[#040404] text-white flex items-center justify-center">
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="text-center">
-          <p className="text-white/40 text-sm mb-3">Not authenticated</p>
-          <Link href="/admin" className="text-orange-400 text-xs hover:underline">Sign in at Admin Console</Link>
+          <p className="text-foreground/40 text-sm mb-3">Not authenticated</p>
+          <Link href="/admin" className="text-primary text-xs hover:underline">Sign in at Admin Console</Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#040404] text-white overflow-hidden">
+    <div className="min-h-screen bg-background text-foreground overflow-hidden">
       {/* Ambient glow */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-[-20%] left-[30%] w-[600px] h-[400px] bg-orange-500/[0.015] rounded-full blur-[150px]" />
-        <div className="absolute bottom-[-10%] right-[20%] w-[400px] h-[300px] bg-orange-500/[0.01] rounded-full blur-[120px]" />
+        <div className="absolute top-[-20%] left-[30%] w-[600px] h-[400px] bg-primary/[0.015] rounded-full blur-[150px]" />
+        <div className="absolute bottom-[-10%] right-[20%] w-[400px] h-[300px] bg-primary/[0.01] rounded-full blur-[120px]" />
       </div>
 
-      {/* Top bar */}
-      <header className="relative z-10 h-10 bg-[#060606]/80 backdrop-blur-xl border-b border-white/[0.03] flex items-center px-4 gap-4">
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-[8px] font-black text-orange-400">B</div>
-          <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Live Feed</span>
+      {/* ===== HEADER — matches admin console ===== */}
+      <header className="sticky top-0 z-10 bg-background/60 backdrop-blur-2xl border-b border-border">
+        <div className="h-[50px] flex items-center px-4 gap-3">
+          {/* Logo */}
+          <div className="flex items-center shrink-0">
+            <Link href="/admin" className="flex items-center gap-2">
+              <Zap className="w-5 h-5 text-foreground fill-foreground" />
+              <span className="text-[17px] leading-none whitespace-nowrap hidden lg:block">
+                <span className="font-bold text-foreground">Blip</span>{" "}
+                <span className="italic text-foreground/90">money</span>
+              </span>
+            </Link>
+          </div>
+
+          {/* Center: Nav pills */}
+          <div className="flex items-center gap-2 mx-auto">
+            <nav className="flex items-center gap-0.5 bg-card rounded-lg p-[3px]">
+              <Link href="/admin" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">
+                Console
+              </Link>
+              <Link href="/admin/live" className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-accent-subtle text-foreground transition-colors">
+                Live Feed
+              </Link>
+              <Link href="/admin/access-control" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">
+                Access Control
+              </Link>
+              <Link href="/admin/accounts" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Accounts</Link>
+              <Link href="/admin/disputes" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Disputes</Link>
+              <Link href="/admin/monitor" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Monitor</Link>
+              <Link href="/admin/usdt-inr-price" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Price</Link>
+            </nav>
+          </div>
+
+          {/* Right: Live stats */}
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-1.5">
+              <Gauge className="w-3 h-3 text-primary/40" />
+              <span className="text-[10px] font-mono text-primary/70 tabular-nums">{stats?.txPerMinute?.toFixed(2) || "0.00"}/min</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Activity className="w-3 h-3 text-foreground/20" />
+              <span className="text-[10px] font-mono text-foreground/30 tabular-nums">{activeOrders.length} active</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Lock className="w-3 h-3 text-foreground/20" />
+              <span className="text-[10px] font-mono text-foreground/30 tabular-nums">${stats?.escrowLocked?.toFixed(0) || 0}</span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card border border-border">
+              <div className="w-2 h-2 rounded-full bg-[var(--color-success)]/60 animate-pulse" />
+              <span className="text-[9px] font-mono font-bold text-foreground/40 uppercase tracking-wider">Live</span>
+            </div>
+            <span className="text-[9px] font-mono text-foreground/20">{mounted ? lastUpdate.toLocaleTimeString() : "--:--:--"}</span>
+          </div>
         </div>
-
-        <div className="flex-1" />
-
-        {/* Ticker stats */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <Gauge className="w-3 h-3 text-orange-400/40" />
-            <span className="text-[10px] font-mono text-orange-400/70 tabular-nums">{stats?.txPerMinute?.toFixed(2) || "0.00"}/min</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Activity className="w-3 h-3 text-white/20" />
-            <span className="text-[10px] font-mono text-white/30 tabular-nums">{activeOrders.length} active</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Lock className="w-3 h-3 text-white/20" />
-            <span className="text-[10px] font-mono text-white/30 tabular-nums">${stats?.escrowLocked?.toFixed(0) || 0} locked</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-[live-dot_1.5s_ease-in-out_infinite]" />
-            <span className="text-[9px] font-mono text-white/20">{mounted ? lastUpdate.toLocaleTimeString() : "--:--:--"}</span>
-          </div>
-        </div>
-
-        <Link href="/admin" className="text-[9px] font-mono text-white/20 hover:text-white/40 transition-colors px-2 py-1 hover:bg-white/[0.03] rounded">
-          Console
-        </Link>
       </header>
 
       {/* Main content */}
-      <div className="relative z-10 p-3 h-[calc(100vh-40px)] flex flex-col gap-3 overflow-hidden">
+      <div className="relative z-10 p-3 h-[calc(100vh-50px)] flex flex-col gap-3 overflow-hidden">
 
         {/* Summary strip */}
         <div className="flex gap-2 shrink-0">
@@ -262,11 +284,11 @@ export default function LiveDashboardPage() {
             { label: "ONLINE", value: stats?.activeMerchants ?? "—", icon: <Users className="w-3 h-3" /> },
             { label: "SUCCESS", value: stats ? `${stats.successRate.toFixed(0)}%` : "—", icon: <CheckCircle className="w-3 h-3" /> },
           ].map((s) => (
-            <div key={s.label} className="flex-1 bg-white/[0.02] border border-white/[0.03] rounded-lg px-3 py-2 flex items-center gap-2">
-              <span className={s.highlight ? "text-orange-400/40" : "text-white/10"}>{s.icon}</span>
+            <div key={s.label} className="flex-1 bg-card border border-section-divider rounded-lg px-3 py-2 flex items-center gap-2">
+              <span className={s.highlight ? "text-primary/40" : "text-foreground/10"}>{s.icon}</span>
               <div>
-                <p className="text-[8px] font-mono text-white/20 tracking-wider">{s.label}</p>
-                <p className={`text-sm font-bold font-mono tabular-nums ${s.highlight ? "text-orange-400" : "text-white/70"}`}>{s.value}</p>
+                <p className="text-[8px] font-mono text-foreground/20 tracking-wider">{s.label}</p>
+                <p className={`text-sm font-bold font-mono tabular-nums ${s.highlight ? "text-primary" : "text-foreground/70"}`}>{s.value}</p>
               </div>
             </div>
           ))}
@@ -278,11 +300,11 @@ export default function LiveDashboardPage() {
           {/* Active orders — main focus */}
           <div className="xl:col-span-3 flex flex-col min-h-0">
             <div className="flex items-center gap-2 mb-2 px-1">
-              <Radio className="w-3.5 h-3.5 text-orange-400/40" />
-              <span className="text-[10px] font-mono text-white/30 uppercase tracking-wider">Active Orders</span>
-              <span className="text-[10px] font-mono text-orange-400/50 px-1.5 py-0.5 bg-orange-500/[0.06] rounded">{activeOrders.length}</span>
+              <Radio className="w-3.5 h-3.5 text-primary/40" />
+              <span className="text-[10px] font-mono text-foreground/30 uppercase tracking-wider">Active Orders</span>
+              <span className="text-[10px] font-mono text-primary/50 px-1.5 py-0.5 bg-primary/[0.06] rounded">{activeOrders.length}</span>
               {disputedOrders.length > 0 && (
-                <span className="text-[10px] font-mono text-red-400/60 px-1.5 py-0.5 bg-red-500/[0.06] rounded ml-auto">
+                <span className="text-[10px] font-mono text-[var(--color-error)]/60 px-1.5 py-0.5 bg-[var(--color-error)]/[0.06] rounded ml-auto">
                   {disputedOrders.length} disputed
                 </span>
               )}
@@ -311,9 +333,9 @@ export default function LiveDashboardPage() {
               ) : (
                 <div className="flex-1 flex items-center justify-center">
                   <div className="text-center">
-                    <Clock className="w-8 h-8 text-white/[0.06] mx-auto mb-2" />
-                    <p className="text-[11px] text-white/15 font-mono">No active orders</p>
-                    <p className="text-[9px] text-white/10 font-mono mt-1">Waiting for trades...</p>
+                    <Clock className="w-8 h-8 text-foreground/[0.06] mx-auto mb-2" />
+                    <p className="text-[11px] text-foreground/15 font-mono">No active orders</p>
+                    <p className="text-[9px] text-foreground/10 font-mono mt-1">Waiting for trades...</p>
                   </div>
                 </div>
               )}
@@ -324,10 +346,10 @@ export default function LiveDashboardPage() {
           <div className="flex flex-col gap-3 min-h-0">
 
             {/* Mini hourly chart */}
-            <div className="bg-white/[0.02] border border-white/[0.03] rounded-lg p-3 shrink-0">
+            <div className="bg-card border border-section-divider rounded-lg p-3 shrink-0">
               <div className="flex items-center gap-1.5 mb-2">
-                <Activity className="w-3 h-3 text-white/15" />
-                <span className="text-[9px] font-mono text-white/20 uppercase tracking-wider">24h Activity</span>
+                <Activity className="w-3 h-3 text-foreground/15" />
+                <span className="text-[9px] font-mono text-foreground/20 uppercase tracking-wider">24h Activity</span>
               </div>
               {hourlyData.length > 0 ? (
                 <div className="h-12 flex items-end gap-[1px]">
@@ -340,45 +362,45 @@ export default function LiveDashboardPage() {
                         className="flex-1"
                         style={{ height: `${Math.max(h, 4)}%` }}
                       >
-                        <div className={`w-full h-full rounded-t-[1px] ${isNow ? "bg-orange-400" : "bg-white/[0.06]"}`} />
+                        <div className={`w-full h-full rounded-t-[1px] ${isNow ? "bg-primary" : "bg-accent-subtle"}`} />
                       </div>
                     );
                   })}
                 </div>
               ) : (
-                <div className="h-12 flex items-center justify-center text-[9px] text-white/10">—</div>
+                <div className="h-12 flex items-center justify-center text-[9px] text-foreground/10">—</div>
               )}
             </div>
 
             {/* Recent completed */}
-            <div className="flex-1 bg-white/[0.02] border border-white/[0.03] rounded-lg p-3 min-h-0 flex flex-col">
+            <div className="flex-1 bg-card border border-section-divider rounded-lg p-3 min-h-0 flex flex-col">
               <div className="flex items-center gap-1.5 mb-2 shrink-0">
-                <CheckCircle className="w-3 h-3 text-emerald-400/30" />
-                <span className="text-[9px] font-mono text-white/20 uppercase tracking-wider">Recent Completed</span>
-                <span className="text-[9px] font-mono text-white/15 ml-auto">{recentCompleted.length}</span>
+                <CheckCircle className="w-3 h-3 text-[var(--color-success)]/30" />
+                <span className="text-[9px] font-mono text-foreground/20 uppercase tracking-wider">Recent Completed</span>
+                <span className="text-[9px] font-mono text-foreground/15 ml-auto">{recentCompleted.length}</span>
               </div>
               <div className="flex-1 overflow-y-auto scrollbar-hide space-y-0.5">
                 {recentCompleted.length > 0 ? recentCompleted.map((o) => (
-                  <div key={o.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-white/[0.02] transition-colors">
+                  <div key={o.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-card transition-colors">
                     <div className={`w-4 h-4 rounded flex items-center justify-center text-[7px] font-black ${
-                      o.type === "buy" ? "bg-orange-500/10 text-orange-400/60" : "bg-white/[0.04] text-white/25"
+                      o.type === "buy" ? "bg-primary/10 text-primary/60" : "bg-card text-foreground/25"
                     }`}>
                       {o.type === "buy" ? "B" : "S"}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <span className="text-[9px] font-mono text-white/30 truncate block">{o.orderNumber}</span>
+                      <span className="text-[9px] font-mono text-foreground/30 truncate block">{o.orderNumber}</span>
                     </div>
-                    <span className="text-[10px] font-mono font-bold text-white/40 tabular-nums shrink-0">
+                    <span className="text-[10px] font-mono font-bold text-foreground/40 tabular-nums shrink-0">
                       ${o.amount.toLocaleString()}
                     </span>
                     {o.feeAmount != null && o.feeAmount > 0 && (
-                      <span className="text-[8px] font-mono text-orange-400/30 shrink-0">
+                      <span className="text-[8px] font-mono text-primary/30 shrink-0">
                         +${o.feeAmount.toFixed(2)}
                       </span>
                     )}
                   </div>
                 )) : (
-                  <div className="flex-1 flex items-center justify-center text-[9px] text-white/10">None yet</div>
+                  <div className="flex-1 flex items-center justify-center text-[9px] text-foreground/10">None yet</div>
                 )}
               </div>
             </div>
@@ -409,21 +431,21 @@ function OrderCard({ order, tickCount }: { order: LiveOrder; tickCount: number }
   const progress = statusProgress[order.status] ?? 0;
 
   return (
-    <div className={`bg-white/[0.015] border rounded-lg px-4 py-3 transition-all ${
+    <div className={`bg-card border rounded-lg px-4 py-3 transition-all ${
       order.status === "disputed"
-        ? "border-red-500/20 bg-red-500/[0.02]"
+        ? "border-[var(--color-error)]/20 bg-[var(--color-error)]/[0.02]"
         : isUrgent
-        ? "border-red-500/15 bg-red-500/[0.01]"
+        ? "border-[var(--color-error)]/15 bg-[var(--color-error)]/[0.01]"
         : isWarning
-        ? "border-orange-500/15 bg-orange-500/[0.01]"
-        : "border-white/[0.04] hover:border-white/[0.06]"
+        ? "border-primary/15 bg-primary/[0.01]"
+        : "border-section-divider hover:border-border"
     }`}>
       <div className="flex items-center gap-4">
         {/* Type */}
         <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-black shrink-0 ${
           order.type === "buy"
-            ? "bg-orange-500/10 border border-orange-500/20 text-orange-400"
-            : "bg-white/[0.04] border border-white/[0.06] text-white/40"
+            ? "bg-primary/10 border border-primary/20 text-primary"
+            : "bg-card border border-border text-foreground/40"
         }`}>
           {order.type === "buy" ? "BUY" : "SELL"}
         </div>
@@ -431,51 +453,51 @@ function OrderCard({ order, tickCount }: { order: LiveOrder; tickCount: number }
         {/* Order info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-mono font-bold text-white/60">{order.orderNumber}</span>
+            <span className="text-xs font-mono font-bold text-foreground/60">{order.orderNumber}</span>
             <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold border ${statusConfig.bg} ${statusConfig.color}`}>
               <span className={`inline-block w-1.5 h-1.5 rounded-full ${statusConfig.dot} mr-1`} />
               {statusConfig.label}
             </span>
             {order.spreadPreference === "fastest" && (
-              <span className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-mono text-orange-400/40">
+              <span className="flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] font-mono text-primary/40">
                 <Zap className="w-2.5 h-2.5" /> FAST
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1.5 text-[10px] text-white/25 font-mono">
+          <div className="flex items-center gap-1.5 text-[10px] text-foreground/25 font-mono">
             <span className="truncate max-w-[100px]">{order.buyerMerchant || order.user}</span>
-            <ArrowRight className="w-3 h-3 text-white/10 shrink-0" />
+            <ArrowRight className="w-3 h-3 text-foreground/10 shrink-0" />
             <span className="truncate max-w-[100px]">{order.merchant}</span>
-            <span className="text-white/10">·</span>
-            <span className="text-white/15">{Math.floor(elapsed / 60)}m {elapsed % 60}s elapsed</span>
+            <span className="text-foreground/10">·</span>
+            <span className="text-foreground/15">{Math.floor(elapsed / 60)}m {elapsed % 60}s elapsed</span>
           </div>
         </div>
 
         {/* Amount */}
         <div className="text-right shrink-0">
-          <p className="text-lg font-black font-mono tabular-nums text-white/80">
+          <p className="text-lg font-black font-mono tabular-nums text-foreground/80">
             ${order.amount.toLocaleString()}
           </p>
-          <p className="text-[10px] font-mono text-white/20 tabular-nums">
+          <p className="text-[10px] font-mono text-foreground/20 tabular-nums">
             {order.fiatAmount?.toLocaleString()} AED
           </p>
         </div>
 
         {/* Fee */}
         {order.feeAmount != null && order.feeAmount > 0 && (
-          <div className="text-right shrink-0 pl-2 border-l border-white/[0.04]">
-            <p className="text-[10px] font-mono text-orange-400/50">FEE</p>
-            <p className="text-xs font-bold font-mono tabular-nums text-orange-400/70">
+          <div className="text-right shrink-0 pl-2 border-l border-section-divider">
+            <p className="text-[10px] font-mono text-primary/50">FEE</p>
+            <p className="text-xs font-bold font-mono tabular-nums text-primary/70">
               ${order.feeAmount.toFixed(2)}
             </p>
-            <p className="text-[9px] font-mono text-white/15">{order.feePercentage}%</p>
+            <p className="text-[9px] font-mono text-foreground/15">{order.feePercentage}%</p>
           </div>
         )}
 
         {/* Timer */}
         {expiresIn > 0 && (
           <div className={`shrink-0 text-right pl-3 ${
-            isUrgent ? "text-red-400" : isWarning ? "text-orange-400/70" : "text-white/25"
+            isUrgent ? "text-[var(--color-error)]" : isWarning ? "text-primary/70" : "text-foreground/25"
           }`}>
             <p className="text-xl font-black font-mono tabular-nums">
               {Math.floor(expiresIn / 60)}:{String(expiresIn % 60).padStart(2, "0")}
@@ -486,12 +508,12 @@ function OrderCard({ order, tickCount }: { order: LiveOrder; tickCount: number }
       </div>
 
       {/* Progress bar */}
-      <div className="mt-2.5 h-[2px] bg-white/[0.04] rounded-full overflow-hidden">
+      <div className="mt-2.5 h-[2px] bg-card rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-1000 ${
-            order.status === "disputed" ? "bg-red-400/40" :
-            order.status === "completed" ? "bg-emerald-400/30" :
-            "bg-orange-400/30"
+            order.status === "disputed" ? "bg-[var(--color-error)]/40" :
+            order.status === "completed" ? "bg-[var(--color-success)]/30" :
+            "bg-primary/30"
           }`}
           style={{ width: `${progress}%` }}
         />

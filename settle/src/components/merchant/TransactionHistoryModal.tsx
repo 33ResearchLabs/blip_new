@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ArrowUpRight, ArrowDownRight, Loader2, RefreshCw, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import type { Order } from '@/types/merchant';
 
 interface Transaction {
   id: string;
@@ -27,17 +28,115 @@ interface TransactionHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   merchantId: string;
+  orders?: Order[];
+  effectiveBalance?: number | null;
+}
+
+/**
+ * Derive transaction-like entries from completed/cancelled orders.
+ * This works even when merchant_transactions table is empty (mock mode).
+ */
+function deriveTransactionsFromOrders(orders: Order[], merchantId: string): Transaction[] {
+  const txs: Transaction[] = [];
+
+  for (const order of orders) {
+    if (order.status !== 'completed' && order.status !== 'cancelled') continue;
+
+    const isCompleted = order.status === 'completed';
+    const isSeller = order.myRole === 'seller' || order.orderMerchantId === merchantId;
+    const isBuyer = order.myRole === 'buyer' || order.buyerMerchantId === merchantId;
+
+    const completedAt = order.dbOrder?.completed_at || (order.dbOrder as any)?.updated_at || order.timestamp?.toISOString();
+    const cancelledAt = (order.dbOrder as any)?.cancelled_at || (order.dbOrder as any)?.updated_at || order.timestamp?.toISOString();
+
+    if (isCompleted) {
+      if (isSeller) {
+        // Seller sent USDC → money out
+        txs.push({
+          id: `${order.id}-out`,
+          type: 'escrow_release',
+          amount: -order.amount,
+          balance_before: 0,
+          balance_after: 0,
+          description: `Sold ${order.amount} USDC to ${order.user} for ${Math.round(order.total)} AED`,
+          created_at: typeof completedAt === 'string' ? completedAt : new Date(completedAt || Date.now()).toISOString(),
+          order_id: order.id,
+        });
+      }
+      if (isBuyer) {
+        // Buyer received USDC → money in
+        txs.push({
+          id: `${order.id}-in`,
+          type: 'order_completed',
+          amount: order.amount,
+          balance_before: 0,
+          balance_after: 0,
+          description: `Bought ${order.amount} USDC from ${order.user} for ${Math.round(order.total)} AED`,
+          created_at: typeof completedAt === 'string' ? completedAt : new Date(completedAt || Date.now()).toISOString(),
+          order_id: order.id,
+        });
+      }
+    } else if (order.status === 'cancelled' && order.escrowTxHash) {
+      // Cancelled with escrow → refund
+      if (isSeller) {
+        txs.push({
+          id: `${order.id}-refund`,
+          type: 'escrow_refund',
+          amount: order.amount,
+          balance_before: 0,
+          balance_after: 0,
+          description: `Escrow refunded ${order.amount} USDC (order cancelled)`,
+          created_at: typeof cancelledAt === 'string' ? cancelledAt : new Date(cancelledAt || Date.now()).toISOString(),
+          order_id: order.id,
+        });
+      }
+    }
+  }
+
+  // Sort by date descending
+  txs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  return txs;
 }
 
 export function TransactionHistoryModal({
   isOpen,
   onClose,
   merchantId,
+  orders = [],
+  effectiveBalance,
 }: TransactionHistoryModalProps) {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [summary, setSummary] = useState<BalanceSummary | null>(null);
+  const [apiTransactions, setApiTransactions] = useState<Transaction[]>([]);
+  const [apiSummary, setApiSummary] = useState<BalanceSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Derive transactions from orders (always available, even without DB entries)
+  const orderDerivedTxs = useMemo(
+    () => deriveTransactionsFromOrders(orders, merchantId),
+    [orders, merchantId]
+  );
+
+  // Merge: prefer API transactions if available, otherwise use order-derived ones
+  const transactions = apiTransactions.length > 0 ? apiTransactions : orderDerivedTxs;
+
+  // Build summary from whatever source we have
+  const summary: BalanceSummary | null = useMemo(() => {
+    if (apiSummary && apiSummary.total_transactions > 0) return apiSummary;
+
+    // Derive from order-based transactions
+    const txs = transactions;
+    if (txs.length === 0 && effectiveBalance == null) return null;
+
+    const totalCredits = txs.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const totalDebits = txs.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
+
+    return {
+      current_balance: effectiveBalance ?? 0,
+      total_credits: totalCredits,
+      total_debits: totalDebits,
+      total_transactions: txs.length,
+    };
+  }, [apiSummary, transactions, effectiveBalance]);
 
   const fetchTransactions = async () => {
     if (!merchantId) return;
@@ -53,7 +152,7 @@ export function TransactionHistoryModal({
       if (summaryRes.ok) {
         const summaryData = await summaryRes.json();
         if (summaryData.success) {
-          setSummary(summaryData.data);
+          setApiSummary(summaryData.data);
         }
       }
 
@@ -64,14 +163,15 @@ export function TransactionHistoryModal({
       if (txRes.ok) {
         const txData = await txRes.json();
         if (txData.success) {
-          setTransactions(txData.data);
+          setApiTransactions(txData.data);
         }
-      } else {
-        throw new Error('Failed to fetch transactions');
       }
     } catch (err) {
       console.error('Fetch transactions error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load transactions');
+      // Don't show error if we have order-derived data
+      if (orderDerivedTxs.length === 0) {
+        setError(err instanceof Error ? err.message : 'Failed to load transactions');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -107,7 +207,15 @@ export function TransactionHistoryModal({
   };
 
   const getTypeLabel = (type: string) => {
-    return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    const labels: Record<string, string> = {
+      escrow_lock: 'Escrow Locked',
+      escrow_release: 'Trade Completed',
+      escrow_refund: 'Escrow Refunded',
+      order_completed: 'Trade Completed',
+      order_cancelled: 'Order Cancelled',
+      fee_deduction: 'Platform Fee',
+    };
+    return labels[type] || type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
   const formatNumber = (num: number) => {
@@ -133,13 +241,13 @@ export function TransactionHistoryModal({
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className="relative w-full max-w-3xl bg-[#0a0a0a] rounded-2xl border border-white/[0.08] shadow-2xl max-h-[90vh] flex flex-col"
+          className="relative w-full max-w-lg bg-card-solid rounded-2xl border border-white/[0.08] shadow-2xl max-h-[90vh] flex flex-col"
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-white/[0.06]">
+          <div className="flex items-center justify-between p-4 border-b border-white/[0.06]">
             <div>
-              <h2 className="text-2xl font-bold text-white">Transaction History</h2>
-              <p className="text-sm text-gray-400 mt-1">Your USDT in and out flow</p>
+              <h2 className="text-base font-bold text-white">Transaction History</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Your USDT in and out flow</p>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -148,111 +256,111 @@ export function TransactionHistoryModal({
                 className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors disabled:opacity-50"
                 title="Refresh"
               >
-                <RefreshCw className={`w-4 h-4 text-gray-400 ${isLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 text-gray-400 ${isLoading ? 'animate-spin' : ''}`} />
               </button>
               <button
                 onClick={onClose}
                 className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
               >
-                <X className="w-5 h-5 text-gray-400" />
+                <X className="w-4 h-4 text-gray-400" />
               </button>
             </div>
           </div>
 
           {/* Summary Cards */}
           {summary && (
-            <div className="grid grid-cols-3 gap-4 p-6 border-b border-white/[0.06]">
-              <div className="bg-gradient-to-br from-green-500/10 to-green-600/5 rounded-xl p-4 border border-green-500/20">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4 text-green-400" />
+            <div className="grid grid-cols-3 gap-2 p-4 border-b border-white/[0.06]">
+              <div className="bg-gradient-to-br from-green-500/10 to-green-600/5 rounded-xl p-3 border border-green-500/20">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <div className="w-6 h-6 rounded-md bg-green-500/10 flex items-center justify-center">
+                    <TrendingUp className="w-3 h-3 text-green-400" />
                   </div>
-                  <p className="text-xs text-green-400/80 font-medium">Total In</p>
+                  <p className="text-[10px] text-green-400/80 font-medium">Total In</p>
                 </div>
-                <p className="text-xl font-bold text-green-400">
+                <p className="text-sm font-bold text-green-400">
                   +{formatNumber(summary.total_credits)}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">USDT</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">USDT</p>
               </div>
 
-              <div className="bg-gradient-to-br from-red-500/10 to-red-600/5 rounded-xl p-4 border border-red-500/20">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
-                    <TrendingDown className="w-4 h-4 text-red-400" />
+              <div className="bg-gradient-to-br from-red-500/10 to-red-600/5 rounded-xl p-3 border border-red-500/20">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <div className="w-6 h-6 rounded-md bg-red-500/10 flex items-center justify-center">
+                    <TrendingDown className="w-3 h-3 text-red-400" />
                   </div>
-                  <p className="text-xs text-red-400/80 font-medium">Total Out</p>
+                  <p className="text-[10px] text-red-400/80 font-medium">Total Out</p>
                 </div>
-                <p className="text-xl font-bold text-red-400">
+                <p className="text-sm font-bold text-red-400">
                   -{formatNumber(summary.total_debits)}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">USDT</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">USDT</p>
               </div>
 
-              <div className="bg-gradient-to-br from-[#26A17B]/10 to-[#26A17B]/5 rounded-xl p-4 border border-[#26A17B]/20">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-[#26A17B]/10 flex items-center justify-center">
-                    <DollarSign className="w-4 h-4 text-[#26A17B]" />
+              <div className="bg-gradient-to-br from-[#26A17B]/10 to-[#26A17B]/5 rounded-xl p-3 border border-[#26A17B]/20">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <div className="w-6 h-6 rounded-md bg-[#26A17B]/10 flex items-center justify-center">
+                    <DollarSign className="w-3 h-3 text-[#26A17B]" />
                   </div>
-                  <p className="text-xs text-[#26A17B]/80 font-medium">Current Balance</p>
+                  <p className="text-[10px] text-[#26A17B]/80 font-medium">Balance</p>
                 </div>
-                <p className="text-xl font-bold text-[#26A17B]">
+                <p className="text-sm font-bold text-[#26A17B]">
                   {formatNumber(summary.current_balance)}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">USDT</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">USDT</p>
               </div>
             </div>
           )}
 
           {/* Transactions List */}
-          <div className="flex-1 overflow-y-auto p-6">
-            {isLoading ? (
+          <div className="flex-1 overflow-y-auto p-4">
+            {isLoading && transactions.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
-                <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-4" />
-                <p className="text-sm text-gray-400">Loading transactions...</p>
+                <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
+                <p className="text-xs text-gray-400">Loading transactions...</p>
               </div>
-            ) : error ? (
+            ) : error && transactions.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
-                <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
-                  <X className="w-8 h-8 text-red-400" />
+                <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-3">
+                  <X className="w-6 h-6 text-red-400" />
                 </div>
-                <p className="text-red-400 mb-4">{error}</p>
+                <p className="text-xs text-red-400 mb-3">{error}</p>
                 <button
                   onClick={fetchTransactions}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
                 >
-                  <RefreshCw className="w-4 h-4" />
-                  <span className="text-sm">Retry</span>
+                  <RefreshCw className="w-3 h-3" />
+                  <span className="text-xs">Retry</span>
                 </button>
               </div>
             ) : transactions.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
-                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                  <DollarSign className="w-8 h-8 text-gray-500" />
+                <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-3">
+                  <DollarSign className="w-6 h-6 text-gray-500" />
                 </div>
-                <p className="text-gray-500 mb-2">No transactions yet</p>
-                <p className="text-xs text-gray-600">Your transaction history will appear here</p>
+                <p className="text-xs text-gray-500 mb-1">No transactions yet</p>
+                <p className="text-[10px] text-gray-600">Complete a trade to see your history</p>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {transactions.map((tx) => (
                   <motion.div
                     key={tx.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex items-start gap-3 p-4 bg-white/[0.02] hover:bg-white/[0.04] rounded-xl border border-white/[0.06] transition-all group"
+                    className="flex items-start gap-2.5 p-3 bg-white/[0.02] hover:bg-white/[0.04] rounded-xl border border-white/[0.06] transition-all group"
                   >
                     {/* Icon */}
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                         tx.amount > 0
                           ? 'bg-green-500/10 group-hover:bg-green-500/20'
                           : 'bg-red-500/10 group-hover:bg-red-500/20'
                       } transition-colors`}
                     >
                       {tx.amount > 0 ? (
-                        <ArrowDownRight className="w-5 h-5 text-green-400" />
+                        <ArrowDownRight className="w-4 h-4 text-green-400" />
                       ) : (
-                        <ArrowUpRight className="w-5 h-5 text-red-400" />
+                        <ArrowUpRight className="w-4 h-4 text-red-400" />
                       )}
                     </div>
 
@@ -260,31 +368,28 @@ export function TransactionHistoryModal({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <p className={`text-sm font-semibold ${getTypeColor(tx.type)}`}>
+                          <p className={`text-xs font-semibold ${getTypeColor(tx.type)}`}>
                             {getTypeLabel(tx.type)}
                           </p>
-                          <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{tx.description}</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">{tx.description}</p>
                         </div>
                         <div className="text-right shrink-0">
                           <p
-                            className={`text-base font-bold ${
+                            className={`text-sm font-bold ${
                               tx.amount > 0 ? 'text-green-400' : 'text-red-400'
                             }`}
                           >
                             {tx.amount > 0 ? '+' : ''}
                             {formatNumber(Math.abs(tx.amount))} USDT
                           </p>
-                          <p className="text-xs text-gray-600 mt-0.5">
-                            Balance: {formatNumber(tx.balance_after)} USDT
-                          </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <p className="text-xs text-gray-600">{formatDate(tx.created_at)}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-[10px] text-gray-600">{formatDate(tx.created_at)}</p>
                         {tx.order_id && (
                           <>
-                            <span className="text-gray-700">•</span>
-                            <p className="text-xs text-gray-600">Order #{tx.order_id.slice(0, 8)}</p>
+                            <span className="text-gray-700">·</span>
+                            <p className="text-[10px] text-gray-600 font-mono">#{tx.order_id.slice(0, 8)}</p>
                           </>
                         )}
                       </div>
@@ -296,14 +401,14 @@ export function TransactionHistoryModal({
           </div>
 
           {/* Footer */}
-          <div className="p-6 border-t border-white/[0.06]">
+          <div className="p-4 border-t border-white/[0.06]">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-500">
-                {transactions.length > 0 && `Showing ${transactions.length} recent transactions`}
+              <p className="text-[10px] text-gray-500">
+                {transactions.length > 0 && `${transactions.length} transaction${transactions.length !== 1 ? 's' : ''}`}
               </p>
               <button
                 onClick={onClose}
-                className="px-6 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-sm font-medium"
+                className="px-4 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-xs font-medium"
               >
                 Close
               </button>

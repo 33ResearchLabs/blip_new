@@ -10,6 +10,8 @@ import { getOrderById } from '../db/repositories/orders';
 import { getUserById } from '../db/repositories/users';
 import { getMerchantById } from '../db/repositories/merchants';
 import { verifySessionToken } from '../auth/sessionToken';
+import { checkBlacklist } from './blacklist';
+import { hasNoActiveSessions, isSessionValid } from '../auth/sessions';
 
 // Admin auth secret - MUST be configured via environment variable
 const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
@@ -93,6 +95,7 @@ export interface AuthContext {
   complianceId?: string;
   actorType: 'user' | 'merchant' | 'system' | 'compliance';
   actorId: string;
+  sessionId?: string; // Present when token contains session_id (v2 tokens)
 }
 
 // Production mode: token is the ONLY trusted identity source
@@ -120,6 +123,7 @@ export function getAuthContext(request: NextRequest): AuthContext | null {
       const ctx: AuthContext = {
         actorType: tokenPayload.actorType,
         actorId: tokenPayload.actorId,
+        ...(tokenPayload.sessionId && { sessionId: tokenPayload.sessionId }),
       };
       if (tokenPayload.actorType === 'user') ctx.userId = tokenPayload.actorId;
       if (tokenPayload.actorType === 'merchant') ctx.merchantId = tokenPayload.actorId;
@@ -135,7 +139,10 @@ export function getAuthContext(request: NextRequest): AuthContext | null {
       if (headerMerchantId && !ctx.merchantId && tokenPayload.actorType === 'merchant') {
         ctx.merchantId = headerMerchantId;
       }
-      if (headerUserId && !ctx.userId) ctx.userId = headerUserId;
+      // Only accept x-user-id from user tokens (prevent merchant spoofing user identity)
+      if (headerUserId && !ctx.userId && tokenPayload.actorType === 'user') {
+        ctx.userId = headerUserId;
+      }
 
       return ctx;
     }
@@ -150,6 +157,8 @@ export function getAuthContext(request: NextRequest): AuthContext | null {
   }
 
   // ── Development-only: header fallback for testing ──
+  // Only allow header fallback if the actor has at least one active session.
+  // This ensures "revoke all sessions" works even in dev mode.
   console.warn('[AUTH] Dev-mode header fallback used — would be rejected in production', {
     route: request.nextUrl.pathname,
   });
@@ -268,6 +277,57 @@ export async function getVerifiedAuthContext(
   const exists = await actorExistsInDb(auth);
   if (!exists) return null;
 
+  // ── Session validation ──────────────────────────────────────────────
+  // v2 tokens (with sessionId): validate the specific session — enables per-session revocation.
+  // v1/legacy tokens (no sessionId): fallback to "has any active session" check.
+  // Dev-mode header auth: validate via refresh cookie's session.
+  try {
+    if (auth.sessionId) {
+      // v2 token: check this specific session (cached, 30s TTL)
+      const valid = await isSessionValid(auth.sessionId);
+      if (!valid) {
+        console.warn('[AUTH] Rejecting request — session revoked or expired', {
+          sessionId: auth.sessionId,
+          actorId: auth.actorId,
+        });
+        return null;
+      }
+    } else {
+      // v1/legacy token or header-only auth: blunt check — does this actor have ANY active session?
+      const noSessions = await hasNoActiveSessions(auth.actorId, auth.actorType);
+      if (noSessions) {
+        console.warn('[AUTH] Rejecting request — no active sessions for actor', {
+          actorId: auth.actorId,
+          actorType: auth.actorType,
+        });
+        return null;
+      }
+
+      // Dev-mode header-only auth: also verify refresh cookie backs this request
+      const usedTokenForAuth = request.headers.get('authorization')?.startsWith('Bearer ');
+      if (!IS_PRODUCTION && !usedTokenForAuth) {
+        try {
+          const { REFRESH_TOKEN_COOKIE } = await import('../auth/sessionToken');
+          const { getSessionIdFromRefreshCookie } = await import('../auth/sessions');
+          const refreshCookie = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+          if (!refreshCookie) {
+            console.warn('[AUTH] Rejecting header-only auth — no refresh cookie', { actorId: auth.actorId });
+            return null;
+          }
+          const cookieSessionId = await getSessionIdFromRefreshCookie(refreshCookie);
+          if (!cookieSessionId) {
+            console.warn('[AUTH] Rejecting header auth — refresh cookie session invalid', { actorId: auth.actorId });
+            return null;
+          }
+        } catch {
+          // If session check fails, allow the request (don't break dev)
+        }
+      }
+    }
+  } catch {
+    // DB error — don't block requests if sessions table is unavailable
+  }
+
   // Phase 2 migration metrics: track token vs header auth usage
   const usedToken = request.headers.get('authorization')?.startsWith('Bearer ');
   if (usedToken) {
@@ -320,8 +380,11 @@ const legacyAuthLogTimestamps = new Map<string, number>();
 // In-memory counters for auth method adoption tracking
 const authMigrationMetrics = { tokenAuth: 0, headerAuth: 0, sensitiveTokenAuth: 0, sensitiveHeaderAuth: 0 };
 
-// Phase 3 env flag — when true, sensitive routes REQUIRE a valid token
-const AUTH_TOKEN_REQUIRED = process.env.AUTH_TOKEN_REQUIRED === 'true';
+// Phase 3 env flag — sensitive routes REQUIRE a valid token
+// Defaults to true in production; set AUTH_TOKEN_REQUIRED=false to opt out (dev only)
+const AUTH_TOKEN_REQUIRED = process.env.NODE_ENV === 'production'
+  ? process.env.AUTH_TOKEN_REQUIRED !== 'false'
+  : process.env.AUTH_TOKEN_REQUIRED === 'true';
 
 /**
  * One-liner auth gate for routes.
@@ -342,6 +405,11 @@ export async function requireAuth(
 ): Promise<AuthContext | NextResponse> {
   const auth = await getVerifiedAuthContext(request);
   if (!auth) return unauthorizedResponse('Authentication required');
+
+  // Blacklist check — blocks hard-banned users/devices/IPs
+  const blacklistResult = await checkBlacklist(request, auth);
+  if (blacklistResult) return blacklistResult;
+
   return auth;
 }
 
@@ -363,6 +431,10 @@ export async function requireTokenAuth(
 ): Promise<AuthContext | NextResponse> {
   const auth = await getVerifiedAuthContext(request);
   if (!auth) return unauthorizedResponse('Authentication required');
+
+  // Blacklist check — blocks hard-banned users/devices/IPs
+  const blacklistResult = await checkBlacklist(request, auth);
+  if (blacklistResult) return blacklistResult;
 
   const hasValidToken = !!request.headers.get('authorization')?.startsWith('Bearer ');
 
@@ -420,7 +492,7 @@ export async function verifyMerchant(merchantId: string): Promise<boolean> {
 /**
  * Verify that a compliance team member exists and is active
  */
-async function verifyComplianceMember(complianceId: string): Promise<boolean> {
+export async function verifyComplianceMember(complianceId: string): Promise<boolean> {
   try {
     const { queryOne: qOne } = await import('../db');
     const member = await qOne<{ id: string; is_active: boolean }>(
@@ -472,7 +544,40 @@ export async function canMerchantAccessOrder(
     if (order.status === 'escrowed' && !order.buyer_merchant_id) {
       return true;
     }
+    // Merchant with compliance access can access disputed orders
+    if (order.status === 'disputed') {
+      const merchant = await getMerchantById(merchantId);
+      if (merchant?.has_compliance_access) {
+        return true;
+      }
+    }
     return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a verified compliance member can access a specific order.
+ * Compliance can only access disputed orders.
+ * Accepts both compliance_team IDs and merchant IDs (with has_compliance_access).
+ */
+export async function canComplianceAccessOrder(
+  complianceId: string,
+  orderId: string
+): Promise<boolean> {
+  try {
+    // Check compliance_team table first
+    let isValid = await verifyComplianceMember(complianceId);
+    // Fallback: check if it's a merchant with compliance access
+    if (!isValid) {
+      const merchant = await getMerchantById(complianceId);
+      isValid = merchant?.has_compliance_access === true;
+    }
+    if (!isValid) return false;
+    const order = await getOrderById(orderId);
+    if (!order) return false;
+    return order.status === 'disputed';
   } catch {
     return false;
   }
@@ -498,6 +603,10 @@ export async function canAccessOrder(
         if (order.merchant_id === auth.merchantId || order.buyer_merchant_id === auth.merchantId) {
           return true;
         }
+        // Broadcast model: merchant_id is NULL, any merchant can access
+        if (!order.merchant_id && ['pending', 'accepted', 'escrowed'].includes(order.status)) {
+          return true;
+        }
       }
       return false;
     }
@@ -507,9 +616,20 @@ export async function canAccessOrder(
       if (order.merchant_id === auth.actorId || order.buyer_merchant_id === auth.actorId) {
         return true;
       }
-      // Broadcast model: allow viewing unclaimed escrowed orders
+      // Broadcast model: allow any merchant to view unclaimed orders
+      // (merchant_id is NULL in manual claim model, or escrowed without buyer)
+      if (!order.merchant_id && ['pending', 'accepted', 'escrowed'].includes(order.status)) {
+        return true;
+      }
       if (order.status === 'escrowed' && !order.buyer_merchant_id) {
         return true;
+      }
+      // Merchant with compliance access can access disputed orders
+      if (order.status === 'disputed') {
+        const merchant = await getMerchantById(auth.actorId);
+        if (merchant?.has_compliance_access) {
+          return true;
+        }
       }
       return false;
     }

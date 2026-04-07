@@ -114,6 +114,94 @@ export async function getEntityStats(
 }
 
 /**
+ * Fetch volume intelligence for an entity (anti-farming + fair scoring).
+ * Computes weighted volume (size weight * time decay), unique counterparties,
+ * concentration risk, and repeated-pair farming detection.
+ */
+async function getVolumeIntelligence(
+  entityId: string,
+  entityType: EntityType
+): Promise<{ weighted_volume: number; unique_counterparties: number; top_counterparty_pct: number; repeat_pair_count: number }> {
+  const idCol = entityType === 'user' ? 'user_id' : 'merchant_id';
+  const counterpartyCol = entityType === 'user' ? 'merchant_id' : 'user_id';
+
+  try {
+    // 1. Weighted volume: size_weight * time_decay * fiat_amount
+    //    size_weight: <$10=0.2, <$100=0.5, >=100=1.0
+    //    time_decay:  7d=1.0, 30d=0.5, 90d=0.2, older=0.1
+    const wvResult = await queryOne<{ wv: string }>(
+      `SELECT COALESCE(SUM(
+        fiat_amount
+        * CASE
+            WHEN fiat_amount < 10 THEN 0.2
+            WHEN fiat_amount < 100 THEN 0.5
+            ELSE 1.0
+          END
+        * CASE
+            WHEN completed_at > NOW() - INTERVAL '7 days' THEN 1.0
+            WHEN completed_at > NOW() - INTERVAL '30 days' THEN 0.5
+            WHEN completed_at > NOW() - INTERVAL '90 days' THEN 0.2
+            ELSE 0.1
+          END
+      ), 0)::text AS wv
+      FROM orders
+      WHERE ${idCol} = $1 AND status = 'completed'`,
+      [entityId]
+    );
+
+    // 2. Unique counterparties
+    const cpResult = await queryOne<{ cnt: string }>(
+      `SELECT COUNT(DISTINCT ${counterpartyCol})::text AS cnt
+       FROM orders
+       WHERE ${idCol} = $1 AND status = 'completed' AND ${counterpartyCol} IS NOT NULL`,
+      [entityId]
+    );
+
+    // 3. Top counterparty concentration (% of total volume with #1 counterparty)
+    const concResult = await queryOne<{ pct: string }>(
+      `WITH totals AS (
+        SELECT COALESCE(SUM(fiat_amount), 0) AS total_vol
+        FROM orders WHERE ${idCol} = $1 AND status = 'completed'
+      ),
+      top_cp AS (
+        SELECT COALESCE(SUM(fiat_amount), 0) AS cp_vol
+        FROM orders WHERE ${idCol} = $1 AND status = 'completed' AND ${counterpartyCol} IS NOT NULL
+        GROUP BY ${counterpartyCol}
+        ORDER BY SUM(fiat_amount) DESC
+        LIMIT 1
+      )
+      SELECT CASE
+        WHEN (SELECT total_vol FROM totals) = 0 THEN 0
+        ELSE ROUND((SELECT cp_vol FROM top_cp) * 100.0 / (SELECT total_vol FROM totals))
+      END::text AS pct`,
+      [entityId]
+    );
+
+    // 4. Repeat pair farming: count counterparty pairs with >5 completed trades
+    const farmResult = await queryOne<{ cnt: string }>(
+      `SELECT COUNT(*)::text AS cnt FROM (
+        SELECT ${counterpartyCol}, COUNT(*) AS trade_count
+        FROM orders
+        WHERE ${idCol} = $1 AND status = 'completed' AND ${counterpartyCol} IS NOT NULL
+        GROUP BY ${counterpartyCol}
+        HAVING COUNT(*) > 5
+      ) farming_pairs`,
+      [entityId]
+    );
+
+    return {
+      weighted_volume: parseFloat(wvResult?.wv || '0'),
+      unique_counterparties: parseInt(cpResult?.cnt || '0'),
+      top_counterparty_pct: parseInt(concResult?.pct || '0'),
+      repeat_pair_count: parseInt(farmResult?.cnt || '0'),
+    };
+  } catch (err) {
+    console.error('[REPUTATION] Volume intelligence query failed:', err);
+    return { weighted_volume: 0, unique_counterparties: 0, top_counterparty_pct: 0, repeat_pair_count: 0 };
+  }
+}
+
+/**
  * Fetch user stats
  */
 async function getUserStats(userId: string): Promise<EntityStats | null> {
@@ -229,6 +317,9 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
     [userId]
   );
 
+  // Volume intelligence (weighted volume, counterparties, farming detection)
+  const volIntel = await getVolumeIntelligence(userId, 'user');
+
   return {
     entity_id: userId,
     entity_type: 'user',
@@ -256,6 +347,7 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
     longest_inactive_streak: activityStats?.longest_inactive || 0,
     volume_percentile: volumePercentile?.percentile || 0,
     user_number: userNumber?.row_num,
+    ...volIntel,
   };
 }
 
@@ -396,6 +488,7 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
     orders_last_30_days: orderStats?.orders_last_30_days || 0,
     longest_inactive_streak: activityStats?.longest_inactive || 0,
     volume_percentile: volumePercentile?.percentile || 0,
+    ...await getVolumeIntelligence(merchantId, 'merchant'),
   };
 }
 
@@ -432,6 +525,7 @@ export async function getReputationScore(
   return {
     ...score,
     badges: score.badges as ReputationBadge[],
+    flags: [], // Flags are computed live by calculateReputationScore, not persisted
   };
 }
 

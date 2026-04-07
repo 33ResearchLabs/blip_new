@@ -130,7 +130,7 @@ export default function MempoolPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#060606] overflow-hidden">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* Navbar — matches main dashboard */}
       <header className="sticky top-0 z-50 bg-black/60 backdrop-blur-2xl border-b border-white/[0.05]">
         <div className="h-[50px] flex items-center px-4 gap-3">

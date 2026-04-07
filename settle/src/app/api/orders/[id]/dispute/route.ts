@@ -27,8 +27,9 @@ export async function POST(
     if (auth instanceof NextResponse) return auth;
 
     // Resolve merchant identity from header (must happen BEFORE canAccessOrder)
+    // Only trust header if the authenticated token is a merchant token
     const dispHeaderMerchantId = request.headers.get('x-merchant-id');
-    if (dispHeaderMerchantId && !auth.merchantId) {
+    if (dispHeaderMerchantId && auth.actorType === 'merchant' && !auth.merchantId) {
       auth.merchantId = dispHeaderMerchantId;
     }
 
@@ -63,8 +64,9 @@ export async function POST(
       ? (user_id || '')
       : (merchant_id || '');
 
-    // Security: enforce actor matches authenticated identity (with merchant header fallback)
-    if (actorId !== auth.actorId && !(initiated_by === 'merchant' && dispHeaderMerchantId && actorId === dispHeaderMerchantId)) {
+    // Security: enforce actor matches authenticated identity
+    // Only allow merchant header fallback if authenticated as merchant
+    if (actorId !== auth.actorId && !(initiated_by === 'merchant' && auth.actorType === 'merchant' && dispHeaderMerchantId && actorId === dispHeaderMerchantId)) {
       return forbiddenResponse('actor_id does not match authenticated identity');
     }
 

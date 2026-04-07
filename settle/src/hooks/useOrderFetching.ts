@@ -307,11 +307,16 @@ export function useOrderFetching({
   const refetchSingleOrder = useCallback(async (orderId: string) => {
     if (!merchantId) return;
     try {
-      const res = await fetchWithAuth(`/api/orders/${orderId}?merchant_id=${merchantId}`, {
-        cache: 'no-store'
+      const res = await fetchWithAuth(`/api/orders/${orderId}?merchant_id=${merchantId}&_fresh=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
       });
       if (!res.ok) {
-        console.error('[Merchant] Failed to refetch order:', res.status);
+        // 403 = not your order (broadcast event for another merchant's order) — silently ignore
+        // 404 = order was expired/deleted between broadcast and refetch — silently ignore
+        if (res.status !== 403 && res.status !== 404) {
+          console.error('[Merchant] Failed to refetch order:', res.status);
+        }
         return;
       }
       const data = await res.json();
@@ -323,7 +328,7 @@ export function useOrderFetching({
         }
         setOrders((prev: Order[]) => prev.map((o: Order) => {
           if (o.id !== orderId) return o;
-          // Don't overwrite a completed/cancelled optimistic status with a stale refetch
+          // Don't overwrite a completed/cancelled status with a non-terminal refetch
           if ((o.status === 'completed' || o.status === 'cancelled') && freshOrder.status !== 'completed' && freshOrder.status !== 'cancelled') {
             return o;
           }
@@ -367,8 +372,10 @@ export function useOrderFetching({
       refetchSingleOrder(orderId);
       resolve();
     }, 800));
+    // Full list refetch ensures enrichOrderResponse recomputes primaryAction
+    debouncedFetchOrders();
     refreshBalance();
-  }, [refetchSingleOrder, refreshBalance]);
+  }, [refetchSingleOrder, debouncedFetchOrders, refreshBalance]);
 
   const dismissBigOrder = useCallback((id: string) => {
     setBigOrders(prev => prev.filter(o => o.id !== id));
@@ -427,7 +434,7 @@ export function useOrderFetching({
           if (isMockMode) fetchInAppBalance();
         }
       };
-      const interval = setInterval(tick, 5000);
+      const interval = setInterval(tick, 15000); // was 5s — reduced Redis load by 66%
       return () => clearInterval(interval);
     }
   // isMempoolVisible removed — uses ref to avoid restarting polling interval on toggle

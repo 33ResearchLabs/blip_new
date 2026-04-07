@@ -42,15 +42,15 @@ const TOAST_ICONS: Record<ToastType, typeof Bell> = {
 };
 
 const TOAST_COLORS: Record<ToastType, { bg: string; border: string; icon: string; accent: string }> = {
-  order: { bg: 'bg-[#1a1a1a]/95', border: 'border-orange-500/30', icon: 'text-orange-400', accent: 'bg-orange-500/10' },
-  escrow: { bg: 'bg-[#1a1a1a]/95', border: 'border-blue-500/30', icon: 'text-blue-400', accent: 'bg-blue-500/10' },
-  payment: { bg: 'bg-[#1a1a1a]/95', border: 'border-emerald-500/30', icon: 'text-emerald-400', accent: 'bg-emerald-500/10' },
-  dispute: { bg: 'bg-[#1a1a1a]/95', border: 'border-red-500/30', icon: 'text-red-400', accent: 'bg-red-500/10' },
-  complete: { bg: 'bg-[#1a1a1a]/95', border: 'border-emerald-500/30', icon: 'text-emerald-400', accent: 'bg-emerald-500/10' },
-  system: { bg: 'bg-[#1a1a1a]/95', border: 'border-white/10', icon: 'text-gray-400', accent: 'bg-white/5' },
-  message: { bg: 'bg-[#1a1a1a]/95', border: 'border-purple-500/30', icon: 'text-purple-400', accent: 'bg-purple-500/10' },
-  warning: { bg: 'bg-[#1a1a1a]/95', border: 'border-amber-500/30', icon: 'text-amber-400', accent: 'bg-amber-500/10' },
-  action: { bg: 'bg-[#1a1a1a]/95', border: 'border-orange-500/40', icon: 'text-orange-400', accent: 'bg-orange-500/15' },
+  order: { bg: 'bg-card-solid/95', border: 'border-primary/30', icon: 'text-primary', accent: 'bg-primary/10' },
+  escrow: { bg: 'bg-card-solid/95', border: 'border-blue-500/30', icon: 'text-blue-400', accent: 'bg-blue-500/10' },
+  payment: { bg: 'bg-card-solid/95', border: 'border-emerald-500/30', icon: 'text-emerald-400', accent: 'bg-emerald-500/10' },
+  dispute: { bg: 'bg-card-solid/95', border: 'border-red-500/30', icon: 'text-red-400', accent: 'bg-red-500/10' },
+  complete: { bg: 'bg-card-solid/95', border: 'border-emerald-500/30', icon: 'text-emerald-400', accent: 'bg-emerald-500/10' },
+  system: { bg: 'bg-card-solid/95', border: 'border-foreground/10', icon: 'text-foreground/50', accent: 'bg-foreground/5' },
+  message: { bg: 'bg-card-solid/95', border: 'border-purple-500/30', icon: 'text-purple-400', accent: 'bg-purple-500/10' },
+  warning: { bg: 'bg-card-solid/95', border: 'border-amber-500/30', icon: 'text-amber-400', accent: 'bg-amber-500/10' },
+  action: { bg: 'bg-card-solid/95', border: 'border-primary/40', icon: 'text-primary', accent: 'bg-primary/15' },
 };
 
 const DEFAULT_DURATION = 5000;
@@ -152,14 +152,14 @@ export function NotificationToastContainer({ position = 'top-right' }: Notificat
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-[11px] font-medium text-white truncate">{toast.title}</p>
-                    <span className="text-[9px] text-gray-500 flex-shrink-0">now</span>
+                    <p className="text-[11px] font-medium text-foreground truncate">{toast.title}</p>
+                    <span className="text-[9px] text-foreground/30 flex-shrink-0">now</span>
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-0.5 leading-relaxed line-clamp-2">{toast.message}</p>
+                  <p className="text-[10px] text-foreground/50 mt-0.5 leading-relaxed line-clamp-2">{toast.message}</p>
                   {toast.actionLabel && toast.onAction && (
                     <button
                       onClick={() => { toast.onAction?.(); removeToast(toast.id); }}
-                      className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-orange-400 hover:text-orange-300 transition-colors"
+                      className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary hover:text-primary/80 transition-colors"
                     >
                       {toast.actionLabel}
                       <ArrowRight className="w-3 h-3" />
@@ -168,9 +168,9 @@ export function NotificationToastContainer({ position = 'top-right' }: Notificat
                 </div>
                 <button
                   onClick={() => removeToast(toast.id)}
-                  className="flex-shrink-0 p-0.5 rounded hover:bg-white/10 transition-colors"
+                  className="flex-shrink-0 p-0.5 rounded hover:bg-foreground/10 transition-colors"
                 >
-                  <X className="w-3 h-3 text-gray-500" />
+                  <X className="w-3 h-3 text-foreground/30" />
                 </button>
               </div>
               <motion.div
@@ -259,10 +259,10 @@ export function ActionPulse({ size = 'sm', label }: { size?: 'sm' | 'md'; label?
   return (
     <div className="flex items-center gap-1">
       <div className="relative">
-        <div className={`${sizeClass} rounded-full bg-orange-400`} />
-        <div className={`absolute inset-0 ${sizeClass} rounded-full bg-orange-400 animate-ping opacity-50`} />
+        <div className={`${sizeClass} rounded-full bg-primary`} />
+        <div className={`absolute inset-0 ${sizeClass} rounded-full bg-primary animate-ping opacity-50`} />
       </div>
-      {label && <span className="text-[9px] font-medium text-orange-400/80">{label}</span>}
+      {label && <span className="text-[9px] font-medium text-primary/80">{label}</span>}
     </div>
   );
 }

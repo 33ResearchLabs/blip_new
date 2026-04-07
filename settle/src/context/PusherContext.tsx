@@ -223,7 +223,13 @@ export function PusherProvider({ children }: PusherProviderProps) {
       const handleError = (error: unknown) => {
         if (!isMountedRef.current) return;
 
-        console.error('[Pusher] Error:', error);
+        // Suppress empty error objects (transient WebSocket connection failures)
+        const hasInfo = error && typeof error === 'object' && Object.keys(error as object).length > 0;
+        if (hasInfo) {
+          console.error('[Pusher] Error:', error);
+        } else {
+          console.warn('[Pusher] Connection error (transient — will auto-reconnect)');
+        }
         const e = error as { error?: { data?: { code?: number } } };
 
         if (e.error?.data?.code === 4004) {

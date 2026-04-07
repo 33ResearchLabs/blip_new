@@ -111,21 +111,21 @@ const formatTimeAgo = (dateStr: string) => {
 const getStatusStyle = (status: string) => {
   switch (status) {
     case "completed":
-      return "bg-emerald-500/10 border-emerald-500/20 text-emerald-400";
+      return "bg-[var(--color-success)]/10 border-[var(--color-success)]/20 text-[var(--color-success)]";
     case "pending":
-      return "bg-white/[0.04] border-white/[0.06] text-white/40";
+      return "bg-card border-border text-foreground/40";
     case "accepted":
     case "escrowed":
     case "payment_sent":
     case "payment_confirmed":
-      return "bg-orange-500/10 border-orange-500/20 text-orange-400";
+      return "bg-primary/10 border-primary/20 text-primary";
     case "cancelled":
     case "expired":
-      return "bg-white/[0.03] border-white/[0.04] text-white/20";
+      return "bg-card border-section-divider text-foreground/20";
     case "disputed":
-      return "bg-red-500/10 border-red-500/20 text-red-400";
+      return "bg-[var(--color-error)]/10 border-[var(--color-error)]/20 text-[var(--color-error)]";
     default:
-      return "bg-white/[0.04] border-white/[0.06] text-white/40";
+      return "bg-card border-border text-foreground/40";
   }
 };
 
@@ -184,7 +184,7 @@ const CircularGauge = ({ value, size = 56 }: { value: number; size?: number }) =
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-xs font-black font-mono tabular-nums text-white/80">
+        <span className="text-xs font-black font-mono tabular-nums text-foreground/80">
           {value.toFixed(0)}%
         </span>
       </div>
@@ -382,10 +382,10 @@ export default function AdminConsolePage() {
 
   if (isCheckingSession) {
     return (
-      <div className="min-h-screen bg-[#060606] flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin" />
-          <span className="text-[10px] font-mono text-white/20 uppercase tracking-widest">Authenticating</span>
+          <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+          <span className="text-[10px] font-mono text-foreground/20 uppercase tracking-widest">Authenticating</span>
         </div>
       </div>
     );
@@ -397,62 +397,62 @@ export default function AdminConsolePage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#060606] text-white flex items-center justify-center p-4 relative overflow-hidden">
-        <div className="absolute top-1/4 left-1/3 w-[500px] h-[500px] bg-orange-500/[0.03] rounded-full blur-[128px] pointer-events-none" />
-        <div className="absolute bottom-1/4 right-1/3 w-[400px] h-[400px] bg-orange-600/[0.02] rounded-full blur-[128px] pointer-events-none" />
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4 relative overflow-hidden">
+        <div className="absolute top-1/4 left-1/3 w-[500px] h-[500px] bg-primary/[0.03] rounded-full blur-[128px] pointer-events-none" />
+        <div className="absolute bottom-1/4 right-1/3 w-[400px] h-[400px] bg-primary/[0.02] rounded-full blur-[128px] pointer-events-none" />
 
         <div className="relative w-full max-w-sm">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500/20 to-orange-600/5 border border-orange-500/20 flex items-center justify-center mx-auto mb-5 shadow-lg shadow-orange-500/10 animate-float">
-              <Shield className="w-8 h-8 text-orange-400" />
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center mx-auto mb-5 shadow-lg shadow-primary/10 animate-float">
+              <Shield className="w-8 h-8 text-primary" />
             </div>
             <div className="flex items-center justify-center gap-2 mb-1.5">
-              <Zap className="w-5 h-5 text-white fill-white" />
+              <Zap className="w-5 h-5 text-foreground fill-foreground" />
               <span className="text-[17px]">
-                <span className="font-bold text-white">Blip</span>{" "}
-                <span className="italic text-white/90">money</span>
+                <span className="font-bold text-foreground">Blip</span>{" "}
+                <span className="italic text-foreground/90">money</span>
               </span>
             </div>
-            <p className="text-[11px] text-white/25 font-mono uppercase tracking-[0.2em]">Admin Console</p>
+            <p className="text-[11px] text-foreground/25 font-mono uppercase tracking-[0.2em]">Admin Console</p>
           </div>
 
-          <div className="relative p-[1px] rounded-2xl bg-gradient-to-b from-white/[0.1] to-white/[0.02]">
-            <div className="bg-[#0a0a0a] rounded-2xl p-6 space-y-4">
+          <div className="relative p-[1px] rounded-2xl bg-gradient-to-b from-foreground/[0.1] to-foreground/[0.02]">
+            <div className="bg-card-solid rounded-2xl p-6 space-y-4">
               {adminLoginError && (
-                <div className="px-3 py-2.5 bg-red-500/10 border border-red-500/20 rounded-xl text-[11px] text-red-400 flex items-center gap-2">
+                <div className="px-3 py-2.5 bg-[var(--color-error)]/10 border border-[var(--color-error)]/20 rounded-xl text-[11px] text-[var(--color-error)] flex items-center gap-2">
                   <XCircle className="w-3.5 h-3.5 shrink-0" />
                   {adminLoginError}
                 </div>
               )}
               <div>
-                <label className="text-[10px] text-white/30 font-mono uppercase tracking-wider mb-1.5 block">Username</label>
+                <label className="text-[10px] text-foreground/30 font-mono uppercase tracking-wider mb-1.5 block">Username</label>
                 <input
                   type="text"
                   placeholder="admin"
                   value={adminLoginForm.username}
                   onChange={(e) => setAdminLoginForm({ ...adminLoginForm, username: e.target.value })}
-                  className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-white/15 focus:border-orange-500/30 focus:outline-none focus:bg-white/[0.04] transition-all"
+                  className="w-full bg-card border border-border rounded-xl px-4 py-3 text-sm text-foreground font-mono placeholder:text-foreground/15 focus:border-primary/30 focus:outline-none focus:bg-card transition-all"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-white/30 font-mono uppercase tracking-wider mb-1.5 block">Password</label>
+                <label className="text-[10px] text-foreground/30 font-mono uppercase tracking-wider mb-1.5 block">Password</label>
                 <input
                   type="password"
                   placeholder="••••••••"
                   value={adminLoginForm.password}
                   onChange={(e) => setAdminLoginForm({ ...adminLoginForm, password: e.target.value })}
                   onKeyDown={(e) => e.key === "Enter" && handleAdminLogin()}
-                  className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-white/15 focus:border-orange-500/30 focus:outline-none focus:bg-white/[0.04] transition-all"
+                  className="w-full bg-card border border-border rounded-xl px-4 py-3 text-sm text-foreground font-mono placeholder:text-foreground/15 focus:border-primary/30 focus:outline-none focus:bg-card transition-all"
                 />
               </div>
               <button
                 onClick={handleAdminLogin}
                 disabled={isAdminLoggingIn || !adminLoginForm.username || !adminLoginForm.password}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-bold hover:from-orange-400 hover:to-orange-500 transition-all disabled:opacity-20 disabled:cursor-not-allowed shadow-lg shadow-orange-500/20"
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-primary to-primary text-foreground text-sm font-bold hover:from-primary/90 hover:to-primary transition-all disabled:opacity-20 disabled:cursor-not-allowed shadow-lg shadow-primary/20"
               >
                 {isAdminLoggingIn ? (
                   <span className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
                     Signing in...
                   </span>
                 ) : (
@@ -477,88 +477,80 @@ export default function AdminConsolePage() {
     <div className="hidden md:flex md:flex-col h-screen overflow-hidden">
 
       {/* ===== HEADER — matches merchant dashboard ===== */}
-      <header className="sticky top-0 z-50 bg-black/60 backdrop-blur-2xl border-b border-white/[0.05]">
+      <header className="sticky top-0 z-50 bg-background/60 backdrop-blur-2xl border-b border-border">
         <div className="h-[50px] flex items-center px-4 gap-3">
           {/* Logo — same as merchant */}
           <div className="flex items-center shrink-0">
             <Link href="/admin" className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-white fill-white" />
+              <Zap className="w-5 h-5 text-foreground fill-foreground" />
               <span className="text-[17px] leading-none whitespace-nowrap hidden lg:block">
-                <span className="font-bold text-white">Blip</span>{" "}
-                <span className="italic text-white/90">money</span>
+                <span className="font-bold text-foreground">Blip</span>{" "}
+                <span className="italic text-foreground/90">money</span>
               </span>
             </Link>
           </div>
 
           {/* Center: Nav pills */}
           <div className="flex items-center gap-2 mx-auto">
-            <nav className="flex items-center gap-0.5 bg-white/[0.03] rounded-lg p-[3px]">
+            <nav className="flex items-center gap-0.5 bg-card rounded-lg p-[3px]">
               <Link
                 href="/admin"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-white/[0.08] text-white transition-colors"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-accent-subtle text-foreground transition-colors"
               >
                 Console
               </Link>
               <Link
                 href="/admin/live"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-white/40 hover:text-white/70 hover:bg-white/[0.04] transition-colors"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors"
               >
                 Live Feed
               </Link>
               <Link
-                href="/admin/ops-access"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-white/40 hover:text-white/70 hover:bg-white/[0.04] transition-colors"
+                href="/admin/access-control"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors"
               >
-                Ops Access
+                Access Control
               </Link>
-              <Link
-                href="/admin/compliance-access"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-white/40 hover:text-white/70 hover:bg-white/[0.04] transition-colors"
-              >
-                Compliance Access
-              </Link>
-              <Link
-                href="/merchant"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-white/40 hover:text-white/70 hover:bg-white/[0.04] transition-colors"
-              >
-                Merchant
-              </Link>
+              <Link href="/admin/accounts" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors">Accounts</Link>
+              <Link href="/admin/disputes" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors">Disputes</Link>
+              <Link href="/admin/monitor" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors">Monitor</Link>
+              <Link href="/admin/usdt-inr-price" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors">Price</Link>
             </nav>
           </div>
 
           {/* Right: Live badge + actions */}
           <div className="flex items-center gap-2 shrink-0">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.05]">
-              <div className="w-2 h-2 rounded-full bg-emerald-500/60 animate-pulse" />
-              <span className="text-[9px] font-mono font-bold text-white/40 uppercase tracking-wider">Live</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card border border-border">
+              <div className="w-2 h-2 rounded-full bg-[var(--color-success)]/60 animate-pulse" />
+              <span className="text-[9px] font-mono font-bold text-foreground/40 uppercase tracking-wider">Live</span>
               {stats && (
                 <>
-                  <span className="text-white/[0.08]">|</span>
-                  <span className="text-[9px] font-mono text-white/30">{stats.txPerMinute?.toFixed(1)}/min</span>
+                  <span className="text-foreground/[0.08]">|</span>
+                  <span className="text-[9px] font-mono text-foreground/30">{stats.txPerMinute?.toFixed(1)}/min</span>
                 </>
               )}
             </div>
 
-            <span className="text-[9px] font-mono text-white/20 tabular-nums">
+            <span className="text-[9px] font-mono text-foreground/20 tabular-nums">
               {mounted ? lastRefresh.toLocaleTimeString() : "--:--:--"}
             </span>
 
             <button
               onClick={fetchData}
               disabled={isRefreshing}
-              className="p-2 rounded-lg transition-all bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.05]"
+              className="p-2 rounded-lg transition-all bg-card hover:bg-accent-subtle border border-border"
             >
-              <RefreshCw className={`w-[18px] h-[18px] text-white/40 ${isRefreshing ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-[18px] h-[18px] text-foreground/40 ${isRefreshing ? "animate-spin" : ""}`} />
             </button>
 
-            <div className="w-px h-6 bg-white/[0.06] mx-0.5" />
+            <div className="w-px h-6 bg-border mx-0.5" />
 
             <button
               onClick={handleAdminLogout}
-              className="p-2 rounded-lg hover:bg-red-500/10 transition-colors"
+              className="p-2 rounded-lg hover:bg-[var(--color-error)]/10 transition-colors"
               title="Logout"
             >
-              <LogOut className="w-[18px] h-[18px] text-white/40" />
+              <LogOut className="w-[18px] h-[18px] text-foreground/40" />
             </button>
           </div>
         </div>
@@ -569,22 +561,22 @@ export default function AdminConsolePage() {
 
         {/* ===== LEFT PANEL: Platform Stats + Real-time ===== */}
         <Panel defaultSize={24} minSize={16} maxSize={35} id="left">
-          <div className="flex flex-col h-full bg-[#060606] overflow-y-auto p-2 gap-2">
+          <div className="flex flex-col h-full bg-background overflow-y-auto p-2 gap-2">
 
             {/* Widget 1: Platform Stats Hero */}
-            <div className="glass-card rounded-xl overflow-hidden flex-shrink-0 border border-white/[0.06]" style={{ minHeight: "260px" }}>
+            <div className="glass-card rounded-xl overflow-hidden flex-shrink-0 border border-border" style={{ minHeight: "260px" }}>
               {/* Live ticker strip — matches merchant StatusCard */}
-              <div className="flex items-center justify-between px-3 py-2.5 bg-white/[0.02] border-b border-white/[0.04] text-[9px] font-mono relative overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2.5 bg-card border-b border-section-divider text-[9px] font-mono relative overflow-hidden">
                 <div className="absolute inset-0 shimmer pointer-events-none" />
                 <div className="flex items-center gap-4 relative z-10">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-live-dot" />
-                    <span className="text-orange-400/80 font-bold tracking-wide">ADMIN</span>
+                    <div className="w-1.5 h-1.5 bg-primary rounded-full animate-live-dot" />
+                    <span className="text-primary/80 font-bold tracking-wide">ADMIN</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-white/25">TX/H <span className="text-white/70 font-bold">{stats?.txPerHour || 0}</span></span>
-                    <span className="text-white/25">WIN <span className="text-white/70 font-bold">{stats?.successRate?.toFixed(0) || 0}%</span></span>
-                    <span className="text-white/25">MER <span className="text-white/70 font-bold">{stats?.activeMerchants ?? 0}/{stats?.totalMerchants ?? 0}</span></span>
+                    <span className="text-foreground/25">TX/H <span className="text-foreground/70 font-bold">{stats?.txPerHour || 0}</span></span>
+                    <span className="text-foreground/25">WIN <span className="text-foreground/70 font-bold">{stats?.successRate?.toFixed(0) || 0}%</span></span>
+                    <span className="text-foreground/25">MER <span className="text-foreground/70 font-bold">{stats?.activeMerchants ?? 0}/{stats?.totalMerchants ?? 0}</span></span>
                   </div>
                 </div>
               </div>
@@ -592,31 +584,31 @@ export default function AdminConsolePage() {
               {/* Big balance hero — matches merchant style */}
               <div className="flex-1 flex flex-col items-center justify-center px-4 py-4 relative">
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-48 h-24 bg-orange-500/[0.03] rounded-full blur-[60px]" />
+                  <div className="w-48 h-24 bg-primary/[0.03] rounded-full blur-[60px]" />
                 </div>
 
                 <div className="flex items-center gap-1.5 mb-1 relative z-10">
-                  <Wallet className="w-3 h-3 text-white/20" />
-                  <span className="text-[10px] text-white/30 font-mono uppercase tracking-widest">Platform Balance</span>
+                  <Wallet className="w-3 h-3 text-foreground/20" />
+                  <span className="text-[10px] text-foreground/30 font-mono uppercase tracking-widest">Platform Balance</span>
                 </div>
 
                 <div className="relative z-10 text-center">
-                  <div className="text-4xl font-black text-white font-mono tabular-nums tracking-tight leading-none">
+                  <div className="text-4xl font-black text-foreground font-mono tabular-nums tracking-tight leading-none">
                     {stats?.platformBalance?.toFixed(2) || "0.00"}
                   </div>
-                  <div className="text-[11px] text-white/20 font-mono mt-1 tabular-nums">
+                  <div className="text-[11px] text-foreground/20 font-mono mt-1 tabular-nums">
                     {stats?.escrowLocked ? `${stats.escrowLocked.toFixed(0)} locked in escrow` : "0 locked"}
                   </div>
                 </div>
 
                 {/* Revenue badge */}
                 {(stats?.todayRevenue ?? 0) > 0 && (
-                  <div className="mt-2.5 flex items-center gap-1 px-2 py-0.5 bg-orange-500/[0.06] border border-orange-500/15 rounded-full relative z-10">
-                    <TrendingUp className="w-2.5 h-2.5 text-orange-400" />
-                    <span className="text-[10px] font-bold text-orange-400 font-mono tabular-nums">
+                  <div className="mt-2.5 flex items-center gap-1 px-2 py-0.5 bg-primary/[0.06] border border-primary/15 rounded-full relative z-10">
+                    <TrendingUp className="w-2.5 h-2.5 text-primary" />
+                    <span className="text-[10px] font-bold text-primary font-mono tabular-nums">
                       +{stats!.todayRevenue.toFixed(2)} USDT
                     </span>
-                    <span className="text-[9px] text-orange-400/50 font-mono">today</span>
+                    <span className="text-[9px] text-primary/50 font-mono">today</span>
                   </div>
                 )}
               </div>
@@ -626,38 +618,38 @@ export default function AdminConsolePage() {
                 <div className="grid grid-cols-2 gap-1.5">
                   <div className="glass-card rounded-lg p-2">
                     <div className="flex items-center gap-1 mb-1">
-                      <DollarSign className="w-2.5 h-2.5 text-orange-400/40" />
-                      <span className="text-[9px] text-white/25 font-mono">REVENUE</span>
+                      <DollarSign className="w-2.5 h-2.5 text-primary/40" />
+                      <span className="text-[9px] text-foreground/25 font-mono">REVENUE</span>
                     </div>
-                    <span className="text-sm font-bold text-orange-400 font-mono tabular-nums">${stats?.revenue?.toFixed(2) || "0.00"}</span>
+                    <span className="text-sm font-bold text-primary font-mono tabular-nums">${stats?.revenue?.toFixed(2) || "0.00"}</span>
                   </div>
                   <div className="glass-card rounded-lg p-2">
                     <div className="flex items-center gap-1 mb-1">
-                      <Lock className="w-2.5 h-2.5 text-orange-400/40" />
-                      <span className="text-[9px] text-white/25 font-mono">ESCROW</span>
+                      <Lock className="w-2.5 h-2.5 text-primary/40" />
+                      <span className="text-[9px] text-foreground/25 font-mono">ESCROW</span>
                     </div>
-                    <span className={`text-sm font-bold font-mono tabular-nums ${(stats?.escrowLocked ?? 0) > 0 ? "text-orange-400" : "text-white/50"}`}>
+                    <span className={`text-sm font-bold font-mono tabular-nums ${(stats?.escrowLocked ?? 0) > 0 ? "text-primary" : "text-foreground/50"}`}>
                       ${stats?.escrowLocked?.toFixed(0) || "0"}
                     </span>
                   </div>
                   <div className="glass-card rounded-lg p-2">
                     <div className="flex items-center gap-1 mb-1">
-                      <Wallet className="w-2.5 h-2.5 text-white/20" />
-                      <span className="text-[9px] text-white/25 font-mono">FEES</span>
+                      <Wallet className="w-2.5 h-2.5 text-foreground/20" />
+                      <span className="text-[9px] text-foreground/25 font-mono">FEES</span>
                     </div>
-                    <span className="text-sm font-bold text-white/60 font-mono tabular-nums">${stats?.totalFeesCollected?.toFixed(2) || "0.00"}</span>
+                    <span className="text-sm font-bold text-foreground/60 font-mono tabular-nums">${stats?.totalFeesCollected?.toFixed(2) || "0.00"}</span>
                   </div>
                   <div className="glass-card rounded-lg p-2">
                     <div className="flex items-center gap-1 mb-1">
-                      <TrendingUp className="w-2.5 h-2.5 text-white/20" />
-                      <span className="text-[9px] text-white/25 font-mono">24H VOL</span>
+                      <TrendingUp className="w-2.5 h-2.5 text-foreground/20" />
+                      <span className="text-[9px] text-foreground/25 font-mono">24H VOL</span>
                     </div>
                     <div className="flex items-center gap-1">
-                      <span className="text-sm font-bold text-white/60 font-mono tabular-nums">
+                      <span className="text-sm font-bold text-foreground/60 font-mono tabular-nums">
                         ${stats ? (stats.volume24h >= 1000 ? `${(stats.volume24h / 1000).toFixed(1)}k` : stats.volume24h.toFixed(0)) : "0"}
                       </span>
                       {stats?.volume24hChange != null && stats.volume24hChange !== 0 && (
-                        <span className={`text-[8px] font-mono ${stats.volume24hChange > 0 ? "text-emerald-400/60" : "text-red-400/60"}`}>
+                        <span className={`text-[8px] font-mono ${stats.volume24hChange > 0 ? "text-[var(--color-success)]/60" : "text-[var(--color-error)]/60"}`}>
                           {stats.volume24hChange > 0 ? "+" : ""}{stats.volume24hChange.toFixed(1)}%
                         </span>
                       )}
@@ -666,60 +658,60 @@ export default function AdminConsolePage() {
                 </div>
 
                 {/* Trades + users row */}
-                <div className="flex items-center justify-between px-1 text-[9px] font-mono text-white/20">
+                <div className="flex items-center justify-between px-1 text-[9px] font-mono text-foreground/20">
                   <span>{stats?.totalTrades ?? 0} trades</span>
-                  <span className="text-white/10">·</span>
+                  <span className="text-foreground/10">·</span>
                   <span>{stats?.totalUsers ?? 0} users</span>
-                  <span className="text-white/10">·</span>
+                  <span className="text-foreground/10">·</span>
                   <span>{stats?.openOrders ?? 0} open</span>
                 </div>
               </div>
             </div>
 
             {/* Widget 2: Real-time Metrics */}
-            <div className="glass-card rounded-xl overflow-hidden flex-1 min-h-0 border border-white/[0.06] p-3">
+            <div className="glass-card rounded-xl overflow-hidden flex-1 min-h-0 border border-border p-3">
               {/* Success Rate with Circular Gauge */}
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <Shield className="w-3.5 h-3.5 text-orange-400/50" />
-                    <span className="text-[10px] font-mono text-white/30 uppercase tracking-wider">Health</span>
+                    <Shield className="w-3.5 h-3.5 text-primary/50" />
+                    <span className="text-[10px] font-mono text-foreground/30 uppercase tracking-wider">Health</span>
                   </div>
-                  <p className="text-lg font-black font-mono tabular-nums text-white/90">
+                  <p className="text-lg font-black font-mono tabular-nums text-foreground/90">
                     {stats?.successRate?.toFixed(1) || "0"}%
                   </p>
-                  <span className="text-[9px] font-mono text-white/20">~{stats?.avgTime?.toFixed(0) || "0"}s avg fill</span>
+                  <span className="text-[9px] font-mono text-foreground/20">~{stats?.avgTime?.toFixed(0) || "0"}s avg fill</span>
                 </div>
                 <CircularGauge value={stats?.successRate ?? 0} />
               </div>
 
               {/* Disputes alert */}
               {stats?.disputes != null && stats.disputes > 0 && (
-                <div className="flex items-center gap-2 px-2.5 py-2 mb-3 bg-red-500/[0.06] border border-red-500/15 rounded-lg">
-                  <AlertTriangle className="w-3.5 h-3.5 text-red-400/60" />
-                  <span className="text-[10px] text-red-400/70 font-medium">{stats.disputes} active dispute{stats.disputes > 1 ? "s" : ""}</span>
+                <div className="flex items-center gap-2 px-2.5 py-2 mb-3 bg-[var(--color-error)]/[0.06] border border-[var(--color-error)]/15 rounded-lg">
+                  <AlertTriangle className="w-3.5 h-3.5 text-[var(--color-error)]/60" />
+                  <span className="text-[10px] text-[var(--color-error)]/70 font-medium">{stats.disputes} active dispute{stats.disputes > 1 ? "s" : ""}</span>
                 </div>
               )}
 
               {/* Order Breakdown */}
-              <div className="pt-2 border-t border-white/[0.04] space-y-1">
-                <p className="text-[8px] text-white/20 font-mono uppercase tracking-wider mb-1.5">Order Breakdown</p>
+              <div className="pt-2 border-t border-section-divider space-y-1">
+                <p className="text-[8px] text-foreground/20 font-mono uppercase tracking-wider mb-1.5">Order Breakdown</p>
                 {Object.entries(statusCounts).filter(([k]) => k !== "all").map(([key, count]) => (
                   <div key={key} className="flex items-center justify-between">
-                    <span className="text-[9px] font-mono text-white/30 capitalize">{key}</span>
+                    <span className="text-[9px] font-mono text-foreground/30 capitalize">{key}</span>
                     <div className="flex items-center gap-2">
-                      <div className="w-16 h-1 bg-white/[0.04] rounded-full overflow-hidden">
+                      <div className="w-16 h-1 bg-card rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full ${
-                            key === "active" ? "bg-orange-400/60" :
-                            key === "completed" ? "bg-emerald-400/60" :
-                            key === "disputed" ? "bg-red-400/60" :
-                            "bg-white/10"
+                            key === "active" ? "bg-primary/60" :
+                            key === "completed" ? "bg-[var(--color-success)]/60" :
+                            key === "disputed" ? "bg-[var(--color-error)]/60" :
+                            "bg-foreground/10"
                           }`}
                           style={{ width: `${statusCounts.all > 0 ? (count / statusCounts.all) * 100 : 0}%` }}
                         />
                       </div>
-                      <span className="text-[9px] font-mono tabular-nums text-white/40 w-6 text-right">{count}</span>
+                      <span className="text-[9px] font-mono tabular-nums text-foreground/40 w-6 text-right">{count}</span>
                     </div>
                   </div>
                 ))}
@@ -732,55 +724,55 @@ export default function AdminConsolePage() {
 
         {/* ===== CENTER-LEFT: Orders Table + Chart ===== */}
         <Panel defaultSize={27} minSize={18} maxSize={40} id="center-left">
-          <div className="flex flex-col h-full bg-black">
+          <div className="flex flex-col h-full bg-background">
 
             {/* Orders Table — 60% */}
-            <div style={{ height: "60%" }} className="flex flex-col border-b border-white/[0.04]">
+            <div style={{ height: "60%" }} className="flex flex-col border-b border-section-divider">
               {/* Header */}
-              <div className="px-3 py-2 border-b border-white/[0.04] flex items-center justify-between shrink-0">
+              <div className="px-3 py-2 border-b border-section-divider flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
-                  <Activity className="w-3.5 h-3.5 text-white/20" />
-                  <span className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">All Orders</span>
-                  <span className="text-[9px] font-mono text-white/20 px-1.5 py-0.5 bg-white/[0.03] rounded">{filteredOrders.length}</span>
+                  <Activity className="w-3.5 h-3.5 text-foreground/20" />
+                  <span className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase">All Orders</span>
+                  <span className="text-[9px] font-mono text-foreground/20 px-1.5 py-0.5 bg-card rounded">{filteredOrders.length}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   {totalFilteredFees > 0 && (
-                    <span className="text-[8px] font-mono text-orange-400/60 px-1 py-0.5 bg-orange-500/[0.06] rounded">
+                    <span className="text-[8px] font-mono text-primary/60 px-1 py-0.5 bg-primary/[0.06] rounded">
                       ${totalFilteredFees.toFixed(2)}
                     </span>
                   )}
-                  <span className="text-[8px] font-mono text-white/20">${totalFilteredVolume.toLocaleString()}</span>
+                  <span className="text-[8px] font-mono text-foreground/20">${totalFilteredVolume.toLocaleString()}</span>
                 </div>
               </div>
 
               {/* Filters */}
-              <div className="px-3 py-1.5 border-b border-white/[0.03] flex flex-wrap items-center gap-1.5 shrink-0">
+              <div className="px-3 py-1.5 border-b border-section-divider flex flex-wrap items-center gap-1.5 shrink-0">
                 <div className="relative flex-1 min-w-[120px] max-w-[180px]">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-2.5 h-2.5 text-white/15" />
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-2.5 h-2.5 text-foreground/15" />
                   <input
                     type="text"
                     placeholder="Search..."
                     value={orderSearch}
                     onChange={(e) => setOrderSearch(e.target.value)}
-                    className="w-full bg-white/[0.02] border border-white/[0.04] rounded-md pl-6 pr-2 py-1 text-[9px] text-white/60 font-mono placeholder:text-white/15 focus:border-white/[0.08] focus:outline-none"
+                    className="w-full bg-card border border-section-divider rounded-md pl-6 pr-2 py-1 text-[9px] text-foreground/60 font-mono placeholder:text-foreground/15 focus:border-border-strong focus:outline-none"
                   />
                 </div>
 
-                <div className="flex gap-0.5 bg-white/[0.02] rounded-md p-0.5">
+                <div className="flex gap-0.5 bg-card rounded-md p-0.5">
                   {(["all", "pending", "active", "completed", "cancelled", "disputed"] as const).map((f) => (
                     <button
                       key={f}
                       onClick={() => setOrderStatusFilter(f)}
                       className={`px-1.5 py-0.5 text-[8px] font-mono rounded transition-colors ${
                         orderStatusFilter === f
-                          ? f === "disputed" ? "bg-red-500/15 text-red-400 font-bold" :
-                            f === "active" ? "bg-orange-500/10 text-orange-400 font-bold" :
-                            "bg-white/[0.06] text-white/70"
-                          : "text-white/25 hover:text-white/40"
+                          ? f === "disputed" ? "bg-[var(--color-error)]/15 text-[var(--color-error)] font-bold" :
+                            f === "active" ? "bg-primary/10 text-primary font-bold" :
+                            "bg-accent-subtle text-foreground/70"
+                          : "text-foreground/25 hover:text-foreground/40"
                       }`}
                     >
                       {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
-                      <span className="ml-0.5 text-white/15">{statusCounts[f as keyof typeof statusCounts] || 0}</span>
+                      <span className="ml-0.5 text-foreground/15">{statusCounts[f as keyof typeof statusCounts] || 0}</span>
                     </button>
                   ))}
                 </div>
@@ -792,10 +784,10 @@ export default function AdminConsolePage() {
                       onClick={() => setOrderTypeFilter(t)}
                       className={`px-1.5 py-0.5 text-[8px] font-mono rounded transition-colors ${
                         orderTypeFilter === t
-                          ? t === "buy" ? "bg-orange-500/10 text-orange-400 border border-orange-500/20" :
-                            t === "sell" ? "bg-white/[0.06] text-white/60 border border-white/[0.06]" :
-                            "bg-white/[0.06] text-white/60"
-                          : "text-white/20 hover:text-white/40"
+                          ? t === "buy" ? "bg-primary/10 text-primary border border-primary/20" :
+                            t === "sell" ? "bg-accent-subtle text-foreground/60 border border-border" :
+                            "bg-accent-subtle text-foreground/60"
+                          : "text-foreground/20 hover:text-foreground/40"
                       }`}
                     >
                       {t === "all" ? "All" : t.toUpperCase()}
@@ -806,7 +798,7 @@ export default function AdminConsolePage() {
                 <select
                   value={orderSort}
                   onChange={(e) => setOrderSort(e.target.value)}
-                  className="bg-white/[0.02] border border-white/[0.04] rounded-md px-1.5 py-0.5 text-[8px] font-mono text-white/40 focus:outline-none cursor-pointer"
+                  className="bg-card border border-section-divider rounded-md px-1.5 py-0.5 text-[8px] font-mono text-foreground/40 focus:outline-none cursor-pointer"
                 >
                   <option value="newest">Newest</option>
                   <option value="oldest">Oldest</option>
@@ -823,48 +815,48 @@ export default function AdminConsolePage() {
                   return (
                     <div
                       key={order.id}
-                      className={`flex items-center gap-2 px-3 py-1.5 border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors ${
-                        isActive ? "bg-orange-500/[0.01]" : ""
+                      className={`flex items-center gap-2 px-3 py-1.5 border-b border-card hover:bg-card transition-colors ${
+                        isActive ? "bg-primary/[0.01]" : ""
                       }`}
                     >
                       <div className={`w-5 h-5 rounded flex items-center justify-center text-[8px] font-black shrink-0 ${
                         order.type === "buy"
-                          ? "bg-orange-500/10 border border-orange-500/20 text-orange-400"
-                          : "bg-white/[0.04] border border-white/[0.06] text-white/40"
+                          ? "bg-primary/10 border border-primary/20 text-primary"
+                          : "bg-card border border-border text-foreground/40"
                       }`}>
                         {order.type === "buy" ? "B" : "S"}
                       </div>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1">
-                          <span className="text-[10px] font-mono font-medium text-white/70">{order.orderNumber}</span>
+                          <span className="text-[10px] font-mono font-medium text-foreground/70">{order.orderNumber}</span>
                           <span className={`px-1 py-0 rounded text-[7px] font-bold border ${getStatusStyle(order.status)}`}>
                             {getStatusLabel(order.status)}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1 text-[8px] text-white/25 font-mono">
+                        <div className="flex items-center gap-1 text-[8px] text-foreground/25 font-mono">
                           <span className="truncate max-w-[60px]">{order.buyerMerchant || order.user}</span>
-                          <ArrowRight className="w-2 h-2 text-white/10 shrink-0" />
+                          <ArrowRight className="w-2 h-2 text-foreground/10 shrink-0" />
                           <span className="truncate max-w-[60px]">{order.merchant}</span>
-                          <span className="text-white/10">·</span>
-                          <span className="text-white/15">{formatTimeAgo(order.createdAt)}</span>
+                          <span className="text-foreground/10">·</span>
+                          <span className="text-foreground/15">{formatTimeAgo(order.createdAt)}</span>
                         </div>
                       </div>
 
                       <div className="text-right shrink-0">
-                        <p className="text-[10px] font-bold font-mono tabular-nums text-white/80">${order.amount.toLocaleString()}</p>
+                        <p className="text-[10px] font-bold font-mono tabular-nums text-foreground/80">${order.amount.toLocaleString()}</p>
                         {order.feeAmount ? (
-                          <span className="text-[8px] font-mono text-orange-400/40">{order.feePercentage}%</span>
+                          <span className="text-[8px] font-mono text-primary/40">{order.feePercentage}%</span>
                         ) : (
-                          <span className="text-[8px] font-mono text-white/15">{order.fiatAmount?.toLocaleString()} AED</span>
+                          <span className="text-[8px] font-mono text-foreground/15">{order.fiatAmount?.toLocaleString()} AED</span>
                         )}
                       </div>
 
                       {isActive && expiresIn > 0 && (
                         <span className={`text-[9px] font-mono font-bold tabular-nums shrink-0 px-1 py-0.5 rounded ${
-                          expiresIn < 120 ? "text-red-400/80 bg-red-500/[0.06] animate-pulse" :
-                          expiresIn < 300 ? "text-orange-400/70 bg-orange-500/[0.04]" :
-                          "text-white/30"
+                          expiresIn < 120 ? "text-[var(--color-error)]/80 bg-[var(--color-error)]/[0.06] animate-pulse" :
+                          expiresIn < 300 ? "text-primary/70 bg-primary/[0.04]" :
+                          "text-foreground/30"
                         }`}>
                           {Math.floor(expiresIn / 60)}:{String(expiresIn % 60).padStart(2, "0")}
                         </span>
@@ -872,7 +864,7 @@ export default function AdminConsolePage() {
                     </div>
                   );
                 }) : (
-                  <div className="flex items-center justify-center h-full text-[10px] text-white/15">
+                  <div className="flex items-center justify-center h-full text-[10px] text-foreground/15">
                     {orderSearch ? "No matching orders" : "No orders"}
                   </div>
                 )}
@@ -883,11 +875,11 @@ export default function AdminConsolePage() {
             <div style={{ height: "40%" }} className="flex flex-col p-3">
               <div className="flex items-center justify-between mb-2 shrink-0">
                 <div className="flex items-center gap-2">
-                  <BarChart3 className="w-3.5 h-3.5 text-white/20" />
-                  <span className="text-[10px] font-mono text-white/30 uppercase tracking-wider">24h Activity</span>
+                  <BarChart3 className="w-3.5 h-3.5 text-foreground/20" />
+                  <span className="text-[10px] font-mono text-foreground/30 uppercase tracking-wider">24h Activity</span>
                 </div>
                 {stats?.peakHour && (
-                  <span className="text-[8px] font-mono text-white/20">
+                  <span className="text-[8px] font-mono text-foreground/20">
                     Peak: {stats.peakHour.hour}:00 ({stats.peakHour.count} tx)
                   </span>
                 )}
@@ -919,22 +911,22 @@ export default function AdminConsolePage() {
                               boxShadow: isNow ? "0 0 12px rgba(249, 115, 22, 0.3)" : "none",
                             }}
                           />
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-1.5 py-0.5 bg-[#1a1a1a] border border-white/[0.08] rounded text-[7px] font-mono text-white/60 opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-10">
-                            <span className="font-bold text-white/80">{data.count}</span> tx @ {hour}:00
-                            {data.volume > 0 && <span className="text-orange-400/60 ml-1">${data.volume.toFixed(0)}</span>}
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-1.5 py-0.5 bg-[#1a1a1a] border border-border-strong rounded text-[7px] font-mono text-foreground/60 opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none z-10">
+                            <span className="font-bold text-foreground/80">{data.count}</span> tx @ {hour}:00
+                            {data.volume > 0 && <span className="text-primary/60 ml-1">${data.volume.toFixed(0)}</span>}
                           </div>
                         </div>
                       );
                     })}
                   </div>
                   <div className="flex justify-between mt-1.5 shrink-0">
-                    <span className="text-[7px] text-white/15 font-mono">24h ago</span>
-                    <span className="text-[7px] text-white/15 font-mono">12h ago</span>
-                    <span className="text-[7px] text-orange-400/40 font-mono font-bold">Now</span>
+                    <span className="text-[7px] text-foreground/15 font-mono">24h ago</span>
+                    <span className="text-[7px] text-foreground/15 font-mono">12h ago</span>
+                    <span className="text-[7px] text-primary/40 font-mono font-bold">Now</span>
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 flex items-center justify-center text-[10px] text-white/15">No hourly data</div>
+                <div className="flex-1 flex items-center justify-center text-[10px] text-foreground/15">No hourly data</div>
               )}
             </div>
           </div>
@@ -944,22 +936,22 @@ export default function AdminConsolePage() {
 
         {/* ===== CENTER-RIGHT: Active Orders + Recent ===== */}
         <Panel defaultSize={27} minSize={18} maxSize={40} id="center-right">
-          <div className="flex flex-col h-full bg-black">
+          <div className="flex flex-col h-full bg-background">
 
             {/* Active Orders — 50% */}
-            <div style={{ height: "50%" }} className="flex flex-col border-b border-white/[0.04]">
-              <div className="px-3 py-2 border-b border-white/[0.04] flex items-center justify-between shrink-0">
+            <div style={{ height: "50%" }} className="flex flex-col border-b border-section-divider">
+              <div className="px-3 py-2 border-b border-section-divider flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
-                  <Zap className="w-3.5 h-3.5 text-orange-400/50" />
-                  <span className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">Active</span>
+                  <Zap className="w-3.5 h-3.5 text-primary/50" />
+                  <span className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase">Active</span>
                   {activeOrders.length > 0 && (
-                    <span className="text-[9px] font-mono text-orange-400 px-1.5 py-0.5 bg-orange-500/[0.08] border border-orange-500/20 rounded animate-pulse">
+                    <span className="text-[9px] font-mono text-primary px-1.5 py-0.5 bg-primary/[0.08] border border-primary/20 rounded animate-pulse">
                       {activeOrders.length}
                     </span>
                   )}
                 </div>
                 {activeOrders.length > 0 && (
-                  <div className="w-2 h-2 rounded-full bg-emerald-500/60 animate-pulse" />
+                  <div className="w-2 h-2 rounded-full bg-[var(--color-success)]/60 animate-pulse" />
                 )}
               </div>
 
@@ -970,42 +962,42 @@ export default function AdminConsolePage() {
                   const isUrgent = expiresIn < 120 && expiresIn > 0;
                   return (
                     <div key={order.id} className={`glass-card rounded-lg p-2.5 border transition-colors ${
-                      isUrgent ? "border-red-500/15 bg-red-500/[0.02]" : "border-white/[0.04] hover:border-white/[0.08]"
+                      isUrgent ? "border-[var(--color-error)]/15 bg-[var(--color-error)]/[0.02]" : "border-section-divider hover:border-border-strong"
                     }`}>
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-1.5">
                           <span className={`w-5 h-5 rounded flex items-center justify-center text-[8px] font-black ${
                             order.type === "buy"
-                              ? "bg-orange-500/10 border border-orange-500/20 text-orange-400"
-                              : "bg-white/[0.04] border border-white/[0.06] text-white/40"
+                              ? "bg-primary/10 border border-primary/20 text-primary"
+                              : "bg-card border border-border text-foreground/40"
                           }`}>
                             {order.type === "buy" ? "B" : "S"}
                           </span>
-                          <span className="text-[10px] font-mono font-medium text-white/70">{order.orderNumber}</span>
+                          <span className="text-[10px] font-mono font-medium text-foreground/70">{order.orderNumber}</span>
                         </div>
                         <span className={`px-1.5 py-0.5 rounded text-[7px] font-bold border ${getStatusStyle(order.status)}`}>
                           {getStatusLabel(order.status)}
                         </span>
                       </div>
 
-                      <div className="w-full h-1 bg-white/[0.04] rounded-full mb-1.5 overflow-hidden">
+                      <div className="w-full h-1 bg-card rounded-full mb-1.5 overflow-hidden">
                         <div
-                          className={`h-full rounded-full transition-all duration-500 ${isUrgent ? "bg-red-400" : "bg-gradient-to-r from-orange-500/60 to-orange-400"}`}
+                          className={`h-full rounded-full transition-all duration-500 ${isUrgent ? "bg-[var(--color-error)]" : "bg-gradient-to-r from-primary/60 to-primary/80"}`}
                           style={{ width: `${statusProgress}%` }}
                         />
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1 text-[8px] text-white/25 font-mono">
+                        <div className="flex items-center gap-1 text-[8px] text-foreground/25 font-mono">
                           <span className="truncate max-w-[50px]">{order.buyerMerchant || order.user}</span>
-                          <ArrowRight className="w-2 h-2 text-white/10" />
+                          <ArrowRight className="w-2 h-2 text-foreground/10" />
                           <span className="truncate max-w-[50px]">{order.merchant}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-bold font-mono tabular-nums text-white/80">${order.amount.toLocaleString()}</span>
+                          <span className="text-[10px] font-bold font-mono tabular-nums text-foreground/80">${order.amount.toLocaleString()}</span>
                           {expiresIn > 0 && (
                             <span className={`text-[8px] font-mono font-bold tabular-nums ${
-                              isUrgent ? "text-red-400/80 animate-pulse" : expiresIn < 300 ? "text-orange-400/70" : "text-white/25"
+                              isUrgent ? "text-[var(--color-error)]/80 animate-pulse" : expiresIn < 300 ? "text-primary/70" : "text-foreground/25"
                             }`}>
                               {Math.floor(expiresIn / 60)}:{String(expiresIn % 60).padStart(2, "0")}
                             </span>
@@ -1015,7 +1007,7 @@ export default function AdminConsolePage() {
                     </div>
                   );
                 }) : (
-                  <div className="flex flex-col items-center justify-center h-full text-white/15">
+                  <div className="flex flex-col items-center justify-center h-full text-foreground/15">
                     <Zap className="w-6 h-6 mb-1.5 opacity-20" />
                     <p className="text-[10px] font-mono">No active orders</p>
                   </div>
@@ -1025,11 +1017,11 @@ export default function AdminConsolePage() {
 
             {/* Recent Completed — 50% */}
             <div style={{ height: "50%" }} className="flex flex-col">
-              <div className="px-3 py-2 border-b border-white/[0.04] flex items-center justify-between shrink-0">
+              <div className="px-3 py-2 border-b border-section-divider flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-2">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-400/40" />
-                  <span className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">Recent</span>
-                  <span className="text-[9px] font-mono text-white/20 px-1.5 py-0.5 bg-white/[0.03] rounded">
+                  <CheckCircle className="w-3.5 h-3.5 text-[var(--color-success)]/40" />
+                  <span className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase">Recent</span>
+                  <span className="text-[9px] font-mono text-foreground/20 px-1.5 py-0.5 bg-card rounded">
                     {recentCompleted.length}
                   </span>
                 </div>
@@ -1037,38 +1029,38 @@ export default function AdminConsolePage() {
 
               <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
                 {recentCompleted.length > 0 ? recentCompleted.map((order) => (
-                  <div key={order.id} className="flex items-center gap-2 px-3 py-1.5 border-b border-white/[0.02] hover:bg-white/[0.02] transition-colors">
+                  <div key={order.id} className="flex items-center gap-2 px-3 py-1.5 border-b border-card hover:bg-card transition-colors">
                     <div className="shrink-0">
                       {order.status === "completed" ? (
-                        <CheckCircle className="w-3 h-3 text-emerald-400/40" />
+                        <CheckCircle className="w-3 h-3 text-[var(--color-success)]/40" />
                       ) : (
-                        <XCircle className="w-3 h-3 text-white/15" />
+                        <XCircle className="w-3 h-3 text-foreground/15" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1">
-                        <span className="text-[10px] font-mono text-white/50">{order.orderNumber}</span>
-                        <span className={`text-[7px] font-bold ${order.type === "buy" ? "text-orange-400/40" : "text-white/20"}`}>
+                        <span className="text-[10px] font-mono text-foreground/50">{order.orderNumber}</span>
+                        <span className={`text-[7px] font-bold ${order.type === "buy" ? "text-primary/40" : "text-foreground/20"}`}>
                           {order.type.toUpperCase()}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1 text-[8px] text-white/20 font-mono">
+                      <div className="flex items-center gap-1 text-[8px] text-foreground/20 font-mono">
                         <span className="truncate max-w-[60px]">{order.buyerMerchant || order.user}</span>
-                        <ArrowRight className="w-2 h-2 text-white/10" />
+                        <ArrowRight className="w-2 h-2 text-foreground/10" />
                         <span className="truncate max-w-[60px]">{order.merchant}</span>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className={`text-[10px] font-bold font-mono tabular-nums ${order.status === "completed" ? "text-white/60" : "text-white/20"}`}>
+                      <p className={`text-[10px] font-bold font-mono tabular-nums ${order.status === "completed" ? "text-foreground/60" : "text-foreground/20"}`}>
                         ${order.amount.toLocaleString()}
                       </p>
-                      <span className="text-[8px] font-mono text-white/15">
+                      <span className="text-[8px] font-mono text-foreground/15">
                         {formatTimeAgo(order.completedAt || order.createdAt)}
                       </span>
                     </div>
                   </div>
                 )) : (
-                  <div className="flex items-center justify-center h-full text-[10px] text-white/15">No recent activity</div>
+                  <div className="flex items-center justify-center h-full text-[10px] text-foreground/15">No recent activity</div>
                 )}
               </div>
             </div>
@@ -1079,76 +1071,76 @@ export default function AdminConsolePage() {
 
         {/* ===== RIGHT PANEL: Merchants + Activity ===== */}
         <Panel defaultSize={22} minSize={15} maxSize={35} id="right">
-          <div className="flex flex-col h-full bg-[#060606] overflow-hidden">
+          <div className="flex flex-col h-full bg-background overflow-hidden">
 
             {/* Top Merchants */}
-            <div style={{ maxHeight: "50%" }} className="flex flex-col border-b border-white/[0.04] overflow-hidden shrink-0">
-              <div className="px-3 py-2 border-b border-white/[0.04] shrink-0">
+            <div style={{ maxHeight: "50%" }} className="flex flex-col border-b border-section-divider overflow-hidden shrink-0">
+              <div className="px-3 py-2 border-b border-section-divider shrink-0">
                 <div className="flex items-center gap-2">
-                  <Crown className="w-3.5 h-3.5 text-orange-400/40" />
-                  <span className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">Top Merchants</span>
+                  <Crown className="w-3.5 h-3.5 text-primary/40" />
+                  <span className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase">Top Merchants</span>
                 </div>
               </div>
 
               <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide p-1.5">
                 {merchants.length > 0 ? merchants.slice(0, 10).map((m, i) => (
-                  <div key={m.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/[0.02] transition-colors">
+                  <div key={m.id} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-card transition-colors">
                     <span className={`w-4 text-right text-[9px] font-mono font-bold shrink-0 ${
-                      i === 0 ? "text-orange-400" : i < 3 ? "text-white/40" : "text-white/15"
+                      i === 0 ? "text-primary" : i < 3 ? "text-foreground/40" : "text-foreground/15"
                     }`}>
                       {i + 1}
                     </span>
                     <span className="text-sm shrink-0">{m.emoji}</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-medium text-white/60 truncate">{m.name}</p>
+                      <p className="text-[10px] font-medium text-foreground/60 truncate">{m.name}</p>
                       <div className="flex items-center gap-1">
-                        <Star className="w-2 h-2 text-orange-400/40 fill-orange-400/40" />
-                        <span className="text-[8px] font-mono text-white/25">{m.rating.toFixed(1)}</span>
-                        <span className="text-[8px] text-white/10">·</span>
-                        <span className="text-[8px] font-mono text-white/20">{m.trades}t</span>
+                        <Star className="w-2 h-2 text-primary/40 fill-primary/40" />
+                        <span className="text-[8px] font-mono text-foreground/25">{m.rating.toFixed(1)}</span>
+                        <span className="text-[8px] text-foreground/10">·</span>
+                        <span className="text-[8px] font-mono text-foreground/20">{m.trades}t</span>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <span className="text-[9px] font-mono font-bold text-white/50 tabular-nums">
+                      <span className="text-[9px] font-mono font-bold text-foreground/50 tabular-nums">
                         ${m.volume >= 1000 ? `${(m.volume / 1000).toFixed(0)}k` : m.volume.toFixed(0)}
                       </span>
                     </div>
                     {m.isOnline && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-success)] shrink-0" />
                     )}
                   </div>
                 )) : (
-                  <div className="flex items-center justify-center h-full text-[10px] text-white/15">No merchants</div>
+                  <div className="flex items-center justify-center h-full text-[10px] text-foreground/15">No merchants</div>
                 )}
               </div>
             </div>
 
             {/* Activity Feed */}
             <div className="flex-1 flex flex-col min-h-0">
-              <div className="px-3 py-2 border-b border-white/[0.04] shrink-0">
+              <div className="px-3 py-2 border-b border-section-divider shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Radio className="w-3.5 h-3.5 text-white/20" />
-                    <span className="text-[10px] font-bold text-white/60 font-mono tracking-wider uppercase">Activity</span>
+                    <Radio className="w-3.5 h-3.5 text-foreground/20" />
+                    <span className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase">Activity</span>
                   </div>
-                  <div className="w-2 h-2 rounded-full bg-emerald-500/60 animate-pulse" />
+                  <div className="w-2 h-2 rounded-full bg-[var(--color-success)]/60 animate-pulse" />
                 </div>
               </div>
 
               <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide p-1.5 space-y-0.5">
                 {activities.length > 0 ? activities.map((a) => (
-                  <div key={a.id} className="flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-white/[0.02] transition-colors">
+                  <div key={a.id} className="flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-card transition-colors">
                     <div className="mt-0.5 shrink-0">
-                      {a.status === "success" ? <CheckCircle className="w-2.5 h-2.5 text-emerald-400/40" /> :
-                       a.status === "warning" ? <AlertTriangle className="w-2.5 h-2.5 text-orange-400/40" /> :
-                       a.status === "error" ? <XCircle className="w-2.5 h-2.5 text-red-400/40" /> :
-                       <Activity className="w-2.5 h-2.5 text-white/15" />}
+                      {a.status === "success" ? <CheckCircle className="w-2.5 h-2.5 text-[var(--color-success)]/40" /> :
+                       a.status === "warning" ? <AlertTriangle className="w-2.5 h-2.5 text-primary/40" /> :
+                       a.status === "error" ? <XCircle className="w-2.5 h-2.5 text-[var(--color-error)]/40" /> :
+                       <Activity className="w-2.5 h-2.5 text-foreground/15" />}
                     </div>
-                    <p className="text-[9px] text-white/40 flex-1 leading-relaxed">{a.message}</p>
-                    <span className="text-[7px] font-mono text-white/15 shrink-0">{a.time}</span>
+                    <p className="text-[9px] text-foreground/40 flex-1 leading-relaxed">{a.message}</p>
+                    <span className="text-[7px] font-mono text-foreground/15 shrink-0">{a.time}</span>
                   </div>
                 )) : (
-                  <div className="flex flex-col items-center justify-center h-full text-white/15">
+                  <div className="flex flex-col items-center justify-center h-full text-foreground/15">
                     <Radio className="w-6 h-6 mb-1.5 opacity-20" />
                     <p className="text-[10px] font-mono">No activity</p>
                   </div>

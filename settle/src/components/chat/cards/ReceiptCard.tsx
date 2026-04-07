@@ -24,6 +24,7 @@ interface ReceiptData {
 interface ReceiptCardProps {
   data: ReceiptData;
   currentStatus?: string;
+  theme?: 'dark' | 'light';
 }
 
 function formatAmount(value: string | number | undefined, decimals = 2): string {
@@ -63,7 +64,7 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   escrow: { bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Escrowed' },
 };
 
-export function ReceiptCard({ data, currentStatus }: ReceiptCardProps) {
+export function ReceiptCard({ data, currentStatus, theme = 'dark' }: ReceiptCardProps) {
   const isBuy = data.order_type === 'buy';
   const effectiveStatus = currentStatus || data.status || '';
   const statusStyle = STATUS_STYLES[effectiveStatus] || STATUS_STYLES.pending;
@@ -71,91 +72,109 @@ export function ReceiptCard({ data, currentStatus }: ReceiptCardProps) {
   const isCancelled = effectiveStatus === 'cancelled';
   const isExpired = effectiveStatus === 'expired';
 
+  // Theme-aware color tokens
+  const isLight = theme === 'light';
+  const t = {
+    card: isLight ? 'bg-white border border-black/[0.08]' : 'bg-white/5 border border-white/6',
+    title: isLight ? 'text-black' : 'text-white',
+    subtitle: isLight ? 'text-black/50' : 'text-white/50',
+    label: isLight ? 'text-black/40' : 'text-white/50',
+    value: isLight ? 'text-black' : 'text-white',
+    valueDim: isLight ? 'text-black/60' : 'text-white/70',
+    icon: isLight ? 'text-black/40' : 'text-white/40',
+    iconDim: isLight ? 'text-black/20' : 'text-white/20',
+    iconBg: isLight ? 'bg-black/5 border border-black/[0.08]' : 'bg-white/5 border border-white/6',
+    divider: isLight ? 'border-black/[0.06]' : 'border-white/[0.04]',
+    headerDefault: isLight ? 'bg-black/[0.02] border-black/[0.06]' : 'bg-white/[0.02] border-white/[0.06]',
+    timestamp: isLight ? 'text-black/30' : 'text-white/30',
+    timestampVal: isLight ? 'text-black/50' : 'text-white/50',
+    receiptIcon: isLight ? 'text-black/60' : 'text-white/70',
+  };
+
   return (
-    <div className="bg-[#111] border border-white/6 rounded-xl overflow-hidden">
+    <div className={`${t.card} rounded-xl overflow-hidden`}>
       {/* Header */}
       <div className={`px-4 py-3 border-b flex items-center justify-between ${
         isCompleted ? 'bg-emerald-500/10 border-emerald-500/20' :
         isCancelled ? 'bg-red-500/10 border-red-500/20' :
         isExpired ? 'bg-zinc-500/10 border-zinc-500/20' :
-        'bg-white/[0.02] border-white/[0.06]'
+        t.headerDefault
       }`}>
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/6 flex items-center justify-center">
-            <Receipt className="w-4 h-4 text-white/70" />
+          <div className={`w-8 h-8 rounded-lg ${t.iconBg} flex items-center justify-center`}>
+            <Receipt className={`w-4 h-4 ${t.receiptIcon}`} />
           </div>
           <div>
-            <h4 className="text-[15px] font-bold text-white font-mono tracking-tight">
+            <h4 className={`text-[15px] font-bold ${t.title} font-mono tracking-tight`}>
               #{data.order_number}
             </h4>
-            <p className="text-[11px] text-white/50">
+            <p className={`text-[11px] ${t.subtitle}`}>
               {isBuy ? 'Buy' : 'Sell'} Order
               {data.payment_method && ` via ${data.payment_method}`}
             </p>
           </div>
         </div>
-        {/* Status badge */}
         <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
           {statusStyle.label}
         </span>
       </div>
 
       {/* Parties */}
-      <div className="px-4 py-3 border-b border-white/[0.04] space-y-2">
+      <div className={`px-4 py-3 border-b ${t.divider} space-y-2`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {data.creator_type === 'merchant' ? (
-              <Store className="w-3.5 h-3.5 text-white/40" />
+              <Store className={`w-3.5 h-3.5 ${t.icon}`} />
             ) : (
-              <User className="w-3.5 h-3.5 text-white/40" />
+              <User className={`w-3.5 h-3.5 ${t.icon}`} />
             )}
-            <span className="text-xs text-white/50">From</span>
+            <span className={`text-xs ${t.label}`}>From</span>
           </div>
-          <span className="text-sm text-white">{data.creator_name || 'Unknown'}</span>
+          <span className={`text-sm ${t.value}`}>{data.creator_name || 'Unknown'}</span>
         </div>
         <div className="flex items-center justify-center">
-          <ArrowRightLeft className="w-3 h-3 text-white/20" />
+          <ArrowRightLeft className={`w-3 h-3 ${t.iconDim}`} />
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {data.acceptor_type === 'merchant' ? (
-              <Store className="w-3.5 h-3.5 text-white/40" />
+              <Store className={`w-3.5 h-3.5 ${t.icon}`} />
             ) : (
-              <User className="w-3.5 h-3.5 text-white/40" />
+              <User className={`w-3.5 h-3.5 ${t.icon}`} />
             )}
-            <span className="text-xs text-white/50">To</span>
+            <span className={`text-xs ${t.label}`}>To</span>
           </div>
-          <span className="text-sm text-white">{data.acceptor_name || 'Unknown'}</span>
+          <span className={`text-sm ${t.value}`}>{data.acceptor_name || 'Unknown'}</span>
         </div>
       </div>
 
       {/* Amounts */}
-      <div className="px-4 py-3 space-y-2.5 border-b border-white/[0.04]">
+      <div className={`px-4 py-3 space-y-2.5 border-b ${t.divider}`}>
         <div className="flex justify-between items-center">
-          <span className="text-xs text-white/50">Crypto</span>
-          <span className="text-[15px] text-white font-bold font-mono tabular-nums">
+          <span className={`text-xs ${t.label}`}>Crypto</span>
+          <span className={`text-[15px] ${t.value} font-bold font-mono tabular-nums`}>
             {formatAmount(data.crypto_amount, 6)} {data.crypto_currency || 'USDC'}
           </span>
         </div>
 
         <div className="flex justify-between items-center">
-          <span className="text-xs text-white/50">Fiat</span>
-          <span className="text-[15px] text-orange-400 font-bold font-mono tabular-nums">
+          <span className={`text-xs ${t.label}`}>Fiat</span>
+          <span className="text-[15px] text-orange-500 font-bold font-mono tabular-nums">
             {formatAmount(data.fiat_amount)} {data.fiat_currency || ''}
           </span>
         </div>
 
         <div className="flex justify-between items-center">
-          <span className="text-xs text-white/50">Rate</span>
-          <span className="text-sm text-white/70 font-mono">
+          <span className={`text-xs ${t.label}`}>Rate</span>
+          <span className={`text-sm ${t.valueDim} font-mono`}>
             {formatAmount(data.rate, 4)}
           </span>
         </div>
 
         {data.platform_fee != null && parseFloat(String(data.platform_fee)) > 0 && (
           <div className="flex justify-between items-center">
-            <span className="text-xs text-white/50">Fee</span>
-            <span className="text-sm text-white/70">
+            <span className={`text-xs ${t.label}`}>Fee</span>
+            <span className={`text-sm ${t.valueDim}`}>
               {formatAmount(data.platform_fee, 6)} {data.crypto_currency || 'USDC'}
             </span>
           </div>
@@ -165,17 +184,17 @@ export function ReceiptCard({ data, currentStatus }: ReceiptCardProps) {
       {/* Timestamps */}
       {(data.created_at || data.updated_at) && (
         <div className="px-4 py-2.5 flex items-center gap-4">
-          <Clock className="w-3 h-3 text-white/30" />
+          <Clock className={`w-3 h-3 ${t.timestamp}`} />
           {data.created_at && (
             <div>
-              <span className="text-[10px] text-white/30">Created </span>
-              <span className="text-[10px] text-white/50">{formatDateTime(data.created_at)}</span>
+              <span className={`text-[10px] ${t.timestamp}`}>Created </span>
+              <span className={`text-[10px] ${t.timestampVal}`}>{formatDateTime(data.created_at)}</span>
             </div>
           )}
           {data.updated_at && data.updated_at !== data.created_at && (
             <div>
-              <span className="text-[10px] text-white/30">Updated </span>
-              <span className="text-[10px] text-white/50">{formatDateTime(data.updated_at)}</span>
+              <span className={`text-[10px] ${t.timestamp}`}>Updated </span>
+              <span className={`text-[10px] ${t.timestampVal}`}>{formatDateTime(data.updated_at)}</span>
             </div>
           )}
         </div>

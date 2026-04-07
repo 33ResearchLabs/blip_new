@@ -211,7 +211,7 @@ export function useUserOrderActions({
               try {
                 const patchRes = await fetchWithAuth(`/api/orders/${activeOrder.id}`, {
                   method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: { 'Content-Type': 'application/json', 'Idempotency-Key': generateIdempotencyKey() },
                   body: JSON.stringify({
                     status: 'completed',
                     actor_type: 'user',

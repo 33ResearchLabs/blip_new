@@ -263,6 +263,7 @@ export const addDisputeEvidenceSchema = z.object({
 export const userOrdersQuerySchema = z.object({
   user_id: uuidSchema,
   status: z.string().optional(), // Comma-separated statuses
+  days: z.coerce.number().int().min(1).max(365).optional(), // Time filter in days
 });
 
 export const merchantOrdersQuerySchema = z.object({

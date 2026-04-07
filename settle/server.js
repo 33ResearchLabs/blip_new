@@ -165,4 +165,23 @@ app.prepare().then(async () => {
   } catch (outboxErr) {
     console.warn('> Notification outbox worker not available:', outboxErr.message);
   }
+
+  // Start price tick collector worker (fetches USDT prices every 25s)
+  try {
+    const { spawn } = require('child_process');
+    const path = require('path');
+    const npxBin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    const priceScript = path.join(__dirname, 'src/workers/price-tick-collector.ts');
+    const priceWorker = spawn(npxBin, ['tsx', priceScript], {
+      stdio: 'inherit',
+      env: { ...process.env },
+      cwd: __dirname,
+    });
+    priceWorker.on('exit', (code) => {
+      if (code !== 0) console.error(`> Price tick worker exited with code ${code}`);
+    });
+    console.log('> Price tick collector started (pid:', priceWorker.pid + ')');
+  } catch (priceErr) {
+    console.warn('> Price tick collector not available:', priceErr.message);
+  }
 });

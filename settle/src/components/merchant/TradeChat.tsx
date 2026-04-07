@@ -175,9 +175,9 @@ function TimelineStep({ status, label, time, isFirst, isLast }: TimelineStepProp
         };
       case 'current':
         return {
-          dot: 'bg-orange-500 animate-pulse',
+          dot: 'bg-primary animate-pulse',
           line: 'bg-gray-700',
-          text: 'text-orange-400',
+          text: 'text-primary',
         };
       case 'failed':
         return {
@@ -187,8 +187,8 @@ function TimelineStep({ status, label, time, isFirst, isLast }: TimelineStepProp
         };
       case 'warning':
         return {
-          dot: 'bg-orange-500',
-          line: 'bg-orange-500/50',
+          dot: 'bg-primary',
+          line: 'bg-primary/50',
           text: 'text-white/70',
         };
       default:
@@ -396,13 +396,13 @@ export function TradeChat({
         avatar: (
           <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
             {currentUserType === 'merchant' ? (
-              <Store className="w-4 h-4 text-orange-400" />
+              <Store className="w-4 h-4 text-primary" />
             ) : (
               <span className="text-sm">{userEmoji || getUserEmoji(userName || 'User')}</span>
             )}
           </div>
         ),
-        color: 'text-orange-400',
+        color: 'text-primary',
       };
     }
 
@@ -427,10 +427,10 @@ export function TradeChat({
           name: otherName,
           avatar: (
             <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
-              <Store className="w-4 h-4 text-orange-400" />
+              <Store className="w-4 h-4 text-primary" />
             </div>
           ),
-          color: 'text-orange-400',
+          color: 'text-primary',
         };
       } else {
         const otherName = msg.senderName || tradeInfo?.user.username || userName || 'User';
@@ -482,9 +482,9 @@ export function TradeChat({
   });
 
   return (
-    <div data-testid="chat-panel" className="h-full flex flex-col bg-[#0a0a0a]">
+    <div data-testid="chat-panel" className="h-full flex flex-col bg-background">
       {/* Header with trade info */}
-      <div className="border-b border-white/[0.04] bg-[#0d0d0d]">
+      <div className="border-b border-white/[0.04] bg-card-solid">
         {/* Navigation bar */}
         <div className="px-4 py-3 flex items-center gap-3">
           <button
@@ -535,7 +535,7 @@ export function TradeChat({
             {/* Merchant */}
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
-                <Store className="w-3 h-3 text-orange-400" />
+                <Store className="w-3 h-3 text-primary" />
               </div>
               <span className="text-gray-400">
                 {tradeInfo?.merchant.displayName || 'Merchant'}
@@ -576,7 +576,7 @@ export function TradeChat({
         {showTimeline && (
           <div className="w-1/2 flex flex-col border-r border-white/[0.04] min-h-0 overflow-hidden">
             {/* Timeline header */}
-            <div className="px-4 py-3 border-b border-white/[0.04] bg-[#0d0d0d]/50">
+            <div className="px-4 py-3 border-b border-white/[0.04] bg-card-solid/50">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-gray-500" />
                 <span className="text-xs font-medium text-gray-400">Order Timeline</span>
@@ -585,7 +585,7 @@ export function TradeChat({
 
             {/* Horizontal status progression */}
             {tradeInfo && (
-              <div className="px-4 py-3 border-b border-white/[0.04] bg-[#0d0d0d]/30">
+              <div className="px-4 py-3 border-b border-white/[0.04] bg-card-solid/30">
                 <div className="flex items-center gap-1 overflow-x-auto pb-2">
                   <TimelineStep status="completed" label="Created" time={tradeInfo.createdAt} isFirst />
                   <TimelineStep
@@ -758,14 +758,14 @@ export function TradeChat({
         {/* Right Panel - Chat Messages (50% or 100% if no timeline) */}
         <div className={`${showTimeline ? 'w-1/2' : 'w-full'} flex flex-col min-h-0 overflow-hidden`}>
           {/* Chat tabs header */}
-          <div className="border-b border-white/[0.04] bg-[#0d0d0d]/50">
+          <div className="border-b border-white/[0.04] bg-card-solid/50">
             <div className="flex">
               {/* Order Chat Tab */}
               <button
                 onClick={() => setActiveChatTab('order')}
                 className={`flex-1 px-4 py-3 flex items-center justify-center gap-2 text-xs font-medium transition-colors relative ${
                   activeChatTab === 'order'
-                    ? 'text-orange-400'
+                    ? 'text-primary'
                     : 'text-gray-500 hover:text-gray-400'
                 }`}
               >
@@ -773,13 +773,13 @@ export function TradeChat({
                 <span>Order Chat</span>
                 {chatMessages.length > 0 && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                    activeChatTab === 'order' ? 'bg-orange-500/20 text-orange-400' : 'bg-gray-700 text-gray-400'
+                    activeChatTab === 'order' ? 'bg-primary/20 text-primary' : 'bg-gray-700 text-gray-400'
                   }`}>
                     {chatMessages.length}
                   </span>
                 )}
                 {activeChatTab === 'order' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
                 )}
               </button>
 
@@ -788,14 +788,14 @@ export function TradeChat({
                 onClick={() => setActiveChatTab('direct')}
                 className={`flex-1 px-4 py-3 flex items-center justify-center gap-2 text-xs font-medium transition-colors relative ${
                   activeChatTab === 'direct'
-                    ? 'text-orange-400'
+                    ? 'text-primary'
                     : 'text-gray-500 hover:text-gray-400'
                 }`}
               >
                 <Users className="w-4 h-4" />
                 <span>Direct Chat</span>
                 {activeChatTab === 'direct' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
                 )}
               </button>
             </div>
@@ -808,7 +808,7 @@ export function TradeChat({
               <>
                 {isLoading ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-orange-400 animate-spin" />
+                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
                   </div>
                 ) : chatMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-gray-500">
@@ -912,7 +912,7 @@ export function TradeChat({
                                 msg.from === 'compliance' || msg.senderType === 'compliance'
                                   ? 'bg-red-500/20 text-gray-200 border border-red-500/30'
                                   : msg.from === 'me'
-                                    ? 'bg-orange-500 text-black'
+                                    ? 'bg-primary text-black'
                                     : 'bg-[#1f1f1f] text-gray-200'
                               }`}
                             >
@@ -973,7 +973,7 @@ export function TradeChat({
 
           {/* Image preview bar */}
           {pendingImage && (
-            <div className="px-3 py-2 bg-[#0d0d0d] border-t border-white/[0.04] flex items-center gap-2">
+            <div className="px-3 py-2 bg-card-solid border-t border-white/[0.04] flex items-center gap-2">
               <div className="relative">
                 <img
                   src={pendingImage.previewUrl}
@@ -992,7 +992,7 @@ export function TradeChat({
           )}
 
           {/* Input area */}
-          <div className="p-3 bg-[#0d0d0d] border-t border-white/[0.04]">
+          <div className="p-3 bg-card-solid border-t border-white/[0.04]">
             <input
               ref={fileInputRef}
               type="file"
@@ -1023,7 +1023,7 @@ export function TradeChat({
                 onKeyDown={handleKeyDown}
                 placeholder={pendingImage ? "Add a caption..." : "Type a message..."}
                 className="flex-1 bg-[#1f1f1f] rounded-xl px-4 py-3 outline-none text-sm
-                           text-white placeholder:text-gray-500 focus:ring-1 focus:ring-orange-500/50"
+                           text-white placeholder:text-gray-500 focus:ring-1 focus:ring-primary/50"
               />
               <motion.button
                 data-testid="chat-send"
@@ -1032,7 +1032,7 @@ export function TradeChat({
                 disabled={!messageText.trim() && !pendingImage}
                 className={`w-12 h-12 rounded-xl flex items-center justify-center
                            disabled:opacity-50 disabled:cursor-not-allowed transition-opacity ${
-                             pendingImage ? 'bg-orange-600' : 'bg-orange-500'
+                             pendingImage ? 'bg-orange-600' : 'bg-primary'
                            }`}
               >
                 {isUploading ? (

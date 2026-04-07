@@ -26,9 +26,9 @@ interface RepLeaderboardEntry {
 }
 
 const TIER_SHORT: Record<string, { label: string; cls: string }> = {
-  newcomer: { label: 'NEW', cls: 'text-white/30' },
+  newcomer: { label: 'NEW', cls: 'text-foreground/30' },
   bronze: { label: 'BRZ', cls: 'text-orange-700' },
-  silver: { label: 'SLV', cls: 'text-gray-400' },
+  silver: { label: 'SLV', cls: 'text-foreground/50' },
   gold: { label: 'GLD', cls: 'text-yellow-400' },
   platinum: { label: 'PLT', cls: 'text-blue-200' },
   diamond: { label: 'DIA', cls: 'text-cyan-300' },
@@ -79,18 +79,18 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
     <div className={`flex flex-col ${isCollapsed ? '' : 'h-full'}`}>
       {/* Header */}
       <div
-        className="px-3 py-2 border-b border-white/[0.04] cursor-pointer select-none hover:bg-white/[0.02] transition-colors"
+        className="px-3 py-2 border-b border-section-divider cursor-pointer select-none hover:bg-foreground/[0.02] transition-colors"
         onClick={() => handleCollapse(!isCollapsed)}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ChevronDown className={`w-3 h-3 text-white/30 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
-            <Trophy className="w-3.5 h-3.5 text-white/30" />
-            <h2 className="text-[11px] font-bold text-white/60 font-mono tracking-wider uppercase">
+            <ChevronDown className={`w-3 h-3 text-foreground/30 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
+            <Trophy className="w-3.5 h-3.5 text-foreground/30" />
+            <h2 className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase">
               Leaderboard
             </h2>
             {isCollapsed && (
-              <span className="text-[11px] border border-white/[0.08] text-white/30 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
+              <span className="text-[11px] border border-foreground/[0.08] text-foreground/30 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
                 {leaderboardData.length}
               </span>
             )}
@@ -102,8 +102,8 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
                   onClick={() => setLeaderboardTab('traders')}
                   className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
                     leaderboardTab === 'traders'
-                      ? 'bg-white/[0.08] text-white/80 border border-white/[0.10]'
-                      : 'text-white/30 hover:text-white/50'
+                      ? 'bg-white/[0.08] text-foreground/80 border border-white/[0.10]'
+                      : 'text-foreground/30 hover:text-foreground/50'
                   }`}
                 >
                   Volume
@@ -112,8 +112,8 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
                   onClick={() => setLeaderboardTab('rated')}
                   className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
                     leaderboardTab === 'rated'
-                      ? 'bg-white/[0.08] text-white/80 border border-white/[0.10]'
-                      : 'text-white/30 hover:text-white/50'
+                      ? 'bg-white/[0.08] text-foreground/80 border border-white/[0.10]'
+                      : 'text-foreground/30 hover:text-foreground/50'
                   }`}
                 >
                   Rated
@@ -122,8 +122,8 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
                   onClick={() => setLeaderboardTab('reputation')}
                   className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
                     leaderboardTab === 'reputation'
-                      ? 'bg-white/[0.08] text-white/80 border border-white/[0.10]'
-                      : 'text-white/30 hover:text-white/50'
+                      ? 'bg-white/[0.08] text-foreground/80 border border-white/[0.10]'
+                      : 'text-foreground/30 hover:text-foreground/50'
                   }`}
                 >
                   Rep
@@ -139,12 +139,12 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
         {leaderboardTab === 'reputation' ? (
           repData.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3">
-              <div className="w-10 h-10 rounded-full border border-white/[0.06] bg-white/[0.02] flex items-center justify-center">
-                <Shield className="w-5 h-5 text-white/20" />
+              <div className="w-10 h-10 rounded-full border border-foreground/[0.06] bg-foreground/[0.02] flex items-center justify-center">
+                <Shield className="w-5 h-5 text-foreground/20" />
               </div>
               <div className="text-center">
-                <p className="text-xs font-medium text-white/30 mb-0.5">No scores yet</p>
-                <p className="text-[10px] text-white/15 font-mono">Reputation scores populate after trades</p>
+                <p className="text-xs font-medium text-foreground/30 mb-0.5">No scores yet</p>
+                <p className="text-[10px] text-foreground/15 font-mono">Reputation scores populate after trades</p>
               </div>
             </div>
           ) : (
@@ -154,16 +154,16 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
                 return (
                   <div
                     key={entry.entity_id}
-                    className="flex items-center px-2 py-2.5 rounded-lg hover:bg-white/[0.03] transition-colors text-[11px] font-mono"
+                    className="flex items-center px-2 py-2.5 rounded-lg hover:bg-foreground/[0.03] transition-colors text-[11px] font-mono"
                   >
-                    <span className="w-5 text-right font-bold shrink-0 tabular-nums text-white/25">
+                    <span className="w-5 text-right font-bold shrink-0 tabular-nums text-foreground/25">
                       {i + 1}
                     </span>
                     <div className="flex items-center flex-1 min-w-0 pl-2">
-                      <span className="text-xs font-medium text-white/70 truncate font-sans">{entry.name}</span>
+                      <span className="text-xs font-medium text-foreground/70 truncate font-sans">{entry.name}</span>
                     </div>
                     <span className={`w-9 text-right font-bold shrink-0 ${tierInfo.cls}`}>{tierInfo.label}</span>
-                    <span className="w-11 text-right text-white/40 font-bold tabular-nums shrink-0">{entry.total_score}</span>
+                    <span className="w-11 text-right text-foreground/40 font-bold tabular-nums shrink-0">{entry.total_score}</span>
                   </div>
                 );
               })}
@@ -171,12 +171,12 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
           )
         ) : filteredData.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
-            <div className="w-10 h-10 rounded-full border border-white/[0.06] bg-white/[0.02] flex items-center justify-center">
-              <Trophy className="w-5 h-5 text-white/20" />
+            <div className="w-10 h-10 rounded-full border border-foreground/[0.06] bg-foreground/[0.02] flex items-center justify-center">
+              <Trophy className="w-5 h-5 text-foreground/20" />
             </div>
             <div className="text-center">
-              <p className="text-xs font-medium text-white/30 mb-0.5">No traders yet</p>
-              <p className="text-[10px] text-white/15 font-mono">Rankings populate as trades complete</p>
+              <p className="text-xs font-medium text-foreground/30 mb-0.5">No traders yet</p>
+              <p className="text-[10px] text-foreground/15 font-mono">Rankings populate as trades complete</p>
             </div>
           </div>
         ) : (
@@ -184,24 +184,24 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
             {filteredData.slice(0, 10).map((entry) => (
               <div
                 key={entry.id}
-                className="flex items-center px-2 py-2.5 rounded-lg hover:bg-white/[0.03] transition-colors text-[11px] font-mono"
+                className="flex items-center px-2 py-2.5 rounded-lg hover:bg-foreground/[0.03] transition-colors text-[11px] font-mono"
               >
-                <span className="w-5 text-right font-bold shrink-0 tabular-nums text-white/25">
+                <span className="w-5 text-right font-bold shrink-0 tabular-nums text-foreground/25">
                   {entry.rank}
                 </span>
                 <div className="flex items-center flex-1 min-w-0 pl-2">
-                  <span className="text-xs font-medium text-white/70 truncate font-sans">
+                  <span className="text-xs font-medium text-foreground/70 truncate font-sans">
                     {entry.displayName}
                   </span>
                 </div>
-                <span className="w-7 text-right text-white/25 shrink-0 tabular-nums">{entry.completedCount || entry.totalTrades}t</span>
-                <span className="w-14 text-right text-white/40 font-bold shrink-0 tabular-nums">
+                <span className="w-7 text-right text-foreground/25 shrink-0 tabular-nums">{entry.completedCount || entry.totalTrades}t</span>
+                <span className="w-14 text-right text-foreground/40 font-bold shrink-0 tabular-nums">
                   {entry.totalVolume >= 1000
                     ? `$${(entry.totalVolume / 1000).toFixed(1)}k`
                     : `$${Math.round(entry.totalVolume)}`}
                 </span>
-                <span className="w-11 text-right flex items-center justify-end gap-0.5 text-orange-400/70 shrink-0">
-                  <Star className="w-3 h-3 fill-orange-400/60 text-orange-400/60" />
+                <span className="w-11 text-right flex items-center justify-end gap-0.5 text-primary/70 shrink-0">
+                  <Star className="w-3 h-3 fill-orange-400/60 text-primary/60" />
                   {entry.rating.toFixed(1)}
                 </span>
               </div>

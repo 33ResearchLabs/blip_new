@@ -25,6 +25,7 @@ export const CacheKeys = {
   orderLock: (id: string) => `lock:order:${id}`,
   orderFull: (id: string) => `order-full:${id}`,
   orderFullLock: (id: string) => `lock:order-full:${id}`,
+  merchantOrders: (id: string) => `merchant-orders:${id}`,
   receipt: (orderId: string) => `receipt:${orderId}`,
   receiptLock: (orderId: string) => `lock:receipt:${orderId}`,
   merchant: (id: string) => `merchant:${id}`,
@@ -35,12 +36,13 @@ export const CacheKeys = {
 // ── TTLs (seconds) ─────────────────────────────────────────────────────
 
 const TTL = {
-  ACTIVE_ORDER: 30,
+  ACTIVE_ORDER: 60,       // was 30s — reduced Redis calls by 50%
   TERMINAL_ORDER: 300,
+  MERCHANT_ORDERS_LIST: 60, // full order list cache
   RECEIPT: 300,
   MERCHANT: 120,
   MERCHANT_OFFERS: 60,
-  LOCK: 5, // Stampede lock — 5s max hold time
+  LOCK: 5,
 } as const;
 
 const TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'expired']);
@@ -179,12 +181,46 @@ export async function updateOrderCache(orderId: string, order: unknown): Promise
 
 /**
  * Invalidate order cache (use when you don't have the updated order object).
+ * Also invalidates the merchant's order list cache.
  */
-export async function invalidateOrderCache(orderId: string): Promise<void> {
-  await cache.del(
+export async function invalidateOrderCache(orderId: string, merchantId?: string): Promise<void> {
+  const keys = [
     CacheKeys.order(orderId),
     CacheKeys.orderFull(orderId),
-    CacheKeys.receipt(orderId)
+    CacheKeys.receipt(orderId),
+  ];
+  if (merchantId) {
+    keys.push(CacheKeys.merchantOrders(merchantId));
+    keys.push(CacheKeys.merchantOrders(`${merchantId}:broadcast`));
+  }
+  await cache.del(...keys);
+}
+
+// ── Merchant order list cache (reduces ~200 Redis calls to 1) ──────────
+
+/**
+ * Get cached merchant order list. Simple GET — no stampede lock needed.
+ * Returns null on miss (caller fetches from DB and calls setMerchantOrdersCache).
+ */
+export async function getMerchantOrdersCache<T>(merchantId: string): Promise<T[] | null> {
+  return cache.get<T[]>(CacheKeys.merchantOrders(merchantId));
+}
+
+/**
+ * Cache the full merchant order list as one key.
+ */
+export async function setMerchantOrdersCache<T>(merchantId: string, orders: T[]): Promise<void> {
+  await cache.set(CacheKeys.merchantOrders(merchantId), orders, TTL.MERCHANT_ORDERS_LIST);
+}
+
+/**
+ * Invalidate merchant order list (on order create/update/cancel).
+ * Clears BOTH the standard and broadcast cache keys.
+ */
+export async function invalidateMerchantOrderListCache(merchantId: string): Promise<void> {
+  await cache.del(
+    CacheKeys.merchantOrders(merchantId),
+    CacheKeys.merchantOrders(`${merchantId}:broadcast`)
   );
 }
 

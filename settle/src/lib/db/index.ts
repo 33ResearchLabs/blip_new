@@ -11,7 +11,7 @@ import { Pool, PoolClient } from 'pg';
 
 // Support both DATABASE_URL (Railway) and individual env vars (local dev)
 const isProduction = process.env.NODE_ENV === 'production';
-const defaultPoolMax = isProduction ? '50' : '20';
+const defaultPoolMax = isProduction ? '100' : '20';
 const poolConfig = process.env.DATABASE_URL
   ? {
       connectionString: process.env.DATABASE_URL,

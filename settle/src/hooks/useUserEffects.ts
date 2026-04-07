@@ -105,11 +105,11 @@ export function useUserEffects({
   } = useRealtimeChat({
     actorType: "user",
     actorId: userId || undefined,
-    onNewMessage: (chatId, message) => {
+    onNewMessage: (orderId, message) => {
       playSound('message');
 
       setOrders(prev => prev.map(o => {
-        if (o.id === chatId && message.from === 'them') {
+        if (o.id === orderId && message.from === 'them') {
           return {
             ...o,
             unreadCount: (o.unreadCount || 0) + 1,
@@ -123,14 +123,14 @@ export function useUserEffects({
         return o;
       }));
 
-      if (message.from === 'them' && (screen !== 'order' || activeOrderId !== chatId)) {
-        const order = orders.find(o => o.id === chatId);
+      if (message.from === 'them' && (screen !== 'order' || activeOrderId !== orderId)) {
+        const order = orders.find(o => o.id === orderId);
         const merchantName = order?.merchant?.name || 'Merchant';
         toast.showNewMessage(merchantName, message.text?.substring(0, 80));
         showBrowserNotification(
           `New message from ${merchantName}`,
           message.text.substring(0, 100),
-          chatId
+          orderId
         );
       }
     },
@@ -399,18 +399,35 @@ export function useUserEffects({
   }, [activeOrder, openChat]);
 
   // Auto-open chat when entering chat-view screen
+  // Use refs to avoid re-firing when callback references change
+  const chatWindowsRef2 = useRef(chatWindows);
+  chatWindowsRef2.current = chatWindows;
+  const markAsReadRef = useRef(markAsRead);
+  markAsReadRef.current = markAsRead;
+  const openChatRef = useRef(openChat);
+  openChatRef.current = openChat;
+  const activeOrderRef = useRef(activeOrder);
+  activeOrderRef.current = activeOrder;
+  const prevChatViewOrderRef = useRef<string | null>(null);
   useEffect(() => {
-    if (screen === "chat-view" && activeOrder) {
-      openChat(
-        activeOrder.merchant.name,
+    const order = activeOrderRef.current;
+    if (screen === "chat-view" && order && order.id !== prevChatViewOrderRef.current) {
+      prevChatViewOrderRef.current = order.id;
+      openChatRef.current(
+        order.merchant?.name || 'Merchant',
         "\uD83C\uDFEA",
-        activeOrder.id
+        order.id
       );
-      // Mark merchant's messages as read when user views the chat
-      const chat = chatWindows.find(w => w.orderId === activeOrder.id);
-      if (chat) markAsRead(chat.id);
+      // Mark merchant's messages as read once when user enters chat
+      setTimeout(() => {
+        const chat = chatWindowsRef2.current.find(w => w.orderId === order.id);
+        if (chat) markAsReadRef.current(chat.id);
+      }, 500);
     }
-  }, [screen, activeOrder, openChat, chatWindows, markAsRead]);
+    if (screen !== "chat-view") {
+      prevChatViewOrderRef.current = null;
+    }
+  }, [screen, activeOrder?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll to bottom when chat messages change
   const activeChat = activeOrder ? chatWindows.find(w => w.orderId === activeOrder.id) : null;
@@ -455,18 +472,8 @@ export function useUserEffects({
     });
   }, [activeChat, chatMessage, sendChatMessage, playSound, activeOrderId, setOrders]);
 
-  // Debug logging for chat issues
-  useEffect(() => {
-    if (screen === "chat-view") {
-      console.log('[page.tsx] chat-view debug:', {
-        activeOrderId,
-        activeOrderExists: !!activeOrder,
-        activeChatExists: !!activeChat,
-        activeChatMessages: activeChat?.messages?.length ?? 0,
-        chatWindows: chatWindows.map(w => ({ id: w.id, orderId: w.orderId, msgCount: w.messages.length })),
-      });
-    }
-  }, [screen, activeOrderId, activeOrder, activeChat, chatWindows]);
+  // Debug logging for chat issues (disabled — was causing re-render spam via chatWindows dep)
+  // To re-enable, use a ref-based approach instead of chatWindows in deps
 
   return {
     matchingTimeLeft,

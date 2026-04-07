@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
   Wallet,
   Loader2,
@@ -10,10 +10,12 @@ import {
   Plus,
   Minus,
   TrendingUp,
+  TrendingDown,
   Activity,
   Radio,
   ChevronRight,
   Shield,
+  Clock,
 } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
@@ -71,6 +73,14 @@ export const StatusCard = memo(function StatusCard({
 
   const [reputationTier, setReputationTier] = useState<{ name: string; tier: string; score: number } | null>(null);
 
+  // Smart Market Price Panel state
+  const [marketPair, setMarketPair] = useState<'usdt_aed' | 'usdt_inr'>('usdt_aed');
+  const [marketTimeframe, setMarketTimeframe] = useState<'1m' | '5m' | '15m' | '1h'>('5m');
+  const [marketData, setMarketData] = useState<{ avg_5m: number; last_price: number; final_price: number; price_mode: string; currency: string; tickCount: number; source: string } | null>(null);
+  const [marketLoading, setMarketLoading] = useState(false);
+  const [marketError, setMarketError] = useState(false);
+  const prevAvgRef = useRef<number | null>(null);
+
   const [inrBalance, setInrBalance] = useState<number>(() => {
     if (typeof window !== 'undefined' && merchantId) {
       const saved = localStorage.getItem(`inr_cash_${merchantId}`);
@@ -87,6 +97,34 @@ export const StatusCard = memo(function StatusCard({
       localStorage.setItem(`inr_cash_${merchantId}`, inrBalance.toString());
     }
   }, [inrBalance, merchantId]);
+
+  // Market price: fetch on pair/timeframe change + poll every 25s
+  const fetchMarketPrice = useCallback(async () => {
+    try {
+      const res = await fetchWithAuth(`/api/price?pair=${marketPair}&timeframe=${marketTimeframe}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          setMarketData(prev => {
+            if (prev) prevAvgRef.current = prev.avg_5m;
+            return json.data;
+          });
+          setMarketError(false);
+        }
+      }
+    } catch {
+      setMarketError(true);
+    } finally {
+      setMarketLoading(false);
+    }
+  }, [marketPair, marketTimeframe]);
+
+  useEffect(() => {
+    setMarketLoading(true);
+    fetchMarketPrice();
+    const id = setInterval(fetchMarketPrice, 25_000);
+    return () => clearInterval(id);
+  }, [fetchMarketPrice]);
 
   // Reputation: fetch once on mount per merchantId (changes rarely, no polling needed)
   useEffect(() => {
@@ -219,58 +257,58 @@ export const StatusCard = memo(function StatusCard({
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <Loader2 className="w-5 h-5 text-white/20 animate-spin" />
+        <Loader2 className="w-5 h-5 text-foreground/20 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Live ticker strip — taller with more info */}
-      <div className="flex items-center justify-between px-3 py-2.5 bg-white/[0.02] border-b border-white/[0.04] text-[9px] font-mono relative overflow-hidden">
+    <div className="flex flex-col">
+      {/* Live ticker strip — sticky at top while sidebar scrolls */}
+      <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2.5 bg-background border-b border-foreground/[0.04] text-[9px] font-mono relative overflow-hidden">
         <div className="absolute inset-0 shimmer pointer-events-none" />
         <div className="flex items-center gap-4 relative z-10">
           <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-live-dot" />
-            <span className="text-orange-400/80 font-bold tracking-wide">LIVE</span>
+            <div className="w-1.5 h-1.5 bg-primary rounded-full animate-live-dot" />
+            <span className="text-primary/80 font-bold tracking-wide">LIVE</span>
           </div>
           <div className="flex items-center gap-3">
             {reputationTier && (
               <span className="flex items-center gap-0.5">
-                <Shield className="w-2.5 h-2.5 text-orange-400/60" />
-                <span className="text-orange-400/70 font-bold uppercase">{reputationTier.name}</span>
+                <Shield className="w-2.5 h-2.5 text-primary/60" />
+                <span className="text-primary/70 font-bold uppercase">{reputationTier.name}</span>
               </span>
             )}
-            <span className="text-white/25">RNK <span className="text-white/70 font-bold">{rank > 0 ? `#${rank}` : '—'}</span></span>
-            <span className="text-white/25">WIN <span className="text-white/70 font-bold">{winRate > 0 ? `${winRate.toFixed(0)}%` : '—'}</span></span>
-            <span className="text-white/25">FILL <span className="text-white/70 font-bold">{corridor?.avg_fill_time_sec ? `${corridor.avg_fill_time_sec}s` : '—'}</span></span>
+            <span className="text-foreground/25">RNK <span className="text-foreground/70 font-bold">{rank > 0 ? `#${rank}` : '—'}</span></span>
+            <span className="text-foreground/25">WIN <span className="text-foreground/70 font-bold">{winRate > 0 ? `${winRate.toFixed(0)}%` : '—'}</span></span>
+            <span className="text-foreground/25">FILL <span className="text-foreground/70 font-bold">{corridor?.avg_fill_time_sec ? `${corridor.avg_fill_time_sec}s` : '—'}</span></span>
           </div>
         </div>
         {/* Active toggle */}
         <button
           onClick={onToggleOnline}
-          className={`relative z-10 flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold tracking-wide transition-all border ${
+          className={`relative z-10 flex items-center justify-center w-6 h-6 rounded-full transition-all border ${
             isOnline
-              ? 'bg-orange-500/10 border-orange-500/30 text-orange-400'
-              : 'bg-white/[0.03] border-white/[0.08] text-white/30'
+              ? 'bg-primary/10 border-primary/30 text-primary'
+              : 'bg-foreground/[0.03] border-foreground/[0.08] text-foreground/30'
           }`}
+          title={isOnline ? 'ACTIVE' : 'OFFLINE'}
         >
-          <Radio className={`w-2.5 h-2.5 ${isOnline ? 'animate-live-dot' : ''}`} />
-          {isOnline ? 'ACTIVE' : 'OFFLINE'}
+          <Radio className={`w-3 h-3 ${isOnline ? 'animate-live-dot' : ''}`} />
         </button>
       </div>
 
       {/* Main balance hero */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-3 relative">
+      <div className="flex flex-col items-center justify-center px-4 py-3 relative">
         {/* Ambient glow behind amount */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-48 h-24 bg-orange-500/[0.03] rounded-full blur-[60px]" />
+          <div className="w-48 h-24 bg-primary/[0.03] rounded-full blur-[60px]" />
         </div>
 
         {/* USDT Label */}
         <div className="flex items-center gap-1.5 mb-1 relative z-10">
-          <Wallet className="w-3 h-3 text-white/20" />
-          <span className="text-[10px] text-white/30 font-mono uppercase tracking-widest">Available Balance</span>
+          <Wallet className="w-3 h-3 text-foreground/20" />
+          <span className="text-[10px] text-foreground/30 font-mono uppercase tracking-widest">Available Balance</span>
         </div>
 
         {/* Big USDT Amount */}
@@ -278,25 +316,25 @@ export const StatusCard = memo(function StatusCard({
           <div className="text-4xl font-black text-white font-mono tabular-nums tracking-tight leading-none">
             {balance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </div>
-          <div className="text-[11px] text-white/20 font-mono mt-1 tabular-nums">
+          <div className="text-[11px] text-foreground/20 font-mono mt-1 tabular-nums">
             ≈ {aedEquivalent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} AED
           </div>
         </div>
 
         {/* 24h Earnings badge */}
         {todayEarnings !== 0 && (
-          <div className="mt-2.5 flex items-center gap-1 px-2 py-0.5 bg-orange-500/[0.06] border border-orange-500/15 rounded-full relative z-10">
-            <TrendingUp className="w-2.5 h-2.5 text-orange-400" />
-            <span className="text-[10px] font-bold text-orange-400 font-mono tabular-nums">
+          <div className="mt-2.5 flex items-center gap-1 px-2 py-0.5 bg-primary/[0.06] border border-primary/15 rounded-full relative z-10">
+            <TrendingUp className="w-2.5 h-2.5 text-primary" />
+            <span className="text-[10px] font-bold text-primary font-mono tabular-nums">
               {todayEarnings > 0 ? '+' : ''}{todayEarnings.toFixed(2)} USDT
             </span>
-            <span className="text-[9px] text-orange-400/50 font-mono">24h</span>
+            <span className="text-[9px] text-primary/50 font-mono">24h</span>
           </div>
         )}
 
         {/* Locked escrow indicator */}
         {lockedInEscrow > 0 && (
-          <div className="mt-1.5 text-[9px] text-white/15 font-mono relative z-10">
+          <div className="mt-1.5 text-[9px] text-foreground/15 font-mono relative z-10">
             {lockedInEscrow.toFixed(0)} locked in escrow
           </div>
         )}
@@ -309,17 +347,17 @@ export const StatusCard = memo(function StatusCard({
           {/* INR */}
           <div className="glass-card rounded-lg p-2">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[9px] text-white/25 font-mono">INR CASH</span>
+              <span className="text-[9px] text-foreground/25 font-mono">INR CASH</span>
               <div className="flex gap-0.5">
                 <button
                   onClick={() => { setInrInputMode('add'); setShowInrInput(true); }}
-                  className="p-0.5 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white/25 transition-all"
+                  className="p-0.5 rounded bg-foreground/[0.04] hover:bg-white/[0.08] border border-foreground/[0.06] text-foreground/25 transition-all"
                 >
                   <Plus className="w-2 h-2" />
                 </button>
                 <button
                   onClick={() => { setInrInputMode('subtract'); setShowInrInput(true); }}
-                  className="p-0.5 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white/25 transition-all"
+                  className="p-0.5 rounded bg-foreground/[0.04] hover:bg-white/[0.08] border border-foreground/[0.06] text-foreground/25 transition-all"
                 >
                   <Minus className="w-2 h-2" />
                 </button>
@@ -327,20 +365,20 @@ export const StatusCard = memo(function StatusCard({
             </div>
             {showInrInput ? (
               <div className="flex items-center gap-1">
-                <span className="text-[9px] text-white/25 font-mono">{inrInputMode === 'add' ? '+' : '-'}</span>
+                <span className="text-[9px] text-foreground/25 font-mono">{inrInputMode === 'add' ? '+' : '-'}</span>
                 <input
                   type="number"
                   value={inrInputValue}
                   onChange={(e) => setInrInputValue(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleInrSubmit(); if (e.key === 'Escape') setShowInrInput(false); }}
                   placeholder="0"
-                  className="w-14 bg-white/[0.03] border border-white/[0.08] rounded px-1 py-0.5 text-[10px] text-white font-mono outline-none focus:border-white/20"
+                  className="w-14 bg-foreground/[0.03] border border-foreground/[0.08] rounded px-1 py-0.5 text-[10px] text-white font-mono outline-none focus:border-white/20"
                   autoFocus
                 />
-                <button onClick={handleInrSubmit} className="px-1 py-0.5 rounded bg-white/[0.06] border border-white/[0.08] text-[8px] text-white/50 font-bold">OK</button>
+                <button onClick={handleInrSubmit} className="px-1 py-0.5 rounded bg-foreground/[0.06] border border-foreground/[0.08] text-[8px] text-foreground/50 font-bold">OK</button>
               </div>
             ) : (
-              <span className="text-sm font-bold text-white/70 font-mono tabular-nums">
+              <span className="text-sm font-bold text-foreground/70 font-mono tabular-nums">
                 {inrBalance > 0 ? `₹${inrBalance.toLocaleString()}` : '₹0'}
               </span>
             )}
@@ -349,98 +387,205 @@ export const StatusCard = memo(function StatusCard({
 
         {/* Success toast */}
         {conversionSuccess && (
-          <div className="flex items-center gap-1.5 py-1 px-2 bg-orange-500/[0.06] border border-orange-500/20 rounded">
-            <Check className="w-3 h-3 text-orange-400" />
-            <span className="text-[9px] text-orange-400">{conversionSuccess}</span>
+          <div className="flex items-center gap-1.5 py-1 px-2 bg-primary/[0.06] border border-primary/20 rounded">
+            <Check className="w-3 h-3 text-primary" />
+            <span className="text-[9px] text-primary">{conversionSuccess}</span>
           </div>
         )}
 
-        {/* Market Rate — prominent display */}
-        <div className="glass-card rounded-lg p-2.5">
+        {/* Smart Market Price Panel */}
+        <div className="glass-card rounded-lg p-2.5 space-y-2">
+          {/* Header: title + pair tabs */}
           <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className="text-[9px] text-white/25 font-mono uppercase tracking-wider">Market Rate</span>
-                {corridor?.confidence && (
-                  <span className={`text-[8px] font-mono px-1 py-0.5 rounded flex items-center gap-0.5 ${
-                    corridor.confidence === 'high' ? 'bg-white/[0.04] text-white/50' :
-                    corridor.confidence === 'medium' ? 'bg-white/[0.03] text-white/35' :
-                    'bg-white/[0.02] text-white/20'
-                  }`}>
-                    <span className={`w-1 h-1 rounded-full ${corridor.confidence === 'high' ? 'bg-orange-400 animate-live-dot' : 'bg-white/20'}`} />
-                    {corridor.confidence === 'high' ? 'LIVE' : corridor.confidence === 'medium' ? 'CALC' : 'EST'}
-                  </span>
-                )}
-              </div>
-              <div className="text-lg font-bold text-white font-mono tabular-nums">
-                {corridor ? Number(corridor.ref_price).toFixed(4) : '—'}
-              </div>
-              <div className="text-[9px] text-white/20 font-mono mt-0.5">USDT/AED</div>
-            </div>
-            <div className="flex flex-col gap-1 items-end">
-              {!showRefPriceInput && (
+            <span className="text-[9px] text-foreground/25 font-mono uppercase tracking-wider">Market</span>
+            <div className="flex items-center gap-0.5 bg-foreground/[0.03] rounded-md p-[2px]">
+              {(['usdt_aed', 'usdt_inr'] as const).map(pair => (
                 <button
-                  onClick={() => setShowRefPriceInput(true)}
-                  className="px-2 py-1 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-orange-500/20 text-[9px] text-orange-400 font-bold transition-all"
+                  key={pair}
+                  onClick={() => { if (pair !== marketPair) { setMarketData(null); setMarketPair(pair); } }}
+                  className={`px-2 py-[3px] rounded text-[8px] font-mono font-bold transition-all ${
+                    marketPair === pair
+                      ? 'bg-foreground/[0.08] text-foreground/70'
+                      : 'text-foreground/25 hover:text-foreground/40'
+                  }`}
                 >
-                  {customRefPrice ? `${customRefPrice.toFixed(4)}` : 'SET PRICE'}
+                  {pair === 'usdt_aed' ? 'USDT/AED' : 'USDT/INR'}
                 </button>
-              )}
+              ))}
             </div>
           </div>
-          {showRefPriceInput && (
-            <div className="flex items-center gap-1 mt-2">
-              <input
-                type="number"
-                value={refPriceInputValue}
-                onChange={(e) => setRefPriceInputValue(e.target.value)}
-                placeholder="3.6730"
-                step="0.0001"
-                className="flex-1 bg-white/[0.02] border border-white/[0.06] rounded px-2 py-1 text-xs text-white font-mono outline-none focus:border-white/15"
-                autoFocus
-              />
+
+          {/* Timeframe pills */}
+          <div className="flex items-center gap-0.5">
+            <Clock className="w-2.5 h-2.5 text-foreground/15 mr-0.5" />
+            {(['1m', '5m', '15m', '1h'] as const).map(tf => (
               <button
-                onClick={() => {
-                  const price = parseFloat(refPriceInputValue);
-                  if (!isNaN(price)) {
-                    setCustomRefPrice(price);
-                    setRefPriceInputValue('');
-                    setShowRefPriceInput(false);
-                  }
-                }}
-                className="px-2 py-1 bg-white/[0.04] hover:bg-white/[0.08] border border-orange-500/30 rounded text-[9px] text-orange-400 font-medium"
+                key={tf}
+                onClick={() => { if (tf !== marketTimeframe) { setMarketData(null); setMarketTimeframe(tf); } }}
+                className={`px-1.5 py-[2px] rounded text-[8px] font-mono font-bold transition-all ${
+                  marketTimeframe === tf
+                    ? 'bg-primary/10 text-primary border border-primary/20'
+                    : 'text-foreground/20 hover:text-foreground/35'
+                }`}
               >
-                Set
+                {tf}
               </button>
-              <button
-                onClick={() => { setCustomRefPrice(null); setRefPriceInputValue(''); setShowRefPriceInput(false); }}
-                className="px-1 py-1 text-white/15 hover:text-white/30"
-              >
-                <X className="w-3 h-3" />
-              </button>
+            ))}
+          </div>
+
+          {/* Price display */}
+          {marketLoading && !marketData ? (
+            <div className="flex items-center justify-center py-2">
+              <Loader2 className="w-3.5 h-3.5 text-foreground/15 animate-spin" />
             </div>
-          )}
+          ) : marketError && !marketData ? (
+            <div className="text-[9px] text-foreground/25 font-mono text-center py-2">Market unavailable</div>
+          ) : marketData ? (
+            <div className="space-y-1.5">
+              {/* Final price — admin-set, primary */}
+              <div>
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="text-[8px] text-foreground/25 font-mono">Price</span>
+                  <span className={`text-[7px] font-mono px-1 py-[1px] rounded ${
+                    marketData.price_mode === 'MANUAL'
+                      ? 'bg-orange-500/10 text-orange-400 border border-orange-500/15'
+                      : 'bg-green-500/10 text-green-400 border border-green-500/15'
+                  }`}>
+                    {marketData.price_mode}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-lg font-bold font-mono tabular-nums ${
+                    marketData.price_mode === 'MANUAL' ? 'text-orange-400' : 'text-white'
+                  }`}>
+                    {marketPair === 'usdt_inr' ? '₹' : ''}{marketData.final_price.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}
+                    {marketPair === 'usdt_aed' ? ' AED' : ''}
+                  </span>
+                  {prevAvgRef.current !== null && prevAvgRef.current !== marketData.avg_5m && (
+                    marketData.avg_5m > prevAvgRef.current
+                      ? <TrendingUp className="w-3 h-3 text-green-400" />
+                      : <TrendingDown className="w-3 h-3 text-red-400" />
+                  )}
+                </div>
+              </div>
+
+              {/* Avg + Last price — secondary row */}
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] text-foreground/20 font-mono">Avg ({marketTimeframe})</span>
+                <span className="text-[10px] text-foreground/40 font-mono tabular-nums">
+                  {marketPair === 'usdt_inr' ? '₹' : ''}{marketData.avg_5m.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}
+                  {marketPair === 'usdt_aed' ? ' AED' : ''}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] text-foreground/20 font-mono">Last Price</span>
+                <span className="text-[10px] text-foreground/40 font-mono tabular-nums">
+                  {marketPair === 'usdt_inr' ? '₹' : ''}{marketData.last_price.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}
+                  {marketPair === 'usdt_aed' ? ' AED' : ''}
+                </span>
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-foreground/[0.04]" />
+
+              {/* Your Price input */}
+              {!showRefPriceInput ? (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[8px] text-foreground/20 font-mono">Your Price</span>
+                    {customRefPrice && marketData.avg_5m > 0 && (
+                      <span className={`ml-1.5 text-[8px] font-mono font-bold ${
+                        ((customRefPrice - marketData.avg_5m) / marketData.avg_5m) * 100 > 0
+                          ? 'text-red-400' : 'text-green-400'
+                      }`}>
+                        {((customRefPrice - marketData.avg_5m) / marketData.avg_5m * 100) > 0 ? '+' : ''}
+                        {((customRefPrice - marketData.avg_5m) / marketData.avg_5m * 100).toFixed(2)}%
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setShowRefPriceInput(true)}
+                    className="px-2 py-1 rounded bg-foreground/[0.04] hover:bg-white/[0.08] border border-primary/20 text-[9px] text-primary font-bold transition-all"
+                  >
+                    {customRefPrice
+                      ? `${marketPair === 'usdt_inr' ? '₹' : ''}${customRefPrice.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}${marketPair === 'usdt_aed' ? ' AED' : ''}`
+                      : 'SET PRICE'}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      value={refPriceInputValue}
+                      onChange={(e) => setRefPriceInputValue(e.target.value)}
+                      placeholder={marketData.avg_5m.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}
+                      step={marketPair === 'usdt_aed' ? '0.0001' : '0.01'}
+                      className="flex-1 bg-foreground/[0.02] border border-foreground/[0.06] rounded px-2 py-1 text-xs text-white font-mono outline-none focus:border-primary/30"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => {
+                        const price = parseFloat(refPriceInputValue);
+                        if (!isNaN(price) && price > 0) {
+                          setCustomRefPrice(price);
+                          setRefPriceInputValue('');
+                          setShowRefPriceInput(false);
+                        }
+                      }}
+                      className="px-2 py-1 bg-primary/10 hover:bg-primary/20 border border-primary/30 rounded text-[9px] text-primary font-bold"
+                    >
+                      Set
+                    </button>
+                    <button
+                      onClick={() => { setCustomRefPrice(null); setRefPriceInputValue(''); setShowRefPriceInput(false); }}
+                      className="px-1 py-1 text-foreground/15 hover:text-foreground/30"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                  {/* Live spread preview */}
+                  {refPriceInputValue && marketData.avg_5m > 0 && (
+                    <div className="text-[8px] font-mono text-foreground/25">
+                      Spread: <span className={`font-bold ${
+                        ((parseFloat(refPriceInputValue) - marketData.avg_5m) / marketData.avg_5m) * 100 > 0
+                          ? 'text-red-400' : 'text-green-400'
+                      }`}>
+                        {((parseFloat(refPriceInputValue) - marketData.avg_5m) / marketData.avg_5m * 100) > 0 ? '+' : ''}
+                        {((parseFloat(refPriceInputValue) - marketData.avg_5m) / marketData.avg_5m * 100).toFixed(2)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tick count indicator */}
+              <div className="text-[7px] text-foreground/10 font-mono text-right">
+                {marketData.tickCount} ticks · {marketData.source}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Corridor button */}
         <button
           onClick={onOpenCorridor}
-          className="w-full flex items-center justify-between py-1.5 px-2.5 glass-card rounded-lg hover:bg-white/[0.04] transition-all group"
+          className="w-full flex items-center justify-between py-1.5 px-2.5 glass-card rounded-lg hover:bg-foreground/[0.04] transition-all group"
         >
           <div className="flex items-center gap-1.5">
-            <Activity className="w-3 h-3 text-white/20" />
-            <span className="text-[9px] text-white/30 font-mono uppercase tracking-wider">Corridor</span>
+            <Activity className="w-3 h-3 text-foreground/20" />
+            <span className="text-[9px] text-foreground/30 font-mono uppercase tracking-wider">Corridor</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[9px] text-white/40 font-mono tabular-nums">
+            <span className="text-[9px] text-foreground/40 font-mono tabular-nums">
               {corridor?.active_merchants_count || 0} online · vol {corridor?.volume_5m ? corridor.volume_5m.toFixed(0) : '0'}
             </span>
-            <ChevronRight className="w-3 h-3 text-white/15 group-hover:text-white/30 transition-colors" />
+            <ChevronRight className="w-3 h-3 text-foreground/15 group-hover:text-foreground/30 transition-colors" />
           </div>
         </button>
 
         {/* Quick stats row */}
-        <div className="flex items-center justify-between px-1 text-[9px] font-mono text-white/20">
+        <div className="flex items-center justify-between px-1 text-[9px] font-mono text-foreground/20">
           <span>{completedOrders} done</span>
           <span className="text-white/10">·</span>
           <span>{cancelledOrders} cancelled</span>

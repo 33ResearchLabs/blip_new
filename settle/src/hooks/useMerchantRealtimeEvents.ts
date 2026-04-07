@@ -32,25 +32,19 @@ export function useMerchantRealtimeEvents({
   useRealtimeOrders({
     actorType: 'merchant',
     actorId: merchantId,
-    onOrderCreated: (order) => {
+    onOrderCreated: () => {
+      // No notification — new orders appear in the Pending list directly
       debouncedFetchOrders();
       debouncedFetchConversations();
-      const isRelevant = order?.merchant_id === merchantId || order?.buyer_merchant_id === merchantId;
-      if (isRelevant) {
-        playSound('new_order');
-        const typeLabel = order?.type === 'buy' ? 'Send' : 'Receive';
-        const amt = order?.crypto_amount ? `${Number(order.crypto_amount).toLocaleString()} USDC` : '';
-        const fiat = order?.fiat_amount ? `${Number(order.fiat_amount).toLocaleString()} AED` : '';
-        addNotification('order', order ? `New ${typeLabel} order · ${amt}${fiat ? ` → ${fiat}` : ''}` : 'New order received', order?.id);
-        toast.showOrderCreated(order ? `${typeLabel} ${order.crypto_amount} USDC for ${order.fiat_amount} AED` : undefined);
-      }
     },
     onOrderStatusUpdated: (orderId, newStatus, _previousStatus, extra?: { buyerMerchantId?: string; merchantId?: string }) => {
       if (newStatus === 'accepted' && extra?.buyerMerchantId) {
         setOrders((prev: Order[]) => prev.map(o => o.id === orderId ? { ...o, buyerMerchantId: extra.buyerMerchantId, minimalStatus: 'accepted' } : o));
       }
-      // Refetch only the affected order — Pusher batched events already handle list state
+      // Fast path: refetch single order for immediate UI update
       refetchSingleOrder(orderId);
+      // Full list refetch to ensure enrichOrderResponse recomputes actions (primaryAction etc.)
+      debouncedFetchOrders();
       debouncedFetchConversations();
       const matchedOrder = orders.find(o => o.id === orderId);
       const isRelevantOrder = () => matchedOrder && (matchedOrder.orderMerchantId === merchantId || matchedOrder.buyerMerchantId === merchantId);
@@ -138,6 +132,30 @@ export function useMerchantRealtimeEvents({
           window.dispatchEvent(new CustomEvent('open-order-chat', { detail: { orderId: data.orderId } }));
         }
       }
+    },
+    // Inbox preview refresh on incoming chat messages, regardless of whether
+    // the chat window is open. The user-side useRealtimeChat hook only
+    // subscribes to a per-order channel when a chat window is OPEN, so
+    // closed-window updates have to come through the merchant's private
+    // channel binding inside useRealtimeOrders. Without this callback the
+    // conversation list keeps showing the stale last message until a manual
+    // refresh.
+    onChatMessage: (data) => {
+      // Skip our own outgoing messages — server publishes to recipient
+      // channel only, but be defensive in case the contract changes.
+      if (data.senderType === 'merchant' && data.senderId === merchantId) return;
+
+      debouncedFetchConversations();
+
+      // Light-weight notification so the merchant gets the same alert UX as
+      // for status events. Falls back to a generic label if we can't find
+      // the order in the local store yet.
+      const order = orders.find(o => o.id === data.orderId);
+      const userLabel = order?.user || (data.senderType === 'user' ? 'User' : 'Merchant');
+      const preview = (data.content || '').substring(0, 80);
+      addNotification('message', preview ? `${userLabel}: ${preview}` : `New message from ${userLabel}`, data.orderId);
+      playSound('message');
+      toast.showNewMessage?.(userLabel, preview);
     },
   });
 }

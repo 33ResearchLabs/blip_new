@@ -4,10 +4,12 @@ import { verifyWalletSignature } from '@/lib/solana/verifySignature';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { requireTokenAuth } from '@/lib/middleware/auth';
 import { updateMerchantOnlineStatus, createDefaultMerchantOffers, serializeMerchant } from '@/lib/db/repositories/merchants';
-import { generateSessionToken, generateAccessToken, generateRefreshToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { createSession, getSessionIdFromRefreshCookie } from '@/lib/auth/sessions';
 import { validateUsername } from '@/lib/validation/username';
 import crypto from 'crypto';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
+import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
 
 // Password hashing — PBKDF2 with 100k iterations (OWASP minimum for SHA-512)
 const PBKDF2_ITERATIONS = 100_000;
@@ -89,11 +91,30 @@ export async function GET(request: NextRequest) {
       console.log('[API] Merchant session restored, set online:', merchant.id);
 
       const payload = { actorId: merchant.id, actorType: 'merchant' as const };
-      const sessionToken = generateSessionToken(payload);
-      const accessToken = generateAccessToken(payload);
-      const refreshToken = generateRefreshToken(payload);
 
-      const response = NextResponse.json({
+      // Look up existing session from refresh cookie to embed sessionId in v2 token.
+      // If no refresh cookie, create a new session (ensures session exists for revocation).
+      let checkSessionId: string | undefined;
+      const refreshCookie = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+      if (refreshCookie) {
+        try {
+          const existingSessionId = await getSessionIdFromRefreshCookie(refreshCookie);
+          if (existingSessionId) checkSessionId = existingSessionId;
+        } catch { /* proceed without sessionId */ }
+      }
+      // If no valid refresh cookie session, create a new one
+      let checkRefreshToken: string | null = null;
+      if (!checkSessionId) {
+        try {
+          const sess = await createSession(payload, request as any);
+          if (sess) { checkSessionId = sess.sessionId; checkRefreshToken = sess.refreshToken; }
+        } catch { /* proceed without session tracking */ }
+      }
+
+      const sessionToken = generateSessionToken(payload);
+      const accessToken = generateAccessToken({ ...payload, sessionId: checkSessionId });
+
+      const checkResponse = NextResponse.json({
         success: true,
         data: {
           valid: true,
@@ -102,10 +123,9 @@ export async function GET(request: NextRequest) {
           ...(accessToken && { accessToken }),
         },
       });
-      if (refreshToken) {
-        response.cookies.set(REFRESH_TOKEN_COOKIE, refreshToken, REFRESH_COOKIE_OPTIONS);
-      }
-      return response;
+      // Set new refresh cookie if we created a new session
+      if (checkRefreshToken) checkResponse.cookies.set(REFRESH_TOKEN_COOKIE, checkRefreshToken, REFRESH_COOKIE_OPTIONS);
+      return checkResponse;
     }
 
     if (action === 'wallet_login' && wallet_address) {
@@ -183,7 +203,7 @@ export async function POST(request: NextRequest) {
 
       // Query merchant by wallet address
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access
+        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access, COALESCE(totp_enabled, false) as totp_enabled
          FROM merchants
          WHERE wallet_address = $1 AND status = 'active'`,
         [wallet_address]
@@ -218,6 +238,7 @@ export async function POST(request: NextRequest) {
           balance: number;
           has_ops_access: boolean;
           has_compliance_access: boolean;
+          totp_enabled: boolean;
         };
 
         // Check if username needs to be set
@@ -242,10 +263,41 @@ export async function POST(request: NextRequest) {
 
         console.log('[API] Merchant login successful:', merchant.id, merchant.username);
 
+        // Fire-and-forget: device + IP tracking
+        trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'login' }).catch(() => {});
+        checkDeviceChangeFrequency(merchant.id, 'merchant').catch(() => {});
+
+        // 2FA gate: if enabled, return pendingToken instead of real tokens
+        if (merchant.totp_enabled) {
+          const { createPendingLoginToken } = await import('@/lib/auth/totp');
+          const pendingToken = await createPendingLoginToken(merchant.id, 'merchant');
+          return NextResponse.json({
+            success: true,
+            data: {
+              requires2FA: true,
+              pendingToken,
+              merchant: { id: merchant.id, display_name: merchant.display_name },
+              isNewMerchant,
+              needsUsername,
+            },
+          });
+        }
+
         const walletPayload = { actorId: merchant.id, actorType: 'merchant' as const };
         const token = generateSessionToken(walletPayload);
-        const walletAccessToken = generateAccessToken(walletPayload);
-        const walletRefreshToken = generateRefreshToken(walletPayload);
+
+        // Create session first to get sessionId for v2 access token
+        let walletSessionId: string | undefined;
+        let walletRefreshToken: string | undefined;
+        try {
+          const session = await createSession(walletPayload, request);
+          if (session) {
+            walletSessionId = session.sessionId;
+            walletRefreshToken = session.refreshToken;
+          }
+        } catch { /* fallback: no sessionId */ }
+
+        const walletAccessToken = generateAccessToken({ ...walletPayload, sessionId: walletSessionId });
 
         const walletResponse = NextResponse.json({
           success: true,
@@ -257,6 +309,7 @@ export async function POST(request: NextRequest) {
             ...(walletAccessToken && { accessToken: walletAccessToken }),
           },
         });
+
         if (walletRefreshToken) {
           walletResponse.cookies.set(REFRESH_TOKEN_COOKIE, walletRefreshToken, REFRESH_COOKIE_OPTIONS);
         }
@@ -362,14 +415,27 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] New merchant created:', merchant.id, merchant.username, MOCK_MODE ? `(mock balance: ${merchantBalance})` : '');
 
+      // Fire-and-forget: device + IP tracking for signup
+      trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'signup' }).catch(() => {});
+
       // Auto-create default offers for new merchant (so they can start receiving orders immediately)
       await createDefaultMerchantOffers(merchant.id, username);
 
       const createPayload = { actorId: merchant.id, actorType: 'merchant' as const };
       const createToken = generateSessionToken(createPayload);
-      const createAccessTk = generateAccessToken(createPayload);
-      const createRefreshTk = generateRefreshToken(createPayload);
 
+      // Create session first to get sessionId for v2 access token
+      let createSessionId: string | undefined;
+      let createRefreshToken: string | undefined;
+      try {
+        const session = await createSession(createPayload, request);
+        if (session) {
+          createSessionId = session.sessionId;
+          createRefreshToken = session.refreshToken;
+        }
+      } catch { /* fallback: no sessionId */ }
+
+      const createAccessTk = generateAccessToken({ ...createPayload, sessionId: createSessionId });
       const createResponse = NextResponse.json({
         success: true,
         data: {
@@ -378,8 +444,9 @@ export async function POST(request: NextRequest) {
           ...(createAccessTk && { accessToken: createAccessTk }),
         },
       });
-      if (createRefreshTk) {
-        createResponse.cookies.set(REFRESH_TOKEN_COOKIE, createRefreshTk, REFRESH_COOKIE_OPTIONS);
+
+      if (createRefreshToken) {
+        createResponse.cookies.set(REFRESH_TOKEN_COOKIE, createRefreshToken, REFRESH_COOKIE_OPTIONS);
       }
       return createResponse;
     }
@@ -597,7 +664,7 @@ export async function POST(request: NextRequest) {
 
       // Find merchant by email
       const rows = await query(
-        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, email, password_hash, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access
+        `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, email, password_hash, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access, COALESCE(totp_enabled, false) as totp_enabled, COALESCE(email_verified, true) as email_verified
          FROM merchants
          WHERE email = $1 AND status = 'active'`,
         [email.toLowerCase()]
@@ -626,6 +693,8 @@ export async function POST(request: NextRequest) {
         balance: number;
         has_ops_access: boolean;
           has_compliance_access: boolean;
+        totp_enabled: boolean;
+        email_verified: boolean;
       };
 
       // Verify password
@@ -649,15 +718,54 @@ export async function POST(request: NextRequest) {
         await query('UPDATE merchants SET password_hash = $1 WHERE id = $2', [newHash, merchant.id]);
       }
 
+      // Email verification gate
+      if (!merchant.email_verified) {
+        return NextResponse.json({
+          success: false,
+          error: 'Please verify your email before logging in. Check your inbox for a verification link.',
+          code: 'EMAIL_NOT_VERIFIED',
+          merchantId: merchant.id,
+        }, { status: 403 });
+      }
+
       // Update online status
       await updateMerchantOnlineStatus(merchant.id, true);
 
       console.log('[API] Merchant email login successful:', merchant.id, merchant.email);
 
+      // Fire-and-forget: device + IP tracking
+      trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'login' }).catch(() => {});
+      checkDeviceChangeFrequency(merchant.id, 'merchant').catch(() => {});
+
+      // 2FA gate: if enabled, return pendingToken instead of real tokens
+      if (merchant.totp_enabled) {
+        const { createPendingLoginToken } = await import('@/lib/auth/totp');
+        const pendingToken = await createPendingLoginToken(merchant.id, 'merchant');
+        return NextResponse.json({
+          success: true,
+          data: {
+            requires2FA: true,
+            pendingToken,
+            merchant: { id: merchant.id, display_name: merchant.display_name },
+          },
+        });
+      }
+
       const emailPayload = { actorId: merchant.id, actorType: 'merchant' as const };
       const emailLoginToken = generateSessionToken(emailPayload);
-      const emailAccessTk = generateAccessToken(emailPayload);
-      const emailRefreshTk = generateRefreshToken(emailPayload);
+
+      // Create session first to get sessionId for v2 access token
+      let emailSessionId: string | undefined;
+      let emailRefreshToken: string | undefined;
+      try {
+        const session = await createSession(emailPayload, request);
+        if (session) {
+          emailSessionId = session.sessionId;
+          emailRefreshToken = session.refreshToken;
+        }
+      } catch { /* fallback: no sessionId */ }
+
+      const emailAccessTk = generateAccessToken({ ...emailPayload, sessionId: emailSessionId });
 
       const emailResponse = NextResponse.json({
         success: true,
@@ -667,8 +775,9 @@ export async function POST(request: NextRequest) {
           ...(emailAccessTk && { accessToken: emailAccessTk }),
         },
       });
-      if (emailRefreshTk) {
-        emailResponse.cookies.set(REFRESH_TOKEN_COOKIE, emailRefreshTk, REFRESH_COOKIE_OPTIONS);
+
+      if (emailRefreshToken) {
+        emailResponse.cookies.set(REFRESH_TOKEN_COOKIE, emailRefreshToken, REFRESH_COOKIE_OPTIONS);
       }
       return emailResponse;
     }
@@ -677,9 +786,9 @@ export async function POST(request: NextRequest) {
     if (action === 'register') {
       const { email, password, business_name } = body;
 
-      if (!email || !password) {
+      if (!email || !password || !business_name?.trim()) {
         return NextResponse.json(
-          { success: false, error: 'Email and password are required' },
+          { success: false, error: 'Email, password, and business name are required' },
           { status: 400 }
         );
       }
@@ -714,8 +823,21 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Generate username from email
-      const baseUsername = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 15);
+      // Check if business name already taken
+      const existingBusiness = await query(
+        `SELECT id FROM merchants WHERE LOWER(business_name) = $1`,
+        [business_name.trim().toLowerCase()]
+      );
+
+      if (existingBusiness.length > 0) {
+        return NextResponse.json(
+          { success: false, error: 'Business name already taken' },
+          { status: 409 }
+        );
+      }
+
+      // Use business_name as username
+      const baseUsername = business_name.trim().toLowerCase().replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 20);
       let username = baseUsername;
       let counter = 1;
 
@@ -733,7 +855,7 @@ export async function POST(request: NextRequest) {
       // Hash password
       const passwordHash = hashPassword(password);
 
-      // Create merchant (auto-funded in mock mode)
+      // Create merchant (auto-funded in mock mode, email NOT verified)
       const regBalance = MOCK_MODE ? MOCK_INITIAL_BALANCE : 0;
       const result = await query(
         `INSERT INTO merchants (
@@ -744,10 +866,11 @@ export async function POST(request: NextRequest) {
           display_name,
           status,
           is_online,
-          balance
-        ) VALUES ($1, $2, $3, $4, $5, 'active', true, $6)
+          balance,
+          email_verified
+        ) VALUES ($1, $2, $3, $4, $5, 'active', true, $6, false)
         RETURNING id, username, display_name, business_name, wallet_address, email, rating, total_trades`,
-        [email.toLowerCase(), passwordHash, username, business_name || username, business_name || username, regBalance]
+        [email.toLowerCase(), passwordHash, username, business_name.trim(), business_name.trim(), regBalance]
       );
 
       const merchant = result[0] as {
@@ -763,13 +886,40 @@ export async function POST(request: NextRequest) {
 
       console.log('[API] New merchant registered:', merchant.id, merchant.email);
 
+      // Fire-and-forget: device + IP tracking for signup
+      trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'signup' }).catch(() => {});
+
       // Auto-create default offers
       await createDefaultMerchantOffers(merchant.id, merchant.display_name);
+
+      // Send verification email
+      try {
+        const verifyToken = crypto.randomBytes(32).toString('hex');
+        const tokenHash = crypto.createHash('sha256').update(verifyToken).digest('hex');
+
+        await query(
+          `INSERT INTO email_verification_tokens (merchant_id, token_hash, expires_at)
+           VALUES ($1, $2, NOW() + INTERVAL '24 hours')`,
+          [merchant.id, tokenHash]
+        );
+
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const verifyLink = `${appUrl}/merchant/verify-email?token=${verifyToken}&id=${merchant.id}`;
+
+        const { sendEmail, emailVerificationEmail } = await import('@/lib/email/ses');
+        const emailContent = emailVerificationEmail(verifyLink, merchant.display_name);
+        sendEmail({ to: merchant.email, ...emailContent })
+          .catch(err => console.error('[Register] Verification email failed:', err));
+      } catch (emailErr) {
+        console.error('[Register] Failed to create verification token:', emailErr);
+      }
 
       return NextResponse.json({
         success: true,
         data: {
           merchant: { ...serializeMerchant(merchant), balance: regBalance },
+          requiresEmailVerification: true,
+          message: 'Account created! Please check your email to verify your account.',
         },
       });
     }

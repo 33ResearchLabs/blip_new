@@ -93,7 +93,7 @@ export function TransactionsTab({ merchantId }: TransactionsTabProps) {
       <div className="flex-1 overflow-y-auto p-1">
         {isLoading && entries.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-4 h-4 text-orange-400/40 animate-spin" />
+            <Loader2 className="w-4 h-4 text-primary/40 animate-spin" />
           </div>
         ) : visibleEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">

@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { isComplianceWallet, addComplianceWallet, COMPLIANCE_WALLETS } from '@/lib/solana/v2/config';
 import crypto from 'crypto';
-import { generateSessionToken, generateAccessToken, generateRefreshToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { createSession } from '@/lib/auth/sessions';
+import { verifyWalletSignature } from '@/lib/solana/verifySignature';
 
 // Compliance team authentication (supports both email/password and wallet)
 export async function POST(request: NextRequest) {
@@ -12,10 +14,20 @@ export async function POST(request: NextRequest) {
 
     // Wallet-based authentication (DAO/multi-sig style)
     if (action === 'wallet_login') {
-      if (!wallet_address) {
+      const { signature, message } = body;
+      if (!wallet_address || !signature || !message) {
         return NextResponse.json(
-          { success: false, error: 'Wallet address is required' },
+          { success: false, error: 'Wallet address, signature, and message are required' },
           { status: 400 }
+        );
+      }
+
+      // Verify wallet signature BEFORE checking whitelist
+      const isValidSig = await verifyWalletSignature(wallet_address, signature, message);
+      if (!isValidSig) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid wallet signature' },
+          { status: 401 }
         );
       }
 
@@ -74,9 +86,17 @@ export async function POST(request: NextRequest) {
       const member = rows[0] as { id: string; email: string | null; wallet_address: string; name: string; role: string };
 
       const cwPayload = { actorId: member.id, actorType: 'compliance' as const };
+
+      // Create session first to get sessionId for v2 token
+      let cwSessionId: string | undefined;
+      let cwRefreshToken: string | null = null;
+      try {
+        const sess = await createSession(cwPayload, request as any);
+        if (sess) { cwSessionId = sess.sessionId; cwRefreshToken = sess.refreshToken; }
+      } catch { /* proceed without session tracking */ }
+
       const walletToken = generateSessionToken(cwPayload);
-      const cwAccessTk = generateAccessToken(cwPayload);
-      const cwRefreshTk = generateRefreshToken(cwPayload);
+      const cwAccessTk = generateAccessToken({ ...cwPayload, sessionId: cwSessionId });
 
       const cwResponse = NextResponse.json({
         success: true,
@@ -93,9 +113,7 @@ export async function POST(request: NextRequest) {
           ...(cwAccessTk && { accessToken: cwAccessTk }),
         },
       });
-      if (cwRefreshTk) {
-        cwResponse.cookies.set(REFRESH_TOKEN_COOKIE, cwRefreshTk, REFRESH_COOKIE_OPTIONS);
-      }
+      if (cwRefreshToken) cwResponse.cookies.set(REFRESH_TOKEN_COOKIE, cwRefreshToken, REFRESH_COOKIE_OPTIONS);
       return cwResponse;
     }
 
@@ -158,9 +176,17 @@ export async function POST(request: NextRequest) {
       }
 
       const cePayload = { actorId: member.id, actorType: 'compliance' as const };
+
+      // Create session first to get sessionId for v2 token
+      let ceSessionId: string | undefined;
+      let ceRefreshToken: string | null = null;
+      try {
+        const sess = await createSession(cePayload, request as any);
+        if (sess) { ceSessionId = sess.sessionId; ceRefreshToken = sess.refreshToken; }
+      } catch { /* proceed without session tracking */ }
+
       const emailToken = generateSessionToken(cePayload);
-      const ceAccessTk = generateAccessToken(cePayload);
-      const ceRefreshTk = generateRefreshToken(cePayload);
+      const ceAccessTk = generateAccessToken({ ...cePayload, sessionId: ceSessionId });
 
       const ceResponse = NextResponse.json({
         success: true,
@@ -177,9 +203,7 @@ export async function POST(request: NextRequest) {
           ...(ceAccessTk && { accessToken: ceAccessTk }),
         },
       });
-      if (ceRefreshTk) {
-        ceResponse.cookies.set(REFRESH_TOKEN_COOKIE, ceRefreshTk, REFRESH_COOKIE_OPTIONS);
-      }
+      if (ceRefreshToken) ceResponse.cookies.set(REFRESH_TOKEN_COOKIE, ceRefreshToken, REFRESH_COOKIE_OPTIONS);
       return ceResponse;
     }
 

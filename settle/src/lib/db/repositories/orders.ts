@@ -112,9 +112,9 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
               ELSE NULL
             END as merchant_payment_method
      FROM orders o
-     JOIN users u ON o.user_id = u.id
-     JOIN merchants m ON o.merchant_id = m.id
-     JOIN merchant_offers mo ON o.offer_id = mo.id
+     LEFT JOIN users u ON o.user_id = u.id
+     LEFT JOIN merchants m ON o.merchant_id = m.id
+     LEFT JOIN merchant_offers mo ON o.offer_id = mo.id
      LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
      LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
      LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
@@ -125,7 +125,8 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
 
 export async function getUserOrders(
   userId: string,
-  status?: OrderStatus[]
+  status?: OrderStatus[],
+  days?: number
 ): Promise<OrderWithRelations[]> {
   let sql = `
     SELECT o.*,
@@ -171,12 +172,12 @@ export async function getUserOrders(
            COALESCE(chat_agg.unread_count, 0) as unread_count,
            chat_latest.last_message
     FROM orders o
-    JOIN merchants m ON o.merchant_id = m.id
-    JOIN merchant_offers mo ON o.offer_id = mo.id
+    LEFT JOIN merchants m ON o.merchant_id = m.id
+    LEFT JOIN merchant_offers mo ON o.offer_id = mo.id
     LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
     LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
     LEFT JOIN LATERAL (
-      SELECT COUNT(*) FILTER (WHERE cm.sender_type = 'merchant' AND cm.message_type != 'system' AND cm.is_read = false)::int as unread_count
+      SELECT COUNT(*) FILTER (WHERE cm.sender_type IN ('merchant', 'compliance') AND cm.message_type != 'system' AND cm.is_read = false)::int as unread_count
       FROM chat_messages cm WHERE cm.order_id = o.id
     ) chat_agg ON true
     LEFT JOIN LATERAL (
@@ -191,8 +192,12 @@ export async function getUserOrders(
   const params: unknown[] = [userId];
 
   if (status && status.length > 0) {
-    sql += ` AND o.status = ANY($2)`;
+    sql += ` AND o.status = ANY($${params.length + 1})`;
     params.push(status);
+  }
+
+  if (days && days > 0) {
+    sql += ` AND o.created_at >= NOW() - INTERVAL '${Math.floor(days)} days'`;
   }
 
   sql += ' ORDER BY o.created_at DESC';
@@ -257,8 +262,8 @@ export async function getMerchantOrders(
            END as merchant_payment_method
     FROM orders o
     JOIN users u ON o.user_id = u.id
-    JOIN merchants m ON o.merchant_id = m.id
-    JOIN merchant_offers mo ON o.offer_id = mo.id
+    LEFT JOIN merchants m ON o.merchant_id = m.id
+    LEFT JOIN merchant_offers mo ON o.offer_id = mo.id
     LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
     LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
     LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
@@ -393,8 +398,8 @@ export async function getAllPendingOrdersForMerchant(
            chat_latest.sender_type as last_human_message_sender
     FROM orders o
     JOIN users u ON o.user_id = u.id
-    JOIN merchants m ON o.merchant_id = m.id
-    JOIN merchant_offers mo ON o.offer_id = mo.id
+    LEFT JOIN merchants m ON o.merchant_id = m.id
+    LEFT JOIN merchant_offers mo ON o.offer_id = mo.id
     LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
     LEFT JOIN merchants current_m ON current_m.id = $1
     LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
@@ -419,13 +424,15 @@ export async function getAllPendingOrdersForMerchant(
     ) chat_latest ON true
     WHERE (
         -- OPEN orders: broadcast pending/escrowed that are NOT yet taken by another merchant
-        -- "Taken" = has buyer_merchant_id set to someone else (and merchant_id differs, meaning a seller accepted)
         (o.status IN ('pending', 'escrowed')
          AND (o.buyer_merchant_id IS NULL
               OR o.buyer_merchant_id = $1
               OR (o.buyer_merchant_id = o.merchant_id AND o.accepted_at IS NULL))
          AND o.accepted_at IS NULL
         )
+
+        -- Unclaimed sell orders (merchant_id IS NULL, broadcast to all merchants)
+        OR (o.merchant_id IS NULL AND o.status IN ('pending', 'escrowed') AND o.accepted_at IS NULL)
 
         -- All orders where I'm the assigned merchant
         OR (o.merchant_id = $1)
@@ -976,7 +983,10 @@ export async function updateOrderStatus(
           break;
         case 'disputed':
           // Set auto-resolve deadline: 24 hours from now to prevent infinite stall
-          timestampField = ", disputed_at = NOW(), dispute_auto_resolve_at = NOW() + INTERVAL '24 hours'";
+          // Track who raised the dispute (user or merchant)
+          timestampField = `, disputed_at = NOW(), dispute_auto_resolve_at = NOW() + INTERVAL '24 hours', disputed_by = $${nextParam}::TEXT, disputed_by_id = $${nextParam + 1}::UUID`;
+          dynamicParams.push(actorType, actorId);
+          nextParam += 2;
           break;
       }
 
@@ -1175,6 +1185,18 @@ export async function updateOrderStatus(
         } catch (contactErr) {
           logger.warn('Failed to upsert merchant contact', { orderId, error: contactErr });
         }
+
+        // Update avg completion time (fire-and-forget, never blocks order flow)
+        try {
+          const { updateAvgCompletionTime } = await import('./risk');
+          if (currentOrder.created_at) {
+            const completionMs = Date.now() - new Date(currentOrder.created_at).getTime();
+            updateAvgCompletionTime(currentOrder.user_id, 'user', completionMs).catch(() => {});
+            updateAvgCompletionTime(currentOrder.merchant_id, 'merchant', completionMs).catch(() => {});
+          }
+        } catch {
+          // risk module not available — non-fatal
+        }
       }
 
       // Handle side effects: cancellation
@@ -1196,6 +1218,43 @@ export async function updateOrderStatus(
           );
         } catch (repErr) {
           logger.warn('Failed to record reputation events for cancelled order', { orderId, error: repErr });
+        }
+
+        // Increment cancelled_orders stats (fire-and-forget, never blocks order flow)
+        try {
+          const { incrementCancelledOrders } = await import('./risk');
+          incrementCancelledOrders(currentOrder.user_id, currentOrder.merchant_id).catch(() => {});
+        } catch {
+          // risk module not available — non-fatal
+        }
+      }
+
+      // Handle side effects: dispute
+      if (newStatus === 'disputed') {
+        // Create disputes table row if one doesn't already exist
+        // The compliance resolve endpoint requires this row to function.
+        try {
+          await client.query(
+            `INSERT INTO disputes (order_id, raised_by, raiser_id, reason, description, status, created_at)
+             SELECT $1, $2, $3, 'non_responsive'::dispute_reason, $4, 'open', NOW()
+             WHERE NOT EXISTS (SELECT 1 FROM disputes WHERE order_id = $1)`,
+            [
+              orderId,
+              actorType || 'system',
+              actorId || currentOrder.user_id,
+              metadata?.reason || 'Order disputed',
+            ]
+          );
+        } catch (disputeErr) {
+          logger.error('Failed to create disputes row (non-fatal)', { orderId, error: disputeErr });
+        }
+
+        // Increment dispute_count stats (fire-and-forget, never blocks order flow)
+        try {
+          const { incrementDisputeCount } = await import('./risk');
+          incrementDisputeCount(currentOrder.user_id, currentOrder.merchant_id).catch(() => {});
+        } catch {
+          // risk module not available — non-fatal
         }
       }
 
@@ -1411,6 +1470,7 @@ export async function claimOrder(
         );
       } else {
         // User↔merchant order: set merchant_id (the claiming merchant is the buyer/counterparty)
+        // merchant_id IS NULL check prevents overwriting an already-assigned merchant
         claimResult = await client.query(
           `UPDATE orders
            SET merchant_id = $1,
@@ -1419,6 +1479,7 @@ export async function claimOrder(
                order_version = order_version + 1
            WHERE id = $2
              AND accepted_at IS NULL
+             AND merchant_id IS NULL
              AND status = 'escrowed'
            RETURNING *`,
           [claimingMerchantId, orderId, walletToUse]
@@ -1784,6 +1845,31 @@ export async function expireOldOrders(): Promise<number> {
       [acceptedIds]
     );
     totalExpired += updateResult?.length || 0;
+
+    // Create disputes rows for orders that moved to disputed (escrow was locked)
+    // The compliance resolve endpoint requires a disputes row to function.
+    const disputedOrders = acceptedExpired.filter(o =>
+      ['escrowed', 'payment_pending', 'payment_sent', 'payment_confirmed', 'releasing'].includes(o.status)
+    );
+    if (disputedOrders.length > 0) {
+      try {
+        const dVals: string[] = [];
+        const dParams: unknown[] = [];
+        let di = 0;
+        for (const o of disputedOrders) {
+          dVals.push(`($${++di}, 'system', $${++di}, 'non_responsive'::dispute_reason, $${++di}, 'open', NOW())`);
+          dParams.push(o.id, o.user_id, `Order timeout - auto-disputed (was in ${o.status} status)`);
+        }
+        await query(
+          `INSERT INTO disputes (order_id, raised_by, raiser_id, reason, description, status, created_at)
+           VALUES ${dVals.join(', ')}
+           ON CONFLICT (order_id) DO NOTHING`,
+          dParams
+        );
+      } catch (disputeErr) {
+        console.error('[expireOrders] Failed to create dispute rows (non-fatal):', disputeErr);
+      }
+    }
   }
 
   // Batch insert system messages + reputation events (avoids N+1 per-order DB calls)
