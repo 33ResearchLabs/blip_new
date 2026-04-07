@@ -172,7 +172,7 @@ export default function Home() {
   });
   extensionRequestSetterRef.current = orderActions.setExtensionRequest;
 
-  const pendingOrders = orders.filter(o => o.status !== "complete");
+  const pendingOrders = orders.filter(o => !["complete", "cancelled", "expired", "disputed"].includes(o.status));
   const completedOrders = orders.filter(o => o.status === "complete");
 
   const fiatAmount = tradeCreation.amount ? (parseFloat(tradeCreation.amount) * tradeCreation.currentRate).toFixed(2) : "0";

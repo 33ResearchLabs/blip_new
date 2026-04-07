@@ -138,6 +138,12 @@ export function useRealtimeOrder(
     }
   }, [orderId]);
 
+  // Reset previous-status tracking whenever the watched order changes,
+  // so a stale ref from a prior order can't trigger a phantom status-change callback.
+  useEffect(() => {
+    previousStatusRef.current = null;
+  }, [orderId]);
+
   // Fetch on mount if no initial data
   useEffect(() => {
     if (!initialData && orderId) {
@@ -180,9 +186,16 @@ export function useRealtimeOrder(
       };
       if (data.orderId !== orderId) return;
 
-      // Call callback if status changed (pass order data for popup display)
-      if (onStatusChangeRef.current && data.previousStatus !== data.status) {
-        onStatusChangeRef.current(data.status, data.previousStatus, data.data || null);
+      // Guard against replayed Pusher events: only fire when local state actually transitions.
+      // (Without this, a replayed event after reconnect re-triggers "Trade Complete" toasts.)
+      const localPrev = previousStatusRef.current;
+      if (
+        onStatusChangeRef.current &&
+        data.previousStatus !== data.status &&
+        localPrev !== null &&
+        localPrev !== data.status
+      ) {
+        onStatusChangeRef.current(data.status, localPrev, data.data || null);
       }
 
       previousStatusRef.current = data.status;

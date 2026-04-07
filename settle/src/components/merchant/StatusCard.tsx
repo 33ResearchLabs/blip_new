@@ -458,7 +458,7 @@ export const StatusCard = memo(function StatusCard({
                   <span className={`text-lg font-bold font-mono tabular-nums ${
                     marketData.price_mode === 'MANUAL' ? 'text-orange-400' : 'text-white'
                   }`}>
-                    {marketPair === 'usdt_inr' ? '₹' : ''}{marketData.final_price.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}
+                    {marketPair === 'usdt_inr' ? '₹' : ''}{marketData.final_price.toFixed(2)}
                     {marketPair === 'usdt_aed' ? ' AED' : ''}
                   </span>
                   {prevAvgRef.current !== null && prevAvgRef.current !== marketData.avg_5m && (
@@ -473,14 +473,14 @@ export const StatusCard = memo(function StatusCard({
               <div className="flex items-center justify-between">
                 <span className="text-[8px] text-foreground/20 font-mono">Avg ({marketTimeframe})</span>
                 <span className="text-[10px] text-foreground/40 font-mono tabular-nums">
-                  {marketPair === 'usdt_inr' ? '₹' : ''}{marketData.avg_5m.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}
+                  {marketPair === 'usdt_inr' ? '₹' : ''}{marketData.avg_5m.toFixed(2)}
                   {marketPair === 'usdt_aed' ? ' AED' : ''}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[8px] text-foreground/20 font-mono">Last Price</span>
                 <span className="text-[10px] text-foreground/40 font-mono tabular-nums">
-                  {marketPair === 'usdt_inr' ? '₹' : ''}{marketData.last_price.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}
+                  {marketPair === 'usdt_inr' ? '₹' : ''}{marketData.last_price.toFixed(2)}
                   {marketPair === 'usdt_aed' ? ' AED' : ''}
                 </span>
               </div>
@@ -508,7 +508,7 @@ export const StatusCard = memo(function StatusCard({
                     className="px-2 py-1 rounded bg-foreground/[0.04] hover:bg-white/[0.08] border border-primary/20 text-[9px] text-primary font-bold transition-all"
                   >
                     {customRefPrice
-                      ? `${marketPair === 'usdt_inr' ? '₹' : ''}${customRefPrice.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}${marketPair === 'usdt_aed' ? ' AED' : ''}`
+                      ? `${marketPair === 'usdt_inr' ? '₹' : ''}${customRefPrice.toFixed(2)}${marketPair === 'usdt_aed' ? ' AED' : ''}`
                       : 'SET PRICE'}
                   </button>
                 </div>
@@ -519,7 +519,7 @@ export const StatusCard = memo(function StatusCard({
                       type="number"
                       value={refPriceInputValue}
                       onChange={(e) => setRefPriceInputValue(e.target.value)}
-                      placeholder={marketData.avg_5m.toFixed(marketPair === 'usdt_aed' ? 4 : 2)}
+                      placeholder={marketData.avg_5m.toFixed(2)}
                       step={marketPair === 'usdt_aed' ? '0.0001' : '0.01'}
                       className="flex-1 bg-foreground/[0.02] border border-foreground/[0.06] rounded px-2 py-1 text-xs text-white font-mono outline-none focus:border-primary/30"
                       autoFocus

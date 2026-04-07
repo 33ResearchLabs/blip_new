@@ -30,6 +30,10 @@ export interface ChatMessage {
   isRead?: boolean;
   status?: 'sending' | 'sent' | 'delivered' | 'read';
   isHighlighted?: boolean;
+  // Phase 3: idempotency + ordering. Both optional for backward compat
+  // with messages constructed before this field existed.
+  clientId?: string;
+  seq?: number;
 }
 
 export interface PresenceMember {
@@ -73,6 +77,9 @@ interface DbMessage {
   is_read: boolean;
   is_highlighted?: boolean;
   status?: 'sent' | 'delivered' | 'seen';
+  // Phase 3 — present on rows after migration 076
+  client_id?: string | null;
+  seq?: number | null;
 }
 
 // Pusher message event
@@ -90,6 +97,9 @@ interface PusherMessageEvent {
   fileSize?: number | null;
   mimeType?: string | null;
   createdAt: string;
+  // Phase 3
+  clientId?: string | null;
+  seq?: number | null;
 }
 
 // Pusher typing event
@@ -150,6 +160,12 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   const chatWindowsRef = useRef(chatWindows);
   chatWindowsRef.current = chatWindows;
 
+  // Phase 3: track the highest seq we've seen per order. On Pusher reconnect
+  // we send GET /api/orders/:id/messages?after_seq=<lastSeq> to backfill any
+  // messages that fired during the disconnect window. The map is keyed by
+  // orderId (the real one, not chat-window id).
+  const lastSeqRef = useRef<Map<string, number>>(new Map());
+
   // Convert DB message to UI message
   const mapDbMessageToUI = useCallback(
     (dbMsg: DbMessage, myActorType: string): ChatMessage => {
@@ -171,6 +187,9 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         isRead: dbMsg.is_read,
         isHighlighted: dbMsg.is_highlighted,
         status: from === 'me' ? (dbMsg.is_read ? 'read' : (dbMsg.status as 'sent' | 'delivered' | undefined) || 'sent') : undefined,
+        // Phase 3: carry through for ordering + dedup. Both null on legacy rows.
+        clientId: dbMsg.client_id ?? undefined,
+        seq: dbMsg.seq ?? undefined,
       };
     },
     []
@@ -195,6 +214,9 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         senderName: event.senderName,
         isRead: false,
         status: from === 'me' ? 'sent' : undefined,
+        // Phase 3: optimistic temp replacement matches by clientId.
+        clientId: event.clientId ?? undefined,
+        seq: event.seq ?? undefined,
       };
     },
     []
@@ -216,6 +238,17 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
           const messages: ChatMessage[] = data.data.map((m: DbMessage) =>
             mapDbMessageToUI(m, actorType)
           );
+
+          // Phase 3: seed lastSeq from the highest seq in the initial fetch
+          // so the first reconnect catch-up only pulls truly missed messages.
+          let maxSeq = 0;
+          for (const m of messages) {
+            if (typeof m.seq === 'number' && m.seq > maxSeq) maxSeq = m.seq;
+          }
+          if (maxSeq > 0) {
+            const current = lastSeqRef.current.get(orderId) || 0;
+            if (maxSeq > current) lastSeqRef.current.set(orderId, maxSeq);
+          }
 
           setChatWindows((prev) =>
             prev.map((w) => {
@@ -276,24 +309,45 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
 
         const message = mapPusherMessageToUI(data, actorType);
 
+        // Phase 3: track lastSeq per order for reconnect catch-up.
+        if (typeof message.seq === 'number') {
+          const current = lastSeqRef.current.get(orderId) || 0;
+          if (message.seq > current) {
+            lastSeqRef.current.set(orderId, message.seq);
+          }
+        }
+
         setChatWindows((prev) =>
           prev.map((w) => {
             if (w.orderId !== orderId) return w;
 
-            // If it's our own message, replace temp message
-            if (message.from === 'me') {
-              const tempIndex = w.messages.findIndex((m) =>
-                m.id.startsWith('temp_')
-              );
+            // Phase 3: dedup by id FIRST. The same message may arrive via the
+            // order channel + a private channel + the reconnect catch-up path.
+            // Whoever wins, we drop the rest.
+            if (w.messages.some(m => m.id === message.id)) return w;
+
+            // Phase 3: replace optimistic temp by clientId (NOT by index).
+            // The previous "first temp_*" approach swapped the wrong message
+            // when multiple sends were in flight.
+            if (message.from === 'me' && message.clientId) {
+              const idx = w.messages.findIndex(m => m.clientId === message.clientId);
+              if (idx >= 0) {
+                const newMessages = [...w.messages];
+                newMessages[idx] = message;
+                return { ...w, messages: newMessages };
+              }
+            }
+
+            // Backward-compat fallback: server didn't echo a clientId
+            // (legacy path), use the old "first temp" replacement.
+            if (message.from === 'me' && !message.clientId) {
+              const tempIndex = w.messages.findIndex(m => m.id.startsWith('temp_'));
               if (tempIndex >= 0) {
                 const newMessages = [...w.messages];
                 newMessages[tempIndex] = message;
                 return { ...w, messages: newMessages };
               }
             }
-
-            // Dedup — message may arrive via both order channel and private channel
-            if (w.messages.some(m => m.id === message.id)) return w;
 
             // Add new message
             const newUnread =
@@ -587,10 +641,21 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       if (fileData) messageType = 'file';
       else if (imageUrl) messageType = 'image';
 
-      // Optimistically add message
-      const tempId = `temp_${Date.now()}`;
+      // Phase 3: client-generated UUID for idempotent sends and for
+      // server-echo-based optimistic temp replacement.
+      // crypto.randomUUID is available in all modern browsers + node 19+;
+      // fallback to a timestamp-based pseudo-uuid for very old environments.
+      const clientId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 10)}`;
+
+      // Optimistically add message — temp id encodes the clientId so the
+      // dedup-by-id path also catches it if the server echoes the temp id.
+      const tempId = `temp_${clientId}`;
       const tempMessage: ChatMessage = {
         id: tempId,
+        clientId,  // ◄ Phase 3: enables replace-by-clientId on Pusher echo
         from: 'me',
         text,
         timestamp: new Date(),
@@ -628,6 +693,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
             file_name: fileData?.fileName,
             file_size: fileData?.fileSize,
             mime_type: fileData?.mimeType,
+            client_id: clientId,  // ◄ Phase 3: server dedupes on this
           }),
         });
 
@@ -773,6 +839,68 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
     },
     [actorType]
   );
+
+  // Phase 3: reconnect catch-up. When Pusher transitions back to 'connected'
+  // (e.g. after a network blip), refetch any messages we missed during the
+  // gap via /api/orders/:id/messages?after_seq=<lastSeq>. The dedup-by-id
+  // path in handleNewMessage prevents double-renders if a message arrived
+  // both via Pusher and via the catch-up fetch.
+  useEffect(() => {
+    if (!pusher) return;
+    const isPusherConnected = pusher.isConnected;
+    if (!isPusherConnected) return;
+    // Only catch-up if we have at least one subscribed order with a known seq.
+    if (lastSeqRef.current.size === 0) return;
+
+    // Run the catch-up once per "connected" transition. We use a ref to
+    // avoid re-running when other state changes flip the effect.
+    let cancelled = false;
+    (async () => {
+      for (const [orderId, lastSeq] of lastSeqRef.current.entries()) {
+        if (cancelled) return;
+        if (!subscribedChannelsRef.current.get(orderId)) continue;
+        try {
+          const res = await fetchWithAuth(
+            `/api/orders/${orderId}/messages?after_seq=${lastSeq}`
+          );
+          if (!res.ok) continue;
+          const data = await res.json();
+          const fresh: DbMessage[] = data?.success ? (data.data || []) : [];
+          if (!fresh.length) continue;
+
+          // Find the chat window that owns this orderId
+          const targetWindow = chatWindowsRef.current.find(w => w.orderId === orderId);
+          if (!targetWindow) continue;
+
+          let newMaxSeq = lastSeq;
+          const mapped: ChatMessage[] = fresh.map((m) => {
+            const ui = mapDbMessageToUI(m, actorType);
+            if (typeof ui.seq === 'number' && ui.seq > newMaxSeq) newMaxSeq = ui.seq;
+            return ui;
+          });
+
+          setChatWindows((prev) =>
+            prev.map((w) => {
+              if (w.id !== targetWindow.id) return w;
+              // Dedup against existing messages by id
+              const seen = new Set(w.messages.map((m) => m.id));
+              const append = mapped.filter((m) => !seen.has(m.id));
+              if (append.length === 0) return w;
+              return { ...w, messages: [...w.messages, ...append] };
+            })
+          );
+
+          if (newMaxSeq > lastSeq) {
+            lastSeqRef.current.set(orderId, newMaxSeq);
+          }
+        } catch (err) {
+          console.warn('[useRealtimeChat] reconnect catch-up failed', { orderId, err });
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [pusher, pusher?.isConnected, actorType, mapDbMessageToUI]);
 
   return {
     chatWindows,

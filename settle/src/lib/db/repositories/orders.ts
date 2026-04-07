@@ -1043,6 +1043,40 @@ export async function updateOrderStatus(
         ]
       );
 
+      // ── Realtime stabilization (Phase 2): outbox row ────────────────────
+      // Inside the SAME transaction as the status UPDATE, queue a delivery
+      // record so the notificationOutbox worker republishes the event even
+      // if the synchronous fireInstantNotification path fails (Pusher down,
+      // process crash, network glitch).
+      //
+      // The worker filters by orderVersion (drops snapshots 2+ versions
+      // stale) so this cannot double-deliver vs the instant fire-and-forget
+      // path. Both field names are included: orderVersion (camelCase) for
+      // the worker's stale-version check, and order_version (snake_case)
+      // for downstream notifyOrderStatusUpdated which reads it that way.
+      //
+      // ZERO change to status update logic, validation, or response shape.
+      // ZERO change to the state machine. Pure additive INSERT.
+      await client.query(
+        `INSERT INTO notification_outbox (event_type, order_id, payload)
+         VALUES ($1, $2, $3)`,
+        [
+          'ORDER_STATUS_CHANGED',
+          orderId,
+          JSON.stringify({
+            orderId,
+            status: newStatus,
+            previousStatus: oldStatus,
+            order_version: updatedOrder.order_version,  // for Pusher publish
+            orderVersion: updatedOrder.order_version,    // for worker stale-filter
+            userId: updatedOrder.user_id,
+            merchantId: updatedOrder.merchant_id,
+            buyerMerchantId: updatedOrder.buyer_merchant_id,
+            updatedAt: new Date().toISOString(),
+          }),
+        ]
+      );
+
       // Handle side effects: liquidity restoration
       if (shouldRestoreLiquidity(oldStatus, newStatus)) {
         await client.query(
@@ -1501,6 +1535,29 @@ export async function claimOrder(
         [orderId, claimingMerchantId, JSON.stringify({ claim: true, [claimField]: claimingMerchantId })]
       );
 
+      // Realtime stabilization (Phase 2): outbox row inside same transaction.
+      // Status doesn't change on claim — but order_version does, and clients
+      // need to learn about the new buyer_merchant_id / merchant_id assignment.
+      await client.query(
+        `INSERT INTO notification_outbox (event_type, order_id, payload)
+         VALUES ($1, $2, $3)`,
+        [
+          'ORDER_STATUS_CHANGED',
+          orderId,
+          JSON.stringify({
+            orderId,
+            status: 'escrowed',
+            previousStatus: 'escrowed',
+            order_version: claimedOrder.order_version,
+            orderVersion: claimedOrder.order_version,
+            userId: claimedOrder.user_id,
+            merchantId: claimedOrder.merchant_id,
+            buyerMerchantId: claimedOrder.buyer_merchant_id,
+            updatedAt: new Date().toISOString(),
+          }),
+        ]
+      );
+
       logger.info('[claimOrder] Order claimed successfully', {
         orderId,
         claimingMerchantId,
@@ -1633,6 +1690,27 @@ export async function claimAndPayOrder(
         })]
       );
 
+      // Realtime stabilization (Phase 2): outbox row inside same transaction.
+      await client.query(
+        `INSERT INTO notification_outbox (event_type, order_id, payload)
+         VALUES ($1, $2, $3)`,
+        [
+          'ORDER_STATUS_CHANGED',
+          orderId,
+          JSON.stringify({
+            orderId,
+            status: 'payment_sent',
+            previousStatus: 'escrowed',
+            order_version: claimedOrder.order_version,
+            orderVersion: claimedOrder.order_version,
+            userId: claimedOrder.user_id,
+            merchantId: claimedOrder.merchant_id,
+            buyerMerchantId: claimedOrder.buyer_merchant_id,
+            updatedAt: new Date().toISOString(),
+          }),
+        ]
+      );
+
       logger.info('[claimAndPayOrder] Order claimed and payment sent', {
         orderId,
         claimingMerchantId,
@@ -1676,7 +1754,16 @@ export async function getOrderMessages(
     params.push(options.before);
   }
 
-  // Fetch newest N messages (DESC), then reverse to return ASC order for frontend
+  // Phase 3: order by seq DESC NULLS LAST, then created_at DESC.
+  //
+  // Self-healing schema detection: if migration 076 hasn't been applied yet,
+  // the seq column doesn't exist and PostgreSQL will fail with 42703. We
+  // detect that lazily (once per process) and use the legacy ORDER BY.
+  const useSeqOrdering = await chatHasSeqColumn();
+  const orderClause = useSeqOrdering
+    ? 'ORDER BY cm.seq DESC NULLS LAST, cm.created_at DESC'
+    : 'ORDER BY cm.created_at DESC';
+
   const rows = await query<ChatMessage>(
     `SELECT
       cm.*,
@@ -1693,13 +1780,117 @@ export async function getOrderMessages(
     WHERE cm.order_id = $1
       AND NOT (cm.sender_type = 'system' AND cm.message_type = 'system')
       ${cursorClause}
-    ORDER BY cm.created_at DESC
+    ${orderClause}
     LIMIT $2`,
     params
   );
 
   // Reverse so messages are returned in chronological (ASC) order
   return rows.reverse();
+}
+
+// ─── Phase 3 schema-detection helpers ───────────────────────────────────────
+//
+// These cache the result of an information_schema lookup so we only pay the
+// cost once per process. They make every Phase 3 code path resilient to the
+// migrations not having been applied yet — sendMessage / markMessagesAsRead /
+// getOrderMessages all keep working with their pre-migration shape until 076
+// and 077 land, then automatically pick up the new columns/table.
+//
+// IMPORTANT: this is intentionally lazy. Some Next.js build paths import this
+// file at compile time, before the DB pool is even initialized. We can't run
+// queries at module load.
+
+let _hasSeqColumn: boolean | null = null;
+let _hasClientIdColumn: boolean | null = null;
+let _hasReadsTable: boolean | null = null;
+
+async function chatHasSeqColumn(): Promise<boolean> {
+  if (_hasSeqColumn !== null) return _hasSeqColumn;
+  try {
+    const rows = await query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.columns
+         WHERE table_name = 'chat_messages' AND column_name = 'seq'
+       ) AS exists`
+    );
+    _hasSeqColumn = !!rows[0]?.exists;
+  } catch {
+    _hasSeqColumn = false;
+  }
+  return _hasSeqColumn;
+}
+
+async function chatHasClientIdColumn(): Promise<boolean> {
+  if (_hasClientIdColumn !== null) return _hasClientIdColumn;
+  try {
+    const rows = await query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.columns
+         WHERE table_name = 'chat_messages' AND column_name = 'client_id'
+       ) AS exists`
+    );
+    _hasClientIdColumn = !!rows[0]?.exists;
+  } catch {
+    _hasClientIdColumn = false;
+  }
+  return _hasClientIdColumn;
+}
+
+async function chatHasReadsTable(): Promise<boolean> {
+  if (_hasReadsTable !== null) return _hasReadsTable;
+  try {
+    const rows = await query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.tables
+         WHERE table_name = 'chat_message_reads'
+       ) AS exists`
+    );
+    _hasReadsTable = !!rows[0]?.exists;
+  } catch {
+    _hasReadsTable = false;
+  }
+  return _hasReadsTable;
+}
+
+// Phase 3: Reconnect catch-up. Returns messages with seq > $2 in ASC order.
+// Used by the frontend when it reconnects to Pusher and needs to backfill
+// any messages it missed during the disconnect window. Hard cap at 200.
+//
+// If the seq column doesn't exist yet (migration 076 not applied), this
+// returns an empty array — the client falls back to its existing behavior
+// (the catch-up was a strict additive feature and missing it doesn't break
+// any pre-existing flow).
+export async function getOrderMessagesAfterSeq(
+  orderId: string,
+  afterSeq: number,
+  limit = 200
+): Promise<ChatMessage[]> {
+  if (!(await chatHasSeqColumn())) {
+    return [];
+  }
+  const cappedLimit = Math.min(Math.max(limit, 1), 200);
+  return query<ChatMessage>(
+    `SELECT
+      cm.*,
+      CASE
+        WHEN cm.sender_type = 'user' THEN u.username
+        WHEN cm.sender_type = 'merchant' THEN m.display_name
+        WHEN cm.sender_type = 'compliance' THEN ct.name
+        ELSE 'System'
+      END as sender_name
+    FROM chat_messages cm
+    LEFT JOIN users u ON cm.sender_type = 'user' AND cm.sender_id = u.id
+    LEFT JOIN merchants m ON cm.sender_type = 'merchant' AND cm.sender_id = m.id
+    LEFT JOIN compliance_team ct ON cm.sender_type = 'compliance' AND cm.sender_id = ct.id
+    WHERE cm.order_id = $1
+      AND cm.seq IS NOT NULL
+      AND cm.seq > $2
+      AND NOT (cm.sender_type = 'system' AND cm.message_type = 'system')
+    ORDER BY cm.seq ASC
+    LIMIT $3`,
+    [orderId, afterSeq, cappedLimit]
+  );
 }
 
 export async function sendMessage(data: {
@@ -1713,9 +1904,53 @@ export async function sendMessage(data: {
   file_name?: string;
   file_size?: number;
   mime_type?: string;
+  client_id?: string;  // Phase 3: idempotent send key (UUID, optional)
 }): Promise<ChatMessage> {
+  const hasClientId = await chatHasClientIdColumn();
+
+  // Phase 3 idempotent path — only when migration 076 has been applied AND
+  // the caller passed a client_id. If either condition fails, we fall
+  // through to the legacy INSERT (byte-identical to pre-Phase-3 behavior).
+  if (hasClientId && data.client_id) {
+    const existing = await queryOne<ChatMessage>(
+      `SELECT * FROM chat_messages
+       WHERE sender_id = $1 AND client_id = $2`,
+      [data.sender_id, data.client_id]
+    );
+    if (existing) return existing;
+
+    const result = await queryOne<ChatMessage>(
+      `INSERT INTO chat_messages
+         (order_id, sender_type, sender_id, content, message_type,
+          image_url, file_url, file_name, file_size, mime_type, client_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (sender_id, client_id) WHERE client_id IS NOT NULL
+         DO UPDATE SET content = chat_messages.content
+       RETURNING *`,
+      [
+        data.order_id,
+        data.sender_type,
+        data.sender_id,
+        data.content || null,
+        data.message_type || 'text',
+        data.image_url || null,
+        data.file_url || null,
+        data.file_name || null,
+        data.file_size || null,
+        data.mime_type || null,
+        data.client_id,
+      ]
+    );
+    return result!;
+  }
+
+  // Legacy / pre-migration path — byte-identical to the original sendMessage.
+  // This is the path that runs before migration 076 is applied OR when the
+  // caller doesn't pass a client_id.
   const result = await queryOne<ChatMessage>(
-    `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type, image_url, file_url, file_name, file_size, mime_type)
+    `INSERT INTO chat_messages
+       (order_id, sender_type, sender_id, content, message_type,
+        image_url, file_url, file_name, file_size, mime_type)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
     [
@@ -1736,15 +1971,47 @@ export async function sendMessage(data: {
 
 export async function markMessagesAsRead(
   orderId: string,
-  readerType: ActorType
+  readerType: ActorType,
+  readerId?: string  // Phase 3: optional for backward compat with existing callers
 ): Promise<void> {
-  // Mark messages as read that were NOT sent by the reader
+  // Existing path: keep the global is_read bit working so legacy queries
+  // (e.g. order list unread badge) continue to function unchanged.
+  // This ALWAYS runs — it's the byte-identical legacy behavior.
   await query(
     `UPDATE chat_messages
      SET is_read = true, read_at = NOW()
      WHERE order_id = $1 AND sender_type != $2 AND is_read = false`,
     [orderId, readerType]
   );
+
+  // Phase 3: per-actor read state. Dual-write to chat_message_reads so we
+  // can serve correct unread counts in 3-party (user + merchant + compliance)
+  // conversations.
+  //
+  // Self-healing: only runs when (a) the caller has migrated to pass
+  // readerId AND (b) migration 077 has been applied (table exists). If
+  // either is missing, the legacy is_read path is still authoritative
+  // and nothing breaks.
+  if (readerId && (await chatHasReadsTable())) {
+    try {
+      await query(
+        `INSERT INTO chat_message_reads (message_id, actor_type, actor_id, read_at)
+         SELECT cm.id, $2, $3, NOW()
+         FROM chat_messages cm
+         WHERE cm.order_id = $1 AND cm.sender_type != $2
+         ON CONFLICT (message_id, actor_type, actor_id) DO NOTHING`,
+        [orderId, readerType, readerId]
+      );
+    } catch (err) {
+      // Phase 3 dual-write failure must NEVER block the legacy is_read path
+      // that already succeeded above. Log and swallow.
+      logger.warn('[markMessagesAsRead] chat_message_reads dual-write failed', {
+        orderId,
+        readerType,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 }
 
 // Update has_manual_message flag when user/merchant sends a message

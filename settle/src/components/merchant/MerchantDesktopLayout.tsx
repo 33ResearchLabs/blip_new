@@ -317,6 +317,15 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
               notifications={notifications}
               onMarkRead={markNotificationRead}
               onSelectOrder={setSelectedOrderId}
+              onOpenChat={(orderId) => {
+                const order =
+                  pendingOrders.find(o => o.id === orderId) ||
+                  ongoingOrders.find(o => o.id === orderId) ||
+                  completedOrders.find(o => o.id === orderId) ||
+                  cancelledOrders.find(o => o.id === orderId);
+                if (order) handleOpenChat(order);
+                else setSelectedOrderId(orderId);
+              }}
             />
             <div className="flex-1 flex flex-col min-h-0">
               {activeDisputeOrderId ? (

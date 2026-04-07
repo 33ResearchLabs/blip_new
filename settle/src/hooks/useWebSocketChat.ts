@@ -11,6 +11,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useWebSocketChatContextOptional } from '@/context/WebSocketChatContext';
+// Phase 3: parallel Pusher receive path. After the B1 fix, all chat sends
+// go through REST → Pusher fanout. The custom WS server is no longer the
+// chat transport, only typing/presence/freeze/highlight. We add a Pusher
+// subscription here so this hook can hear the same MESSAGE_NEW events
+// useRealtimeChat hears, dedup-by-id, and stay in sync in real time.
+import { usePusherOptional } from '@/context/PusherContext';
+import { getOrderChannel } from '@/lib/pusher/channels';
+import { CHAT_EVENTS } from '@/lib/pusher/events';
 import type {
   WSNewMessageEvent,
   WSTypingEvent,
@@ -21,6 +29,25 @@ import type {
   ActorType,
   MessageType,
 } from '@/lib/websocket/types';
+
+// Pusher event payload (matches the shape notifyNewMessage publishes)
+interface PusherChatMessageEvent {
+  messageId: string;
+  orderId: string;
+  senderType: ActorType;
+  senderId: string | null;
+  senderName?: string;
+  content: string;
+  messageType: MessageType;
+  imageUrl?: string | null;
+  fileUrl?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  mimeType?: string | null;
+  createdAt: string;
+  clientId?: string | null;
+  seq?: number | null;
+}
 
 export interface ChatMessage {
   id: string;
@@ -37,6 +64,9 @@ export interface ChatMessage {
   senderName?: string;
   isHighlighted?: boolean;
   status?: 'sending' | 'sent' | 'delivered' | 'read';
+  // Phase 3: idempotency + ordering, optional for backward compat.
+  clientId?: string;
+  seq?: number;
 }
 
 export interface PresenceMember {
@@ -79,6 +109,9 @@ interface DbMessage {
   is_read: boolean;
   is_highlighted?: boolean;
   status?: string;
+  // Phase 3 — present on rows after migration 076
+  client_id?: string | null;
+  seq?: number | null;
 }
 
 interface UseWebSocketChatOptions {
@@ -123,8 +156,17 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   const [chatWindows, setChatWindows] = useState<ChatWindow[]>([]);
 
   const wsContext = useWebSocketChatContextOptional();
+  const pusher = usePusherOptional();
   const subscribedOrdersRef = useRef<Set<string>>(new Set());
   const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  // Phase 3: parallel Pusher subscription state.
+  //   pusherSubscribedRef — orderId → true once we've subscribed to private-order-X
+  //   lastSeqRef          — orderId → highest seq seen, drives reconnect catch-up
+  // Both maps are independent of the WS context state — Pusher receive
+  // works even when the custom WS server is down.
+  const pusherSubscribedRef = useRef<Map<string, boolean>>(new Map());
+  const lastSeqRef = useRef<Map<string, number>>(new Map());
 
   // Stable ref for chatWindows — removes it from callback deps
   const chatWindowsRef = useRef(chatWindows);
@@ -160,6 +202,8 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         senderName: dbMsg.sender_name,
         isHighlighted: dbMsg.is_highlighted,
         status: from === 'me' ? ((dbMsg.status === 'seen' ? 'read' : dbMsg.status as 'sent' | 'delivered') || 'sent') : undefined,
+        clientId: dbMsg.client_id ?? undefined,  // Phase 3
+        seq: dbMsg.seq ?? undefined,             // Phase 3
       };
     },
     []
@@ -170,6 +214,10 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
     (event: WSNewMessageEvent, myActorType: string): ChatMessage => {
       const { data } = event;
       const from = determineSender(data.senderType, data.messageType, myActorType);
+      // Phase 3: WS event may also carry clientId/seq if the WS server is updated
+      // to forward them. Until then these fields are undefined and the dedup
+      // path falls back to id-based dedup (which still works).
+      const eventWithPhase3 = data as typeof data & { clientId?: string; seq?: number };
       return {
         id: data.messageId,
         from,
@@ -184,6 +232,8 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         senderType: data.senderType,
         senderName: data.senderName,
         status: from === 'me' ? 'sent' : undefined,
+        clientId: eventWithPhase3.clientId ?? undefined,  // Phase 3
+        seq: eventWithPhase3.seq ?? undefined,            // Phase 3
       };
     },
     []
@@ -202,6 +252,18 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
             mapDbMessageToUI(m, actorType)
           );
 
+          // Phase 3: seed lastSeq from initial fetch so the first reconnect
+          // catch-up only pulls messages newer than what we already loaded.
+          // Pre-migration messages have seq=undefined and this is a no-op.
+          let maxSeq = 0;
+          for (const m of messages) {
+            if (typeof m.seq === 'number' && m.seq > maxSeq) maxSeq = m.seq;
+          }
+          if (maxSeq > 0) {
+            const current = lastSeqRef.current.get(orderId) || 0;
+            if (maxSeq > current) lastSeqRef.current.set(orderId, maxSeq);
+          }
+
           setChatWindows((prev) =>
             prev.map((w) => {
               if (w.id !== chatId) return w;
@@ -216,6 +278,174 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
     [actorType, mapDbMessageToUI]
   );
 
+  // Phase 3: shared handler for incoming Pusher chat events. Mirrors the
+  // existing WS handleNewMessage logic exactly so dedup-by-id and
+  // replace-by-clientId behave identically regardless of which transport
+  // delivered the message.
+  const handlePusherMessage = useCallback(
+    (rawData: unknown) => {
+      const event = rawData as PusherChatMessageEvent;
+      if (!event?.messageId || !event?.orderId) return;
+
+      // Track lastSeq for reconnect catch-up
+      if (typeof event.seq === 'number') {
+        const current = lastSeqRef.current.get(event.orderId) || 0;
+        if (event.seq > current) lastSeqRef.current.set(event.orderId, event.seq);
+      }
+
+      const from = determineSender(event.senderType, event.messageType, actorType);
+      const message: ChatMessage = {
+        id: event.messageId,
+        from,
+        text: event.content || '',
+        timestamp: new Date(event.createdAt),
+        messageType: event.messageType,
+        imageUrl: event.imageUrl,
+        fileUrl: event.fileUrl,
+        fileName: event.fileName,
+        fileSize: event.fileSize,
+        mimeType: event.mimeType,
+        senderType: event.senderType,
+        senderName: event.senderName,
+        status: from === 'me' ? 'sent' : undefined,
+        clientId: event.clientId ?? undefined,
+        seq: event.seq ?? undefined,
+      };
+
+      setChatWindows((prev) =>
+        prev.map((w) => {
+          if (w.orderId !== event.orderId) return w;
+
+          // Dedup by id FIRST — message may also arrive via WS context
+          if (w.messages.some((m) => m.id === message.id)) return w;
+
+          // Replace optimistic temp by clientId (post-migration server echo)
+          if (message.from === 'me' && message.clientId) {
+            const idx = w.messages.findIndex((m) => m.clientId === message.clientId);
+            if (idx >= 0) {
+              const newMessages = [...w.messages];
+              newMessages[idx] = message;
+              return { ...w, messages: newMessages };
+            }
+          }
+
+          // Backward-compat fallback: server didn't echo clientId (legacy)
+          if (message.from === 'me' && !message.clientId) {
+            const tempIndex = w.messages.findIndex((m) => m.id.startsWith('temp_'));
+            if (tempIndex >= 0) {
+              const newMessages = [...w.messages];
+              newMessages[tempIndex] = message;
+              return { ...w, messages: newMessages };
+            }
+          }
+
+          // Append new message
+          const newUnread = message.from !== 'me' && w.minimized ? w.unread + 1 : w.unread;
+          if (message.from !== 'me') {
+            onNewMessage?.(w.orderId!, message);
+          }
+          return {
+            ...w,
+            messages: [...w.messages.filter((m) => !m.id.startsWith('temp_')), message],
+            unread: newUnread,
+            isTyping: false,
+          };
+        })
+      );
+    },
+    [actorType, onNewMessage]
+  );
+
+  // Phase 3: subscribe to Pusher private-order-X for every chat window's order.
+  // This is the receive path for messages that came in through REST → Pusher
+  // (which is now ALL chat sends after the B1 fix).
+  useEffect(() => {
+    if (!pusher) return;
+    const orderIds = chatWindows
+      .map((w) => w.orderId)
+      .filter((id): id is string => !!id);
+
+    // Subscribe to any orderId we haven't subscribed to yet
+    for (const orderId of orderIds) {
+      if (pusherSubscribedRef.current.get(orderId)) continue;
+      const channel = pusher.subscribe(getOrderChannel(orderId));
+      if (!channel) continue;
+      channel.bind(CHAT_EVENTS.MESSAGE_NEW, handlePusherMessage);
+      pusherSubscribedRef.current.set(orderId, true);
+    }
+
+    // Unsubscribe from any orderId no longer in the windows list
+    const activeIds = new Set(orderIds);
+    for (const [orderId] of pusherSubscribedRef.current) {
+      if (!activeIds.has(orderId)) {
+        const channel = pusher.subscribe(getOrderChannel(orderId));
+        channel?.unbind(CHAT_EVENTS.MESSAGE_NEW, handlePusherMessage);
+        pusher.unsubscribe(getOrderChannel(orderId));
+        pusherSubscribedRef.current.delete(orderId);
+        lastSeqRef.current.delete(orderId);
+      }
+    }
+  }, [pusher, chatWindows, handlePusherMessage]);
+
+  // Phase 3: reconnect catch-up. When Pusher reconnects, fetch any messages
+  // we missed during the gap via /api/orders/:id/messages?after_seq=<lastSeq>.
+  // The dedup-by-id path in handlePusherMessage prevents double-renders if a
+  // message arrives both via Pusher and via this catch-up fetch.
+  // Pre-migration: getOrderMessagesAfterSeq returns [] (self-healing), so this
+  // is a no-op and nothing breaks.
+  useEffect(() => {
+    if (!pusher) return;
+    if (!pusher.isConnected) return;
+    if (lastSeqRef.current.size === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      for (const [orderId, lastSeq] of lastSeqRef.current.entries()) {
+        if (cancelled) return;
+        if (!pusherSubscribedRef.current.get(orderId)) continue;
+        try {
+          const res = await fetchWithAuth(
+            `/api/orders/${orderId}/messages?after_seq=${lastSeq}`
+          );
+          if (!res.ok) continue;
+          const data = await res.json();
+          const fresh: DbMessage[] = data?.success ? (data.data || []) : [];
+          if (!fresh.length) continue;
+
+          const targetWindow = chatWindowsRef.current.find((w) => w.orderId === orderId);
+          if (!targetWindow) continue;
+
+          let newMaxSeq = lastSeq;
+          const mapped: ChatMessage[] = fresh.map((m) => {
+            const ui = mapDbMessageToUI(m, actorType);
+            if (typeof ui.seq === 'number' && ui.seq > newMaxSeq) newMaxSeq = ui.seq;
+            return ui;
+          });
+
+          setChatWindows((prev) =>
+            prev.map((w) => {
+              if (w.id !== targetWindow.id) return w;
+              const seen = new Set(w.messages.map((m) => m.id));
+              const append = mapped.filter((m) => !seen.has(m.id));
+              if (append.length === 0) return w;
+              return { ...w, messages: [...w.messages, ...append] };
+            })
+          );
+
+          if (newMaxSeq > lastSeq) {
+            lastSeqRef.current.set(orderId, newMaxSeq);
+          }
+        } catch (err) {
+          console.warn('[useWebSocketChat] reconnect catch-up failed', { orderId, err });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pusher, pusher?.isConnected, actorType, mapDbMessageToUI]);
+
   // Handle new messages from WebSocket
   useEffect(() => {
     if (!wsContext) return;
@@ -229,15 +459,28 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
 
           const message = mapWSMessageToUI(event, actorType);
 
-          // If it's our own message, replace temp message
-          if (message.from === 'me') {
+          // Phase 3: dedup by id FIRST. The same message may arrive via WS
+          // and via the Pusher path on the same client.
+          if (w.messages.some(m => m.id === message.id)) return w;
+
+          // Phase 3: replace optimistic temp by clientId (NOT by index).
+          if (message.from === 'me' && message.clientId) {
+            const idx = w.messages.findIndex(m => m.clientId === message.clientId);
+            if (idx >= 0) {
+              const newMessages = [...w.messages];
+              newMessages[idx] = message;
+              return { ...w, messages: newMessages };
+            }
+          }
+
+          // Backward-compat fallback when the server didn't echo a clientId.
+          if (message.from === 'me' && !message.clientId) {
             const tempIndex = w.messages.findIndex((m) => m.id.startsWith('temp_'));
             if (tempIndex >= 0) {
               const newMessages = [...w.messages];
               newMessages[tempIndex] = message;
               return { ...w, messages: newMessages };
             }
-            if (w.messages.some(m => m.id === message.id)) return w;
           }
 
           // Add new message
@@ -445,10 +688,17 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
       if (fileData) messageType = 'file';
       else if (imageUrl) messageType = 'image';
 
+      // Phase 3: client-generated UUID for idempotent sends + temp replacement
+      const clientId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 10)}`;
+
       // Optimistically add message
-      const tempId = `temp_${Date.now()}`;
+      const tempId = `temp_${clientId}`;
       const tempMessage: ChatMessage = {
         id: tempId,
+        clientId,  // ◄ Phase 3: replace-by-clientId on server echo
         from: 'me',
         text,
         timestamp: new Date(),
@@ -468,64 +718,80 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         })
       );
 
-      // Send via WebSocket if available
-      if (wsContext?.isConnected) {
-        wsContext.sendMessage(
-          window.orderId,
-          text,
-          messageType as MessageType,
-          imageUrl
-        );
-        // For file messages, we also send via API since WS sendMessage doesn't support file metadata yet
-        if (fileData) {
-          try {
-            await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                sender_type: actorType,
-                sender_id: currentActorId,
-                content: text || undefined,
-                message_type: messageType,
-                image_url: imageUrl,
-                file_url: fileData.fileUrl,
-                file_name: fileData.fileName,
-                file_size: fileData.fileSize,
-                mime_type: fileData.mimeType,
-              }),
-            });
-          } catch {
-            // Best-effort
-          }
-        }
-      } else {
-        // Fallback to HTTP API
-        try {
-          const res = await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sender_type: actorType,
-              sender_id: currentActorId,
-              content: text || undefined,
-              message_type: messageType,
-              image_url: imageUrl,
-              file_url: fileData?.fileUrl,
-              file_name: fileData?.fileName,
-              file_size: fileData?.fileSize,
-              mime_type: fileData?.mimeType,
-            }),
-          });
+      // ─── B1 fix: REST-only chat send ──────────────────────────────────
+      //
+      // Why this changed:
+      //   The merchant page uses useWebSocketChat which historically sent
+      //   text messages via wsContext.sendMessage. The custom WS server
+      //   (websocket-server.js) inserts the row and broadcasts it to other
+      //   WS subscribers — but it does NOT publish to Pusher.
+      //
+      //   The user app uses useRealtimeChat which subscribes ONLY to
+      //   Pusher. Result: merchant text messages never reached users in
+      //   real time. Users had to refresh to see them.
+      //
+      //   Routing all sends through POST /api/orders/:id/messages fixes
+      //   this because the REST handler calls notifyNewMessage() which
+      //   publishes to all relevant Pusher channels. This is the same
+      //   path useRealtimeChat already uses, so user→merchant and
+      //   merchant→user are now symmetrical and both go through Pusher.
+      //
+      //   The custom WS server is still alive (typing indicators, presence,
+      //   freeze, highlight) — only the chat:send code path is bypassed.
+      //   Phase 5 will eventually delete the WS server entirely.
+      //
+      // Idempotency:
+      //   client_id is included in the body. With migration 076 applied,
+      //   the server dedupes on (sender_id, client_id) so a network retry
+      //   doesn't create a duplicate row. Pre-migration, the server falls
+      //   back to legacy INSERT and the client_id field is ignored.
+      try {
+        const res = await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sender_type: actorType,
+            sender_id: currentActorId,
+            content: text || undefined,
+            message_type: messageType,
+            image_url: imageUrl,
+            file_url: fileData?.fileUrl,
+            file_name: fileData?.fileName,
+            file_size: fileData?.fileSize,
+            mime_type: fileData?.mimeType,
+            client_id: clientId,
+          }),
+        });
 
-          if (!res.ok) return;
-          const data = await res.json();
-          if (!data.success) throw new Error(data.error);
-        } catch {
-          // Keep local message in demo mode
+        if (!res.ok) {
+          // Mark the optimistic message as failed so the user can see + retry
+          setChatWindows((prev) =>
+            prev.map((w) => {
+              if (w.id !== chatId) return w;
+              return {
+                ...w,
+                messages: w.messages.map((m) =>
+                  m.id === tempId ? { ...m, status: 'sending' as const } : m
+                ),
+              };
+            })
+          );
+          return;
         }
+
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to send message');
+        }
+        // The Pusher MESSAGE_NEW event will replace the temp message via
+        // the handleNewMessage path (replace-by-clientId post-migration,
+        // or first-temp fallback pre-migration).
+      } catch {
+        // Network failure — keep the optimistic message visible so the
+        // user knows it exists locally; the next reload will resync.
       }
     },
-    [actorType, wsContext]
+    [actorType]
   );
 
   const markAsRead = useCallback(

@@ -243,6 +243,28 @@ export async function mockEscrowLock(
         ]
       );
 
+      // 10. Realtime stabilization (Phase 2): outbox row inside same tx.
+      // Reliable delivery backup if fireInstantNotification fails.
+      await client.query(
+        `INSERT INTO notification_outbox (event_type, order_id, payload)
+         VALUES ($1, $2, $3)`,
+        [
+          'ORDER_STATUS_CHANGED',
+          orderId,
+          JSON.stringify({
+            orderId,
+            status: 'escrowed',
+            previousStatus: lockedOrder.status,
+            order_version: updatedOrder.order_version,
+            orderVersion: updatedOrder.order_version,
+            userId: updatedOrder.user_id,
+            merchantId: updatedOrder.merchant_id,
+            buyerMerchantId: updatedOrder.buyer_merchant_id,
+            updatedAt: new Date().toISOString(),
+          }),
+        ]
+      );
+
       logger.info('[MockEscrow] Escrow locked', {
         orderId,
         payer: payer.entityType,

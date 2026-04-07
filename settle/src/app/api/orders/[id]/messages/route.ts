@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrderMessages, sendMessage, markMessagesAsRead, getOrderById, markOrderHasManualMessage } from '@/lib/db/repositories/orders';
+import { getOrderMessages, getOrderMessagesAfterSeq, sendMessage, markMessagesAsRead, getOrderById, markOrderHasManualMessage } from '@/lib/db/repositories/orders';
 import { query } from '@/lib/db';
 import {
   sendMessageSchema,
@@ -58,6 +58,26 @@ export async function GET(
       return forbiddenResponse('You do not have access to this order');
     }
 
+    // Phase 3: reconnect catch-up cursor. When the client provides
+    // ?after_seq=N we return messages with seq > N in ASC order, hard-capped
+    // at 200. Used after Pusher reconnect to backfill missed messages without
+    // losing ordering.
+    //
+    // Backward compatible: if after_seq is absent, the existing latest-N
+    // path runs unchanged.
+    const afterSeqParam = request.nextUrl.searchParams.get('after_seq');
+    if (afterSeqParam !== null) {
+      const afterSeq = parseInt(afterSeqParam, 10);
+      if (Number.isNaN(afterSeq) || afterSeq < 0) {
+        return validationErrorResponse(['after_seq must be a non-negative integer']);
+      }
+      const limitParam = request.nextUrl.searchParams.get('limit');
+      const limit = limitParam ? parseInt(limitParam, 10) : 200;
+      const catchup = await getOrderMessagesAfterSeq(id, afterSeq, limit);
+      logger.api.request('GET', `/api/orders/${id}/messages?after_seq=${afterSeq}`, auth.actorId);
+      return successResponse(catchup);
+    }
+
     const limitParam = request.nextUrl.searchParams.get('limit');
     const before = request.nextUrl.searchParams.get('before') || undefined;
     const limit = limitParam ? parseInt(limitParam, 10) : undefined;
@@ -101,7 +121,7 @@ export async function POST(
       return validationErrorResponse(errors);
     }
 
-    const { sender_type, sender_id, content, message_type, image_url, file_url, file_name, file_size, mime_type } = parseResult.data;
+    const { sender_type, sender_id, content, message_type, image_url, file_url, file_name, file_size, mime_type, client_id } = parseResult.data;
 
     // Verify sender identity matches authenticated actor (prevent spoofing)
     // Allow dual-login: user token can send as user if userId matches,
@@ -180,6 +200,7 @@ export async function POST(
       file_name,
       file_size,
       mime_type,
+      client_id,  // Phase 3: idempotency key, optional
     });
 
     // Mark order as having manual messages (fire-and-forget, don't block response)
@@ -187,7 +208,9 @@ export async function POST(
       markOrderHasManualMessage(id).catch(() => {});
     }
 
-    // Trigger real-time notification on order channel + participant private channels
+    // Trigger real-time notification on order channel + participant private channels.
+    // Phase 3: include clientId and seq so recipients can replace optimistic
+    // temp messages by clientId and track lastSeq for reconnect catch-up.
     notifyNewMessage({
       orderId: id,
       messageId: message.id,
@@ -204,6 +227,8 @@ export async function POST(
       userId: order.user_id,
       merchantId: order.merchant_id,
       buyerMerchantId: order.buyer_merchant_id,
+      clientId: (message as { client_id?: string | null }).client_id ?? null,
+      seq: (message as { seq?: number | null }).seq ?? null,
     });
 
     // ── Post-send notifications (fire-and-forget, don't block response) ──
@@ -418,7 +443,11 @@ export async function PATCH(
       return forbiddenResponse('You do not have access to this order');
     }
 
-    await markMessagesAsRead(id, reader_type);
+    // Phase 3: pass authenticated actorId so the dual-write to
+    // chat_message_reads can attribute the read to the correct actor.
+    // Backward compatible: the readerId parameter is optional in the repo
+    // function — old callers (none currently, but defensive) keep working.
+    await markMessagesAsRead(id, reader_type, auth.actorId);
 
     // Trigger real-time notification
     notifyMessagesRead(id, reader_type, new Date().toISOString());

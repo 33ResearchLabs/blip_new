@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blip Money — Manual Testing Checklist</title>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --card: #141414;
+    --border: #222;
+    --text: #e5e5e5;
+    --muted: #666;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --blue: #3b82f6;
+    --purple: #a855f7;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    padding: 24px; max-width: 1100px; margin: 0 auto;
+    line-height: 1.5;
+  }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .progress-bar {
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 16px; margin-bottom: 24px; display: flex; align-items: center; gap: 16px;
+    position: sticky; top: 0; z-index: 10; backdrop-filter: blur(12px);
+  }
+  .progress-bar .track {
+    flex: 1; height: 8px; background: #1a1a1a; border-radius: 4px; overflow: hidden;
+  }
+  .progress-bar .fill {
+    height: 100%; background: var(--green); border-radius: 4px;
+    transition: width 0.3s ease;
+  }
+  .progress-bar .stats { font-size: 12px; font-family: monospace; color: var(--muted); white-space: nowrap; }
+  .progress-bar .pct { font-size: 14px; font-weight: 700; min-width: 42px; }
+
+  section {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    margin-bottom: 16px; overflow: hidden;
+  }
+  .section-header {
+    padding: 12px 16px; display: flex; align-items: center; gap: 8px;
+    cursor: pointer; user-select: none; border-bottom: 1px solid var(--border);
+  }
+  .section-header:hover { background: rgba(255,255,255,0.02); }
+  .section-header .icon { font-size: 16px; }
+  .section-header h2 { font-size: 14px; font-weight: 600; flex: 1; }
+  .section-header .badge {
+    font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+    font-family: monospace;
+  }
+  .badge-critical { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge-high { background: rgba(245,158,11,0.15); color: var(--yellow); }
+  .badge-medium { background: rgba(59,130,246,0.15); color: var(--blue); }
+  .badge-low { background: rgba(168,85,247,0.15); color: var(--purple); }
+  .section-count { font-size: 11px; color: var(--muted); font-family: monospace; }
+
+  .items { padding: 4px 0; }
+  .items.collapsed { display: none; }
+  .item {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 16px; transition: background 0.15s;
+  }
+  .item:hover { background: rgba(255,255,255,0.015); }
+  .item input[type="checkbox"] {
+    appearance: none; -webkit-appearance: none;
+    width: 18px; height: 18px; min-width: 18px;
+    border: 2px solid #333; border-radius: 4px; margin-top: 1px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .item input[type="checkbox"]:checked {
+    background: var(--green); border-color: var(--green);
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: center; background-size: 14px;
+  }
+  .item label { cursor: pointer; font-size: 13px; flex: 1; }
+  .item.checked label { color: var(--muted); text-decoration: line-through; }
+  .item .tag {
+    font-size: 9px; padding: 1px 6px; border-radius: 6px; font-weight: 600;
+    letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; margin-top: 2px;
+  }
+  .tag-security { background: rgba(239,68,68,0.12); color: var(--red); }
+  .tag-financial { background: rgba(245,158,11,0.12); color: var(--yellow); }
+  .tag-ux { background: rgba(59,130,246,0.12); color: var(--blue); }
+  .tag-edge { background: rgba(168,85,247,0.12); color: var(--purple); }
+  .tag-perf { background: rgba(34,197,94,0.12); color: var(--green); }
+
+  .note {
+    font-size: 11px; color: var(--muted); padding: 0 16px 8px 44px;
+    margin-top: -4px; font-style: italic;
+  }
+
+  .actions {
+    display: flex; gap: 8px; margin-bottom: 24px;
+  }
+  .actions button {
+    padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); font-size: 12px; cursor: pointer;
+    font-weight: 500;
+  }
+  .actions button:hover { background: #1a1a1a; }
+  .env-info {
+    display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .env-info input, .env-info select {
+    padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 12px; font-family: monospace;
+  }
+  @media print {
+    body { background: #fff; color: #000; }
+    .progress-bar, .actions, .env-info { display: none; }
+    section { break-inside: avoid; border-color: #ccc; background: #fff; }
+    .item input[type="checkbox"] { border-color: #999; }
+    .item.checked label { color: #999; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Blip Money — Manual Testing Checklist</h1>
+<p class="subtitle">Complete end-to-end QA checklist for production readiness. Check each item as you test.</p>
+
+<div class="env-info">
+  <input type="text" id="env-url" placeholder="Base URL (e.g. https://app.blip.money)" style="width:280px">
+  <input type="text" id="env-tester" placeholder="Tester name">
+  <input type="date" id="env-date">
+</div>
+
+<div class="actions">
+  <button onclick="expandAll()">Expand All</button>
+  <button onclick="collapseAll()">Collapse All</button>
+  <button onclick="resetAll()">Reset All</button>
+  <button onclick="window.print()">Print / PDF</button>
+  <button onclick="exportResults()">Export JSON</button>
+</div>
+
+<div class="progress-bar">
+  <span class="pct" id="pct">0%</span>
+  <div class="track"><div class="fill" id="fill" style="width:0%"></div></div>
+  <span class="stats"><span id="done">0</span> / <span id="total">0</span></span>
+</div>
+
+<div id="sections"></div>
+
+<script>
+const DATA = [
+  {
+    title: "Dev Access Lock",
+    icon: "🔒",
+    priority: "critical",
+    items: [
+      { text: "Visit / — redirects to /dev-lock", tags: ["security"] },
+      { text: "Visit /merchant — redirects to /dev-lock", tags: ["security"] },
+      { text: "Visit /admin — redirects to /dev-lock", tags: ["security"] },
+      { text: "Enter wrong password — shows error, does NOT unlock", tags: ["security"] },
+      { text: "Enter correct password — redirects to app, cookie set", tags: ["security"] },
+      { text: "Refresh page — stays unlocked (cookie persists)", tags: ["ux"] },
+      { text: "API calls without cookie return 401 (curl test)", tags: ["security"] },
+      { text: "Rate limit: 5+ wrong attempts → 429 response", tags: ["security"] },
+    ]
+  },
+  {
+    title: "Authentication — User (Wallet)",
+    icon: "👤",
+    priority: "critical",
+    items: [
+      { text: "Connect Solana wallet → user created or found", tags: ["security"] },
+      { text: "Wallet signature verified on backend (not just address)", tags: ["security"] },
+      { text: "Access token returned (short-lived, 15min)", tags: ["security"] },
+      { text: "Refresh token set as httpOnly cookie", tags: ["security"] },
+      { text: "New user: prompted to set username", tags: ["ux"] },
+      { text: "Existing user: lands on dashboard with correct data", tags: ["ux"] },
+      { text: "Disconnect wallet: click disconnect → state cleared", tags: ["ux"] },
+      { text: "Page refresh: session restores automatically", tags: ["ux"] },
+      { text: "Expired access token: auto-refreshes via cookie", tags: ["security"] },
+      { text: "Expired refresh token: redirects to login", tags: ["security"] },
+      { text: "POST /api/auth/logout: revokes session + clears cookie", tags: ["security"] },
+    ]
+  },
+  {
+    title: "Authentication — Merchant",
+    icon: "🏪",
+    priority: "critical",
+    items: [
+      { text: "Merchant wallet login works", tags: ["security"] },
+      { text: "Merchant email/password login works", tags: ["security"] },
+      { text: "New merchant registration with email verification", tags: ["ux"] },
+      { text: "Forgot password → reset email → new password works", tags: ["ux"] },
+      { text: "Merchant token stored correctly (sessionStorage)", tags: ["security"] },
+      { text: "Merchant can only access own orders (not other merchants')", tags: ["security"] },
+      { text: "x-merchant-id header rejected from user token", tags: ["security"], note: "Fixed in C1/C5" },
+    ]
+  },
+  {
+    title: "Authentication — Admin",
+    icon: "🛡️",
+    priority: "critical",
+    items: [
+      { text: "Admin login with username + password", tags: ["security"] },
+      { text: "Admin token valid for 24h", tags: ["security"] },
+      { text: "Invalid admin creds → 401", tags: ["security"] },
+      { text: "Admin API endpoints blocked without token", tags: ["security"] },
+      { text: "Admin logout clears localStorage", tags: ["ux"] },
+    ]
+  },
+  {
+    title: "Authentication — Compliance",
+    icon: "⚖️",
+    priority: "critical",
+    items: [
+      { text: "Compliance wallet login requires signature (not just address)", tags: ["security"], note: "Fixed in C3 — signature now verified" },
+      { text: "Non-whitelisted wallet → 403", tags: ["security"] },
+      { text: "Compliance can access disputed orders only", tags: ["security"] },
+    ]
+  },
+  {
+    title: "Order Creation",
+    icon: "📦",
+    priority: "critical",
+    items: [
+      { text: "BUY order: created successfully, broadcast to merchants", tags: ["financial"] },
+      { text: "SELL order: requires escrow_tx_hash at creation", tags: ["financial"] },
+      { text: "Fiat amount calculated SERVER-SIDE from corridor rate", tags: ["financial"] },
+      { text: "Frontend CANNOT set fiat_amount or rate (ignored)", tags: ["security"] },
+      { text: "Corridor rate unavailable → order rejected (no stale 3.67 fallback)", tags: ["financial"], note: "Fixed: rejects instead of using hardcoded rate" },
+      { text: "Double-click creates only ONE order (idempotency)", tags: ["edge"] },
+      { text: "Same user+type+amount within 30s → returns cached result", tags: ["edge"] },
+      { text: "Explicit Idempotency-Key header works for retries", tags: ["edge"] },
+      { text: "Rate limit: max 20 order creations per minute", tags: ["perf"] },
+      { text: "Invalid crypto_amount (0, negative, string) → 400", tags: ["edge"] },
+    ]
+  },
+  {
+    title: "Order Claiming (Merchant)",
+    icon: "🤝",
+    priority: "critical",
+    items: [
+      { text: "Merchant claims broadcast order → assigned successfully", tags: ["financial"] },
+      { text: "Two merchants claim same order simultaneously → only one wins, other gets 409", tags: ["edge"], note: "FOR UPDATE + IS NULL in transaction" },
+      { text: "Claimed order shows correct merchant in UI", tags: ["ux"] },
+      { text: "Cannot claim already-assigned order", tags: ["security"], note: "Fixed in C2 — claim access control" },
+      { text: "Claim + Pay (atomic): SEND_PAYMENT on unclaimed order claims first", tags: ["financial"] },
+    ]
+  },
+  {
+    title: "Order State Machine",
+    icon: "🔄",
+    priority: "critical",
+    items: [
+      { text: "ACCEPT: open → accepted (buyer only)", tags: ["financial"] },
+      { text: "LOCK_ESCROW: accepted → escrowed (seller only)", tags: ["financial"] },
+      { text: "SEND_PAYMENT: escrowed → payment_sent (buyer only)", tags: ["financial"] },
+      { text: "CONFIRM_PAYMENT: payment_sent → completed (seller only)", tags: ["financial"] },
+      { text: "CANCEL: open/accepted/escrowed → cancelled (any)", tags: ["financial"] },
+      { text: "DISPUTE: escrowed/payment_sent → disputed (any)", tags: ["financial"] },
+      { text: "Invalid transition rejected (e.g. open → completed)", tags: ["edge"] },
+      { text: "Buyer CANNOT confirm payment (role check)", tags: ["security"] },
+      { text: "Seller CANNOT send payment (role check)", tags: ["security"] },
+      { text: "Frontend sends ACTION not status (backend determines target)", tags: ["security"] },
+    ]
+  },
+  {
+    title: "Escrow System",
+    icon: "🔐",
+    priority: "critical",
+    items: [
+      { text: "Escrow lock deducts balance from seller", tags: ["financial"] },
+      { text: "Balance goes negative → rejected by DB constraint", tags: ["financial"] },
+      { text: "Escrow release: only escrow_debited_entity can release", tags: ["security"] },
+      { text: "'system' actor type NOT accepted in release API", tags: ["security"], note: "Fixed: removed from Zod enum" },
+      { text: "Cancel with escrow → refund is atomic (single transaction)", tags: ["financial"] },
+      { text: "Balance after refund matches expected (post-invariant check)", tags: ["financial"] },
+      { text: "payment_sent stuck >24h → auto-disputed by expire cron", tags: ["financial"] },
+      { text: "GET /api/orders/:id/escrow requires access check", tags: ["security"], note: "Fixed: uncommented auth" },
+    ]
+  },
+  {
+    title: "Payment Flow",
+    icon: "💳",
+    priority: "critical",
+    items: [
+      { text: "Idempotency-Key required for payment_sent transition", tags: ["financial"] },
+      { text: "Idempotency-Key required for completed transition", tags: ["financial"] },
+      { text: "Same payment action retried → returns cached result (no double-execute)", tags: ["edge"] },
+      { text: "Cancel during payment: refund executed atomically", tags: ["financial"] },
+    ]
+  },
+  {
+    title: "Chat System",
+    icon: "💬",
+    priority: "high",
+    items: [
+      { text: "WebSocket connects with valid token", tags: ["security"] },
+      { text: "Messages delivered in real-time to both parties", tags: ["ux"] },
+      { text: "Messages persisted in database (survive refresh)", tags: ["ux"] },
+      { text: "Image/file upload works in chat", tags: ["ux"] },
+      { text: "Rate limit: 30 messages per minute per user", tags: ["perf"] },
+      { text: "31st message rejected (rate limit fires BEFORE save)", tags: ["security"] },
+      { text: "Chat frozen by compliance → non-compliance users blocked", tags: ["security"] },
+      { text: "Compliance message: only merchants with has_compliance_access can send as 'compliance'", tags: ["security"], note: "Fixed in C3" },
+      { text: "Typing indicators work", tags: ["ux"] },
+      { text: "Presence: shows online/offline status", tags: ["ux"] },
+      { text: "WebSocket reconnects after disconnect", tags: ["ux"] },
+      { text: "Messages from REST API also appear in real-time", tags: ["ux"] },
+      { text: "WS queries timeout after 5s (no indefinite hang)", tags: ["perf"], note: "Fixed in H8" },
+    ]
+  },
+  {
+    title: "Price System",
+    icon: "📊",
+    priority: "high",
+    items: [
+      { text: "Price tick collector fetches every 25s", tags: ["perf"] },
+      { text: "CoinGecko primary, Binance fallback", tags: ["ux"] },
+      { text: "Both APIs down → returns last known price with stale warning", tags: ["edge"] },
+      { text: "Admin price page shows live chart", tags: ["ux"] },
+      { text: "Admin can see current avg price + source", tags: ["ux"] },
+      { text: "Old ticks cleaned up (no unbounded DB growth)", tags: ["perf"] },
+    ]
+  },
+  {
+    title: "Ratings & Reputation",
+    icon: "⭐",
+    priority: "medium",
+    items: [
+      { text: "Only order participants can rate", tags: ["security"] },
+      { text: "Only completed orders can be rated", tags: ["security"] },
+      { text: "Duplicate rating on same order → 409 rejected", tags: ["edge"] },
+      { text: "Self-rating blocked (same entity both sides)", tags: ["security"], note: "Fixed: rater_id === rated_id check" },
+      { text: "Rating appears on merchant/user profile", tags: ["ux"] },
+    ]
+  },
+  {
+    title: "Dispute System",
+    icon: "⚠️",
+    priority: "high",
+    items: [
+      { text: "Dispute raised from escrowed or payment_sent", tags: ["financial"] },
+      { text: "Disputed order NOT auto-completable", tags: ["security"] },
+      { text: "Compliance can propose resolution", tags: ["ux"] },
+      { text: "Double resolution blocked (investigating → 409)", tags: ["edge"], note: "Fixed: idempotency guard" },
+      { text: "Both parties must confirm resolution", tags: ["financial"] },
+      { text: "Resolved dispute releases funds correctly", tags: ["financial"] },
+    ]
+  },
+  {
+    title: "Admin Dashboard",
+    icon: "📋",
+    priority: "medium",
+    items: [
+      { text: "Console page loads with stats", tags: ["ux"] },
+      { text: "Live Feed page shows real-time orders", tags: ["ux"] },
+      { text: "Merchants page: list, search, sort, filter all work", tags: ["ux"] },
+      { text: "Users page: list, search, sort, filter all work", tags: ["ux"] },
+      { text: "Disputes page: summary + recent disputes", tags: ["ux"] },
+      { text: "Monitor page: live orders + security alerts", tags: ["ux"] },
+      { text: "Price page: chart + current price", tags: ["ux"] },
+      { text: "Ops Access toggle works", tags: ["ux"] },
+      { text: "Compliance Access toggle works", tags: ["ux"] },
+      { text: "All admin pages have Monitor + Price in nav", tags: ["ux"] },
+      { text: "Auto-refresh every 8-30s depending on page", tags: ["perf"] },
+      { text: "Pusher real-time updates work on admin", tags: ["ux"] },
+    ]
+  },
+  {
+    title: "Security Guards & Monitoring",
+    icon: "🚨",
+    priority: "high",
+    items: [
+      { text: "Create 4+ orders rapidly → [GUARD] alert logged", tags: ["security"] },
+      { text: "Claim same order 3+ times → [GUARD] alert logged", tags: ["security"] },
+      { text: "Retry payment 3+ times → [GUARD] alert logged", tags: ["security"] },
+      { text: "10+ auth calls from same IP → [GUARD] alert logged", tags: ["security"] },
+      { text: "Alerts appear in /admin/monitor dashboard", tags: ["ux"] },
+      { text: "Alerts persist in security_alerts DB table", tags: ["perf"] },
+    ]
+  },
+  {
+    title: "File Upload",
+    icon: "📎",
+    priority: "medium",
+    items: [
+      { text: "Upload image in chat (jpg/png/webp)", tags: ["ux"] },
+      { text: "Upload PDF receipt", tags: ["ux"] },
+      { text: "Invalid folder path → 400 rejected", tags: ["security"], note: "Fixed in H5" },
+      { text: "Only allowed file types accepted (jpg,png,webp,gif,mp4,pdf)", tags: ["security"], note: "Fixed in H5" },
+      { text: "File >50MB rejected by Cloudinary", tags: ["security"] },
+      { text: "Upload requires authentication", tags: ["security"] },
+    ]
+  },
+  {
+    title: "API Security",
+    icon: "🔐",
+    priority: "critical",
+    items: [
+      { text: "All protected endpoints return 401 without token", tags: ["security"] },
+      { text: "Rate limiting: auth=5/min, orders=20/min, standard=100/min", tags: ["security"] },
+      { text: "CSRF: POST/PUT/DELETE require matching origin header", tags: ["security"] },
+      { text: "Security headers present (CSP, HSTS, X-Frame-Options)", tags: ["security"] },
+      { text: "Body size >100KB rejected (non-upload routes)", tags: ["security"] },
+      { text: "/api/test/* and /api/setup/* blocked in production", tags: ["security"] },
+      { text: "x-merchant-id header only trusted from merchant tokens", tags: ["security"], note: "Fixed in C5" },
+      { text: "x-user-id header only trusted from user tokens", tags: ["security"], note: "Fixed in C1" },
+      { text: "/api/orders/status only returns participant's orders", tags: ["security"], note: "Fixed in H2" },
+    ]
+  },
+  {
+    title: "Mobile Responsiveness",
+    icon: "📱",
+    priority: "medium",
+    items: [
+      { text: "Home page renders correctly on mobile (375px)", tags: ["ux"] },
+      { text: "Order creation form usable on mobile", tags: ["ux"] },
+      { text: "Chat input and messages readable on mobile", tags: ["ux"] },
+      { text: "Merchant dashboard usable on tablet", tags: ["ux"] },
+      { text: "Admin pages: nav scrollable on small screens", tags: ["ux"] },
+      { text: "No horizontal scroll on any page", tags: ["ux"] },
+      { text: "Touch targets large enough (44px min)", tags: ["ux"] },
+    ]
+  },
+  {
+    title: "Error Handling & Edge Cases",
+    icon: "🧪",
+    priority: "high",
+    items: [
+      { text: "Network offline: appropriate error shown", tags: ["ux"] },
+      { text: "API 500: user sees friendly error (no stack trace)", tags: ["ux"] },
+      { text: "Empty states: no orders, no messages, no offers", tags: ["ux"] },
+      { text: "Loading states: skeleton/spinner shown during fetch", tags: ["ux"] },
+      { text: "Concurrent tab: actions don't conflict", tags: ["edge"] },
+      { text: "Browser back/forward: no broken states", tags: ["ux"] },
+      { text: "Token in URL params: NOT present (no leakage via referer)", tags: ["security"] },
+    ]
+  },
+  {
+    title: "Performance",
+    icon: "⚡",
+    priority: "medium",
+    items: [
+      { text: "Home page loads <3s on 4G", tags: ["perf"] },
+      { text: "Order list API <500ms for 100 orders", tags: ["perf"] },
+      { text: "Merchant dashboard <1s load", tags: ["perf"] },
+      { text: "Admin pages load within 2s", tags: ["perf"] },
+      { text: "No console errors on any page", tags: ["perf"] },
+      { text: "No memory leak warnings", tags: ["perf"] },
+      { text: "WebSocket stable for 10+ minutes", tags: ["perf"] },
+    ]
+  },
+];
+
+// Render
+const sectionsEl = document.getElementById('sections');
+let allCheckboxes = [];
+
+DATA.forEach((section, si) => {
+  const sec = document.createElement('section');
+  sec.innerHTML = `
+    <div class="section-header" onclick="toggleSection(${si})">
+      <span class="icon">${section.icon}</span>
+      <h2>${section.title}</h2>
+      <span class="badge badge-${section.priority}">${section.priority.toUpperCase()}</span>
+      <span class="section-count" id="sec-count-${si}">0/${section.items.length}</span>
+    </div>
+    <div class="items" id="sec-items-${si}">
+      ${section.items.map((item, ii) => {
+        const id = `cb-${si}-${ii}`;
+        const tagsHtml = item.tags.map(t => `<span class="tag tag-${t}">${t}</span>`).join('');
+        const noteHtml = item.note ? `<div class="note">${item.note}</div>` : '';
+        return `
+          <div class="item" id="item-${si}-${ii}">
+            <input type="checkbox" id="${id}" onchange="onCheck(${si},${ii})">
+            <label for="${id}">${item.text}</label>
+            ${tagsHtml}
+          </div>
+          ${noteHtml}
+        `;
+      }).join('')}
+    </div>
+  `;
+  sectionsEl.appendChild(sec);
+  section.items.forEach((_, ii) => allCheckboxes.push({ si, ii }));
+});
+
+document.getElementById('total').textContent = allCheckboxes.length;
+document.getElementById('env-date').value = new Date().toISOString().split('T')[0];
+
+function onCheck(si, ii) {
+  const cb = document.getElementById(`cb-${si}-${ii}`);
+  const item = document.getElementById(`item-${si}-${ii}`);
+  item.classList.toggle('checked', cb.checked);
+  updateProgress();
+  save();
+}
+
+function updateProgress() {
+  let total = allCheckboxes.length, done = 0;
+  DATA.forEach((sec, si) => {
+    let secDone = 0;
+    sec.items.forEach((_, ii) => {
+      if (document.getElementById(`cb-${si}-${ii}`).checked) { done++; secDone++; }
+    });
+    document.getElementById(`sec-count-${si}`).textContent = `${secDone}/${sec.items.length}`;
+  });
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  document.getElementById('pct').textContent = pct + '%';
+  document.getElementById('fill').style.width = pct + '%';
+  document.getElementById('done').textContent = done;
+  document.getElementById('pct').style.color = pct === 100 ? 'var(--green)' : pct >= 70 ? 'var(--yellow)' : 'var(--text)';
+}
+
+function toggleSection(si) {
+  document.getElementById(`sec-items-${si}`).classList.toggle('collapsed');
+}
+function expandAll() { DATA.forEach((_, si) => document.getElementById(`sec-items-${si}`).classList.remove('collapsed')); }
+function collapseAll() { DATA.forEach((_, si) => document.getElementById(`sec-items-${si}`).classList.add('collapsed')); }
+function resetAll() {
+  if (!confirm('Reset all checkboxes?')) return;
+  allCheckboxes.forEach(({ si, ii }) => {
+    const cb = document.getElementById(`cb-${si}-${ii}`);
+    cb.checked = false;
+    document.getElementById(`item-${si}-${ii}`).classList.remove('checked');
+  });
+  updateProgress();
+  save();
+}
+
+function save() {
+  const state = {};
+  allCheckboxes.forEach(({ si, ii }) => {
+    if (document.getElementById(`cb-${si}-${ii}`).checked) state[`${si}-${ii}`] = true;
+  });
+  localStorage.setItem('blip_qa_checklist', JSON.stringify({
+    state,
+    url: document.getElementById('env-url').value,
+    tester: document.getElementById('env-tester').value,
+    date: document.getElementById('env-date').value,
+  }));
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem('blip_qa_checklist');
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data.state) {
+      Object.keys(data.state).forEach(key => {
+        const [si, ii] = key.split('-').map(Number);
+        const cb = document.getElementById(`cb-${si}-${ii}`);
+        if (cb) { cb.checked = true; document.getElementById(`item-${si}-${ii}`).classList.add('checked'); }
+      });
+    }
+    if (data.url) document.getElementById('env-url').value = data.url;
+    if (data.tester) document.getElementById('env-tester').value = data.tester;
+    if (data.date) document.getElementById('env-date').value = data.date;
+    updateProgress();
+  } catch {}
+}
+
+function exportResults() {
+  const results = { url: document.getElementById('env-url').value, tester: document.getElementById('env-tester').value, date: document.getElementById('env-date').value, sections: [] };
+  DATA.forEach((sec, si) => {
+    const items = sec.items.map((item, ii) => ({
+      text: item.text,
+      passed: document.getElementById(`cb-${si}-${ii}`).checked,
+      tags: item.tags,
+    }));
+    results.sections.push({ title: sec.title, priority: sec.priority, items, passed: items.filter(i => i.passed).length, total: items.length });
+  });
+  const totalPassed = results.sections.reduce((s, sec) => s + sec.passed, 0);
+  const totalItems = results.sections.reduce((s, sec) => s + sec.total, 0);
+  results.summary = { passed: totalPassed, total: totalItems, percentage: Math.round((totalPassed / totalItems) * 100) };
+  const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `blip-qa-${results.date || 'results'}.json`;
+  a.click();
+}
+
+load();
+</script>
+</body>
+</html>

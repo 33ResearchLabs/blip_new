@@ -254,6 +254,11 @@ interface ChatMessageData {
   userId?: string | null;
   merchantId?: string | null;
   buyerMerchantId?: string | null;
+  // Phase 3: client_id (idempotency key) and seq (monotonic order). Echoed
+  // back so the client can replace its optimistic temp message by clientId
+  // and use seq for deterministic ordering / reconnect catch-up.
+  clientId?: string | null;
+  seq?: number | null;
 }
 
 /**
@@ -277,6 +282,10 @@ export async function notifyNewMessage(data: ChatMessageData): Promise<void> {
     fileSize: data.fileSize,
     mimeType: data.mimeType,
     createdAt: data.createdAt,
+    // Phase 3: pass client_id + seq so the recipient can dedupe optimistic
+    // temp messages by clientId and update its lastSeq cursor.
+    clientId: data.clientId,
+    seq: data.seq,
   };
 
   // 1. Order channel (existing — for open chat windows)

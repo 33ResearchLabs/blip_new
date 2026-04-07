@@ -159,12 +159,17 @@ const OrderList = memo(function OrderList({
               >
                 <div
                   onClick={() => onSelectMempoolOrder(mOrder)}
-                  className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
+                  className={`relative p-2.5 rounded-lg border transition-colors cursor-pointer ${
                     isMyMempoolOrder
                       ? "bg-white/[0.01] border-foreground/[0.04] opacity-50"
                       : "glass-card border-white/[0.10] hover:border-primary/30 ring-1 ring-white/[0.04]"
                   }`}
                 >
+                  {/* Live pulse dot */}
+                  <span className="absolute -top-1 -left-1 flex h-2.5 w-2.5 z-20">
+                    <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-75 animate-ping" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
+                  </span>
                   {/* Processing banner */}
                   {acceptingOrderId === mOrder.id && (
                     <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-primary/10 border border-primary/20">
@@ -271,6 +276,19 @@ const OrderList = memo(function OrderList({
                       </button>
                     )}
                   </div>
+                  {/* Countdown timer bar (bottom) */}
+                  {(() => {
+                    const total = Math.max(1, mOrder.seconds_until_expiry || 1);
+                    const pct = Math.max(0, Math.min(100, (liveExpiry / total) * 100));
+                    return (
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground/[0.04] rounded-b-lg overflow-hidden">
+                        <div
+                          className={`h-full transition-[width] duration-1000 ease-linear ${liveExpiry <= 120 ? 'bg-red-400' : 'bg-primary'}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             );
@@ -309,7 +327,7 @@ const OrderList = memo(function OrderList({
               <div
                 data-testid={`order-card-${order.id}`}
                 onClick={() => onSelectOrder(order)}
-                className={`p-2.5 rounded-lg border transition-colors cursor-pointer ${
+                className={`relative p-2.5 rounded-lg border transition-colors cursor-pointer ${
                   isMyOwnOrder
                     ? "bg-white/[0.01] border-foreground/[0.04] opacity-50"
                     : isMineable
@@ -319,6 +337,11 @@ const OrderList = memo(function OrderList({
                         : "glass-card hover:border-foreground/[0.08]"
                 }`}
               >
+                {/* Live pulse dot */}
+                <span className="absolute -top-1 -left-1 flex h-2.5 w-2.5 z-20">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-75 animate-ping" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
+                </span>
                 {/* Processing banner */}
                 {acceptingOrderId === order.id && (
                   <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-primary/10 border border-primary/20">
@@ -507,6 +530,19 @@ const OrderList = memo(function OrderList({
                     </button>
                   )}
                 </div>
+                {/* Countdown timer bar (bottom) */}
+                {(() => {
+                  const total = 900;
+                  const pct = Math.max(0, Math.min(100, (order.expiresIn / total) * 100));
+                  return (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground/[0.04]">
+                      <div
+                        className={`h-full transition-[width] duration-1000 ease-linear ${order.expiresIn <= 120 ? 'bg-red-400' : 'bg-primary'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           );

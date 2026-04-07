@@ -8,6 +8,7 @@ interface NotificationsPanelProps {
   notifications: Notification[];
   onMarkRead: (id: string) => void;
   onSelectOrder: (orderId: string) => void;
+  onOpenChat?: (orderId: string) => void;
 }
 
 interface GroupedNotification {
@@ -20,6 +21,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
   notifications,
   onMarkRead,
   onSelectOrder,
+  onOpenChat,
 }: NotificationsPanelProps) {
   const groupedNotifications = useMemo(() => {
     const groups: GroupedNotification[] = [];
@@ -42,7 +44,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
     return groups;
   }, [notifications]);
   return (
-    <div style={{ maxHeight: '50%' }} className="flex flex-col border-b border-section-divider overflow-hidden shrink-0">
+    <div style={{ height: '50%' }} className="flex flex-col border-b border-section-divider overflow-hidden shrink-0">
       <div className="flex flex-col h-full min-h-0">
         {/* Header */}
         <div className="px-3 py-2 border-b border-section-divider">
@@ -84,7 +86,13 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                     key={group.ids[0]}
                     onClick={() => {
                       group.ids.forEach(id => onMarkRead(id));
-                      if (notif.orderId) onSelectOrder(notif.orderId);
+                      if (notif.orderId) {
+                        if (notif.type === 'message' && onOpenChat) {
+                          onOpenChat(notif.orderId);
+                        } else {
+                          onSelectOrder(notif.orderId);
+                        }
+                      }
                     }}
                     className={`p-2 rounded-lg border transition-colors cursor-pointer ${
                       hasUnread
