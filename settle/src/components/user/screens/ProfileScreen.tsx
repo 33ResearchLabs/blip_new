@@ -16,6 +16,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
+import { colors, sectionLabel, cardLabel as cardLabelStyle, mono } from "@/lib/design/theme";
 import { BottomNav } from "./BottomNav";
 import type { Screen, Order, BankAccount } from "./types";
 import type { MutableRefObject } from "react";
@@ -125,12 +126,12 @@ export const ProfileScreen = ({
   setLoginForm,
   maxW,
 }: ProfileScreenProps) => {
-  const card = { background: '#111111', border: '1px solid rgba(255,255,255,0.08)' };
-  const label = { fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(0,0,0,0.4)', textTransform: 'uppercase' as const };
-  const cardLabel = { fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase' as const };
+  const card = { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` };
+  const label = { ...sectionLabel };
+  const cardLabel = { ...cardLabelStyle };
 
   return (
-    <div className="flex flex-col h-dvh overflow-hidden" style={{ background: '#ffffff' }}>
+    <div className="flex flex-col h-dvh overflow-hidden" style={{ background: colors.bg.primary }}>
 
       {/* ── Header ── */}
       <header className="px-5 pt-10 pb-4 shrink-0">
@@ -138,12 +139,12 @@ export const ProfileScreen = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-[16px] flex items-center justify-center shrink-0"
-              style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+              style={{ background: colors.bg.secondary, border: `1px solid ${colors.border.subtle}` }}>
               <span style={{ fontSize: 20, fontWeight: 800, color: '#fff' }}>{userName.charAt(0).toUpperCase()}</span>
             </div>
             <div>
-              <p style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.03em', color: '#000', lineHeight: 1.1 }}>{userName}</p>
-              <p style={{ fontSize: 11, fontWeight: 600, color: 'rgba(0,0,0,0.4)', fontFamily: 'monospace', marginTop: 2 }}>
+              <p style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.03em', color: colors.text.primary, lineHeight: 1.1 }}>{userName}</p>
+              <p style={{ fontSize: 11, fontWeight: 600, color: colors.text.tertiary, fontFamily: 'monospace', marginTop: 2 }}>
                 {solanaWallet.connected && solanaWallet.walletAddress
                   ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
                   : 'Wallet not connected'}
@@ -158,7 +159,7 @@ export const ProfileScreen = ({
                 setTimeout(() => setCopied(false), 2000);
               }}
               className="w-9 h-9 rounded-[12px] flex items-center justify-center"
-              style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+              style={{ background: colors.bg.secondary, border: `1px solid ${colors.border.subtle}` }}>
               {copied ? <Check size={15} color="#10b981" /> : <Copy size={15} color="rgba(255,255,255,0.4)" />}
             </motion.button>
           )}
@@ -194,7 +195,7 @@ export const ProfileScreen = ({
               </div>
               <div className="flex items-end gap-1">
                 {[...Array(5)].map((_, i) => (
-                  <div key={i} style={{ width: 4, borderRadius: 2, height: 8 + i * 4, background: i < lvl ? '#fff' : 'rgba(255,255,255,0.15)' }} />
+                  <div key={i} style={{ width: 4, borderRadius: 2, height: 8 + i * 4, background: i < lvl ? '#fff' : colors.text.quaternary }} />
                 ))}
               </div>
             </div>
@@ -262,8 +263,8 @@ export const ProfileScreen = ({
                 }
               }}
               className="w-full py-3 rounded-[14px] flex items-center justify-center gap-2 mt-2"
-              style={{ background: '#ffffff', fontSize: 14, fontWeight: 800, color: '#000', letterSpacing: '-0.01em' }}>
-              <Wallet size={16} color="#000" /> Connect Wallet
+              style={{ background: colors.accent.primary, fontSize: 14, fontWeight: 800, color: "black", letterSpacing: '-0.01em' }}>
+              <Wallet size={16} color={colors.white} /> Connect Wallet
             </motion.button>
           )}
         </div>
@@ -273,7 +274,7 @@ export const ProfileScreen = ({
           <p style={label}>Bank Accounts</p>
           <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowAddBank(true)}
             className="w-8 h-8 rounded-[10px] flex items-center justify-center"
-            style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+            style={{ background: colors.bg.secondary, border: `1px solid ${colors.border.subtle}` }}>
             <Plus size={15} color="rgba(255,255,255,0.5)" />
           </motion.button>
         </div>
@@ -286,7 +287,7 @@ export const ProfileScreen = ({
                 <div className="flex items-center gap-2">
                   <p style={{ fontSize: 14, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>{acc.bank}</p>
                   {acc.isDefault && (
-                    <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 99, background: '#fff', color: '#000' }}>Default</span>
+                    <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 99, background: colors.accent.primary, color: colors.accent.text }}>Default</span>
                   )}
                 </div>
                 <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontFamily: 'monospace' }}>{acc.iban}</p>
@@ -352,7 +353,7 @@ export const ProfileScreen = ({
           </>
         )}
 
-        {/* Theme Toggle — commented out, not ready yet
+        {/* Theme Toggle */}
         <p style={{ ...label, marginBottom: 8, display: 'block' }}>Appearance</p>
         <div className="rounded-[16px] px-4 py-3 flex items-center justify-between mb-3" style={card}>
           <div className="flex items-center gap-3">
@@ -379,7 +380,6 @@ export const ProfileScreen = ({
             </div>
           </button>
         </div>
-        */}
 
         {/* Logout */}
         <motion.button whileTap={{ scale: 0.97 }}
@@ -407,7 +407,7 @@ export const ProfileScreen = ({
             window.location.href = '/';
           }}
           className="w-full flex items-center justify-center gap-2"
-          style={{ height: 48, borderRadius: 14, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.18)', fontSize: 14, fontWeight: 800, color: '#dc2626', letterSpacing: '-0.01em' }}>
+          style={{ height: 48, borderRadius: 14, background: colors.errorDim, border: `1px solid ${colors.errorBorder}`, fontSize: 14, fontWeight: 800, color: '#dc2626', letterSpacing: '-0.01em' }}>
           <LogOut size={16} color="#dc2626" />
           Sign Out
         </motion.button>
@@ -425,58 +425,64 @@ export const ProfileScreen = ({
               onClick={() => setShowAddBank(false)}
             />
             <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 30 }}
-              className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl`}
-              style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className={`fixed inset-0 z-50 flex items-center justify-center px-5 py-8`}
+              onClick={() => setShowAddBank(false)}
             >
-              <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                <p style={{ fontSize: 17, fontWeight: 800, color: '#000', letterSpacing: '-0.02em' }}>Add Bank Account</p>
-                <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowAddBank(false)}
-                  className="w-8 h-8 rounded-[10px] flex items-center justify-center"
-                  style={{ background: 'rgba(0,0,0,0.05)' }}>
-                  <X size={15} color="rgba(0,0,0,0.4)" />
-                </motion.button>
-              </div>
-              <div className="px-5 py-4 flex flex-col gap-3">
-                <div>
-                  <p style={{ ...cardLabel, marginBottom: 6, display: 'block' }}>Bank Name</p>
-                  <input
-                    value={newBank.bank}
-                    onChange={(e) => setNewBank(p => ({ ...p, bank: e.target.value }))}
-                    placeholder="Emirates NBD"
-                    style={{ width: '100%', background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 12, padding: '10px 14px', fontSize: 14, fontWeight: 600, color: '#000', outline: 'none' }}
-                  />
+              <div
+                className={`w-full ${maxW} rounded-2xl shadow-2xl`}
+                style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`, border: `1px solid ${colors.border.subtle}` }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${colors.border.subtle}` }}>
+                  <p style={{ fontSize: 17, fontWeight: 800, color: colors.text.primary, letterSpacing: '-0.02em' }}>Add Bank Account</p>
+                  <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowAddBank(false)}
+                    className="w-8 h-8 rounded-[10px] flex items-center justify-center"
+                    style={{ background: colors.surface.card }}>
+                    <X size={15} color={colors.text.tertiary} />
+                  </motion.button>
                 </div>
-                <div>
-                  <p style={{ ...cardLabel, marginBottom: 6, display: 'block' }}>IBAN</p>
-                  <input
-                    value={newBank.iban}
-                    onChange={(e) => setNewBank(p => ({ ...p, iban: e.target.value }))}
-                    placeholder="AE12 0345 0000 0012 3456 789"
-                    style={{ width: '100%', background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 12, padding: '10px 14px', fontSize: 14, fontWeight: 600, color: '#000', outline: 'none' }}
-                  />
+                <div className="px-5 py-4 flex flex-col gap-3">
+                  <div>
+                    <p style={{ ...cardLabel, marginBottom: 6, display: 'block' }}>Bank Name</p>
+                    <input
+                      value={newBank.bank}
+                      onChange={(e) => setNewBank(p => ({ ...p, bank: e.target.value }))}
+                      placeholder="Emirates NBD"
+                      style={{ width: '100%', background: colors.surface.card, border: `1px solid ${colors.border.subtle}`, borderRadius: 12, padding: '10px 14px', fontSize: 14, fontWeight: 600, color: colors.text.primary, outline: 'none' }}
+                    />
+                  </div>
+                  <div>
+                    <p style={{ ...cardLabel, marginBottom: 6, display: 'block' }}>IBAN</p>
+                    <input
+                      value={newBank.iban}
+                      onChange={(e) => setNewBank(p => ({ ...p, iban: e.target.value }))}
+                      placeholder="AE12 0345 0000 0012 3456 789"
+                      style={{ width: '100%', background: colors.surface.card, border: `1px solid ${colors.border.subtle}`, borderRadius: 12, padding: '10px 14px', fontSize: 14, fontWeight: 600, color: colors.text.primary, outline: 'none' }}
+                    />
+                  </div>
+                  <div>
+                    <p style={{ ...cardLabel, marginBottom: 6, display: 'block' }}>Account Name</p>
+                    <input
+                      value={newBank.name}
+                      onChange={(e) => setNewBank(p => ({ ...p, name: e.target.value }))}
+                      placeholder="John Doe"
+                      style={{ width: '100%', background: colors.surface.card, border: `1px solid ${colors.border.subtle}`, borderRadius: 12, padding: '10px 14px', fontSize: 14, fontWeight: 600, color: colors.text.primary, outline: 'none' }}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <p style={{ ...cardLabel, marginBottom: 6, display: 'block' }}>Account Name</p>
-                  <input
-                    value={newBank.name}
-                    onChange={(e) => setNewBank(p => ({ ...p, name: e.target.value }))}
-                    placeholder="John Doe"
-                    style={{ width: '100%', background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 12, padding: '10px 14px', fontSize: 14, fontWeight: 600, color: '#000', outline: 'none' }}
-                  />
+                <div className="px-5 pb-5 pt-1">
+                  <motion.button whileTap={{ scale: 0.97 }}
+                    onClick={addBankAccount}
+                    disabled={!newBank.bank || !newBank.iban || !newBank.name}
+                    className="w-full"
+                    style={{ height: 48, borderRadius: 14, fontSize: 14, fontWeight: 800, letterSpacing: '-0.01em', ...(newBank.bank && newBank.iban && newBank.name ? { background: colors.accent.primary, color: colors.accent.text } : { background: colors.surface.card, color: colors.text.quaternary }) }}>
+                    Add Account
+                  </motion.button>
                 </div>
-              </div>
-              <div className="px-5 pt-1" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)' }}>
-                <motion.button whileTap={{ scale: 0.97 }}
-                  onClick={addBankAccount}
-                  disabled={!newBank.bank || !newBank.iban || !newBank.name}
-                  className="w-full"
-                  style={{ height: 48, borderRadius: 14, fontSize: 14, fontWeight: 800, letterSpacing: '-0.01em', ...(newBank.bank && newBank.iban && newBank.name ? { background: '#000', color: '#fff' } : { background: 'rgba(0,0,0,0.05)', color: 'rgba(0,0,0,0.2)' }) }}>
-                  Add Account
-                </motion.button>
               </div>
             </motion.div>
           </>

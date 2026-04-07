@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2, Lock, Key } from 'lucide-react';
+import { colors } from "@/lib/design/theme";
 
 interface UnlockWalletPromptProps {
   onUnlock: (password: string) => Promise<boolean>;
@@ -38,13 +39,13 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
-      <div className="rounded-2xl w-full max-w-sm shadow-2xl p-6 space-y-4" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
+      <div className="rounded-2xl w-full max-w-sm shadow-2xl p-6 space-y-4" style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`, border: `1px solid ${colors.border.subtle}` }}>
         <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: '#111111' }}>
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: colors.surface.active }}>
             <Lock className="w-4 h-4" style={{ color: '#fff' }} />
           </div>
-          <h2 className="text-lg font-bold font-mono" style={{ color: '#000' }}>Unlock Wallet</h2>
+          <h2 className="text-lg font-bold font-mono" style={{ color: colors.text.primary }}>Unlock Wallet</h2>
         </div>
 
         {error && (
@@ -54,7 +55,7 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
         )}
 
         <div>
-          <label className="text-[10px] font-mono uppercase mb-1 block" style={{ color: 'rgba(0,0,0,0.4)', fontWeight: 700, letterSpacing: '0.2em' }}>Password</label>
+          <label className="text-[10px] font-mono uppercase mb-1 block" style={{ color: colors.text.tertiary, fontWeight: 700, letterSpacing: '0.2em' }}>Password</label>
           <input
             type="password"
             value={password}
@@ -63,7 +64,7 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
             placeholder="Enter your wallet password"
             autoFocus
             className="w-full px-3 py-2.5 rounded-lg text-sm font-mono outline-none"
-            style={{ background: '#f4f4f4', border: '1px solid rgba(0,0,0,0.08)', color: '#000' }}
+            style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}`, color: colors.text.primary }}
           />
         </div>
 
@@ -71,7 +72,7 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
           onClick={handleUnlock}
           disabled={isUnlocking || !password}
           className="w-full py-3 rounded-lg font-bold font-mono transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-          style={{ background: '#111111', color: '#fff' }}
+          style={{ background: colors.accent.primary, color: colors.accent.text }}
         >
           {isUnlocking ? <><Loader2 className="w-4 h-4 animate-spin" /> Unlocking...</> : 'Unlock'}
         </button>
@@ -82,7 +83,7 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
               <button
                 onClick={onForgotPassword}
                 className="text-[11px] font-mono transition-colors flex items-center gap-1"
-                style={{ color: 'rgba(0,0,0,0.5)' }}
+                style={{ color: colors.text.secondary }}
               >
                 <Key className="w-3 h-3" />
                 Import key
@@ -92,7 +93,7 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
               <button
                 onClick={onCreateNew}
                 className="text-[11px] font-mono transition-colors flex items-center gap-1"
-                style={{ color: 'rgba(0,0,0,0.4)' }}
+                style={{ color: colors.text.tertiary }}
               >
                 <Lock className="w-3 h-3" />
                 New wallet
@@ -103,7 +104,7 @@ export function UnlockWalletPrompt({ onUnlock, onForgotPassword, onCreateNew, on
             <button
               onClick={onClose}
               className="text-[11px] font-mono transition-colors"
-              style={{ color: 'rgba(0,0,0,0.4)' }}
+              style={{ color: colors.text.tertiary }}
             >
               Cancel
             </button>

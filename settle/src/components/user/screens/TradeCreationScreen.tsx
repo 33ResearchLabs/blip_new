@@ -12,6 +12,7 @@ import {
   TrendingUp,
   TrendingDown,
 } from "lucide-react";
+import { colors, sectionLabel, mono } from "@/lib/design/theme";
 import type { Screen, TradeType, TradePreference, PaymentMethod } from "./types";
 import { PaymentMethodSelector, type PaymentMethodItem } from "../PaymentMethodSelector";
 import { BottomNav } from "./BottomNav";
@@ -65,7 +66,7 @@ function RateSparkline({
     line += ` C${cp.toFixed(1)},${pts[i - 1].y.toFixed(1)} ${cp.toFixed(1)},${pts[i].y.toFixed(1)} ${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)}`;
   }
   const area = `${line} L${w},${h} L0,${h} Z`;
-  const color = positive ? "#10b981" : "#ef4444";
+  const color = positive ? colors.success : colors.error;
 
   return (
     <svg
@@ -120,7 +121,7 @@ export const TradeCreationScreen = ({
   return (
     <div
       className="flex flex-col h-dvh overflow-hidden"
-      style={{ background: "#ffffff" }}
+      style={{ background: colors.bg.primary }}
     >
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="px-5 pt-10 pb-3 flex items-center gap-4 z-10 shrink-0">
@@ -129,14 +130,14 @@ export const TradeCreationScreen = ({
           onClick={() => setScreen("home")}
           className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
           style={{
-            background: "#111111",
-            border: "1px solid rgba(255,255,255,0.08)",
+            background: colors.bg.secondary,
+            border: `1px solid ${colors.border.subtle}`,
           }}
         >
           <ChevronLeft
             size={20}
             strokeWidth={2}
-            style={{ color: "rgba(255,255,255,0.6)" }}
+            style={{ color: colors.text.secondary }}
           />
         </motion.button>
         <div>
@@ -145,7 +146,7 @@ export const TradeCreationScreen = ({
               fontSize: 11,
               fontWeight: 700,
               letterSpacing: "0.22em",
-              color: "rgba(0,0,0,0.4)",
+              color: colors.text.tertiary,
               textTransform: "uppercase",
               marginBottom: 2,
             }}
@@ -157,7 +158,7 @@ export const TradeCreationScreen = ({
               fontSize: 22,
               fontWeight: 800,
               letterSpacing: "-0.03em",
-              color: "#000",
+              color: colors.text.primary,
             }}
           >
             Trade USDT
@@ -170,8 +171,8 @@ export const TradeCreationScreen = ({
         {/* ── Buy / Sell — big cards ───────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-3 shrink-0">
           {([
-            { type: 'buy' as const, label: 'Buy USDT', sub: 'Pay AED, get USDT', Icon: ArrowDownLeft, activeColor: '#10b981' },
-            { type: 'sell' as const, label: 'Sell USDT', sub: 'Send USDT, get AED', Icon: ArrowUpRight, activeColor: '#ef4444' },
+            { type: 'buy' as const, label: 'Buy USDT', sub: 'Pay AED, get USDT', Icon: ArrowDownLeft, activeColor: colors.success },
+            { type: 'sell' as const, label: 'Sell USDT', sub: 'Send USDT, get AED', Icon: ArrowUpRight, activeColor: colors.error },
           ] as const).map(({ type, label, sub, Icon, activeColor }) => {
             const on = tradeType === type;
             return (
@@ -182,8 +183,8 @@ export const TradeCreationScreen = ({
                 className="flex items-center justify-between rounded-[20px]"
                 style={{
                   padding: "12px 14px",
-                  background: "#111111",
-                  border: on ? `1.5px solid ${activeColor}` : "1px solid rgba(255,255,255,0.08)",
+                  background: colors.surface.card,
+                  border: on ? `1.5px solid ${activeColor}` : `1px solid ${colors.border.subtle}`,
                   boxShadow: on ? `0 4px 16px ${activeColor}22` : "none",
                 }}
               >
@@ -191,20 +192,20 @@ export const TradeCreationScreen = ({
                   <div
                     className="w-8 h-8 rounded-[10px] flex items-center justify-center"
                     style={{
-                      background: on ? `${activeColor}15` : "rgba(255,255,255,0.08)",
+                      background: on ? `${activeColor}15` : colors.surface.active,
                     }}
                   >
                     <Icon
                       size={18}
                       strokeWidth={2.5}
                       style={{
-                        color: on ? activeColor : "rgba(255,255,255,0.35)",
+                        color: on ? activeColor : colors.text.tertiary,
                       }}
                     />
                   </div>
                   <div className="flex flex-col text-left">
-                    <p style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>{label}</p>
-                    <p style={{ fontSize: 10, fontWeight: 500, color: "rgba(255,255,255,0.4)" }}>{sub}</p>
+                    <p style={{ fontSize: 16, fontWeight: 700, color: colors.text.primary }}>{label}</p>
+                    <p style={{ fontSize: 10, fontWeight: 500, color: colors.text.tertiary }}>{sub}</p>
                   </div>
                 </div>
                 {on && (
@@ -225,8 +226,8 @@ export const TradeCreationScreen = ({
           transition={{ delay: 0.05 }}
           className="w-full rounded-[24px] shrink-0"
           style={{
-            background: "#111111",
-            border: "1px solid rgba(255,255,255,0.08)",
+            background: colors.surface.card,
+            border: `1px solid ${colors.border.subtle}`,
           }}
         >
           <div className="flex items-center justify-between px-4 pt-3 pb-2">
@@ -236,7 +237,7 @@ export const TradeCreationScreen = ({
                   fontSize: 10,
                   fontWeight: 700,
                   letterSpacing: "0.22em",
-                  color: "rgba(255,255,255,0.35)",
+                  color: colors.text.tertiary,
                   textTransform: "uppercase",
                   marginBottom: 5,
                 }}
@@ -249,7 +250,7 @@ export const TradeCreationScreen = ({
                     fontSize: 26,
                     fontWeight: 800,
                     letterSpacing: "-0.03em",
-                    color: "#fff",
+                    color: colors.text.primary,
                     lineHeight: 1.1,
                   }}
                 >
@@ -264,7 +265,7 @@ export const TradeCreationScreen = ({
                   style={{
                     fontSize: 13,
                     fontWeight: 600,
-                    color: "rgba(255,255,255,0.35)",
+                    color: colors.text.tertiary,
                   }}
                 >
                   AED
@@ -294,15 +295,15 @@ export const TradeCreationScreen = ({
           <div
             className="flex items-center justify-between px-5 py-2.5"
             style={{
-              borderTop: "1px solid rgba(255,255,255,0.08)",
-              background: "rgba(255,255,255,0.03)",
+              borderTop: `1px solid ${colors.border.subtle}`,
+              background: colors.surface.glass,
             }}
           >
             <span
               style={{
                 fontSize: 10,
                 fontWeight: 600,
-                color: "rgba(255,255,255,0.3)",
+                color: colors.text.tertiary,
                 letterSpacing: "0.08em",
               }}
             >
@@ -310,7 +311,7 @@ export const TradeCreationScreen = ({
             </span>
             <div
               className="flex-1 mx-4 h-1 rounded-full"
-              style={{ background: "rgba(255,255,255,0.1)" }}
+              style={{ background: colors.border.medium }}
             >
               <div
                 className="h-1 rounded-full"
@@ -325,7 +326,7 @@ export const TradeCreationScreen = ({
               style={{
                 fontSize: 10,
                 fontWeight: 600,
-                color: "rgba(255,255,255,0.3)",
+                color: colors.text.tertiary,
                 letterSpacing: "0.08em",
               }}
             >
@@ -338,8 +339,8 @@ export const TradeCreationScreen = ({
         <div
           className="w-full rounded-[28px] mb-3 flex flex-col items-center py-2 px-3"
           style={{
-            background: "#111111",
-            border: "1px solid rgba(255,255,255,0.08)",
+            background: colors.surface.card,
+            border: `1px solid ${colors.border.subtle}`,
           }}
         >
           <p
@@ -347,7 +348,7 @@ export const TradeCreationScreen = ({
               fontSize: 10,
               fontWeight: 700,
               letterSpacing: "0.28em",
-              color: "rgba(255,255,255,0.35)",
+              color: colors.text.tertiary,
               textTransform: "uppercase",
               marginBottom: 8,
             }}
@@ -370,7 +371,7 @@ export const TradeCreationScreen = ({
                 background: "transparent",
                 border: "none",
                 outline: "none",
-                color: hasAmount ? "#fff" : "rgba(255,255,255,0.15)",
+                color: hasAmount ? colors.text.primary : colors.text.quaternary,
                 width: amount
                   ? `${Math.max(72, amount.length * 44)}px`
                   : "72px",
@@ -383,7 +384,7 @@ export const TradeCreationScreen = ({
               style={{
                 fontSize: 20,
                 fontWeight: 700,
-                color: "rgba(255,255,255,0.25)",
+                color: colors.text.tertiary,
                 letterSpacing: "-0.01em",
               }}
             >
@@ -397,7 +398,7 @@ export const TradeCreationScreen = ({
                 fontSize: 24,
                 fontWeight: 700,
                 letterSpacing: "-0.02em",
-                color: hasAmount ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.15)",
+                color: hasAmount ? colors.text.secondary : colors.text.quaternary,
               }}
             >
               {'\u062F.\u0625'}{" "}
@@ -411,7 +412,7 @@ export const TradeCreationScreen = ({
               style={{
                 fontSize: 13,
                 fontWeight: 600,
-                color: "rgba(255,255,255,0.25)",
+                color: colors.text.tertiary,
               }}
             >
               AED
@@ -422,15 +423,15 @@ export const TradeCreationScreen = ({
             <div
               className="mt-2 px-3 py-1 rounded-full"
               style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.08)",
+                background: colors.surface.hover,
+                border: `1px solid ${colors.border.subtle}`,
               }}
             >
               <span
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  color: "rgba(255,255,255,0.35)",
+                  color: colors.text.tertiary,
                   letterSpacing: "0.08em",
                 }}
               >
@@ -449,7 +450,7 @@ export const TradeCreationScreen = ({
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               className="flex items-center gap-4 mt-2 pt-2 w-full"
-              style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
+              style={{ borderTop: `1px solid ${colors.border.subtle}` }}
             >
               <div className="flex-1 text-center">
                 <p
@@ -457,50 +458,50 @@ export const TradeCreationScreen = ({
                     fontSize: 9,
                     fontWeight: 700,
                     letterSpacing: "0.18em",
-                    color: "rgba(255,255,255,0.3)",
+                    color: colors.text.tertiary,
                     textTransform: "uppercase",
                     marginBottom: 3,
                   }}
                 >
                   Fee
                 </p>
-                <p style={{ fontSize: 15, fontWeight: 800, color: "rgba(255,255,255,0.7)" }}>
+                <p style={{ fontSize: 15, fontWeight: 800, color: colors.text.secondary }}>
                   {(currentFees.totalFee * 100).toFixed(1)}%
                 </p>
               </div>
-              <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.1)" }} />
+              <div style={{ width: 1, height: 28, background: colors.border.medium }} />
               <div className="flex-1 text-center">
                 <p
                   style={{
                     fontSize: 9,
                     fontWeight: 700,
                     letterSpacing: "0.18em",
-                    color: "rgba(255,255,255,0.3)",
+                    color: colors.text.tertiary,
                     textTransform: "uppercase",
                     marginBottom: 3,
                   }}
                 >
                   Trader Earns
                 </p>
-                <p style={{ fontSize: 15, fontWeight: 800, color: "rgba(255,255,255,0.7)" }}>
+                <p style={{ fontSize: 15, fontWeight: 800, color: colors.text.secondary }}>
                   {(currentFees.traderCut * 100).toFixed(2)}%
                 </p>
               </div>
-              <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.1)" }} />
+              <div style={{ width: 1, height: 28, background: colors.border.medium }} />
               <div className="flex-1 text-center">
                 <p
                   style={{
                     fontSize: 9,
                     fontWeight: 700,
                     letterSpacing: "0.18em",
-                    color: "rgba(255,255,255,0.3)",
+                    color: colors.text.tertiary,
                     textTransform: "uppercase",
                     marginBottom: 3,
                   }}
                 >
                   You Get
                 </p>
-                <p style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>
+                <p style={{ fontSize: 15, fontWeight: 800, color: colors.text.primary }}>
                   {tradeType === "buy"
                     ? `${parseFloat(amount || "0").toFixed(2)} USDT`
                     : `${'\u062F.\u0625'}${parseFloat(fiatAmount || "0").toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
@@ -517,7 +518,7 @@ export const TradeCreationScreen = ({
               fontSize: 10,
               fontWeight: 700,
               letterSpacing: "0.28em",
-              color: "rgba(0,0,0,0.4)",
+              color: colors.text.tertiary,
               textTransform: "uppercase",
               marginBottom: 8,
             }}
@@ -538,21 +539,21 @@ export const TradeCreationScreen = ({
                   className="flex items-center justify-between rounded-[16px]"
                   style={{
                     padding: "10px 12px",
-                    background: "#111111",
-                    border: on ? "1.5px solid rgba(255,255,255,0.5)" : "1px solid rgba(255,255,255,0.08)",
+                    background: colors.surface.card,
+                    border: on ? `1.5px solid ${colors.text.secondary}` : `1px solid ${colors.border.subtle}`,
                     boxShadow: on ? "0 4px 14px rgba(0,0,0,0.3)" : "none",
                   }}
                 >
                   <div className="flex items-center gap-3">
                     <div
                       className="w-7 h-7 rounded-[10px] flex items-center justify-center"
-                      style={{ background: "rgba(255,255,255,0.08)" }}
+                      style={{ background: colors.surface.active }}
                     >
-                      <Icon size={16} style={{ color: "rgba(255,255,255,0.55)" }} />
+                      <Icon size={16} style={{ color: colors.text.secondary }} />
                     </div>
                     <div className="flex flex-col">
-                      <p style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{label}</p>
-                      <p style={{ fontSize: 10, fontWeight: 500, color: "rgba(255,255,255,0.4)" }}>{sub}</p>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: colors.text.primary }}>{label}</p>
+                      <p style={{ fontSize: 10, fontWeight: 500, color: colors.text.tertiary }}>{sub}</p>
                     </div>
                   </div>
                   {on && <div className="w-2 h-2 rounded-full bg-white" />}
@@ -580,7 +581,7 @@ export const TradeCreationScreen = ({
               fontSize: 10,
               fontWeight: 700,
               letterSpacing: "0.28em",
-              color: "rgba(0,0,0,0.4)",
+              color: colors.text.tertiary,
               textTransform: "uppercase",
               marginBottom: 12,
             }}
@@ -602,17 +603,17 @@ export const TradeCreationScreen = ({
                   className="flex-1 rounded-[16px]"
                   style={{
                     padding: "10px 12px",
-                    background: "#111111",
+                    background: colors.surface.card,
                     border: on
                       ? `1.5px solid ${barColor}`
-                      : "1px solid rgba(255,255,255,0.08)",
+                      : `1px solid ${colors.border.subtle}`,
                     boxShadow: on ? `0 2px 10px ${barColor}22` : "none",
                   }}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col items-start leading-tight">
-                      <p style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>{label}</p>
-                      <p style={{ fontSize: 10, fontWeight: 500, color: "rgba(255,255,255,0.4)" }}>{sub}</p>
+                      <p style={{ fontSize: 12, fontWeight: 700, color: colors.text.primary }}>{label}</p>
+                      <p style={{ fontSize: 10, fontWeight: 500, color: colors.text.tertiary }}>{sub}</p>
                     </div>
                     <div
                       className="flex items-center justify-center h-5 px-1 rounded-full"
@@ -653,15 +654,15 @@ export const TradeCreationScreen = ({
             letterSpacing: "-0.01em",
             ...(hasAmount && !isLoading
               ? {
-                  background: "#111111",
-                  color: "#ffffff",
+                  background: colors.accent.primary,
+                  color: colors.accent.text,
                   boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
-                  border: "1px solid rgba(255,255,255,0.1)",
+                  border: `1px solid ${colors.accent.border}`,
                 }
               : {
-                  background: "rgba(0,0,0,0.04)",
-                  color: "rgba(0,0,0,0.25)",
-                  border: "1px solid rgba(0,0,0,0.08)",
+                  background: colors.surface.card,
+                  color: colors.text.quaternary,
+                  border: `1px solid ${colors.border.subtle}`,
                 }),
           }}
         >
@@ -684,11 +685,11 @@ export const TradeCreationScreen = ({
           style={{
             fontSize: 13,
             fontWeight: 600,
-            color: "rgba(0,0,0,0.3)",
+            color: colors.text.tertiary,
           }}
         >
           Large amount?{" "}
-          <span style={{ color: "rgba(0,0,0,0.55)", fontWeight: 700 }}>
+          <span style={{ color: colors.text.secondary, fontWeight: 700 }}>
             Create a custom offer {'\u2192'}
           </span>
         </button>

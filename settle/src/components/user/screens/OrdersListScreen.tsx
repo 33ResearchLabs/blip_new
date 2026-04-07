@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Clock, Check, TrendingUp, TrendingDown, X } from "lucide-react";
+import { colors, sectionLabel as sectionLabelStyle, mono } from "@/lib/design/theme";
 import { BottomNav } from "./BottomNav";
 import type { Screen, Order } from "./types";
 
@@ -28,16 +29,16 @@ export const OrdersListScreen = ({
   cancelledOrders,
   maxW,
 }: OrdersListScreenProps) => {
-  const card = { background: '#111111', border: '1px solid rgba(255,255,255,0.08)' };
-  const sectionLabel = { fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(0,0,0,0.4)', textTransform: 'uppercase' as const };
+  const card = { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` };
+  const sectionLabel = { ...sectionLabelStyle };
 
   return (
-    <div className="flex flex-col h-dvh overflow-hidden" style={{ background: '#ffffff' }}>
+    <div className="flex flex-col h-dvh overflow-hidden" style={{ background: colors.bg.primary }}>
 
       {/* ── Header ── */}
       <header className="px-5 pt-10 pb-4 shrink-0">
         <p style={{ ...sectionLabel, marginBottom: 4 }}>Overview</p>
-        <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', color: '#000', lineHeight: 1, marginBottom: 16 }}>Activity</p>
+        <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', color: colors.text.primary, lineHeight: 1, marginBottom: 16 }}>Activity</p>
 
         {/* Tabs */}
         <div className="flex gap-2">
@@ -53,20 +54,20 @@ export const OrdersListScreen = ({
                 className="shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-full"
                 style={{
                   fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-                  background: on ? '#111' : 'rgba(0,0,0,0.04)',
-                  color: on ? '#fff' : 'rgba(0,0,0,0.4)',
-                  border: on ? 'none' : '1px solid rgba(0,0,0,0.08)',
+                  background: on ? colors.accent.primary : colors.surface.card,
+                  color: on ? colors.accent.text : colors.text.tertiary,
+                  border: on ? 'none' : `1px solid ${colors.border.subtle}`,
                 }}>
                 {tab === "active" && on && (
-                  <motion.div style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff' }}
+                  <motion.div style={{ width: 6, height: 6, borderRadius: '50%', background: colors.accent.text }}
                     animate={{ scale: [1, 1.4, 1] }} transition={{ duration: 1.5, repeat: Infinity }} />
                 )}
                 {label}
                 {count > 0 && (
                   <span style={{
                     fontSize: 9, fontWeight: 800, padding: '1px 5px', borderRadius: 99,
-                    background: on ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)',
-                    color: on ? '#fff' : 'rgba(0,0,0,0.4)',
+                    background: on ? 'rgba(0,0,0,0.15)' : colors.surface.card,
+                    color: on ? colors.accent.text : colors.text.tertiary,
                   }}>{count}</span>
                 )}
               </motion.button>
@@ -83,11 +84,11 @@ export const OrdersListScreen = ({
           pendingOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4"
-                style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+                style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}>
                 <Clock size={22} color="rgba(255,255,255,0.3)" />
               </div>
-              <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: '#000', marginBottom: 6 }}>No active trades</p>
-              <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(0,0,0,0.4)' }}>Start a new trade from the home screen</p>
+              <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: colors.text.primary, marginBottom: 6 }}>No active trades</p>
+              <p style={{ fontSize: 13, fontWeight: 500, color: colors.text.tertiary }}>Start a new trade from the home screen</p>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -114,7 +115,7 @@ export const OrdersListScreen = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1.5">
-                        <p style={{ fontSize: 14, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: colors.text.primary, letterSpacing: '-0.01em' }}>
                           {isBuy ? "Receiving" : "Sending"} {parseFloat(order.cryptoAmount).toFixed(2)} USDT
                         </p>
                         <p style={{ fontSize: 14, fontWeight: 800, letterSpacing: '-0.01em', color: isBuy ? '#059669' : '#dc2626' }}>
@@ -144,11 +145,11 @@ export const OrdersListScreen = ({
           completedOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4"
-                style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+                style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}>
                 <Check size={22} color="rgba(255,255,255,0.3)" />
               </div>
-              <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: '#000', marginBottom: 6 }}>No completed trades</p>
-              <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(0,0,0,0.4)' }}>Completed transactions appear here</p>
+              <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: colors.text.primary, marginBottom: 6 }}>No completed trades</p>
+              <p style={{ fontSize: 13, fontWeight: 500, color: colors.text.tertiary }}>Completed transactions appear here</p>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -167,7 +168,7 @@ export const OrdersListScreen = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1.5">
-                        <p style={{ fontSize: 14, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: colors.text.primary, letterSpacing: '-0.01em' }}>
                           {isBuy ? "Received" : "Sent"} {parseFloat(order.cryptoAmount).toFixed(2)} USDT
                         </p>
                         <p style={{ fontSize: 14, fontWeight: 800, letterSpacing: '-0.01em', color: isBuy ? '#059669' : '#dc2626' }}>
@@ -191,11 +192,11 @@ export const OrdersListScreen = ({
           cancelledOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4"
-                style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+                style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}>
                 <X size={22} color="rgba(255,255,255,0.3)" />
               </div>
-              <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: '#000', marginBottom: 6 }}>No cancelled orders</p>
-              <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(0,0,0,0.4)' }}>Cancelled or expired orders appear here</p>
+              <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: colors.text.primary, marginBottom: 6 }}>No cancelled orders</p>
+              <p style={{ fontSize: 13, fontWeight: 500, color: colors.text.tertiary }}>Cancelled or expired orders appear here</p>
             </div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -214,7 +215,7 @@ export const OrdersListScreen = ({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1.5">
-                        <p style={{ fontSize: 14, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>
+                        <p style={{ fontSize: 14, fontWeight: 700, color: colors.text.primary, letterSpacing: '-0.01em' }}>
                           {isBuy ? "Buy" : "Sell"} {parseFloat(order.cryptoAmount).toFixed(2)} USDT
                         </p>
                         <p style={{ fontSize: 14, fontWeight: 800, letterSpacing: '-0.01em', color: 'rgba(255,255,255,0.4)' }}>

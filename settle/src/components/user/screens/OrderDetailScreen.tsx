@@ -34,6 +34,7 @@ import {
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/context/ModalContext";
+import { colors, sectionLabel, cardLabel as cardLabelStyle, mono } from "@/lib/design/theme";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
@@ -334,7 +335,7 @@ export const OrderDetailScreen = ({
   }, []);
 
   return (
-    <div style={{ background: "#ffffff", minHeight: "100%" }}>
+    <div style={{ background: colors.bg.primary, minHeight: "100%" }}>
       <div className="h-12" />
 
       <div className="px-5 py-4 flex items-center">
@@ -342,16 +343,16 @@ export const OrderDetailScreen = ({
           onClick={() => setScreen(previousScreen || "home")}
           className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1"
           style={{
-            background: "#111111",
-            border: "1px solid rgba(255,255,255,0.08)",
+            background: colors.bg.secondary,
+            border: `1px solid ${colors.border.subtle}`,
           }}
         >
           <ChevronLeft
             className="w-5 h-5"
-            style={{ color: "rgba(255,255,255,0.6)" }}
+            style={{ color: colors.text.secondary }}
           />
         </button>
-        <h1 className="flex-1 text-center text-[17px] font-semibold text-black pr-8">
+        <h1 className="flex-1 text-center text-[17px] font-semibold pr-8" style={{ color: colors.text.primary }}>
           Order Details
         </h1>
       </div>
@@ -361,8 +362,8 @@ export const OrderDetailScreen = ({
         <div
           className="rounded-2xl p-4 mb-4"
           style={{
-            background: "#111111",
-            border: "1px solid rgba(255,255,255,0.08)",
+            background: colors.surface.card,
+            border: `1px solid ${colors.border.subtle}`,
           }}
         >
           <div className="flex items-center gap-3 mb-4">
@@ -390,14 +391,14 @@ export const OrderDetailScreen = ({
             <div>
               <p
                 className="text-[17px] font-semibold"
-                style={{ color: "#fff" }}
+                style={{ color: colors.text.primary }}
               >
                 {activeOrder.type === "buy" ? "Buying" : "Selling"}{" "}
                 {parseFloat(activeOrder.cryptoAmount).toFixed(2)} USDC
               </p>
               <p
                 className="text-[13px]"
-                style={{ color: "rgba(255,255,255,0.45)" }}
+                style={{ color: colors.text.secondary }}
               >
                 {"\u062F.\u0625"}{" "}
                 {parseFloat(activeOrder.fiatAmount).toLocaleString()}
@@ -417,15 +418,15 @@ export const OrderDetailScreen = ({
                     activeOrder.status === "expired"
                       ? "rgba(239,68,68,0.4)"
                       : step <= activeOrder.step
-                        ? "#fff"
-                        : "rgba(255,255,255,0.15)",
+                        ? colors.text.primary
+                        : colors.text.quaternary,
                 }}
               />
             ))}
           </div>
           <p
             className="text-[13px]"
-            style={{ color: "rgba(255,255,255,0.45)" }}
+            style={{ color: colors.text.secondary }}
           >
             {activeOrder.status === "cancelled"
               ? "Order Cancelled"
@@ -440,51 +441,51 @@ export const OrderDetailScreen = ({
           <div
             className="rounded-2xl p-4 mb-4"
             style={{
-              background: "#111111",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: colors.surface.card,
+              border: `1px solid ${colors.border.subtle}`,
             }}
           >
             <div className="flex items-center gap-3 mb-3">
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center"
-                style={{ background: "rgba(255,255,255,0.08)" }}
+                style={{ background: colors.surface.active }}
               >
                 <Lock
                   className="w-5 h-5"
-                  style={{ color: "rgba(255,255,255,0.5)" }}
+                  style={{ color: colors.text.secondary }}
                 />
               </div>
               <div className="flex-1">
                 <p
                   className="text-[15px] font-semibold"
-                  style={{ color: "#fff" }}
+                  style={{ color: colors.text.primary }}
                 >
                   Escrow Locked
                 </p>
                 <p
                   className="text-[13px]"
-                  style={{ color: "rgba(255,255,255,0.45)" }}
+                  style={{ color: colors.text.secondary }}
                 >
                   Your USDC is secured on-chain
                 </p>
               </div>
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center"
-                style={{ background: "rgba(255,255,255,0.08)" }}
+                style={{ background: colors.surface.active }}
               >
-                <Check className="w-4 h-4" style={{ color: "#fff" }} />
+                <Check className="w-4 h-4" style={{ color: colors.text.primary }} />
               </div>
             </div>
 
             <div className="space-y-2 text-[13px]">
               {activeOrder.escrowTradeId && (
                 <div className="flex items-center justify-between">
-                  <span style={{ color: "rgba(255,255,255,0.4)" }}>
+                  <span style={{ color: colors.text.tertiary }}>
                     Trade ID
                   </span>
                   <span
                     className="font-mono font-semibold"
-                    style={{ color: "#fff" }}
+                    style={{ color: colors.text.primary }}
                   >
                     #{activeOrder.escrowTradeId}
                   </span>
@@ -492,7 +493,7 @@ export const OrderDetailScreen = ({
               )}
               {activeOrder.escrowTxHash && (
                 <div className="flex items-center justify-between">
-                  <span style={{ color: "rgba(255,255,255,0.4)" }}>
+                  <span style={{ color: colors.text.tertiary }}>
                     Transaction
                   </span>
                   <a
@@ -500,7 +501,7 @@ export const OrderDetailScreen = ({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1"
-                    style={{ color: "rgba(255,255,255,0.6)" }}
+                    style={{ color: colors.text.secondary }}
                   >
                     <span className="font-mono">
                       {activeOrder.escrowTxHash.slice(0, 8)}...
@@ -523,30 +524,30 @@ export const OrderDetailScreen = ({
               animate={{ opacity: 1, y: 0 }}
               className="rounded-2xl p-4 mb-4"
               style={{
-                background: "#111111",
-                border: "1px solid rgba(255,255,255,0.08)",
+                background: colors.surface.card,
+                border: `1px solid ${colors.border.subtle}`,
               }}
             >
               <div className="flex items-center gap-3 mb-3">
                 <div
                   className="w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{ background: "rgba(255,255,255,0.08)" }}
+                  style={{ background: colors.surface.active }}
                 >
                   <Clock
                     className="w-5 h-5"
-                    style={{ color: "rgba(255,255,255,0.5)" }}
+                    style={{ color: colors.text.secondary }}
                   />
                 </div>
                 <div className="flex-1">
                   <p
                     className="text-[15px] font-semibold"
-                    style={{ color: "#fff" }}
+                    style={{ color: colors.text.primary }}
                   >
                     Extension Requested
                   </p>
                   <p
                     className="text-[13px]"
-                    style={{ color: "rgba(255,255,255,0.45)" }}
+                    style={{ color: colors.text.secondary }}
                   >
                     Merchant wants +
                     {extensionRequest.extensionMinutes >= 60
@@ -561,7 +562,7 @@ export const OrderDetailScreen = ({
                   onClick={() => respondToExtension(true)}
                   disabled={requestingExtension}
                   className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50"
-                  style={{ background: "#fff", color: "#000" }}
+                  style={{ background: colors.accent.primary, color: colors.accent.text }}
                 >
                   {requestingExtension ? (
                     <Loader2 className="w-4 h-4 animate-spin mx-auto" />
@@ -575,8 +576,8 @@ export const OrderDetailScreen = ({
                   disabled={requestingExtension}
                   className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50"
                   style={{
-                    background: "rgba(255,255,255,0.08)",
-                    color: "rgba(255,255,255,0.6)",
+                    background: colors.surface.active,
+                    color: colors.text.secondary,
                   }}
                 >
                   Decline
@@ -584,7 +585,7 @@ export const OrderDetailScreen = ({
               </div>
               <p
                 className="text-[11px] text-center mt-2"
-                style={{ color: "rgba(255,255,255,0.4)" }}
+                style={{ color: colors.text.tertiary }}
               >
                 Extensions used: {extensionRequest.extensionCount}/
                 {extensionRequest.maxExtensions}
@@ -600,17 +601,18 @@ export const OrderDetailScreen = ({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4 mb-4"
+              className="rounded-2xl p-4 mb-4"
+              style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
             >
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
-                  <X className="w-5 h-5 text-orange-500" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.15)' }}>
+                  <X className="w-5 h-5" style={{ color: '#f59e0b' }} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-[15px] font-semibold text-orange-700">
+                  <p className="text-[15px] font-semibold" style={{ color: '#f59e0b' }}>
                     Cancel Requested
                   </p>
-                  <p className="text-[13px] text-orange-600/70">
+                  <p className="text-[13px]" style={{ color: 'rgba(245,158,11,0.7)' }}>
                     Merchant wants to cancel: {activeOrder.cancelRequest.reason}
                   </p>
                 </div>
@@ -620,7 +622,8 @@ export const OrderDetailScreen = ({
                   whileTap={{ scale: 0.97 }}
                   onClick={() => respondToCancelRequest(true)}
                   disabled={isRequestingCancel}
-                  className="flex-1 py-3 rounded-xl bg-orange-500/20 text-orange-700 text-[15px] font-semibold disabled:opacity-50"
+                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50"
+                  style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}
                 >
                   {isRequestingCancel ? (
                     <Loader2 className="w-4 h-4 animate-spin mx-auto" />
@@ -634,8 +637,8 @@ export const OrderDetailScreen = ({
                   disabled={isRequestingCancel}
                   className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50"
                   style={{
-                    background: "rgba(255,255,255,0.08)",
-                    color: "rgba(255,255,255,0.6)",
+                    background: colors.surface.active,
+                    color: colors.text.secondary,
                   }}
                 >
                   Continue Order
@@ -652,17 +655,18 @@ export const OrderDetailScreen = ({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4 mb-4"
+              className="rounded-2xl p-4 mb-4"
+              style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)' }}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
-                  <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.15)' }}>
+                  <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#f59e0b' }} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-[15px] font-semibold text-orange-700">
+                  <p className="text-[15px] font-semibold" style={{ color: '#f59e0b' }}>
                     Cancel Request Sent
                   </p>
-                  <p className="text-[13px] text-orange-600/70">
+                  <p className="text-[13px]" style={{ color: 'rgba(245,158,11,0.7)' }}>
                     Waiting for merchant to approve
                   </p>
                 </div>
@@ -679,17 +683,18 @@ export const OrderDetailScreen = ({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-4 mb-4"
+              className="rounded-2xl p-4 mb-4"
+              style={{ background: colors.warningDim, border: `1px solid ${colors.warningBorder}` }}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                  <AlertTriangle className="w-5 h-5 text-yellow-600" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.15)' }}>
+                  <AlertTriangle className="w-5 h-5" style={{ color: colors.warning }} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-[15px] font-semibold text-yellow-700">
+                  <p className="text-[15px] font-semibold" style={{ color: colors.warning }}>
                     Inactivity Warning
                   </p>
-                  <p className="text-[13px] text-yellow-600/70">
+                  <p className="text-[13px]" style={{ color: 'rgba(245,158,11,0.7)' }}>
                     No activity for 15+ minutes. Complete this order soon or it
                     will be auto-cancelled/disputed.
                   </p>
@@ -704,17 +709,18 @@ export const OrderDetailScreen = ({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 mb-4"
+              className="rounded-2xl p-4 mb-4"
+              style={{ background: colors.errorDim, border: `1px solid ${colors.errorBorder}` }}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-red-500" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)' }}>
+                  <Clock className="w-5 h-5" style={{ color: colors.error }} />
                 </div>
                 <div className="flex-1">
-                  <p className="text-[15px] font-semibold text-red-600">
+                  <p className="text-[15px] font-semibold" style={{ color: colors.error }}>
                     Dispute Timer
                   </p>
-                  <p className="text-[13px] text-red-500/70">
+                  <p className="text-[13px]" style={{ color: 'rgba(239,68,68,0.7)' }}>
                     {new Date(activeOrder.disputeAutoResolveAt) > new Date()
                       ? `Auto-refund to escrow funder in ${Math.max(0, Math.round((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) / 3600000))}h ${Math.max(0, Math.round(((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) % 3600000) / 60000))}m`
                       : "Auto-refund processing..."}
@@ -733,7 +739,7 @@ export const OrderDetailScreen = ({
             <div className="mb-4">
               <p
                 className="text-[12px] font-medium mb-2 flex items-center gap-1.5"
-                style={{ color: "rgba(0,0,0,0.45)" }}
+                style={{ color: colors.text.tertiary }}
               >
                 <Clock className="w-3.5 h-3.5" />
                 Request Time Extension
@@ -751,9 +757,9 @@ export const OrderDetailScreen = ({
                     disabled={requestingExtension}
                     className="flex-1 py-2.5 rounded-xl text-[13px] font-medium flex items-center justify-center gap-1 disabled:opacity-50 transition-colors"
                     style={{
-                      background: "rgba(0,0,0,0.05)",
-                      border: "1px solid rgba(0,0,0,0.1)",
-                      color: "rgba(0,0,0,0.5)",
+                      background: colors.surface.card,
+                      border: `1px solid ${colors.border.subtle}`,
+                      color: colors.text.secondary,
                     }}
                   >
                     {requestingExtension ? (
@@ -773,9 +779,9 @@ export const OrderDetailScreen = ({
               disabled={requestingExtension}
               className="w-full py-3 rounded-xl text-[13px] font-medium mb-4 flex items-center justify-center gap-2 disabled:opacity-50"
               style={{
-                background: "rgba(0,0,0,0.05)",
-                border: "1px solid rgba(0,0,0,0.1)",
-                color: "rgba(0,0,0,0.5)",
+                background: colors.surface.card,
+                border: `1px solid ${colors.border.subtle}`,
+                color: colors.text.secondary,
               }}
             >
               {requestingExtension ? (
@@ -792,18 +798,18 @@ export const OrderDetailScreen = ({
         {/* Cancelled/Expired Banner */}
         {(activeOrder.status === "cancelled" ||
           activeOrder.status === "expired") && (
-          <div className="mb-4 p-4 rounded-2xl bg-red-500/10 border border-red-500/20">
+          <div className="mb-4 p-4 rounded-2xl" style={{ background: colors.errorDim, border: `1px solid ${colors.errorBorder}` }}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                <X className="w-5 h-5 text-red-400" />
+              <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(239,68,68,0.15)' }}>
+                <X className="w-5 h-5" style={{ color: '#ef4444' }} />
               </div>
               <div>
-                <p className="text-[15px] font-semibold text-red-400">
+                <p className="text-[15px] font-semibold" style={{ color: '#ef4444' }}>
                   {activeOrder.status === "cancelled"
                     ? "Order Cancelled"
                     : "Order Expired"}
                 </p>
-                <p className="text-[13px] text-red-400">
+                <p className="text-[13px]" style={{ color: 'rgba(239,68,68,0.7)' }}>
                   {activeOrder.status === "cancelled"
                     ? "This trade was cancelled and did not complete."
                     : "This order expired before it could be completed."}
@@ -823,12 +829,12 @@ export const OrderDetailScreen = ({
                 style={
                   activeOrder.step >= 1
                     ? {
-                        background: "#111111",
-                        border: "1px solid rgba(255,255,255,0.08)",
+                        background: colors.surface.card,
+                        border: `1px solid ${colors.border.subtle}`,
                       }
                     : {
-                        background: "rgba(0,0,0,0.04)",
-                        border: "1px solid rgba(0,0,0,0.08)",
+                        background: colors.surface.card,
+                        border: `1px solid ${colors.border.subtle}`,
                       }
                 }
               >
@@ -837,10 +843,10 @@ export const OrderDetailScreen = ({
                     className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0"
                     style={
                       activeOrder.step >= 1
-                        ? { background: "#fff", color: "#000" }
+                        ? { background: colors.accent.primary, color: colors.accent.text }
                         : {
-                            background: "rgba(0,0,0,0.06)",
-                            color: "rgba(0,0,0,0.3)",
+                            background: colors.surface.card,
+                            color: colors.text.tertiary,
                           }
                     }
                   >
@@ -851,7 +857,7 @@ export const OrderDetailScreen = ({
                       className="text-[15px] font-medium"
                       style={{
                         color:
-                          activeOrder.step >= 1 ? "#fff" : "rgba(0,0,0,0.3)",
+                          activeOrder.step >= 1 ? colors.text.primary : colors.text.tertiary,
                       }}
                     >
                       Order created
@@ -859,7 +865,7 @@ export const OrderDetailScreen = ({
                     {activeOrder.step >= 1 && (
                       <p
                         className="text-[13px]"
-                        style={{ color: "rgba(255,255,255,0.45)" }}
+                        style={{ color: colors.text.secondary }}
                       >
                         {activeOrder.dbStatus === "pending"
                           ? "Waiting for merchant..."
@@ -873,30 +879,30 @@ export const OrderDetailScreen = ({
                         <div
                           className="mt-3 rounded-xl p-4"
                           style={{
-                            background: "rgba(255,255,255,0.08)",
-                            border: "1px solid rgba(255,255,255,0.12)",
+                            background: colors.surface.active,
+                            border: `1px solid ${colors.border.medium}`,
                           }}
                         >
                           <div className="flex items-center gap-3 mb-2">
                             <div
                               className="w-8 h-8 rounded-full flex items-center justify-center"
-                              style={{ background: "rgba(255,255,255,0.1)" }}
+                              style={{ background: colors.surface.active }}
                             >
                               <Loader2
                                 className="w-4 h-4 animate-spin"
-                                style={{ color: "rgba(255,255,255,0.5)" }}
+                                style={{ color: colors.text.secondary }}
                               />
                             </div>
                             <div>
                               <p
                                 className="text-[14px] font-medium"
-                                style={{ color: "rgba(255,255,255,0.7)" }}
+                                style={{ color: colors.text.primary }}
                               >
                                 Waiting for Merchant
                               </p>
                               <p
                                 className="text-[12px]"
-                                style={{ color: "rgba(255,255,255,0.45)" }}
+                                style={{ color: colors.text.secondary }}
                               >
                                 Your USDT is locked. Waiting for merchant to
                                 claim
@@ -905,7 +911,7 @@ export const OrderDetailScreen = ({
                           </div>
                           <p
                             className="text-[12px]"
-                            style={{ color: "rgba(255,255,255,0.4)" }}
+                            style={{ color: colors.text.tertiary }}
                           >
                             Your USDT is secured in escrow on-chain. A merchant
                             will claim this order and send fiat to your bank
@@ -923,12 +929,12 @@ export const OrderDetailScreen = ({
                 style={
                   activeOrder.step >= 2
                     ? {
-                        background: "#111111",
-                        border: "1px solid rgba(255,255,255,0.08)",
+                        background: colors.surface.card,
+                        border: `1px solid ${colors.border.subtle}`,
                       }
                     : {
-                        background: "rgba(0,0,0,0.04)",
-                        border: "1px solid rgba(0,0,0,0.08)",
+                        background: colors.surface.card,
+                        border: `1px solid ${colors.border.subtle}`,
                       }
                 }
               >
@@ -937,10 +943,10 @@ export const OrderDetailScreen = ({
                     className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0"
                     style={
                       activeOrder.step >= 2
-                        ? { background: "#fff", color: "#000" }
+                        ? { background: colors.accent.primary, color: colors.accent.text }
                         : {
-                            background: "rgba(0,0,0,0.06)",
-                            color: "rgba(0,0,0,0.3)",
+                            background: colors.surface.card,
+                            color: colors.text.tertiary,
                           }
                     }
                   >
@@ -951,7 +957,7 @@ export const OrderDetailScreen = ({
                       className="text-[15px] font-medium"
                       style={{
                         color:
-                          activeOrder.step >= 2 ? "#fff" : "rgba(0,0,0,0.3)",
+                          activeOrder.step >= 2 ? colors.text.primary : colors.text.tertiary,
                       }}
                     >
                       {activeOrder.type === "buy"
@@ -967,22 +973,22 @@ export const OrderDetailScreen = ({
                         <div
                           className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2"
                           style={{
-                            background: "rgba(255,255,255,0.08)",
-                            border: "1px solid rgba(255,255,255,0.12)",
+                            background: colors.surface.active,
+                            border: `1px solid ${colors.border.medium}`,
                           }}
                         >
                           <div
                             className="w-5 h-5 rounded-full flex items-center justify-center"
-                            style={{ background: "rgba(255,255,255,0.1)" }}
+                            style={{ background: colors.surface.active }}
                           >
                             <Lock
                               className="w-3 h-3"
-                              style={{ color: "#fff" }}
+                              style={{ color: colors.text.primary }}
                             />
                           </div>
                           <span
                             className="text-[13px] font-medium"
-                            style={{ color: "#fff" }}
+                            style={{ color: colors.text.primary }}
                           >
                             {activeOrder.type === "buy"
                               ? "Funds locked in escrow"
@@ -999,30 +1005,30 @@ export const OrderDetailScreen = ({
                           <div
                             className="rounded-xl p-4"
                             style={{
-                              background: "rgba(255,255,255,0.08)",
-                              border: "1px solid rgba(255,255,255,0.12)",
+                              background: colors.surface.active,
+                              border: `1px solid ${colors.border.medium}`,
                             }}
                           >
                             <div className="flex items-center gap-3 mb-3">
                               <div
                                 className="w-10 h-10 rounded-full flex items-center justify-center"
-                                style={{ background: "rgba(255,255,255,0.1)" }}
+                                style={{ background: colors.surface.active }}
                               >
                                 <Loader2
                                   className="w-5 h-5 animate-spin"
-                                  style={{ color: "rgba(255,255,255,0.5)" }}
+                                  style={{ color: colors.text.secondary }}
                                 />
                               </div>
                               <div>
                                 <p
                                   className="text-[15px] font-medium"
-                                  style={{ color: "rgba(255,255,255,0.7)" }}
+                                  style={{ color: colors.text.primary }}
                                 >
                                   Escrow Funding in Progress
                                 </p>
                                 <p
                                   className="text-[12px]"
-                                  style={{ color: "rgba(255,255,255,0.45)" }}
+                                  style={{ color: colors.text.secondary }}
                                 >
                                   Merchant is locking USDT in escrow
                                 </p>
@@ -1030,12 +1036,12 @@ export const OrderDetailScreen = ({
                             </div>
                             <div
                               className="h-1.5 rounded-full overflow-hidden"
-                              style={{ background: "rgba(255,255,255,0.1)" }}
+                              style={{ background: colors.surface.active }}
                             >
                               <motion.div
                                 className="h-full"
                                 style={{
-                                  background: "rgba(255,255,255,0.3)",
+                                  background: colors.text.tertiary,
                                   width: "40%",
                                 }}
                                 animate={{ x: ["-100%", "100%"] }}
@@ -1048,7 +1054,7 @@ export const OrderDetailScreen = ({
                             </div>
                             <p
                               className="mt-3 text-[12px]"
-                              style={{ color: "rgba(255,255,255,0.4)" }}
+                              style={{ color: colors.text.tertiary }}
                             >
                               Once the merchant funds the escrow, you&apos;ll be
                               able to send your payment.
@@ -1058,9 +1064,9 @@ export const OrderDetailScreen = ({
                             onClick={handleOpenChat}
                             className="w-full py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
                             style={{
-                              background: "rgba(255,255,255,0.12)",
-                              color: "#fff",
-                              border: "1px solid rgba(255,255,255,0.15)",
+                              background: colors.surface.active,
+                              color: colors.text.primary,
+                              border: `1px solid ${colors.border.medium}`,
                             }}
                           >
                             <MessageCircle className="w-4 h-4" />
@@ -1082,7 +1088,7 @@ export const OrderDetailScreen = ({
                                 <div
                                   className="h-40 relative"
                                   style={{
-                                    background: "#1e1e1e",
+                                    background: colors.bg.secondary,
                                     backgroundImage: `url('https://api.mapbox.com/styles/v1/mapbox/light-v11/static/pin-s+000000(${activeOrder.merchant.lng},${activeOrder.merchant.lat})/${activeOrder.merchant.lng},${activeOrder.merchant.lat},14,0/400x200@2x?access_token=pk.placeholder')`,
                                     backgroundSize: "cover",
                                     backgroundPosition: "center",
@@ -1092,21 +1098,21 @@ export const OrderDetailScreen = ({
                                   <div
                                     className="absolute inset-0"
                                     style={{
-                                      background: "rgba(255,255,255,0.03)",
+                                      background: colors.surface.card,
                                     }}
                                   />
                                   <div className="absolute inset-0 flex items-center justify-center">
                                     <div className="flex flex-col items-center">
                                       <div
                                         className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg mb-1"
-                                        style={{ background: "#000" }}
+                                        style={{ background: colors.bg.secondary }}
                                       >
                                         <MapPin className="w-5 h-5 text-white" />
                                       </div>
                                       <div
                                         className="w-1 h-3 rounded-b-full"
                                         style={{
-                                          background: "rgba(255,255,255,0.3)",
+                                          background: colors.text.tertiary,
                                         }}
                                       />
                                     </div>
@@ -1131,7 +1137,7 @@ export const OrderDetailScreen = ({
                                     )
                                   }
                                   className="absolute top-3 right-3 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-1.5"
-                                  style={{ background: "rgba(0,0,0,0.8)" }}
+                                  style={{ background: colors.bg.secondary }}
                                 >
                                   <ExternalLink className="w-3.5 h-3.5 text-white" />
                                   <span className="text-[12px] font-medium text-white">
@@ -1143,24 +1149,24 @@ export const OrderDetailScreen = ({
                               {/* Meeting Details */}
                               <div
                                 className="rounded-xl p-3 space-y-3"
-                                style={{ background: "#1e1e1e" }}
+                                style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}` }}
                               >
                                 <div>
                                   <p
                                     className="text-[11px] uppercase tracking-wide mb-1"
-                                    style={{ color: "rgba(255,255,255,0.4)" }}
+                                    style={{ color: colors.text.tertiary }}
                                   >
                                     Meeting Location
                                   </p>
                                   <p
                                     className="text-[15px] font-medium"
-                                    style={{ color: "#fff" }}
+                                    style={{ color: colors.text.primary }}
                                   >
                                     {activeOrder.merchant.location}
                                   </p>
                                   <p
                                     className="text-[13px]"
-                                    style={{ color: "rgba(255,255,255,0.5)" }}
+                                    style={{ color: colors.text.secondary }}
                                   >
                                     {activeOrder.merchant.address}
                                   </p>
@@ -1169,23 +1175,23 @@ export const OrderDetailScreen = ({
                                   className="pt-2"
                                   style={{
                                     borderTop:
-                                      "1px solid rgba(255,255,255,0.1)",
+                                      `1px solid ${colors.border.medium}`,
                                   }}
                                 >
                                   <p
                                     className="text-[11px] uppercase tracking-wide mb-1"
-                                    style={{ color: "rgba(255,255,255,0.4)" }}
+                                    style={{ color: colors.text.tertiary }}
                                   >
                                     Meeting Spot
                                   </p>
                                   <div className="flex items-start gap-2">
                                     <Navigation
                                       className="w-4 h-4 flex-shrink-0 mt-0.5"
-                                      style={{ color: "rgba(255,255,255,0.5)" }}
+                                      style={{ color: colors.text.secondary }}
                                     />
                                     <p
                                       className="text-[13px]"
-                                      style={{ color: "#fff" }}
+                                      style={{ color: colors.text.primary }}
                                     >
                                       {activeOrder.merchant.meetingSpot}
                                     </p>
@@ -1195,21 +1201,21 @@ export const OrderDetailScreen = ({
                                   className="pt-2"
                                   style={{
                                     borderTop:
-                                      "1px solid rgba(255,255,255,0.1)",
+                                      `1px solid ${colors.border.medium}`,
                                   }}
                                 >
                                   <div className="flex items-center justify-between">
                                     <span
                                       className="text-[13px]"
                                       style={{
-                                        color: "rgba(255,255,255,0.45)",
+                                        color: colors.text.secondary,
                                       }}
                                     >
                                       Cash Amount
                                     </span>
                                     <span
                                       className="text-[17px] font-semibold"
-                                      style={{ color: "#fff" }}
+                                      style={{ color: colors.text.primary }}
                                     >
                                       {"\u062F.\u0625"}{" "}
                                       {parseFloat(
@@ -1226,9 +1232,9 @@ export const OrderDetailScreen = ({
                                   onClick={handleOpenChat}
                                   className="flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
                                   style={{
-                                    background: "rgba(255,255,255,0.12)",
-                                    color: "#fff",
-                                    border: "1px solid rgba(255,255,255,0.15)",
+                                    background: colors.surface.active,
+                                    color: colors.text.primary,
+                                    border: `1px solid ${colors.border.medium}`,
                                   }}
                                 >
                                   <MessageCircle className="w-4 h-4" />
@@ -1238,7 +1244,7 @@ export const OrderDetailScreen = ({
                                   whileTap={{ scale: 0.98 }}
                                   onClick={markPaymentSent}
                                   className="flex-[2] py-3 rounded-xl text-[15px] font-semibold"
-                                  style={{ background: "#fff", color: "#000" }}
+                                  style={{ background: colors.accent.primary, color: colors.accent.text }}
                                 >
                                   I&apos;m at the location
                                 </motion.button>
@@ -1248,7 +1254,7 @@ export const OrderDetailScreen = ({
                             <>
                               <div
                                 className="rounded-xl p-3 space-y-2"
-                                style={{ background: "#1e1e1e" }}
+                                style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}` }}
                               >
                                 {/* Locked payment method header */}
                                 {activeOrder.lockedPaymentMethod && (
@@ -1256,7 +1262,7 @@ export const OrderDetailScreen = ({
                                     className="flex items-center gap-1.5 pb-2"
                                     style={{
                                       borderBottom:
-                                        "1px solid rgba(255,255,255,0.1)",
+                                        `1px solid ${colors.border.medium}`,
                                     }}
                                   >
                                     <Lock className="w-3 h-3 text-orange-400" />
@@ -1272,7 +1278,7 @@ export const OrderDetailScreen = ({
                                       <span
                                         className="text-[13px]"
                                         style={{
-                                          color: "rgba(255,255,255,0.45)",
+                                          color: colors.text.secondary,
                                         }}
                                       >
                                         Method
@@ -1280,7 +1286,7 @@ export const OrderDetailScreen = ({
                                       <div className="flex items-center gap-1.5">
                                         <span
                                           className="text-[13px] font-medium"
-                                          style={{ color: "#fff" }}
+                                          style={{ color: colors.text.primary }}
                                         >
                                           {
                                             activeOrder.merchantPaymentMethod
@@ -1303,7 +1309,7 @@ export const OrderDetailScreen = ({
                                             <Copy
                                               className="w-3.5 h-3.5"
                                               style={{
-                                                color: "rgba(255,255,255,0.3)",
+                                                color: colors.text.tertiary,
                                               }}
                                             />
                                           )}
@@ -1316,7 +1322,7 @@ export const OrderDetailScreen = ({
                                         <span
                                           className="text-[13px]"
                                           style={{
-                                            color: "rgba(255,255,255,0.45)",
+                                            color: colors.text.secondary,
                                           }}
                                         >
                                           Details
@@ -1324,7 +1330,7 @@ export const OrderDetailScreen = ({
                                         <div className="flex items-center gap-1.5">
                                           <span
                                             className="text-[13px] font-mono"
-                                            style={{ color: "#fff" }}
+                                            style={{ color: colors.text.primary }}
                                           >
                                             {
                                               activeOrder.merchantPaymentMethod
@@ -1349,7 +1355,7 @@ export const OrderDetailScreen = ({
                                                 className="w-3.5 h-3.5"
                                                 style={{
                                                   color:
-                                                    "rgba(255,255,255,0.3)",
+                                                    colors.text.tertiary,
                                                 }}
                                               />
                                             )}
@@ -1366,7 +1372,7 @@ export const OrderDetailScreen = ({
                                         <span
                                           className="text-[13px]"
                                           style={{
-                                            color: "rgba(255,255,255,0.45)",
+                                            color: colors.text.secondary,
                                           }}
                                         >
                                           Bank
@@ -1374,7 +1380,7 @@ export const OrderDetailScreen = ({
                                         <div className="flex items-center gap-1.5">
                                           <span
                                             className="text-[13px]"
-                                            style={{ color: "#fff" }}
+                                            style={{ color: colors.text.primary }}
                                           >
                                             {
                                               activeOrder.lockedPaymentMethod
@@ -1398,7 +1404,7 @@ export const OrderDetailScreen = ({
                                                 className="w-3.5 h-3.5"
                                                 style={{
                                                   color:
-                                                    "rgba(255,255,255,0.3)",
+                                                    colors.text.tertiary,
                                                 }}
                                               />
                                             )}
@@ -1412,7 +1418,7 @@ export const OrderDetailScreen = ({
                                         <span
                                           className="text-[13px]"
                                           style={{
-                                            color: "rgba(255,255,255,0.45)",
+                                            color: colors.text.secondary,
                                           }}
                                         >
                                           IBAN
@@ -1420,7 +1426,7 @@ export const OrderDetailScreen = ({
                                         <div className="flex items-center gap-1.5">
                                           <span
                                             className="text-[13px] font-mono"
-                                            style={{ color: "#fff" }}
+                                            style={{ color: colors.text.primary }}
                                           >
                                             {
                                               activeOrder.lockedPaymentMethod
@@ -1444,7 +1450,7 @@ export const OrderDetailScreen = ({
                                                 className="w-3.5 h-3.5"
                                                 style={{
                                                   color:
-                                                    "rgba(255,255,255,0.3)",
+                                                    colors.text.tertiary,
                                                 }}
                                               />
                                             )}
@@ -1458,7 +1464,7 @@ export const OrderDetailScreen = ({
                                         <span
                                           className="text-[13px]"
                                           style={{
-                                            color: "rgba(255,255,255,0.45)",
+                                            color: colors.text.secondary,
                                           }}
                                         >
                                           Name
@@ -1466,7 +1472,7 @@ export const OrderDetailScreen = ({
                                         <div className="flex items-center gap-1.5">
                                           <span
                                             className="text-[13px]"
-                                            style={{ color: "#fff" }}
+                                            style={{ color: colors.text.primary }}
                                           >
                                             {
                                               activeOrder.lockedPaymentMethod
@@ -1490,7 +1496,7 @@ export const OrderDetailScreen = ({
                                                 className="w-3.5 h-3.5"
                                                 style={{
                                                   color:
-                                                    "rgba(255,255,255,0.3)",
+                                                    colors.text.tertiary,
                                                 }}
                                               />
                                             )}
@@ -1504,7 +1510,7 @@ export const OrderDetailScreen = ({
                                         <span
                                           className="text-[13px]"
                                           style={{
-                                            color: "rgba(255,255,255,0.45)",
+                                            color: colors.text.secondary,
                                           }}
                                         >
                                           UPI
@@ -1512,7 +1518,7 @@ export const OrderDetailScreen = ({
                                         <div className="flex items-center gap-1.5">
                                           <span
                                             className="text-[13px] font-mono"
-                                            style={{ color: "#fff" }}
+                                            style={{ color: colors.text.primary }}
                                           >
                                             {
                                               activeOrder.lockedPaymentMethod
@@ -1536,7 +1542,7 @@ export const OrderDetailScreen = ({
                                                 className="w-3.5 h-3.5"
                                                 style={{
                                                   color:
-                                                    "rgba(255,255,255,0.3)",
+                                                    colors.text.tertiary,
                                                 }}
                                               />
                                             )}
@@ -1552,7 +1558,7 @@ export const OrderDetailScreen = ({
                                         <span
                                           className="text-[13px]"
                                           style={{
-                                            color: "rgba(255,255,255,0.45)",
+                                            color: colors.text.secondary,
                                           }}
                                         >
                                           Bank
@@ -1560,7 +1566,7 @@ export const OrderDetailScreen = ({
                                         <div className="flex items-center gap-1.5">
                                           <span
                                             className="text-[13px]"
-                                            style={{ color: "#fff" }}
+                                            style={{ color: colors.text.primary }}
                                           >
                                             {activeOrder.merchant.bank}
                                           </span>
@@ -1580,7 +1586,7 @@ export const OrderDetailScreen = ({
                                                 className="w-3.5 h-3.5"
                                                 style={{
                                                   color:
-                                                    "rgba(255,255,255,0.3)",
+                                                    colors.text.tertiary,
                                                 }}
                                               />
                                             )}
@@ -1593,7 +1599,7 @@ export const OrderDetailScreen = ({
                                         <span
                                           className="text-[13px]"
                                           style={{
-                                            color: "rgba(255,255,255,0.45)",
+                                            color: colors.text.secondary,
                                           }}
                                         >
                                           IBAN
@@ -1601,7 +1607,7 @@ export const OrderDetailScreen = ({
                                         <div className="flex items-center gap-1.5">
                                           <span
                                             className="text-[13px] font-mono"
-                                            style={{ color: "#fff" }}
+                                            style={{ color: colors.text.primary }}
                                           >
                                             {activeOrder.merchant.iban}
                                           </span>
@@ -1621,7 +1627,7 @@ export const OrderDetailScreen = ({
                                                 className="w-3.5 h-3.5"
                                                 style={{
                                                   color:
-                                                    "rgba(255,255,255,0.3)",
+                                                    colors.text.tertiary,
                                                 }}
                                               />
                                             )}
@@ -1634,7 +1640,7 @@ export const OrderDetailScreen = ({
                                         <span
                                           className="text-[13px]"
                                           style={{
-                                            color: "rgba(255,255,255,0.45)",
+                                            color: colors.text.secondary,
                                           }}
                                         >
                                           Name
@@ -1642,7 +1648,7 @@ export const OrderDetailScreen = ({
                                         <div className="flex items-center gap-1.5">
                                           <span
                                             className="text-[13px]"
-                                            style={{ color: "#fff" }}
+                                            style={{ color: colors.text.primary }}
                                           >
                                             {activeOrder.merchant.accountName}
                                           </span>
@@ -1663,7 +1669,7 @@ export const OrderDetailScreen = ({
                                                 className="w-3.5 h-3.5"
                                                 style={{
                                                   color:
-                                                    "rgba(255,255,255,0.3)",
+                                                    colors.text.tertiary,
                                                 }}
                                               />
                                             )}
@@ -1677,14 +1683,14 @@ export const OrderDetailScreen = ({
                                   className="pt-2"
                                   style={{
                                     borderTop:
-                                      "1px solid rgba(255,255,255,0.1)",
+                                      `1px solid ${colors.border.medium}`,
                                   }}
                                 >
                                   <div className="flex items-center justify-between">
                                     <span
                                       className="text-[13px]"
                                       style={{
-                                        color: "rgba(255,255,255,0.45)",
+                                        color: colors.text.secondary,
                                       }}
                                     >
                                       Amount
@@ -1692,7 +1698,7 @@ export const OrderDetailScreen = ({
                                     <div className="flex items-center gap-1.5">
                                       <span
                                         className="text-[17px] font-semibold"
-                                        style={{ color: "#fff" }}
+                                        style={{ color: colors.text.primary }}
                                       >
                                         {"\u062F.\u0625"}{" "}
                                         {parseFloat(
@@ -1716,7 +1722,7 @@ export const OrderDetailScreen = ({
                                           <Copy
                                             className="w-3.5 h-3.5"
                                             style={{
-                                              color: "rgba(255,255,255,0.3)",
+                                              color: colors.text.tertiary,
                                             }}
                                           />
                                         )}
@@ -1730,9 +1736,9 @@ export const OrderDetailScreen = ({
                                   onClick={handleOpenChat}
                                   className="flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
                                   style={{
-                                    background: "rgba(255,255,255,0.12)",
-                                    color: "#fff",
-                                    border: "1px solid rgba(255,255,255,0.15)",
+                                    background: colors.surface.active,
+                                    color: colors.text.primary,
+                                    border: `1px solid ${colors.border.medium}`,
                                   }}
                                 >
                                   <MessageCircle className="w-4 h-4" />
@@ -1743,7 +1749,7 @@ export const OrderDetailScreen = ({
                                   onClick={markPaymentSent}
                                   disabled={isLoading}
                                   className="flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                                  style={{ background: "#fff", color: "#000" }}
+                                  style={{ background: colors.accent.primary, color: colors.accent.text }}
                                 >
                                   {isLoading
                                     ? "Processing..."
@@ -1764,30 +1770,30 @@ export const OrderDetailScreen = ({
                           <div
                             className="rounded-xl p-4"
                             style={{
-                              background: "rgba(255,255,255,0.08)",
-                              border: "1px solid rgba(255,255,255,0.12)",
+                              background: colors.surface.active,
+                              border: `1px solid ${colors.border.medium}`,
                             }}
                           >
                             <div className="flex items-center gap-3 mb-3">
                               <div
                                 className="w-10 h-10 rounded-full flex items-center justify-center"
-                                style={{ background: "rgba(255,255,255,0.1)" }}
+                                style={{ background: colors.surface.active }}
                               >
                                 <Lock
                                   className="w-5 h-5"
-                                  style={{ color: "#fff" }}
+                                  style={{ color: colors.text.primary }}
                                 />
                               </div>
                               <div>
                                 <p
                                   className="text-[15px] font-medium"
-                                  style={{ color: "#fff" }}
+                                  style={{ color: colors.text.primary }}
                                 >
                                   Merchant Accepted - Lock Escrow
                                 </p>
                                 <p
                                   className="text-[12px]"
-                                  style={{ color: "rgba(255,255,255,0.45)" }}
+                                  style={{ color: colors.text.secondary }}
                                 >
                                   Merchant verified their wallet. Lock funds to
                                   proceed.
@@ -1796,7 +1802,7 @@ export const OrderDetailScreen = ({
                             </div>
                             <p
                               className="text-[12px] mb-3"
-                              style={{ color: "rgba(255,255,255,0.4)" }}
+                              style={{ color: colors.text.tertiary }}
                             >
                               The merchant has signed with their wallet (
                               {activeOrder.acceptorWalletAddress?.slice(0, 4)}
@@ -1902,7 +1908,7 @@ export const OrderDetailScreen = ({
                                   !solanaWallet.programReady)
                               }
                               className="w-full py-3 rounded-xl text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                              style={{ background: "#fff", color: "#000" }}
+                              style={{ background: colors.accent.primary, color: colors.accent.text }}
                             >
                               {isLoading ? (
                                 <>
@@ -1932,9 +1938,9 @@ export const OrderDetailScreen = ({
                             onClick={handleOpenChat}
                             className="w-full py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
                             style={{
-                              background: "rgba(255,255,255,0.12)",
-                              color: "#fff",
-                              border: "1px solid rgba(255,255,255,0.15)",
+                              background: colors.surface.active,
+                              color: colors.text.primary,
+                              border: `1px solid ${colors.border.medium}`,
                             }}
                           >
                             <MessageCircle className="w-4 h-4" />
@@ -1951,7 +1957,7 @@ export const OrderDetailScreen = ({
                         <div className="mt-2">
                           <p
                             className="text-[13px]"
-                            style={{ color: "rgba(255,255,255,0.45)" }}
+                            style={{ color: colors.text.secondary }}
                           >
                             Your USDT is locked in escrow. Waiting for merchant
                             to send AED payment...
@@ -1959,18 +1965,18 @@ export const OrderDetailScreen = ({
 
                           <div
                             className="mt-3 rounded-xl p-3"
-                            style={{ background: "#1e1e1e" }}
+                            style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}` }}
                           >
                             <div className="flex items-center justify-between mb-2">
                               <span
                                 className="text-[12px]"
-                                style={{ color: "rgba(255,255,255,0.45)" }}
+                                style={{ color: colors.text.secondary }}
                               >
                                 Expected payment
                               </span>
                               <span
                                 className="text-[15px] font-semibold"
-                                style={{ color: "#fff" }}
+                                style={{ color: colors.text.primary }}
                               >
                                 {"\u062F.\u0625"}{" "}
                                 {parseFloat(
@@ -1982,7 +1988,7 @@ export const OrderDetailScreen = ({
                               <div
                                 className="pt-2 space-y-1.5"
                                 style={{
-                                  borderTop: "1px solid rgba(255,255,255,0.1)",
+                                  borderTop: `1px solid ${colors.border.medium}`,
                                 }}
                               >
                                 <div className="flex items-center gap-1.5">
@@ -1993,7 +1999,7 @@ export const OrderDetailScreen = ({
                                 </div>
                                 <p
                                   className="text-[13px] font-medium"
-                                  style={{ color: "#fff" }}
+                                  style={{ color: colors.text.primary }}
                                 >
                                   {activeOrder.lockedPaymentMethod.label}
                                 </p>
@@ -2004,7 +2010,7 @@ export const OrderDetailScreen = ({
                                       .bank_name && (
                                       <p
                                         style={{
-                                          color: "rgba(255,255,255,0.5)",
+                                          color: colors.text.secondary,
                                         }}
                                       >
                                         {
@@ -2018,7 +2024,7 @@ export const OrderDetailScreen = ({
                                       <p
                                         className="font-mono"
                                         style={{
-                                          color: "rgba(255,255,255,0.5)",
+                                          color: colors.text.secondary,
                                         }}
                                       >
                                         {
@@ -2035,7 +2041,7 @@ export const OrderDetailScreen = ({
                                     .upi_id && (
                                     <p
                                       className="text-[12px] font-mono"
-                                      style={{ color: "rgba(255,255,255,0.5)" }}
+                                      style={{ color: colors.text.secondary }}
                                     >
                                       {
                                         activeOrder.lockedPaymentMethod.details
@@ -2045,7 +2051,7 @@ export const OrderDetailScreen = ({
                                   )}
                                 <p
                                   className="text-[10px]"
-                                  style={{ color: "rgba(255,255,255,0.35)" }}
+                                  style={{ color: colors.text.tertiary }}
                                 >
                                   Merchant will send payment to this method
                                 </p>
@@ -2053,7 +2059,7 @@ export const OrderDetailScreen = ({
                             ) : (
                               <p
                                 className="text-[11px]"
-                                style={{ color: "rgba(255,255,255,0.35)" }}
+                                style={{ color: colors.text.tertiary }}
                               >
                                 Merchant will send this amount to your bank
                                 account
@@ -2063,7 +2069,7 @@ export const OrderDetailScreen = ({
 
                           <div
                             className="mt-3 h-1 rounded-full overflow-hidden"
-                            style={{ background: "rgba(255,255,255,0.1)" }}
+                            style={{ background: colors.surface.active }}
                           >
                             <motion.div
                               className="h-full bg-orange-400"
@@ -2080,9 +2086,9 @@ export const OrderDetailScreen = ({
                             onClick={handleOpenChat}
                             className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2"
                             style={{
-                              background: "rgba(255,255,255,0.12)",
-                              color: "#fff",
-                              border: "1px solid rgba(255,255,255,0.15)",
+                              background: colors.surface.active,
+                              color: colors.text.primary,
+                              border: `1px solid ${colors.border.medium}`,
                             }}
                           >
                             <MessageCircle className="w-4 h-4" />
@@ -2100,12 +2106,12 @@ export const OrderDetailScreen = ({
                 style={
                   activeOrder.step >= 3
                     ? {
-                        background: "#111111",
-                        border: "1px solid rgba(255,255,255,0.08)",
+                        background: colors.surface.card,
+                        border: `1px solid ${colors.border.subtle}`,
                       }
                     : {
-                        background: "rgba(0,0,0,0.04)",
-                        border: "1px solid rgba(0,0,0,0.08)",
+                        background: colors.surface.card,
+                        border: `1px solid ${colors.border.subtle}`,
                       }
                 }
               >
@@ -2114,10 +2120,10 @@ export const OrderDetailScreen = ({
                     className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0"
                     style={
                       activeOrder.step >= 3
-                        ? { background: "#fff", color: "#000" }
+                        ? { background: colors.accent.primary, color: colors.accent.text }
                         : {
-                            background: "rgba(0,0,0,0.06)",
-                            color: "rgba(0,0,0,0.3)",
+                            background: colors.surface.card,
+                            color: colors.text.tertiary,
                           }
                     }
                   >
@@ -2128,7 +2134,7 @@ export const OrderDetailScreen = ({
                       className="text-[15px] font-medium"
                       style={{
                         color:
-                          activeOrder.step >= 3 ? "#fff" : "rgba(0,0,0,0.3)",
+                          activeOrder.step >= 3 ? colors.text.primary : colors.text.tertiary,
                       }}
                     >
                       {activeOrder.dbStatus === "disputed"
@@ -2144,7 +2150,7 @@ export const OrderDetailScreen = ({
                         <div className="mt-2">
                           <p
                             className="text-[13px]"
-                            style={{ color: "rgba(255,255,255,0.45)" }}
+                            style={{ color: colors.text.secondary }}
                           >
                             This order is under dispute. Our team is reviewing
                             the case.
@@ -2153,9 +2159,9 @@ export const OrderDetailScreen = ({
                             onClick={handleOpenChat}
                             className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2"
                             style={{
-                              background: "rgba(255,255,255,0.12)",
-                              color: "#fff",
-                              border: "1px solid rgba(255,255,255,0.15)",
+                              background: colors.surface.active,
+                              color: colors.text.primary,
+                              border: `1px solid ${colors.border.medium}`,
                             }}
                           >
                             <MessageCircle className="w-4 h-4" />
@@ -2170,18 +2176,18 @@ export const OrderDetailScreen = ({
                         <div className="mt-2">
                           <p
                             className="text-[13px]"
-                            style={{ color: "rgba(255,255,255,0.45)" }}
+                            style={{ color: colors.text.secondary }}
                           >
                             Seller is verifying your payment...
                           </p>
                           <div
                             className="mt-2 h-1 rounded-full overflow-hidden"
-                            style={{ background: "rgba(255,255,255,0.1)" }}
+                            style={{ background: colors.surface.active }}
                           >
                             <motion.div
                               className="h-full"
                               style={{
-                                background: "rgba(255,255,255,0.3)",
+                                background: colors.text.tertiary,
                                 width: "30%",
                               }}
                               animate={{ x: ["-100%", "100%"] }}
@@ -2196,9 +2202,9 @@ export const OrderDetailScreen = ({
                             onClick={handleOpenChat}
                             className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2"
                             style={{
-                              background: "rgba(255,255,255,0.12)",
-                              color: "#fff",
-                              border: "1px solid rgba(255,255,255,0.15)",
+                              background: colors.surface.active,
+                              color: colors.text.primary,
+                              border: `1px solid ${colors.border.medium}`,
                             }}
                           >
                             <MessageCircle className="w-4 h-4" />
@@ -2213,7 +2219,7 @@ export const OrderDetailScreen = ({
                         <div className="mt-2">
                           <p
                             className="text-[13px]"
-                            style={{ color: "rgba(255,255,255,0.45)" }}
+                            style={{ color: colors.text.secondary }}
                           >
                             This order is under dispute. Our team is reviewing
                             the case.
@@ -2222,9 +2228,9 @@ export const OrderDetailScreen = ({
                             onClick={handleOpenChat}
                             className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2"
                             style={{
-                              background: "rgba(255,255,255,0.12)",
-                              color: "#fff",
-                              border: "1px solid rgba(255,255,255,0.15)",
+                              background: colors.surface.active,
+                              color: colors.text.primary,
+                              border: `1px solid ${colors.border.medium}`,
                             }}
                           >
                             <MessageCircle className="w-4 h-4" />
@@ -2240,13 +2246,13 @@ export const OrderDetailScreen = ({
                           <div
                             className="rounded-xl p-3 mb-3"
                             style={{
-                              background: "rgba(255,255,255,0.08)",
-                              border: "1px solid rgba(255,255,255,0.12)",
+                              background: colors.surface.active,
+                              border: `1px solid ${colors.border.medium}`,
                             }}
                           >
                             <p
                               className="text-[13px]"
-                              style={{ color: "rgba(255,255,255,0.7)" }}
+                              style={{ color: colors.text.primary }}
                             >
                               Merchant has sent {"\u062F.\u0625"}{" "}
                               {parseFloat(
@@ -2256,7 +2262,7 @@ export const OrderDetailScreen = ({
                             </p>
                             <p
                               className="text-[12px] mt-1"
-                              style={{ color: "rgba(255,255,255,0.45)" }}
+                              style={{ color: colors.text.secondary }}
                             >
                               Check your bank account before confirming.
                             </p>
@@ -2266,9 +2272,9 @@ export const OrderDetailScreen = ({
                               onClick={handleOpenChat}
                               className="flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
                               style={{
-                                background: "rgba(255,255,255,0.12)",
-                                color: "#fff",
-                                border: "1px solid rgba(255,255,255,0.15)",
+                                background: colors.surface.active,
+                                color: colors.text.primary,
+                                border: `1px solid ${colors.border.medium}`,
                               }}
                             >
                               <MessageCircle className="w-4 h-4" />
@@ -2279,7 +2285,7 @@ export const OrderDetailScreen = ({
                               onClick={confirmFiatReceived}
                               disabled={isLoading}
                               className="flex-[2] py-3 rounded-xl text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                              style={{ background: "#fff", color: "#000" }}
+                              style={{ background: colors.accent.primary, color: colors.accent.text }}
                             >
                               {isLoading ? (
                                 <>
@@ -2296,7 +2302,7 @@ export const OrderDetailScreen = ({
                           </div>
                           <p
                             className="text-[11px] mt-2 text-center"
-                            style={{ color: "rgba(255,255,255,0.35)" }}
+                            style={{ color: colors.text.tertiary }}
                           >
                             This will sign a wallet transaction to release
                             escrow to merchant
@@ -2311,22 +2317,22 @@ export const OrderDetailScreen = ({
               <div
                 className="p-4 rounded-2xl"
                 style={activeOrder.step >= 4
-                  ? { background: "#111111", border: "1px solid rgba(255,255,255,0.08)" }
-                  : { background: "rgba(0,0,0,0.04)", border: "1px solid rgba(0,0,0,0.08)" }}
+                  ? { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }
+                  : { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
               >
                 <div className="flex items-center gap-3">
                   <div
                     className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold"
                     style={activeOrder.step >= 4
-                      ? { background: "#fff", color: "#000" }
-                      : { background: "rgba(0,0,0,0.06)", color: "rgba(0,0,0,0.3)" }}
+                      ? { background: colors.accent.primary, color: colors.accent.text }
+                      : { background: colors.surface.card, color: colors.text.tertiary }}
                   >
                     {activeOrder.step >= 4 ? <Check className="w-4 h-4" /> : "4"}
                   </div>
                   <div>
                     <p
                       className="text-[15px] font-medium"
-                      style={{ color: activeOrder.step >= 4 ? "#fff" : "rgba(0,0,0,0.3)" }}
+                      style={{ color: activeOrder.step >= 4 ? colors.text.primary : colors.text.tertiary }}
                     >
                       Complete
                     </p>
@@ -2334,7 +2340,7 @@ export const OrderDetailScreen = ({
                       activeOrder.step >= 4 && (
                         <p
                           className="text-[13px]"
-                          style={{ color: "rgba(255,255,255,0.6)" }}
+                          style={{ color: colors.text.secondary }}
                         >
                           Trade completed successfully
                         </p>
@@ -2350,13 +2356,13 @@ export const OrderDetailScreen = ({
                   animate={{ opacity: 1, y: 0 }}
                   className="rounded-2xl p-4 text-center"
                   style={{
-                    background: "#111111",
-                    border: "1px solid rgba(255,255,255,0.08)",
+                    background: colors.surface.card,
+                    border: `1px solid ${colors.border.subtle}`,
                   }}
                 >
                   <p
                     className="text-[15px] mb-3"
-                    style={{ color: "rgba(255,255,255,0.45)" }}
+                    style={{ color: colors.text.secondary }}
                   >
                     Rate your experience
                   </p>
@@ -2369,7 +2375,7 @@ export const OrderDetailScreen = ({
                             color:
                               star <= rating
                                 ? undefined
-                                : "rgba(255,255,255,0.15)",
+                                : colors.text.quaternary,
                           }}
                         />
                       </button>
@@ -2384,15 +2390,15 @@ export const OrderDetailScreen = ({
         <div
           className="mt-4 rounded-2xl p-4"
           style={{
-            background: "#111111",
-            border: "1px solid rgba(255,255,255,0.08)",
+            background: colors.surface.card,
+            border: `1px solid ${colors.border.subtle}`,
           }}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center font-semibold"
-                style={{ background: "#fff", color: "#000" }}
+                style={{ background: colors.accent.primary, color: colors.accent.text }}
               >
                 {activeOrder.merchant.name.charAt(0)}
               </div>
@@ -2400,15 +2406,15 @@ export const OrderDetailScreen = ({
                 <div className="flex items-center gap-2">
                   <p
                     className="text-[15px] font-medium"
-                    style={{ color: "#fff" }}
+                    style={{ color: colors.text.primary }}
                   >
                     {activeOrder.merchant.name}
                   </p>
                   <span
                     className="px-2 py-0.5 rounded-full text-[10px] font-medium"
                     style={{
-                      background: "rgba(255,255,255,0.08)",
-                      color: "rgba(255,255,255,0.5)",
+                      background: colors.surface.active,
+                      color: colors.text.secondary,
                     }}
                   >
                     {activeOrder.merchant.paymentMethod === "cash"
@@ -2420,7 +2426,7 @@ export const OrderDetailScreen = ({
                   <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
                   <span
                     className="text-[13px]"
-                    style={{ color: "rgba(255,255,255,0.45)" }}
+                    style={{ color: colors.text.secondary }}
                   >
                     {activeOrder.merchant.rating} {"\u00b7"}{" "}
                     {activeOrder.merchant.trades} trades
@@ -2431,11 +2437,11 @@ export const OrderDetailScreen = ({
             <button
               onClick={handleOpenChat}
               className="w-10 h-10 rounded-full flex items-center justify-center"
-              style={{ background: "rgba(255,255,255,0.08)" }}
+              style={{ background: colors.surface.active }}
             >
               <MessageCircle
                 className="w-5 h-5"
-                style={{ color: "rgba(255,255,255,0.45)" }}
+                style={{ color: colors.text.secondary }}
               />
             </button>
           </div>
@@ -2449,7 +2455,8 @@ export const OrderDetailScreen = ({
             <button
               onClick={() => requestCancelOrder()}
               disabled={isRequestingCancel}
-              className="w-full mt-3 py-3 rounded-2xl text-[14px] font-medium bg-orange-500/10 border border-orange-500/20 text-orange-400 flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+              style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: '#f59e0b' }}
             >
               {isRequestingCancel ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -2464,7 +2471,8 @@ export const OrderDetailScreen = ({
           activeOrder.status !== "disputed" && (
             <button
               onClick={() => setShowDisputeModal(true)}
-              className="w-full mt-3 py-3 rounded-2xl text-[14px] font-medium bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center gap-2"
+              className="w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2"
+              style={{ background: colors.errorDim, border: `1px solid ${colors.errorBorder}`, color: '#ef4444' }}
             >
               <AlertTriangle className="w-4 h-4" />
               Report Issue
@@ -2473,14 +2481,14 @@ export const OrderDetailScreen = ({
 
         {/* Already Disputed */}
         {activeOrder.status === "disputed" && (
-          <div className="mt-3 py-3 px-4 rounded-2xl bg-red-500/10 border border-red-500/20">
-            <div className="flex items-center gap-2 text-red-600">
+          <div className="mt-3 py-3 px-4 rounded-2xl" style={{ background: colors.errorDim, border: `1px solid ${colors.errorBorder}` }}>
+            <div className="flex items-center gap-2" style={{ color: '#ef4444' }}>
               <AlertTriangle className="w-4 h-4" />
               <span className="text-[14px] font-medium">
                 Dispute in Progress
               </span>
             </div>
-            <p className="text-[12px] text-red-500/70 mt-1">
+            <p className="text-[12px] mt-1" style={{ color: 'rgba(239,68,68,0.7)' }}>
               Our team is reviewing this case.
             </p>
           </div>
@@ -2496,9 +2504,9 @@ export const OrderDetailScreen = ({
             onClick={() => setScreen(previousScreen || "home")}
             className="w-full mt-4 py-4 rounded-2xl text-[17px] font-semibold"
             style={{
-              background: "#111111",
-              border: "1px solid rgba(255,255,255,0.1)",
-              color: "#fff",
+              background: colors.bg.secondary,
+              border: `1px solid ${colors.border.medium}`,
+              color: colors.text.primary,
             }}
           >
             Done
@@ -2523,14 +2531,14 @@ export const OrderDetailScreen = ({
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30 }}
               className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl p-6`}
-              style={{ background: "#111111" }}
+              style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}` }}
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-red-500" />
                   <h3
                     className="text-[17px] font-semibold"
-                    style={{ color: "#fff" }}
+                    style={{ color: colors.text.primary }}
                   >
                     Report Issue
                   </h3>
@@ -2538,14 +2546,14 @@ export const OrderDetailScreen = ({
                 <button onClick={() => setShowDisputeModal(false)}>
                   <X
                     className="w-5 h-5"
-                    style={{ color: "rgba(255,255,255,0.4)" }}
+                    style={{ color: colors.text.tertiary }}
                   />
                 </button>
               </div>
 
               <p
                 className="text-[13px] mb-4"
-                style={{ color: "rgba(255,255,255,0.45)" }}
+                style={{ color: colors.text.secondary }}
               >
                 If you&apos;re having a problem with this trade, let us know and
                 our support team will help resolve it.
@@ -2554,7 +2562,7 @@ export const OrderDetailScreen = ({
               <div className="mb-4">
                 <label
                   className="text-[12px] uppercase tracking-wide mb-2 block"
-                  style={{ color: "rgba(255,255,255,0.4)" }}
+                  style={{ color: colors.text.tertiary }}
                 >
                   Reason
                 </label>
@@ -2563,9 +2571,9 @@ export const OrderDetailScreen = ({
                   onChange={(e) => setDisputeReason(e.target.value)}
                   className="w-full rounded-xl px-4 py-3 text-[15px] outline-none appearance-none"
                   style={{
-                    background: "#1e1e1e",
-                    color: "#fff",
-                    border: "1px solid rgba(255,255,255,0.1)",
+                    background: colors.bg.secondary,
+                    color: colors.text.primary,
+                    border: `1px solid ${colors.border.medium}`,
                   }}
                 >
                   <option value="">Select a reason...</option>
@@ -2584,7 +2592,7 @@ export const OrderDetailScreen = ({
               <div className="mb-6">
                 <label
                   className="text-[12px] uppercase tracking-wide mb-2 block"
-                  style={{ color: "rgba(255,255,255,0.4)" }}
+                  style={{ color: colors.text.tertiary }}
                 >
                   Description
                 </label>
@@ -2595,9 +2603,9 @@ export const OrderDetailScreen = ({
                   rows={3}
                   className="w-full rounded-xl px-4 py-3 text-[15px] outline-none resize-none"
                   style={{
-                    background: "#1e1e1e",
-                    color: "#fff",
-                    border: "1px solid rgba(255,255,255,0.1)",
+                    background: colors.bg.secondary,
+                    color: colors.text.primary,
+                    border: `1px solid ${colors.border.medium}`,
                   }}
                 />
               </div>
@@ -2607,8 +2615,8 @@ export const OrderDetailScreen = ({
                   onClick={() => setShowDisputeModal(false)}
                   className="flex-1 py-3 rounded-xl text-[15px] font-medium"
                   style={{
-                    background: "rgba(255,255,255,0.08)",
-                    color: "rgba(255,255,255,0.6)",
+                    background: colors.surface.active,
+                    color: colors.text.secondary,
                   }}
                 >
                   Cancel
@@ -2617,7 +2625,8 @@ export const OrderDetailScreen = ({
                   whileTap={{ scale: 0.98 }}
                   onClick={submitDispute}
                   disabled={!disputeReason || isSubmittingDispute}
-                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold bg-red-500 text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ background: '#ef4444', color: '#fff' }}
                 >
                   {isSubmittingDispute ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -2649,21 +2658,21 @@ export const OrderDetailScreen = ({
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30 }}
               className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl h-[70vh] flex flex-col`}
-              style={{ background: "#111111" }}
+              style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}` }}
             >
               <div
                 className="flex items-center justify-between p-4"
-                style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
+                style={{ borderBottom: `1px solid ${colors.border.medium}` }}
               >
                 <div className="flex items-center gap-3">
                   <div
                     className="w-8 h-8 rounded-full"
-                    style={{ background: "#fff" }}
+                    style={{ background: colors.accent.primary }}
                   />
                   <div>
                     <p
                       className="text-[15px] font-medium"
-                      style={{ color: "#fff" }}
+                      style={{ color: colors.text.primary }}
                     >
                       {activeOrder.merchant.name}
                     </p>
@@ -2676,7 +2685,7 @@ export const OrderDetailScreen = ({
                 <button onClick={() => setShowChat(false)} className="p-2">
                   <X
                     className="w-5 h-5"
-                    style={{ color: "rgba(255,255,255,0.4)" }}
+                    style={{ color: colors.text.tertiary }}
                   />
                 </button>
               </div>
@@ -2692,19 +2701,19 @@ export const OrderDetailScreen = ({
                         const data = JSON.parse(msg.text);
                         return (
                           <div key={msg.id} className="flex justify-center">
-                            <div className="w-full max-w-[90%] bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
+                            <div className="w-full max-w-[90%] rounded-2xl p-4" style={{ background: colors.errorDim, border: `1px solid ${colors.errorBorder}` }}>
                               <div className="flex items-center gap-2 mb-2">
-                                <AlertTriangle className="w-4 h-4 text-red-400" />
-                                <span className="text-[13px] font-semibold text-red-400">
+                                <AlertTriangle className="w-4 h-4" style={{ color: '#ef4444' }} />
+                                <span className="text-[13px] font-semibold" style={{ color: '#ef4444' }}>
                                   Dispute Opened
                                 </span>
                               </div>
                               <p
                                 className="text-[14px] mb-1"
-                                style={{ color: "#fff" }}
+                                style={{ color: colors.text.primary }}
                               >
                                 <span
-                                  style={{ color: "rgba(255,255,255,0.4)" }}
+                                  style={{ color: colors.text.tertiary }}
                                 >
                                   Reason:
                                 </span>{" "}
@@ -2713,14 +2722,14 @@ export const OrderDetailScreen = ({
                               {data.description && (
                                 <p
                                   className="text-[13px]"
-                                  style={{ color: "rgba(255,255,255,0.5)" }}
+                                  style={{ color: colors.text.secondary }}
                                 >
                                   {data.description}
                                 </p>
                               )}
                               <p
                                 className="text-[11px] mt-2"
-                                style={{ color: "rgba(255,255,255,0.4)" }}
+                                style={{ color: colors.text.tertiary }}
                               >
                                 Our support team will review this case
                               </p>
@@ -2740,18 +2749,18 @@ export const OrderDetailScreen = ({
                             <div
                               className="w-full max-w-[90%] rounded-2xl p-4"
                               style={{
-                                background: "rgba(255,255,255,0.08)",
-                                border: "1px solid rgba(255,255,255,0.12)",
+                                background: colors.surface.active,
+                                border: `1px solid ${colors.border.medium}`,
                               }}
                             >
                               <div className="flex items-center gap-2 mb-2">
                                 <Shield
                                   className="w-4 h-4"
-                                  style={{ color: "rgba(255,255,255,0.5)" }}
+                                  style={{ color: colors.text.secondary }}
                                 />
                                 <span
                                   className="text-[13px] font-semibold"
-                                  style={{ color: "rgba(255,255,255,0.6)" }}
+                                  style={{ color: colors.text.secondary }}
                                 >
                                   {data.type === "resolution_proposed"
                                     ? "Resolution Proposed"
@@ -2760,10 +2769,10 @@ export const OrderDetailScreen = ({
                               </div>
                               <p
                                 className="text-[14px] mb-1"
-                                style={{ color: "#fff" }}
+                                style={{ color: colors.text.primary }}
                               >
                                 <span
-                                  style={{ color: "rgba(255,255,255,0.4)" }}
+                                  style={{ color: colors.text.tertiary }}
                                 >
                                   Decision:
                                 </span>{" "}
@@ -2772,7 +2781,7 @@ export const OrderDetailScreen = ({
                               {data.notes && (
                                 <p
                                   className="text-[13px] mb-2"
-                                  style={{ color: "rgba(255,255,255,0.5)" }}
+                                  style={{ color: colors.text.secondary }}
                                 >
                                   {data.notes}
                                 </p>
@@ -2787,8 +2796,8 @@ export const OrderDetailScreen = ({
                                       disabled={isRespondingToResolution}
                                       className="flex-1 py-2 rounded-xl text-[13px] font-medium disabled:opacity-50"
                                       style={{
-                                        background: "rgba(255,255,255,0.08)",
-                                        color: "rgba(255,255,255,0.6)",
+                                        background: colors.surface.active,
+                                        color: colors.text.secondary,
                                       }}
                                     >
                                       Reject
@@ -2800,8 +2809,8 @@ export const OrderDetailScreen = ({
                                       disabled={isRespondingToResolution}
                                       className="flex-1 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-50"
                                       style={{
-                                        background: "#fff",
-                                        color: "#000",
+                                        background: colors.accent.primary,
+                                        color: colors.white,
                                       }}
                                     >
                                       Accept
@@ -2812,7 +2821,7 @@ export const OrderDetailScreen = ({
                                 !disputeInfo?.merchant_confirmed && (
                                   <p
                                     className="text-[11px] mt-2"
-                                    style={{ color: "rgba(255,255,255,0.5)" }}
+                                    style={{ color: colors.text.secondary }}
                                   >
                                     You accepted. Waiting for merchant
                                     confirmation...
@@ -2835,31 +2844,31 @@ export const OrderDetailScreen = ({
                             <div
                               className="w-full max-w-[90%] rounded-2xl p-4"
                               style={{
-                                background: "rgba(255,255,255,0.08)",
-                                border: "1px solid rgba(255,255,255,0.12)",
+                                background: colors.surface.active,
+                                border: `1px solid ${colors.border.medium}`,
                               }}
                             >
                               <div className="flex items-center gap-2 mb-2">
                                 <Check
                                   className="w-4 h-4"
-                                  style={{ color: "#fff" }}
+                                  style={{ color: colors.text.primary }}
                                 />
                                 <span
                                   className="text-[13px] font-semibold"
-                                  style={{ color: "#fff" }}
+                                  style={{ color: colors.text.primary }}
                                 >
                                   Resolution Finalized
                                 </span>
                               </div>
                               <p
                                 className="text-[14px]"
-                                style={{ color: "#fff" }}
+                                style={{ color: colors.text.primary }}
                               >
                                 Decision: {data.resolution?.replace(/_/g, " ")}
                               </p>
                               <p
                                 className="text-[11px] mt-2"
-                                style={{ color: "rgba(255,255,255,0.4)" }}
+                                style={{ color: colors.text.tertiary }}
                               >
                                 Both parties confirmed. Case closed.
                               </p>
@@ -2882,16 +2891,17 @@ export const OrderDetailScreen = ({
                         return (
                           <div key={msg.id} className="flex justify-center">
                             <div
-                              className={`px-4 py-2 rounded-2xl text-[13px] ${
-                                isAccepted ? "" : "bg-red-500/10 text-red-500"
-                              }`}
+                              className="px-4 py-2 rounded-2xl text-[13px]"
                               style={
                                 isAccepted
                                   ? {
-                                      background: "rgba(255,255,255,0.08)",
-                                      color: "rgba(255,255,255,0.6)",
+                                      background: colors.surface.active,
+                                      color: colors.text.secondary,
                                     }
-                                  : {}
+                                  : {
+                                      background: colors.errorDim,
+                                      color: '#ef4444',
+                                    }
                               }
                             >
                               {data.party === "user" ? "You" : "Merchant"}{" "}
@@ -2936,7 +2946,7 @@ export const OrderDetailScreen = ({
                             />
                             <p
                               className="text-[10px] mt-1 text-center"
-                              style={{ color: "rgba(255,255,255,0.4)" }}
+                              style={{ color: colors.text.tertiary }}
                             >
                               {msg.timestamp.toLocaleTimeString([], {
                                 hour: "2-digit",
@@ -2962,7 +2972,7 @@ export const OrderDetailScreen = ({
                             msg.senderName && (
                               <span
                                 className="text-[11px] mb-0.5 px-1"
-                                style={{ color: "rgba(255,255,255,0.4)" }}
+                                style={{ color: colors.text.tertiary }}
                               >
                                 {msg.senderName}
                               </span>
@@ -2971,14 +2981,14 @@ export const OrderDetailScreen = ({
                             className={`px-4 py-2 rounded-2xl text-[15px]`}
                             style={
                               msg.from === "me"
-                                ? { background: "#fff", color: "#000" }
+                                ? { background: colors.accent.primary, color: colors.accent.text }
                                 : msg.from === "system"
                                   ? {
-                                      background: "rgba(255,255,255,0.08)",
-                                      color: "rgba(255,255,255,0.5)",
+                                      background: colors.surface.active,
+                                      color: colors.text.secondary,
                                       fontSize: 13,
                                     }
-                                  : { background: "#222222", color: "#fff" }
+                                  : { background: colors.surface.card, color: colors.text.primary }
                             }
                           >
                             {msg.messageType === "image" && msg.imageUrl && (
@@ -3005,7 +3015,7 @@ export const OrderDetailScreen = ({
                   <div className="flex-1 flex items-center justify-center h-full">
                     <p
                       className="text-[15px]"
-                      style={{ color: "rgba(255,255,255,0.35)" }}
+                      style={{ color: colors.text.tertiary }}
                     >
                       No messages yet
                     </p>
@@ -3019,24 +3029,24 @@ export const OrderDetailScreen = ({
                     (m) => m.messageType === "resolution",
                   ) && (
                     <div className="flex justify-center">
-                      <div className="w-full max-w-[90%] bg-white/5 border border-white/6 rounded-2xl p-4">
+                      <div className="w-full max-w-[90%] rounded-2xl p-4" style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}>
                         <div className="flex items-center gap-2 mb-2">
                           <Shield
                             className="w-4 h-4"
-                            style={{ color: "rgba(255,255,255,0.5)" }}
+                            style={{ color: colors.text.secondary }}
                           />
                           <span
                             className="text-[13px] font-semibold"
-                            style={{ color: "rgba(255,255,255,0.6)" }}
+                            style={{ color: colors.text.secondary }}
                           >
                             Resolution Proposed
                           </span>
                         </div>
                         <p
                           className="text-[14px] mb-1"
-                          style={{ color: "#fff" }}
+                          style={{ color: colors.text.primary }}
                         >
-                          <span style={{ color: "rgba(255,255,255,0.4)" }}>
+                          <span style={{ color: colors.text.tertiary }}>
                             Decision:
                           </span>{" "}
                           {disputeInfo.proposed_resolution.replace(/_/g, " ")}
@@ -3044,7 +3054,7 @@ export const OrderDetailScreen = ({
                         {disputeInfo.resolution_notes && (
                           <p
                             className="text-[13px] mb-2"
-                            style={{ color: "rgba(255,255,255,0.5)" }}
+                            style={{ color: colors.text.secondary }}
                           >
                             {disputeInfo.resolution_notes}
                           </p>
@@ -3056,8 +3066,8 @@ export const OrderDetailScreen = ({
                               disabled={isRespondingToResolution}
                               className="flex-1 py-2 rounded-xl text-[13px] font-medium disabled:opacity-50"
                               style={{
-                                background: "rgba(255,255,255,0.08)",
-                                color: "rgba(255,255,255,0.6)",
+                                background: colors.surface.active,
+                                color: colors.text.secondary,
                               }}
                             >
                               Reject
@@ -3066,7 +3076,7 @@ export const OrderDetailScreen = ({
                               onClick={() => respondToResolution("accept")}
                               disabled={isRespondingToResolution}
                               className="flex-1 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-50"
-                              style={{ background: "#fff", color: "#000" }}
+                              style={{ background: colors.accent.primary, color: colors.accent.text }}
                             >
                               Accept
                             </button>
@@ -3076,7 +3086,7 @@ export const OrderDetailScreen = ({
                           !disputeInfo.merchant_confirmed && (
                             <p
                               className="text-[11px] mt-2"
-                              style={{ color: "rgba(255,255,255,0.5)" }}
+                              style={{ color: colors.text.secondary }}
                             >
                               You accepted. Waiting for merchant confirmation...
                             </p>
@@ -3093,28 +3103,28 @@ export const OrderDetailScreen = ({
                       <div
                         className="w-1.5 h-1.5 rounded-full animate-bounce"
                         style={{
-                          background: "rgba(255,255,255,0.3)",
+                          background: colors.text.tertiary,
                           animationDelay: "0ms",
                         }}
                       />
                       <div
                         className="w-1.5 h-1.5 rounded-full animate-bounce"
                         style={{
-                          background: "rgba(255,255,255,0.3)",
+                          background: colors.text.tertiary,
                           animationDelay: "150ms",
                         }}
                       />
                       <div
                         className="w-1.5 h-1.5 rounded-full animate-bounce"
                         style={{
-                          background: "rgba(255,255,255,0.3)",
+                          background: colors.text.tertiary,
                           animationDelay: "300ms",
                         }}
                       />
                     </div>
                     <span
                       className="text-[11px]"
-                      style={{ color: "rgba(255,255,255,0.4)" }}
+                      style={{ color: colors.text.tertiary }}
                     >
                       {activeOrder.merchant.name} is typing...
                     </span>
@@ -3154,26 +3164,26 @@ export const OrderDetailScreen = ({
               {pendingImage && (
                 <div
                   className="px-4 py-2 flex items-center gap-3"
-                  style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}
+                  style={{ borderTop: `1px solid ${colors.border.medium}` }}
                 >
                   <div className="relative">
                     <img
                       src={pendingImage.previewUrl}
                       alt="Preview"
                       className="w-16 h-16 rounded-xl object-cover"
-                      style={{ border: "1px solid rgba(255,255,255,0.1)" }}
+                      style={{ border: `1px solid ${colors.border.medium}` }}
                     />
                     <button
                       onClick={clearPendingImage}
                       className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center"
-                      style={{ background: "rgba(255,255,255,0.3)" }}
+                      style={{ background: colors.text.tertiary }}
                     >
                       <X className="w-3 h-3 text-white" />
                     </button>
                   </div>
                   <span
                     className="text-[13px] flex-1"
-                    style={{ color: "rgba(255,255,255,0.5)" }}
+                    style={{ color: colors.text.secondary }}
                   >
                     Image ready to send
                   </span>
@@ -3182,14 +3192,14 @@ export const OrderDetailScreen = ({
 
               <div
                 className="p-4 pb-8"
-                style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}
+                style={{ borderTop: `1px solid ${colors.border.medium}` }}
               >
                 <div className="flex items-center gap-2">
                   {/* Emoji button */}
                   <button
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                     className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: "#1e1e1e" }}
+                    style={{ background: colors.bg.secondary }}
                   >
                     <span className="text-lg">😊</span>
                   </button>
@@ -3198,17 +3208,17 @@ export const OrderDetailScreen = ({
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
                     className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50"
-                    style={{ background: "#1e1e1e" }}
+                    style={{ background: colors.bg.secondary }}
                   >
                     {isUploading ? (
                       <Loader2
                         className="w-4 h-4 animate-spin"
-                        style={{ color: "rgba(255,255,255,0.4)" }}
+                        style={{ color: colors.text.tertiary }}
                       />
                     ) : (
                       <ArrowUpRight
                         className="w-4 h-4"
-                        style={{ color: "rgba(255,255,255,0.4)" }}
+                        style={{ color: colors.text.tertiary }}
                       />
                     )}
                   </button>
@@ -3231,7 +3241,7 @@ export const OrderDetailScreen = ({
                       pendingImage ? "Add a caption..." : "Message..."
                     }
                     className="flex-1 rounded-xl px-4 py-3 text-[15px] outline-none"
-                    style={{ background: "#1e1e1e", color: "#fff" }}
+                    style={{ background: colors.bg.secondary, color: colors.text.primary }}
                   />
                   <button
                     onClick={() => {
@@ -3243,15 +3253,15 @@ export const OrderDetailScreen = ({
                       setShowEmojiPicker(false);
                     }}
                     disabled={isUploading}
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
-                      pendingImage ? "bg-orange-500" : "bg-white"
-                    } disabled:opacity-50`}
+                    className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50"
+                    style={{ background: pendingImage ? '#f97316' : colors.accent.primary }}
                   >
                     {isUploading ? (
-                      <Loader2 className="w-5 h-5 text-black animate-spin" />
+                      <Loader2 className="w-5 h-5 animate-spin" style={{ color: colors.white }} />
                     ) : (
                       <ChevronRight
-                        className={`w-5 h-5 ${pendingImage ? "text-white" : "text-black"}`}
+                        className="w-5 h-5"
+                        style={{ color: colors.white }}
                       />
                     )}
                   </button>

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Loader2, AlertCircle } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { colors } from "@/lib/design/theme";
 
 interface UsernameModalProps {
   isOpen: boolean;
@@ -124,28 +125,28 @@ export default function UsernameModal({
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
           className="relative w-full max-w-md rounded-2xl p-6 shadow-2xl"
-          style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}
+          style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`, border: `1px solid ${colors.border.subtle}` }}
         >
           {/* Close button (only if canClose) */}
           {canClose && onClose && (
             <button
               onClick={onClose}
               className="absolute top-4 right-4 p-2 rounded-lg transition-colors"
-              style={{ background: 'rgba(0,0,0,0.05)' }}
+              style={{ background: colors.surface.card }}
             >
-              <X className="w-5 h-5" style={{ color: 'rgba(0,0,0,0.4)' }} />
+              <X className="w-5 h-5" style={{ color: colors.text.tertiary }} />
             </button>
           )}
 
           {/* Header */}
           <div className="mb-6">
-            <h2 className="text-2xl font-bold mb-2" style={{ color: '#000', letterSpacing: '-0.03em' }}>
+            <h2 className="text-2xl font-bold mb-2" style={{ color: colors.text.primary, letterSpacing: '-0.03em' }}>
               Choose Your Username
             </h2>
-            <p className="text-sm" style={{ color: 'rgba(0,0,0,0.45)' }}>
-              This will be your unique identity on Blip <span className="text-orange-500">Money</span>
+            <p className="text-sm" style={{ color: colors.text.secondary }}>
+              This will be your unique identity on Blip <span style={{ color: colors.accent.primary }}>Money</span>
             </p>
-            <p className="text-xs mt-1" style={{ color: 'rgba(0,0,0,0.3)' }}>
+            <p className="text-xs mt-1" style={{ color: colors.text.tertiary }}>
               Cannot be changed later
             </p>
           </div>
@@ -153,16 +154,16 @@ export default function UsernameModal({
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Wallet Display */}
-            <div className="p-3 rounded-xl" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)' }}>
-              <p className="text-xs mb-1" style={{ color: 'rgba(0,0,0,0.35)' }}>Connected Wallet</p>
-              <p className="text-sm font-mono font-semibold" style={{ color: '#000' }}>
+            <div className="p-3 rounded-xl" style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`, border: `1px solid ${colors.border.subtle}` }}>
+              <p className="text-xs mb-1" style={{ color: colors.text.tertiary }}>Connected Wallet</p>
+              <p className="text-sm font-mono font-semibold" style={{ color: colors.text.primary }}>
                 {walletAddress.slice(0, 4)}...{walletAddress.slice(-4)}
               </p>
             </div>
 
             {/* Username Input */}
             <div>
-              <label htmlFor="username" className="block text-sm font-semibold mb-2" style={{ color: '#000' }}>
+              <label htmlFor="username" className="block text-sm font-semibold mb-2" style={{ color: colors.text.primary }}>
                 Username
               </label>
               <div className="relative">
@@ -174,9 +175,9 @@ export default function UsernameModal({
                   placeholder="your_username"
                   className="w-full px-4 py-3 rounded-xl focus:outline-none transition-colors"
                   style={{
-                    background: 'rgba(0,0,0,0.04)',
-                    border: `1px solid ${error ? 'rgba(220,38,38,0.4)' : isAvailable ? 'rgba(5,150,105,0.4)' : 'rgba(0,0,0,0.08)'}`,
-                    color: '#000',
+                    background: colors.surface.card,
+                    border: `1px solid ${error ? 'rgba(220,38,38,0.4)' : isAvailable ? 'rgba(5,150,105,0.4)' : colors.border.subtle}`,
+                    color: colors.text.primary,
                     fontSize: 14,
                     fontWeight: 500,
                   }}
@@ -188,7 +189,7 @@ export default function UsernameModal({
                 {/* Status Indicator */}
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
                   {isChecking && (
-                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'rgba(0,0,0,0.3)' }} />
+                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: colors.text.tertiary }} />
                   )}
                   {!isChecking && username && isAvailable === true && (
                     <Check className="w-5 h-5 text-green-600" />
@@ -214,7 +215,7 @@ export default function UsernameModal({
               )}
 
               {/* Format Helper */}
-              <p className="mt-2 text-xs" style={{ color: 'rgba(0,0,0,0.3)' }}>
+              <p className="mt-2 text-xs" style={{ color: colors.text.tertiary }}>
                 3-20 characters • Letters, numbers, and underscores only
               </p>
             </div>
@@ -226,8 +227,8 @@ export default function UsernameModal({
               whileTap={{ scale: 0.98 }}
               className="w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
               style={{
-                background: (!isAvailable || isSubmitting || isChecking) ? 'rgba(0,0,0,0.06)' : '#000000',
-                color: (!isAvailable || isSubmitting || isChecking) ? 'rgba(0,0,0,0.25)' : '#ffffff',
+                background: (!isAvailable || isSubmitting || isChecking) ? colors.surface.card : colors.accent.primary,
+                color: (!isAvailable || isSubmitting || isChecking) ? colors.text.quaternary : colors.accent.text,
                 fontSize: 15,
                 letterSpacing: '-0.01em',
               }}

@@ -7,36 +7,36 @@
    ========================================== */
 
 :root {
-  /* Background hierarchy — near-black */
-  --background: #060606;
-  --color-bg-primary: #060606;
-  --color-bg-secondary: #0c0c0c;
-  --color-bg-tertiary: #131313;
+  /* Background hierarchy — deep navy-black */
+  --background: #0B0F14;
+  --color-bg-primary: #0B0F14;
+  --color-bg-secondary: #111827;
+  --color-bg-tertiary: #1F2937;
 
   /* Text hierarchy — white with opacity layers */
   --foreground: #ffffff;
   --color-text-primary: rgba(255, 255, 255, 0.92);
-  --color-text-secondary: rgba(255, 255, 255, 0.50);
+  --color-text-secondary: rgba(255, 255, 255, 0.55);
   --color-text-tertiary: rgba(255, 255, 255, 0.30);
   --color-text-quaternary: rgba(255, 255, 255, 0.15);
 
   /* Borders — neutral */
   --border: rgba(255, 255, 255, 0.06);
-  --color-border-subtle: rgba(255, 255, 255, 0.05);
-  --color-border-medium: rgba(255, 255, 255, 0.09);
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-medium: rgba(255, 255, 255, 0.10);
 
   /* Glass card base — neutral */
-  --card: rgba(255, 255, 255, 0.03);
-  --card-solid: #0c0c0c;
+  --card: rgba(255, 255, 255, 0.04);
+  --card-solid: #111827;
   --glass-blur: blur(20px);
 
-  /* White accent — primary CTA color (Apple style) */
-  --accent: #ffffff;
-  --accent-bright: #f5f5f5;
-  --accent-dark: #e5e5e5;
-  --accent-dim: #d4d4d4;
+  /* Monochrome white accent — primary CTA color */
+  --accent: #FFFFFF;
+  --accent-bright: rgba(255, 255, 255, 0.85);
+  --accent-dark: rgba(255, 255, 255, 0.70);
+  --accent-dim: rgba(255, 255, 255, 0.70);
   --accent-subtle: rgba(255, 255, 255, 0.06);
-  --accent-glow: rgba(255, 255, 255, 0.04);
+  --accent-glow: rgba(255, 255, 255, 0.08);
 
   /* Semantic — used for financial meaning */
   --color-success: #10b981;   /* green  — positive / buy  */
@@ -46,23 +46,23 @@
 
   /* Legacy */
   --muted: #525252;
-  --muted-bg: #131313;
+  --muted-bg: #1F2937;
 }
 
 /* Light mode */
 :root.light {
-  --background: #fafafa;
-  --foreground: #0a0a0a;
+  --background: #f8fafc;
+  --foreground: #0f172a;
   --card: rgba(0, 0, 0, 0.025);
   --card-solid: rgba(255, 255, 255, 0.9);
   --border: rgba(0, 0, 0, 0.07);
-  --muted: #71717a;
-  --muted-bg: #f5f5f5;
-  --accent: #0a0a0a;
-  --accent-bright: #171717;
-  --accent-dark: #262626;
-  --accent-subtle: rgba(0, 0, 0, 0.05);
-  --accent-glow: rgba(0, 0, 0, 0.04);
+  --muted: #64748b;
+  --muted-bg: #f1f5f9;
+  --accent: #0f172a;
+  --accent-bright: #1e293b;
+  --accent-dark: #020617;
+  --accent-subtle: rgba(15, 23, 42, 0.06);
+  --accent-glow: rgba(15, 23, 42, 0.08);
   --color-success: #059669;
   --color-warning: #d97706;
   --color-error: #dc2626;
@@ -97,9 +97,9 @@ html, body {
 
 body {
   color: var(--foreground);
-  /* SF Pro on Apple, Segoe UI on Windows, Roboto on Android — "system Apple font" */
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
-    'Helvetica Neue', 'Inter', Arial, sans-serif;
+  /* Inter as primary, SF Pro on Apple, system fallbacks */
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+    'Helvetica Neue', Arial, sans-serif;
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

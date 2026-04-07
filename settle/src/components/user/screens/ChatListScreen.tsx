@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { MessageCircle } from "lucide-react";
+import { colors, sectionLabel } from "@/lib/design/theme";
 import { BottomNav } from "./BottomNav";
 import type { Screen, Order } from "./types";
 
@@ -22,15 +23,15 @@ export const ChatListScreen = ({
   setOrders,
   maxW,
 }: ChatListScreenProps) => {
-  const card = { background: '#111111', border: '1px solid rgba(255,255,255,0.08)' };
+  const card = { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` };
 
   return (
-    <div className="flex flex-col h-dvh overflow-hidden" style={{ background: '#ffffff' }}>
+    <div className="flex flex-col h-dvh overflow-hidden" style={{ background: colors.bg.primary }}>
 
       {/* ── Header ── */}
       <header className="px-5 pt-10 pb-4 shrink-0">
-        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(0,0,0,0.4)', textTransform: 'uppercase', marginBottom: 4 }}>Inbox</p>
-        <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', color: '#000', lineHeight: 1 }}>Messages</p>
+        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', color: colors.text.tertiary, textTransform: 'uppercase', marginBottom: 4 }}>Inbox</p>
+        <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', color: colors.text.primary, lineHeight: 1 }}>Messages</p>
       </header>
 
       {/* ── List ── */}
@@ -38,11 +39,11 @@ export const ChatListScreen = ({
         {orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4"
-              style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+              style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}>
               <MessageCircle size={22} color="rgba(255,255,255,0.3)" />
             </div>
-            <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: '#000', marginBottom: 6 }}>No messages</p>
-            <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(0,0,0,0.4)' }}>Start a trade to chat with merchants</p>
+            <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: colors.text.primary, marginBottom: 6 }}>No messages</p>
+            <p style={{ fontSize: 13, fontWeight: 500, color: colors.text.tertiary }}>Start a trade to chat with merchants</p>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -59,33 +60,33 @@ export const ChatListScreen = ({
                     setOrders(prev => prev.map(o => o.id === order.id ? { ...o, unreadCount: 0 } : o));
                   }}
                   className="w-full rounded-[18px] p-3.5 flex items-center gap-3 text-left"
-                  style={hasUnread ? { background: '#111111', border: '1.5px solid rgba(255,255,255,0.2)' } : card}>
+                  style={hasUnread ? { background: colors.surface.card, border: `1.5px solid ${colors.accent.border}` } : card}>
                   {/* Avatar */}
                   <div className="relative shrink-0">
                     <div className="w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0"
-                      style={{ background: hasUnread ? '#fff' : 'rgba(255,255,255,0.1)' }}>
-                      <span style={{ fontSize: 17, fontWeight: 800, color: hasUnread ? '#000' : 'rgba(255,255,255,0.5)' }}>{initial}</span>
+                      style={{ background: hasUnread ? colors.accent.primary : 'rgba(255,255,255,0.1)' }}>
+                      <span style={{ fontSize: 17, fontWeight: 800, color: hasUnread ? 'black' : 'rgba(255,255,255,0.5)' }}>{initial}</span>
                     </div>
                     {hasUnread && (
                       <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
-                        style={{ background: '#fff', border: '2px solid #111111' }}>
-                        <span style={{ fontSize: 8, fontWeight: 800, color: '#000' }}>{order.unreadCount}</span>
+                        style={{ background: colors.accent.primary, border: `2px solid ${colors.bg.primary}` }}>
+                        <span style={{ fontSize: 8, fontWeight: 800, color: colors.white }}>{order.unreadCount}</span>
                       </div>
                     )}
                   </div>
                   {/* Text */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
-                      <p style={{ fontSize: 14, fontWeight: hasUnread ? 800 : 600, color: '#fff', letterSpacing: '-0.01em' }}>
+                      <p style={{ fontSize: 14, fontWeight: hasUnread ? 800 : 600, color: colors.text.primary, letterSpacing: '-0.01em' }}>
                         {order.merchant.name}
                       </p>
-                      <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.35)' }}>
+                      <p style={{ fontSize: 10, fontWeight: 500, color: colors.text.tertiary }}>
                         {order.lastMessage
                           ? order.lastMessage.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                           : order.createdAt.toLocaleDateString('en-GB')}
                       </p>
                     </div>
-                    <p style={{ fontSize: 12, fontWeight: hasUnread ? 600 : 400, color: hasUnread ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.35)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <p style={{ fontSize: 12, fontWeight: hasUnread ? 600 : 400, color: hasUnread ? 'rgba(255,255,255,0.65)' : colors.text.tertiary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {order.lastMessage
                         ? (order.lastMessage.fromMerchant ? '' : 'You: ') + order.lastMessage.content
                         : order.status === 'complete'

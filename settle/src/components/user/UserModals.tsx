@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Check } from "lucide-react";
+import { colors } from "@/lib/design/theme";
 import dynamic from "next/dynamic";
 
 const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
@@ -89,7 +90,7 @@ export function UserModals({
 
       {IS_EMBEDDED_WALLET && showWalletSetup && embeddedWallet && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
+          <div className="rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden" style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`, border: `1px solid ${colors.border.subtle}` }}>
             <EmbeddedWalletSetup
               onWalletCreated={(kp) => {
                 embeddedWallet.setKeypairAndUnlock(kp);
@@ -118,28 +119,28 @@ export function UserModals({
             exit={{ opacity: 0, y: -50, scale: 0.9 }}
             className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-sm"
           >
-            <div className="rounded-2xl p-4 shadow-xl" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
+            <div className="rounded-2xl p-4 shadow-xl" style={{ background: `linear-gradient(${colors.surface.card}, ${colors.surface.card}), ${colors.bg.primary}`, border: `1px solid ${colors.border.subtle}` }}>
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(0,0,0,0.06)' }}>
-                  <Check className="w-5 h-5" style={{ color: '#000' }} />
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: colors.surface.active }}>
+                  <Check className="w-5 h-5" style={{ color: colors.text.primary }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold mb-1" style={{ color: '#000' }}>Order Accepted!</p>
-                  <p className="text-xs mb-2" style={{ color: 'rgba(0,0,0,0.45)' }}>
-                    <span className="font-semibold" style={{ color: '#000' }}>{acceptedOrderInfo.merchantName}</span> accepted your {acceptedOrderInfo.orderType === 'sell' ? 'sell' : 'buy'} order
+                  <p className="text-sm font-bold mb-1" style={{ color: colors.text.primary }}>Order Accepted!</p>
+                  <p className="text-xs mb-2" style={{ color: colors.text.secondary }}>
+                    <span className="font-semibold" style={{ color: colors.text.primary }}>{acceptedOrderInfo.merchantName}</span> accepted your {acceptedOrderInfo.orderType === 'sell' ? 'sell' : 'buy'} order
                   </p>
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="font-semibold" style={{ color: '#000' }}>{acceptedOrderInfo.cryptoAmount} USDC</span>
-                    <span style={{ color: 'rgba(0,0,0,0.25)' }}>{'\u2022'}</span>
-                    <span style={{ color: 'rgba(0,0,0,0.45)' }}>{acceptedOrderInfo.fiatAmount.toLocaleString()} AED</span>
+                    <span className="font-semibold" style={{ color: colors.text.primary }}>{acceptedOrderInfo.cryptoAmount} USDC</span>
+                    <span style={{ color: colors.text.quaternary }}>{'\u2022'}</span>
+                    <span style={{ color: colors.text.secondary }}>{acceptedOrderInfo.fiatAmount.toLocaleString()} AED</span>
                   </div>
                 </div>
                 <button
                   onClick={() => setShowAcceptancePopup(false)}
                   className="p-1 rounded-lg transition-colors"
-                  style={{ background: 'rgba(0,0,0,0.05)' }}
+                  style={{ background: colors.surface.card }}
                 >
-                  <X className="w-4 h-4" style={{ color: 'rgba(0,0,0,0.4)' }} />
+                  <X className="w-4 h-4" style={{ color: colors.text.tertiary }} />
                 </button>
               </div>
             </div>
