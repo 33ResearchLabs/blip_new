@@ -220,7 +220,7 @@ export default function RiskProfilePage({ params }: { params: Promise<{ entityId
         <div className="text-center">
           <AlertTriangle className="w-6 h-6 text-[var(--color-error)]/40 mx-auto mb-2" />
           <p className="text-sm text-foreground/40">{error || "Profile not found"}</p>
-          <Link href="/admin/merchants" className="text-[10px] text-primary mt-2 block">Back to merchants</Link>
+          <Link href="/admin/accounts?tab=merchants" className="text-[10px] text-primary mt-2 block">Back to merchants</Link>
         </div>
       </div>
     );
@@ -241,9 +241,9 @@ export default function RiskProfilePage({ params }: { params: Promise<{ entityId
       {/* Header */}
       <header className="sticky top-0 z-50 bg-background/60 backdrop-blur-2xl border-b border-border">
         <div className="h-[50px] flex items-center px-4 gap-3">
-          <Link href="/admin/merchants" className="flex items-center gap-1.5 text-foreground/40 hover:text-foreground/70 transition-colors">
+          <Link href="/admin/accounts?tab=merchants" className="flex items-center gap-1.5 text-foreground/40 hover:text-foreground/70 transition-colors">
             <ChevronLeft className="w-4 h-4" />
-            <span className="text-[11px] font-mono">Merchants</span>
+            <span className="text-[11px] font-mono">Accounts</span>
           </Link>
           <div className="flex items-center gap-2 mx-auto">
             <Zap className="w-4 h-4 text-foreground fill-foreground" />

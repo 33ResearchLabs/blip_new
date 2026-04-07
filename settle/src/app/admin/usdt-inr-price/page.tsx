@@ -224,13 +224,17 @@ export default function UsdtPricePage() {
     [activePair, activeTimeframe],
   );
 
-  // Fetch price config (LIVE/MANUAL mode) for active pair
+  // Fetch price config (LIVE/MANUAL mode) for active pair.
+  // Uses the admin-authed GET on /api/admin/set-price-mode — the public
+  // /api/prices/current endpoint rejects admin tokens (it only accepts
+  // user/merchant/compliance tokens via requireAuth), which used to silently
+  // 401 and leave the manual price input empty after every page refresh.
   const fetchPriceConfig = useCallback(async () => {
     const token = adminTokenRef.current;
     if (!token) return;
     try {
       const res = await fetchWithAuth(
-        `/api/prices/current?pair=${activePair}`,
+        `/api/admin/set-price-mode?pair=${activePair}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -241,6 +245,10 @@ export default function UsdtPricePage() {
         if (json.data.adminPrice != null && json.data.adminPrice > 0) {
           setAdminPrice(String(json.data.adminPrice));
           setAdminPriceSaved(json.data.adminPrice);
+        } else {
+          // No manual price stored — clear stale UI state from a prior pair
+          setAdminPrice("");
+          setAdminPriceSaved(null);
         }
       }
     } catch {
@@ -385,28 +393,16 @@ export default function UsdtPricePage() {
                 Live Feed
               </Link>
               <Link
-                href="/admin/ops-access"
+                href="/admin/access-control"
                 className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
               >
-                Ops Access
+                Access Control
               </Link>
               <Link
-                href="/admin/compliance-access"
+                href="/admin/accounts"
                 className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
               >
-                Compliance Access
-              </Link>
-              <Link
-                href="/admin/merchants"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Merchants
-              </Link>
-              <Link
-                href="/admin/users"
-                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
-              >
-                Users
+                Accounts
               </Link>
               <Link
                 href="/admin/disputes"
@@ -694,20 +690,19 @@ export default function UsdtPricePage() {
                       <input
                         type="number"
                         value={adminPrice}
-                        onChange={(e) => { setAdminPrice(e.target.value); setInputError(false); }}
+                        onChange={(e) => setAdminPrice(e.target.value)}
                         placeholder={
                           priceMode === "MANUAL"
                             ? "Enter manual price..."
-                            : priceData ? priceData.livePrice.toFixed(4) : "0.0000"
+                            : "Type a price to switch to MANUAL"
                         }
                         step={activePair === "usdt_aed" ? "0.0001" : "0.01"}
-                        disabled={priceMode === "LIVE" && !inputError}
                         className={`flex-1 rounded-lg px-3 py-2 text-sm font-mono outline-none transition-all ${
                           inputError
                             ? "bg-green-500/[0.08] border-2 border-green-500/50 text-green-400 ring-1 ring-green-500/20 animate-pulse placeholder-green-400/60"
                             : priceMode === "MANUAL"
                               ? "bg-green-500/[0.06] border-2 border-green-500/40 text-green-400 ring-1 ring-green-500/20 focus:border-green-500/60 placeholder-green-400/40"
-                              : "bg-foreground/[0.02] border border-foreground/[0.05] text-foreground/20 cursor-not-allowed opacity-40"
+                              : "bg-foreground/[0.03] border border-foreground/[0.08] text-foreground/70 focus:border-primary/30"
                         }`}
                       />
                       <button
