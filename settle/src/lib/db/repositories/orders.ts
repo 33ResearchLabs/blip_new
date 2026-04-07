@@ -1429,6 +1429,147 @@ export async function cancelOrder(
 
 /**
  * Atomically claim an escrowed order for a merchant (broadcast model).
+/**
+ * Receipt creation for the SELL/M2M claim path.
+ *
+ * Mirrors core-api's createOrderReceipt() row shape exactly. We need this
+ * helper here because:
+ *   • BUY user orders go through ACCEPT → core-api PATCH → core-api fires
+ *     ORDER_EVENT.ACCEPTED → receiptListener creates the receipt.
+ *   • SELL user orders and broadcast SELL orders skip ACCEPT entirely (they
+ *     start at 'escrowed') and use CLAIM, which runs locally in settle.
+ *     core-api never sees the claim, so its event listener never fires,
+ *     and no receipt is ever created.
+ *
+ * This helper closes that gap by inserting the receipt inside the SAME
+ * transaction as the claim. ON CONFLICT (order_id) DO NOTHING makes it
+ * idempotent: if a receipt already exists (e.g. from a future code path
+ * we don't know about) the second insert is a no-op.
+ *
+ * Designed to be called with the in-flight transaction client so success
+ * is atomic with the claim. Receipt failures are caught and logged but
+ * MUST NOT roll back the claim — the receipt is a side effect, the claim
+ * is the source of truth. Caller wraps in try/catch.
+ *
+ * NOTE: This duplicates ~30 lines of SQL with core-api/src/receipts.ts.
+ * The duplication is acceptable as a stopgap until claimOrder moves to
+ * core-api in the longer-term Phase 5 cleanup. Schema-compatible with
+ * core-api's INSERT — both paths use the same ON CONFLICT (order_id) so
+ * either side can create the row safely.
+ */
+async function insertReceiptForClaim(
+  client: { query: (sql: string, params: unknown[]) => Promise<{ rows: unknown[] }> },
+  order: Order,
+  claimingMerchantId: string,
+): Promise<void> {
+  // Resolve creator/acceptor parties — same logic as core-api/src/receipts.ts:78
+  // Determine whether the original order was merchant-created (placeholder user)
+  // or user-created. The claiming merchant is always the acceptor.
+  const userRow = await client.query(
+    'SELECT username, wallet_address FROM users WHERE id = $1',
+    [order.user_id],
+  );
+  const userInfo = (userRow.rows[0] || {}) as { username?: string; wallet_address?: string | null };
+  const username = userInfo.username || '';
+  const isMerchantCreated = username.startsWith('open_order_') || username.startsWith('m2m_');
+
+  let creatorType: 'user' | 'merchant';
+  let creatorId: string;
+  let creatorName: string | null;
+  let creatorWalletAddress: string | null;
+
+  if (isMerchantCreated) {
+    // M2M / merchant-initiated: creator is the OTHER merchant (the one who
+    // didn't just claim). After claimOrder runs, buyer_merchant_id may be
+    // set to the claimer or the merchant_id may be the claimer — pick the
+    // one that ISN'T the actor.
+    const creatorMerchantId =
+      order.buyer_merchant_id && order.buyer_merchant_id !== claimingMerchantId
+        ? order.buyer_merchant_id
+        : order.merchant_id;
+    const creatorMerchantRow = await client.query(
+      'SELECT business_name, wallet_address FROM merchants WHERE id = $1',
+      [creatorMerchantId],
+    );
+    const creatorMerchant = (creatorMerchantRow.rows[0] || {}) as {
+      business_name?: string;
+      wallet_address?: string | null;
+    };
+    creatorType = 'merchant';
+    creatorId = creatorMerchantId!;
+    creatorName = creatorMerchant.business_name || null;
+    creatorWalletAddress = creatorMerchant.wallet_address || null;
+  } else {
+    // User-initiated SELL: the user is the creator (and the seller)
+    creatorType = 'user';
+    creatorId = order.user_id!;
+    creatorName = username || null;
+    creatorWalletAddress = userInfo.wallet_address || order.buyer_wallet_address || null;
+  }
+
+  const acceptorMerchantRow = await client.query(
+    'SELECT business_name, wallet_address FROM merchants WHERE id = $1',
+    [claimingMerchantId],
+  );
+  const acceptorMerchant = (acceptorMerchantRow.rows[0] || {}) as {
+    business_name?: string;
+    wallet_address?: string | null;
+  };
+  const acceptorName = acceptorMerchant.business_name || null;
+  const acceptorWalletAddress =
+    order.acceptor_wallet_address || acceptorMerchant.wallet_address || null;
+
+  // INSERT mirrors core-api/src/receipts.ts:148 — same column list, same
+  // ON CONFLICT (order_id) DO NOTHING for idempotency. accepted_at is set
+  // to NOW() because the order was just claimed/accepted by this merchant.
+  await client.query(
+    `INSERT INTO order_receipts (
+       order_id, order_number, type, payment_method,
+       crypto_amount, crypto_currency, fiat_amount, fiat_currency, rate,
+       platform_fee, protocol_fee_amount, status,
+       creator_type, creator_id, creator_name, creator_wallet_address,
+       acceptor_type, acceptor_id, acceptor_name, acceptor_wallet_address,
+       payment_details, escrow_tx_hash,
+       accepted_at, escrowed_at
+     ) VALUES (
+       $1, $2, $3, $4,
+       $5, $6, $7, $8, $9,
+       $10, $11, $12,
+       $13, $14, $15, $16,
+       $17, $18, $19, $20,
+       $21, $22,
+       NOW(), $23
+     )
+     ON CONFLICT (order_id) DO NOTHING`,
+    [
+      order.id,
+      order.order_number,
+      order.type,
+      order.payment_method,
+      order.crypto_amount,
+      order.crypto_currency,
+      order.fiat_amount,
+      order.fiat_currency,
+      order.rate,
+      order.platform_fee || 0,
+      order.protocol_fee_amount || null,
+      order.status,
+      creatorType,
+      creatorId,
+      creatorName,
+      creatorWalletAddress,
+      'merchant',
+      claimingMerchantId,
+      acceptorName,
+      acceptorWalletAddress,
+      JSON.stringify(order.payment_details || {}),
+      order.escrow_tx_hash || null,
+      order.escrowed_at || null,
+    ],
+  );
+}
+
+/**
  *
  * Uses WHERE buyer_merchant_id IS NULL AND status = 'escrowed' to prevent
  * race conditions — only one merchant can claim. If no rows are updated,
@@ -1557,6 +1698,21 @@ export async function claimOrder(
           }),
         ]
       );
+
+      // SELL/M2M receipt fix: SELL flows skip ACCEPT, so core-api's
+      // ORDER_EVENT.ACCEPTED listener never fires and no receipt is ever
+      // created. We create the receipt here, in the same transaction as
+      // the claim, so it's atomic with the claim itself.
+      // ON CONFLICT (order_id) DO NOTHING makes it idempotent.
+      // Failure must NOT roll back the claim — log and continue.
+      try {
+        await insertReceiptForClaim(client, claimedOrder, claimingMerchantId);
+      } catch (receiptErr) {
+        logger.warn('[claimOrder] Failed to create order receipt', {
+          orderId,
+          error: receiptErr instanceof Error ? receiptErr.message : String(receiptErr),
+        });
+      }
 
       logger.info('[claimOrder] Order claimed successfully', {
         orderId,
@@ -1710,6 +1866,18 @@ export async function claimAndPayOrder(
           }),
         ]
       );
+
+      // SELL/M2M receipt fix: this path bypasses ACCEPT just like claimOrder.
+      // Without this insert, the receipt is never created and the receiptListener's
+      // PAYMENT_SENT update has no row to update. Atomic with the claim+pay tx.
+      try {
+        await insertReceiptForClaim(client, claimedOrder, claimingMerchantId);
+      } catch (receiptErr) {
+        logger.warn('[claimAndPayOrder] Failed to create order receipt', {
+          orderId,
+          error: receiptErr instanceof Error ? receiptErr.message : String(receiptErr),
+        });
+      }
 
       logger.info('[claimAndPayOrder] Order claimed and payment sent', {
         orderId,

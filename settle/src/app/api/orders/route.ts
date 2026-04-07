@@ -19,6 +19,7 @@ import {
 import { checkRateLimit, STANDARD_LIMIT, ORDER_LIMIT } from '@/lib/middleware/rateLimit';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import { transaction, query as dbQuery } from '@/lib/db';
+import { getFinalPrice } from '@/lib/price/usdtInrPrice';
 import { enrichOrderResponse } from '@/lib/orders/enrichOrderResponse';
 import { auditLog } from '@/lib/auditLog';
 import { getIdempotencyKey, withIdempotency } from '@/lib/idempotency';
@@ -163,16 +164,13 @@ export async function POST(request: NextRequest) {
         ]);
       }
 
-      // Get corridor rate for fiat calculation — reject if unavailable
+      // Get rate from canonical price engine — same source as /api/prices/current.
+      // Reads latest price_tick (refreshed every 25s by the price worker) and respects
+      // admin MANUAL overrides. Reject if unavailable (no hardcoded fallbacks per CLAUDE.md).
       let sellRate: number | null = null;
       try {
-        const corridorRows = await dbQuery<{ ref_price: string }>(
-          'SELECT ref_price FROM corridor_prices WHERE corridor_id = $1',
-          ['USDT_AED']
-        );
-        if (corridorRows[0]) {
-          sellRate = parseFloat(corridorRows[0].ref_price);
-        }
+        const finalPrice = await getFinalPrice('usdt_aed');
+        if (finalPrice.price > 0) sellRate = finalPrice.price;
       } catch { /* sellRate stays null */ }
       if (!sellRate || sellRate <= 0) {
         return errorResponse('Exchange rate temporarily unavailable. Please try again in a moment.');
@@ -231,16 +229,13 @@ export async function POST(request: NextRequest) {
     // Same as sell orders — broadcast to all merchants, first to claim wins.
     // Offer-based flow commented out below for easy revert.
 
-    // Get corridor rate for fiat calculation — reject if unavailable
+    // Get rate from canonical price engine — same source as /api/prices/current.
+    // Reads latest price_tick (refreshed every 25s by the price worker) and respects
+    // admin MANUAL overrides. Reject if unavailable (no hardcoded fallbacks per CLAUDE.md).
     let buyRate: number | null = null;
     try {
-      const corridorRows = await dbQuery<{ ref_price: string }>(
-        'SELECT ref_price FROM corridor_prices WHERE corridor_id = $1',
-        ['USDT_AED']
-      );
-      if (corridorRows[0]) {
-        buyRate = parseFloat(corridorRows[0].ref_price);
-      }
+      const finalPrice = await getFinalPrice('usdt_aed');
+      if (finalPrice.price > 0) buyRate = finalPrice.price;
     } catch { /* buyRate stays null */ }
     if (!buyRate || buyRate <= 0) {
       return errorResponse('Exchange rate temporarily unavailable. Please try again in a moment.');

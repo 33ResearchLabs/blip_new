@@ -268,7 +268,16 @@ export function WebSocketChatProvider({ children }: WebSocketChatProviderProps) 
           }, delay);
         } else if (retryCountRef.current >= MAX_RETRIES) {
           setConnectionState('failed');
-          console.error('[WebSocket] Max retries reached');
+          // Use warn (not error) so Next.js dev overlay doesn't pop on transient WS outages.
+          console.warn('[WebSocket] Max retries reached — will retry in 30s');
+          // Self-heal: cool off, reset the counter, and try again so the chat
+          // recovers automatically if the server comes back.
+          retryTimeoutRef.current = setTimeout(() => {
+            if (isMountedRef.current) {
+              retryCountRef.current = 0;
+              connect();
+            }
+          }, 30000);
         } else {
           setConnectionState('disconnected');
         }
