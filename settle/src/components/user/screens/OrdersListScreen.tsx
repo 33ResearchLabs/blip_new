@@ -122,7 +122,7 @@ export const OrdersListScreen = ({
         {filteredOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className={`w-14 h-14 rounded-[18px] flex items-center justify-center mb-4 ${CARD}`}>
-              <Clock size={22} className="text-white/30" />
+              <Clock size={22} className="text-text-tertiary" />
             </div>
             <p className="text-[18px] font-extrabold tracking-[-0.02em] text-text-primary mb-1.5">No orders found</p>
             <p className="text-[13px] font-medium text-text-tertiary">Try a different filter or time range</p>
@@ -144,7 +144,7 @@ export const OrdersListScreen = ({
                 : null;
 
               const iconWrap =
-                isCompleted ? "bg-white/[0.08] border border-white/[0.08]" :
+                isCompleted ? "bg-surface-active border border-border-subtle" :
                 isCancelled || isDisputed ? "bg-error-dim border border-error-border" :
                 isBuy ? "bg-success-dim border border-success-border" : "bg-error-dim border border-error-border";
 
@@ -153,9 +153,9 @@ export const OrdersListScreen = ({
                 isCancelled || isDisputed ? X :
                 isBuy ? TrendingUp : TrendingDown;
               const iconColor =
-                isCompleted ? "text-white/40" :
-                isCancelled || isDisputed ? "text-[#dc2626]" :
-                isBuy ? "text-[#059669]" : "text-[#dc2626]";
+                isCompleted ? "text-text-tertiary" :
+                isCancelled || isDisputed ? "text-error" :
+                isBuy ? "text-success" : "text-error";
 
               const titleVerb =
                 isCompleted ? (isBuy ? "Received" : "Sent") :
@@ -163,9 +163,9 @@ export const OrdersListScreen = ({
                 isBuy ? "Receiving" : "Sending";
 
               const amountColor =
-                isCompleted ? (isBuy ? "text-[#059669]" : "text-[#dc2626]") :
-                isCancelled || isDisputed ? "text-white/40" :
-                isBuy ? "text-[#059669]" : "text-[#dc2626]";
+                isCompleted ? (isBuy ? "text-success" : "text-error") :
+                isCancelled || isDisputed ? "text-text-tertiary" :
+                isBuy ? "text-success" : "text-error";
 
               const amountSign = isCompleted ? (isBuy ? "+" : "-") : isCancelled || isDisputed ? "" : (isBuy ? "+" : "-");
 
@@ -180,10 +180,10 @@ export const OrdersListScreen = ({
                 "Active";
 
               const statusBadgeClass =
-                isCompleted ? "bg-white/[0.08] text-white/35" :
+                isCompleted ? "bg-surface-active text-text-tertiary" :
                 isCancelled ? "bg-error-dim text-error" :
                 isDisputed  ? "bg-error-dim text-error" :
-                "bg-white/[0.08] text-white/50";
+                "bg-surface-active text-text-secondary";
 
               return (
                 <motion.button key={order.id}
@@ -209,13 +209,13 @@ export const OrdersListScreen = ({
                       </span>
                       {isActive && timeStr && (
                         <span className={`text-[9px] font-bold font-mono ${
-                          secs !== null && secs < 60 ? 'text-[#dc2626]' : 'text-white/35'
+                          secs !== null && secs < 60 ? 'text-error' : 'text-text-tertiary'
                         }`}>
                           {timeStr}
                         </span>
                       )}
                       {!isActive && order.createdAt && (
-                        <span className="text-[10px] font-medium text-white/35">
+                        <span className="text-[10px] font-medium text-text-tertiary">
                           {order.createdAt.toLocaleDateString('en-GB')}
                         </span>
                       )}

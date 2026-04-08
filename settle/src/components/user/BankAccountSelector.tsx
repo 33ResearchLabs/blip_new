@@ -296,7 +296,7 @@ export const BankAccountSelector = ({
               <span className="text-[13px] font-semibold" style={{ color: colors.text.primary }}>Add Bank Account</span>
               <button
                 onClick={() => { setShowAddForm(false); setFormError(""); }}
-                className="p-1 rounded-lg hover:bg-white/5"
+                className="p-1 rounded-lg hover:bg-surface-hover"
               >
                 <X className="w-4 h-4" style={{ color: colors.text.tertiary }} />
               </button>
@@ -308,7 +308,7 @@ export const BankAccountSelector = ({
                 value={bankName}
                 onChange={(e) => setBankName(e.target.value)}
                 placeholder="Bank Name (e.g. Emirates NBD)"
-                className="w-full rounded-lg px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-white/20"
+                className="w-full rounded-lg px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-border-strong"
                 style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}`, color: colors.text.primary }}
               />
               <input
@@ -316,7 +316,7 @@ export const BankAccountSelector = ({
                 value={accountName}
                 onChange={(e) => setAccountName(e.target.value)}
                 placeholder="Account Holder Name"
-                className="w-full rounded-lg px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-white/20"
+                className="w-full rounded-lg px-3 py-2.5 text-[13px] outline-none focus:ring-1 focus:ring-border-strong"
                 style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}`, color: colors.text.primary }}
               />
               <input
@@ -324,12 +324,12 @@ export const BankAccountSelector = ({
                 value={iban}
                 onChange={(e) => setIban(e.target.value.toUpperCase())}
                 placeholder="IBAN (e.g. AE070331234567890123456)"
-                className="w-full rounded-lg px-3 py-2.5 text-[13px] font-mono outline-none focus:ring-1 focus:ring-white/20"
+                className="w-full rounded-lg px-3 py-2.5 text-[13px] font-mono outline-none focus:ring-1 focus:ring-border-strong"
                 style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}`, color: colors.text.primary }}
               />
 
               {formError && (
-                <p className="text-[12px] text-red-400">{formError}</p>
+                <p className="text-[12px] text-error">{formError}</p>
               )}
 
               <motion.button
