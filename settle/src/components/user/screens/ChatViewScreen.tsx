@@ -206,8 +206,8 @@ export const ChatViewScreen = ({
 
   return (
     <>
-      {/* Chat Header */}
-      <div className="pt-12 pb-3 px-4 bg-surface-raised border-b border-border-subtle">
+      {/* Chat Header — pinned to top of the panel */}
+      <div className="shrink-0 pt-12 pb-3 px-4 bg-surface-raised border-b border-border-subtle">
         <div className="flex items-center gap-3">
           <button onClick={() => setScreen("chats")} className="p-2 -ml-2">
             <ChevronLeft className="w-6 h-6 text-text-primary" />
@@ -249,10 +249,11 @@ export const ChatViewScreen = ({
         </div>
       </div>
 
-      {/* Messages Area */}
+      {/* Messages Area — only this scrolls; min-h-0 lets flex-1 actually
+          constrain inside the flex column instead of growing past it. */}
       <div
         ref={chatMessagesRef}
-        className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-surface-base"
+        className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3 bg-surface-base"
       >
         {activeChat && activeChat.messages.length > 0 ? (
           activeChat.messages.map((msg) => {
@@ -402,8 +403,8 @@ export const ChatViewScreen = ({
         </div>
       )}
 
-      {/* Message Input */}
-      <div className="px-4 py-3 pb-8 bg-surface-raised border-t border-border-subtle">
+      {/* Message Input — pinned to bottom of the panel */}
+      <div className="shrink-0 px-4 py-3 pb-8 bg-surface-raised border-t border-border-subtle">
         <input
           ref={fileInputRef}
           type="file"

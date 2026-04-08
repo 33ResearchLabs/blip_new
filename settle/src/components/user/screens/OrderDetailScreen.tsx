@@ -43,7 +43,10 @@ const CARD_STRONG = "bg-surface-active border border-border-medium";
 const AMBER_CARD = "bg-warning-dim border border-warning-border";
 const AMBER_CARD_STRONG = "bg-warning-dim border border-warning-border";
 const RED_CARD = "bg-error-dim border border-error-border";
-const SHEET_BG = "bg-surface-card"; // use as overlay on surface-base (sheet bg = base + card overlay); approximated
+// Modal sheets must be solid (not translucent) so the underlying screen
+// doesn't bleed through. surface-base is the page background — opaque in
+// both themes — and pairs with the dark scrim above it.
+const SHEET_BG = "bg-surface-base";
 const PRIMARY_BTN = "bg-accent text-accent-text";
 const SECONDARY_BTN = "bg-surface-active text-text-primary border border-border-medium";
 const MUTED_BTN = "bg-surface-active text-text-secondary";
@@ -2029,7 +2032,7 @@ export const OrderDetailScreen = ({
                     </p>
                     <div className="flex items-center gap-1.5">
                       <ConnectionIndicator isConnected={true} />
-                      <p className="text-[11px] text-warning">Online</p>
+                      <p className="text-[11px] text-success">Online</p>
                     </div>
                   </div>
                 </div>
