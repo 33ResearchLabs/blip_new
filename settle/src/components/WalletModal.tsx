@@ -174,34 +174,36 @@ export default function WalletModal({
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto bg-black rounded-2xl border border-white/6 overflow-hidden z-50"
+              className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto rounded-2xl overflow-hidden z-50"
+            style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}
             >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-white/6">
+              <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                 <div>
-                  <h2 className="text-[22px] font-semibold text-white tracking-tight leading-none">Mock Mode</h2>
-                  <p className="text-[13px] text-white/50 mt-0.5">Wallet connect disabled - using test coins</p>
+                  <h2 className="text-[22px] font-semibold tracking-tight leading-none" style={{ color: '#000' }}>Mock Mode</h2>
+                  <p className="text-[13px] mt-0.5" style={{ color: 'rgba(0,0,0,0.45)' }}>Wallet connect disabled - using test coins</p>
                 </div>
-                <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors">
-                  <X className="w-5 h-5 text-white/50" />
+                <button onClick={onClose} className="p-2 hover:bg-black/5 rounded-full transition-colors">
+                  <X className="w-5 h-5" style={{ color: 'rgba(0,0,0,0.4)' }} />
                 </button>
               </div>
               <div className="p-6 space-y-4">
-                <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                  <p className="text-sm text-white font-medium mb-1">Test Mode Active</p>
-                  <p className="text-xs text-white/50">
+                <div className="rounded-xl p-4" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <p className="text-sm font-medium mb-1" style={{ color: '#fff' }}>Test Mode Active</p>
+                  <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
                     Real wallet connections are disabled. All accounts are auto-funded with 10,000 USDT test coins.
                     Login or register to get started.
                   </p>
                 </div>
                 <button
                   onClick={onClose}
-                  className="w-full py-3 bg-white/10 text-white font-medium rounded-xl hover:bg-white/20 transition-colors border border-white/10"
+                  className="w-full py-3 font-medium rounded-xl transition-colors"
+                  style={{ background: '#111111', color: '#fff' }}
                 >
                   Got it
                 </button>
               </div>
-              <div className="p-4 border-t border-white/6 bg-white/5">
-                <p className="text-xs text-white/40 text-center">
+              <div className="p-4" style={{ borderTop: '1px solid rgba(0,0,0,0.06)', background: 'rgba(0,0,0,0.02)' }}>
+                <p className="text-xs text-center" style={{ color: 'rgba(0,0,0,0.35)' }}>
                   Set NEXT_PUBLIC_MOCK_MODE=false to enable real wallets
                 </p>
               </div>
@@ -248,19 +250,20 @@ export default function WalletModal({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.96 }}
             transition={{ duration: 0.2, ease: [0.4, 0.0, 0.2, 1] }}
-            className={`fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto bg-black rounded-2xl border ${themeConfig.border} overflow-hidden z-50 max-h-[85vh] flex flex-col`}
+            className="fixed inset-x-4 top-1/2 -translate-y-1/2 max-w-md mx-auto rounded-2xl overflow-hidden z-50 max-h-[85vh] flex flex-col"
+            style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}
           >
             {/* Header - Minimal */}
-            <div className={`flex items-center justify-between px-6 py-4 border-b ${themeConfig.border}`}>
+            <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
               <div>
-                <h2 className="text-[22px] font-semibold text-white tracking-tight leading-none">Connect Wallet</h2>
-                <p className="text-[13px] text-white/50 mt-0.5">{themeConfig.subtitle}</p>
+                <h2 className="text-[22px] font-semibold tracking-tight leading-none" style={{ color: '#000' }}>Connect Wallet</h2>
+                <p className="text-[13px] mt-0.5" style={{ color: 'rgba(0,0,0,0.45)' }}>{themeConfig.subtitle}</p>
               </div>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-white/5 rounded-full transition-colors"
+                className="p-2 hover:bg-black/5 rounded-full transition-colors"
               >
-                <X className="w-5 h-5 text-white/50" />
+                <X className="w-5 h-5" style={{ color: 'rgba(0,0,0,0.4)' }} />
               </button>
             </div>
 
@@ -269,33 +272,33 @@ export default function WalletModal({
               {connected && walletAddress ? (
                 /* Connected State */
                 <div className="space-y-4">
-                  <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+                  <div className="rounded-xl p-4" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.15)' }}>
                         <Check className="w-5 h-5 text-green-500" />
                       </div>
                       <div>
                         <p className="text-sm font-medium text-green-500">Connected</p>
-                        <p className="text-xs text-white/50">{wallet?.adapter.name}</p>
+                        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>{wallet?.adapter.name}</p>
                       </div>
                     </div>
-                    <div className="bg-black/30 rounded-lg p-3">
-                      <p className="text-xs text-white/50 mb-1">Wallet Address</p>
-                      <p className="text-sm text-white font-mono break-all">{walletAddress}</p>
+                    <div className="rounded-lg p-3" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                      <p className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>Wallet Address</p>
+                      <p className="text-sm font-mono break-all" style={{ color: '#fff' }}>{walletAddress}</p>
                     </div>
                   </div>
 
                   {/* Balances */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white/5 rounded-xl p-4">
-                      <p className="text-xs text-white/50 mb-1">SOL Balance</p>
-                      <p className="text-lg font-semibold text-white">
+                    <div className="rounded-xl p-4" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <p className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>SOL Balance</p>
+                      <p className="text-lg font-semibold" style={{ color: '#fff' }}>
                         {solBalance !== null ? solBalance.toFixed(4) : '...'} SOL
                       </p>
                     </div>
-                    <div className="bg-white/5 rounded-xl p-4">
-                      <p className="text-xs text-white/50 mb-1">USDT Balance</p>
-                      <p className="text-lg font-semibold text-white">
+                    <div className="rounded-xl p-4" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <p className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>USDT Balance</p>
+                      <p className="text-lg font-semibold" style={{ color: '#fff' }}>
                         {usdtBalance !== null ? usdtBalance.toFixed(2) : '...'} USDT
                       </p>
                     </div>
@@ -303,7 +306,8 @@ export default function WalletModal({
 
                   <button
                     onClick={() => refreshBalances()}
-                    className="w-full py-2 text-sm text-white/50 hover:text-white transition-colors"
+                    className="w-full py-2 text-sm transition-colors"
+                    style={{ color: 'rgba(0,0,0,0.45)' }}
                   >
                     Refresh Balances
                   </button>
@@ -315,14 +319,15 @@ export default function WalletModal({
                         disconnect();
                         onClose();
                       }}
-                      className="flex-1 py-3 bg-red-500/10 border border-red-500/30 text-red-400 font-medium rounded-xl hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
+                      className="flex-1 py-3 bg-red-500/10 border border-red-500/20 text-red-500 font-medium rounded-xl hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
                     >
                       <LogOut className="w-4 h-4" />
                       Disconnect
                     </button>
                     <button
                       onClick={onClose}
-                      className="flex-1 py-3 bg-white/10 text-white font-medium rounded-xl hover:bg-white/20 transition-colors active:scale-98 border border-white/10 hover:border-white/20"
+                      className="flex-1 py-3 font-medium rounded-xl transition-colors"
+                      style={{ background: '#111111', color: '#fff' }}
                     >
                       Continue
                     </button>
@@ -333,31 +338,31 @@ export default function WalletModal({
                 <>
                   {/* Error Alert */}
                   {connectionError && (
-                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-xl p-3">
+                    <div className="mb-4 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
                       <div className="flex items-center gap-3">
                         <X className="w-5 h-5 text-red-500 flex-shrink-0" />
-                        <p className="text-sm text-red-400">{connectionError}</p>
+                        <p className="text-sm text-red-500">{connectionError}</p>
                       </div>
                     </div>
                   )}
 
                   {/* Connecting Indicator */}
                   {isConnecting && (
-                    <div className={`mb-4 ${themeConfig.bgAccent} border ${themeConfig.borderAccent} rounded-xl p-4 flex items-center gap-3`}>
-                      <Loader2 className={`w-6 h-6 ${themeConfig.loaderColor} animate-spin`} />
+                    <div className="mb-4 rounded-xl p-4 flex items-center gap-3" style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <Loader2 className="w-6 h-6 animate-spin" style={{ color: '#fff' }} />
                       <div>
-                        <p className={`text-sm font-medium ${themeConfig.textAccentLight}`}>
+                        <p className="text-sm font-medium" style={{ color: '#fff' }}>
                           Connecting to {connectingWallet}...
                         </p>
-                        <p className="text-xs text-white/50">Approve in your wallet</p>
+                        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>Approve in your wallet</p>
                       </div>
                     </div>
                   )}
 
                   {/* In-App Browser Warning */}
                   {isInAppBrowser && (
-                    <div className="mb-4 bg-white/5 border border-white/10 rounded-xl p-3">
-                      <p className="text-sm text-white/70">
+                    <div className="mb-4 rounded-xl p-3" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)' }}>
+                      <p className="text-sm" style={{ color: 'rgba(0,0,0,0.6)' }}>
                         For best experience, open this page in your browser (Safari/Chrome)
                       </p>
                     </div>
@@ -366,7 +371,7 @@ export default function WalletModal({
                   {/* Mobile Wallet Options */}
                   {isMobile && showMobileOptions && mobileWallets.length > 0 && (
                     <div className="mb-4">
-                      <p className="text-xs text-white/50 uppercase tracking-wider mb-2 flex items-center gap-2">
+                      <p className="text-xs uppercase tracking-wider mb-2 flex items-center gap-2" style={{ color: 'rgba(0,0,0,0.4)' }}>
                         <Smartphone className="w-3 h-3" />
                         Open in Wallet App
                       </p>
@@ -382,7 +387,8 @@ export default function WalletModal({
                             <button
                               key={`mobile-${walletAdapter.adapter.name}`}
                               onClick={() => handleMobileWalletOpen(walletAdapter.adapter.name)}
-                              className="w-full flex items-center gap-3 p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-all border border-white/6 hover:border-white/12"
+                              className="w-full flex items-center gap-3 p-4 rounded-xl transition-all"
+                              style={{ background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}
                             >
                               {walletAdapter.adapter.icon ? (
                                 <img
@@ -391,15 +397,15 @@ export default function WalletModal({
                                   className="w-10 h-10 rounded-lg"
                                 />
                               ) : (
-                                <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-xl">
+                                <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl" style={{ background: 'rgba(255,255,255,0.1)' }}>
                                   {info.icon}
                                 </div>
                               )}
                               <div className="flex-1 text-left">
-                                <p className="text-[15px] font-medium text-white">{info.name}</p>
-                                <p className="text-[13px] text-white/50">Continue in app</p>
+                                <p className="text-[15px] font-medium" style={{ color: '#fff' }}>{info.name}</p>
+                                <p className="text-[13px]" style={{ color: 'rgba(255,255,255,0.5)' }}>Continue in app</p>
                               </div>
-                              <ChevronRight className="w-5 h-5 text-white/30" />
+                              <ChevronRight className="w-5 h-5" style={{ color: 'rgba(255,255,255,0.3)' }} />
                             </button>
                           );
                         })}
@@ -410,7 +416,7 @@ export default function WalletModal({
                   {/* Installed Wallets */}
                   {installedWallets.length > 0 && (
                     <div className="mb-4">
-                      <p className="text-xs text-white/50 uppercase tracking-wider mb-2">
+                      <p className="text-xs uppercase tracking-wider mb-2" style={{ color: 'rgba(0,0,0,0.4)' }}>
                         {isMobile ? 'Available Wallets' : 'Detected Wallets'}
                       </p>
                       <div className="space-y-2">
@@ -427,11 +433,10 @@ export default function WalletModal({
                               key={walletAdapter.adapter.name}
                               onClick={() => handleWalletSelect(walletAdapter.adapter.name)}
                               disabled={isConnecting}
-                              className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-all ${
-                                isSelected
-                                  ? 'bg-white/10 border-white/12'
-                                  : 'bg-white/5 border-white/6 hover:bg-white/10 hover:border-white/12'
-                              } ${isConnecting && !isSelected ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              className={`w-full flex items-center gap-3 p-4 rounded-xl transition-all ${isConnecting && !isSelected ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              style={isSelected
+                                ? { background: '#1a1a1a', border: '2px solid rgba(255,255,255,0.2)' }
+                                : { background: '#111111', border: '1px solid rgba(255,255,255,0.08)' }}
                             >
                               {walletAdapter.adapter.icon ? (
                                 <img
@@ -440,18 +445,18 @@ export default function WalletModal({
                                   className="w-10 h-10 rounded-lg"
                                 />
                               ) : (
-                                <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-xl">
+                                <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl" style={{ background: 'rgba(255,255,255,0.1)' }}>
                                   {info.icon}
                                 </div>
                               )}
                               <div className="flex-1 text-left">
-                                <p className="text-[15px] font-medium text-white">{info.name}</p>
-                                <p className="text-[13px] text-white/50">{info.description}</p>
+                                <p className="text-[15px] font-medium" style={{ color: '#fff' }}>{info.name}</p>
+                                <p className="text-[13px]" style={{ color: 'rgba(255,255,255,0.5)' }}>{info.description}</p>
                               </div>
                               {isSelected && isConnecting ? (
-                                <Loader2 className="w-5 h-5 text-white animate-spin" />
+                                <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#fff' }} />
                               ) : (
-                                <ChevronRight className="w-5 h-5 text-white/30" />
+                                <ChevronRight className="w-5 h-5" style={{ color: 'rgba(255,255,255,0.3)' }} />
                               )}
                             </button>
                           );
@@ -463,7 +468,7 @@ export default function WalletModal({
                   {/* Not Installed Wallets (desktop only) */}
                   {!isMobile && notInstalledWallets.length > 0 && (
                     <div>
-                      <p className="text-xs text-white/50 uppercase tracking-wider mb-2">Other Wallets</p>
+                      <p className="text-xs uppercase tracking-wider mb-2" style={{ color: 'rgba(0,0,0,0.4)' }}>Other Wallets</p>
                       <div className="space-y-2">
                         {notInstalledWallets.map((walletAdapter) => {
                           const info = WALLET_INFO[walletAdapter.adapter.name] || {
@@ -478,7 +483,8 @@ export default function WalletModal({
                               href={walletAdapter.adapter.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-transparent hover:bg-white/10 hover:border-white/20 transition-all"
+                              className="w-full flex items-center gap-3 p-3 rounded-xl transition-all"
+                              style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)' }}
                             >
                               {walletAdapter.adapter.icon ? (
                                 <img
@@ -487,15 +493,15 @@ export default function WalletModal({
                                   className="w-10 h-10 rounded-lg opacity-50"
                                 />
                               ) : (
-                                <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-xl opacity-50">
+                                <div className="w-10 h-10 rounded-lg flex items-center justify-center text-xl opacity-50" style={{ background: 'rgba(0,0,0,0.06)' }}>
                                   {info.icon}
                                 </div>
                               )}
                               <div className="flex-1 text-left">
-                                <p className="text-sm font-medium text-white/70">{info.name}</p>
-                                <p className="text-xs text-white/40">Click to install</p>
+                                <p className="text-sm font-medium" style={{ color: 'rgba(0,0,0,0.6)' }}>{info.name}</p>
+                                <p className="text-xs" style={{ color: 'rgba(0,0,0,0.35)' }}>Click to install</p>
                               </div>
-                              <ExternalLink className="w-4 h-4 text-white/30" />
+                              <ExternalLink className="w-4 h-4" style={{ color: 'rgba(0,0,0,0.3)' }} />
                             </a>
                           );
                         })}
@@ -506,11 +512,11 @@ export default function WalletModal({
                   {/* No Wallets Found */}
                   {filteredWallets.length === 0 && (
                     <div className="text-center py-8">
-                      <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
-                        <Wallet className="w-8 h-8 text-white/30" />
+                      <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: '#111111' }}>
+                        <Wallet className="w-8 h-8" style={{ color: 'rgba(255,255,255,0.4)' }} />
                       </div>
-                      <p className="text-white/70 mb-2">No wallets found</p>
-                      <p className="text-sm text-white/50">
+                      <p className="mb-2" style={{ color: 'rgba(0,0,0,0.6)' }}>No wallets found</p>
+                      <p className="text-sm" style={{ color: 'rgba(0,0,0,0.4)' }}>
                         {isMobile
                           ? 'Install a Solana wallet app like Phantom'
                           : 'Install a Solana wallet like Phantom to continue'
@@ -520,7 +526,8 @@ export default function WalletModal({
                         href="https://phantom.app/"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`inline-flex items-center gap-2 mt-4 px-4 py-2 ${themeConfig.bgAccent} ${themeConfig.textAccentLight} rounded-lg ${themeConfig.bgAccentHover} transition-colors`}
+                        className="inline-flex items-center gap-2 mt-4 px-4 py-2 rounded-lg transition-colors"
+                        style={{ background: '#111111', color: '#fff' }}
                       >
                         Get Phantom
                         <ExternalLink className="w-4 h-4" />
@@ -532,8 +539,8 @@ export default function WalletModal({
             </div>
 
             {/* Footer */}
-            <div className={`p-4 border-t ${themeConfig.border} bg-white/5`}>
-              <p className="text-xs text-white/40 text-center">
+            <div className="p-4" style={{ borderTop: '1px solid rgba(0,0,0,0.06)', background: 'rgba(0,0,0,0.02)' }}>
+              <p className="text-xs text-center" style={{ color: 'rgba(0,0,0,0.35)' }}>
                 {themeConfig.footer}
               </p>
             </div>

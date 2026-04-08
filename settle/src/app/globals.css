@@ -272,6 +272,23 @@
   --color-accent-dark: var(--accent-dark);
   --color-accent-subtle: var(--accent-subtle);
   --color-accent-glow: var(--accent-glow);
+  /* Additive tokens used by the user route (scoped via .user-scope in user-theme.css).
+     Adding them here only declares the Tailwind utilities (bg-accent-text, bg-surface-card,
+     etc.). The CSS variables resolve only inside .user-scope so merchant UIs are unaffected. */
+  --color-accent-text: var(--accent-text);
+  --color-accent-bright: var(--accent-bright);
+  --color-accent-dim: var(--accent-dim);
+  --color-surface-card: var(--color-surface-card);
+  --color-surface-hover: var(--color-surface-hover);
+  --color-surface-active: var(--color-surface-active);
+  --color-border-subtle: var(--color-border-subtle);
+  --color-border-medium: var(--color-border-medium);
+  --color-success-dim: var(--color-success-dim);
+  --color-success-border: var(--color-success-border);
+  --color-warning-dim: var(--color-warning-dim);
+  --color-warning-border: var(--color-warning-border);
+  --color-error-dim: var(--color-error-dim);
+  --color-error-border: var(--color-error-border);
   --color-primary: var(--primary);
   --color-primary-dim: var(--primary-dim);
   --font-sans: var(--font-geist-sans);

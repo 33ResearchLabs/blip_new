@@ -4,7 +4,17 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Bell, Zap, Lock, DollarSign, AlertTriangle, CheckCircle2, MessageCircle, Shield, Activity } from "lucide-react";
 import { BottomNav } from "./BottomNav";
+import { FilterDropdown, type FilterOption } from "./ui";
 import type { Screen } from "./types";
+
+type TimeFilter = 'today' | '7d' | '30d' | 'all';
+
+const TIME_FILTER_OPTIONS: ReadonlyArray<FilterOption<TimeFilter>> = [
+  { key: 'today', label: 'Today' },
+  { key: '7d',    label: '7 Days' },
+  { key: '30d',   label: '30 Days' },
+  { key: 'all',   label: 'All' },
+];
 
 interface Notification {
   id: string;
@@ -74,7 +84,7 @@ export const NotificationsScreen = ({
   maxW,
 }: NotificationsScreenProps) => {
   const [activeTab, setActiveTab] = useState<'alerts' | 'activity'>('alerts');
-  const [timeFilter, setTimeFilter] = useState<'today' | '7d' | '30d' | 'all'>('today');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
 
   const filteredNotifications = (() => {
     if (timeFilter === 'all') return notifications;
@@ -105,8 +115,8 @@ export const NotificationsScreen = ({
         </div>
       </header>
 
-      {/* ── Tabs ── */}
-      <div className="px-5 pb-2 flex gap-2 shrink-0">
+      {/* ── Tabs + Time Filter (single row) ── */}
+      <div className="px-5 pb-2 flex items-center gap-2 shrink-0">
         <button
           onClick={() => setActiveTab('alerts')}
           className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all"
@@ -135,30 +145,15 @@ export const NotificationsScreen = ({
           <Activity size={13} strokeWidth={2.2} />
           <span style={{ fontSize: 12, fontWeight: 700 }}>Orders</span>
         </button>
-      </div>
 
-      {/* ── Time Filter ── */}
-      <div className="px-5 pb-2 flex gap-1.5 shrink-0 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-        {([
-          { key: 'today' as const, label: 'Today' },
-          { key: '7d' as const, label: '7 Days' },
-          { key: '30d' as const, label: '30 Days' },
-          { key: 'all' as const, label: 'All' },
-        ]).map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setTimeFilter(key)}
-            className="shrink-0 px-3 py-1 rounded-full transition-all"
-            style={{
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.05em',
-              background: timeFilter === key ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.03)',
-              color: timeFilter === key ? '#fff' : 'rgba(255,255,255,0.3)',
-              border: `1px solid ${timeFilter === key ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.04)'}`,
-            }}
-          >
-            {label}
-          </button>
-        ))}
+        {/* Time filter — collapsed dropdown on the right */}
+        <FilterDropdown
+          className="ml-auto"
+          ariaLabel="Time range filter"
+          value={timeFilter}
+          onChange={setTimeFilter}
+          options={TIME_FILTER_OPTIONS}
+        />
       </div>
 
       {/* ── Notification List ── */}

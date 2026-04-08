@@ -34,17 +34,23 @@ export const HomeSparkline = ({ width = 300, height = 56 }: { width?: number; he
   const midPt = pts.find(p => p.x >= midX) ?? last;
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="w-full overflow-visible">
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      className="w-full overflow-visible text-text-primary"
+    >
       <defs>
-        {/* Area fill gradient — subtle white */}
+        {/* Area fill gradient — uses currentColor so it themes */}
         <linearGradient id="sg-area" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.10" />
-          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
         </linearGradient>
-        {/* Line gradient — left neutral, right bright white */}
+        {/* Line gradient — fades into bright on right */}
         <linearGradient id="sg-line" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="rgba(255,255,255,0.2)" />
-          <stop offset="100%" stopColor="rgba(255,255,255,0.9)" />
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0.95" />
         </linearGradient>
         {/* End dot glow */}
         <filter id="sg-glow" x="-50%" y="-50%" width="200%" height="200%">
@@ -61,15 +67,15 @@ export const HomeSparkline = ({ width = 300, height = 56 }: { width?: number; he
       {/* Vertical reference tick at midpoint */}
       <line
         x1={midPt.x} y1={midPt.y + 6} x2={midPt.x} y2={height}
-        stroke="rgba(255,255,255,0.06)" strokeWidth="1" strokeDasharray="2 3"
+        stroke="currentColor" strokeOpacity="0.12" strokeWidth="1" strokeDasharray="2 3"
       />
 
       {/* End dot */}
-      <circle cx={last.x} cy={last.y} r="3" fill="#ffffff" filter="url(#sg-glow)" opacity="0.9" />
+      <circle cx={last.x} cy={last.y} r="3" fill="currentColor" filter="url(#sg-glow)" opacity="0.9" />
       {/* Pulsing ring */}
       <motion.circle
         cx={last.x} cy={last.y} r="6" fill="none"
-        stroke="rgba(255,255,255,0.25)" strokeWidth="1"
+        stroke="currentColor" strokeOpacity="0.3" strokeWidth="1"
         animate={{ r: [5, 9], opacity: [0.3, 0] }}
         transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
       />

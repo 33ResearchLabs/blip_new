@@ -13,6 +13,21 @@ import { query, transaction } from '../lib/db';
 import { notifyOrderStatusUpdated } from '../lib/pusher/server';
 import { wsBroadcastOrderUpdate } from '../lib/websocket/broadcast';
 import { logger } from 'settlement-core';
+// ── Shadow realtime (isolated, additive) ─────────────────────────────
+// Importing emitEvent does NOT start the shadow server. If the shadow
+// server isn't running, emitEvent broadcasts to an empty room map and
+// returns 0 — never throws, never affects Pusher or wsBroadcastOrderUpdate.
+import { emitEvent } from '../realtime/wsServer';
+import { publishShadowEvent } from '../realtime/wsRedisBus';
+
+// This worker processes order-status events from notification_outbox,
+// so the only shadow room it ever publishes to is `order:{id}`.
+// MESSAGE_NEW / NOTIFICATION_NEW are NOT routed through this worker —
+// they would need their own outbox integration before they can flow
+// through the shadow path. See audit P2 (still open).
+function mapOrderRoom(orderId: string | undefined): string | null {
+  return orderId ? `order:${orderId}` : null;
+}
 
 /**
  * Export helper for monitoring stuck notifications
@@ -99,6 +114,35 @@ async function processOutboxRecord(record: OutboxRecord): Promise<boolean> {
         ...payload,
         merchantId: payload.buyerMerchantId,
       });
+    }
+
+    // ── Shadow realtime emit (additive, fire-and-forget, never throws) ──
+    // Runs AFTER Pusher + wsBroadcastOrderUpdate. If the shadow WS server
+    // isn't running, this is a no-op. Any error here is swallowed and must
+    // never affect outbox processing or the existing delivery channels.
+    try {
+      const room = mapOrderRoom(payload.orderId);
+      if (room) {
+        const shadowPayload = {
+          type: 'ORDER_UPDATED' as const,
+          room,
+          data: {
+            orderId: payload.orderId,
+            status: payload.status,
+            previousStatus: payload.previousStatus,
+            orderVersion: payload.orderVersion,
+            updatedAt: payload.updatedAt,
+          },
+        };
+        // Same-process delivery (works without Redis)
+        emitEvent(shadowPayload);
+        // Cross-process fan-out via Redis (no-op if Redis is down)
+        void publishShadowEvent(shadowPayload).catch((e) =>
+          console.error('[ws-shadow] publish', e instanceof Error ? e.message : e)
+        );
+      }
+    } catch (e) {
+      console.error('[ws-shadow]', e instanceof Error ? e.message : e);
     }
 
     logger.info('[Outbox] Successfully processed notification', {

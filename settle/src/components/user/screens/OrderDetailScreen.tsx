@@ -24,15 +24,33 @@ import {
 import { ConnectionIndicator } from "@/components/NotificationToast";
 import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
 import type { Screen, Order } from "./types";
-import { type RefObject, useState as useLocalState, useRef as useLocalRef, useCallback as useLocalCallback, useEffect as useLocalEffect } from "react";
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
-import dynamic from 'next/dynamic';
-import { showAlert } from '@/context/ModalContext';
+import {
+  type RefObject,
+  useState as useLocalState,
+  useRef as useLocalRef,
+  useCallback as useLocalCallback,
+  useEffect as useLocalEffect,
+} from "react";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import dynamic from "next/dynamic";
+import { showAlert } from "@/context/ModalContext";
 
-const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
+const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
+
+// Reusable class strings — mirror Card / SectionLabel / CardLabel conventions
+const CARD = "bg-surface-card border border-border-subtle";
+const CARD_STRONG = "bg-white/[0.08] border border-white/10";
+const AMBER_CARD = "bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.2)]";
+const AMBER_CARD_STRONG = "bg-[rgba(245,158,11,0.12)] border border-[rgba(245,158,11,0.25)]";
+const RED_CARD = "bg-[rgba(239,68,68,0.10)] border border-[rgba(239,68,68,0.20)]";
+const SHEET_BG = "bg-surface-card"; // use as overlay on surface-base (sheet bg = base + card overlay); approximated
+const PRIMARY_BTN = "bg-accent text-accent-text";
+const SECONDARY_BTN = "bg-white/[0.08] text-text-primary border border-white/10";
+const MUTED_BTN = "bg-white/[0.08] text-text-secondary";
 
 export interface OrderDetailScreenProps {
   setScreen: (s: Screen) => void;
+  previousScreen?: Screen;
   activeOrder: Order;
   isLoading: boolean;
   setIsLoading: (v: boolean) => void;
@@ -95,7 +113,7 @@ export interface OrderDetailScreenProps {
     user_confirmed?: boolean;
     merchant_confirmed?: boolean;
   } | null;
-  respondToResolution: (action: 'accept' | 'reject') => void;
+  respondToResolution: (action: "accept" | "reject") => void;
   isRespondingToResolution: boolean;
   // Cancel request
   requestCancelOrder: (reason?: string) => void;
@@ -106,7 +124,10 @@ export interface OrderDetailScreenProps {
     connected: boolean;
     programReady: boolean;
     walletAddress: string | null;
-    depositToEscrow: (params: { amount: number; merchantWallet: string }) => Promise<{
+    depositToEscrow: (params: {
+      amount: number;
+      merchantWallet: string;
+    }) => Promise<{
       success: boolean;
       txHash: string;
       tradeId?: number;
@@ -117,12 +138,24 @@ export interface OrderDetailScreenProps {
   setShowWalletModal: (v: boolean) => void;
   userId: string | null;
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
-  playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
+  playSound: (
+    sound:
+      | "message"
+      | "send"
+      | "trade_start"
+      | "trade_complete"
+      | "notification"
+      | "error"
+      | "click"
+      | "new_order"
+      | "order_complete",
+  ) => void;
   maxW: string;
 }
 
 export const OrderDetailScreen = ({
   setScreen,
+  previousScreen,
   activeOrder,
   isLoading,
   setIsLoading,
@@ -168,32 +201,43 @@ export const OrderDetailScreen = ({
   playSound,
   maxW,
 }: OrderDetailScreenProps) => {
+  // Suppress unused-param lint: `copied` is part of the prop API but not rendered here.
+  void copied;
   const [showEmojiPicker, setShowEmojiPicker] = useLocalState(false);
   const [isUploading, setIsUploading] = useLocalState(false);
   const [copiedField, setCopiedField] = useLocalState<string | null>(null);
 
-  const copyField = useLocalCallback((field: string, text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedField(field);
-      handleCopy(text);
-      setTimeout(() => setCopiedField(null), 1500);
-    });
-  }, [handleCopy]);
-  const [pendingImage, setPendingImage] = useLocalState<{ file: File; previewUrl: string } | null>(null);
+  const copyField = useLocalCallback(
+    (field: string, text: string) => {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopiedField(field);
+        handleCopy(text);
+        setTimeout(() => setCopiedField(null), 1500);
+      });
+    },
+    [handleCopy],
+  );
+  const [pendingImage, setPendingImage] = useLocalState<{
+    file: File;
+    previewUrl: string;
+  } | null>(null);
   const fileInputRef = useLocalRef<HTMLInputElement>(null);
   const typingTimeoutRef = useLocalRef<NodeJS.Timeout | null>(null);
 
   // Handle file select — only store locally + show preview (no upload yet)
-  const handleFileSelect = useLocalCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) return; // 10MB max
-    if (!file.type.startsWith('image/')) return;
+  const handleFileSelect = useLocalCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) return; // 10MB max
+      if (!file.type.startsWith("image/")) return;
 
-    const previewUrl = URL.createObjectURL(file);
-    setPendingImage({ file, previewUrl });
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  }, []);
+      const previewUrl = URL.createObjectURL(file);
+      setPendingImage({ file, previewUrl });
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    },
+    [],
+  );
 
   // Clear pending image
   const clearPendingImage = useLocalCallback(() => {
@@ -208,67 +252,92 @@ export const OrderDetailScreen = ({
     setIsUploading(true);
     try {
       // Include userId header explicitly for auth
-      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (userId) authHeaders['x-user-id'] = userId;
-      const sigRes = await fetch('/api/upload/signature', {
-        method: 'POST',
+      const authHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (userId) authHeaders["x-user-id"] = userId;
+      const sigRes = await fetch("/api/upload/signature", {
+        method: "POST",
         headers: authHeaders,
-        body: JSON.stringify({ orderId: activeChat.orderId || 'chat' }),
+        body: JSON.stringify({ orderId: activeChat.orderId || "chat" }),
       });
-      if (!sigRes.ok) { setIsUploading(false); return; }
+      if (!sigRes.ok) {
+        setIsUploading(false);
+        return;
+      }
       const sigData = await sigRes.json();
-      if (!sigData.success) { setIsUploading(false); return; }
+      if (!sigData.success) {
+        setIsUploading(false);
+        return;
+      }
       const sig = sigData.data;
 
       const formData = new FormData();
-      formData.append('file', pendingImage.file);
-      formData.append('signature', sig.signature);
-      formData.append('timestamp', sig.timestamp.toString());
-      formData.append('api_key', sig.apiKey);
-      formData.append('folder', sig.folder);
+      formData.append("file", pendingImage.file);
+      formData.append("signature", sig.signature);
+      formData.append("timestamp", sig.timestamp.toString());
+      formData.append("api_key", sig.apiKey);
+      formData.append("folder", sig.folder);
 
       const uploadRes = await fetch(
         `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`,
-        { method: 'POST', body: formData }
+        { method: "POST", body: formData },
       );
       if (uploadRes.ok) {
         const result = await uploadRes.json();
-        const text = chatMessage.trim() || 'Photo';
+        const text = chatMessage.trim() || "Photo";
         sendChatMessage(activeChat.id, text, result.secure_url);
-        setChatMessage('');
-        playSound('send');
+        setChatMessage("");
+        playSound("send");
       } else {
-        console.error('[OrderDetailScreen] Cloudinary upload failed:', uploadRes.status, await uploadRes.text().catch(() => ''));
+        console.error(
+          "[OrderDetailScreen] Cloudinary upload failed:",
+          uploadRes.status,
+          await uploadRes.text().catch(() => ""),
+        );
       }
     } catch (err) {
-      console.error('[OrderDetailScreen] Image upload error:', err);
+      console.error("[OrderDetailScreen] Image upload error:", err);
     } finally {
       setIsUploading(false);
       clearPendingImage();
     }
-  }, [pendingImage, activeChat, sendChatMessage, chatMessage, setChatMessage, playSound, clearPendingImage, userId]);
+  }, [
+    pendingImage,
+    activeChat,
+    sendChatMessage,
+    chatMessage,
+    setChatMessage,
+    playSound,
+    clearPendingImage,
+    userId,
+  ]);
 
   // Cleanup preview URL on unmount
   useLocalEffect(() => {
     return () => {
-      if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
+      if (pendingImage?.previewUrl)
+        URL.revokeObjectURL(pendingImage.previewUrl);
     };
   }, [pendingImage]);
 
   // Handle typing indicator
-  const handleTypingChange = useLocalCallback((value: string) => {
-    setChatMessage(value);
-    if (!activeChat || !sendTypingIndicator) return;
+  const handleTypingChange = useLocalCallback(
+    (value: string) => {
+      setChatMessage(value);
+      if (!activeChat || !sendTypingIndicator) return;
 
-    // Send typing start
-    sendTypingIndicator(activeChat.id, true);
+      // Send typing start
+      sendTypingIndicator(activeChat.id, true);
 
-    // Clear previous timeout and set new one to send typing stop
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      sendTypingIndicator(activeChat.id, false);
-    }, 2000);
-  }, [activeChat, sendTypingIndicator, setChatMessage]);
+      // Clear previous timeout and set new one to send typing stop
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        sendTypingIndicator(activeChat.id, false);
+      }, 2000);
+    },
+    [activeChat, sendTypingIndicator, setChatMessage],
+  );
 
   // Cleanup typing timeout
   useLocalEffect(() => {
@@ -278,92 +347,120 @@ export const OrderDetailScreen = ({
   }, []);
 
   return (
-    <>
+    <div className="min-h-[100dvh] bg-surface-base">
       <div className="h-12" />
 
       <div className="px-5 py-4 flex items-center">
-        <button onClick={() => setScreen("home")}
-          className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1"
-          style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
-          <ChevronLeft className="w-5 h-5" style={{ color: 'rgba(0,0,0,0.6)' }} />
+        <button
+          onClick={() => setScreen(previousScreen || "home")}
+          className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle"
+        >
+          <ChevronLeft className="w-5 h-5 text-text-secondary" />
         </button>
-        <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">Order Details</h1>
+        <h1 className="flex-1 text-center text-[17px] font-semibold pr-8 text-text-primary">
+          Order Details
+        </h1>
       </div>
 
       <div className="flex-1 px-5 overflow-auto pb-6">
         {/* Order Summary */}
-        <div className="rounded-2xl p-4 mb-4" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
+        <div className={`rounded-2xl p-4 mb-4 ${CARD}`}>
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.05)' }}>
-              {activeOrder.type === "buy"
-                ? <ArrowDownLeft className="w-5 h-5" style={{ color: '#059669' }} />
-                : <ArrowUpRight className="w-5 h-5" style={{ color: '#dc2626' }} />
-              }
+            <div
+              className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                activeOrder.type === "buy"
+                  ? "bg-[rgba(16,185,129,0.15)]"
+                  : "bg-[rgba(239,68,68,0.15)]"
+              }`}
+            >
+              {activeOrder.type === "buy" ? (
+                <ArrowDownLeft className="w-5 h-5 text-[#10b981]" />
+              ) : (
+                <ArrowUpRight className="w-5 h-5 text-[#ef4444]" />
+              )}
             </div>
             <div>
-              <p className="text-[17px] font-semibold" style={{ color: '#000' }}>
-                {activeOrder.type === "buy" ? "Buying" : "Selling"} ${activeOrder.cryptoAmount} USDC
+              <p className="text-[17px] font-semibold text-text-primary">
+                {activeOrder.type === "buy" ? "Buying" : "Selling"}{" "}
+                {parseFloat(activeOrder.cryptoAmount).toFixed(2)} USDC
               </p>
-              <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>
-                {'\u062F.\u0625'} {parseFloat(activeOrder.fiatAmount).toLocaleString()}
+              <p className="text-[13px] text-text-secondary">
+                {"\u062F.\u0625"}{" "}
+                {parseFloat(activeOrder.fiatAmount).toLocaleString()}
               </p>
             </div>
           </div>
 
           {/* Progress */}
-          <div className="flex items-center gap-1 mb-2">
-            {[1, 2, 3, 4].map(step => (
-              <div
-                key={step}
-                className="flex-1 h-1 rounded-full"
-                style={{ background: (activeOrder.status === 'cancelled' || activeOrder.status === 'expired')
-                    ? 'rgba(239,68,68,0.4)'
-                    : step <= activeOrder.step ? '#000' : 'rgba(0,0,0,0.1)'
-                }}
-              />
-            ))}
+          <div className="flex items-center gap-1.5 mb-2">
+            {[1, 2, 3, 4].map((step) => {
+              // Dynamic: per-step computed background color based on status/step.
+              const bg =
+                activeOrder.status === "cancelled" ||
+                activeOrder.status === "expired"
+                  ? "bg-[rgba(239,68,68,0.4)]"
+                  : step <= activeOrder.step
+                    ? "bg-text-primary"
+                    : "bg-text-quaternary";
+              return (
+                <div
+                  key={step}
+                  className={`flex-1 h-1.5 rounded-full ${bg}`}
+                />
+              );
+            })}
           </div>
-          <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>
-            {activeOrder.status === 'cancelled' ? 'Order Cancelled' : activeOrder.status === 'expired' ? 'Order Expired' : `Step ${activeOrder.step} of 4`}
+          <p className="text-[13px] text-text-secondary">
+            {activeOrder.status === "cancelled"
+              ? "Order Cancelled"
+              : activeOrder.status === "expired"
+                ? "Order Expired"
+                : `Step ${activeOrder.step} of 4`}
           </p>
         </div>
 
         {/* Escrow Status Section - Show for sell orders with escrow */}
         {activeOrder.type === "sell" && activeOrder.escrowTxHash && (
-          <div className="rounded-2xl p-4 mb-4" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
+          <div className={`rounded-2xl p-4 mb-4 ${CARD}`}>
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.05)' }}>
-                <Lock className="w-5 h-5" style={{ color: 'rgba(0,0,0,0.5)' }} />
+              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]">
+                <Lock className="w-5 h-5 text-text-secondary" />
               </div>
               <div className="flex-1">
-                <p className="text-[15px] font-semibold" style={{ color: '#000' }}>Escrow Locked</p>
-                <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>
+                <p className="text-[15px] font-semibold text-text-primary">
+                  Escrow Locked
+                </p>
+                <p className="text-[13px] text-text-secondary">
                   Your USDC is secured on-chain
                 </p>
               </div>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.05)' }}>
-                <Check className="w-4 h-4" style={{ color: '#000' }} />
+              <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/[0.08]">
+                <Check className="w-4 h-4 text-text-primary" />
               </div>
             </div>
 
             <div className="space-y-2 text-[13px]">
               {activeOrder.escrowTradeId && (
                 <div className="flex items-center justify-between">
-                  <span style={{ color: 'rgba(0,0,0,0.4)' }}>Trade ID</span>
-                  <span className="font-mono font-semibold" style={{ color: '#000' }}>#{activeOrder.escrowTradeId}</span>
+                  <span className="text-text-tertiary">Trade ID</span>
+                  <span className="font-mono font-semibold text-text-primary">
+                    #{activeOrder.escrowTradeId}
+                  </span>
                 </div>
               )}
               {activeOrder.escrowTxHash && (
                 <div className="flex items-center justify-between">
-                  <span style={{ color: 'rgba(0,0,0,0.4)' }}>Transaction</span>
+                  <span className="text-text-tertiary">Transaction</span>
                   <a
                     href={`https://explorer.solana.com/tx/${activeOrder.escrowTxHash}?cluster=devnet`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1"
-                    style={{ color: 'rgba(0,0,0,0.6)' }}
+                    className="flex items-center gap-1 text-text-secondary"
                   >
-                    <span className="font-mono">{activeOrder.escrowTxHash.slice(0, 8)}...{activeOrder.escrowTxHash.slice(-6)}</span>
+                    <span className="font-mono">
+                      {activeOrder.escrowTxHash.slice(0, 8)}...
+                      {activeOrder.escrowTxHash.slice(-6)}
+                    </span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
@@ -373,178 +470,210 @@ export const OrderDetailScreen = ({
         )}
 
         {/* Extension Request Banner */}
-        {extensionRequest && extensionRequest.requestedBy === 'merchant' && extensionRequest.orderId === activeOrder.id && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl p-4 mb-4"
-            style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.05)' }}>
-                <Clock className="w-5 h-5" style={{ color: 'rgba(0,0,0,0.5)' }} />
+        {extensionRequest &&
+          extensionRequest.requestedBy === "merchant" &&
+          extensionRequest.orderId === activeOrder.id && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`rounded-2xl p-4 mb-4 ${CARD}`}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]">
+                  <Clock className="w-5 h-5 text-text-secondary" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[15px] font-semibold text-text-primary">
+                    Extension Requested
+                  </p>
+                  <p className="text-[13px] text-text-secondary">
+                    Merchant wants +
+                    {extensionRequest.extensionMinutes >= 60
+                      ? `${Math.round(extensionRequest.extensionMinutes / 60)} hour${Math.round(extensionRequest.extensionMinutes / 60) > 1 ? "s" : ""}`
+                      : `${extensionRequest.extensionMinutes} minutes`}
+                  </p>
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="text-[15px] font-semibold" style={{ color: '#000' }}>Extension Requested</p>
-                <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>
-                  Merchant wants +{extensionRequest.extensionMinutes >= 60
-                    ? `${Math.round(extensionRequest.extensionMinutes / 60)} hour${Math.round(extensionRequest.extensionMinutes / 60) > 1 ? 's' : ''}`
-                    : `${extensionRequest.extensionMinutes} minutes`}
-                </p>
+              <div className="flex gap-2">
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => respondToExtension(true)}
+                  disabled={requestingExtension}
+                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-accent text-accent-text"
+                >
+                  {requestingExtension ? (
+                    <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                  ) : (
+                    "Accept"
+                  )}
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => respondToExtension(false)}
+                  disabled={requestingExtension}
+                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-white/[0.08] text-text-secondary"
+                >
+                  Decline
+                </motion.button>
               </div>
-            </div>
-            <div className="flex gap-2">
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={() => respondToExtension(true)}
-                disabled={requestingExtension}
-                className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50"
-                style={{ background: '#000', color: '#fff' }}
-              >
-                {requestingExtension ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Accept"}
-              </motion.button>
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={() => respondToExtension(false)}
-                disabled={requestingExtension}
-                className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50"
-                style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.6)' }}
-              >
-                Decline
-              </motion.button>
-            </div>
-            <p className="text-[11px] text-center mt-2" style={{ color: 'rgba(0,0,0,0.4)' }}>
-              Extensions used: {extensionRequest.extensionCount}/{extensionRequest.maxExtensions}
-            </p>
-          </motion.div>
-        )}
+              <p className="text-[11px] text-center mt-2 text-text-tertiary">
+                Extensions used: {extensionRequest.extensionCount}/
+                {extensionRequest.maxExtensions}
+              </p>
+            </motion.div>
+          )}
 
         {/* Cancel Request Banner — merchant requested cancel, user decides */}
-        {activeOrder.cancelRequest && activeOrder.cancelRequest.requestedBy === 'merchant' && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4 mb-4"
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
-                <X className="w-5 h-5 text-orange-500" />
+        {activeOrder.cancelRequest &&
+          activeOrder.cancelRequest.requestedBy === "merchant" &&
+          activeOrder.status !== "cancelled" &&
+          activeOrder.status !== "expired" && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`rounded-2xl p-4 mb-4 ${AMBER_CARD}`}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(245,158,11,0.15)]">
+                  <X className="w-5 h-5 text-[#f59e0b]" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[15px] font-semibold text-[#f59e0b]">
+                    Cancel Requested
+                  </p>
+                  <p className="text-[13px] text-[rgba(245,158,11,0.7)]">
+                    Merchant wants to cancel: {activeOrder.cancelRequest.reason}
+                  </p>
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="text-[15px] font-semibold text-orange-700">Cancel Requested</p>
-                <p className="text-[13px] text-orange-600/70">
-                  Merchant wants to cancel: {activeOrder.cancelRequest.reason}
-                </p>
+              <div className="flex gap-2">
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => respondToCancelRequest(true)}
+                  disabled={isRequestingCancel}
+                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-[rgba(245,158,11,0.15)] text-[#f59e0b]"
+                >
+                  {isRequestingCancel ? (
+                    <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                  ) : (
+                    "Agree to Cancel"
+                  )}
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => respondToCancelRequest(false)}
+                  disabled={isRequestingCancel}
+                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-white/[0.08] text-text-secondary"
+                >
+                  Continue Order
+                </motion.button>
               </div>
-            </div>
-            <div className="flex gap-2">
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={() => respondToCancelRequest(true)}
-                disabled={isRequestingCancel}
-                className="flex-1 py-3 rounded-xl bg-orange-500/20 text-orange-700 text-[15px] font-semibold disabled:opacity-50"
-              >
-                {isRequestingCancel ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Agree to Cancel"}
-              </motion.button>
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                onClick={() => respondToCancelRequest(false)}
-                disabled={isRequestingCancel}
-                className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50"
-                style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.6)' }}
-              >
-                Continue Order
-              </motion.button>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
 
         {/* Cancel Request Pending — user requested, waiting for merchant */}
-        {activeOrder.cancelRequest && activeOrder.cancelRequest.requestedBy === 'user' && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-4 mb-4"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
-                <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
+        {activeOrder.cancelRequest &&
+          activeOrder.cancelRequest.requestedBy === "user" &&
+          activeOrder.status !== "cancelled" &&
+          activeOrder.status !== "expired" && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`rounded-2xl p-4 mb-4 ${AMBER_CARD}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(245,158,11,0.15)]">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#f59e0b]" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[15px] font-semibold text-[#f59e0b]">
+                    Cancel Request Sent
+                  </p>
+                  <p className="text-[13px] text-[rgba(245,158,11,0.7)]">
+                    Waiting for merchant to approve
+                  </p>
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="text-[15px] font-semibold text-orange-700">Cancel Request Sent</p>
-                <p className="text-[13px] text-orange-600/70">Waiting for merchant to approve</p>
-              </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
 
         {/* Inactivity Warning Banner */}
-        {activeOrder.inactivityWarned && activeOrder.status !== "disputed" && activeOrder.status !== "complete" && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-4 mb-4"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 text-yellow-600" />
+        {activeOrder.inactivityWarned &&
+          activeOrder.status !== "disputed" &&
+          activeOrder.status !== "complete" &&
+          activeOrder.status !== "cancelled" &&
+          activeOrder.status !== "expired" && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`rounded-2xl p-4 mb-4 ${AMBER_CARD_STRONG}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(245,158,11,0.15)]">
+                  <AlertTriangle className="w-5 h-5 text-[#F59E0B]" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[15px] font-semibold text-[#F59E0B]">
+                    Inactivity Warning
+                  </p>
+                  <p className="text-[13px] text-[rgba(245,158,11,0.7)]">
+                    No activity for 15+ minutes. Complete this order soon or it
+                    will be auto-cancelled/disputed.
+                  </p>
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="text-[15px] font-semibold text-yellow-700">Inactivity Warning</p>
-                <p className="text-[13px] text-yellow-600/70">
-                  No activity for 15+ minutes. Complete this order soon or it will be auto-cancelled/disputed.
-                </p>
-              </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
 
         {/* Dispute Auto-Resolve Countdown */}
-        {activeOrder.status === "disputed" && activeOrder.disputeAutoResolveAt && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 mb-4"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-red-500" />
+        {activeOrder.status === "disputed" &&
+          activeOrder.disputeAutoResolveAt && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={`rounded-2xl p-4 mb-4 ${RED_CARD}`}
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(239,68,68,0.15)]">
+                  <Clock className="w-5 h-5 text-[#EF4444]" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[15px] font-semibold text-[#EF4444]">
+                    Dispute Timer
+                  </p>
+                  <p className="text-[13px] text-[rgba(239,68,68,0.7)]">
+                    {new Date(activeOrder.disputeAutoResolveAt) > new Date()
+                      ? `Auto-refund to escrow funder in ${Math.max(0, Math.round((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) / 3600000))}h ${Math.max(0, Math.round(((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) % 3600000) / 60000))}m`
+                      : "Auto-refund processing..."}
+                  </p>
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="text-[15px] font-semibold text-red-600">Dispute Timer</p>
-                <p className="text-[13px] text-red-500/70">
-                  {new Date(activeOrder.disputeAutoResolveAt) > new Date()
-                    ? `Auto-refund to escrow funder in ${Math.max(0, Math.round((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) / 3600000))}h ${Math.max(0, Math.round(((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) % 3600000) / 60000))}m`
-                    : 'Auto-refund processing...'
-                  }
-                </p>
-              </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
 
         {/* Request Extension — duration picker for payment_sent, simple button otherwise */}
-        {activeOrder.step >= 2 && activeOrder.step < 4 && !extensionRequest && (
-          activeOrder.step === 3 ? (
+        {activeOrder.step >= 2 &&
+          activeOrder.step < 4 &&
+          !extensionRequest &&
+          (activeOrder.step === 3 ? (
             /* Payment sent: fiat sender picks duration */
             <div className="mb-4">
-              <p className="text-[12px] font-medium mb-2 flex items-center gap-1.5" style={{ color: 'rgba(0,0,0,0.45)' }}>
+              <p className="text-[12px] font-medium mb-2 flex items-center gap-1.5 text-text-tertiary">
                 <Clock className="w-3.5 h-3.5" />
                 Request Time Extension
               </p>
               <div className="flex gap-2">
                 {[
-                  { minutes: 15, label: '15 min' },
-                  { minutes: 60, label: '1 hour' },
-                  { minutes: 720, label: '12 hours' },
+                  { minutes: 15, label: "15 min" },
+                  { minutes: 60, label: "1 hour" },
+                  { minutes: 720, label: "12 hours" },
                 ].map((opt) => (
                   <motion.button
                     key={opt.minutes}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => requestExtension(opt.minutes)}
                     disabled={requestingExtension}
-                    className="flex-1 py-2.5 rounded-xl text-[13px] font-medium flex items-center justify-center gap-1 disabled:opacity-50 transition-colors"
-                    style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.08)', color: 'rgba(0,0,0,0.45)' }}
+                    className={`flex-1 py-2.5 rounded-xl text-[13px] font-medium flex items-center justify-center gap-1 disabled:opacity-50 transition-colors text-text-secondary ${CARD}`}
                   >
                     {requestingExtension ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -561,8 +690,7 @@ export const OrderDetailScreen = ({
               whileTap={{ scale: 0.97 }}
               onClick={() => requestExtension()}
               disabled={requestingExtension}
-              className="w-full py-3 rounded-xl text-[13px] font-medium mb-4 flex items-center justify-center gap-2 disabled:opacity-50"
-              style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.08)', color: 'rgba(0,0,0,0.45)' }}
+              className={`w-full py-3 rounded-xl text-[13px] font-medium mb-4 flex items-center justify-center gap-2 disabled:opacity-50 text-text-secondary ${CARD}`}
             >
               {requestingExtension ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -573,800 +701,1201 @@ export const OrderDetailScreen = ({
                 </>
               )}
             </motion.button>
-          )
-        )}
+          ))}
 
         {/* Cancelled/Expired Banner */}
-        {(activeOrder.status === 'cancelled' || activeOrder.status === 'expired') && (
-          <div className="mb-4 p-4 rounded-2xl bg-red-500/10 border border-red-500/20">
+        {(activeOrder.status === "cancelled" ||
+          activeOrder.status === "expired") && (
+          <div className={`mb-4 p-4 rounded-2xl ${RED_CARD}`}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-                <X className="w-5 h-5 text-red-400" />
+              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(239,68,68,0.15)]">
+                <X className="w-5 h-5 text-[#ef4444]" />
               </div>
               <div>
-                <p className="text-[15px] font-semibold text-red-400">
-                  {activeOrder.status === 'cancelled' ? 'Order Cancelled' : 'Order Expired'}
+                <p className="text-[15px] font-semibold text-[#ef4444]">
+                  {activeOrder.status === "cancelled"
+                    ? "Order Cancelled"
+                    : "Order Expired"}
                 </p>
-                <p className="text-[13px] text-neutral-500">
-                  {activeOrder.status === 'cancelled' ? 'This trade was cancelled and did not complete.' : 'This order expired before it could be completed.'}
+                <p className="text-[13px] text-[rgba(239,68,68,0.7)]">
+                  {activeOrder.status === "cancelled"
+                    ? "This trade was cancelled and did not complete."
+                    : "This order expired before it could be completed."}
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Steps */}
-        <div className="space-y-3">
-          {/* Step 1 */}
-          <div className="p-4 rounded-2xl" style={activeOrder.step >= 1 ? { background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' } : { background: '#f8f8f8', border: '1px solid rgba(0,0,0,0.04)' }}>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0" style={
-                activeOrder.step >= 1
-                  ? { background: '#000', color: '#fff' }
-                  : { background: 'rgba(0,0,0,0.08)', color: 'rgba(0,0,0,0.3)' }
-              }>
-                {activeOrder.step > 1 ? <Check className="w-4 h-4" /> : "1"}
-              </div>
-              <div>
-                <p className="text-[15px] font-medium" style={{ color: activeOrder.step >= 1 ? '#000' : 'rgba(0,0,0,0.3)' }}>
-                  Order created
-                </p>
-                {activeOrder.step >= 1 && (
-                  <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>
-                    {activeOrder.dbStatus === 'pending' ? 'Waiting for merchant...' : `Matched with ${activeOrder.merchant.name}`}
-                  </p>
-                )}
-                {/* For sell orders waiting for merchant to mine/claim */}
-                {activeOrder.step === 1 && activeOrder.type === "sell" && activeOrder.dbStatus === 'escrowed' && (
-                  <div className="mt-3 rounded-xl p-4" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)' }}>
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.08)' }}>
-                        <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'rgba(0,0,0,0.5)' }} />
-                      </div>
-                      <div>
-                        <p className="text-[14px] font-medium" style={{ color: 'rgba(0,0,0,0.7)' }}>Waiting for Merchant</p>
-                        <p className="text-[12px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Your USDT is locked. Waiting for merchant to claim</p>
-                      </div>
-                    </div>
-                    <p className="text-[12px]" style={{ color: 'rgba(0,0,0,0.4)' }}>
-                      Your USDT is secured in escrow on-chain. A merchant will claim this order and send fiat to your bank account.
-                    </p>
+        {/* Steps — hidden when cancelled/expired */}
+        {activeOrder.status !== "cancelled" &&
+          activeOrder.status !== "expired" && (
+            <div className="space-y-3">
+              {/* Step 1 */}
+              <div className={`p-4 rounded-2xl ${CARD}`}>
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
+                      activeOrder.step >= 1
+                        ? "bg-accent text-accent-text"
+                        : "bg-surface-card text-text-tertiary"
+                    }`}
+                  >
+                    {activeOrder.step > 1 ? <Check className="w-4 h-4" /> : "1"}
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Step 2 */}
-          <div className="p-4 rounded-2xl" style={activeOrder.step >= 2 ? { background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' } : { background: '#f8f8f8', border: '1px solid rgba(0,0,0,0.04)' }}>
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0" style={
-                activeOrder.step >= 2
-                  ? { background: '#000', color: '#fff' }
-                  : { background: 'rgba(0,0,0,0.08)', color: 'rgba(0,0,0,0.3)' }
-              }>
-                {activeOrder.step > 2 ? <Check className="w-4 h-4" /> : "2"}
-              </div>
-              <div className="flex-1">
-                <p className="text-[15px] font-medium" style={{ color: activeOrder.step >= 2 ? '#000' : 'rgba(0,0,0,0.3)' }}>
-                  {activeOrder.type === "buy"
-                    ? activeOrder.merchant.paymentMethod === "cash"
-                      ? "Meet & pay cash"
-                      : "Send payment"
-                    : "Waiting for merchant"}
-                </p>
-
-                {/* Funds Locked indicator - show when escrow is locked */}
-                {activeOrder.step === 2 && activeOrder.dbStatus === 'escrowed' && (
-                  <div className="mt-2 flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)' }}>
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.08)' }}>
-                      <Lock className="w-3 h-3" style={{ color: '#000' }} />
-                    </div>
-                    <span className="text-[13px] font-medium" style={{ color: '#000' }}>
-                      {activeOrder.type === "buy" ? "Funds locked in escrow" : "Your USDT locked in escrow"}
-                    </span>
-                  </div>
-                )}
-
-                {/* Show escrow funding in progress for buy orders when escrow not yet funded */}
-                {activeOrder.step === 2 && activeOrder.type === "buy" && activeOrder.dbStatus !== 'escrowed' && (
-                  <div className="mt-3 space-y-3">
-                    <div className="rounded-xl p-4" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)' }}>
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.08)' }}>
-                          <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'rgba(0,0,0,0.5)' }} />
-                        </div>
-                        <div>
-                          <p className="text-[15px] font-medium" style={{ color: 'rgba(0,0,0,0.7)' }}>Escrow Funding in Progress</p>
-                          <p className="text-[12px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Merchant is locking USDT in escrow</p>
-                        </div>
-                      </div>
-                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.08)' }}>
-                        <motion.div
-                          className="h-full"
-                          style={{ background: 'rgba(0,0,0,0.2)', width: "40%" }}
-                          animate={{ x: ["-100%", "100%"] }}
-                          transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                        />
-                      </div>
-                      <p className="mt-3 text-[12px]" style={{ color: 'rgba(0,0,0,0.4)' }}>
-                        Once the merchant funds the escrow, you&apos;ll be able to send your payment.
-                      </p>
-                    </div>
-                    <button
-                      onClick={handleOpenChat}
-                      className="w-full py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
-                      style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.7)' }}
+                  <div>
+                    <p
+                      className={`text-[15px] font-medium ${
+                        activeOrder.step >= 1
+                          ? "text-text-primary"
+                          : "text-text-tertiary"
+                      }`}
                     >
-                      <MessageCircle className="w-4 h-4" />
-                      Message Merchant
-                    </button>
+                      Order created
+                    </p>
+                    {activeOrder.step >= 1 && (
+                      <p className="text-[13px] text-text-secondary">
+                        {activeOrder.dbStatus === "pending"
+                          ? "Waiting for merchant..."
+                          : `Matched with ${activeOrder.merchant.name}`}
+                      </p>
+                    )}
+                    {/* For sell orders waiting for merchant to mine/claim */}
+                    {activeOrder.step === 1 &&
+                      activeOrder.type === "sell" &&
+                      activeOrder.dbStatus === "escrowed" && (
+                        <div className={`mt-3 rounded-xl p-4 ${CARD_STRONG}`}>
+                          <div className="flex items-center gap-3 mb-2">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/[0.08]">
+                              <Loader2 className="w-4 h-4 animate-spin text-text-secondary" />
+                            </div>
+                            <div>
+                              <p className="text-[14px] font-medium text-text-primary">
+                                Waiting for Merchant
+                              </p>
+                              <p className="text-[12px] text-text-secondary">
+                                Your USDT is locked. Waiting for merchant to
+                                claim
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-[12px] text-text-tertiary">
+                            Your USDT is secured in escrow on-chain. A merchant
+                            will claim this order and send fiat to your bank
+                            account.
+                          </p>
+                        </div>
+                      )}
                   </div>
-                )}
+                </div>
+              </div>
 
-                {/* Show payment UI when escrow is funded (escrowed or payment_pending) */}
-                {activeOrder.step === 2 && activeOrder.type === "buy" && (activeOrder.dbStatus === 'escrowed' || activeOrder.dbStatus === 'payment_pending') && (
-                  <div className="mt-3 space-y-3">
-                    {activeOrder.merchant.paymentMethod === "cash" ? (
-                      <>
-                        {/* Map Preview */}
-                        <div className="relative rounded-xl overflow-hidden">
-                          <div
-                            className="h-40 relative"
-                            style={{
-                              background: '#f4f4f4',
-                              backgroundImage: `url('https://api.mapbox.com/styles/v1/mapbox/light-v11/static/pin-s+000000(${activeOrder.merchant.lng},${activeOrder.merchant.lat})/${activeOrder.merchant.lng},${activeOrder.merchant.lat},14,0/400x200@2x?access_token=pk.placeholder')`,
-                              backgroundSize: 'cover',
-                              backgroundPosition: 'center'
-                            }}
-                          >
-                            {/* Fallback map UI */}
-                            <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.02)' }} />
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="flex flex-col items-center">
-                                <div className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg mb-1" style={{ background: '#000' }}>
-                                  <MapPin className="w-5 h-5 text-white" />
-                                </div>
-                                <div className="w-1 h-3 rounded-b-full" style={{ background: 'rgba(0,0,0,0.3)' }} />
+              {/* Step 2 */}
+              <div className={`p-4 rounded-2xl ${CARD}`}>
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
+                      activeOrder.step >= 2
+                        ? "bg-accent text-accent-text"
+                        : "bg-surface-card text-text-tertiary"
+                    }`}
+                  >
+                    {activeOrder.step > 2 ? <Check className="w-4 h-4" /> : "2"}
+                  </div>
+                  <div className="flex-1">
+                    <p
+                      className={`text-[15px] font-medium ${
+                        activeOrder.step >= 2
+                          ? "text-text-primary"
+                          : "text-text-tertiary"
+                      }`}
+                    >
+                      {activeOrder.type === "buy"
+                        ? activeOrder.merchant.paymentMethod === "cash"
+                          ? "Meet & pay cash"
+                          : "Send payment"
+                        : "Waiting for merchant"}
+                    </p>
+
+                    {/* Funds Locked indicator - show when escrow is locked */}
+                    {activeOrder.step === 2 &&
+                      activeOrder.dbStatus === "escrowed" && (
+                        <div className={`mt-2 flex items-center gap-2 rounded-lg px-3 py-2 ${CARD_STRONG}`}>
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center bg-white/[0.08]">
+                            <Lock className="w-3 h-3 text-text-primary" />
+                          </div>
+                          <span className="text-[13px] font-medium text-text-primary">
+                            {activeOrder.type === "buy"
+                              ? "Funds locked in escrow"
+                              : "Your USDT locked in escrow"}
+                          </span>
+                        </div>
+                      )}
+
+                    {/* Show escrow funding in progress for buy orders when escrow not yet funded */}
+                    {activeOrder.step === 2 &&
+                      activeOrder.type === "buy" &&
+                      activeOrder.dbStatus !== "escrowed" && (
+                        <div className="mt-3 space-y-3">
+                          <div className={`rounded-xl p-4 ${CARD_STRONG}`}>
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]">
+                                <Loader2 className="w-5 h-5 animate-spin text-text-secondary" />
+                              </div>
+                              <div>
+                                <p className="text-[15px] font-medium text-text-primary">
+                                  Escrow Funding in Progress
+                                </p>
+                                <p className="text-[12px] text-text-secondary">
+                                  Merchant is locking USDT in escrow
+                                </p>
                               </div>
                             </div>
-                            {/* Grid pattern for map feel */}
-                            <div className="absolute inset-0 opacity-10">
-                              <div className="w-full h-full" style={{
-                                backgroundImage: 'linear-gradient(rgba(0,0,0,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.15) 1px, transparent 1px)',
-                                backgroundSize: '40px 40px'
-                              }} />
+                            <div className="h-1.5 rounded-full overflow-hidden bg-white/[0.08]">
+                              <motion.div
+                                className="h-full bg-text-tertiary"
+                                style={{ width: "40%" }}
+                                animate={{ x: ["-100%", "100%"] }}
+                                transition={{
+                                  duration: 1.5,
+                                  repeat: Infinity,
+                                  ease: "linear",
+                                }}
+                              />
                             </div>
+                            <p className="mt-3 text-[12px] text-text-tertiary">
+                              Once the merchant funds the escrow, you&apos;ll be
+                              able to send your payment.
+                            </p>
                           </div>
-                          <button
-                            onClick={() => window.open(`https://maps.google.com/?q=${activeOrder.merchant.lat},${activeOrder.merchant.lng}`, '_blank')}
-                            className="absolute top-3 right-3 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-1.5"
-                            style={{ background: 'rgba(0,0,0,0.7)' }}
-                          >
-                            <ExternalLink className="w-3.5 h-3.5 text-white" />
-                            <span className="text-[12px] font-medium text-white">Open Maps</span>
-                          </button>
-                        </div>
-
-                        {/* Meeting Details */}
-                        <div className="rounded-xl p-3 space-y-3" style={{ background: '#f4f4f4' }}>
-                          <div>
-                            <p className="text-[11px] uppercase tracking-wide mb-1" style={{ color: 'rgba(0,0,0,0.4)' }}>Meeting Location</p>
-                            <p className="text-[15px] font-medium" style={{ color: '#000' }}>{activeOrder.merchant.location}</p>
-                            <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.5)' }}>{activeOrder.merchant.address}</p>
-                          </div>
-                          <div className="pt-2" style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
-                            <p className="text-[11px] uppercase tracking-wide mb-1" style={{ color: 'rgba(0,0,0,0.4)' }}>Meeting Spot</p>
-                            <div className="flex items-start gap-2">
-                              <Navigation className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: 'rgba(0,0,0,0.5)' }} />
-                              <p className="text-[13px]" style={{ color: '#000' }}>{activeOrder.merchant.meetingSpot}</p>
-                            </div>
-                          </div>
-                          <div className="pt-2" style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
-                            <div className="flex items-center justify-between">
-                              <span className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Cash Amount</span>
-                              <span className="text-[17px] font-semibold" style={{ color: '#000' }}>
-                                {'\u062F.\u0625'} {parseFloat(activeOrder.fiatAmount).toLocaleString()}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex gap-2">
                           <button
                             onClick={handleOpenChat}
-                            className="flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
-                            style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.7)' }}
+                            className={`w-full py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
                             <MessageCircle className="w-4 h-4" />
-                            Chat
+                            Message Merchant
                           </button>
-                          <motion.button
-                            whileTap={{ scale: 0.98 }}
-                            onClick={markPaymentSent}
-                            className="flex-[2] py-3 rounded-xl text-[15px] font-semibold"
-                            style={{ background: '#000', color: '#fff' }}
-                          >
-                            I&apos;m at the location
-                          </motion.button>
                         </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="rounded-xl p-3 space-y-2" style={{ background: '#f4f4f4' }}>
-                          {/* Locked payment method header */}
-                          {activeOrder.lockedPaymentMethod && (
-                            <div className="flex items-center gap-1.5 pb-2" style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
-                              <Lock className="w-3 h-3 text-orange-400" />
-                              <span className="text-[10px] text-orange-400 font-bold uppercase tracking-wide">
-                                Send payment to this method only
-                              </span>
-                            </div>
-                          )}
-                          {/* Show merchant's payment method if available, then locked payment method, then fall back to offer details */}
-                          {activeOrder.merchantPaymentMethod ? (
+                      )}
+
+                    {/* Show payment UI when escrow is funded (escrowed or payment_pending) */}
+                    {activeOrder.step === 2 &&
+                      activeOrder.type === "buy" &&
+                      (activeOrder.dbStatus === "escrowed" ||
+                        activeOrder.dbStatus === "payment_pending") && (
+                        <div className="mt-3 space-y-3">
+                          {activeOrder.merchant.paymentMethod === "cash" ? (
                             <>
-                              <div className="flex items-center justify-between">
-                                <span className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Method</span>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-[13px] font-medium" style={{ color: '#000' }}>{activeOrder.merchantPaymentMethod.name}</span>
-                                  <button onClick={() => copyField('method', activeOrder.merchantPaymentMethod!.name)} className="p-0.5 rounded hover:bg-black/5">
-                                    {copiedField === 'method' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" style={{ color: 'rgba(0,0,0,0.3)' }} />}
-                                  </button>
+                              {/* Map Preview */}
+                              <div className="relative rounded-xl overflow-hidden">
+                                <div
+                                  className="h-40 relative bg-surface-raised bg-cover bg-center"
+                                  style={{
+                                    // Dynamic: mapbox URL built from merchant lat/lng.
+                                    backgroundImage: `url('https://api.mapbox.com/styles/v1/mapbox/light-v11/static/pin-s+000000(${activeOrder.merchant.lng},${activeOrder.merchant.lat})/${activeOrder.merchant.lng},${activeOrder.merchant.lat},14,0/400x200@2x?access_token=pk.placeholder')`,
+                                  }}
+                                >
+                                  {/* Fallback map UI */}
+                                  <div className="absolute inset-0 bg-surface-card" />
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="flex flex-col items-center">
+                                      <div className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg mb-1 bg-surface-raised">
+                                        <MapPin className="w-5 h-5 text-white" />
+                                      </div>
+                                      <div className="w-1 h-3 rounded-b-full bg-text-tertiary" />
+                                    </div>
+                                  </div>
+                                  {/* Grid pattern for map feel */}
+                                  <div
+                                    className="absolute inset-0 opacity-10 bg-[linear-gradient(rgba(0,0,0,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.15)_1px,transparent_1px)] bg-[length:40px_40px]"
+                                  />
+                                </div>
+                                <button
+                                  onClick={() =>
+                                    window.open(
+                                      `https://maps.google.com/?q=${activeOrder.merchant.lat},${activeOrder.merchant.lng}`,
+                                      "_blank",
+                                    )
+                                  }
+                                  className="absolute top-3 right-3 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-1.5 bg-surface-raised"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5 text-white" />
+                                  <span className="text-[12px] font-medium text-white">
+                                    Open Maps
+                                  </span>
+                                </button>
+                              </div>
+
+                              {/* Meeting Details */}
+                              <div className={`rounded-xl p-3 space-y-3 ${CARD}`}>
+                                <div>
+                                  <p className="text-[11px] uppercase tracking-wide mb-1 text-text-tertiary">
+                                    Meeting Location
+                                  </p>
+                                  <p className="text-[15px] font-medium text-text-primary">
+                                    {activeOrder.merchant.location}
+                                  </p>
+                                  <p className="text-[13px] text-text-secondary">
+                                    {activeOrder.merchant.address}
+                                  </p>
+                                </div>
+                                <div className="pt-2 border-t border-white/10">
+                                  <p className="text-[11px] uppercase tracking-wide mb-1 text-text-tertiary">
+                                    Meeting Spot
+                                  </p>
+                                  <div className="flex items-start gap-2">
+                                    <Navigation className="w-4 h-4 flex-shrink-0 mt-0.5 text-text-secondary" />
+                                    <p className="text-[13px] text-text-primary">
+                                      {activeOrder.merchant.meetingSpot}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="pt-2 border-t border-white/10">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[13px] text-text-secondary">
+                                      Cash Amount
+                                    </span>
+                                    <span className="text-[17px] font-semibold text-text-primary">
+                                      {"\u062F.\u0625"}{" "}
+                                      {parseFloat(
+                                        activeOrder.fiatAmount,
+                                      ).toLocaleString()}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
-                              {activeOrder.merchantPaymentMethod.details && (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Details</span>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-[13px] font-mono" style={{ color: '#000' }}>{activeOrder.merchantPaymentMethod.details}</span>
-                                    <button onClick={() => copyField('details', activeOrder.merchantPaymentMethod!.details)} className="p-0.5 rounded hover:bg-black/5">
-                                      {copiedField === 'details' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" style={{ color: 'rgba(0,0,0,0.3)' }} />}
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          ) : activeOrder.lockedPaymentMethod ? (
-                            <>
-                              {activeOrder.lockedPaymentMethod.details.bank_name && (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Bank</span>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-[13px]" style={{ color: '#000' }}>{activeOrder.lockedPaymentMethod.details.bank_name}</span>
-                                    <button onClick={() => copyField('bank', activeOrder.lockedPaymentMethod!.details.bank_name || '')} className="p-0.5 rounded hover:bg-black/5">
-                                      {copiedField === 'bank' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" style={{ color: 'rgba(0,0,0,0.3)' }} />}
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                              {activeOrder.lockedPaymentMethod.details.iban && (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>IBAN</span>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-[13px] font-mono" style={{ color: '#000' }}>{activeOrder.lockedPaymentMethod.details.iban}</span>
-                                    <button onClick={() => copyField('iban', activeOrder.lockedPaymentMethod!.details.iban || '')} className="p-0.5 rounded hover:bg-black/5">
-                                      {copiedField === 'iban' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" style={{ color: 'rgba(0,0,0,0.3)' }} />}
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                              {activeOrder.lockedPaymentMethod.details.account_name && (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Name</span>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-[13px]" style={{ color: '#000' }}>{activeOrder.lockedPaymentMethod.details.account_name}</span>
-                                    <button onClick={() => copyField('name', activeOrder.lockedPaymentMethod!.details.account_name || '')} className="p-0.5 rounded hover:bg-black/5">
-                                      {copiedField === 'name' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" style={{ color: 'rgba(0,0,0,0.3)' }} />}
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                              {activeOrder.lockedPaymentMethod.details.upi_id && (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>UPI</span>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-[13px] font-mono" style={{ color: '#000' }}>{activeOrder.lockedPaymentMethod.details.upi_id}</span>
-                                    <button onClick={() => copyField('upi', activeOrder.lockedPaymentMethod!.details.upi_id || '')} className="p-0.5 rounded hover:bg-black/5">
-                                      {copiedField === 'upi' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" style={{ color: 'rgba(0,0,0,0.3)' }} />}
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
+
+                              {/* Action Buttons */}
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={handleOpenChat}
+                                  className={`flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
+                                >
+                                  <MessageCircle className="w-4 h-4" />
+                                  Chat
+                                </button>
+                                <motion.button
+                                  whileTap={{ scale: 0.98 }}
+                                  onClick={markPaymentSent}
+                                  className={`flex-[2] py-3 rounded-xl text-[15px] font-semibold ${PRIMARY_BTN}`}
+                                >
+                                  I&apos;m at the location
+                                </motion.button>
+                              </div>
                             </>
                           ) : (
                             <>
-                              {activeOrder.merchant.bank && (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Bank</span>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-[13px]" style={{ color: '#000' }}>{activeOrder.merchant.bank}</span>
-                                    <button onClick={() => copyField('bank', activeOrder.merchant.bank || '')} className="p-0.5 rounded hover:bg-black/5">
-                                      {copiedField === 'bank' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" style={{ color: 'rgba(0,0,0,0.3)' }} />}
-                                    </button>
+                              <div className={`rounded-xl p-3 space-y-2 ${CARD}`}>
+                                {/* Locked payment method header */}
+                                {activeOrder.lockedPaymentMethod && (
+                                  <div className="flex items-center gap-1.5 pb-2 border-b border-white/10">
+                                    <Lock className="w-3 h-3 text-orange-400" />
+                                    <span className="text-[10px] text-orange-400 font-bold uppercase tracking-wide">
+                                      Send payment to this method only
+                                    </span>
+                                  </div>
+                                )}
+                                {/* Show merchant's payment method if available, then locked payment method, then fall back to offer details */}
+                                {activeOrder.merchantPaymentMethod ? (
+                                  <>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[13px] text-text-secondary">
+                                        Method
+                                      </span>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-[13px] font-medium text-text-primary">
+                                          {
+                                            activeOrder.merchantPaymentMethod
+                                              .name
+                                          }
+                                        </span>
+                                        <button
+                                          onClick={() =>
+                                            copyField(
+                                              "method",
+                                              activeOrder.merchantPaymentMethod!
+                                                .name,
+                                            )
+                                          }
+                                          className="p-0.5 rounded hover:bg-white/10"
+                                        >
+                                          {copiedField === "method" ? (
+                                            <Check className="w-3.5 h-3.5 text-green-500" />
+                                          ) : (
+                                            <Copy className="w-3.5 h-3.5 text-text-tertiary" />
+                                          )}
+                                        </button>
+                                      </div>
+                                    </div>
+                                    {activeOrder.merchantPaymentMethod
+                                      .details && (
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[13px] text-text-secondary">
+                                          Details
+                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-[13px] font-mono text-text-primary">
+                                            {
+                                              activeOrder.merchantPaymentMethod
+                                                .details
+                                            }
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              copyField(
+                                                "details",
+                                                activeOrder
+                                                  .merchantPaymentMethod!
+                                                  .details,
+                                              )
+                                            }
+                                            className="p-0.5 rounded hover:bg-white/10"
+                                          >
+                                            {copiedField === "details" ? (
+                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                            ) : (
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                ) : activeOrder.lockedPaymentMethod ? (
+                                  <>
+                                    {activeOrder.lockedPaymentMethod.details
+                                      .bank_name && (
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[13px] text-text-secondary">
+                                          Bank
+                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-[13px] text-text-primary">
+                                            {
+                                              activeOrder.lockedPaymentMethod
+                                                .details.bank_name
+                                            }
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              copyField(
+                                                "bank",
+                                                activeOrder.lockedPaymentMethod!
+                                                  .details.bank_name || "",
+                                              )
+                                            }
+                                            className="p-0.5 rounded hover:bg-white/10"
+                                          >
+                                            {copiedField === "bank" ? (
+                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                            ) : (
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {activeOrder.lockedPaymentMethod.details
+                                      .iban && (
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[13px] text-text-secondary">
+                                          IBAN
+                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-[13px] font-mono text-text-primary">
+                                            {
+                                              activeOrder.lockedPaymentMethod
+                                                .details.iban
+                                            }
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              copyField(
+                                                "iban",
+                                                activeOrder.lockedPaymentMethod!
+                                                  .details.iban || "",
+                                              )
+                                            }
+                                            className="p-0.5 rounded hover:bg-white/10"
+                                          >
+                                            {copiedField === "iban" ? (
+                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                            ) : (
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {activeOrder.lockedPaymentMethod.details
+                                      .account_name && (
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[13px] text-text-secondary">
+                                          Name
+                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-[13px] text-text-primary">
+                                            {
+                                              activeOrder.lockedPaymentMethod
+                                                .details.account_name
+                                            }
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              copyField(
+                                                "name",
+                                                activeOrder.lockedPaymentMethod!
+                                                  .details.account_name || "",
+                                              )
+                                            }
+                                            className="p-0.5 rounded hover:bg-white/10"
+                                          >
+                                            {copiedField === "name" ? (
+                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                            ) : (
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {activeOrder.lockedPaymentMethod.details
+                                      .upi_id && (
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[13px] text-text-secondary">
+                                          UPI
+                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-[13px] font-mono text-text-primary">
+                                            {
+                                              activeOrder.lockedPaymentMethod
+                                                .details.upi_id
+                                            }
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              copyField(
+                                                "upi",
+                                                activeOrder.lockedPaymentMethod!
+                                                  .details.upi_id || "",
+                                              )
+                                            }
+                                            className="p-0.5 rounded hover:bg-white/10"
+                                          >
+                                            {copiedField === "upi" ? (
+                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                            ) : (
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <>
+                                    {activeOrder.merchant.bank && (
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[13px] text-text-secondary">
+                                          Bank
+                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-[13px] text-text-primary">
+                                            {activeOrder.merchant.bank}
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              copyField(
+                                                "bank",
+                                                activeOrder.merchant.bank || "",
+                                              )
+                                            }
+                                            className="p-0.5 rounded hover:bg-white/10"
+                                          >
+                                            {copiedField === "bank" ? (
+                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                            ) : (
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {activeOrder.merchant.iban && (
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[13px] text-text-secondary">
+                                          IBAN
+                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-[13px] font-mono text-text-primary">
+                                            {activeOrder.merchant.iban}
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              copyField(
+                                                "iban",
+                                                activeOrder.merchant.iban || "",
+                                              )
+                                            }
+                                            className="p-0.5 rounded hover:bg-white/10"
+                                          >
+                                            {copiedField === "iban" ? (
+                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                            ) : (
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                    {activeOrder.merchant.accountName && (
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[13px] text-text-secondary">
+                                          Name
+                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-[13px] text-text-primary">
+                                            {activeOrder.merchant.accountName}
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              copyField(
+                                                "name",
+                                                activeOrder.merchant
+                                                  .accountName || "",
+                                              )
+                                            }
+                                            className="p-0.5 rounded hover:bg-white/10"
+                                          >
+                                            {copiedField === "name" ? (
+                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                            ) : (
+                                              <Copy className="w-3.5 h-3.5 text-text-tertiary" />
+                                            )}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                                <div className="pt-2 border-t border-white/10">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[13px] text-text-secondary">
+                                      Amount
+                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[17px] font-semibold text-text-primary">
+                                        {"\u062F.\u0625"}{" "}
+                                        {parseFloat(
+                                          activeOrder.fiatAmount,
+                                        ).toLocaleString()}
+                                      </span>
+                                      <button
+                                        onClick={() =>
+                                          copyField(
+                                            "amount",
+                                            parseFloat(
+                                              activeOrder.fiatAmount,
+                                            ).toString(),
+                                          )
+                                        }
+                                        className="p-0.5 rounded hover:bg-white/10"
+                                      >
+                                        {copiedField === "amount" ? (
+                                          <Check className="w-3.5 h-3.5 text-green-500" />
+                                        ) : (
+                                          <Copy className="w-3.5 h-3.5 text-text-tertiary" />
+                                        )}
+                                      </button>
+                                    </div>
                                   </div>
                                 </div>
-                              )}
-                              {activeOrder.merchant.iban && (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>IBAN</span>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-[13px] font-mono" style={{ color: '#000' }}>{activeOrder.merchant.iban}</span>
-                                    <button onClick={() => copyField('iban', activeOrder.merchant.iban || '')} className="p-0.5 rounded hover:bg-black/5">
-                                      {copiedField === 'iban' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" style={{ color: 'rgba(0,0,0,0.3)' }} />}
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-                              {activeOrder.merchant.accountName && (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Name</span>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-[13px]" style={{ color: '#000' }}>{activeOrder.merchant.accountName}</span>
-                                    <button onClick={() => copyField('name', activeOrder.merchant.accountName || '')} className="p-0.5 rounded hover:bg-black/5">
-                                      {copiedField === 'name' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" style={{ color: 'rgba(0,0,0,0.3)' }} />}
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={handleOpenChat}
+                                  className={`flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
+                                >
+                                  <MessageCircle className="w-4 h-4" />
+                                  Chat
+                                </button>
+                                <motion.button
+                                  whileTap={{ scale: 0.98 }}
+                                  onClick={markPaymentSent}
+                                  disabled={isLoading}
+                                  className={`flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${PRIMARY_BTN}`}
+                                >
+                                  {isLoading
+                                    ? "Processing..."
+                                    : "I've sent the payment"}
+                                </motion.button>
+                              </div>
                             </>
                           )}
-                          <div className="pt-2" style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
-                            <div className="flex items-center justify-between">
-                              <span className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Amount</span>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[17px] font-semibold" style={{ color: '#000' }}>
-                                  {'\u062F.\u0625'} {parseFloat(activeOrder.fiatAmount).toLocaleString()}
-                                </span>
-                                <button onClick={() => copyField('amount', parseFloat(activeOrder.fiatAmount).toString())} className="p-0.5 rounded hover:bg-black/5">
-                                  {copiedField === 'amount' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" style={{ color: 'rgba(0,0,0,0.3)' }} />}
-                                </button>
+                        </div>
+                      )}
+
+                    {/* Sell order step 2 - merchant accepted with wallet signature, now user locks escrow */}
+                    {activeOrder.step === 2 &&
+                      activeOrder.type === "sell" &&
+                      activeOrder.dbStatus === "accepted" &&
+                      !activeOrder.escrowTxHash && (
+                        <div className="mt-3 space-y-3">
+                          <div className={`rounded-xl p-4 ${CARD_STRONG}`}>
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]">
+                                <Lock className="w-5 h-5 text-text-primary" />
+                              </div>
+                              <div>
+                                <p className="text-[15px] font-medium text-text-primary">
+                                  Merchant Accepted - Lock Escrow
+                                </p>
+                                <p className="text-[12px] text-text-secondary">
+                                  Merchant verified their wallet. Lock funds to
+                                  proceed.
+                                </p>
                               </div>
                             </div>
+                            <p className="text-[12px] mb-3 text-text-tertiary">
+                              The merchant has signed with their wallet (
+                              {activeOrder.acceptorWalletAddress?.slice(0, 4)}
+                              ...{activeOrder.acceptorWalletAddress?.slice(-4)}
+                              ). Lock your{" "}
+                              {parseFloat(activeOrder.cryptoAmount).toFixed(2)}{" "}
+                              USDT to the escrow. Funds will be released to this
+                              wallet when you confirm payment received.
+                            </p>
+                            <motion.button
+                              whileTap={{ scale: 0.98 }}
+                              onClick={async () => {
+                                if (!solanaWallet.connected) {
+                                  setShowWalletModal(true);
+                                  return;
+                                }
+                                if (!solanaWallet.programReady) {
+                                  showAlert(
+                                    "Wallet Error",
+                                    "Wallet not ready. Please reconnect your wallet.",
+                                    "error",
+                                  );
+                                  return;
+                                }
+                                setIsLoading(true);
+                                try {
+                                  const merchantWallet =
+                                    activeOrder.acceptorWalletAddress ||
+                                    activeOrder.merchant.walletAddress;
+                                  if (
+                                    !merchantWallet ||
+                                    !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(
+                                      merchantWallet,
+                                    )
+                                  ) {
+                                    showAlert(
+                                      "Wallet Error",
+                                      "Merchant wallet not available. Please wait for merchant to accept the order with their wallet.",
+                                      "warning",
+                                    );
+                                    setIsLoading(false);
+                                    return;
+                                  }
+                                  const escrowResult =
+                                    await solanaWallet.depositToEscrow({
+                                      amount: parseFloat(
+                                        activeOrder.cryptoAmount,
+                                      ),
+                                      merchantWallet,
+                                    });
+                                  if (escrowResult.success) {
+                                    await fetchWithAuth(
+                                      `/api/orders/${activeOrder.id}/escrow`,
+                                      {
+                                        method: "POST",
+                                        headers: {
+                                          "Content-Type": "application/json",
+                                        },
+                                        body: JSON.stringify({
+                                          tx_hash: escrowResult.txHash,
+                                          actor_type: "user",
+                                          actor_id: userId,
+                                          escrow_address:
+                                            solanaWallet.walletAddress,
+                                          escrow_trade_id: escrowResult.tradeId,
+                                          escrow_trade_pda:
+                                            escrowResult.tradePda,
+                                          escrow_pda: escrowResult.escrowPda,
+                                          escrow_creator_wallet:
+                                            solanaWallet.walletAddress,
+                                        }),
+                                      },
+                                    );
+                                    setOrders((prev) =>
+                                      prev.map((o) =>
+                                        o.id === activeOrder.id
+                                          ? {
+                                              ...o,
+                                              dbStatus: "escrowed",
+                                              escrowTxHash: escrowResult.txHash,
+                                            }
+                                          : o,
+                                      ),
+                                    );
+                                    playSound("trade_complete");
+                                  }
+                                } catch (err: any) {
+                                  console.error("Escrow failed:", err);
+                                  showAlert(
+                                    "Escrow Failed",
+                                    err?.message ||
+                                      "Failed to lock escrow. Please try again.",
+                                    "error",
+                                  );
+                                  playSound("error");
+                                } finally {
+                                  setIsLoading(false);
+                                }
+                              }}
+                              disabled={
+                                isLoading ||
+                                (solanaWallet.connected &&
+                                  !solanaWallet.programReady)
+                              }
+                              className={`w-full py-3 rounded-xl text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50 ${PRIMARY_BTN}`}
+                            >
+                              {isLoading ? (
+                                <>
+                                  <Loader2 className="w-5 h-5 animate-spin" />
+                                  Locking...
+                                </>
+                              ) : !solanaWallet.connected ? (
+                                <>
+                                  <Wallet className="w-5 h-5" />
+                                  Connect Wallet to Lock
+                                </>
+                              ) : !solanaWallet.programReady ? (
+                                "Wallet Not Ready"
+                              ) : (
+                                <>
+                                  <Lock className="w-5 h-5" />
+                                  Lock{" "}
+                                  {parseFloat(activeOrder.cryptoAmount).toFixed(
+                                    2,
+                                  )}{" "}
+                                  USDT to Escrow
+                                </>
+                              )}
+                            </motion.button>
                           </div>
-                        </div>
-                        <div className="flex gap-2">
                           <button
                             onClick={handleOpenChat}
-                            className="flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
-                            style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.7)' }}
+                            className={`w-full py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
                             <MessageCircle className="w-4 h-4" />
-                            Chat
+                            Message Merchant
                           </button>
-                          <motion.button
-                            whileTap={{ scale: 0.98 }}
-                            onClick={markPaymentSent}
-                            disabled={isLoading}
-                            className="flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                            style={{ background: '#000', color: '#fff' }}
-                          >
-                            {isLoading ? 'Processing...' : "I've sent the payment"}
-                          </motion.button>
                         </div>
-                      </>
-                    )}
-                  </div>
-                )}
+                      )}
 
-                {/* Sell order step 2 - merchant accepted with wallet signature, now user locks escrow */}
-                {activeOrder.step === 2 && activeOrder.type === "sell" && activeOrder.dbStatus === 'accepted' && !activeOrder.escrowTxHash && (
-                  <div className="mt-3 space-y-3">
-                    <div className="rounded-xl p-4" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)' }}>
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.08)' }}>
-                          <Lock className="w-5 h-5" style={{ color: '#000' }} />
-                        </div>
-                        <div>
-                          <p className="text-[15px] font-medium" style={{ color: '#000' }}>Merchant Accepted - Lock Escrow</p>
-                          <p className="text-[12px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Merchant verified their wallet. Lock funds to proceed.</p>
-                        </div>
-                      </div>
-                      <p className="text-[12px] mb-3" style={{ color: 'rgba(0,0,0,0.4)' }}>
-                        The merchant has signed with their wallet ({activeOrder.acceptorWalletAddress?.slice(0, 4)}...{activeOrder.acceptorWalletAddress?.slice(-4)}). Lock your {activeOrder.cryptoAmount} USDT to the escrow. Funds will be released to this wallet when you confirm payment received.
-                      </p>
-                      <motion.button
-                        whileTap={{ scale: 0.98 }}
-                        onClick={async () => {
-                          if (!solanaWallet.connected) {
-                            setShowWalletModal(true);
-                            return;
-                          }
-                          if (!solanaWallet.programReady) {
-                            showAlert('Wallet Error', 'Wallet not ready. Please reconnect your wallet.', 'error');
-                            return;
-                          }
-                          setIsLoading(true);
-                          try {
-                            const merchantWallet = activeOrder.acceptorWalletAddress || activeOrder.merchant.walletAddress;
-                            if (!merchantWallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet)) {
-                              showAlert('Wallet Error', 'Merchant wallet not available. Please wait for merchant to accept the order with their wallet.', 'warning');
-                              setIsLoading(false);
-                              return;
-                            }
-                            const escrowResult = await solanaWallet.depositToEscrow({
-                              amount: parseFloat(activeOrder.cryptoAmount),
-                              merchantWallet,
-                            });
-                            if (escrowResult.success) {
-                              await fetchWithAuth(`/api/orders/${activeOrder.id}/escrow`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  tx_hash: escrowResult.txHash,
-                                  actor_type: 'user',
-                                  actor_id: userId,
-                                  escrow_address: solanaWallet.walletAddress,
-                                  escrow_trade_id: escrowResult.tradeId,
-                                  escrow_trade_pda: escrowResult.tradePda,
-                                  escrow_pda: escrowResult.escrowPda,
-                                  escrow_creator_wallet: solanaWallet.walletAddress,
-                                }),
-                              });
-                              setOrders(prev => prev.map(o =>
-                                o.id === activeOrder.id ? { ...o, dbStatus: 'escrowed', escrowTxHash: escrowResult.txHash } : o
-                              ));
-                              playSound('trade_complete');
-                            }
-                          } catch (err: any) {
-                            console.error('Escrow failed:', err);
-                            showAlert('Escrow Failed', err?.message || 'Failed to lock escrow. Please try again.', 'error');
-                            playSound('error');
-                          } finally {
-                            setIsLoading(false);
-                          }
-                        }}
-                        disabled={isLoading || (solanaWallet.connected && !solanaWallet.programReady)}
-                        className="w-full py-3 rounded-xl text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                        style={{ background: '#000', color: '#fff' }}
-                      >
-                        {isLoading ? (
-                          <>
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            Locking...
-                          </>
-                        ) : !solanaWallet.connected ? (
-                          <>
-                            <Wallet className="w-5 h-5" />
-                            Connect Wallet to Lock
-                          </>
-                        ) : !solanaWallet.programReady ? (
-                          'Wallet Not Ready'
-                        ) : (
-                          <>
-                            <Lock className="w-5 h-5" />
-                            Lock {activeOrder.cryptoAmount} USDT to Escrow
-                          </>
-                        )}
-                      </motion.button>
-                    </div>
-                    <button
-                      onClick={handleOpenChat}
-                      className="w-full py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
-                      style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.7)' }}
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      Message Merchant
-                    </button>
-                  </div>
-                )}
+                    {/* Sell order step 2 - escrow IS locked, waiting for payment */}
+                    {activeOrder.step === 2 &&
+                      activeOrder.type === "sell" &&
+                      (activeOrder.dbStatus === "escrowed" ||
+                        activeOrder.escrowTxHash) && (
+                        <div className="mt-2">
+                          <p className="text-[13px] text-text-secondary">
+                            Your USDT is locked in escrow. Waiting for merchant
+                            to send AED payment...
+                          </p>
 
-                {/* Sell order step 2 - escrow IS locked, waiting for payment */}
-                {activeOrder.step === 2 && activeOrder.type === "sell" && (activeOrder.dbStatus === 'escrowed' || activeOrder.escrowTxHash) && (
-                  <div className="mt-2">
-                    <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Your USDT is locked in escrow. Waiting for merchant to send AED payment...</p>
-
-                    <div className="mt-3 rounded-xl p-3" style={{ background: '#f4f4f4' }}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[12px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Expected payment</span>
-                        <span className="text-[15px] font-semibold" style={{ color: '#000' }}>
-                          {'\u062F.\u0625'} {parseFloat(activeOrder.fiatAmount).toLocaleString()}
-                        </span>
-                      </div>
-                      {activeOrder.lockedPaymentMethod ? (
-                        <div className="pt-2 space-y-1.5" style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
-                          <div className="flex items-center gap-1.5">
-                            <Lock className="w-3 h-3 text-orange-400" />
-                            <span className="text-[11px] text-orange-400 font-semibold uppercase tracking-wide">Locked Payment Method</span>
-                          </div>
-                          <p className="text-[13px] font-medium" style={{ color: '#000' }}>{activeOrder.lockedPaymentMethod.label}</p>
-                          {activeOrder.lockedPaymentMethod.type === 'bank' && (
-                            <div className="space-y-1 text-[12px]">
-                              {activeOrder.lockedPaymentMethod.details.bank_name && (
-                                <p style={{ color: 'rgba(0,0,0,0.5)' }}>{activeOrder.lockedPaymentMethod.details.bank_name}</p>
-                              )}
-                              {activeOrder.lockedPaymentMethod.details.iban && (
-                                <p className="font-mono" style={{ color: 'rgba(0,0,0,0.5)' }}>{activeOrder.lockedPaymentMethod.details.iban}</p>
-                              )}
+                          <div className={`mt-3 rounded-xl p-3 ${CARD}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-[12px] text-text-secondary">
+                                Expected payment
+                              </span>
+                              <span className="text-[15px] font-semibold text-text-primary">
+                                {"\u062F.\u0625"}{" "}
+                                {parseFloat(
+                                  activeOrder.fiatAmount,
+                                ).toLocaleString()}
+                              </span>
                             </div>
-                          )}
-                          {activeOrder.lockedPaymentMethod.type === 'upi' && activeOrder.lockedPaymentMethod.details.upi_id && (
-                            <p className="text-[12px] font-mono" style={{ color: 'rgba(0,0,0,0.5)' }}>{activeOrder.lockedPaymentMethod.details.upi_id}</p>
-                          )}
-                          <p className="text-[10px]" style={{ color: 'rgba(0,0,0,0.35)' }}>Merchant will send payment to this method</p>
+                            {activeOrder.lockedPaymentMethod ? (
+                              <div className="pt-2 space-y-1.5 border-t border-white/10">
+                                <div className="flex items-center gap-1.5">
+                                  <Lock className="w-3 h-3 text-orange-400" />
+                                  <span className="text-[11px] text-orange-400 font-semibold uppercase tracking-wide">
+                                    Locked Payment Method
+                                  </span>
+                                </div>
+                                <p className="text-[13px] font-medium text-text-primary">
+                                  {activeOrder.lockedPaymentMethod.label}
+                                </p>
+                                {activeOrder.lockedPaymentMethod.type ===
+                                  "bank" && (
+                                  <div className="space-y-1 text-[12px]">
+                                    {activeOrder.lockedPaymentMethod.details
+                                      .bank_name && (
+                                      <p className="text-text-secondary">
+                                        {
+                                          activeOrder.lockedPaymentMethod
+                                            .details.bank_name
+                                        }
+                                      </p>
+                                    )}
+                                    {activeOrder.lockedPaymentMethod.details
+                                      .iban && (
+                                      <p className="font-mono text-text-secondary">
+                                        {
+                                          activeOrder.lockedPaymentMethod
+                                            .details.iban
+                                        }
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                                {activeOrder.lockedPaymentMethod.type ===
+                                  "upi" &&
+                                  activeOrder.lockedPaymentMethod.details
+                                    .upi_id && (
+                                    <p className="text-[12px] font-mono text-text-secondary">
+                                      {
+                                        activeOrder.lockedPaymentMethod.details
+                                          .upi_id
+                                      }
+                                    </p>
+                                  )}
+                                <p className="text-[10px] text-text-tertiary">
+                                  Merchant will send payment to this method
+                                </p>
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-text-tertiary">
+                                Merchant will send this amount to your bank
+                                account
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="mt-3 h-1 rounded-full overflow-hidden bg-white/[0.08]">
+                            <motion.div
+                              className="h-full bg-orange-400"
+                              animate={{ x: ["-100%", "100%"] }}
+                              transition={{
+                                duration: 1.5,
+                                repeat: Infinity,
+                                ease: "linear",
+                              }}
+                              style={{ width: "30%" }}
+                            />
+                          </div>
+                          <button
+                            onClick={handleOpenChat}
+                            className={`mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            Message Merchant
+                          </button>
                         </div>
-                      ) : (
-                        <p className="text-[11px]" style={{ color: 'rgba(0,0,0,0.35)' }}>
-                          Merchant will send this amount to your bank account
+                      )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className={`p-4 rounded-2xl ${CARD}`}>
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0 ${
+                      activeOrder.step >= 3
+                        ? "bg-accent text-accent-text"
+                        : "bg-surface-card text-text-tertiary"
+                    }`}
+                  >
+                    {activeOrder.step > 3 ? <Check className="w-4 h-4" /> : "3"}
+                  </div>
+                  <div className="flex-1">
+                    <p
+                      className={`text-[15px] font-medium ${
+                        activeOrder.step >= 3
+                          ? "text-text-primary"
+                          : "text-text-tertiary"
+                      }`}
+                    >
+                      {activeOrder.dbStatus === "disputed"
+                        ? "Dispute"
+                        : activeOrder.type === "buy"
+                          ? "Confirming payment"
+                          : "Confirm received"}
+                    </p>
+
+                    {activeOrder.step === 3 &&
+                      activeOrder.type === "buy" &&
+                      activeOrder.dbStatus === "disputed" && (
+                        <div className="mt-2">
+                          <p className="text-[13px] text-text-secondary">
+                            This order is under dispute. Our team is reviewing
+                            the case.
+                          </p>
+                          <button
+                            onClick={handleOpenChat}
+                            className={`mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            Message Seller
+                          </button>
+                        </div>
+                      )}
+
+                    {activeOrder.step === 3 &&
+                      activeOrder.type === "buy" &&
+                      activeOrder.dbStatus !== "disputed" && (
+                        <div className="mt-2">
+                          <p className="text-[13px] text-text-secondary">
+                            Seller is verifying your payment...
+                          </p>
+                          <div className="mt-2 h-1 rounded-full overflow-hidden bg-white/[0.08]">
+                            <motion.div
+                              className="h-full bg-text-tertiary"
+                              style={{ width: "30%" }}
+                              animate={{ x: ["-100%", "100%"] }}
+                              transition={{
+                                duration: 1.5,
+                                repeat: Infinity,
+                                ease: "linear",
+                              }}
+                            />
+                          </div>
+                          <button
+                            onClick={handleOpenChat}
+                            className={`mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            Message Seller
+                          </button>
+                        </div>
+                      )}
+
+                    {activeOrder.step === 3 &&
+                      activeOrder.type === "sell" &&
+                      activeOrder.dbStatus === "disputed" && (
+                        <div className="mt-2">
+                          <p className="text-[13px] text-text-secondary">
+                            This order is under dispute. Our team is reviewing
+                            the case.
+                          </p>
+                          <button
+                            onClick={handleOpenChat}
+                            className={`mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                            Message Merchant
+                          </button>
+                        </div>
+                      )}
+
+                    {activeOrder.step === 3 &&
+                      activeOrder.type === "sell" &&
+                      activeOrder.dbStatus !== "disputed" && (
+                        <div className="mt-3">
+                          <div className={`rounded-xl p-3 mb-3 ${CARD_STRONG}`}>
+                            <p className="text-[13px] text-text-primary">
+                              Merchant has sent {"\u062F.\u0625"}{" "}
+                              {parseFloat(
+                                activeOrder.fiatAmount,
+                              ).toLocaleString()}{" "}
+                              to your bank.
+                            </p>
+                            <p className="text-[12px] mt-1 text-text-secondary">
+                              Check your bank account before confirming.
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleOpenChat}
+                              className={`flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                              Chat
+                            </button>
+                            <motion.button
+                              whileTap={{ scale: 0.98 }}
+                              onClick={confirmFiatReceived}
+                              disabled={isLoading}
+                              className={`flex-[2] py-3 rounded-xl text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50 ${PRIMARY_BTN}`}
+                            >
+                              {isLoading ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Releasing...
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="w-4 h-4" />
+                                  Confirm & Release
+                                </>
+                              )}
+                            </motion.button>
+                          </div>
+                          <p className="text-[11px] mt-2 text-center text-text-tertiary">
+                            This will sign a wallet transaction to release
+                            escrow to merchant
+                          </p>
+                        </div>
+                      )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 4 */}
+              <div className={`p-4 rounded-2xl ${CARD}`}>
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold ${
+                      activeOrder.step >= 4
+                        ? "bg-accent text-accent-text"
+                        : "bg-surface-card text-text-tertiary"
+                    }`}
+                  >
+                    {activeOrder.step >= 4 ? <Check className="w-4 h-4" /> : "4"}
+                  </div>
+                  <div>
+                    <p
+                      className={`text-[15px] font-medium ${
+                        activeOrder.step >= 4
+                          ? "text-text-primary"
+                          : "text-text-tertiary"
+                      }`}
+                    >
+                      Complete
+                    </p>
+                    {activeOrder.status === "complete" &&
+                      activeOrder.step >= 4 && (
+                        <p className="text-[13px] text-text-secondary">
+                          Trade completed successfully
                         </p>
                       )}
-                    </div>
-
-                    <div className="mt-3 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.08)' }}>
-                      <motion.div
-                        className="h-full bg-orange-400"
-                        animate={{ x: ["-100%", "100%"] }}
-                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                        style={{ width: "30%" }}
-                      />
-                    </div>
-                    <button
-                      onClick={handleOpenChat}
-                      className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2"
-                      style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.7)' }}
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      Message Merchant
-                    </button>
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-          </div>
 
-          {/* Step 3 */}
-          <div className="p-4 rounded-2xl" style={activeOrder.step >= 3 ? { background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' } : { background: '#f8f8f8', border: '1px solid rgba(0,0,0,0.04)' }}>
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold flex-shrink-0" style={
-                activeOrder.step >= 3
-                  ? { background: '#000', color: '#fff' }
-                  : { background: 'rgba(0,0,0,0.08)', color: 'rgba(0,0,0,0.3)' }
-              }>
-                {activeOrder.step > 3 ? <Check className="w-4 h-4" /> : "3"}
-              </div>
-              <div className="flex-1">
-                <p className="text-[15px] font-medium" style={{ color: activeOrder.step >= 3 ? '#000' : 'rgba(0,0,0,0.3)' }}>
-                  {activeOrder.dbStatus === 'disputed' ? "Dispute" : activeOrder.type === "buy" ? "Confirming payment" : "Confirm received"}
-                </p>
-
-                {activeOrder.step === 3 && activeOrder.type === "buy" && activeOrder.dbStatus === 'disputed' && (
-                  <div className="mt-2">
-                    <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>This order is under dispute. Our team is reviewing the case.</p>
-                    <button
-                      onClick={handleOpenChat}
-                      className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2"
-                      style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.7)' }}
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      Message Seller
-                    </button>
-                  </div>
-                )}
-
-                {activeOrder.step === 3 && activeOrder.type === "buy" && activeOrder.dbStatus !== 'disputed' && (
-                  <div className="mt-2">
-                    <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>Seller is verifying your payment...</p>
-                    <div className="mt-2 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(0,0,0,0.08)' }}>
-                      <motion.div
-                        className="h-full"
-                        style={{ background: 'rgba(0,0,0,0.2)', width: "30%" }}
-                        animate={{ x: ["-100%", "100%"] }}
-                        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                      />
-                    </div>
-                    <button
-                      onClick={handleOpenChat}
-                      className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2"
-                      style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.7)' }}
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      Message Seller
-                    </button>
-                  </div>
-                )}
-
-                {activeOrder.step === 3 && activeOrder.type === "sell" && activeOrder.dbStatus === 'disputed' && (
-                  <div className="mt-2">
-                    <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>This order is under dispute. Our team is reviewing the case.</p>
-                    <button
-                      onClick={handleOpenChat}
-                      className="mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2"
-                      style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.7)' }}
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      Message Merchant
-                    </button>
-                  </div>
-                )}
-
-                {activeOrder.step === 3 && activeOrder.type === "sell" && activeOrder.dbStatus !== 'disputed' && (
-                  <div className="mt-3">
-                    <div className="rounded-xl p-3 mb-3" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)' }}>
-                      <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.7)' }}>
-                        Merchant has sent {'\u062F.\u0625'} {parseFloat(activeOrder.fiatAmount).toLocaleString()} to your bank.
-                      </p>
-                      <p className="text-[12px] mt-1" style={{ color: 'rgba(0,0,0,0.45)' }}>
-                        Check your bank account before confirming.
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleOpenChat}
-                        className="flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2"
-                        style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.7)' }}
-                      >
-                        <MessageCircle className="w-4 h-4" />
-                        Chat
+              {/* Rating - only for completed orders */}
+              {activeOrder.status === "complete" && activeOrder.step >= 4 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`rounded-2xl p-4 text-center ${CARD}`}
+                >
+                  <p className="text-[15px] mb-3 text-text-secondary">
+                    Rate your experience
+                  </p>
+                  <div className="flex justify-center gap-2">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button key={star} onClick={() => setRating(star)}>
+                        <Star
+                          className={`w-8 h-8 ${
+                            star <= rating
+                              ? "fill-amber-400 text-amber-400"
+                              : "text-text-quaternary"
+                          }`}
+                        />
                       </button>
-                      <motion.button
-                        whileTap={{ scale: 0.98 }}
-                        onClick={confirmFiatReceived}
-                        disabled={isLoading}
-                        className="flex-[2] py-3 rounded-xl text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                        style={{ background: '#000', color: '#fff' }}
-                      >
-                        {isLoading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Releasing...
-                          </>
-                        ) : (
-                          <>
-                            <Check className="w-4 h-4" />
-                            Confirm & Release
-                          </>
-                        )}
-                      </motion.button>
-                    </div>
-                    <p className="text-[11px] mt-2 text-center" style={{ color: 'rgba(0,0,0,0.35)' }}>
-                      This will sign a wallet transaction to release escrow to merchant
-                    </p>
+                    ))}
                   </div>
-                )}
-              </div>
+                </motion.div>
+              )}
             </div>
-          </div>
-
-          {/* Step 4 */}
-          <div className={`p-4 rounded-2xl ${
-            activeOrder.status === 'cancelled' || activeOrder.status === 'expired'
-              ? "bg-red-500/10 border border-red-500/20"
-              : ""
-          }`} style={activeOrder.status !== 'cancelled' && activeOrder.status !== 'expired' ? (activeOrder.step >= 4 ? { background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' } : { background: '#f8f8f8', border: '1px solid rgba(0,0,0,0.04)' }) : {}}>
-            <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold ${
-                activeOrder.status === 'cancelled' || activeOrder.status === 'expired'
-                  ? "bg-red-500/20 text-red-400"
-                  : ""
-              }`} style={activeOrder.status !== 'cancelled' && activeOrder.status !== 'expired' ? (activeOrder.step >= 4 ? { background: '#000', color: '#fff' } : { background: 'rgba(0,0,0,0.08)', color: 'rgba(0,0,0,0.3)' }) : {}}>
-                {activeOrder.status === 'cancelled' || activeOrder.status === 'expired'
-                  ? <X className="w-4 h-4" />
-                  : activeOrder.step >= 4 ? <Check className="w-4 h-4" /> : "4"}
-              </div>
-              <div>
-                <p className={`text-[15px] font-medium ${
-                  activeOrder.status === 'cancelled' || activeOrder.status === 'expired'
-                    ? "text-red-400"
-                    : ""
-                }`} style={activeOrder.status !== 'cancelled' && activeOrder.status !== 'expired' ? { color: activeOrder.step >= 4 ? '#000' : 'rgba(0,0,0,0.3)' } : {}}>
-                  {activeOrder.status === 'cancelled' ? 'Cancelled' : activeOrder.status === 'expired' ? 'Expired' : 'Complete'}
-                </p>
-                {activeOrder.status === 'cancelled' && (
-                  <p className="text-[13px] text-red-400/70">This order was cancelled</p>
-                )}
-                {activeOrder.status === 'expired' && (
-                  <p className="text-[13px] text-red-400/70">This order has expired</p>
-                )}
-                {activeOrder.status === 'complete' && activeOrder.step >= 4 && (
-                  <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.6)' }}>Trade completed successfully</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Rating - only for completed orders */}
-          {activeOrder.status === 'complete' && activeOrder.step >= 4 && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="rounded-2xl p-4 text-center"
-              style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}
-            >
-              <p className="text-[15px] mb-3" style={{ color: 'rgba(0,0,0,0.45)' }}>Rate your experience</p>
-              <div className="flex justify-center gap-2">
-                {[1, 2, 3, 4, 5].map(star => (
-                  <button key={star} onClick={() => setRating(star)}>
-                    <Star className={`w-8 h-8 ${star <= rating ? "fill-amber-400 text-amber-400" : ""}`} style={{ color: star <= rating ? undefined : 'rgba(0,0,0,0.15)' }} />
-                  </button>
-                ))}
-              </div>
-            </motion.div>
           )}
-        </div>
 
-        {/* Merchant — hidden until a merchant claims this order */}
-        {activeOrder.merchant?.name ? (
-        <div className="mt-4 rounded-2xl p-4" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
+        {/* Merchant */}
+        <div className={`mt-4 rounded-2xl p-4 ${CARD}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold" style={{ background: '#000', color: '#fff' }}>
+              <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold bg-accent text-accent-text">
                 {activeOrder.merchant.name.charAt(0)}
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <p className="text-[15px] font-medium" style={{ color: '#000' }}>{activeOrder.merchant.name}</p>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.5)' }}>
-                    {activeOrder.merchant.paymentMethod === "cash" ? "Cash" : "Bank"}
+                  <p className="text-[15px] font-medium text-text-primary">
+                    {activeOrder.merchant.name}
+                  </p>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/[0.08] text-text-secondary">
+                    {activeOrder.merchant.paymentMethod === "cash"
+                      ? "Cash"
+                      : "Bank"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
                   <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                  <span className="text-[13px]" style={{ color: 'rgba(0,0,0,0.45)' }}>{activeOrder.merchant.rating} {'\u00b7'} {activeOrder.merchant.trades} trades</span>
+                  <span className="text-[13px] text-text-secondary">
+                    {activeOrder.merchant.rating} {"\u00b7"}{" "}
+                    {activeOrder.merchant.trades} trades
+                  </span>
                 </div>
               </div>
             </div>
             <button
               onClick={handleOpenChat}
-              className="w-10 h-10 rounded-full flex items-center justify-center"
-              style={{ background: 'rgba(0,0,0,0.06)' }}
+              className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]"
             >
-              <MessageCircle className="w-5 h-5" style={{ color: 'rgba(0,0,0,0.45)' }} />
+              <MessageCircle className="w-5 h-5 text-text-secondary" />
             </button>
           </div>
         </div>
-        ) : (
-        <div className="mt-4 rounded-2xl p-4 flex items-center gap-3" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
-          <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.06)' }}>
-            <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'rgba(0,0,0,0.3)' }} />
-          </div>
-          <div>
-            <p className="text-[15px] font-medium" style={{ color: '#000' }}>Waiting for merchant</p>
-            <p className="text-[12px]" style={{ color: 'rgba(0,0,0,0.4)' }}>A merchant will claim your order shortly</p>
-          </div>
-        </div>
-        )}
 
         {/* Cancel & Dispute Buttons - Show for active orders (step 2-3) */}
-        {activeOrder.step >= 2 && activeOrder.step < 4 && activeOrder.status !== "disputed" && !activeOrder.cancelRequest && (
-          <button
-            onClick={() => requestCancelOrder()}
-            disabled={isRequestingCancel}
-            className="w-full mt-3 py-3 rounded-2xl text-[14px] font-medium bg-orange-500/10 border border-orange-500/20 text-orange-400 flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            {isRequestingCancel ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-            Request Cancellation
-          </button>
-        )}
-        {activeOrder.step >= 2 && activeOrder.step < 4 && activeOrder.status !== "disputed" && (
-          <button
-            onClick={() => setShowDisputeModal(true)}
-            className="w-full mt-3 py-3 rounded-2xl text-[14px] font-medium bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center gap-2"
-          >
-            <AlertTriangle className="w-4 h-4" />
-            Report Issue
-          </button>
-        )}
+        {activeOrder.step >= 2 &&
+          activeOrder.step < 4 &&
+          activeOrder.status !== "disputed" &&
+          !activeOrder.cancelRequest && (
+            <button
+              onClick={() => requestCancelOrder()}
+              disabled={isRequestingCancel}
+              className={`w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2 disabled:opacity-50 text-[#f59e0b] ${AMBER_CARD}`}
+            >
+              {isRequestingCancel ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <X className="w-4 h-4" />
+              )}
+              Request Cancellation
+            </button>
+          )}
+        {activeOrder.step >= 2 &&
+          activeOrder.step < 4 &&
+          activeOrder.status !== "disputed" && (
+            <button
+              onClick={() => setShowDisputeModal(true)}
+              className={`w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2 text-[#ef4444] ${RED_CARD}`}
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Report Issue
+            </button>
+          )}
 
         {/* Already Disputed */}
         {activeOrder.status === "disputed" && (
-          <div className="mt-3 py-3 px-4 rounded-2xl bg-red-500/10 border border-red-500/20">
-            <div className="flex items-center gap-2 text-red-600">
+          <div className={`mt-3 py-3 px-4 rounded-2xl ${RED_CARD}`}>
+            <div className="flex items-center gap-2 text-[#ef4444]">
               <AlertTriangle className="w-4 h-4" />
-              <span className="text-[14px] font-medium">Dispute in Progress</span>
+              <span className="text-[14px] font-medium">
+                Dispute in Progress
+              </span>
             </div>
-            <p className="text-[12px] text-red-500/70 mt-1">Our team is reviewing this case.</p>
+            <p className="text-[12px] mt-1 text-[rgba(239,68,68,0.7)]">
+              Our team is reviewing this case.
+            </p>
           </div>
         )}
 
-        {(activeOrder.step >= 4 || activeOrder.status === 'cancelled' || activeOrder.status === 'expired') && (
+        {(activeOrder.step >= 4 ||
+          activeOrder.status === "cancelled" ||
+          activeOrder.status === "expired") && (
           <motion.button
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => setScreen("home")}
-            className="w-full mt-4 py-4 rounded-2xl text-[17px] font-semibold"
-            style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.08)', color: '#000' }}
+            onClick={() => setScreen(previousScreen || "home")}
+            className="w-full mt-4 py-4 rounded-2xl text-[17px] font-semibold bg-surface-raised border border-white/10 text-text-primary"
           >
             Done
           </motion.button>
@@ -1389,34 +1918,41 @@ export const OrderDetailScreen = ({
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30 }}
-              className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl p-6`}
-              style={{ background: '#ffffff' }}
+              className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl p-6 ${SHEET_BG}`}
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-red-500" />
-                  <h3 className="text-[17px] font-semibold" style={{ color: '#000' }}>Report Issue</h3>
+                  <h3 className="text-[17px] font-semibold text-text-primary">
+                    Report Issue
+                  </h3>
                 </div>
                 <button onClick={() => setShowDisputeModal(false)}>
-                  <X className="w-5 h-5" style={{ color: 'rgba(0,0,0,0.4)' }} />
+                  <X className="w-5 h-5 text-text-tertiary" />
                 </button>
               </div>
 
-              <p className="text-[13px] mb-4" style={{ color: 'rgba(0,0,0,0.45)' }}>
-                If you&apos;re having a problem with this trade, let us know and our support team will help resolve it.
+              <p className="text-[13px] mb-4 text-text-secondary">
+                If you&apos;re having a problem with this trade, let us know and
+                our support team will help resolve it.
               </p>
 
               <div className="mb-4">
-                <label className="text-[12px] uppercase tracking-wide mb-2 block" style={{ color: 'rgba(0,0,0,0.4)' }}>Reason</label>
+                <label className="text-[12px] uppercase tracking-wide mb-2 block text-text-tertiary">
+                  Reason
+                </label>
                 <select
                   value={disputeReason}
                   onChange={(e) => setDisputeReason(e.target.value)}
-                  className="w-full rounded-xl px-4 py-3 text-[15px] outline-none appearance-none"
-                  style={{ background: '#f4f4f4', color: '#000', border: '1px solid rgba(0,0,0,0.08)' }}
+                  className="w-full rounded-xl px-4 py-3 text-[15px] outline-none appearance-none bg-surface-raised text-text-primary border border-white/10"
                 >
                   <option value="">Select a reason...</option>
-                  <option value="payment_not_received">Payment not received</option>
-                  <option value="crypto_not_received">Crypto not received</option>
+                  <option value="payment_not_received">
+                    Payment not received
+                  </option>
+                  <option value="crypto_not_received">
+                    Crypto not received
+                  </option>
                   <option value="wrong_amount">Wrong amount sent</option>
                   <option value="fraud">Suspected fraud</option>
                   <option value="other">Other issue</option>
@@ -1424,22 +1960,22 @@ export const OrderDetailScreen = ({
               </div>
 
               <div className="mb-6">
-                <label className="text-[12px] uppercase tracking-wide mb-2 block" style={{ color: 'rgba(0,0,0,0.4)' }}>Description</label>
+                <label className="text-[12px] uppercase tracking-wide mb-2 block text-text-tertiary">
+                  Description
+                </label>
                 <textarea
                   value={disputeDescription}
                   onChange={(e) => setDisputeDescription(e.target.value)}
                   placeholder="Describe the issue in detail..."
                   rows={3}
-                  className="w-full rounded-xl px-4 py-3 text-[15px] outline-none resize-none"
-                  style={{ background: '#f4f4f4', color: '#000', border: '1px solid rgba(0,0,0,0.08)' }}
+                  className="w-full rounded-xl px-4 py-3 text-[15px] outline-none resize-none bg-surface-raised text-text-primary border border-white/10"
                 />
               </div>
 
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowDisputeModal(false)}
-                  className="flex-1 py-3 rounded-xl text-[15px] font-medium"
-                  style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.6)' }}
+                  className={`flex-1 py-3 rounded-xl text-[15px] font-medium ${MUTED_BTN}`}
                 >
                   Cancel
                 </button>
@@ -1447,7 +1983,7 @@ export const OrderDetailScreen = ({
                   whileTap={{ scale: 0.98 }}
                   onClick={submitDispute}
                   disabled={!disputeReason || isSubmittingDispute}
-                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold bg-red-500 text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 flex items-center justify-center gap-2 bg-[#ef4444] text-white"
                 >
                   {isSubmittingDispute ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -1478,14 +2014,15 @@ export const OrderDetailScreen = ({
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30 }}
-              className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl h-[70vh] flex flex-col`}
-              style={{ background: '#ffffff' }}
+              className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl h-[70vh] flex flex-col ${SHEET_BG}`}
             >
-              <div className="flex items-center justify-between p-4" style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+              <div className="flex items-center justify-between p-4 border-b border-white/10">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full" style={{ background: '#000' }} />
+                  <div className="w-8 h-8 rounded-full bg-accent" />
                   <div>
-                    <p className="text-[15px] font-medium" style={{ color: '#000' }}>{activeOrder.merchant.name}</p>
+                    <p className="text-[15px] font-medium text-text-primary">
+                      {activeOrder.merchant.name}
+                    </p>
                     <div className="flex items-center gap-1.5">
                       <ConnectionIndicator isConnected={true} />
                       <p className="text-[11px] text-orange-500">Online</p>
@@ -1493,7 +2030,7 @@ export const OrderDetailScreen = ({
                   </div>
                 </div>
                 <button onClick={() => setShowChat(false)} className="p-2">
-                  <X className="w-5 h-5" style={{ color: 'rgba(0,0,0,0.4)' }} />
+                  <X className="w-5 h-5 text-text-tertiary" />
                 </button>
               </div>
               <div
@@ -1503,23 +2040,30 @@ export const OrderDetailScreen = ({
                 {activeChat && activeChat.messages.length > 0 ? (
                   activeChat.messages.map((msg) => {
                     // Parse dispute/resolution messages from JSON content
-                    if (msg.messageType === 'dispute') {
+                    if (msg.messageType === "dispute") {
                       try {
                         const data = JSON.parse(msg.text);
                         return (
                           <div key={msg.id} className="flex justify-center">
-                            <div className="w-full max-w-[90%] bg-red-500/10 border border-red-500/20 rounded-2xl p-4">
+                            <div className={`w-full max-w-[90%] rounded-2xl p-4 ${RED_CARD}`}>
                               <div className="flex items-center gap-2 mb-2">
-                                <AlertTriangle className="w-4 h-4 text-red-400" />
-                                <span className="text-[13px] font-semibold text-red-400">Dispute Opened</span>
+                                <AlertTriangle className="w-4 h-4 text-[#ef4444]" />
+                                <span className="text-[13px] font-semibold text-[#ef4444]">
+                                  Dispute Opened
+                                </span>
                               </div>
-                              <p className="text-[14px] mb-1" style={{ color: '#000' }}>
-                                <span style={{ color: 'rgba(0,0,0,0.4)' }}>Reason:</span> {data.reason?.replace(/_/g, ' ')}
+                              <p className="text-[14px] mb-1 text-text-primary">
+                                <span className="text-text-tertiary">
+                                  Reason:
+                                </span>{" "}
+                                {data.reason?.replace(/_/g, " ")}
                               </p>
                               {data.description && (
-                                <p className="text-[13px]" style={{ color: 'rgba(0,0,0,0.5)' }}>{data.description}</p>
+                                <p className="text-[13px] text-text-secondary">
+                                  {data.description}
+                                </p>
                               )}
-                              <p className="text-[11px] mt-2" style={{ color: 'rgba(0,0,0,0.4)' }}>
+                              <p className="text-[11px] mt-2 text-text-tertiary">
                                 Our support team will review this case
                               </p>
                             </div>
@@ -1530,49 +2074,61 @@ export const OrderDetailScreen = ({
                       }
                     }
 
-                    if (msg.messageType === 'resolution') {
+                    if (msg.messageType === "resolution") {
                       try {
                         const data = JSON.parse(msg.text);
                         return (
                           <div key={msg.id} className="flex justify-center">
-                            <div className="w-full max-w-[90%] rounded-2xl p-4" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                            <div className={`w-full max-w-[90%] rounded-2xl p-4 ${CARD_STRONG}`}>
                               <div className="flex items-center gap-2 mb-2">
-                                <Shield className="w-4 h-4" style={{ color: 'rgba(0,0,0,0.5)' }} />
-                                <span className="text-[13px] font-semibold" style={{ color: 'rgba(0,0,0,0.6)' }}>
-                                  {data.type === 'resolution_proposed' ? 'Resolution Proposed' : 'Resolution Finalized'}
+                                <Shield className="w-4 h-4 text-text-secondary" />
+                                <span className="text-[13px] font-semibold text-text-secondary">
+                                  {data.type === "resolution_proposed"
+                                    ? "Resolution Proposed"
+                                    : "Resolution Finalized"}
                                 </span>
                               </div>
-                              <p className="text-[14px] mb-1" style={{ color: '#000' }}>
-                                <span style={{ color: 'rgba(0,0,0,0.4)' }}>Decision:</span> {data.resolution?.replace(/_/g, ' ')}
+                              <p className="text-[14px] mb-1 text-text-primary">
+                                <span className="text-text-tertiary">
+                                  Decision:
+                                </span>{" "}
+                                {data.resolution?.replace(/_/g, " ")}
                               </p>
                               {data.notes && (
-                                <p className="text-[13px] mb-2" style={{ color: 'rgba(0,0,0,0.5)' }}>{data.notes}</p>
-                              )}
-                              {data.type === 'resolution_proposed' && !disputeInfo?.user_confirmed && (
-                                <div className="flex gap-2 mt-3">
-                                  <button
-                                    onClick={() => respondToResolution('reject')}
-                                    disabled={isRespondingToResolution}
-                                    className="flex-1 py-2 rounded-xl text-[13px] font-medium disabled:opacity-50"
-                                    style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.6)' }}
-                                  >
-                                    Reject
-                                  </button>
-                                  <button
-                                    onClick={() => respondToResolution('accept')}
-                                    disabled={isRespondingToResolution}
-                                    className="flex-1 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-50"
-                                    style={{ background: '#000', color: '#fff' }}
-                                  >
-                                    Accept
-                                  </button>
-                                </div>
-                              )}
-                              {disputeInfo?.user_confirmed && !disputeInfo?.merchant_confirmed && (
-                                <p className="text-[11px] mt-2" style={{ color: 'rgba(0,0,0,0.5)' }}>
-                                  You accepted. Waiting for merchant confirmation...
+                                <p className="text-[13px] mb-2 text-text-secondary">
+                                  {data.notes}
                                 </p>
                               )}
+                              {data.type === "resolution_proposed" &&
+                                !disputeInfo?.user_confirmed && (
+                                  <div className="flex gap-2 mt-3">
+                                    <button
+                                      onClick={() =>
+                                        respondToResolution("reject")
+                                      }
+                                      disabled={isRespondingToResolution}
+                                      className={`flex-1 py-2 rounded-xl text-[13px] font-medium disabled:opacity-50 ${MUTED_BTN}`}
+                                    >
+                                      Reject
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        respondToResolution("accept")
+                                      }
+                                      disabled={isRespondingToResolution}
+                                      className="flex-1 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-50 bg-accent text-accent-text"
+                                    >
+                                      Accept
+                                    </button>
+                                  </div>
+                                )}
+                              {disputeInfo?.user_confirmed &&
+                                !disputeInfo?.merchant_confirmed && (
+                                  <p className="text-[11px] mt-2 text-text-secondary">
+                                    You accepted. Waiting for merchant
+                                    confirmation...
+                                  </p>
+                                )}
                             </div>
                           </div>
                         );
@@ -1582,20 +2138,22 @@ export const OrderDetailScreen = ({
                     }
 
                     // Resolution finalized message
-                    if (msg.messageType === 'resolution_finalized') {
+                    if (msg.messageType === "resolution_finalized") {
                       try {
                         const data = JSON.parse(msg.text);
                         return (
                           <div key={msg.id} className="flex justify-center">
-                            <div className="w-full max-w-[90%] rounded-2xl p-4" style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)' }}>
+                            <div className={`w-full max-w-[90%] rounded-2xl p-4 ${CARD_STRONG}`}>
                               <div className="flex items-center gap-2 mb-2">
-                                <Check className="w-4 h-4" style={{ color: '#000' }} />
-                                <span className="text-[13px] font-semibold" style={{ color: '#000' }}>Resolution Finalized</span>
+                                <Check className="w-4 h-4 text-text-primary" />
+                                <span className="text-[13px] font-semibold text-text-primary">
+                                  Resolution Finalized
+                                </span>
                               </div>
-                              <p className="text-[14px]" style={{ color: '#000' }}>
-                                Decision: {data.resolution?.replace(/_/g, ' ')}
+                              <p className="text-[14px] text-text-primary">
+                                Decision: {data.resolution?.replace(/_/g, " ")}
                               </p>
-                              <p className="text-[11px] mt-2" style={{ color: 'rgba(0,0,0,0.4)' }}>
+                              <p className="text-[11px] mt-2 text-text-tertiary">
                                 Both parties confirmed. Case closed.
                               </p>
                             </div>
@@ -1607,16 +2165,25 @@ export const OrderDetailScreen = ({
                     }
 
                     // Resolution accepted/rejected system messages
-                    if (msg.messageType === 'resolution_accepted' || msg.messageType === 'resolution_rejected') {
+                    if (
+                      msg.messageType === "resolution_accepted" ||
+                      msg.messageType === "resolution_rejected"
+                    ) {
                       try {
                         const data = JSON.parse(msg.text);
-                        const isAccepted = data.type === 'resolution_accepted';
+                        const isAccepted = data.type === "resolution_accepted";
                         return (
                           <div key={msg.id} className="flex justify-center">
-                            <div className={`px-4 py-2 rounded-2xl text-[13px] ${
-                              isAccepted ? '' : 'bg-red-500/10 text-red-500'
-                            }`} style={isAccepted ? { background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.6)' } : {}}>
-                              {data.party === 'user' ? 'You' : 'Merchant'} {isAccepted ? 'accepted' : 'rejected'} the resolution
+                            <div
+                              className={`px-4 py-2 rounded-2xl text-[13px] ${
+                                isAccepted
+                                  ? "bg-white/[0.08] text-text-secondary"
+                                  : "bg-[rgba(239,68,68,0.10)] text-[#ef4444]"
+                              }`}
+                            >
+                              {data.party === "user" ? "You" : "Merchant"}{" "}
+                              {isAccepted ? "accepted" : "rejected"} the
+                              resolution
                             </div>
                           </div>
                         );
@@ -1628,24 +2195,37 @@ export const OrderDetailScreen = ({
                     // Receipt card messages — structured (new) or JSON fallback (old)
                     {
                       let receiptPayload: Record<string, unknown> | null = null;
-                      if (msg.messageType === 'receipt' && msg.receiptData) {
+                      if (msg.messageType === "receipt" && msg.receiptData) {
                         receiptPayload = msg.receiptData;
                       } else {
                         try {
-                          if (msg.text.startsWith('{')) {
+                          if (msg.text.startsWith("{")) {
                             const parsed = JSON.parse(msg.text);
-                            if (parsed.type === 'order_receipt' && parsed.data) {
+                            if (
+                              parsed.type === "order_receipt" &&
+                              parsed.data
+                            ) {
                               receiptPayload = parsed.data;
                             }
                           }
-                        } catch { /* not JSON */ }
+                        } catch {
+                          /* not JSON */
+                        }
                       }
                       if (receiptPayload) {
                         return (
                           <div key={msg.id} className="max-w-[90%] mx-auto">
-                            <ReceiptCard data={receiptPayload as any} currentStatus={activeOrder?.dbStatus || activeOrder?.status} theme="light" />
-                            <p className="text-[10px] mt-1 text-center" style={{ color: 'rgba(0,0,0,0.4)' }}>
-                              {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            <ReceiptCard
+                              data={receiptPayload as any}
+                              currentStatus={
+                                activeOrder?.dbStatus || activeOrder?.status
+                              }
+                            />
+                            <p className="text-[10px] mt-1 text-center text-text-tertiary">
+                              {msg.timestamp.toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
                             </p>
                           </div>
                         );
@@ -1658,22 +2238,31 @@ export const OrderDetailScreen = ({
                         key={msg.id}
                         className={`flex ${msg.from === "me" ? "justify-end" : msg.from === "system" ? "justify-center" : "justify-start"}`}
                       >
-                        <div className={`max-w-[80%] flex flex-col ${msg.from === "me" ? "items-end" : "items-start"}`}>
-                          {msg.from !== "me" && msg.from !== "system" && msg.senderName && (
-                            <span className="text-[11px] mb-0.5 px-1" style={{ color: 'rgba(0,0,0,0.4)' }}>{msg.senderName}</span>
-                          )}
+                        <div
+                          className={`max-w-[80%] flex flex-col ${msg.from === "me" ? "items-end" : "items-start"}`}
+                        >
+                          {msg.from !== "me" &&
+                            msg.from !== "system" &&
+                            msg.senderName && (
+                              <span className="text-[11px] mb-0.5 px-1 text-text-tertiary">
+                                {msg.senderName}
+                              </span>
+                            )}
                           <div
-                            className={`px-4 py-2 rounded-2xl text-[15px]`}
-                            style={
+                            className={`px-4 py-2 rounded-2xl ${
                               msg.from === "me"
-                                ? { background: '#000', color: '#fff' }
+                                ? "bg-accent text-accent-text text-[15px]"
                                 : msg.from === "system"
-                                ? { background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.5)', fontSize: 13 }
-                                : { background: '#f0f0f0', color: '#000' }
-                            }
+                                  ? "bg-white/[0.08] text-text-secondary text-[13px]"
+                                  : "bg-surface-card text-text-primary text-[15px]"
+                            }`}
                           >
-                            {msg.messageType === 'image' && msg.imageUrl && (
-                              <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer">
+                            {msg.messageType === "image" && msg.imageUrl && (
+                              <a
+                                href={msg.imageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
                                 <img
                                   src={msg.imageUrl}
                                   alt="Shared image"
@@ -1682,7 +2271,7 @@ export const OrderDetailScreen = ({
                                 />
                               </a>
                             )}
-                            {msg.text !== 'Photo' && <span>{msg.text}</span>}
+                            {msg.text !== "Photo" && <span>{msg.text}</span>}
                           </div>
                         </div>
                       </div>
@@ -1690,63 +2279,86 @@ export const OrderDetailScreen = ({
                   })
                 ) : (
                   <div className="flex-1 flex items-center justify-center h-full">
-                    <p className="text-[15px]" style={{ color: 'rgba(0,0,0,0.35)' }}>No messages yet</p>
+                    <p className="text-[15px] text-text-tertiary">
+                      No messages yet
+                    </p>
                   </div>
                 )}
 
                 {/* Show pending resolution if dispute exists and has a proposal */}
-                {disputeInfo?.status === 'pending_confirmation' && disputeInfo.proposed_resolution && !activeChat?.messages.some(m => m.messageType === 'resolution') && (
-                  <div className="flex justify-center">
-                    <div className="w-full max-w-[90%] bg-white/5 border border-white/6 rounded-2xl p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Shield className="w-4 h-4" style={{ color: 'rgba(0,0,0,0.5)' }} />
-                        <span className="text-[13px] font-semibold" style={{ color: 'rgba(0,0,0,0.6)' }}>Resolution Proposed</span>
-                      </div>
-                      <p className="text-[14px] mb-1" style={{ color: '#000' }}>
-                        <span style={{ color: 'rgba(0,0,0,0.4)' }}>Decision:</span> {disputeInfo.proposed_resolution.replace(/_/g, ' ')}
-                      </p>
-                      {disputeInfo.resolution_notes && (
-                        <p className="text-[13px] mb-2" style={{ color: 'rgba(0,0,0,0.5)' }}>{disputeInfo.resolution_notes}</p>
-                      )}
-                      {!disputeInfo.user_confirmed && (
-                        <div className="flex gap-2 mt-3">
-                          <button
-                            onClick={() => respondToResolution('reject')}
-                            disabled={isRespondingToResolution}
-                            className="flex-1 py-2 rounded-xl text-[13px] font-medium disabled:opacity-50"
-                            style={{ background: 'rgba(0,0,0,0.06)', color: 'rgba(0,0,0,0.6)' }}
-                          >
-                            Reject
-                          </button>
-                          <button
-                            onClick={() => respondToResolution('accept')}
-                            disabled={isRespondingToResolution}
-                            className="flex-1 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-50"
-                            style={{ background: '#000', color: '#fff' }}
-                          >
-                            Accept
-                          </button>
+                {disputeInfo?.status === "pending_confirmation" &&
+                  disputeInfo.proposed_resolution &&
+                  !activeChat?.messages.some(
+                    (m) => m.messageType === "resolution",
+                  ) && (
+                    <div className="flex justify-center">
+                      <div className={`w-full max-w-[90%] rounded-2xl p-4 ${CARD}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Shield className="w-4 h-4 text-text-secondary" />
+                          <span className="text-[13px] font-semibold text-text-secondary">
+                            Resolution Proposed
+                          </span>
                         </div>
-                      )}
-                      {disputeInfo.user_confirmed && !disputeInfo.merchant_confirmed && (
-                        <p className="text-[11px] mt-2" style={{ color: 'rgba(0,0,0,0.5)' }}>
-                          You accepted. Waiting for merchant confirmation...
+                        <p className="text-[14px] mb-1 text-text-primary">
+                          <span className="text-text-tertiary">
+                            Decision:
+                          </span>{" "}
+                          {disputeInfo.proposed_resolution.replace(/_/g, " ")}
                         </p>
-                      )}
+                        {disputeInfo.resolution_notes && (
+                          <p className="text-[13px] mb-2 text-text-secondary">
+                            {disputeInfo.resolution_notes}
+                          </p>
+                        )}
+                        {!disputeInfo.user_confirmed && (
+                          <div className="flex gap-2 mt-3">
+                            <button
+                              onClick={() => respondToResolution("reject")}
+                              disabled={isRespondingToResolution}
+                              className={`flex-1 py-2 rounded-xl text-[13px] font-medium disabled:opacity-50 ${MUTED_BTN}`}
+                            >
+                              Reject
+                            </button>
+                            <button
+                              onClick={() => respondToResolution("accept")}
+                              disabled={isRespondingToResolution}
+                              className="flex-1 py-2 rounded-xl text-[13px] font-semibold disabled:opacity-50 bg-accent text-accent-text"
+                            >
+                              Accept
+                            </button>
+                          </div>
+                        )}
+                        {disputeInfo.user_confirmed &&
+                          !disputeInfo.merchant_confirmed && (
+                            <p className="text-[11px] mt-2 text-text-secondary">
+                              You accepted. Waiting for merchant confirmation...
+                            </p>
+                          )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
               {/* Typing indicator */}
               {activeChat?.isTyping && (
                 <div className="px-4 py-1">
                   <div className="flex items-center gap-2">
                     <div className="flex gap-1">
-                      <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'rgba(0,0,0,0.3)', animationDelay: '0ms' }} />
-                      <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'rgba(0,0,0,0.3)', animationDelay: '150ms' }} />
-                      <div className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'rgba(0,0,0,0.3)', animationDelay: '300ms' }} />
+                      <div
+                        className="w-1.5 h-1.5 rounded-full animate-bounce bg-text-tertiary"
+                        style={{ animationDelay: "0ms" }}
+                      />
+                      <div
+                        className="w-1.5 h-1.5 rounded-full animate-bounce bg-text-tertiary"
+                        style={{ animationDelay: "150ms" }}
+                      />
+                      <div
+                        className="w-1.5 h-1.5 rounded-full animate-bounce bg-text-tertiary"
+                        style={{ animationDelay: "300ms" }}
+                      />
                     </div>
-                    <span className="text-[11px]" style={{ color: 'rgba(0,0,0,0.4)' }}>{activeOrder.merchant.name} is typing...</span>
+                    <span className="text-[11px] text-text-tertiary">
+                      {activeOrder.merchant.name} is typing...
+                    </span>
                   </div>
                 </div>
               )}
@@ -1781,33 +2393,32 @@ export const OrderDetailScreen = ({
 
               {/* Image preview bar */}
               {pendingImage && (
-                <div className="px-4 py-2 flex items-center gap-3" style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+                <div className="px-4 py-2 flex items-center gap-3 border-t border-white/10">
                   <div className="relative">
                     <img
                       src={pendingImage.previewUrl}
                       alt="Preview"
-                      className="w-16 h-16 rounded-xl object-cover"
-                      style={{ border: '1px solid rgba(0,0,0,0.1)' }}
+                      className="w-16 h-16 rounded-xl object-cover border border-white/10"
                     />
                     <button
                       onClick={clearPendingImage}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center"
-                      style={{ background: 'rgba(0,0,0,0.3)' }}
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center bg-text-tertiary"
                     >
                       <X className="w-3 h-3 text-white" />
                     </button>
                   </div>
-                  <span className="text-[13px] flex-1" style={{ color: 'rgba(0,0,0,0.5)' }}>Image ready to send</span>
+                  <span className="text-[13px] flex-1 text-text-secondary">
+                    Image ready to send
+                  </span>
                 </div>
               )}
 
-              <div className="p-4 pb-8" style={{ borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+              <div className="p-4 pb-8 border-t border-white/10">
                 <div className="flex items-center gap-2">
                   {/* Emoji button */}
                   <button
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: '#f4f4f4' }}
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-surface-raised"
                   >
                     <span className="text-lg">😊</span>
                   </button>
@@ -1815,13 +2426,12 @@ export const OrderDetailScreen = ({
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50"
-                    style={{ background: '#f4f4f4' }}
+                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50 bg-surface-raised"
                   >
                     {isUploading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'rgba(0,0,0,0.4)' }} />
+                      <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
                     ) : (
-                      <ArrowUpRight className="w-4 h-4" style={{ color: 'rgba(0,0,0,0.4)' }} />
+                      <ArrowUpRight className="w-4 h-4 text-text-tertiary" />
                     )}
                   </button>
                   <input
@@ -1839,9 +2449,10 @@ export const OrderDetailScreen = ({
                         setShowEmojiPicker(false);
                       }
                     }}
-                    placeholder={pendingImage ? "Add a caption..." : "Message..."}
-                    className="flex-1 rounded-xl px-4 py-3 text-[15px] outline-none"
-                    style={{ background: '#f4f4f4', color: '#000' }}
+                    placeholder={
+                      pendingImage ? "Add a caption..." : "Message..."
+                    }
+                    className="flex-1 rounded-xl px-4 py-3 text-[15px] outline-none bg-surface-raised text-text-primary"
                   />
                   <button
                     onClick={() => {
@@ -1853,14 +2464,14 @@ export const OrderDetailScreen = ({
                       setShowEmojiPicker(false);
                     }}
                     disabled={isUploading}
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
-                      pendingImage ? 'bg-orange-500' : 'bg-white'
-                    } disabled:opacity-50`}
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50 ${
+                      pendingImage ? "bg-[#f97316]" : "bg-accent"
+                    }`}
                   >
                     {isUploading ? (
-                      <Loader2 className="w-5 h-5 text-black animate-spin" />
+                      <Loader2 className="w-5 h-5 animate-spin text-white" />
                     ) : (
-                      <ChevronRight className={`w-5 h-5 ${pendingImage ? 'text-white' : 'text-black'}`} />
+                      <ChevronRight className="w-5 h-5 text-white" />
                     )}
                   </button>
                 </div>
@@ -1869,6 +2480,6 @@ export const OrderDetailScreen = ({
           </>
         )}
       </AnimatePresence>
-    </>
+    </div>
   );
 };

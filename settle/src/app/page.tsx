@@ -1,7 +1,8 @@
 "use client";
 
+import "./user-theme.css";
 import { LandingPage } from "@/components/user/LandingPage";
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -25,6 +26,7 @@ import { FEE_CONFIG } from "@/components/user/screens/helpers";
 const fade = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } };
 const slide = { initial: { opacity: 0, x: 20 }, animate: { opacity: 1, x: 0 }, exit: { opacity: 0, x: -20 } };
 const darkBg = { background: '#080810' } as const;
+const lightPanelBg = { background: '#ffffff' } as const;
 function Panel({ k, anim = fade, className = "", style, children }: { k: string; anim?: typeof fade; className?: string; style?: React.CSSProperties; children: React.ReactNode }) {
   return <motion.div key={k} {...anim} className={`flex-1 w-full max-w-[440px] mx-auto flex flex-col ${className}`} style={style}>{children}</motion.div>;
 }
@@ -94,9 +96,14 @@ export default function Home() {
     };
   }, [rawToast, addNotification]);
 
-  const [screen, setScreen] = useState<Screen>("home");
+  const [screen, setScreenRaw] = useState<Screen>("home");
+  const [previousScreen, setPreviousScreen] = useState<Screen>("home");
+  const setScreen = (s: Screen) => {
+    setPreviousScreen(screen);
+    setScreenRaw(s);
+  };
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
-  const [activityTab, setActivityTab] = useState<'active' | 'completed'>('active');
+  const [activityTab, setActivityTab] = useState<'active' | 'completed' | 'cancelled'>('active');
   const [copied, setCopied] = useState(false);
   const [rating, setRating] = useState(0);
   const [showAddBank, setShowAddBank] = useState(false);
@@ -174,6 +181,22 @@ export default function Home() {
 
   const pendingOrders = orders.filter(o => !["complete", "cancelled", "expired", "disputed"].includes(o.status));
   const completedOrders = orders.filter(o => o.status === "complete");
+  const cancelledOrders = orders.filter(o => o.status === "cancelled" || o.status === "expired");
+
+  // Defensive guard: if the user is on the escrow screen but the active order
+  // has already moved to a terminal state (completed / cancelled / expired /
+  // disputed), bounce them to OrderDetail. This protects any path where
+  // 'screen=escrow' is left mounted after the order finished.
+  useEffect(() => {
+    if (
+      screen === "escrow" &&
+      activeOrder &&
+      ["complete", "cancelled", "expired", "disputed"].includes(activeOrder.status)
+    ) {
+      setScreen("order");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, activeOrder?.status]);
 
   const fiatAmount = tradeCreation.amount ? (parseFloat(tradeCreation.amount) * tradeCreation.currentRate).toFixed(2) : "0";
   const currentFees = FEE_CONFIG[tradeCreation.tradePreference];
@@ -196,14 +219,17 @@ export default function Home() {
 
   if (auth.isInitializing) {
     return (
-      <div className="h-dvh bg-black flex items-center justify-center overflow-hidden">
-        <Loader2 className="w-8 h-8 text-white animate-spin" />
+      <div className={`user-scope ${theme === 'light' ? 'user-light' : ''} h-dvh flex items-center justify-center overflow-hidden`} style={{ background: theme === 'light' ? '#ffffff' : '#0a0a0a' }}>
+        <Loader2 className={`w-8 h-8 animate-spin ${theme === 'light' ? 'text-black' : 'text-white'}`} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-dvh flex flex-col items-center overflow-y-auto relative" style={{ background: '#0a0a0a' }}>
+    <div
+      className={`user-scope ${theme === 'light' ? 'user-light' : ''} min-h-dvh flex flex-col items-center overflow-y-auto relative`}
+      style={{ background: theme === 'light' ? 'var(--user-frame)' : '#0a0a0a' }}
+    >
       <NotificationToastContainer position="top-right" />
       <AnimatePresence mode="wait">
         {screen === "welcome" && (
@@ -221,7 +247,7 @@ export default function Home() {
         )}
 
         {screen === "home" && (
-          <Panel k="home" className="relative" style={darkBg}>
+          <Panel k="home" className="relative" style={theme === 'light' ? lightPanelBg : darkBg}>
             <HomeScreen
               userName={auth.userName}
               userId={auth.userId}
@@ -241,6 +267,7 @@ export default function Home() {
               embeddedWallet={embeddedWallet}
               userBalance={auth.userBalance}
               maxW={maxW}
+              notificationCount={notifications.filter(n => !n.read).length}
             />
           </Panel>
         )}
@@ -306,6 +333,7 @@ export default function Home() {
           <Panel k="order" anim={slide}>
             <OrderDetailScreen
               setScreen={setScreen}
+              previousScreen={previousScreen}
               activeOrder={activeOrder}
               isLoading={auth.isLoading}
               setIsLoading={auth.setIsLoading}
@@ -373,7 +401,7 @@ export default function Home() {
         )}
 
         {screen === "orders" && (
-          <Panel k="orders" className="relative" style={darkBg}>
+          <Panel k="orders" className="relative" style={theme === 'light' ? lightPanelBg : darkBg}>
             <OrdersListScreen
               screen={screen}
               setScreen={setScreen}
@@ -382,17 +410,14 @@ export default function Home() {
               setActivityTab={setActivityTab}
               pendingOrders={pendingOrders}
               completedOrders={completedOrders}
-              allOrders={orders}
+              cancelledOrders={cancelledOrders}
               maxW={maxW}
-              onFilterChange={(opts) => {
-                if (auth.userId) fetchOrders(auth.userId, opts);
-              }}
             />
           </Panel>
         )}
 
         {screen === "notifications" && (
-          <Panel k="notifications" style={darkBg}>
+          <Panel k="notifications" style={theme === 'light' ? lightPanelBg : darkBg}>
             <NotificationsScreen
               screen={screen}
               setScreen={setScreen}
@@ -406,7 +431,7 @@ export default function Home() {
         )}
 
         {screen === "profile" && (
-          <Panel k="profile" className="overflow-hidden relative" style={darkBg}>
+          <Panel k="profile" className="overflow-hidden relative" style={theme === 'light' ? lightPanelBg : darkBg}>
             <ProfileScreen
               screen={screen}
               setScreen={setScreen}

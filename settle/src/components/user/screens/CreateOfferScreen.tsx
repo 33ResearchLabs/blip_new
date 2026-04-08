@@ -4,6 +4,9 @@ import { motion } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
 import type { Screen, TradeType } from "./types";
 
+const CARD = "bg-surface-card border border-border-subtle";
+const FIELD_LABEL = "text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase";
+
 export interface CreateOfferScreenProps {
   setScreen: (s: Screen) => void;
   tradeType: TradeType;
@@ -15,47 +18,38 @@ export const CreateOfferScreen = ({
   tradeType,
   setTradeType,
 }: CreateOfferScreenProps) => {
-  const card = { background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' };
-  const fieldLabel = { fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' as const };
-
   return (
-    <div className="flex flex-col h-dvh overflow-hidden" style={{ background: '#060606' }}>
+    <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
       <div className="h-12 shrink-0" />
 
       {/* Header */}
       <div className="px-5 py-4 flex items-center shrink-0">
         <button onClick={() => setScreen("home")}
-          className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1"
-          style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.06)' }}>
-          <ChevronLeft className="w-5 h-5" style={{ color: 'rgba(0,0,0,0.6)' }} />
+          className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle">
+          <ChevronLeft className="w-5 h-5 text-text-secondary" />
         </button>
-        <h1 className="flex-1 text-center pr-8"
-          style={{ fontSize: 17, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em' }}>
+        <h1 className="flex-1 text-center pr-8 text-[17px] font-bold text-text-primary tracking-[-0.02em]">
           Create Offer
         </h1>
       </div>
 
-      <div className="flex-1 px-5 overflow-y-auto pb-6" style={{ scrollbarWidth: 'none' }}>
-        <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.35)', marginBottom: 20, lineHeight: 1.5 }}>
+      <div className="flex-1 px-5 overflow-y-auto pb-6 scrollbar-hide">
+        <p className="text-[14px] text-text-tertiary mb-5 leading-[1.5]">
           Post an offer for others to accept. Great for large amounts or custom rates.
         </p>
 
         {/* Offer Type */}
         <div className="mb-5">
-          <p style={{ ...fieldLabel, marginBottom: 10, display: 'block' }}>I want to</p>
+          <p className={`${FIELD_LABEL} block mb-2.5`}>I want to</p>
           <div className="flex gap-2">
             {(["buy", "sell"] as const).map((type) => {
               const on = tradeType === type;
-              const accent = type === "buy" ? "#059669" : "#dc2626";
+              const accentClass = type === "buy" ? "text-[#059669] border-[#059669]" : "text-[#dc2626] border-[#dc2626]";
               return (
                 <button key={type} onClick={() => setTradeType(type)}
-                  className="flex-1 py-3 rounded-xl"
-                  style={{
-                    background: '#ffffff',
-                    border: on ? `1.5px solid ${accent}` : '1px solid rgba(0,0,0,0.06)',
-                    fontSize: 14, fontWeight: 700, color: on ? accent : 'rgba(0,0,0,0.4)',
-                    boxShadow: on ? `0 2px 10px ${accent}22` : 'none',
-                  }}>
+                  className={`flex-1 py-3 rounded-xl bg-surface-card text-[14px] font-bold ${
+                    on ? `border-[1.5px] ${accentClass}` : 'border border-border-subtle text-text-tertiary'
+                  }`}>
                   {type === "buy" ? "Buy USDC" : "Sell USDC"}
                 </button>
               );
@@ -65,21 +59,16 @@ export const CreateOfferScreen = ({
 
         {/* Amount */}
         <div className="mb-4">
-          <p style={{ ...fieldLabel, marginBottom: 8, display: 'block' }}>Amount</p>
-          <div className="rounded-[18px] p-4" style={card}>
+          <p className={`${FIELD_LABEL} block mb-2`}>Amount</p>
+          <div className={`rounded-[18px] p-4 ${CARD}`}>
             <div className="relative">
               <input
                 type="text"
                 inputMode="decimal"
                 placeholder="0"
-                style={{
-                  width: '100%', paddingRight: 52, fontSize: 28, fontWeight: 800,
-                  letterSpacing: '-0.03em', color: '#000', background: 'transparent',
-                  border: 'none', outline: 'none',
-                }}
+                className="w-full pr-[52px] text-[28px] font-extrabold tracking-[-0.03em] text-text-primary bg-transparent border-0 outline-none"
               />
-              <span className="absolute right-0 top-1/2 -translate-y-1/2"
-                style={{ fontSize: 14, fontWeight: 600, color: 'rgba(0,0,0,0.3)' }}>
+              <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[14px] font-semibold text-text-tertiary">
                 USDC
               </span>
             </div>
@@ -88,36 +77,33 @@ export const CreateOfferScreen = ({
 
         {/* Rate */}
         <div className="mb-4">
-          <p style={{ ...fieldLabel, marginBottom: 8, display: 'block' }}>Your rate (AED per USDC)</p>
-          <div className="rounded-[18px] p-4" style={card}>
+          <p className={`${FIELD_LABEL} block mb-2`}>Your rate (AED per USDC)</p>
+          <div className={`rounded-[18px] p-4 ${CARD}`}>
             <div className="flex items-center gap-3">
               <input
                 type="text"
                 inputMode="decimal"
                 placeholder="3.67"
-                style={{
-                  flex: 1, fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em',
-                  color: '#000', background: 'transparent', border: 'none', outline: 'none',
-                }}
+                className="flex-1 text-[28px] font-extrabold tracking-[-0.03em] text-text-primary bg-transparent border-0 outline-none"
               />
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(0,0,0,0.3)' }}>AED</span>
+              <span className="text-[14px] font-semibold text-text-tertiary">AED</span>
             </div>
           </div>
-          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>Market rate: 3.67 AED</p>
+          <p className="text-[12px] text-text-tertiary mt-1.5">Market rate: 3.67 AED</p>
         </div>
 
         {/* Min/Max */}
         <div className="mb-5">
-          <p style={{ ...fieldLabel, marginBottom: 8, display: 'block' }}>Order limits (optional)</p>
+          <p className={`${FIELD_LABEL} block mb-2`}>Order limits (optional)</p>
           <div className="flex gap-3">
             {[{ placeholder: '100', label: 'Min' }, { placeholder: '10,000', label: 'Max' }].map(f => (
-              <div key={f.label} className="flex-1 rounded-[18px] p-3" style={card}>
-                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(0,0,0,0.35)', marginBottom: 4 }}>{f.label}</p>
+              <div key={f.label} className={`flex-1 rounded-[18px] p-3 ${CARD}`}>
+                <p className="text-[9px] font-bold tracking-[0.18em] uppercase text-text-tertiary mb-1">{f.label}</p>
                 <input
                   type="text"
                   inputMode="decimal"
                   placeholder={f.placeholder}
-                  style={{ width: '100%', fontSize: 17, fontWeight: 700, color: '#000', background: 'transparent', border: 'none', outline: 'none' }}
+                  className="w-full text-[17px] font-bold text-text-primary bg-transparent border-0 outline-none"
                 />
               </div>
             ))}
@@ -127,11 +113,10 @@ export const CreateOfferScreen = ({
 
       <div className="px-5 pb-10 shrink-0">
         <motion.button whileTap={{ scale: 0.98 }}
-          className="w-full py-4 rounded-2xl"
-          style={{ fontSize: 15, fontWeight: 800, background: '#ffffff', color: '#000', letterSpacing: '-0.01em' }}>
+          className="w-full py-4 rounded-2xl text-[15px] font-extrabold bg-accent text-accent-text tracking-[-0.01em]">
           Post Offer
         </motion.button>
-        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10 }}>
+        <p className="text-[12px] text-text-tertiary text-center mt-2.5">
           Your offer will be visible to all traders
         </p>
       </div>

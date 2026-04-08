@@ -197,21 +197,35 @@ export function useUserEffects({
         if (solanaWallet.connected) {
           solanaWallet.refreshBalances();
         }
+        // Pull the user off any pre-completion intermediate screen so the
+        // stale "Escrow Locked / Waiting for merchant" UI doesn't keep showing.
+        if (screen === 'escrow' || screen === 'matching') {
+          setScreen('order');
+        }
       }
 
       if (newStatus === 'disputed') {
         playSound('error');
         toast.showDisputeOpened();
         showBrowserNotification('Dispute Opened', 'A dispute has been raised on your order.', activeOrderId || undefined);
+        if (screen === 'escrow' || screen === 'matching') {
+          setScreen('order');
+        }
       }
 
       if (newStatus === 'cancelled') {
         playSound('error');
         toast.showOrderCancelled();
+        if (screen === 'escrow' || screen === 'matching') {
+          setScreen('order');
+        }
       }
 
       if (newStatus === 'expired') {
         toast.showOrderExpired();
+        if (screen === 'escrow' || screen === 'matching') {
+          setScreen('order');
+        }
       }
 
       if (activeOrderId) {
