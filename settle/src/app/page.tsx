@@ -1,6 +1,6 @@
 "use client";
 
-import "./user-theme.css";
+import "@/components/user/styles/user-theme.css";
 import { LandingPage } from "@/components/user/LandingPage";
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { copyToClipboard } from "@/lib/clipboard";

@@ -1,12 +1,16 @@
 /* ==========================================================================
-   USER-SCREEN THEME — scoped light mode
+   USER MODULE — scoped theme tokens (dark + light)
    --------------------------------------------------------------------------
-   All rules in this file affect ONLY descendants of `.user-scope`.
-   The `.user-light` modifier on the same wrapper element activates light
-   mode for the user route without touching admin / merchant / arbiter UIs.
+   Lives entirely inside the user module. The user route is the ONLY caller:
+       src/app/page.tsx → import "@/components/user/styles/user-theme.css"
 
-   Imported by:  src/app/page.tsx (the user route)
-   Wrapper:      <div class="user-scope user-light?"> ... </div>
+   Every rule in this file is scoped under `.user-scope` (or
+   `.user-scope.user-light` for the light variant). No declaration here
+   leaks into merchant / admin / arbiter UIs, and this file does not depend
+   on or import any styling from other modules.
+
+   Wrapper element (set in src/app/page.tsx):
+       <div class="user-scope user-light?"> ... </div>
    ========================================================================== */
 
 /* ----- Dark-mode design tokens (scoped to user route) -----
@@ -142,7 +146,7 @@
   --user-frame: #0B0F14;
 }
 
-/* ----- Raw class overrides for hardcoded dark-mode markup ----- */
+/* ----- Raw class overrides for any remaining hardcoded dark-mode markup ----- */
 .user-scope.user-light .bg-neutral-950 { background-color: #f8fafc !important; }
 .user-scope.user-light .bg-neutral-900 { background-color: #f1f5f9 !important; }
 .user-scope.user-light .bg-neutral-800 { background-color: #e2e8f0 !important; }
