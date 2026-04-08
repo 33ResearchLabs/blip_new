@@ -39,14 +39,14 @@ const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
 // Reusable class strings — mirror Card / SectionLabel / CardLabel conventions
 const CARD = "bg-surface-card border border-border-subtle";
-const CARD_STRONG = "bg-white/[0.08] border border-white/10";
-const AMBER_CARD = "bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.2)]";
-const AMBER_CARD_STRONG = "bg-[rgba(245,158,11,0.12)] border border-[rgba(245,158,11,0.25)]";
-const RED_CARD = "bg-[rgba(239,68,68,0.10)] border border-[rgba(239,68,68,0.20)]";
+const CARD_STRONG = "bg-surface-active border border-border-medium";
+const AMBER_CARD = "bg-warning-dim border border-warning-border";
+const AMBER_CARD_STRONG = "bg-warning-dim border border-warning-border";
+const RED_CARD = "bg-error-dim border border-error-border";
 const SHEET_BG = "bg-surface-card"; // use as overlay on surface-base (sheet bg = base + card overlay); approximated
 const PRIMARY_BTN = "bg-accent text-accent-text";
-const SECONDARY_BTN = "bg-white/[0.08] text-text-primary border border-white/10";
-const MUTED_BTN = "bg-white/[0.08] text-text-secondary";
+const SECONDARY_BTN = "bg-surface-active text-text-primary border border-border-medium";
+const MUTED_BTN = "bg-surface-active text-text-secondary";
 
 export interface OrderDetailScreenProps {
   setScreen: (s: Screen) => void;
@@ -369,14 +369,14 @@ export const OrderDetailScreen = ({
             <div
               className={`w-10 h-10 rounded-full flex items-center justify-center ${
                 activeOrder.type === "buy"
-                  ? "bg-[rgba(16,185,129,0.15)]"
-                  : "bg-[rgba(239,68,68,0.15)]"
+                  ? "bg-success-dim"
+                  : "bg-error-dim"
               }`}
             >
               {activeOrder.type === "buy" ? (
-                <ArrowDownLeft className="w-5 h-5 text-[#10b981]" />
+                <ArrowDownLeft className="w-5 h-5 text-success" />
               ) : (
-                <ArrowUpRight className="w-5 h-5 text-[#ef4444]" />
+                <ArrowUpRight className="w-5 h-5 text-error" />
               )}
             </div>
             <div>
@@ -398,7 +398,7 @@ export const OrderDetailScreen = ({
               const bg =
                 activeOrder.status === "cancelled" ||
                 activeOrder.status === "expired"
-                  ? "bg-[rgba(239,68,68,0.4)]"
+                  ? "bg-error"
                   : step <= activeOrder.step
                     ? "bg-text-primary"
                     : "bg-text-quaternary";
@@ -423,7 +423,7 @@ export const OrderDetailScreen = ({
         {activeOrder.type === "sell" && activeOrder.escrowTxHash && (
           <div className={`rounded-2xl p-4 mb-4 ${CARD}`}>
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-active">
                 <Lock className="w-5 h-5 text-text-secondary" />
               </div>
               <div className="flex-1">
@@ -434,7 +434,7 @@ export const OrderDetailScreen = ({
                   Your USDC is secured on-chain
                 </p>
               </div>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/[0.08]">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-active">
                 <Check className="w-4 h-4 text-text-primary" />
               </div>
             </div>
@@ -479,7 +479,7 @@ export const OrderDetailScreen = ({
               className={`rounded-2xl p-4 mb-4 ${CARD}`}
             >
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-active">
                   <Clock className="w-5 h-5 text-text-secondary" />
                 </div>
                 <div className="flex-1">
@@ -511,7 +511,7 @@ export const OrderDetailScreen = ({
                   whileTap={{ scale: 0.97 }}
                   onClick={() => respondToExtension(false)}
                   disabled={requestingExtension}
-                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-white/[0.08] text-text-secondary"
+                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-surface-active text-text-secondary"
                 >
                   Decline
                 </motion.button>
@@ -534,14 +534,14 @@ export const OrderDetailScreen = ({
               className={`rounded-2xl p-4 mb-4 ${AMBER_CARD}`}
             >
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(245,158,11,0.15)]">
-                  <X className="w-5 h-5 text-[#f59e0b]" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-warning-dim">
+                  <X className="w-5 h-5 text-warning" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-[15px] font-semibold text-[#f59e0b]">
+                  <p className="text-[15px] font-semibold text-warning">
                     Cancel Requested
                   </p>
-                  <p className="text-[13px] text-[rgba(245,158,11,0.7)]">
+                  <p className="text-[13px] text-warning">
                     Merchant wants to cancel: {activeOrder.cancelRequest.reason}
                   </p>
                 </div>
@@ -551,7 +551,7 @@ export const OrderDetailScreen = ({
                   whileTap={{ scale: 0.97 }}
                   onClick={() => respondToCancelRequest(true)}
                   disabled={isRequestingCancel}
-                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-[rgba(245,158,11,0.15)] text-[#f59e0b]"
+                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-warning-dim text-warning"
                 >
                   {isRequestingCancel ? (
                     <Loader2 className="w-4 h-4 animate-spin mx-auto" />
@@ -563,7 +563,7 @@ export const OrderDetailScreen = ({
                   whileTap={{ scale: 0.97 }}
                   onClick={() => respondToCancelRequest(false)}
                   disabled={isRequestingCancel}
-                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-white/[0.08] text-text-secondary"
+                  className="flex-1 py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 bg-surface-active text-text-secondary"
                 >
                   Continue Order
                 </motion.button>
@@ -582,14 +582,14 @@ export const OrderDetailScreen = ({
               className={`rounded-2xl p-4 mb-4 ${AMBER_CARD}`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(245,158,11,0.15)]">
-                  <Loader2 className="w-5 h-5 animate-spin text-[#f59e0b]" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-warning-dim">
+                  <Loader2 className="w-5 h-5 animate-spin text-warning" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-[15px] font-semibold text-[#f59e0b]">
+                  <p className="text-[15px] font-semibold text-warning">
                     Cancel Request Sent
                   </p>
-                  <p className="text-[13px] text-[rgba(245,158,11,0.7)]">
+                  <p className="text-[13px] text-warning">
                     Waiting for merchant to approve
                   </p>
                 </div>
@@ -609,14 +609,14 @@ export const OrderDetailScreen = ({
               className={`rounded-2xl p-4 mb-4 ${AMBER_CARD_STRONG}`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(245,158,11,0.15)]">
-                  <AlertTriangle className="w-5 h-5 text-[#F59E0B]" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-warning-dim">
+                  <AlertTriangle className="w-5 h-5 text-warning" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-[15px] font-semibold text-[#F59E0B]">
+                  <p className="text-[15px] font-semibold text-warning">
                     Inactivity Warning
                   </p>
-                  <p className="text-[13px] text-[rgba(245,158,11,0.7)]">
+                  <p className="text-[13px] text-warning">
                     No activity for 15+ minutes. Complete this order soon or it
                     will be auto-cancelled/disputed.
                   </p>
@@ -634,14 +634,14 @@ export const OrderDetailScreen = ({
               className={`rounded-2xl p-4 mb-4 ${RED_CARD}`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(239,68,68,0.15)]">
-                  <Clock className="w-5 h-5 text-[#EF4444]" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-error-dim">
+                  <Clock className="w-5 h-5 text-error" />
                 </div>
                 <div className="flex-1">
-                  <p className="text-[15px] font-semibold text-[#EF4444]">
+                  <p className="text-[15px] font-semibold text-error">
                     Dispute Timer
                   </p>
-                  <p className="text-[13px] text-[rgba(239,68,68,0.7)]">
+                  <p className="text-[13px] text-error">
                     {new Date(activeOrder.disputeAutoResolveAt) > new Date()
                       ? `Auto-refund to escrow funder in ${Math.max(0, Math.round((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) / 3600000))}h ${Math.max(0, Math.round(((new Date(activeOrder.disputeAutoResolveAt).getTime() - Date.now()) % 3600000) / 60000))}m`
                       : "Auto-refund processing..."}
@@ -708,16 +708,16 @@ export const OrderDetailScreen = ({
           activeOrder.status === "expired") && (
           <div className={`mb-4 p-4 rounded-2xl ${RED_CARD}`}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(239,68,68,0.15)]">
-                <X className="w-5 h-5 text-[#ef4444]" />
+              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-error-dim">
+                <X className="w-5 h-5 text-error" />
               </div>
               <div>
-                <p className="text-[15px] font-semibold text-[#ef4444]">
+                <p className="text-[15px] font-semibold text-error">
                   {activeOrder.status === "cancelled"
                     ? "Order Cancelled"
                     : "Order Expired"}
                 </p>
-                <p className="text-[13px] text-[rgba(239,68,68,0.7)]">
+                <p className="text-[13px] text-error">
                   {activeOrder.status === "cancelled"
                     ? "This trade was cancelled and did not complete."
                     : "This order expired before it could be completed."}
@@ -766,7 +766,7 @@ export const OrderDetailScreen = ({
                       activeOrder.dbStatus === "escrowed" && (
                         <div className={`mt-3 rounded-xl p-4 ${CARD_STRONG}`}>
                           <div className="flex items-center gap-3 mb-2">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white/[0.08]">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-active">
                               <Loader2 className="w-4 h-4 animate-spin text-text-secondary" />
                             </div>
                             <div>
@@ -821,7 +821,7 @@ export const OrderDetailScreen = ({
                     {activeOrder.step === 2 &&
                       activeOrder.dbStatus === "escrowed" && (
                         <div className={`mt-2 flex items-center gap-2 rounded-lg px-3 py-2 ${CARD_STRONG}`}>
-                          <div className="w-5 h-5 rounded-full flex items-center justify-center bg-white/[0.08]">
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center bg-surface-active">
                             <Lock className="w-3 h-3 text-text-primary" />
                           </div>
                           <span className="text-[13px] font-medium text-text-primary">
@@ -839,7 +839,7 @@ export const OrderDetailScreen = ({
                         <div className="mt-3 space-y-3">
                           <div className={`rounded-xl p-4 ${CARD_STRONG}`}>
                             <div className="flex items-center gap-3 mb-3">
-                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]">
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-active">
                                 <Loader2 className="w-5 h-5 animate-spin text-text-secondary" />
                               </div>
                               <div>
@@ -851,7 +851,7 @@ export const OrderDetailScreen = ({
                                 </p>
                               </div>
                             </div>
-                            <div className="h-1.5 rounded-full overflow-hidden bg-white/[0.08]">
+                            <div className="h-1.5 rounded-full overflow-hidden bg-surface-active">
                               <motion.div
                                 className="h-full bg-text-tertiary"
                                 style={{ width: "40%" }}
@@ -900,14 +900,18 @@ export const OrderDetailScreen = ({
                                   <div className="absolute inset-0 flex items-center justify-center">
                                     <div className="flex flex-col items-center">
                                       <div className="w-10 h-10 rounded-full flex items-center justify-center shadow-lg mb-1 bg-surface-raised">
-                                        <MapPin className="w-5 h-5 text-white" />
+                                        <MapPin className="w-5 h-5 text-text-primary" />
                                       </div>
                                       <div className="w-1 h-3 rounded-b-full bg-text-tertiary" />
                                     </div>
                                   </div>
                                   {/* Grid pattern for map feel */}
                                   <div
-                                    className="absolute inset-0 opacity-10 bg-[linear-gradient(rgba(0,0,0,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.15)_1px,transparent_1px)] bg-[length:40px_40px]"
+                                    className="absolute inset-0 opacity-10 bg-[length:40px_40px]"
+                                    style={{
+                                      backgroundImage:
+                                        'linear-gradient(var(--color-border-strong) 1px, transparent 1px), linear-gradient(90deg, var(--color-border-strong) 1px, transparent 1px)',
+                                    }}
                                   />
                                 </div>
                                 <button
@@ -919,8 +923,8 @@ export const OrderDetailScreen = ({
                                   }
                                   className="absolute top-3 right-3 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-1.5 bg-surface-raised"
                                 >
-                                  <ExternalLink className="w-3.5 h-3.5 text-white" />
-                                  <span className="text-[12px] font-medium text-white">
+                                  <ExternalLink className="w-3.5 h-3.5 text-text-primary" />
+                                  <span className="text-[12px] font-medium text-text-primary">
                                     Open Maps
                                   </span>
                                 </button>
@@ -939,7 +943,7 @@ export const OrderDetailScreen = ({
                                     {activeOrder.merchant.address}
                                   </p>
                                 </div>
-                                <div className="pt-2 border-t border-white/10">
+                                <div className="pt-2 border-t border-border-medium">
                                   <p className="text-[11px] uppercase tracking-wide mb-1 text-text-tertiary">
                                     Meeting Spot
                                   </p>
@@ -950,7 +954,7 @@ export const OrderDetailScreen = ({
                                     </p>
                                   </div>
                                 </div>
-                                <div className="pt-2 border-t border-white/10">
+                                <div className="pt-2 border-t border-border-medium">
                                   <div className="flex items-center justify-between">
                                     <span className="text-[13px] text-text-secondary">
                                       Cash Amount
@@ -988,9 +992,9 @@ export const OrderDetailScreen = ({
                               <div className={`rounded-xl p-3 space-y-2 ${CARD}`}>
                                 {/* Locked payment method header */}
                                 {activeOrder.lockedPaymentMethod && (
-                                  <div className="flex items-center gap-1.5 pb-2 border-b border-white/10">
-                                    <Lock className="w-3 h-3 text-orange-400" />
-                                    <span className="text-[10px] text-orange-400 font-bold uppercase tracking-wide">
+                                  <div className="flex items-center gap-1.5 pb-2 border-b border-border-medium">
+                                    <Lock className="w-3 h-3 text-warning" />
+                                    <span className="text-[10px] text-warning font-bold uppercase tracking-wide">
                                       Send payment to this method only
                                     </span>
                                   </div>
@@ -1017,10 +1021,10 @@ export const OrderDetailScreen = ({
                                                 .name,
                                             )
                                           }
-                                          className="p-0.5 rounded hover:bg-white/10"
+                                          className="p-0.5 rounded hover:bg-surface-active"
                                         >
                                           {copiedField === "method" ? (
-                                            <Check className="w-3.5 h-3.5 text-green-500" />
+                                            <Check className="w-3.5 h-3.5 text-success" />
                                           ) : (
                                             <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                           )}
@@ -1049,10 +1053,10 @@ export const OrderDetailScreen = ({
                                                   .details,
                                               )
                                             }
-                                            className="p-0.5 rounded hover:bg-white/10"
+                                            className="p-0.5 rounded hover:bg-surface-active"
                                           >
                                             {copiedField === "details" ? (
-                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                              <Check className="w-3.5 h-3.5 text-success" />
                                             ) : (
                                               <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
@@ -1084,10 +1088,10 @@ export const OrderDetailScreen = ({
                                                   .details.bank_name || "",
                                               )
                                             }
-                                            className="p-0.5 rounded hover:bg-white/10"
+                                            className="p-0.5 rounded hover:bg-surface-active"
                                           >
                                             {copiedField === "bank" ? (
-                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                              <Check className="w-3.5 h-3.5 text-success" />
                                             ) : (
                                               <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
@@ -1116,10 +1120,10 @@ export const OrderDetailScreen = ({
                                                   .details.iban || "",
                                               )
                                             }
-                                            className="p-0.5 rounded hover:bg-white/10"
+                                            className="p-0.5 rounded hover:bg-surface-active"
                                           >
                                             {copiedField === "iban" ? (
-                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                              <Check className="w-3.5 h-3.5 text-success" />
                                             ) : (
                                               <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
@@ -1148,10 +1152,10 @@ export const OrderDetailScreen = ({
                                                   .details.account_name || "",
                                               )
                                             }
-                                            className="p-0.5 rounded hover:bg-white/10"
+                                            className="p-0.5 rounded hover:bg-surface-active"
                                           >
                                             {copiedField === "name" ? (
-                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                              <Check className="w-3.5 h-3.5 text-success" />
                                             ) : (
                                               <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
@@ -1180,10 +1184,10 @@ export const OrderDetailScreen = ({
                                                   .details.upi_id || "",
                                               )
                                             }
-                                            className="p-0.5 rounded hover:bg-white/10"
+                                            className="p-0.5 rounded hover:bg-surface-active"
                                           >
                                             {copiedField === "upi" ? (
-                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                              <Check className="w-3.5 h-3.5 text-success" />
                                             ) : (
                                               <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
@@ -1210,10 +1214,10 @@ export const OrderDetailScreen = ({
                                                 activeOrder.merchant.bank || "",
                                               )
                                             }
-                                            className="p-0.5 rounded hover:bg-white/10"
+                                            className="p-0.5 rounded hover:bg-surface-active"
                                           >
                                             {copiedField === "bank" ? (
-                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                              <Check className="w-3.5 h-3.5 text-success" />
                                             ) : (
                                               <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
@@ -1237,10 +1241,10 @@ export const OrderDetailScreen = ({
                                                 activeOrder.merchant.iban || "",
                                               )
                                             }
-                                            className="p-0.5 rounded hover:bg-white/10"
+                                            className="p-0.5 rounded hover:bg-surface-active"
                                           >
                                             {copiedField === "iban" ? (
-                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                              <Check className="w-3.5 h-3.5 text-success" />
                                             ) : (
                                               <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
@@ -1265,10 +1269,10 @@ export const OrderDetailScreen = ({
                                                   .accountName || "",
                                               )
                                             }
-                                            className="p-0.5 rounded hover:bg-white/10"
+                                            className="p-0.5 rounded hover:bg-surface-active"
                                           >
                                             {copiedField === "name" ? (
-                                              <Check className="w-3.5 h-3.5 text-green-500" />
+                                              <Check className="w-3.5 h-3.5 text-success" />
                                             ) : (
                                               <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                             )}
@@ -1278,7 +1282,7 @@ export const OrderDetailScreen = ({
                                     )}
                                   </>
                                 )}
-                                <div className="pt-2 border-t border-white/10">
+                                <div className="pt-2 border-t border-border-medium">
                                   <div className="flex items-center justify-between">
                                     <span className="text-[13px] text-text-secondary">
                                       Amount
@@ -1299,10 +1303,10 @@ export const OrderDetailScreen = ({
                                             ).toString(),
                                           )
                                         }
-                                        className="p-0.5 rounded hover:bg-white/10"
+                                        className="p-0.5 rounded hover:bg-surface-active"
                                       >
                                         {copiedField === "amount" ? (
-                                          <Check className="w-3.5 h-3.5 text-green-500" />
+                                          <Check className="w-3.5 h-3.5 text-success" />
                                         ) : (
                                           <Copy className="w-3.5 h-3.5 text-text-tertiary" />
                                         )}
@@ -1343,7 +1347,7 @@ export const OrderDetailScreen = ({
                         <div className="mt-3 space-y-3">
                           <div className={`rounded-xl p-4 ${CARD_STRONG}`}>
                             <div className="flex items-center gap-3 mb-3">
-                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]">
+                              <div className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-active">
                                 <Lock className="w-5 h-5 text-text-primary" />
                               </div>
                               <div>
@@ -1520,10 +1524,10 @@ export const OrderDetailScreen = ({
                               </span>
                             </div>
                             {activeOrder.lockedPaymentMethod ? (
-                              <div className="pt-2 space-y-1.5 border-t border-white/10">
+                              <div className="pt-2 space-y-1.5 border-t border-border-medium">
                                 <div className="flex items-center gap-1.5">
-                                  <Lock className="w-3 h-3 text-orange-400" />
-                                  <span className="text-[11px] text-orange-400 font-semibold uppercase tracking-wide">
+                                  <Lock className="w-3 h-3 text-warning" />
+                                  <span className="text-[11px] text-warning font-semibold uppercase tracking-wide">
                                     Locked Payment Method
                                   </span>
                                 </div>
@@ -1576,9 +1580,9 @@ export const OrderDetailScreen = ({
                             )}
                           </div>
 
-                          <div className="mt-3 h-1 rounded-full overflow-hidden bg-white/[0.08]">
+                          <div className="mt-3 h-1 rounded-full overflow-hidden bg-surface-active">
                             <motion.div
-                              className="h-full bg-orange-400"
+                              className="h-full bg-warning"
                               animate={{ x: ["-100%", "100%"] }}
                               transition={{
                                 duration: 1.5,
@@ -1653,7 +1657,7 @@ export const OrderDetailScreen = ({
                           <p className="text-[13px] text-text-secondary">
                             Seller is verifying your payment...
                           </p>
-                          <div className="mt-2 h-1 rounded-full overflow-hidden bg-white/[0.08]">
+                          <div className="mt-2 h-1 rounded-full overflow-hidden bg-surface-active">
                             <motion.div
                               className="h-full bg-text-tertiary"
                               style={{ width: "30%" }}
@@ -1794,7 +1798,7 @@ export const OrderDetailScreen = ({
                         <Star
                           className={`w-8 h-8 ${
                             star <= rating
-                              ? "fill-amber-400 text-amber-400"
+                              ? "fill-warning text-warning"
                               : "text-text-quaternary"
                           }`}
                         />
@@ -1818,14 +1822,14 @@ export const OrderDetailScreen = ({
                   <p className="text-[15px] font-medium text-text-primary">
                     {activeOrder.merchant.name}
                   </p>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-white/[0.08] text-text-secondary">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface-active text-text-secondary">
                     {activeOrder.merchant.paymentMethod === "cash"
                       ? "Cash"
                       : "Bank"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                  <Star className="w-3 h-3 fill-warning text-warning" />
                   <span className="text-[13px] text-text-secondary">
                     {activeOrder.merchant.rating} {"\u00b7"}{" "}
                     {activeOrder.merchant.trades} trades
@@ -1835,7 +1839,7 @@ export const OrderDetailScreen = ({
             </div>
             <button
               onClick={handleOpenChat}
-              className="w-10 h-10 rounded-full flex items-center justify-center bg-white/[0.08]"
+              className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-active"
             >
               <MessageCircle className="w-5 h-5 text-text-secondary" />
             </button>
@@ -1850,7 +1854,7 @@ export const OrderDetailScreen = ({
             <button
               onClick={() => requestCancelOrder()}
               disabled={isRequestingCancel}
-              className={`w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2 disabled:opacity-50 text-[#f59e0b] ${AMBER_CARD}`}
+              className={`w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2 disabled:opacity-50 text-warning ${AMBER_CARD}`}
             >
               {isRequestingCancel ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -1865,7 +1869,7 @@ export const OrderDetailScreen = ({
           activeOrder.status !== "disputed" && (
             <button
               onClick={() => setShowDisputeModal(true)}
-              className={`w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2 text-[#ef4444] ${RED_CARD}`}
+              className={`w-full mt-3 py-3 rounded-2xl text-[14px] font-medium flex items-center justify-center gap-2 text-error ${RED_CARD}`}
             >
               <AlertTriangle className="w-4 h-4" />
               Report Issue
@@ -1875,13 +1879,13 @@ export const OrderDetailScreen = ({
         {/* Already Disputed */}
         {activeOrder.status === "disputed" && (
           <div className={`mt-3 py-3 px-4 rounded-2xl ${RED_CARD}`}>
-            <div className="flex items-center gap-2 text-[#ef4444]">
+            <div className="flex items-center gap-2 text-error">
               <AlertTriangle className="w-4 h-4" />
               <span className="text-[14px] font-medium">
                 Dispute in Progress
               </span>
             </div>
-            <p className="text-[12px] mt-1 text-[rgba(239,68,68,0.7)]">
+            <p className="text-[12px] mt-1 text-error">
               Our team is reviewing this case.
             </p>
           </div>
@@ -1895,7 +1899,7 @@ export const OrderDetailScreen = ({
             animate={{ opacity: 1 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setScreen(previousScreen || "home")}
-            className="w-full mt-4 py-4 rounded-2xl text-[17px] font-semibold bg-surface-raised border border-white/10 text-text-primary"
+            className="w-full mt-4 py-4 rounded-2xl text-[17px] font-semibold bg-surface-raised border border-border-medium text-text-primary"
           >
             Done
           </motion.button>
@@ -1922,7 +1926,7 @@ export const OrderDetailScreen = ({
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                  <AlertTriangle className="w-5 h-5 text-error" />
                   <h3 className="text-[17px] font-semibold text-text-primary">
                     Report Issue
                   </h3>
@@ -1944,7 +1948,7 @@ export const OrderDetailScreen = ({
                 <select
                   value={disputeReason}
                   onChange={(e) => setDisputeReason(e.target.value)}
-                  className="w-full rounded-xl px-4 py-3 text-[15px] outline-none appearance-none bg-surface-raised text-text-primary border border-white/10"
+                  className="w-full rounded-xl px-4 py-3 text-[15px] outline-none appearance-none bg-surface-raised text-text-primary border border-border-medium"
                 >
                   <option value="">Select a reason...</option>
                   <option value="payment_not_received">
@@ -1968,7 +1972,7 @@ export const OrderDetailScreen = ({
                   onChange={(e) => setDisputeDescription(e.target.value)}
                   placeholder="Describe the issue in detail..."
                   rows={3}
-                  className="w-full rounded-xl px-4 py-3 text-[15px] outline-none resize-none bg-surface-raised text-text-primary border border-white/10"
+                  className="w-full rounded-xl px-4 py-3 text-[15px] outline-none resize-none bg-surface-raised text-text-primary border border-border-medium"
                 />
               </div>
 
@@ -1983,7 +1987,7 @@ export const OrderDetailScreen = ({
                   whileTap={{ scale: 0.98 }}
                   onClick={submitDispute}
                   disabled={!disputeReason || isSubmittingDispute}
-                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 flex items-center justify-center gap-2 bg-[#ef4444] text-white"
+                  className="flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 flex items-center justify-center gap-2 bg-error text-text-primary"
                 >
                   {isSubmittingDispute ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -2016,7 +2020,7 @@ export const OrderDetailScreen = ({
               transition={{ type: "spring", damping: 30 }}
               className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl h-[70vh] flex flex-col ${SHEET_BG}`}
             >
-              <div className="flex items-center justify-between p-4 border-b border-white/10">
+              <div className="flex items-center justify-between p-4 border-b border-border-medium">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-accent" />
                   <div>
@@ -2025,7 +2029,7 @@ export const OrderDetailScreen = ({
                     </p>
                     <div className="flex items-center gap-1.5">
                       <ConnectionIndicator isConnected={true} />
-                      <p className="text-[11px] text-orange-500">Online</p>
+                      <p className="text-[11px] text-warning">Online</p>
                     </div>
                   </div>
                 </div>
@@ -2047,8 +2051,8 @@ export const OrderDetailScreen = ({
                           <div key={msg.id} className="flex justify-center">
                             <div className={`w-full max-w-[90%] rounded-2xl p-4 ${RED_CARD}`}>
                               <div className="flex items-center gap-2 mb-2">
-                                <AlertTriangle className="w-4 h-4 text-[#ef4444]" />
-                                <span className="text-[13px] font-semibold text-[#ef4444]">
+                                <AlertTriangle className="w-4 h-4 text-error" />
+                                <span className="text-[13px] font-semibold text-error">
                                   Dispute Opened
                                 </span>
                               </div>
@@ -2177,8 +2181,8 @@ export const OrderDetailScreen = ({
                             <div
                               className={`px-4 py-2 rounded-2xl text-[13px] ${
                                 isAccepted
-                                  ? "bg-white/[0.08] text-text-secondary"
-                                  : "bg-[rgba(239,68,68,0.10)] text-[#ef4444]"
+                                  ? "bg-surface-active text-text-secondary"
+                                  : "bg-error-dim text-error"
                               }`}
                             >
                               {data.party === "user" ? "You" : "Merchant"}{" "}
@@ -2253,7 +2257,7 @@ export const OrderDetailScreen = ({
                               msg.from === "me"
                                 ? "bg-accent text-accent-text text-[15px]"
                                 : msg.from === "system"
-                                  ? "bg-white/[0.08] text-text-secondary text-[13px]"
+                                  ? "bg-surface-active text-text-secondary text-[13px]"
                                   : "bg-surface-card text-text-primary text-[15px]"
                             }`}
                           >
@@ -2393,18 +2397,18 @@ export const OrderDetailScreen = ({
 
               {/* Image preview bar */}
               {pendingImage && (
-                <div className="px-4 py-2 flex items-center gap-3 border-t border-white/10">
+                <div className="px-4 py-2 flex items-center gap-3 border-t border-border-medium">
                   <div className="relative">
                     <img
                       src={pendingImage.previewUrl}
                       alt="Preview"
-                      className="w-16 h-16 rounded-xl object-cover border border-white/10"
+                      className="w-16 h-16 rounded-xl object-cover border border-border-medium"
                     />
                     <button
                       onClick={clearPendingImage}
                       className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center bg-text-tertiary"
                     >
-                      <X className="w-3 h-3 text-white" />
+                      <X className="w-3 h-3 text-text-primary" />
                     </button>
                   </div>
                   <span className="text-[13px] flex-1 text-text-secondary">
@@ -2413,7 +2417,7 @@ export const OrderDetailScreen = ({
                 </div>
               )}
 
-              <div className="p-4 pb-8 border-t border-white/10">
+              <div className="p-4 pb-8 border-t border-border-medium">
                 <div className="flex items-center gap-2">
                   {/* Emoji button */}
                   <button
@@ -2465,13 +2469,13 @@ export const OrderDetailScreen = ({
                     }}
                     disabled={isUploading}
                     className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50 ${
-                      pendingImage ? "bg-[#f97316]" : "bg-accent"
+                      pendingImage ? "bg-warning" : "bg-accent"
                     }`}
                   >
                     {isUploading ? (
-                      <Loader2 className="w-5 h-5 animate-spin text-white" />
+                      <Loader2 className="w-5 h-5 animate-spin text-accent-text" />
                     ) : (
-                      <ChevronRight className="w-5 h-5 text-white" />
+                      <ChevronRight className="w-5 h-5 text-accent-text" />
                     )}
                   </button>
                 </div>

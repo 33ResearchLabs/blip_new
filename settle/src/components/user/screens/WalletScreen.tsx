@@ -131,8 +131,8 @@ export const WalletScreen = ({
     return (
       <>
         <div className="flex-1 flex flex-col items-center justify-center px-6">
-          <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 bg-white/[0.06] border border-white">
-            <Wallet size={36} className="text-white" />
+          <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 bg-surface-hover border border-border-strong">
+            <Wallet size={36} className="text-text-primary" />
           </div>
           <h2 className="text-xl font-black mb-2 text-text-primary">Set Up Wallet</h2>
           <p className="text-sm text-center mb-8 text-text-tertiary">
@@ -166,7 +166,7 @@ export const WalletScreen = ({
       <header className="px-5 pt-2 pb-4 flex items-center justify-between">
         <h1 className="text-[20px] font-black tracking-tight text-text-primary">Wallet</h1>
         <motion.button whileTap={{ scale: 0.9 }} onClick={handleRefresh}
-          className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/[0.03] border border-border-subtle">
+          className="w-9 h-9 rounded-xl flex items-center justify-center bg-surface-card border border-border-subtle">
           <RefreshCw size={15} className={`${isRefreshing ? 'animate-spin' : ''} text-text-tertiary`} />
         </motion.button>
       </header>
@@ -196,7 +196,7 @@ export const WalletScreen = ({
             </div>
 
             <div className="flex items-center gap-3 mt-3 mb-5">
-              <div className="px-2.5 py-1 rounded-full bg-white/[0.03] border border-border-subtle">
+              <div className="px-2.5 py-1 rounded-full bg-surface-card border border-border-subtle">
                 <span className="text-[11px] font-bold text-text-tertiary">
                   SOL: {solanaWallet.solBalance !== null ? solanaWallet.solBalance.toFixed(4) : '0'}
                 </span>
@@ -221,15 +221,15 @@ export const WalletScreen = ({
 
         {/* Address Card */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-          className="rounded-[22px] p-4 mb-4 bg-white/[0.03] border border-border-subtle">
+          className="rounded-[22px] p-4 mb-4 bg-surface-card border border-border-subtle">
           <p className="text-[8px] font-black tracking-[0.25em] text-text-tertiary uppercase mb-2">Wallet Address</p>
           <div className="flex items-center gap-2">
             <p className="flex-1 font-mono text-[12px] truncate text-text-secondary">
               {solanaWallet.walletAddress || '—'}
             </p>
             <motion.button whileTap={{ scale: 0.85 }} onClick={handleCopy}
-              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-white/[0.03]">
-              {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} className="text-text-tertiary" />}
+              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-surface-card">
+              {copied ? <Check size={14} className="text-success" /> : <Copy size={14} className="text-text-tertiary" />}
             </motion.button>
           </div>
         </motion.div>
@@ -240,10 +240,10 @@ export const WalletScreen = ({
           {/* Airdrop (devnet) */}
           {solanaWallet.requestAirdrop && (
             <motion.button whileTap={{ scale: 0.95 }} onClick={handleAirdrop} disabled={isAirdropping}
-              className="flex items-center gap-3 rounded-[18px] p-3.5 bg-white/[0.03] border border-border-subtle">
+              className="flex items-center gap-3 rounded-[18px] p-3.5 bg-surface-card border border-border-subtle">
               {isAirdropping
-                ? <Loader2 size={18} className="animate-spin text-purple-400" />
-                : <Droplets size={18} className="text-white/85" />}
+                ? <Loader2 size={18} className="animate-spin text-info" />
+                : <Droplets size={18} className="text-text-primary" />}
               <div className="text-left">
                 <p className="text-[12px] font-extrabold text-text-primary">Airdrop</p>
                 <p className="text-[9px] text-text-tertiary">Free SOL</p>
@@ -254,7 +254,7 @@ export const WalletScreen = ({
           {solanaWallet.walletAddress && (
             <motion.button whileTap={{ scale: 0.95 }}
               onClick={() => window.open(`https://explorer.solana.com/address/${solanaWallet.walletAddress}?cluster=devnet`, '_blank')}
-              className="flex items-center gap-3 rounded-[18px] p-3.5 bg-white/[0.03] border border-border-subtle">
+              className="flex items-center gap-3 rounded-[18px] p-3.5 bg-surface-card border border-border-subtle">
               <ExternalLink size={18} className="text-info" />
               <div className="text-left">
                 <p className="text-[12px] font-extrabold text-text-primary">Explorer</p>
@@ -266,7 +266,7 @@ export const WalletScreen = ({
 
         {/* Airdrop message */}
         {airdropMsg && (
-          <p className={`text-center text-sm mb-4 ${airdropMsg.includes('received') ? 'text-[#10b981]' : 'text-[#f87171]'}`}>
+          <p className={`text-center text-sm mb-4 ${airdropMsg.includes('received') ? 'text-success' : 'text-error'}`}>
             {airdropMsg}
           </p>
         )}
@@ -294,7 +294,7 @@ export const WalletScreen = ({
                   <button key={t} onClick={() => setSendToken(t)}
                     className={`flex-1 py-2 rounded-xl text-sm font-bold ${
                       sendToken === t
-                        ? 'bg-white/[0.06] border border-white/15 text-white'
+                        ? 'bg-surface-hover border border-border-strong text-text-primary'
                         : 'bg-surface-card border border-border-subtle text-text-tertiary'
                     }`}>
                     {t}
@@ -319,8 +319,8 @@ export const WalletScreen = ({
                   : `${solanaWallet.solBalance?.toFixed(4) ?? '0'} SOL`}
               </p>
 
-              {sendError && <p className="text-xs text-red-400 mb-3">{sendError}</p>}
-              {sendSuccess && <p className="text-xs text-emerald-400 mb-3">{sendSuccess}</p>}
+              {sendError && <p className="text-xs text-error mb-3">{sendError}</p>}
+              {sendSuccess && <p className="text-xs text-success mb-3">{sendSuccess}</p>}
 
               <motion.button whileTap={{ scale: 0.97 }} onClick={handleSend} disabled={isSending}
                 className={`w-full py-3.5 rounded-2xl text-[15px] font-bold ${
@@ -361,7 +361,7 @@ export const WalletScreen = ({
 
               <motion.button whileTap={{ scale: 0.97 }} onClick={handleCopy}
                 className="w-full py-3.5 rounded-2xl text-[15px] font-bold flex items-center justify-center gap-2 bg-surface-active border border-border-medium text-text-primary">
-                {copied ? <><Check size={16} className="text-emerald-500" /> Copied!</> : <><Copy size={16} /> Copy Address</>}
+                {copied ? <><Check size={16} className="text-success" /> Copied!</> : <><Copy size={16} /> Copy Address</>}
               </motion.button>
             </motion.div>
           </motion.div>

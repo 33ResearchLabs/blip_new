@@ -10,29 +10,73 @@
    ========================================================================== */
 
 /* ----- Dark-mode design tokens (scoped to user route) -----
-   These are the NEW tokens Atul's user screens reference via Tailwind utilities
-   (bg-surface-card, text-accent-text, border-success-border, etc.). They are
-   declared only inside .user-scope so merchant routes never see them —
-   merchant's :root and @theme inline in globals.css stays fully intact. */
+   The user route ONLY uses two themes: dark (default) and light (.user-light).
+   Any other merchant theme set globally via [data-theme="navy|emerald|orchid|gold|..."]
+   on <html> would otherwise cascade INTO .user-scope and recolor user screens.
+   To prevent that, we redeclare the FULL dark token set here so merchant theme
+   variables can never bleed in. Higher specificity than [data-theme] on :root
+   isn't needed — same specificity (one class) wins because .user-scope is a
+   nearer ancestor of the user-screen elements. */
 .user-scope {
-  /* Accent text (text drawn on top of accent CTA) — dark mode = dark pill on light text */
-  --accent-text: #0B0F14;
+  /* Backgrounds */
+  --background:           #0B0F14;
+  --foreground:           #ffffff;
+  --color-bg-primary:     #0B0F14;
+  --color-bg-secondary:   #111827;
+  --color-bg-tertiary:    #1F2937;
 
-  /* Glass surfaces (translucent layers over bg) */
+  /* Surface hierarchy (used by bg-surface-base / -raised / -overlay) */
+  --color-surface-base:    #0B0F14;
+  --color-surface-raised:  #111827;
+  --color-surface-overlay: #1F2937;
+
+  /* Text hierarchy — white opacities */
+  --color-text-primary:    rgba(255, 255, 255, 0.92);
+  --color-text-secondary:  rgba(255, 255, 255, 0.55);
+  --color-text-tertiary:   rgba(255, 255, 255, 0.30);
+  --color-text-quaternary: rgba(255, 255, 255, 0.15);
+
+  /* Borders */
+  --border:                  rgba(255, 255, 255, 0.06);
+  --color-border-subtle:     rgba(255, 255, 255, 0.06);
+  --color-border-medium:     rgba(255, 255, 255, 0.10);
+  --color-border-strong:     rgba(255, 255, 255, 0.16);
+
+  /* Glass surfaces */
   --color-surface-card:   rgba(255, 255, 255, 0.04);
   --color-surface-hover:  rgba(255, 255, 255, 0.06);
   --color-surface-active: rgba(255, 255, 255, 0.08);
 
-  /* Semantic dim/border tints */
+  --card:        rgba(255, 255, 255, 0.04);
+  --card-solid:  #111827;
+
+  --muted:    #525252;
+  --muted-bg: #1F2937;
+
+  /* Accent CTA — white pill, dark text */
+  --accent:        #FFFFFF;
+  --accent-bright: rgba(255, 255, 255, 0.85);
+  --accent-dark:   rgba(255, 255, 255, 0.70);
+  --accent-dim:    rgba(255, 255, 255, 0.70);
+  --accent-subtle: rgba(255, 255, 255, 0.06);
+  --accent-glow:   rgba(255, 255, 255, 0.08);
+  --accent-text:   #0B0F14;
+
+  /* Semantic */
+  --color-success:        #10b981;
   --color-success-dim:    rgba(16,185,129,0.12);
   --color-success-border: rgba(16,185,129,0.25);
+  --color-warning:        #f59e0b;
   --color-warning-dim:    rgba(245,158,11,0.12);
   --color-warning-border: rgba(245,158,11,0.25);
+  --color-error:          #ef4444;
   --color-error-dim:      rgba(239,68,68,0.10);
   --color-error-border:   rgba(239,68,68,0.20);
+  --color-info:           #60a5fa;
 
-  /* Dark "desk" frame around the phone column */
-  --user-frame: #0B0F14;
+  /* "Desk" frame around the phone column.
+     Dark mode: white desk for contrast against the dark phone. */
+  --user-frame: #ffffff;
 }
 
 /* ----- Light-mode design tokens (scoped) ----- */
@@ -44,6 +88,11 @@
   --color-bg-primary:   #ffffff;
   --color-bg-secondary: #f7f8fa;
   --color-bg-tertiary:  #eef0f3;
+
+  /* Surface hierarchy (used by bg-surface-base / -raised / -overlay) */
+  --color-surface-base:    #ffffff;
+  --color-surface-raised:  #f7f8fa;
+  --color-surface-overlay: #eef0f3;
 
   /* Text hierarchy — dark on white */
   --color-text-primary:    rgba(15, 23, 42, 0.95);

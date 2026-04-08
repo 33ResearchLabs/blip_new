@@ -9,7 +9,7 @@ import {
   ChevronLeft,
   Loader2,
 } from "lucide-react";
-import { useTheme } from "@/context/ThemeContext";
+import { useUserTheme } from "@/hooks/useUserTheme";
 import { useSounds } from "@/hooks/useSounds";
 import { NotificationToastContainer, useToast } from "@/components/NotificationToast";
 import { useUserAuth } from "@/hooks/useUserAuth";
@@ -47,7 +47,10 @@ import {
 } from "@/components/user/screens";
 
 export default function Home() {
-  const { theme, toggleTheme } = useTheme();
+  // User route uses its own dark/light state — independent of the merchant
+  // ThemeContext (which has 7 themes). Stored under localStorage key
+  // 'user_theme' so it never collides with the merchant 'theme' key.
+  const { theme, toggleTheme } = useUserTheme();
   const { playSound } = useSounds();
   const rawToast = useToast();
   const solanaWallet = useSolanaWalletSafe();
@@ -217,18 +220,24 @@ export default function Home() {
 
   const maxW = "max-w-[440px] mx-auto";
 
+  // The user route only uses two themes: dark (default) and light.
+  const isUserLight = theme === 'light';
+
   if (auth.isInitializing) {
     return (
-      <div className={`user-scope ${theme === 'light' ? 'user-light' : ''} h-dvh flex items-center justify-center overflow-hidden`} style={{ background: theme === 'light' ? '#ffffff' : '#0a0a0a' }}>
-        <Loader2 className={`w-8 h-8 animate-spin ${theme === 'light' ? 'text-black' : 'text-white'}`} />
+      <div
+        className={`user-scope ${isUserLight ? 'user-light' : ''} h-dvh flex items-center justify-center overflow-hidden`}
+        style={{ background: 'var(--user-frame)' }}
+      >
+        <Loader2 className="w-8 h-8 animate-spin text-accent-text" />
       </div>
     );
   }
 
   return (
     <div
-      className={`user-scope ${theme === 'light' ? 'user-light' : ''} min-h-dvh flex flex-col items-center overflow-y-auto relative`}
-      style={{ background: theme === 'light' ? 'var(--user-frame)' : '#0a0a0a' }}
+      className={`user-scope ${isUserLight ? 'user-light' : ''} min-h-dvh flex flex-col items-center overflow-y-auto relative`}
+      style={{ background: 'var(--user-frame)' }}
     >
       <NotificationToastContainer position="top-right" />
       <AnimatePresence mode="wait">

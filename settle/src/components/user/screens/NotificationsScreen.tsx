@@ -25,30 +25,34 @@ interface Notification {
   read: boolean;
 }
 
+// Icons use the semantic tokens (success / warning / error / info) plus the
+// neutral text-text-secondary for "message" — no off-palette hexes.
 function getNotifIcon(type: string) {
   switch (type) {
-    case 'order': return <Zap size={16} color="#f97316" />;
-    case 'escrow': return <Lock size={16} color="#3b82f6" />;
-    case 'payment': return <DollarSign size={16} color="#10b981" />;
-    case 'dispute': return <AlertTriangle size={16} color="#ef4444" />;
-    case 'complete': return <CheckCircle2 size={16} color="#10b981" />;
-    case 'message': return <MessageCircle size={16} color="#a855f7" />;
-    case 'warning': return <AlertTriangle size={16} color="#f59e0b" />;
-    case 'action': return <Shield size={16} color="#f97316" />;
-    default: return <Bell size={16} color="rgba(255,255,255,0.4)" />;
+    case 'order':    return <Zap          size={16} className="text-warning" />;
+    case 'escrow':   return <Lock         size={16} className="text-info" />;
+    case 'payment':  return <DollarSign   size={16} className="text-success" />;
+    case 'dispute':  return <AlertTriangle size={16} className="text-error" />;
+    case 'complete': return <CheckCircle2 size={16} className="text-success" />;
+    case 'message':  return <MessageCircle size={16} className="text-text-secondary" />;
+    case 'warning':  return <AlertTriangle size={16} className="text-warning" />;
+    case 'action':   return <Shield       size={16} className="text-warning" />;
+    default:         return <Bell         size={16} className="text-text-tertiary" />;
   }
 }
 
-function getNotifBg(type: string) {
+// Tinted card background per type, all from the semantic palette.
+function getNotifBgClass(type: string) {
   switch (type) {
-    case 'order': return 'rgba(249,115,22,0.08)';
-    case 'escrow': return 'rgba(59,130,246,0.08)';
-    case 'payment': return 'rgba(16,185,129,0.08)';
-    case 'dispute': return 'rgba(239,68,68,0.08)';
-    case 'complete': return 'rgba(16,185,129,0.08)';
-    case 'message': return 'rgba(168,85,247,0.08)';
-    case 'warning': return 'rgba(245,158,11,0.08)';
-    default: return 'rgba(255,255,255,0.04)';
+    case 'order':
+    case 'warning':
+    case 'action':   return 'bg-warning-dim';
+    case 'escrow':   return 'bg-surface-card'; // info-dim not in palette → neutral
+    case 'payment':
+    case 'complete': return 'bg-success-dim';
+    case 'dispute':  return 'bg-error-dim';
+    case 'message':
+    default:         return 'bg-surface-card';
   }
 }
 
@@ -94,22 +98,21 @@ export const NotificationsScreen = ({
   })();
 
   return (
-    <div className="flex flex-col h-dvh overflow-hidden" style={{ background: '#060606' }}>
+    <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
       {/* ── Header ── */}
       <header className="px-5 pt-10 pb-3 shrink-0">
         <div className="flex items-center justify-between">
           <div>
-            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.22em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', marginBottom: 4 }}>Updates</p>
-            <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.03em', color: '#fff', lineHeight: 1 }}>Notifications</p>
+            <p className="text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase mb-1">Updates</p>
+            <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">Notifications</p>
           </div>
           {unreadCount > 0 && (
             <button
               onClick={onMarkAllRead}
-              className="px-3 py-1.5 rounded-full"
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.06)' }}
+              className="px-3 py-1.5 rounded-full bg-surface-hover border border-border-subtle"
             >
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>Mark all read</span>
+              <span className="text-[11px] font-semibold text-text-secondary">Mark all read</span>
             </button>
           )}
         </div>
@@ -119,31 +122,26 @@ export const NotificationsScreen = ({
       <div className="px-5 pb-2 flex items-center gap-2 shrink-0">
         <button
           onClick={() => setActiveTab('alerts')}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all"
-          style={activeTab === 'alerts'
-            ? { background: '#fff', color: '#000' }
-            : { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)' }
-          }
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all ${
+            activeTab === 'alerts'
+              ? 'bg-accent text-accent-text'
+              : 'bg-surface-hover text-text-tertiary'
+          }`}
         >
           <Bell size={13} strokeWidth={2.2} />
-          <span style={{ fontSize: 12, fontWeight: 700 }}>Alerts</span>
+          <span className="text-[12px] font-bold">Alerts</span>
           {unreadCount > 0 && (
-            <span style={{
-              fontSize: 10, fontWeight: 800, minWidth: 18, textAlign: 'center',
-              background: activeTab === 'alerts' ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.1)',
-              color: '#ef4444', borderRadius: 10, padding: '1px 5px',
-            }}>
+            <span className="text-[10px] font-extrabold min-w-4.5 text-center bg-error-dim text-error rounded-[10px] px-1.25 py-px">
               {unreadCount}
             </span>
           )}
         </button>
         <button
           onClick={() => { setActiveTab('activity'); setScreen('orders'); }}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all"
-          style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)' }}
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all bg-surface-hover text-text-tertiary"
         >
           <Activity size={13} strokeWidth={2.2} />
-          <span style={{ fontSize: 12, fontWeight: 700 }}>Orders</span>
+          <span className="text-[12px] font-bold">Orders</span>
         </button>
 
         {/* Time filter — collapsed dropdown on the right */}
@@ -157,15 +155,14 @@ export const NotificationsScreen = ({
       </div>
 
       {/* ── Notification List ── */}
-      <div className="flex-1 px-5 pt-2 pb-24 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+      <div className="flex-1 px-5 pt-2 pb-24 overflow-y-auto scrollbar-hide">
         {filteredNotifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <Bell size={22} color="rgba(255,255,255,0.2)" />
+            <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4 bg-surface-card border border-border-subtle">
+              <Bell size={22} className="text-text-quaternary" />
             </div>
-            <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em', color: '#fff', marginBottom: 6 }}>No notifications</p>
-            <p style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>You're all caught up</p>
+            <p className="text-[18px] font-extrabold tracking-[-0.02em] text-text-primary mb-1.5">No notifications</p>
+            <p className="text-[13px] font-medium text-text-tertiary">You&apos;re all caught up</p>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -177,37 +174,34 @@ export const NotificationsScreen = ({
                 transition={{ delay: i * 0.03 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => onMarkRead(notif.id)}
-                className="w-full rounded-[18px] p-3.5 flex items-start gap-3 text-left"
-                style={{
-                  background: notif.read ? 'rgba(255,255,255,0.02)' : getNotifBg(notif.type),
-                  border: `1px solid ${notif.read ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.08)'}`,
-                }}
+                className={`w-full rounded-[18px] p-3.5 flex items-start gap-3 text-left border ${
+                  notif.read
+                    ? 'bg-surface-card border-border-subtle'
+                    : `${getNotifBgClass(notif.type)} border-border-medium`
+                }`}
               >
                 {/* Icon */}
-                <div className="w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0"
-                  style={{ background: 'rgba(255,255,255,0.06)' }}>
+                <div className="w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 bg-surface-hover">
                   {getNotifIcon(notif.type)}
                 </div>
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-0.5">
-                    <p style={{ fontSize: 14, fontWeight: notif.read ? 500 : 700, color: '#fff', letterSpacing: '-0.01em' }}>
+                    <p className={`text-[14px] tracking-[-0.01em] text-text-primary ${notif.read ? 'font-medium' : 'font-bold'}`}>
                       {notif.title}
                     </p>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
                       {!notif.read && (
-                        <div className="w-2 h-2 rounded-full" style={{ background: '#3b82f6' }} />
+                        <div className="w-2 h-2 rounded-full bg-info" />
                       )}
-                      <p style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.3)' }}>
+                      <p className="text-[10px] font-medium text-text-tertiary">
                         {formatTimeAgo(notif.timestamp)}
                       </p>
                     </div>
                   </div>
-                  <p style={{
-                    fontSize: 13, fontWeight: 400,
-                    color: notif.read ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.5)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
+                  <p className={`text-[13px] font-normal overflow-hidden text-ellipsis whitespace-nowrap ${
+                    notif.read ? 'text-text-tertiary' : 'text-text-secondary'
+                  }`}>
                     {notif.message}
                   </p>
                 </div>

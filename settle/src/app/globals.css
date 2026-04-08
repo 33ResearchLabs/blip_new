@@ -278,6 +278,9 @@
   --color-accent-text: var(--accent-text);
   --color-accent-bright: var(--accent-bright);
   --color-accent-dim: var(--accent-dim);
+  --color-surface-base: var(--color-surface-base);
+  --color-surface-raised: var(--color-surface-raised);
+  --color-surface-overlay: var(--color-surface-overlay);
   --color-surface-card: var(--color-surface-card);
   --color-surface-hover: var(--color-surface-hover);
   --color-surface-active: var(--color-surface-active);

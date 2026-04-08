@@ -133,7 +133,10 @@ function WalletBalanceSection({
 }) {
   const balance  = displayBalance ?? 0;
   const balWhole = Math.floor(balance).toLocaleString();
-  const balDec   = (balance % 1).toFixed(2).slice(1);
+  const balDec   = (balance % 1).toFixed(2).slice(1); 
+
+   const d = new Date();
+  d.setDate(d.getDate() - 7);
 
   return (
     <>
@@ -185,7 +188,7 @@ function WalletBalanceSection({
               </div>
               <HomeSparkline height={72} />
               <div className="flex justify-between mt-1 px-1">
-                <span className="text-[8px] text-text-quaternary font-medium">Mar 13</span>
+                <span className="text-[8px] text-text-quaternary font-medium">{d.toLocaleDateString('en-IN')}</span>
                 <span className="text-[8px] text-text-quaternary font-medium">Today</span>
               </div>
             </div>
@@ -234,7 +237,7 @@ function WalletBalanceSection({
                 : 'bg-surface-card border border-border-subtle'
             }`}>
               <Icon size={22} strokeWidth={2}
-                className={primary ? 'text-white' : 'text-text-secondary'} />
+                className={primary ? 'text-accent-text' : 'text-text-secondary'} />
             </div>
             <span className={`text-[9px] font-bold uppercase tracking-[0.12em] ${
               primary ? 'text-text-primary' : 'text-text-secondary'
@@ -462,7 +465,7 @@ export const HomeScreen = ({
                         {isActive && (
                           <motion.div animate={{ scale: [1, 1.35, 1] }} transition={{ duration: 2, repeat: Infinity }}
                             className="absolute -bottom-[3px] -right-[3px] flex items-center justify-center w-[14px] h-[14px] rounded-full bg-success border-2 border-surface-base">
-                            <Zap size={6} className="fill-white text-white" />
+                            <Zap size={6} className="fill-current text-text-primary" />
                           </motion.div>
                         )}
                       </div>
@@ -502,7 +505,7 @@ export const HomeScreen = ({
                   setScreen('matching');
                 } else { setScreen('order'); }
               }}
-              className="w-full flex items-center gap-3 text-left rounded-[18px] mt-3 mb-1 py-[13px] px-[15px] bg-white/[0.06] border border-white/15"
+              className="w-full flex items-center gap-3 text-left rounded-[18px] mt-3 mb-1 py-[13px] px-[15px] bg-surface-hover border border-border-strong"
             >
               <motion.div animate={{ opacity: [1, 0.25, 1] }} transition={{ duration: 1.4, repeat: Infinity }}
                 className="w-[7px] h-[7px] rounded-full bg-accent shrink-0" />
