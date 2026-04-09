@@ -44,7 +44,7 @@ export const CreateOfferScreen = ({
           <div className="flex gap-2">
             {(["buy", "sell"] as const).map((type) => {
               const on = tradeType === type;
-              const accentClass = type === "buy" ? "text-[#059669] border-[#059669]" : "text-[#dc2626] border-[#dc2626]";
+              const accentClass = type === "buy" ? "text-success border-success" : "text-error border-error";
               return (
                 <button key={type} onClick={() => setTradeType(type)}
                   className={`flex-1 py-3 rounded-xl bg-surface-card text-[14px] font-bold ${

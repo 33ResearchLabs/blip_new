@@ -143,7 +143,7 @@ export const ProfileScreen = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-[16px] flex items-center justify-center shrink-0 bg-surface-raised border border-border-subtle">
-              <span className="text-[20px] font-extrabold text-white">{userName.charAt(0).toUpperCase()}</span>
+              <span className="text-[20px] font-extrabold text-text-primary">{userName.charAt(0).toUpperCase()}</span>
             </div>
             <div>
               <p className="text-[20px] font-extrabold tracking-[-0.03em] text-text-primary leading-[1.1]">{userName}</p>
@@ -163,8 +163,8 @@ export const ProfileScreen = ({
               }}
               className="w-9 h-9 rounded-[12px] flex items-center justify-center bg-surface-raised border border-border-subtle">
               {copied
-                ? <Check size={15} className="text-[#10b981]" />
-                : <Copy size={15} className="text-white/40" />}
+                ? <Check size={15} className="text-success" />
+                : <Copy size={15} className="text-text-tertiary" />}
             </motion.button>
           )}
         </div>
@@ -182,7 +182,7 @@ export const ProfileScreen = ({
           ].map(stat => (
             <div key={stat.label} className={`rounded-[18px] flex flex-col items-center py-3 ${CARD}`}>
               <p className={`${CARD_LABEL} mb-1`}>{stat.label}</p>
-              <p className="text-[20px] font-extrabold tracking-[-0.03em] text-white">{stat.value}{" "}<span className="text-sm">{stat.currency}</span></p>
+              <p className="text-[20px] font-extrabold tracking-[-0.03em] text-text-primary">{stat.value}{" "}<span className="text-sm">{stat.currency}</span></p>
             </div>
           ))}
         </div>
@@ -195,13 +195,13 @@ export const ProfileScreen = ({
             <div className={`rounded-[18px] px-4 py-3 flex items-center justify-between mb-3 ${CARD}`}>
               <div>
                 <p className={`${CARD_LABEL} mb-1`}>Reputation</p>
-                <p className="text-[16px] font-extrabold tracking-[-0.02em] text-white">{tier}</p>
+                <p className="text-[16px] font-extrabold tracking-[-0.02em] text-text-primary">{tier}</p>
               </div>
               <div className="flex items-end gap-1">
                 {[...Array(5)].map((_, i) => (
                   <div
                     key={i}
-                    className={`w-1 rounded-[2px] ${REP_BAR_H[i]} ${i < lvl ? 'bg-white' : 'bg-text-quaternary'}`}
+                    className={`w-1 rounded-[2px] ${REP_BAR_H[i]} ${i < lvl ? 'bg-accent' : 'bg-text-quaternary'}`}
                   />
                 ))}
               </div>
@@ -213,16 +213,16 @@ export const ProfileScreen = ({
         <p className={`${SECTION_LABEL} block mb-2`}>Solana Wallet</p>
         <div className={`rounded-[18px] p-4 mb-3 ${CARD}`}>
           <div className="flex items-center gap-3 mb-3">
-            <div className={`w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 border border-white/10 ${
-              solanaWallet.connected ? 'bg-white/10' : 'bg-white/5'
+            <div className={`w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 border border-border-medium ${
+              solanaWallet.connected ? 'bg-surface-active' : 'bg-surface-hover'
             }`}>
-              <Wallet size={16} className={solanaWallet.connected ? 'text-white' : 'text-white/30'} />
+              <Wallet size={16} className={solanaWallet.connected ? 'text-text-primary' : 'text-text-tertiary'} />
             </div>
             <div className="flex-1 min-w-0">
               <p className={`${CARD_LABEL} mb-0.5`}>
                 {solanaWallet.connected ? 'Solana Devnet' : 'Not Connected'}
               </p>
-              <p className="text-[13px] font-bold text-white font-mono">
+              <p className="text-[13px] font-bold text-text-primary font-mono">
                 {solanaWallet.connected && solanaWallet.walletAddress
                   ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`
                   : 'Connect your wallet'}
@@ -233,20 +233,20 @@ export const ProfileScreen = ({
           {/* Solana Balances */}
           {solanaWallet.connected && (
             <>
-              <div className="flex gap-2 mb-2 pt-3 border-t border-white/10">
+              <div className="flex gap-2 mb-2 pt-3 border-t border-border-medium">
                 {[
                   { label: 'SOL', value: solanaWallet.solBalance !== null ? solanaWallet.solBalance.toFixed(4) : '\u2014' },
                   { label: 'USDT', value: solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : '\u2014' },
                 ].map(b => (
-                  <div key={b.label} className="flex-1 rounded-[14px] px-3 py-2 bg-white/[0.06] border border-white/10">
+                  <div key={b.label} className="flex-1 rounded-[14px] px-3 py-2 bg-surface-hover border border-border-medium">
                     <p className={`${CARD_LABEL} mb-[3px]`}>{b.label}</p>
-                    <p className="text-[17px] font-extrabold tracking-[-0.02em] text-white">{b.value}</p>
+                    <p className="text-[17px] font-extrabold tracking-[-0.02em] text-text-primary">{b.value}</p>
                   </div>
                 ))}
               </div>
               <div className="flex gap-2">
                 <motion.button whileTap={{ scale: 0.96 }} onClick={() => solanaWallet.refreshBalances()}
-                  className="flex-1 py-2 rounded-[12px] bg-white/[0.08] text-[11px] font-bold text-white/50 tracking-[0.08em] uppercase">
+                  className="flex-1 py-2 rounded-[12px] bg-surface-active text-[11px] font-bold text-text-secondary tracking-[0.08em] uppercase">
                   Refresh
                 </motion.button>
                 <motion.button whileTap={{ scale: 0.96 }} onClick={() => solanaWallet.disconnect()}
@@ -279,25 +279,25 @@ export const ProfileScreen = ({
           <p className={SECTION_LABEL}>Bank Accounts</p>
           <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowAddBank(true)}
             className="w-8 h-8 rounded-[10px] flex items-center justify-center bg-surface-raised border border-border-subtle">
-            <Plus size={15} className="text-white/50" />
+            <Plus size={15} className="text-text-secondary" />
           </motion.button>
         </div>
         <div className="flex flex-col gap-2 mb-3">
           {bankAccounts.map(acc => (
             <div key={acc.id} className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${CARD}`}>
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-white/[0.08] text-[18px]">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-surface-active text-[18px]">
                 {'\uD83C\uDFE6'}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="text-[14px] font-bold text-white tracking-[-0.01em]">{acc.bank}</p>
+                  <p className="text-[14px] font-bold text-text-primary tracking-[-0.01em]">{acc.bank}</p>
                   {acc.isDefault && (
                     <span className="text-[8px] font-extrabold tracking-[0.1em] uppercase px-1.5 py-0.5 rounded-full bg-accent text-accent-text">
                       Default
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-white/35 font-mono">{acc.iban}</p>
+                <p className="text-[11px] text-text-tertiary font-mono">{acc.iban}</p>
               </div>
             </div>
           ))}
@@ -306,19 +306,19 @@ export const ProfileScreen = ({
         {/* Console & Analytics */}
         <p className={`${SECTION_LABEL} block mb-2`}>Analytics</p>
         <a href="/console" className={`flex items-center gap-3 rounded-[16px] px-4 py-3 mb-3 ${CARD}`}>
-          <div className="w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 bg-white/[0.08]">
-            <TrendingUp size={16} className="text-white/60" />
+          <div className="w-9 h-9 rounded-[12px] flex items-center justify-center shrink-0 bg-surface-active">
+            <TrendingUp size={16} className="text-text-secondary" />
           </div>
           <div className="flex-1">
-            <p className="text-[14px] font-bold text-white tracking-[-0.01em]">Console</p>
-            <p className="text-[10px] font-semibold text-white/35 tracking-[0.1em] uppercase">Timeouts & Analytics</p>
+            <p className="text-[14px] font-bold text-text-primary tracking-[-0.01em]">Console</p>
+            <p className="text-[10px] font-semibold text-text-tertiary tracking-[0.1em] uppercase">Timeouts & Analytics</p>
           </div>
           {timedOutOrders.length > 0 && (
-            <span className="text-[10px] font-bold px-2 py-[3px] rounded-full bg-error-dim border border-error-border text-[#dc2626]">
+            <span className="text-[10px] font-bold px-2 py-[3px] rounded-full bg-error-dim border border-error-border text-error">
               {timedOutOrders.length} timeout{timedOutOrders.length !== 1 ? 's' : ''}
             </span>
           )}
-          <ChevronRight size={15} className="text-white/20" />
+          <ChevronRight size={15} className="text-text-quaternary" />
         </a>
 
         {/* Resolved Disputes */}
@@ -329,27 +329,27 @@ export const ProfileScreen = ({
               {resolvedDisputes.map(dispute => {
                 const badgeClass =
                   dispute.resolvedInFavorOf === 'user'
-                    ? 'bg-success-dim text-[#059669] border border-success-border'
+                    ? 'bg-success-dim text-success border border-success-border'
                     : dispute.resolvedInFavorOf === 'merchant'
-                    ? 'bg-error-dim text-[#dc2626] border border-error-border'
-                    : 'bg-white/[0.08] text-white/40';
+                    ? 'bg-error-dim text-error border border-error-border'
+                    : 'bg-surface-active text-text-tertiary';
                 return (
                   <div key={dispute.id} className={`rounded-[16px] px-4 py-3 ${CARD}`}>
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-2">
-                        <span className="text-[13px] font-bold text-white">#{dispute.orderNumber}</span>
+                        <span className="text-[13px] font-bold text-text-primary">#{dispute.orderNumber}</span>
                         <span className={`text-[9px] font-bold tracking-[0.1em] uppercase px-[7px] py-0.5 rounded-full ${badgeClass}`}>
                           {dispute.resolvedInFavorOf === 'user' ? 'Won' :
                            dispute.resolvedInFavorOf === 'merchant' ? 'Lost' : 'Split'}
                         </span>
                       </div>
-                      <p className="text-[11px] text-white/35">
+                      <p className="text-[11px] text-text-tertiary">
                         {new Date(dispute.resolvedAt).toLocaleDateString('en-GB')}
                       </p>
                     </div>
                     <div className="flex items-center justify-between">
-                      <p className="text-[12px] text-white/35">vs {dispute.otherPartyName}</p>
-                      <p className="text-[14px] font-extrabold text-white tracking-[-0.01em]">
+                      <p className="text-[12px] text-text-tertiary">vs {dispute.otherPartyName}</p>
+                      <p className="text-[14px] font-extrabold text-text-primary tracking-[-0.01em]">
                         ${dispute.cryptoAmount.toLocaleString()}
                       </p>
                     </div>
@@ -407,8 +407,8 @@ export const ProfileScreen = ({
             }
             window.location.href = '/';
           }}
-          className="w-full h-12 flex items-center justify-center gap-2 rounded-[14px] bg-error-dim border border-error-border text-[14px] font-extrabold text-[#dc2626] tracking-[-0.01em]">
-          <LogOut size={16} className="text-[#dc2626]" />
+          className="w-full h-12 flex items-center justify-center gap-2 rounded-[14px] bg-error-dim border border-error-border text-[14px] font-extrabold text-error tracking-[-0.01em]">
+          <LogOut size={16} className="text-error" />
           Sign Out
         </motion.button>
       </div>

@@ -99,7 +99,7 @@ export const EscrowLockScreen = ({
             <span className="text-[15px] text-text-secondary">Wallet</span>
             {solanaWallet.connected ? (
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#10b981]" />
+                <span className="w-2 h-2 rounded-full bg-success" />
                 <span className="text-[14px] font-mono text-text-primary">
                   {solanaWallet.walletAddress?.slice(0, 4)}...{solanaWallet.walletAddress?.slice(-4)}
                 </span>
@@ -119,7 +119,7 @@ export const EscrowLockScreen = ({
               <span className={`text-[15px] font-medium ${
                 solanaWallet.usdtBalance !== null && solanaWallet.usdtBalance >= parseFloat(amount || '0')
                   ? 'text-text-primary'
-                  : 'text-red-400'
+                  : 'text-error'
               }`}>
                 {solanaWallet.usdtBalance !== null ? solanaWallet.usdtBalance.toFixed(2) : '...'} USDT
               </span>
@@ -191,11 +191,11 @@ export const EscrowLockScreen = ({
 
         {/* Program Not Ready Warning */}
         {solanaWallet.connected && !solanaWallet.programReady && (
-          <div className="w-full rounded-xl p-4 bg-[rgba(234,179,8,0.08)] border border-[rgba(234,179,8,0.2)]">
+          <div className="w-full rounded-xl p-4 bg-warning-dim border border-warning-border">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
               <div className="text-left flex-1">
-                <p className="text-[14px] font-medium text-yellow-600">Wallet Needs Reconnection</p>
+                <p className="text-[14px] font-medium text-warning">Wallet Needs Reconnection</p>
                 <p className="text-[13px] mt-1 text-text-secondary">
                   The escrow program is not ready. Please reconnect your wallet.
                 </p>
@@ -223,11 +223,11 @@ export const EscrowLockScreen = ({
 
         {/* Error Message */}
         {escrowError && (
-          <div className="w-full rounded-xl p-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)]">
+          <div className="w-full rounded-xl p-4 bg-error-dim border border-error-border">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-error shrink-0 mt-0.5" />
               <div className="text-left">
-                <p className="text-[14px] text-red-500 font-medium">Transaction Failed</p>
+                <p className="text-[14px] text-error font-medium">Transaction Failed</p>
                 <p className="text-[13px] mt-1 text-text-secondary">{escrowError}</p>
               </div>
             </div>
@@ -243,13 +243,13 @@ export const EscrowLockScreen = ({
         {/* Show waiting state after success */}
         {escrowTxStatus === 'success' ? (
           <div className="space-y-4">
-            <div className="rounded-2xl p-4 bg-[rgba(16,185,129,0.08)] border border-[rgba(16,185,129,0.2)]">
+            <div className="rounded-2xl p-4 bg-success-dim border border-success-border">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[rgba(16,185,129,0.15)]">
-                  <Lock className="w-5 h-5 text-green-600" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-success-dim">
+                  <Lock className="w-5 h-5 text-success" />
                 </div>
                 <div>
-                  <p className="text-[15px] font-semibold text-green-700">Escrow Locked</p>
+                  <p className="text-[15px] font-semibold text-success">Escrow Locked</p>
                   <p className="text-[13px] text-text-secondary">Your USDC is secured on-chain</p>
                 </div>
               </div>
@@ -258,7 +258,7 @@ export const EscrowLockScreen = ({
                   href={`https://explorer.solana.com/tx/${escrowTxHash}?cluster=devnet`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[13px] text-green-600 hover:text-green-700"
+                  className="flex items-center gap-1 text-[13px] text-success hover:text-success"
                 >
                   View Transaction <ExternalLink className="w-3 h-3" />
                 </a>

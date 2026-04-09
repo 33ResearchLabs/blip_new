@@ -70,7 +70,7 @@ export const CashConfirmScreen = ({
               <p className="text-[17px] font-medium text-text-primary">{selectedOffer.merchant.display_name}</p>
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1">
-                  <Star className="w-3 h-3 fill-amber-400 text-text-secondary" />
+                  <Star className="w-3 h-3 fill-warning text-text-secondary" />
                   <span className="text-[13px] text-text-secondary">{selectedOffer.merchant.rating}</span>
                 </div>
                 <span className="text-text-tertiary">{'\u00b7'}</span>
@@ -96,7 +96,8 @@ export const CashConfirmScreen = ({
               <div
                 className="w-full h-full"
                 style={{
-                  backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
+                  backgroundImage:
+                    'linear-gradient(var(--color-border-medium) 1px, transparent 1px), linear-gradient(90deg, var(--color-border-medium) 1px, transparent 1px)',
                   backgroundSize: '30px 30px'
                 }}
               />

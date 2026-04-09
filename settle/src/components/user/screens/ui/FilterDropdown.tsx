@@ -66,12 +66,7 @@ export function FilterDropdown<T extends string>({
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex items-center gap-1 px-3 py-1 rounded-full transition-all bg-foreground/[0.08] text-foreground border border-foreground/[0.12] hover:bg-foreground/[0.12]"
-        style={{
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: "0.05em",
-        }}
+        className="flex items-center gap-1 px-3 py-1 rounded-full transition-all bg-surface-active text-text-primary border border-border-medium text-[10px] font-bold tracking-[0.05em]"
       >
         <span>{activeLabel}</span>
         <ChevronDown
@@ -89,11 +84,7 @@ export function FilterDropdown<T extends string>({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.12, ease: "easeOut" }}
-            className={`absolute ${align === "left" ? "left-0" : "right-0"} mt-1.5 z-50 min-w-[110px] rounded-xl overflow-hidden bg-background border border-foreground/[0.10] shadow-2xl`}
-            style={{
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
-            }}
+            className={`absolute ${align === "left" ? "left-0" : "right-0"} mt-1.5 z-50 min-w-[110px] rounded-xl overflow-hidden bg-surface-base border border-border-subtle shadow-[0_8px_32px_rgba(0,0,0,0.45)] backdrop-blur-[20px]`}
           >
             {options.map(({ key, label }) => {
               const selected = key === value;
@@ -107,14 +98,11 @@ export function FilterDropdown<T extends string>({
                       onChange(key);
                       setOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-2 transition-colors hover:bg-foreground/[0.08] ${
-                      selected ? "bg-foreground/[0.06] text-foreground" : "text-foreground/55"
+                    className={`w-full text-left px-3 py-2 transition-colors text-[11px] font-bold tracking-[0.04em] hover:bg-surface-active ${
+                      selected
+                        ? "bg-surface-hover text-text-primary"
+                        : "bg-transparent text-text-secondary"
                     }`}
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      letterSpacing: "0.04em",
-                    }}
                   >
                     {label}
                   </button>

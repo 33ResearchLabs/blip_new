@@ -81,7 +81,7 @@ export const MatchingScreen = ({
                 transition={{ duration: 2, repeat: Infinity }}
               />
               <motion.div
-                className="w-3 h-3 rounded-full bg-[#10b981]"
+                className="w-3 h-3 rounded-full bg-success"
                 animate={{ scale: [1, 0.8, 1] }}
                 transition={{ duration: 1.5, repeat: Infinity }}
               />
@@ -94,8 +94,8 @@ export const MatchingScreen = ({
 
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-[#10b981]">
-                <Check className="w-3 h-3 text-white" />
+              <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-success">
+                <Check className="w-3 h-3 text-text-primary" />
               </div>
               <p className="text-[14px] text-text-primary">Order submitted</p>
             </div>
@@ -125,8 +125,8 @@ export const MatchingScreen = ({
         >
           <p className="text-[11px] uppercase tracking-wide mb-2 text-text-tertiary">Time remaining</p>
           <div className="flex items-center justify-center gap-2">
-            <Clock className={`w-5 h-5 ${matchingTimeLeft < 60 ? 'text-red-400' : 'text-text-secondary'}`} />
-            <p className={`text-[28px] font-semibold tracking-tight ${matchingTimeLeft < 60 ? 'text-red-400' : 'text-text-primary'}`}>
+            <Clock className={`w-5 h-5 ${matchingTimeLeft < 60 ? 'text-error' : 'text-text-secondary'}`} />
+            <p className={`text-[28px] font-semibold tracking-tight ${matchingTimeLeft < 60 ? 'text-error' : 'text-text-primary'}`}>
               {formatTimeLeft(matchingTimeLeft)}
             </p>
           </div>
@@ -134,14 +134,14 @@ export const MatchingScreen = ({
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className={`text-[12px] mt-2 ${matchingTimeLeft < 60 ? 'text-[#ef4444]' : 'text-white/50'}`}
+              className={`text-[12px] mt-2 ${matchingTimeLeft < 60 ? 'text-error' : 'text-text-tertiary'}`}
             >
               {matchingTimeLeft < 60 ? 'Order will expire soon!' : 'Hurry! Time is running out'}
             </motion.p>
           )}
           <div className="w-full h-1.5 rounded-full mt-3 overflow-hidden bg-surface-card">
             <motion.div
-              className={`h-full rounded-full ${matchingTimeLeft < 60 ? 'bg-red-500' : 'bg-border-medium'}`}
+              className={`h-full rounded-full ${matchingTimeLeft < 60 ? 'bg-error' : 'bg-border-medium'}`}
               initial={{ width: '100%' }}
               animate={{ width: `${(matchingTimeLeft / (15 * 60)) * 100}%` }}
               transition={{ duration: 0.5 }}
@@ -216,7 +216,7 @@ export const MatchingScreen = ({
                 setPendingTradeData(null);
                 setScreen("home");
               }}
-              className="flex-1 py-3 rounded-xl text-[13px] font-medium bg-[rgba(239,68,68,0.08)] text-[#dc2626] border border-[rgba(239,68,68,0.15)]"
+              className="flex-1 py-3 rounded-xl text-[13px] font-medium bg-error-dim text-error border border-error-border"
             >
               Cancel Order
             </button>

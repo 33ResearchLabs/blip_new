@@ -206,8 +206,8 @@ export const ChatViewScreen = ({
 
   return (
     <>
-      {/* Chat Header */}
-      <div className="pt-12 pb-3 px-4 bg-surface-raised border-b border-border-subtle">
+      {/* Chat Header — pinned to top of the panel */}
+      <div className="shrink-0 pt-12 pb-3 px-4 bg-surface-raised border-b border-border-subtle">
         <div className="flex items-center gap-3">
           <button onClick={() => setScreen("chats")} className="p-2 -ml-2">
             <ChevronLeft className="w-6 h-6 text-text-primary" />
@@ -220,7 +220,7 @@ export const ChatViewScreen = ({
             <div className="flex items-center gap-1.5">
               <ConnectionIndicator isConnected={activeOrder.merchant.isOnline ?? false} />
               <p className={`text-[12px] ${activeOrder.merchant.isOnline ? '' : 'text-text-tertiary'}`}>
-                {activeOrder.merchant.isOnline && <span className="text-emerald-500">{formatLastSeen(activeOrder.merchant.isOnline, activeOrder.merchant.lastSeenAt)}</span>}
+                {activeOrder.merchant.isOnline && <span className="text-success">{formatLastSeen(activeOrder.merchant.isOnline, activeOrder.merchant.lastSeenAt)}</span>}
                 {!activeOrder.merchant.isOnline && formatLastSeen(activeOrder.merchant.isOnline, activeOrder.merchant.lastSeenAt)}
               </p>
             </div>
@@ -236,8 +236,8 @@ export const ChatViewScreen = ({
         <div className="mt-3 rounded-xl px-3 py-2 flex items-center justify-between bg-surface-card">
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${
-              activeOrder.status === 'complete' ? 'bg-white/10' :
-              activeOrder.status === 'disputed' ? 'bg-red-400' : 'bg-white/10'
+              activeOrder.status === 'complete' ? 'bg-surface-active' :
+              activeOrder.status === 'disputed' ? 'bg-error' : 'bg-surface-active'
             }`} />
             <span className="text-[12px] text-text-secondary">
               {activeOrder.type === "buy" ? "Buying" : "Selling"} {parseFloat(activeOrder.cryptoAmount).toFixed(2)} USDC
@@ -249,10 +249,11 @@ export const ChatViewScreen = ({
         </div>
       </div>
 
-      {/* Messages Area */}
+      {/* Messages Area — only this scrolls; min-h-0 lets flex-1 actually
+          constrain inside the flex column instead of growing past it. */}
       <div
         ref={chatMessagesRef}
-        className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-surface-base"
+        className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3 bg-surface-base"
       >
         {activeChat && activeChat.messages.length > 0 ? (
           activeChat.messages.map((msg) => {
@@ -261,10 +262,10 @@ export const ChatViewScreen = ({
                 const data = JSON.parse(msg.text);
                 return (
                   <div key={msg.id} className="flex justify-center">
-                    <div className="w-full max-w-[90%] rounded-2xl p-4 bg-[rgba(239,68,68,0.08)] border border-[rgba(239,68,68,0.2)]">
+                    <div className="w-full max-w-[90%] rounded-2xl p-4 bg-error-dim border border-error-border">
                       <div className="flex items-center gap-2 mb-2">
-                        <AlertTriangle className="w-4 h-4 text-red-400" />
-                        <span className="text-[13px] font-semibold text-red-400">Dispute Opened</span>
+                        <AlertTriangle className="w-4 h-4 text-error" />
+                        <span className="text-[13px] font-semibold text-error">Dispute Opened</span>
                       </div>
                       <p className="text-[14px] mb-1 text-text-primary">
                         <span className="text-text-secondary">Reason:</span> {data.reason?.replace(/_/g, ' ')}
@@ -320,7 +321,7 @@ export const ChatViewScreen = ({
             if (msg.from === 'system' && msg.messageType !== 'system') {
               return (
                 <div key={msg.id} className="flex justify-center">
-                  <div className="w-full max-w-[90%] rounded-2xl px-4 py-3 bg-white/[0.06] border border-white/15">
+                  <div className="w-full max-w-[90%] rounded-2xl px-4 py-3 bg-surface-hover border border-border-strong">
                     <p className="text-[13px] whitespace-pre-line leading-relaxed text-text-secondary">{msg.text}</p>
                     <p className="text-[10px] mt-1.5 text-text-tertiary">
                       {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -354,16 +355,16 @@ export const ChatViewScreen = ({
                     <p className="text-[15px] leading-relaxed">{msg.text}</p>
                   )}
                   <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : ''}`}>
-                    <span className={`text-[10px] ${isMe ? 'text-black/50' : 'text-text-tertiary'}`}>
+                    <span className={`text-[10px] ${isMe ? 'text-accent-text/60' : 'text-text-tertiary'}`}>
                       {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     {isMe && (
                       msg.status === 'sending' ? (
-                        <Clock className="w-3 h-3 text-white/40" />
+                        <Clock className="w-3 h-3 text-text-tertiary" />
                       ) : msg.status === 'read' || msg.isRead ? (
-                        <CheckCheck className="w-3.5 h-3.5 text-blue-400" />
+                        <CheckCheck className="w-3.5 h-3.5 text-info" />
                       ) : (
-                        <CheckCheck className="w-3.5 h-3.5 text-white/50" />
+                        <CheckCheck className="w-3.5 h-3.5 text-text-secondary" />
                       )
                     )}
                   </div>
@@ -395,15 +396,15 @@ export const ChatViewScreen = ({
               onClick={clearPendingImage}
               className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center bg-black/60"
             >
-              <X className="w-3 h-3 text-white" />
+              <X className="w-3 h-3 text-text-primary" />
             </button>
           </div>
           <span className="text-[13px] flex-1 text-text-secondary">Ready to send</span>
         </div>
       )}
 
-      {/* Message Input */}
-      <div className="px-4 py-3 pb-8 bg-surface-raised border-t border-border-subtle">
+      {/* Message Input — pinned to bottom of the panel */}
+      <div className="shrink-0 px-4 py-3 pb-8 bg-surface-raised border-t border-border-subtle">
         <input
           ref={fileInputRef}
           type="file"
@@ -445,9 +446,9 @@ export const ChatViewScreen = ({
             }`}
           >
             {isUploading ? (
-              <Loader2 className="w-5 h-5 text-white animate-spin" />
+              <Loader2 className="w-5 h-5 text-accent-text animate-spin" />
             ) : (
-              <Send className={`w-5 h-5 ${chatMessage.trim() || pendingImage ? 'text-white' : 'text-text-quaternary'}`} />
+              <Send className={`w-5 h-5 ${chatMessage.trim() || pendingImage ? 'text-accent-text' : 'text-text-quaternary'}`} />
             )}
           </motion.button>
         </div>

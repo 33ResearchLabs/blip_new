@@ -77,7 +77,9 @@ function RateSparkline({
     line += ` C${cp.toFixed(1)},${pts[i - 1].y.toFixed(1)} ${cp.toFixed(1)},${pts[i].y.toFixed(1)} ${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)}`;
   }
   const area = `${line} L${w},${h} L0,${h} Z`;
-  const color = positive ? "#10B981" : "#EF4444";
+  // SVG attributes can't take Tailwind classes — use the CSS variable directly
+  // so the color flips with the theme.
+  const color = positive ? "var(--color-success)" : "var(--color-error)";
 
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
@@ -171,8 +173,8 @@ export const TradeCreationScreen = ({
         {/* ── Buy / Sell — big cards ───────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-3 shrink-0">
           {([
-            { type: 'buy' as const, label: 'Buy USDT', sub: 'Pay AED, get USDT', Icon: ArrowDownLeft, activeClass: 'border-[1.5px] border-[#10B981]', dotClass: 'bg-[#10B981]', iconBgOn: 'bg-[#10B981]/15', iconOn: 'text-[#10B981]' },
-            { type: 'sell' as const, label: 'Sell USDT', sub: 'Send USDT, get AED', Icon: ArrowUpRight, activeClass: 'border-[1.5px] border-[#EF4444]', dotClass: 'bg-[#EF4444]', iconBgOn: 'bg-[#EF4444]/15', iconOn: 'text-[#EF4444]' },
+            { type: 'buy' as const, label: 'Buy USDT', sub: 'Pay AED, get USDT', Icon: ArrowDownLeft, activeClass: 'border-[1.5px] border-success', dotClass: 'bg-success', iconBgOn: 'bg-success/15', iconOn: 'text-success' },
+            { type: 'sell' as const, label: 'Sell USDT', sub: 'Send USDT, get AED', Icon: ArrowUpRight, activeClass: 'border-[1.5px] border-error', dotClass: 'bg-error', iconBgOn: 'bg-error/15', iconOn: 'text-error' },
           ] as const).map(({ type, label, sub, Icon, activeClass, dotClass, iconBgOn, iconOn }) => {
             const on = tradeType === type;
             return (
@@ -252,11 +254,11 @@ export const TradeCreationScreen = ({
               </div>
               <div className="flex items-center gap-1 mt-1">
                 {ratePositive ? (
-                  <TrendingUp size={11} className="text-[#059669]" />
+                  <TrendingUp size={11} className="text-success" />
                 ) : (
-                  <TrendingDown size={11} className="text-[#dc2626]" />
+                  <TrendingDown size={11} className="text-error" />
                 )}
-                <span className={`text-[11px] font-bold ${ratePositive ? "text-[#059669]" : "text-[#dc2626]"}`}>
+                <span className={`text-[11px] font-bold ${ratePositive ? "text-success" : "text-error"}`}>
                   {ratePositive ? "+0.24%" : "-0.18%"} today
                 </span>
               </div>
@@ -427,9 +429,12 @@ export const TradeCreationScreen = ({
           </p>
           <div className="flex gap-2.5">
             {([
-              { key: 'fast' as const, label: 'Fastest', sub: '~2 min', fee: '3.0%', barHex: '#d97706' },
-              { key: 'best' as const, label: 'Best Rate', sub: '~8 min', fee: '2.5%', barHex: '#3b82f6' },
-              { key: 'cheap' as const, label: 'Cheapest', sub: '~15 min', fee: '1.5%', barHex: '#059669' },
+              // Speed indicators reuse the semantic palette: warning = fastest/most expensive,
+              // info = balanced, success = cheapest. Inline-style strings reference the CSS
+              // variables so the colors flip with the active theme.
+              { key: 'fast' as const, label: 'Fastest', sub: '~2 min', fee: '3.0%', barHex: 'var(--color-warning)' },
+              { key: 'best' as const, label: 'Best Rate', sub: '~8 min', fee: '2.5%', barHex: 'var(--color-info)' },
+              { key: 'cheap' as const, label: 'Cheapest', sub: '~15 min', fee: '1.5%', barHex: 'var(--color-success)' },
             ] as const).map(({ key, label, sub, fee, barHex }) => {
               const on = tradePreference === key;
               return (
@@ -469,7 +474,7 @@ export const TradeCreationScreen = ({
           disabled={!hasAmount || isLoading || !userId}
           className={`w-full flex items-center justify-center gap-2 shrink-0 min-h-12 rounded-[14px] text-[14px] font-bold tracking-[-0.01em] ${
             hasAmount && !isLoading
-              ? 'bg-accent text-accent-text border border-white/15 shadow-[0_4px_16px_rgba(0,0,0,0.2)]'
+              ? 'bg-accent text-accent-text border border-border-strong shadow-[0_4px_16px_rgba(0,0,0,0.2)]'
               : 'bg-surface-card text-text-quaternary border border-border-subtle'
           }`}
         >
