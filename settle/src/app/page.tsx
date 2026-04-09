@@ -100,8 +100,8 @@ export default function Home() {
     };
   }, [rawToast, addNotification]);
 
-  const [screen, setScreenRaw] = useState<Screen>("home");
-  const [previousScreen, setPreviousScreen] = useState<Screen>("home");
+  const [screen, setScreenRaw] = useState<Screen>("welcome");
+  const [previousScreen, setPreviousScreen] = useState<Screen>("welcome");
   const setScreen = (s: Screen) => {
     setPreviousScreen(screen);
     setScreenRaw(s);
