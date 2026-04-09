@@ -254,22 +254,19 @@ export const OrderDetailScreen = ({
 
     setIsUploading(true);
     try {
-      // Include userId header explicitly for auth
-      const authHeaders: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (userId) authHeaders["x-user-id"] = userId;
-      const sigRes = await fetch("/api/upload/signature", {
+      const sigRes = await fetchWithAuth("/api/upload/signature", {
         method: "POST",
-        headers: authHeaders,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId: activeChat.orderId || "chat" }),
       });
       if (!sigRes.ok) {
+        console.error("[OrderDetailScreen] Upload signature failed:", sigRes.status);
         setIsUploading(false);
         return;
       }
       const sigData = await sigRes.json();
       if (!sigData.success) {
+        console.error("[OrderDetailScreen] Upload signature error:", sigData.error);
         setIsUploading(false);
         return;
       }

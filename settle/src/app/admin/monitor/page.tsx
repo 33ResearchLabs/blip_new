@@ -374,7 +374,7 @@ export default function MonitorPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* ── Header ── */}
-      <div className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
+      <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="max-w-[1600px] mx-auto px-4 h-12 flex items-center justify-between">
           {/* Left: Logo */}
           <div className="flex items-center gap-2 shrink-0">

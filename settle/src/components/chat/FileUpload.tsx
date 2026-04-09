@@ -18,6 +18,8 @@ interface UploadSignature {
   cloudName: string;
   apiKey: string;
   folder: string;
+  allowedFormats?: string;
+  maxFileSize?: number;
 }
 
 type FileCategory = 'image' | 'document';
@@ -84,6 +86,7 @@ export function FileUpload({
     formData.append('timestamp', signature.timestamp.toString());
     formData.append('api_key', signature.apiKey);
     formData.append('folder', signature.folder);
+
 
     // Determine resource type based on file
     const isImage = file.type.startsWith('image/');

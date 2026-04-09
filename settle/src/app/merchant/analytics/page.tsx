@@ -68,7 +68,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Top Navbar */}
-      <header className="sticky top-0 z-50 bg-[#0a0a0a]/90 backdrop-blur-xl border-b border-white/[0.04]">
+      <header className="sticky top-0 z-50 bg-[#0a0a0a]/95 backdrop-blur-sm border-b border-white/[0.04]">
         <div className="px-4 h-14 flex items-center gap-4">
           {/* Logo */}
           <div className="flex items-center gap-2">

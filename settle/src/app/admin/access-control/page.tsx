@@ -265,7 +265,7 @@ export default function AccessControlPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* ===== HEADER ===== */}
-      <header className="sticky top-0 z-50 bg-background/60 backdrop-blur-2xl border-b border-border">
+      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="h-[50px] flex items-center px-4 gap-3">
           <div className="flex items-center shrink-0">
             <Link href="/admin" className="flex items-center gap-2">

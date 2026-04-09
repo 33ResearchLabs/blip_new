@@ -143,7 +143,7 @@ export function NotificationToastContainer({ position = 'top-right' }: Notificat
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: slideDirection, scale: 0.9 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className={`pointer-events-auto ${colors.bg} backdrop-blur-xl border ${colors.border} rounded-xl shadow-2xl shadow-black/40 overflow-hidden`}
+              className={`pointer-events-auto ${colors.bg} backdrop-blur-sm border ${colors.border} rounded-xl shadow-2xl shadow-black/40 overflow-hidden`}
             >
               <div className={`h-[2px] w-full ${colors.accent}`} />
               <div className="flex items-start gap-3 p-3">

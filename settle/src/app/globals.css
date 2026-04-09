@@ -334,7 +334,9 @@ html:not(.no-transitions) {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-html:not(.no-transitions) * {
+/* Theme transition — scoped to direct theme-aware containers only.
+   Global * transitions cause subpixel rendering artifacts and layout jank. */
+html:not(.no-transitions) > body {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
 }
 
@@ -552,8 +554,8 @@ button, a, input, select, textarea,
 /* Default glass card — neutral, no orange */
 .glass-card {
   background: rgba(255, 255, 255, 0.025);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
@@ -577,16 +579,14 @@ button, a, input, select, textarea,
 /* Orange accent card — used only for highlighted/active items */
 .glass-card-active {
   background: rgba(255, 255, 255, 0.025);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-left: 2px solid rgba(249, 115, 22, 0.5);
 }
 
 .card {
   background: var(--card-solid);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--color-border-subtle);
 }
 
@@ -902,7 +902,7 @@ input[type="number"] { -moz-appearance: textfield; }
 
 .wallet-adapter-modal-wrapper {
   background-color: rgba(0, 0, 0, 0.7) !important;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(4px);
 }
 
 .wallet-adapter-modal {

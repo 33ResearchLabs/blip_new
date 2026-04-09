@@ -479,7 +479,7 @@ export default function AdminConsolePage() {
     <div className="hidden md:flex md:flex-col h-screen overflow-hidden">
 
       {/* ===== HEADER — matches merchant dashboard ===== */}
-      <header className="sticky top-0 z-50 bg-background/60 backdrop-blur-2xl border-b border-border">
+      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="h-[50px] flex items-center px-4 gap-3">
           {/* Logo — same as merchant */}
           <div className="flex items-center shrink-0">

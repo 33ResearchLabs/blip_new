@@ -339,7 +339,7 @@ export default function ComplianceDashboard() {
       </div>
 
       {/* Top Navbar */}
-      <header className="sticky top-0 z-50 bg-background/90 backdrop-blur-xl border-b border-border">
+      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="px-4 h-12 flex items-center gap-3">
           {/* Logo */}
           <div className="flex items-center gap-2">

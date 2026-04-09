@@ -183,19 +183,30 @@ export function DirectChatView({
     setPendingImage(null);
   };
 
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   // Upload to Cloudinary then send message + image URL together
   const uploadAndSend = async () => {
     if (!pendingImage) return;
     setIsUploading(true);
+    setUploadError(null);
     try {
       const sigRes = await fetchWithAuth('/api/upload/signature', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId: 'direct-chat' }),
       });
-      if (!sigRes.ok) { setIsUploading(false); return; }
+      if (!sigRes.ok) {
+        setUploadError(sigRes.status === 401 ? 'Session expired — please refresh the page' : 'Failed to prepare upload');
+        setIsUploading(false);
+        return;
+      }
       const sigData = await sigRes.json();
-      if (!sigData.success) { setIsUploading(false); return; }
+      if (!sigData.success) {
+        setUploadError(sigData.error || 'Failed to prepare upload');
+        setIsUploading(false);
+        return;
+      }
       const sig = sigData.data;
 
       const formData = new FormData();
@@ -204,6 +215,7 @@ export function DirectChatView({
       formData.append('timestamp', sig.timestamp.toString());
       formData.append('api_key', sig.apiKey);
       formData.append('folder', sig.folder);
+
 
       const uploadRes = await fetch(
         `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`,
@@ -216,9 +228,11 @@ export function DirectChatView({
         setInputText('');
       } else {
         console.error('[DirectChatView] Cloudinary upload failed:', uploadRes.status, await uploadRes.text().catch(() => ''));
+        setUploadError('Upload failed — please try again');
       }
     } catch (err) {
       console.error('[DirectChatView] Image upload error:', err);
+      setUploadError('Upload failed — check your connection');
     } finally {
       setIsUploading(false);
       clearPendingImage();
@@ -439,6 +453,16 @@ export function DirectChatView({
             </button>
           </div>
           <span className="text-[9px] text-foreground/30 font-mono flex-1">Ready to send</span>
+        </div>
+      )}
+
+      {/* Upload error banner */}
+      {uploadError && (
+        <div className="mx-2 mb-1 px-2.5 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-between gap-2">
+          <p className="text-[10px] text-red-400">{uploadError}</p>
+          <button onClick={() => setUploadError(null)} className="text-red-400/60 hover:text-red-400">
+            <X className="w-3 h-3" />
+          </button>
         </div>
       )}
 

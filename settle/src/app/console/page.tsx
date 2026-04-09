@@ -183,7 +183,7 @@ export default function ConsolePage() {
       </div>
 
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-black/90 backdrop-blur-xl border-b border-white/[0.04]">
+      <header className="sticky top-0 z-50 bg-black/95 backdrop-blur-sm border-b border-white/[0.04]">
         <div className="px-4 h-14 flex items-center gap-4">
           <Link href="/" className="p-2 -ml-2 hover:bg-white/5 rounded-lg transition-colors">
             <ArrowLeft className="w-5 h-5 text-neutral-400" />

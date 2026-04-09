@@ -102,56 +102,61 @@ function TransactionCard({
     order.toCurrency || order.dbOrder?.fiat_currency || "AED";
   const cryptoAmount: number = order.amount || 0;
   const fiatAmount: number = order.total ?? cryptoAmount * (order.rate || 0);
+  const orderNumber: string = order.dbOrder?.order_number || "";
 
-  // Direction-aware icon: BUY = incoming (down-left, green); SELL = outgoing (up-right, red);
-  // unknown → neutral repeat icon. For completed cards we keep the green accent overall but
-  // still show direction in the avatar.
   const isBuy = orderType === "buy";
   const isSell = orderType === "sell";
   const Icon = isBuy ? ArrowDownLeft : isSell ? ArrowUpRight : Repeat;
-  const iconCls = isBuy
-    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+  const amountColor = isBuy ? "text-emerald-400" : isSell ? "text-red-400" : "text-foreground/80";
+  const amountPrefix = isBuy ? "+" : isSell ? "-" : "";
+  const tagLabel = isBuy ? "BUY" : isSell ? "SELL" : "TRADE";
+  const tagCls = isBuy
+    ? "bg-emerald-500/10 text-emerald-400"
     : isSell
-      ? "bg-red-500/10 text-red-400 border-red-500/20"
-      : "bg-foreground/[0.06] text-foreground/60 border-foreground/[0.10]";
+      ? "bg-red-500/10 text-red-400"
+      : "bg-foreground/[0.06] text-foreground/50";
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group w-full text-left rounded-xl p-4 bg-foreground/[0.03] hover:bg-foreground/[0.06] border border-foreground/[0.06] hover:border-foreground/[0.12] transition-all duration-150 active:scale-[0.99]"
+      className="group w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-foreground/[0.04] transition-colors active:scale-[0.99]"
     >
-      <div className="flex items-start justify-between gap-3">
-        {/* ─── Left: avatar + name + date ───────────────── */}
-        <div className="flex items-start gap-3 min-w-0 flex-1">
-          <div
-            className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center border ${iconCls}`}
-          >
-            <Icon className="w-4 h-4" />
-          </div>
-          <div className="flex flex-col min-w-0">
-            <span className="text-sm font-semibold text-foreground truncate">
-              {order.user || "Unknown"}
-            </span>
-            <span className="text-xs text-foreground/45 mt-0.5">
-              {completedDate ? formatRelative(completedDate, new Date()) : "—"}
-            </span>
-          </div>
-        </div>
+      {/* Icon */}
+      <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${isBuy ? 'bg-emerald-500/10' : isSell ? 'bg-red-500/10' : 'bg-foreground/[0.05]'}`}>
+        <Icon className={`w-3.5 h-3.5 ${isBuy ? 'text-emerald-400' : isSell ? 'text-red-400' : 'text-foreground/50'}`} />
+      </div>
 
-        {/* ─── Right: amount + converted + status badge ─── */}
-        <div className="flex flex-col items-end shrink-0 gap-1.5">
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-bold uppercase tracking-wider text-emerald-400">
-            <CheckCircle2 className="w-2.5 h-2.5" />
-            Completed
+      {/* Middle: name + order + time */}
+      <div className="flex flex-col min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-semibold text-foreground truncate">
+            {order.user || "Unknown"}
           </span>
-          <span className="text-sm font-medium text-foreground tabular-nums whitespace-nowrap">
-            {Math.round(cryptoAmount).toLocaleString()} {cryptoCode}
-          </span>
-          <span className="text-xs text-foreground/45 tabular-nums whitespace-nowrap">
-            {formatConverted(fiatAmount, fiatCode)}
+          <span className={`text-[8px] font-bold px-1 py-[1px] rounded ${tagCls}`}>
+            {tagLabel}
           </span>
         </div>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          {orderNumber && (
+            <span className="text-[9px] text-foreground/25 font-mono">
+              {orderNumber.slice(0, 15)}
+            </span>
+          )}
+          <span className="text-[9px] text-foreground/20">
+            {completedDate ? formatRelative(completedDate, new Date()) : "—"}
+          </span>
+        </div>
+      </div>
+
+      {/* Right: amounts */}
+      <div className="flex flex-col items-end shrink-0">
+        <span className={`text-[12px] font-bold font-mono tabular-nums ${amountColor}`}>
+          {amountPrefix}{Math.round(cryptoAmount).toLocaleString()} {cryptoCode}
+        </span>
+        <span className="text-[9px] text-foreground/30 font-mono tabular-nums">
+          {formatConverted(fiatAmount, fiatCode)}
+        </span>
       </div>
     </button>
   );
@@ -227,15 +232,15 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto px-3 py-1 space-y-4">
+          <div className="flex-1 overflow-y-auto px-1.5 py-1">
             {grouped.map((group) => (
-              <section key={group.label} className="space-y-2">
-                <div className="sticky top-0 z-[1] -mx-3 px-3 py-1 bg-background/95 backdrop-blur-sm">
-                  <span className="text-[10px] font-bold font-mono text-foreground/45 uppercase tracking-wider">
+              <section key={group.label}>
+                <div className="sticky top-0 z-[1] px-2 py-1.5 bg-background/95 backdrop-blur-sm">
+                  <span className="text-[9px] font-bold font-mono text-foreground/35 uppercase tracking-wider">
                     {group.label}
                   </span>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-0.5">
                   {group.items.map((order) => (
                     <TransactionCard
                       key={order.id}

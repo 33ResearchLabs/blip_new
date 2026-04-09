@@ -25,7 +25,7 @@ export const BottomNav = ({ screen, setScreen, chatUnreadCount = 0 }: BottomNavP
     className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full max-w-110 px-3 bg-surface-base "
     style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 12px), 12px)' }}
   >
-    <div className="flex items-center justify-around px-4 pt-2.5 pb-1 rounded-2xl bg-surface-base/90 backdrop-blur-[20px] border border-border-subtle shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
+    <div className="flex items-center justify-around px-4 pt-2.5 pb-1 rounded-2xl bg-surface-base/95 backdrop-blur-sm border border-border-subtle shadow-[0_8px_32px_rgba(0,0,0,0.25)]">
       {TABS.map(({ key, Icon, label }) => {
         const on = (screen as string) === key;
         const badge = key === "chats" ? chatUnreadCount : 0;

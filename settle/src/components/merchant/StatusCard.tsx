@@ -297,7 +297,7 @@ export const StatusCard = memo(function StatusCard({
   return (
     <div className="flex flex-col">
       {/* Live ticker strip — sticky at top while sidebar scrolls */}
-      <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2.5 bg-background border-b border-foreground/[0.04] text-[9px] font-mono relative overflow-hidden">
+      <div className="sticky top-0 z-20 flex items-center justify-between px-3 py-2.5 bg-background border-b border-foreground/[0.04] text-[9px] font-mono overflow-hidden" style={{ backgroundColor: 'var(--background)' }}>
         <div className="absolute inset-0 shimmer pointer-events-none" />
         <div className="flex items-center gap-4 relative z-10">
           <div className="flex items-center gap-1.5">

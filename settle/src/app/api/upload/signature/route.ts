@@ -50,12 +50,9 @@ export async function POST(request: NextRequest) {
     const uploadFolder = orderId ? `${folder}/${orderId}` : folder;
 
     // Parameters to sign — must match exactly what the client sends in the upload FormData
-    // Cloudinary enforces these server-side: allowed types + max file size (50MB)
     const params: Record<string, string | number> = {
       timestamp,
       folder: uploadFolder,
-      allowed_formats: 'jpg,jpeg,png,webp,gif,mp4,pdf',
-      max_file_size: 50_000_000, // 50MB
     };
 
     // Generate signature

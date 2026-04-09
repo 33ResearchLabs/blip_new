@@ -153,7 +153,7 @@ fi
 echo ""
 echo "Waiting for services to be ready..."
 wait_for_health "http://localhost:$CORE_API_PORT/health" "Core API" 15 || true
-wait_for_health "http://localhost:$SETTLE_PORT/api/health" "Settle" 60 || true
+wait_for_health "http://localhost:$SETTLE_PORT/api/health" "Settle" 120 || true
 wait_for_health "http://localhost:$BLIPSCAN_PORT/api/stats" "BlipScan" 30 || true
 
 echo ""

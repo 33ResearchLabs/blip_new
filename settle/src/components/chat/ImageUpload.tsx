@@ -17,6 +17,8 @@ interface UploadSignature {
   cloudName: string;
   apiKey: string;
   folder: string;
+  allowedFormats?: string;
+  maxFileSize?: number;
 }
 
 export function ImageUpload({
@@ -64,6 +66,7 @@ export function ImageUpload({
     formData.append('timestamp', signature.timestamp.toString());
     formData.append('api_key', signature.apiKey);
     formData.append('folder', signature.folder);
+
 
     try {
       const xhr = new XMLHttpRequest();

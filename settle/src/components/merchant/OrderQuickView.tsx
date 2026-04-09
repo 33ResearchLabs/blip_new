@@ -38,30 +38,81 @@ function LockedPaymentMethodCard({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const fields: { label: string; value: string; key: string; mono?: boolean }[] = [];
-  if (lpm.type === 'upi') {
-    if (lpm.details.upi_id) fields.push({ label: 'UPI ID', value: lpm.details.upi_id, key: 'upi_id', mono: true });
-    if (lpm.details.provider) fields.push({ label: 'Provider', value: lpm.details.provider, key: 'provider' });
-  } else if (lpm.type === 'cash') {
-    if (lpm.details.location_name) fields.push({ label: 'Location', value: lpm.details.location_name, key: 'location' });
-    if (lpm.details.location_address) fields.push({ label: 'Address', value: lpm.details.location_address, key: 'address' });
-    if (lpm.details.meeting_instructions) fields.push({ label: 'Instructions', value: lpm.details.meeting_instructions, key: 'instructions' });
+  const fields: {
+    label: string;
+    value: string;
+    key: string;
+    mono?: boolean;
+  }[] = [];
+  if (lpm.type === "upi") {
+    if (lpm.details.upi_id)
+      fields.push({
+        label: "UPI ID",
+        value: lpm.details.upi_id,
+        key: "upi_id",
+        mono: true,
+      });
+    if (lpm.details.provider)
+      fields.push({
+        label: "Provider",
+        value: lpm.details.provider,
+        key: "provider",
+      });
+  } else if (lpm.type === "cash") {
+    if (lpm.details.location_name)
+      fields.push({
+        label: "Location",
+        value: lpm.details.location_name,
+        key: "location",
+      });
+    if (lpm.details.location_address)
+      fields.push({
+        label: "Address",
+        value: lpm.details.location_address,
+        key: "address",
+      });
+    if (lpm.details.meeting_instructions)
+      fields.push({
+        label: "Instructions",
+        value: lpm.details.meeting_instructions,
+        key: "instructions",
+      });
   } else {
-    if (lpm.details.method_name) fields.push({ label: 'Method', value: lpm.details.method_name, key: 'method' });
-    if (lpm.details.account_identifier) fields.push({ label: 'Account', value: lpm.details.account_identifier, key: 'account', mono: true });
-    if (lpm.details.instructions) fields.push({ label: 'Instructions', value: lpm.details.instructions, key: 'instructions' });
+    if (lpm.details.method_name)
+      fields.push({
+        label: "Method",
+        value: lpm.details.method_name,
+        key: "method",
+      });
+    if (lpm.details.account_identifier)
+      fields.push({
+        label: "Account",
+        value: lpm.details.account_identifier,
+        key: "account",
+        mono: true,
+      });
+    if (lpm.details.instructions)
+      fields.push({
+        label: "Instructions",
+        value: lpm.details.instructions,
+        key: "instructions",
+      });
   }
 
   return (
     <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
       <div className="flex items-center gap-2">
         <Lock className="w-3.5 h-3.5 text-primary" />
-        <span className="text-[11px] text-primary uppercase tracking-wide font-bold">Send AED Here</span>
+        <span className="text-[11px] text-primary uppercase tracking-wide font-bold">
+          Send AED Here
+        </span>
       </div>
       <div className="flex items-center gap-2">
         {typeIcon}
         <span className="text-sm text-foreground font-medium">{lpm.label}</span>
-        <span className="text-[10px] text-foreground/30 uppercase">{lpm.type}</span>
+        <span className="text-[10px] text-foreground/30 uppercase">
+          {lpm.type}
+        </span>
       </div>
       {fields.map(({ label, value, key, mono }) => (
         <div key={key} className="flex justify-between items-center">
@@ -70,14 +121,22 @@ function LockedPaymentMethodCard({
             onClick={() => copyField(value, key)}
             className="flex items-center gap-1 text-foreground hover:text-foreground/70 transition-colors"
           >
-            <span className={`text-sm ${mono ? 'font-mono' : ''}`}>{value}</span>
-            {copiedKey === key ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-foreground/30" />}
+            <span className={`text-sm ${mono ? "font-mono" : ""}`}>
+              {value}
+            </span>
+            {copiedKey === key ? (
+              <Check className="w-3 h-3 text-green-400" />
+            ) : (
+              <Copy className="w-3 h-3 text-foreground/30" />
+            )}
           </button>
         </div>
       ))}
       <div className="flex justify-between items-center pt-2 border-t border-foreground/[0.04]">
         <span className="text-foreground/50 text-sm">Amount</span>
-        <span className="text-base font-semibold text-foreground">{'\u062F.\u0625'} {amount.toLocaleString()}</span>
+        <span className="text-base font-semibold text-foreground">
+          {"\u062F.\u0625"} {amount.toLocaleString()}
+        </span>
       </div>
     </div>
   );
@@ -146,20 +205,29 @@ export function OrderQuickView({
                   {selectedOrder.emoji}
                 </div>
                 <div>
-                  <p className="text-base font-semibold text-foreground">{selectedOrder.user}</p>
+                  <p className="text-base font-semibold text-foreground">
+                    {selectedOrder.user}
+                  </p>
                   <div className="flex items-center gap-2">
                     <p className="text-[11px] text-foreground/40">
-                      {selectedOrder.orderType === 'buy' ? 'Selling' : 'Buying'} USDC
+                      {selectedOrder.orderType === "buy" ? "Selling" : "Buying"}{" "}
+                      USDC
                     </p>
                     {selectedOrder.myRole && (
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
-                        selectedOrder.myRole === 'buyer'
-                          ? 'bg-blue-500/20 text-blue-400'
-                          : selectedOrder.myRole === 'seller'
-                          ? 'bg-purple-500/20 text-purple-400'
-                          : 'bg-gray-500/20 text-foreground/40'
-                      }`}>
-                        {selectedOrder.myRole === 'buyer' ? 'YOU RECEIVE' : selectedOrder.myRole === 'seller' ? 'YOU SEND' : 'OBSERVER'}
+                      <span
+                        className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
+                          selectedOrder.myRole === "buyer"
+                            ? "bg-blue-500/20 text-blue-400"
+                            : selectedOrder.myRole === "seller"
+                              ? "bg-purple-500/20 text-purple-400"
+                              : "bg-gray-500/20 text-foreground/40"
+                        }`}
+                      >
+                        {selectedOrder.myRole === "buyer"
+                          ? "YOU RECEIVE"
+                          : selectedOrder.myRole === "seller"
+                            ? "YOU SEND"
+                            : "OBSERVER"}
                       </span>
                     )}
                   </div>
@@ -182,7 +250,9 @@ export function OrderQuickView({
                     <div className="w-8 h-8 rounded-lg bg-foreground/5 flex items-center justify-center">
                       <Shield className="w-4 h-4 text-foreground" />
                     </div>
-                    <span className="text-sm font-medium text-foreground">Escrow Secured</span>
+                    <span className="text-sm font-medium text-foreground">
+                      Escrow Secured
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
                     <a
@@ -210,41 +280,64 @@ export function OrderQuickView({
               {/* Order Details */}
               <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-foreground/40 uppercase tracking-wide">Amount</span>
-                  <span className="text-sm font-semibold text-foreground">${selectedOrder.amount.toLocaleString()} USDC</span>
+                  <span className="text-xs text-foreground/40 uppercase tracking-wide">
+                    Amount
+                  </span>
+                  <span className="text-sm font-semibold text-foreground">
+                    ${selectedOrder.amount.toLocaleString()} USDC
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-foreground/40 uppercase tracking-wide">Total Fiat</span>
-                  <span className="text-sm font-semibold text-foreground">{'\u062F.\u0625'} {Math.round(selectedOrder.total).toLocaleString()}</span>
+                  <span className="text-xs text-foreground/40 uppercase tracking-wide">
+                    Total Fiat
+                  </span>
+                  <span className="text-sm font-semibold text-foreground">
+                    {"\u062F.\u0625"}{" "}
+                    {Math.round(selectedOrder.total).toLocaleString()}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t border-foreground/[0.04]">
                   <span className="text-xs text-foreground/40 flex items-center gap-1">
                     <Lock className="w-3 h-3" />
                     Rate (Locked)
                   </span>
-                  <span className="text-xs font-mono text-foreground/50">1 USDC = {selectedOrder.rate} AED</span>
+                  <span className="text-xs font-mono text-foreground/50">
+                    1 USDC = {selectedOrder.rate} AED
+                  </span>
                 </div>
                 {selectedOrder.dbOrder?.accepted_at && (
                   <p className="text-[10px] text-foreground/25 text-right -mb-1">
-                    Locked at {new Date(selectedOrder.dbOrder.accepted_at).toLocaleString()}
+                    Locked at{" "}
+                    {new Date(
+                      selectedOrder.dbOrder.accepted_at,
+                    ).toLocaleString()}
                   </p>
                 )}
               </div>
 
               {/* Payment Method - Show to BUYER (fiat sender) only */}
               {(() => {
-                const popupBankRole = selectedOrder.myRole || 'observer';
-                const iAmBuyerInPopup = popupBankRole === 'buyer';
+                const popupBankRole = selectedOrder.myRole || "observer";
+                const iAmBuyerInPopup = popupBankRole === "buyer";
                 if (!iAmBuyerInPopup) return null;
 
                 // Priority 1: Seller's merchant payment method (explicitly added by seller)
                 if (selectedOrder.sellerPaymentMethod) {
                   const spm = selectedOrder.sellerPaymentMethod;
-                  const typeIcon = spm.type === 'upi' ? <Smartphone className="w-4 h-4 text-green-400" />
-                    : spm.type === 'bank' ? <Building2 className="w-4 h-4 text-blue-400" />
-                    : <CreditCard className="w-4 h-4 text-purple-400" />;
+                  const typeIcon =
+                    spm.type === "upi" ? (
+                      <Smartphone className="w-4 h-4 text-green-400" />
+                    ) : spm.type === "bank" ? (
+                      <Building2 className="w-4 h-4 text-blue-400" />
+                    ) : (
+                      <CreditCard className="w-4 h-4 text-purple-400" />
+                    );
 
-                  if (spm.type === 'bank' && spm.details && typeof spm.details === 'object') {
+                  if (
+                    spm.type === "bank" &&
+                    spm.details &&
+                    typeof spm.details === "object"
+                  ) {
                     return (
                       <CopyableBankDetails
                         title="Send AED to this account"
@@ -257,16 +350,23 @@ export function OrderQuickView({
                   }
 
                   // Card / UPI / Cash / Other
-                  const detailStr = typeof spm.details === 'string' ? spm.details : JSON.stringify(spm.details);
+                  const detailStr =
+                    typeof spm.details === "string"
+                      ? spm.details
+                      : JSON.stringify(spm.details);
                   return (
                     <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-3 space-y-2">
                       <div className="flex items-center gap-2 text-xs text-zinc-400 uppercase tracking-wide">
                         {typeIcon}
                         <span>Seller&apos;s Payment Method</span>
                       </div>
-                      <div className="text-sm text-foreground font-medium">{spm.name}</div>
+                      <div className="text-sm text-foreground font-medium">
+                        {spm.name}
+                      </div>
                       <div className="text-xs text-zinc-400">{detailStr}</div>
-                      <div className="text-right text-sm font-semibold text-green-400">{Math.round(selectedOrder.total)} د.إ</div>
+                      <div className="text-right text-sm font-semibold text-green-400">
+                        {Math.round(selectedOrder.total)} د.إ
+                      </div>
                     </div>
                   );
                 }
@@ -274,11 +374,16 @@ export function OrderQuickView({
                 // Priority 2: Locked payment method (user payment method system)
                 if (selectedOrder.lockedPaymentMethod) {
                   const lpm = selectedOrder.lockedPaymentMethod;
-                  const typeIcon = lpm.type === 'upi' ? <Smartphone className="w-4 h-4 text-green-400" />
-                    : lpm.type === 'bank' ? <Building2 className="w-4 h-4 text-blue-400" />
-                    : <CreditCard className="w-4 h-4 text-purple-400" />;
+                  const typeIcon =
+                    lpm.type === "upi" ? (
+                      <Smartphone className="w-4 h-4 text-green-400" />
+                    ) : lpm.type === "bank" ? (
+                      <Building2 className="w-4 h-4 text-blue-400" />
+                    ) : (
+                      <CreditCard className="w-4 h-4 text-purple-400" />
+                    );
 
-                  if (lpm.type === 'bank') {
+                  if (lpm.type === "bank") {
                     return (
                       <CopyableBankDetails
                         title={`Send AED to this account`}
@@ -314,7 +419,10 @@ export function OrderQuickView({
                 }
 
                 // Priority 3: User bank details from payment_details (legacy)
-                if (selectedOrder.userBankDetails || selectedOrder.userBankAccount) {
+                if (
+                  selectedOrder.userBankDetails ||
+                  selectedOrder.userBankAccount
+                ) {
                   const details = selectedOrder.userBankDetails;
                   return (
                     <CopyableBankDetails
@@ -322,7 +430,9 @@ export function OrderQuickView({
                       bankName={details?.bank_name}
                       accountName={details?.account_name}
                       iban={details?.iban}
-                      fallbackText={!details ? selectedOrder.userBankAccount : undefined}
+                      fallbackText={
+                        !details ? selectedOrder.userBankAccount : undefined
+                      }
                       amount={Math.round(selectedOrder.total)}
                     />
                   );
@@ -330,27 +440,32 @@ export function OrderQuickView({
 
                 return (
                   <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-                    <p className="text-xs text-red-400">No payment details provided. Chat to get bank details.</p>
+                    <p className="text-xs text-red-400">
+                      No payment details provided. Chat to get bank details.
+                    </p>
                   </div>
                 );
               })()}
 
               {/* Status message for SELLER waiting for buyer */}
               {(() => {
-                const popupSellerRole = selectedOrder.myRole || 'observer';
+                const popupSellerRole = selectedOrder.myRole || "observer";
                 const popupStatus = selectedOrder.dbOrder?.status;
                 const popupAccepted = !!selectedOrder.dbOrder?.accepted_at;
 
-                if (popupSellerRole === 'seller' && (popupStatus === 'escrowed' || popupStatus === 'accepted')) {
+                if (
+                  popupSellerRole === "seller" &&
+                  (popupStatus === "escrowed" || popupStatus === "accepted")
+                ) {
                   return (
                     <div className="bg-foreground/[0.04] border border-foreground/[0.06] rounded-xl p-3 flex items-center gap-2">
                       <div className="w-6 h-6 rounded-lg bg-foreground/[0.04] flex items-center justify-center shrink-0">
-                        <span className="text-xs">{'\u231B'}</span>
+                        <span className="text-xs">{"\u231B"}</span>
                       </div>
                       <p className="text-xs text-foreground/50">
                         {popupAccepted
-                          ? 'Waiting for buyer to mark payment as sent...'
-                          : 'Escrow locked by user. Waiting for a merchant to accept...'}
+                          ? "Waiting for buyer to mark payment as sent..."
+                          : "Escrow locked by user. Waiting for a merchant to accept..."}
                       </p>
                     </div>
                   );
@@ -362,17 +477,28 @@ export function OrderQuickView({
 
             {/* Cancel Request Banner — shown when counterparty requested cancellation */}
             {(() => {
-              if (!selectedOrder.cancelRequestedBy && !selectedOrder.dbOrder?.cancel_requested_by) return null;
+              if (
+                !selectedOrder.cancelRequestedBy &&
+                !selectedOrder.dbOrder?.cancel_requested_by
+              )
+                return null;
 
-              const cancelBy = selectedOrder.cancelRequestedBy || selectedOrder.dbOrder?.cancel_requested_by;
-              const cancelReason = selectedOrder.cancelRequestReason || selectedOrder.dbOrder?.cancel_request_reason;
+              const cancelBy =
+                selectedOrder.cancelRequestedBy ||
+                selectedOrder.dbOrder?.cancel_requested_by;
+              const cancelReason =
+                selectedOrder.cancelRequestReason ||
+                selectedOrder.dbOrder?.cancel_request_reason;
 
               // Determine if counterparty requested (I need to respond) or I requested (waiting)
-              const dbUsername = selectedOrder.dbOrder?.user?.username || '';
-              const isPlaceholderUser = dbUsername.startsWith('open_order_') || dbUsername.startsWith('m2m_');
+              const dbUsername = selectedOrder.dbOrder?.user?.username || "";
+              const isPlaceholderUser =
+                dbUsername.startsWith("open_order_") ||
+                dbUsername.startsWith("m2m_");
               const iRequestedIt = isPlaceholderUser
-                ? cancelBy === 'merchant' && selectedOrder.orderMerchantId === merchantId
-                : cancelBy === 'merchant';
+                ? cancelBy === "merchant" &&
+                  selectedOrder.orderMerchantId === merchantId
+                : cancelBy === "merchant";
               const counterpartyRequested = !iRequestedIt;
 
               if (counterpartyRequested) {
@@ -381,11 +507,14 @@ export function OrderQuickView({
                     <div className="flex items-center gap-2 mb-2">
                       <X className="w-4 h-4 text-primary" />
                       <span className="text-sm font-semibold text-primary">
-                        Cancel Requested by {cancelBy === 'user' ? 'User' : 'Merchant'}
+                        Cancel Requested by{" "}
+                        {cancelBy === "user" ? "User" : "Merchant"}
                       </span>
                     </div>
                     {cancelReason && (
-                      <p className="text-xs text-foreground/50 mb-3">{cancelReason}</p>
+                      <p className="text-xs text-foreground/50 mb-3">
+                        {cancelReason}
+                      </p>
                     )}
                     <div className="flex gap-2">
                       <motion.button
@@ -397,7 +526,11 @@ export function OrderQuickView({
                         }}
                         className="flex-1 py-2.5 rounded-lg bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary text-sm font-semibold flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
                       >
-                        {isRequestingCancel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        {isRequestingCancel ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
                         Agree to Cancel
                       </motion.button>
                       <motion.button
@@ -421,8 +554,12 @@ export function OrderQuickView({
                 <div className="mx-5 mb-2 rounded-xl border border-primary/20 bg-primary/[0.04] p-3 flex items-center gap-2">
                   <Loader2 className="w-4 h-4 text-primary animate-spin" />
                   <div>
-                    <p className="text-sm font-medium text-primary">Cancel Request Sent</p>
-                    <p className="text-xs text-foreground/40">Waiting for counterparty to approve</p>
+                    <p className="text-sm font-medium text-primary">
+                      Cancel Request Sent
+                    </p>
+                    <p className="text-xs text-foreground/40">
+                      Waiting for counterparty to approve
+                    </p>
                   </div>
                 </div>
               );
@@ -442,30 +579,57 @@ export function OrderQuickView({
 
                 // Map backend action type → frontend handler
                 const ACTION_HANDLER: Record<string, () => void> = {
-                  ACCEPT: () => { onAcceptOrder(selectedOrder); onClose(); },
-                  CLAIM: () => { onAcceptOrder(selectedOrder); onClose(); },
-                  LOCK_ESCROW: () => { onOpenEscrowModal(selectedOrder); onClose(); },
-                  SEND_PAYMENT: () => { onMarkFiatPaymentSent(selectedOrder); onClose(); },
-                  CONFIRM_PAYMENT: () => { onConfirmPayment(selectedOrder.id).then(onClose); },
-                  CANCEL: () => { onCancelOrderWithoutEscrow(selectedOrder.id); onClose(); },
-                  DISPUTE: () => { onOpenDispute?.(selectedOrder.id); onClose(); },
+                  ACCEPT: () => {
+                    onAcceptOrder(selectedOrder);
+                    onClose();
+                  },
+                  CLAIM: () => {
+                    onAcceptOrder(selectedOrder);
+                    onClose();
+                  },
+                  LOCK_ESCROW: () => {
+                    onOpenEscrowModal(selectedOrder);
+                    onClose();
+                  },
+                  SEND_PAYMENT: () => {
+                    onMarkFiatPaymentSent(selectedOrder);
+                    onClose();
+                  },
+                  CONFIRM_PAYMENT: () => {
+                    onConfirmPayment(selectedOrder.id).then(onClose);
+                  },
+                  CANCEL: () => {
+                    onCancelOrderWithoutEscrow(selectedOrder.id);
+                    onClose();
+                  },
+                  DISPUTE: () => {
+                    onOpenDispute?.(selectedOrder.id);
+                    onClose();
+                  },
                 };
 
                 // Loading state per action type
                 const isActionLoading = (type: string | null) => {
                   if (!type) return false;
-                  if (type === 'ACCEPT' || type === 'CLAIM') return acceptingOrderId === selectedOrder.id;
-                  if (type === 'CONFIRM_PAYMENT') return confirmingOrderId === selectedOrder.id;
-                  if (type === 'CANCEL') return cancellingOrderId === selectedOrder.id;
-                  if (type === 'SEND_PAYMENT') return markingDone;
+                  if (type === "ACCEPT" || type === "CLAIM")
+                    return acceptingOrderId === selectedOrder.id;
+                  if (type === "CONFIRM_PAYMENT")
+                    return confirmingOrderId === selectedOrder.id;
+                  if (type === "CANCEL")
+                    return cancellingOrderId === selectedOrder.id;
+                  if (type === "SEND_PAYMENT") return markingDone;
                   return false;
                 };
 
                 // Action button styles
-                const PRIMARY_STYLE = 'bg-primary/10 hover:bg-primary/20 border-primary/30 hover:border-primary/40 text-primary';
-                const PRIMARY_LOADING = 'bg-primary/5 border-primary/10 text-primary/50 cursor-wait';
-                const SECONDARY_STYLE = 'bg-red-500/10 hover:bg-[var(--color-error)]/20 border-red-500/30 hover:border-[var(--color-error)]/40 text-red-400';
-                const DISABLED_STYLE = 'bg-foreground/[0.04] border-foreground/[0.06] text-foreground/40 cursor-not-allowed';
+                const PRIMARY_STYLE =
+                  "bg-primary/10 hover:bg-primary/20 border-primary/30 hover:border-primary/40 text-primary";
+                const PRIMARY_LOADING =
+                  "bg-primary/5 border-primary/10 text-primary/50 cursor-wait";
+                const SECONDARY_STYLE =
+                  "bg-red-500/10 hover:bg-[var(--color-error)]/20 border-red-500/30 hover:border-[var(--color-error)]/40 text-red-400";
+                const DISABLED_STYLE =
+                  "bg-foreground/[0.04] border-foreground/[0.06] text-foreground/40 cursor-not-allowed";
 
                 const loading = isActionLoading(primary.type);
 
@@ -488,9 +652,14 @@ export function OrderQuickView({
                         )}
                         {primary.label}
                       </motion.button>
-                    ) : primary.label && primary.disabledReason && !primary.disabledReason.includes('No actions available') ? (
+                    ) : primary.label &&
+                      primary.disabledReason &&
+                      !primary.disabledReason.includes(
+                        "No actions available",
+                      ) ? (
                       /* Disabled informational button (e.g., "Waiting for Payment") — hidden for terminal states */
-                      <div className={`w-full py-3 rounded-xl border font-medium flex items-center justify-center gap-2 text-sm ${DISABLED_STYLE}`}
+                      <div
+                        className={`w-full py-3 rounded-xl border font-medium flex items-center justify-center gap-2 text-sm ${DISABLED_STYLE}`}
                         title={primary.disabledReason}
                       >
                         <Loader2 className="w-4 h-4 animate-spin opacity-40" />
@@ -505,7 +674,9 @@ export function OrderQuickView({
                         disabled={isActionLoading(secondary.type)}
                         onClick={() => ACTION_HANDLER[secondary.type!]?.()}
                         className={`w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
-                          isActionLoading(secondary.type) ? PRIMARY_LOADING : SECONDARY_STYLE
+                          isActionLoading(secondary.type)
+                            ? PRIMARY_LOADING
+                            : SECONDARY_STYLE
                         }`}
                       >
                         {isActionLoading(secondary.type) ? (
@@ -531,7 +702,7 @@ export function OrderQuickView({
                 View Full Details
               </button>
 
-              <button
+              {/* <button
                 onClick={() => {
                   onOpenChat(selectedOrder);
                   onClose();
@@ -540,7 +711,7 @@ export function OrderQuickView({
               >
                 <MessageCircle className="w-4 h-4" />
                 Chat
-              </button>
+              </button> */}
             </div>
           </motion.div>
         </>

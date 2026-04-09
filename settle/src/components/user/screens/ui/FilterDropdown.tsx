@@ -84,7 +84,7 @@ export function FilterDropdown<T extends string>({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.12, ease: "easeOut" }}
-            className={`absolute ${align === "left" ? "left-0" : "right-0"} mt-1.5 z-50 min-w-[110px] rounded-xl overflow-hidden bg-surface-base border border-border-subtle shadow-[0_8px_32px_rgba(0,0,0,0.45)] backdrop-blur-[20px]`}
+            className={`absolute ${align === "left" ? "left-0" : "right-0"} mt-1.5 z-50 min-w-[110px] rounded-xl overflow-hidden bg-surface-base border border-border-subtle shadow-[0_8px_32px_rgba(0,0,0,0.45)] backdrop-blur-sm`}
           >
             {options.map(({ key, label }) => {
               const selected = key === value;

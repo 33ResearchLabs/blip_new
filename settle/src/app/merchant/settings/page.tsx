@@ -31,11 +31,13 @@ import {
   Palette,
   Lock,
   Trophy,
+  BookOpen,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMerchantStore } from '@/stores/merchantStore';
 import { CorridorProviderSettings } from '@/components/merchant/CorridorProviderSettings';
+import { WalletLedger } from '@/components/merchant/WalletLedger';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useTheme, THEMES, type Theme } from '@/context/ThemeContext';
 
@@ -67,7 +69,7 @@ const PRESET_AVATARS = [
   'https://api.dicebear.com/7.x/pixel-art/svg?seed=Pixel4',
 ];
 
-type SettingsTab = 'profile' | 'account' | 'security' | 'theme' | 'payments' | 'notifications' | 'liquidity' | 'reputation';
+type SettingsTab = 'profile' | 'account' | 'security' | 'theme' | 'payments' | 'notifications' | 'liquidity' | 'reputation' | 'ledger';
 
 export default function MerchantSettingsPage() {
   const router = useRouter();
@@ -357,12 +359,13 @@ export default function MerchantSettingsPage() {
     { id: 'notifications', label: 'Alerts', icon: Bell },
     { id: 'liquidity', label: 'Liquidity', icon: Droplets },
     { id: 'reputation', label: 'Reputation', icon: Trophy },
+    { id: 'ledger', label: 'Wallet Ledger', icon: BookOpen },
   ];
 
   return (
     <div className="min-h-screen bg-background text-white">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-2xl border-b border-white/[0.05]">
+      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-white/[0.05]">
         <div className="h-[50px] flex items-center px-4 gap-3 max-w-5xl mx-auto">
           <Link
             href="/merchant"
@@ -945,6 +948,14 @@ export default function MerchantSettingsPage() {
 
           {activeTab === 'reputation' && (
             <ReputationTab merchantId={merchantId} />
+          )}
+
+          {activeTab === 'ledger' && merchantId && (
+            <div>
+              <h2 className="text-lg font-bold mb-1">Wallet Ledger</h2>
+              <p className="text-sm text-white/40 mb-6">View your complete USDT transaction history with running balances.</p>
+              <WalletLedger merchantId={merchantId} />
+            </div>
           )}
 
           {/* Mobile Logout */}

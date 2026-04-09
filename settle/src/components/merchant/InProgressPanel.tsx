@@ -88,7 +88,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
               <div
                 data-testid={`order-card-${order.id}`}
                 onClick={() => onSelectOrder(order)}
-                className="relative p-2.5 rounded-lg backdrop-blur-xl cursor-pointer transition-colors"
+                className="relative p-2.5 rounded-lg cursor-pointer transition-colors"
                 style={{ background: 'var(--card)', border: '1px solid color-mix(in srgb, var(--primary) 50%, transparent)' }}
                 onMouseEnter={(e) => e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--primary) 70%, transparent)'}
                 onMouseLeave={(e) => e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--primary) 50%, transparent)'}

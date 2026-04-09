@@ -22,14 +22,14 @@ export function WalletPromptModal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 z-50"
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
             onClick={onDismiss}
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[90%] max-w-md bg-white/[0.03] rounded-2xl p-6 border border-white/10"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[90%] max-w-md bg-card-solid rounded-2xl p-6 border border-white/[0.08] shadow-2xl"
           >
             <div className="text-center">
               <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/[0.04] flex items-center justify-center">
@@ -42,7 +42,7 @@ export function WalletPromptModal({
               <div className="flex gap-3">
                 <button
                   onClick={onDismiss}
-                  className="flex-1 px-4 py-3 rounded-xl border border-white/10 text-foreground/40 font-medium text-sm hover:bg-card transition-colors"
+                  className="flex-1 px-4 py-3 rounded-xl border border-white/[0.08] text-foreground/40 font-medium text-sm hover:bg-card transition-colors"
                 >
                   Later
                 </button>

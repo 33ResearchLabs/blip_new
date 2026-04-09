@@ -286,18 +286,29 @@ export function TradeChat({
     setPendingImage(null);
   };
 
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   const uploadAndSend = async () => {
     if (!pendingImage || !tradeInfo) return;
     setIsUploading(true);
+    setUploadError(null);
     try {
       const sigRes = await fetchWithAuth('/api/upload/signature', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId: tradeInfo.orderId }),
       });
-      if (!sigRes.ok) { setIsUploading(false); return; }
+      if (!sigRes.ok) {
+        setUploadError(sigRes.status === 401 ? 'Session expired — please refresh the page' : 'Failed to prepare upload');
+        setIsUploading(false);
+        return;
+      }
       const sigData = await sigRes.json();
-      if (!sigData.success) { setIsUploading(false); return; }
+      if (!sigData.success) {
+        setUploadError(sigData.error || 'Failed to prepare upload');
+        setIsUploading(false);
+        return;
+      }
       const sig = sigData.data;
 
       const formData = new FormData();
@@ -306,6 +317,7 @@ export function TradeChat({
       formData.append('timestamp', sig.timestamp.toString());
       formData.append('api_key', sig.apiKey);
       formData.append('folder', sig.folder);
+
 
       const uploadRes = await fetch(
         `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`,
@@ -317,10 +329,13 @@ export function TradeChat({
         onSendMessage(text, result.secure_url);
         setMessageText('');
       } else {
-        console.error('[TradeChat] Cloudinary upload failed:', uploadRes.status, await uploadRes.text().catch(() => ''));
+        const errText = await uploadRes.text().catch(() => '');
+        console.error('[TradeChat] Cloudinary upload failed:', uploadRes.status, errText);
+        setUploadError('Upload failed — please try again');
       }
     } catch (err) {
       console.error('[TradeChat] Image upload error:', err);
+      setUploadError('Upload failed — check your connection');
     } finally {
       setIsUploading(false);
       clearPendingImage();
@@ -991,6 +1006,16 @@ export function TradeChat({
             </div>
           )}
 
+          {/* Upload error banner */}
+          {uploadError && (
+            <div className="mx-3 mb-1 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-between gap-2">
+              <p className="text-[11px] text-red-400">{uploadError}</p>
+              <button onClick={() => setUploadError(null)} className="text-red-400/60 hover:text-red-400">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
           {/* Input area */}
           {(() => {
             const isChatClosed = ['completed', 'cancelled', 'expired'].includes(tradeInfo?.status || '');
@@ -1015,14 +1040,14 @@ export function TradeChat({
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
-                className="w-12 h-12 rounded-xl bg-[#1f1f1f] flex items-center justify-center
-                           disabled:opacity-50 transition-opacity hover:bg-card-solid"
-                title="Attach image"
+                className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center
+                           disabled:opacity-50 transition-all hover:bg-white/[0.1] hover:border-white/[0.12] active:scale-95 self-end"
+                title="Attach file"
               >
                 {isUploading ? (
-                  <Loader2 className="w-5 h-5 text-foreground/40 animate-spin" />
+                  <Loader2 className="w-4 h-4 text-white/50 animate-spin" />
                 ) : (
-                  <Paperclip className="w-5 h-5 text-foreground/40" />
+                  <Paperclip className="w-4 h-4 text-white/50" />
                 )}
               </button>
               <input
@@ -1041,15 +1066,15 @@ export function TradeChat({
                 whileTap={{ scale: 0.95 }}
                 onClick={handleSend}
                 disabled={!messageText.trim() && !pendingImage}
-                className={`w-12 h-12 rounded-xl flex items-center justify-center
-                           disabled:opacity-50 disabled:cursor-not-allowed transition-opacity ${
+                className={`w-10 h-10 rounded-xl flex items-center justify-center self-end
+                           disabled:opacity-30 disabled:cursor-not-allowed transition-all ${
                              pendingImage ? 'bg-primary/80' : 'bg-primary'
                            }`}
               >
                 {isUploading ? (
-                  <Loader2 className="w-5 h-5 text-background animate-spin" />
+                  <Loader2 className="w-4 h-4 text-background animate-spin" />
                 ) : (
-                  <Send className="w-5 h-5 text-background" />
+                  <Send className="w-4 h-4 text-background" />
                 )}
               </motion.button>
             </div>

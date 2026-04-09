@@ -239,7 +239,7 @@ export default function RiskProfilePage({ params }: { params: Promise<{ entityId
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/60 backdrop-blur-2xl border-b border-border">
+      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
         <div className="h-[50px] flex items-center px-4 gap-3">
           <Link href="/admin/accounts?tab=merchants" className="flex items-center gap-1.5 text-foreground/40 hover:text-foreground/70 transition-colors">
             <ChevronLeft className="w-4 h-4" />
