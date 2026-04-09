@@ -12,10 +12,12 @@ export interface MobileChatViewProps {
     activeContactType: 'user' | 'merchant';
     messages: any[];
     isLoadingMessages: boolean;
+    isContactTyping: boolean;
     conversations: any[];
     totalUnread: number;
     isLoadingConversations: boolean;
     sendMessage: (text: string, imageUrl?: string) => void;
+    sendTyping: (orderId?: string) => void;
     closeChat: () => void;
     openChat: (targetId: string, targetType: 'user' | 'merchant', name: string) => void;
   };
