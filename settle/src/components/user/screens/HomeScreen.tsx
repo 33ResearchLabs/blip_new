@@ -251,6 +251,8 @@ function WalletBalanceSection({
   );
 }
 
+
+
 // ─── HomeScreen ─────────────────────────────────────────────────────────────
 export const HomeScreen = ({
   userName,

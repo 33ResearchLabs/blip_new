@@ -444,6 +444,7 @@ export default function Home() {
             <ProfileScreen
               screen={screen}
               setScreen={setScreen}
+              userId={auth.userId}
               userName={auth.userName}
               completedOrders={completedOrders}
               timedOutOrders={timedOutOrders}
