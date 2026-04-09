@@ -36,6 +36,7 @@ export interface EscrowLockScreenProps {
   userId: string | null;
   setShowWalletModal: (v: boolean) => void;
   onConnectWallet?: () => void;
+  fiatCurrency?: string;
   solanaWallet: {
     connected: boolean;
     walletAddress: string | null;
@@ -64,8 +65,10 @@ export const EscrowLockScreen = ({
   userId,
   setShowWalletModal,
   onConnectWallet,
+  fiatCurrency = 'AED',
   solanaWallet,
 }: EscrowLockScreenProps) => {
+  const fiatSymbol = fiatCurrency === 'INR' ? '₹' : fiatCurrency === 'USD' ? '$' : 'د.إ';
   const handleConnectWallet = onConnectWallet || (() => setShowWalletModal(true));
   return (
     <div className="bg-surface-base min-h-full">
@@ -135,11 +138,11 @@ export const EscrowLockScreen = ({
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[15px] text-text-secondary">You&apos;ll receive</span>
-            <span className="text-[15px] font-medium text-text-primary">{'\u062F.\u0625'} {parseFloat(fiatAmount).toLocaleString()}</span>
+            <span className="text-[15px] font-medium text-text-primary">{fiatSymbol} {parseFloat(fiatAmount).toLocaleString()}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[15px] text-text-secondary">Rate</span>
-            <span className="text-[15px] text-text-secondary">1 USDT = {currentRate} AED</span>
+            <span className="text-[15px] text-text-secondary">1 USDT = {currentRate} {fiatCurrency}</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[15px] text-text-secondary">Network</span>

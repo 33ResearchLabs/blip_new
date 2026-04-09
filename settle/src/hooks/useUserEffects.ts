@@ -289,6 +289,33 @@ export function useUserEffects({
     },
   });
 
+  // Detect merchant claiming a sell order (status stays 'escrowed' but merchant_id gets set).
+  // When this happens on the escrow/matching screen, transition to order detail.
+  const prevMerchantIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!realtimeOrder || !activeOrderId) return;
+    const merchantId = (realtimeOrder as any).merchant_id || null;
+    const prevMerchantId = prevMerchantIdRef.current;
+    prevMerchantIdRef.current = merchantId;
+
+    // Merchant just got assigned (claim transition on sell order)
+    if (merchantId && !prevMerchantId && (screen === 'escrow' || screen === 'matching')) {
+      const merchantName = (realtimeOrder as any).merchant?.display_name || 'Merchant';
+      playSound('notification');
+      toast.showMerchantAccepted(merchantName);
+      setAcceptedOrderInfo({
+        merchantName,
+        cryptoAmount: (realtimeOrder as any).crypto_amount || 0,
+        fiatAmount: (realtimeOrder as any).fiat_amount || 0,
+        orderType: (realtimeOrder as any).type || 'sell',
+      });
+      setShowAcceptancePopup(true);
+      setTimeout(() => setShowAcceptancePopup(false), 5000);
+      if (screen === 'matching') setPendingTradeData(null);
+      setScreen('order');
+    }
+  }, [realtimeOrder, activeOrderId, screen]);
+
   // Active order: merge real-time data with list data, preserving optimistic updates
   const orderFromList = orders.find(o => o.id === activeOrderId);
   const mappedRealtimeOrder = realtimeOrder ? mapDbOrderToUI(realtimeOrder as unknown as DbOrder) : null;

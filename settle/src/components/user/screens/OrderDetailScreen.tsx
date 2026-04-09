@@ -1536,7 +1536,7 @@ export const OrderDetailScreen = ({
                         <div className="mt-2">
                           <p className="text-[13px] text-text-secondary">
                             Your USDT is locked in escrow. Waiting for merchant
-                            to send AED payment...
+                            to send {activeOrder.fiatCode || 'AED'} payment...
                           </p>
 
                           <div className={`mt-3 rounded-xl p-3 ${CARD}`}>
@@ -1847,12 +1847,12 @@ export const OrderDetailScreen = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold bg-accent text-accent-text">
-                {activeOrder.merchant.name.charAt(0)}
+                {(activeOrder.merchant.name || 'M').charAt(0)}
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <p className="text-[15px] font-medium text-text-primary">
-                    {activeOrder.merchant.name}
+                    {activeOrder.merchant.name || 'Waiting for merchant...'}
                   </p>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-surface-active text-text-secondary">
                     {activeOrder.merchant.paymentMethod === "cash"

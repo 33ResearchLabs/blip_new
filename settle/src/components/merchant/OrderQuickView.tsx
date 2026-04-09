@@ -21,15 +21,27 @@ import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
 import type { Order } from "@/types/merchant";
 import { CopyableBankDetails } from "@/components/shared/CopyableBankDetails";
 
+/** Map fiat currency code to display symbol */
+function fiatSymbol(code: string | undefined | null): string {
+  switch ((code || "").toUpperCase()) {
+    case "INR": return "₹";
+    case "USD": return "$";
+    case "AED": return "د.إ";
+    default: return (code || "AED").toUpperCase();
+  }
+}
+
 // Inline component for non-bank locked payment methods (UPI, Cash, Other)
 function LockedPaymentMethodCard({
   lpm,
   amount,
   typeIcon,
+  currency,
 }: {
   lpm: { type: string; label: string; details: Record<string, string> };
   amount: number;
   typeIcon: React.ReactNode;
+  currency?: string;
 }) {
   const [copiedKey, setCopiedKey] = useLocalState<string | null>(null);
   const copyField = (value: string, key: string) => {
@@ -104,7 +116,7 @@ function LockedPaymentMethodCard({
       <div className="flex items-center gap-2">
         <Lock className="w-3.5 h-3.5 text-primary" />
         <span className="text-[11px] text-primary uppercase tracking-wide font-bold">
-          Send AED Here
+          Send {currency || 'AED'} Here
         </span>
       </div>
       <div className="flex items-center gap-2">
@@ -292,7 +304,7 @@ export function OrderQuickView({
                     Total Fiat
                   </span>
                   <span className="text-sm font-semibold text-foreground">
-                    {"\u062F.\u0625"}{" "}
+                    {fiatSymbol(selectedOrder.toCurrency)}{" "}
                     {Math.round(selectedOrder.total).toLocaleString()}
                   </span>
                 </div>
@@ -302,7 +314,7 @@ export function OrderQuickView({
                     Rate (Locked)
                   </span>
                   <span className="text-xs font-mono text-foreground/50">
-                    1 USDC = {selectedOrder.rate} AED
+                    1 USDC = {selectedOrder.rate} {selectedOrder.toCurrency || 'AED'}
                   </span>
                 </div>
                 {selectedOrder.dbOrder?.accepted_at && (
@@ -340,7 +352,7 @@ export function OrderQuickView({
                   ) {
                     return (
                       <CopyableBankDetails
-                        title="Send AED to this account"
+                        title={`Send ${selectedOrder.toCurrency || 'AED'} to this account`}
                         bankName={spm.details.bank_name}
                         accountName={spm.details.account_name}
                         iban={spm.details.iban}
@@ -365,7 +377,7 @@ export function OrderQuickView({
                       </div>
                       <div className="text-xs text-zinc-400">{detailStr}</div>
                       <div className="text-right text-sm font-semibold text-green-400">
-                        {Math.round(selectedOrder.total)} د.إ
+                        {Math.round(selectedOrder.total)} {selectedOrder.toCurrency || 'AED'}
                       </div>
                     </div>
                   );
@@ -386,7 +398,7 @@ export function OrderQuickView({
                   if (lpm.type === "bank") {
                     return (
                       <CopyableBankDetails
-                        title={`Send AED to this account`}
+                        title={`Send ${selectedOrder.toCurrency || 'AED'} to this account`}
                         bankName={lpm.details.bank_name}
                         accountName={lpm.details.account_name}
                         iban={lpm.details.iban}
@@ -401,6 +413,7 @@ export function OrderQuickView({
                       lpm={lpm}
                       amount={Math.round(selectedOrder.total)}
                       typeIcon={typeIcon}
+                      currency={selectedOrder.toCurrency}
                     />
                   );
                 }
@@ -409,7 +422,7 @@ export function OrderQuickView({
                 if (selectedOrder.sellerBankDetails) {
                   return (
                     <CopyableBankDetails
-                      title="Send AED to this account"
+                      title={`Send ${selectedOrder.toCurrency || 'AED'} to this account`}
                       bankName={selectedOrder.sellerBankDetails.bank_name}
                       accountName={selectedOrder.sellerBankDetails.account_name}
                       iban={selectedOrder.sellerBankDetails.iban}
@@ -426,7 +439,7 @@ export function OrderQuickView({
                   const details = selectedOrder.userBankDetails;
                   return (
                     <CopyableBankDetails
-                      title="Send AED to this account"
+                      title={`Send ${selectedOrder.toCurrency || 'AED'} to this account`}
                       bankName={details?.bank_name}
                       accountName={details?.account_name}
                       iban={details?.iban}

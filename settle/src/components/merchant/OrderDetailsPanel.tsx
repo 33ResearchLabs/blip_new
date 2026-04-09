@@ -978,7 +978,7 @@ export function OrderDetailsPanel({
                               <div className="flex items-center gap-1.5">
                                 <Lock className="w-3 h-3 text-primary" />
                                 <p className="text-[11px] text-primary uppercase tracking-wide font-bold">
-                                  Send AED Here
+                                  Send {order.fiat_currency || 'AED'} Here
                                 </p>
                               </div>
                               <div className="flex items-center gap-2 mb-1">
@@ -1034,7 +1034,7 @@ export function OrderDetailsPanel({
                               return (
                                 <div className="space-y-2 pt-3 border-t border-white/[0.06]">
                                   <p className="text-[11px] text-white/30 uppercase tracking-wide font-medium">
-                                    User Bank (Send AED here)
+                                    User Bank (Send {order.fiat_currency || 'AED'} here)
                                   </p>
                                   {[
                                     {
@@ -1089,7 +1089,7 @@ export function OrderDetailsPanel({
                             return (
                               <div className="pt-3 border-t border-white/[0.06]">
                                 <p className="text-[11px] text-white/30 uppercase tracking-wide font-medium mb-2">
-                                  User Bank (Send AED here)
+                                  User Bank (Send {order.fiat_currency || 'AED'} here)
                                 </p>
                                 <div className="flex justify-between items-center">
                                   <span className="text-white font-mono text-sm">

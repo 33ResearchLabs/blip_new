@@ -39,6 +39,7 @@ export function useUserTradeCreation({
   const [amount, setAmount] = useState("");
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
   const [currentRate, setCurrentRate] = useState(3.67);
+  const [selectedPair, setSelectedPair] = useState<'usdt_aed' | 'usdt_inr'>('usdt_aed');
   const [isLoading, setIsLoading] = useState(false);
 
   // Escrow transaction state
@@ -85,6 +86,7 @@ export function useUserTradeCreation({
         type: offerType,
         payment_method: paymentMethod,
         preference: tradePreference,
+        pair: selectedPair,
       });
       const offerRes = await fetchWithAuth(`/api/offers?${params}`);
       if (!offerRes.ok) {
@@ -105,7 +107,23 @@ export function useUserTradeCreation({
       }
 
       const offer = offerData.data;
-      setCurrentRate(parseFloat(offer.rate));
+
+      // Use corridor rate for the selected pair (admin-set price), not the offer's AED rate
+      if (selectedPair !== 'usdt_aed') {
+        try {
+          const priceRes = await fetchWithAuth(`/api/prices/current?pair=${selectedPair}`);
+          const priceData = await priceRes.json();
+          if (priceData?.success && priceData.data?.price) {
+            setCurrentRate(priceData.data.price);
+          } else {
+            setCurrentRate(parseFloat(offer.rate));
+          }
+        } catch {
+          setCurrentRate(parseFloat(offer.rate));
+        }
+      } else {
+        setCurrentRate(parseFloat(offer.rate));
+      }
 
       // SELL orders MUST lock escrow first (escrow-first model), regardless of payment method.
       // Route to escrow screen before anything else.
@@ -153,6 +171,7 @@ export function useUserTradeCreation({
           payment_method: paymentMethod,
           preference: tradePreference,
           buyer_wallet_address: solanaWallet.walletAddress,
+          pair: selectedPair,
         }),
       });
       if (!orderRes.ok) {
@@ -435,6 +454,7 @@ export function useUserTradeCreation({
           type: 'sell',
           payment_method: paymentMethod,
           preference: tradePreference,
+          pair: selectedPair,
           // CRITICAL: Include escrow_tx_hash so backend creates order as 'escrowed' (escrow-first model)
           escrow_tx_hash: escrowResult.txHash,
           escrow_trade_pda: escrowResult.tradePda,
@@ -514,6 +534,7 @@ export function useUserTradeCreation({
     amount, setAmount,
     selectedOffer, setSelectedOffer,
     currentRate, setCurrentRate,
+    selectedPair, setSelectedPair,
     isLoading, setIsLoading,
     escrowTxStatus, setEscrowTxStatus,
     escrowTxHash,

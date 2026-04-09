@@ -186,6 +186,15 @@ export default function Home() {
   });
   extensionRequestSetterRef.current = orderActions.setExtensionRequest;
 
+  // Refetch orders when returning to home screen so completed/cancelled orders update
+  const prevScreenRef = useRef(screen);
+  useEffect(() => {
+    if (screen === 'home' && prevScreenRef.current !== 'home' && auth.userId) {
+      fetchOrders(auth.userId);
+    }
+    prevScreenRef.current = screen;
+  }, [screen, auth.userId, fetchOrders]);
+
   const pendingOrders = orders.filter(o => !["complete", "cancelled", "expired", "disputed"].includes(o.status));
   const completedOrders = orders.filter(o => o.status === "complete");
   const cancelledOrders = orders.filter(o => o.status === "cancelled" || o.status === "expired");
@@ -306,6 +315,9 @@ export default function Home() {
               solanaWallet={solanaWallet}
               selectedPaymentMethodId={tradeCreation.selectedPaymentMethod?.id || null}
               onSelectPaymentMethod={tradeCreation.setSelectedPaymentMethod}
+              selectedPair={tradeCreation.selectedPair}
+              onPairChange={tradeCreation.setSelectedPair}
+              setCurrentRate={tradeCreation.setCurrentRate}
             />
           </Panel>
         )}
@@ -337,6 +349,7 @@ export default function Home() {
                   auth.setShowWalletModal(true);
                 }
               }}
+              fiatCurrency={tradeCreation.selectedPair === 'usdt_inr' ? 'INR' : 'AED'}
               solanaWallet={solanaWallet}
             />
           </Panel>

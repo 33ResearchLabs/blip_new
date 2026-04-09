@@ -48,6 +48,9 @@ export interface TradeCreationScreenProps {
   solanaWallet: { connected: boolean; usdtBalance: number | null };
   selectedPaymentMethodId: string | null;
   onSelectPaymentMethod: (method: PaymentMethodItem | null) => void;
+  selectedPair?: 'usdt_aed' | 'usdt_inr';
+  onPairChange?: (pair: 'usdt_aed' | 'usdt_inr') => void;
+  setCurrentRate?: (rate: number) => void;
 }
 
 // ─── Mini sparkline for the rate card ─────────────────────────────────────
@@ -114,15 +117,19 @@ export const TradeCreationScreen = ({
   solanaWallet,
   selectedPaymentMethodId,
   onSelectPaymentMethod,
+  selectedPair,
+  onPairChange,
+  setCurrentRate,
 }: TradeCreationScreenProps) => {
   const ratePositive = true;
   const hasAmount = !!amount && parseFloat(amount) > 0;
 
   // ── AED / INR display toggle ──
-  // Trade creation backend always uses the AED corridor (server fetches it via
-  // getFinalPrice('usdt_aed')). This toggle is purely a display preview — same
-  // scope as main's TradeCreationScreen.
-  const [ratePair, setRatePair] = useState<RatePair>("usdt_aed");
+  const [ratePair, setRatePairLocal] = useState<RatePair>(selectedPair || "usdt_aed");
+  const setRatePair = (p: RatePair) => {
+    setRatePairLocal(p);
+    onPairChange?.(p);
+  };
   const [rateData, setRateData] = useState<PriceData | null>(null);
   const [rateLoading, setRateLoading] = useState(true);
   useEffect(() => {
@@ -134,8 +141,10 @@ export const TradeCreationScreen = ({
       .then((res) => res.json())
       .then((j) => {
         if (cancelled) return;
-        if (j?.success && j.data) setRateData(j.data as PriceData);
-        else setRateData(null);
+        if (j?.success && j.data) {
+          setRateData(j.data as PriceData);
+          if ((j.data as PriceData).price) setCurrentRate?.((j.data as PriceData).price);
+        } else setRateData(null);
       })
       .catch(() => { if (!cancelled) setRateData(null); })
       .finally(() => { if (!cancelled) setRateLoading(false); });
@@ -173,8 +182,8 @@ export const TradeCreationScreen = ({
         {/* ── Buy / Sell — big cards ───────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-3 shrink-0">
           {([
-            { type: 'buy' as const, label: 'Buy USDT', sub: 'Pay AED, get USDT', Icon: ArrowDownLeft, activeClass: 'border-[1.5px] border-success', dotClass: 'bg-success', iconBgOn: 'bg-success/15', iconOn: 'text-success' },
-            { type: 'sell' as const, label: 'Sell USDT', sub: 'Send USDT, get AED', Icon: ArrowUpRight, activeClass: 'border-[1.5px] border-error', dotClass: 'bg-error', iconBgOn: 'bg-error/15', iconOn: 'text-error' },
+            { type: 'buy' as const, label: 'Buy USDT', sub: `Pay ${ratePair === 'usdt_inr' ? 'INR' : 'AED'}, get USDT`, Icon: ArrowDownLeft, activeClass: 'border-[1.5px] border-success', dotClass: 'bg-success', iconBgOn: 'bg-success/15', iconOn: 'text-success' },
+            { type: 'sell' as const, label: 'Sell USDT', sub: `Send USDT, get ${ratePair === 'usdt_inr' ? 'INR' : 'AED'}`, Icon: ArrowUpRight, activeClass: 'border-[1.5px] border-error', dotClass: 'bg-error', iconBgOn: 'bg-error/15', iconOn: 'text-error' },
           ] as const).map(({ type, label, sub, Icon, activeClass, dotClass, iconBgOn, iconOn }) => {
             const on = tradeType === type;
             return (
