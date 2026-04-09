@@ -58,12 +58,14 @@ export async function POST(
       );
     }
 
-    // Get the dispute
+    // Get the dispute. The `[id]` route param is historically the order id,
+    // but some callers pass the dispute id (rows from GET /api/compliance/disputes
+    // expose both `id` (order id) AND `dispute.id`). Match either to avoid 404s.
     const disputeResult = await query(
-      `SELECT d.*, o.crypto_amount, o.user_id, o.merchant_id
+      `SELECT d.*, o.id AS order_id, o.crypto_amount, o.user_id, o.merchant_id
        FROM disputes d
        JOIN orders o ON d.order_id = o.id
-       WHERE d.order_id = $1`,
+       WHERE d.order_id = $1 OR d.id = $1`,
       [orderId]
     );
 
@@ -78,7 +80,11 @@ export async function POST(
       status: string;
       user_id: string;
       merchant_id: string;
+      order_id: string;
     };
+    // Normalize: from here on, always use the real order id from the row
+    // (not whatever was in the URL).
+    const realOrderId = dispute.order_id;
 
     if (dispute.status === 'resolved') {
       return NextResponse.json(
@@ -114,7 +120,7 @@ export async function POST(
           complianceId,
           notes || '',
           splitPercentage ? JSON.stringify(splitPercentage) : null,
-          orderId
+          realOrderId
         ]
       );
     } catch (updateErr) {
@@ -135,7 +141,7 @@ export async function POST(
           complianceId,
           notes || '',
           splitPercentage ? JSON.stringify(splitPercentage) : null,
-          orderId
+          realOrderId
         ]
       );
     }
@@ -145,7 +151,7 @@ export async function POST(
       await query(
         `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type, created_at)
          VALUES ($1, 'system'::actor_type, $2, $3, 'system'::message_type, NOW())`,
-        [orderId, complianceId, JSON.stringify({
+        [realOrderId, complianceId, JSON.stringify({
           resolution,
           notes,
           splitPercentage,
@@ -156,7 +162,7 @@ export async function POST(
       console.log('Chat message insert note:', msgErr);
     }
 
-    auditLog('compliance.dispute_resolved', complianceId, auth.actorType, orderId, {
+    auditLog('compliance.dispute_resolved', complianceId, auth.actorType, realOrderId, {
       resolution,
       notes,
       splitPercentage,
@@ -165,7 +171,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       data: {
-        orderId,
+        orderId: realOrderId,
         proposedResolution: resolution,
         status: 'pending_confirmation',
         message: 'Resolution proposed. Waiting for both parties to confirm.',
@@ -224,25 +230,57 @@ export async function PATCH(
       [complianceId]
     );
 
-    // Update dispute status
-    const result = await query(
+    // The compliance dashboard surfaces orders that are status='disputed'
+    // even when no `disputes` row exists yet (the GET uses LEFT JOIN). The URL
+    // param can therefore be an order id OR a dispute id, AND the dispute row
+    // may need to be created on the fly when an officer hits "Investigate".
+    //
+    // 1) Resolve to a real order id from whichever shape we got.
+    const orderRow = await queryOne<{ id: string }>(
+      `SELECT o.id
+         FROM orders o
+         LEFT JOIN disputes d ON d.order_id = o.id
+        WHERE o.id = $1 OR d.id = $1
+        LIMIT 1`,
+      [orderId]
+    );
+
+    if (!orderRow) {
+      return NextResponse.json(
+        { success: false, error: 'Order not found' },
+        { status: 404 }
+      );
+    }
+    const realOrderId = orderRow.id;
+
+    // 2) Try to update an existing dispute row; if none exists yet, create one.
+    let result = await query(
       `UPDATE disputes
        SET status = 'investigating'::dispute_status,
            assigned_to = $1,
            resolution_notes = COALESCE(resolution_notes || E'\n', '') || $2
        WHERE order_id = $3
        RETURNING *`,
-      [complianceRow?.id || null, notes ? `[${new Date().toISOString()}] ${notes}` : '', orderId]
+      [complianceRow?.id || null, notes ? `[${new Date().toISOString()}] ${notes}` : '', realOrderId]
     );
 
     if (result.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Dispute not found' },
-        { status: 404 }
+      // No dispute row yet — create it in the investigating state. Mirrors
+      // the columns used by the existing INSERT sites in the orders repo.
+      result = await query(
+        `INSERT INTO disputes (order_id, raised_by, raiser_id, reason, description, status, assigned_to, resolution_notes, created_at)
+         VALUES ($1, 'compliance'::actor_type, $2, 'other'::dispute_reason, 'Auto-created on investigation start', 'investigating'::dispute_status, $3, $4, NOW())
+         RETURNING *`,
+        [
+          realOrderId,
+          complianceId,
+          complianceRow?.id || null,
+          notes ? `[${new Date().toISOString()}] ${notes}` : '',
+        ]
       );
     }
 
-    auditLog('compliance.dispute_status_changed', complianceId, patchAuth.actorType, orderId, {
+    auditLog('compliance.dispute_status_changed', complianceId, patchAuth.actorType, realOrderId, {
       newStatus: status,
       notes,
     });

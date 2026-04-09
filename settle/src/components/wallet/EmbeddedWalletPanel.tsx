@@ -121,7 +121,7 @@ export function EmbeddedWalletPanel({
           </div>
           <div className="p-2.5 bg-white/[0.02] border border-white/[0.06] rounded-lg">
             <div className="text-[9px] text-white/30 font-mono uppercase">USDT</div>
-            <div className="text-base font-bold text-orange-500 font-mono tabular-nums">
+            <div className="text-base font-bold text-primary font-mono tabular-nums">
               {usdtBalance !== null ? usdtBalance.toFixed(2) : '—'}
             </div>
           </div>

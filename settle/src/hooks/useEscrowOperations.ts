@@ -250,6 +250,7 @@ export function useEscrowOperations({
               spread_preference: pendingSellOrder.spreadPreference,
               priority_fee: pendingSellOrder.priorityFee || 0,
               matched_offer_id: pendingSellOrder.matchedOfferId,
+              pair: pendingSellOrder.pair || 'usdt_aed',
               escrow_tx_hash: escrowResult.txHash,
               escrow_trade_id: escrowResult.tradeId,
               escrow_trade_pda: escrowResult.tradePda,

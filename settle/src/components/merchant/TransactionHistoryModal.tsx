@@ -203,7 +203,7 @@ export function TransactionHistoryModal({
     if (type.includes('lock') || type.includes('cancelled')) {
       return 'text-red-400';
     }
-    return 'text-gray-400';
+    return 'text-foreground/40';
   };
 
   const getTypeLabel = (type: string) => {
@@ -247,22 +247,22 @@ export function TransactionHistoryModal({
           <div className="flex items-center justify-between p-4 border-b border-white/[0.06]">
             <div>
               <h2 className="text-base font-bold text-white">Transaction History</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Your USDT in and out flow</p>
+              <p className="text-xs text-foreground/40 mt-0.5">Your USDT in and out flow</p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={fetchTransactions}
                 disabled={isLoading}
-                className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors disabled:opacity-50"
+                className="p-2 hover:bg-card rounded-lg transition-colors disabled:opacity-50"
                 title="Refresh"
               >
-                <RefreshCw className={`w-3.5 h-3.5 text-gray-400 ${isLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 text-foreground/40 ${isLoading ? 'animate-spin' : ''}`} />
               </button>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
+                className="p-2 hover:bg-card rounded-lg transition-colors"
               >
-                <X className="w-4 h-4 text-gray-400" />
+                <X className="w-4 h-4 text-foreground/40" />
               </button>
             </div>
           </div>
@@ -280,7 +280,7 @@ export function TransactionHistoryModal({
                 <p className="text-sm font-bold text-green-400">
                   +{formatNumber(summary.total_credits)}
                 </p>
-                <p className="text-[10px] text-gray-500 mt-0.5">USDT</p>
+                <p className="text-[10px] text-foreground/35 mt-0.5">USDT</p>
               </div>
 
               <div className="bg-gradient-to-br from-red-500/10 to-red-600/5 rounded-xl p-3 border border-red-500/20">
@@ -293,7 +293,7 @@ export function TransactionHistoryModal({
                 <p className="text-sm font-bold text-red-400">
                   -{formatNumber(summary.total_debits)}
                 </p>
-                <p className="text-[10px] text-gray-500 mt-0.5">USDT</p>
+                <p className="text-[10px] text-foreground/35 mt-0.5">USDT</p>
               </div>
 
               <div className="bg-gradient-to-br from-[#26A17B]/10 to-[#26A17B]/5 rounded-xl p-3 border border-[#26A17B]/20">
@@ -306,7 +306,7 @@ export function TransactionHistoryModal({
                 <p className="text-sm font-bold text-[#26A17B]">
                   {formatNumber(summary.current_balance)}
                 </p>
-                <p className="text-[10px] text-gray-500 mt-0.5">USDT</p>
+                <p className="text-[10px] text-foreground/35 mt-0.5">USDT</p>
               </div>
             </div>
           )}
@@ -316,7 +316,7 @@ export function TransactionHistoryModal({
             {isLoading && transactions.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
-                <p className="text-xs text-gray-400">Loading transactions...</p>
+                <p className="text-xs text-foreground/40">Loading transactions...</p>
               </div>
             ) : error && transactions.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
@@ -326,7 +326,7 @@ export function TransactionHistoryModal({
                 <p className="text-xs text-red-400 mb-3">{error}</p>
                 <button
                   onClick={fetchTransactions}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-white/5 hover:bg-accent-subtle rounded-lg transition-colors"
                 >
                   <RefreshCw className="w-3 h-3" />
                   <span className="text-xs">Retry</span>
@@ -335,9 +335,9 @@ export function TransactionHistoryModal({
             ) : transactions.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12">
                 <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-3">
-                  <DollarSign className="w-6 h-6 text-gray-500" />
+                  <DollarSign className="w-6 h-6 text-foreground/35" />
                 </div>
-                <p className="text-xs text-gray-500 mb-1">No transactions yet</p>
+                <p className="text-xs text-foreground/35 mb-1">No transactions yet</p>
                 <p className="text-[10px] text-gray-600">Complete a trade to see your history</p>
               </div>
             ) : (
@@ -347,14 +347,14 @@ export function TransactionHistoryModal({
                     key={tx.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="flex items-start gap-2.5 p-3 bg-white/[0.02] hover:bg-white/[0.04] rounded-xl border border-white/[0.06] transition-all group"
+                    className="flex items-start gap-2.5 p-3 bg-white/[0.02] hover:bg-card rounded-xl border border-white/[0.06] transition-all group"
                   >
                     {/* Icon */}
                     <div
                       className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                         tx.amount > 0
-                          ? 'bg-green-500/10 group-hover:bg-green-500/20'
-                          : 'bg-red-500/10 group-hover:bg-red-500/20'
+                          ? 'bg-green-500/10 group-hover:bg-[var(--color-success)]/20'
+                          : 'bg-red-500/10 group-hover:bg-[var(--color-error)]/20'
                       } transition-colors`}
                     >
                       {tx.amount > 0 ? (
@@ -371,7 +371,7 @@ export function TransactionHistoryModal({
                           <p className={`text-xs font-semibold ${getTypeColor(tx.type)}`}>
                             {getTypeLabel(tx.type)}
                           </p>
-                          <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-1">{tx.description}</p>
+                          <p className="text-[10px] text-foreground/35 mt-0.5 line-clamp-1">{tx.description}</p>
                         </div>
                         <div className="text-right shrink-0">
                           <p
@@ -403,12 +403,12 @@ export function TransactionHistoryModal({
           {/* Footer */}
           <div className="p-4 border-t border-white/[0.06]">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] text-gray-500">
+              <p className="text-[10px] text-foreground/35">
                 {transactions.length > 0 && `${transactions.length} transaction${transactions.length !== 1 ? 's' : ''}`}
               </p>
               <button
                 onClick={onClose}
-                className="px-4 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-xs font-medium"
+                className="px-4 py-1.5 bg-white/5 hover:bg-accent-subtle rounded-lg transition-colors text-xs font-medium"
               >
                 Close
               </button>

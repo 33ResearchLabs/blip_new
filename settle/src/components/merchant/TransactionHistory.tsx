@@ -90,10 +90,10 @@ export function TransactionHistory({ merchantId }: TransactionHistoryProps) {
         <span className="text-[9px] text-white/50 font-mono uppercase tracking-wider">Activity</span>
         <button
           onClick={fetchTransactions}
-          className="p-0.5 rounded hover:bg-white/5 transition-colors"
+          className="p-0.5 rounded hover:bg-card transition-colors"
           title="Refresh"
         >
-          <RefreshCw className="w-3 h-3 text-white/30 hover:text-white/60" />
+          <RefreshCw className="w-3 h-3 text-white/30 hover:text-foreground/60" />
         </button>
       </div>
 
@@ -115,7 +115,7 @@ export function TransactionHistory({ merchantId }: TransactionHistoryProps) {
               return (
                 <div
                   key={tx.id}
-                  className="flex items-center gap-2 px-3 py-1.5 border-b border-white/[0.03] last:border-b-0 hover:bg-white/[0.02] transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 border-b border-white/[0.03] last:border-b-0 hover:bg-card transition-colors"
                 >
                   {/* Icon */}
                   <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${

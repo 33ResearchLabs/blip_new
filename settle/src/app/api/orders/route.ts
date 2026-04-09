@@ -157,6 +157,11 @@ export async function POST(request: NextRequest) {
     // ── SELL ORDERS: manual merchant-claim model (no offer matching) ────
     // Sell orders are broadcast to all merchants. No merchant_id assigned.
     // A merchant must manually claim via POST /api/orders/:id/claim.
+    // Pair / corridor selection — defaults to usdt_aed for backward compat.
+    const pairFromBody = ((body as any)?.pair === 'usdt_inr' || (body as any)?.pair === 'USDT_INR') ? 'usdt_inr' : 'usdt_aed';
+    const orderCorridorId = pairFromBody === 'usdt_inr' ? 'USDT_INR' : 'USDT_AED';
+    const orderFiatCurrency = pairFromBody === 'usdt_inr' ? 'INR' : 'AED';
+
     if (type === 'sell') {
       if (!escrow_tx_hash) {
         return validationErrorResponse([
@@ -169,7 +174,7 @@ export async function POST(request: NextRequest) {
       // admin MANUAL overrides. Reject if unavailable (no hardcoded fallbacks per CLAUDE.md).
       let sellRate: number | null = null;
       try {
-        const finalPrice = await getFinalPrice('usdt_aed');
+        const finalPrice = await getFinalPrice(pairFromBody);
         if (finalPrice.price > 0) sellRate = finalPrice.price;
       } catch { /* sellRate stays null */ }
       if (!sellRate || sellRate <= 0) {
@@ -212,6 +217,8 @@ export async function POST(request: NextRequest) {
               escrow_trade_pda,
               escrow_pda,
               escrow_creator_wallet,
+              corridor_id: orderCorridorId,
+              fiat_currency: orderFiatCurrency,
             },
           });
           const data = await resp.json();
@@ -234,7 +241,7 @@ export async function POST(request: NextRequest) {
     // admin MANUAL overrides. Reject if unavailable (no hardcoded fallbacks per CLAUDE.md).
     let buyRate: number | null = null;
     try {
-      const finalPrice = await getFinalPrice('usdt_aed');
+      const finalPrice = await getFinalPrice(pairFromBody);
       if (finalPrice.price > 0) buyRate = finalPrice.price;
     } catch { /* buyRate stays null */ }
     if (!buyRate || buyRate <= 0) {
@@ -264,6 +271,8 @@ export async function POST(request: NextRequest) {
             accepted_at: null,
             ref_price_at_create: buyRate,
             payment_method_id: verifiedPaymentMethodId,
+            corridor_id: orderCorridorId,
+            fiat_currency: orderFiatCurrency,
           },
         });
         const data = await resp.json();

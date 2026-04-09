@@ -29,13 +29,13 @@ export default function BottomNav({ currentScreen, onNavigate, maxWidth = "max-w
                 whileTap={{ scale: 0.95 }}
                 onClick={() => onNavigate(key)}
                 className={`flex flex-col items-center gap-1 relative px-4 py-1 rounded-xl transition-all ${
-                  currentScreen === key ? "text-orange-400" : "text-neutral-600"
+                  currentScreen === key ? "text-primary" : "text-neutral-600"
                 }`}
               >
                 {currentScreen === key && (
                   <motion.div
                     layoutId="nav-indicator"
-                    className="absolute inset-0 bg-orange-500/10 rounded-xl"
+                    className="absolute inset-0 bg-primary/10 rounded-xl"
                     transition={{ type: "spring", bounce: 0.2, duration: 0.4 }}
                   />
                 )}

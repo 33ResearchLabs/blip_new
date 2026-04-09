@@ -35,6 +35,9 @@ export function MobileChatView({
         <DirectChatView
           contactName={directChat.activeContactName}
           contactType={directChat.activeContactType}
+          contactId={directChat.activeContactId}
+          isTyping={directChat.isContactTyping}
+          onTyping={directChat.sendTyping}
           messages={directChat.messages}
           isLoading={directChat.isLoadingMessages}
           onSendMessage={(text, imageUrl) => {
@@ -55,7 +58,7 @@ export function MobileChatView({
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center py-12">
           <MessageCircle className="w-12 h-12 text-gray-600 mb-3" />
-          <p className="text-sm text-gray-500">Loading chats...</p>
+          <p className="text-sm text-foreground/35">Loading chats...</p>
         </div>
       )}
     </div>

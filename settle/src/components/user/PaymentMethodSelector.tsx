@@ -245,7 +245,7 @@ export const PaymentMethodSelector = ({
                     </div>
                     {isSel && (
                       <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center shrink-0">
-                        <Check className="w-3 h-3 text-black" />
+                        <Check className="w-3 h-3 text-background" />
                       </div>
                     )}
                   </button>

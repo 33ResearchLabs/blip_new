@@ -32,7 +32,7 @@ export function AnalyticsModal({ show, merchantId, onClose }: AnalyticsModalProp
               <h2 className="text-lg font-semibold text-white">Analytics Dashboard</h2>
               <button
                 onClick={onClose}
-                className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+                className="p-2 rounded-lg hover:bg-accent-subtle transition-colors"
               >
                 <X className="w-5 h-5 text-white/60" />
               </button>

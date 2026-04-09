@@ -71,8 +71,8 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
   };
 
   const getPriorityColor = (premiumBps: number): string => {
-    if (premiumBps >= 200) return 'text-orange-500'; // High priority - gold
-    if (premiumBps >= 100) return 'text-orange-400'; // Medium priority
+    if (premiumBps >= 200) return 'text-primary'; // High priority - gold
+    if (premiumBps >= 100) return 'text-primary'; // Medium priority
     return 'text-white/60'; // Low priority
   };
 
@@ -93,14 +93,14 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
               Mempool Orders
             </h2>
             {orders.length > 0 && (
-              <span className="text-[10px] border border-orange-500/30 text-orange-400 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
+              <span className="text-[10px] border border-primary/30 text-primary px-1.5 py-0.5 rounded-full font-mono tabular-nums">
                 {orders.length}
               </span>
             )}
           </div>
           <div className="flex items-center gap-1.5">
             <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.02] rounded border border-white/[0.06]">
-              <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
+              <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
               <span className="text-[9px] text-white/35 font-mono">Live</span>
             </div>
             <button
@@ -117,7 +117,7 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
       <div className="flex-1 overflow-y-auto p-2">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-6 h-6 text-orange-500 animate-spin" />
+            <Loader2 className="w-6 h-6 text-primary animate-spin" />
           </div>
         ) : orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-white/40">
@@ -139,7 +139,7 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
                   onClick={() => onSelectOrder?.(order)}
                   className={`p-3 rounded-lg border transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-orange-500/10 border-orange-500/40'
+                      ? 'bg-primary/10 border-primary/40'
                       : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.02]'
                   }`}
                 >
@@ -152,9 +152,9 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
                       <span
                         className={`text-[8px] px-1.5 py-0.5 rounded font-mono font-bold ${
                           order.premium_bps_current >= 200
-                            ? 'bg-orange-500/20 text-orange-500'
+                            ? 'bg-primary/20 text-primary'
                             : order.premium_bps_current >= 100
-                            ? 'bg-orange-500/20 text-orange-400'
+                            ? 'bg-primary/20 text-primary'
                             : 'bg-white/10 text-white/50'
                         }`}
                       >
@@ -166,7 +166,7 @@ export function MempoolWidget({ onSelectOrder, selectedOrderId }: MempoolWidgetP
                     </div>
 
                     <div className={`flex items-center gap-1 text-sm font-mono font-bold ${
-                      order.seconds_until_expiry <= 120 ? 'text-red-400' : 'text-orange-400'
+                      order.seconds_until_expiry <= 120 ? 'text-red-400' : 'text-primary'
                     }`}>
                       {formatTimeRemaining(order.seconds_until_expiry)}
                       <span className="animate-pulse" style={{ filter: order.seconds_until_expiry <= 120 ? 'drop-shadow(0 0 6px #ef4444)' : 'drop-shadow(0 0 4px #f97316)' }}>🔥</span>

@@ -87,7 +87,7 @@ export const mapDbOrderToUI = (dbOrder: DbOrder, merchantId?: string | null): Or
       : userName),
     amount: cryptoAmount,
     fromCurrency: "USDC",
-    toCurrency: "AED",
+    toCurrency: (dbOrder as any).fiat_currency || "AED",
     rate: rate,
     total: fiatAmount,
     timestamp: new Date(dbOrder.created_at),

@@ -30,6 +30,7 @@ import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "reac
 import { usePusher } from "@/context/PusherContext";
 import { useSounds } from "@/hooks/useSounds";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import AdminAnalytics from "@/components/admin/AdminAnalytics";
 
 // ============================================
 // TYPES
@@ -216,6 +217,7 @@ export default function AdminConsolePage() {
   const [orderTypeFilter, setOrderTypeFilter] = useState<string>("all");
   const [orderSearch, setOrderSearch] = useState("");
   const [orderSort, setOrderSort] = useState<string>("newest");
+  const [activeTab, setActiveTab] = useState<"orders" | "analytics">("orders");
 
   const adminTokenRef = useRef<string | null>(null);
   adminTokenRef.current = adminToken;
@@ -556,7 +558,39 @@ export default function AdminConsolePage() {
         </div>
       </header>
 
+      {/* ===== TAB SWITCHER ===== */}
+      <div className="flex items-center gap-1 px-4 py-1.5 bg-background border-b border-border">
+        <button
+          onClick={() => setActiveTab("orders")}
+          className={`px-3.5 py-1.5 rounded-lg text-[11px] font-bold font-mono uppercase tracking-wider transition-all duration-200 ${
+            activeTab === "orders"
+              ? "bg-primary/10 text-primary border border-primary/20"
+              : "text-foreground/30 hover:text-foreground/60 hover:bg-card"
+          }`}
+        >
+          Orders
+        </button>
+        <button
+          onClick={() => setActiveTab("analytics")}
+          className={`px-3.5 py-1.5 rounded-lg text-[11px] font-bold font-mono uppercase tracking-wider transition-all duration-200 ${
+            activeTab === "analytics"
+              ? "bg-primary/10 text-primary border border-primary/20"
+              : "text-foreground/30 hover:text-foreground/60 hover:bg-card"
+          }`}
+        >
+          Analytics
+        </button>
+      </div>
+
+      {/* ===== ANALYTICS TAB ===== */}
+      {activeTab === "analytics" && adminToken && (
+        <div className="flex-1 overflow-y-auto">
+          <AdminAnalytics adminToken={adminToken} />
+        </div>
+      )}
+
       {/* ===== 4-PANEL RESIZABLE LAYOUT — matches merchant ===== */}
+      {activeTab === "orders" && (
       <PanelGroup orientation="horizontal" className="flex-1 overflow-hidden">
 
         {/* ===== LEFT PANEL: Platform Stats + Real-time ===== */}
@@ -1151,6 +1185,7 @@ export default function AdminConsolePage() {
         </Panel>
 
       </PanelGroup>
+      )}
     </div>
   );
 }

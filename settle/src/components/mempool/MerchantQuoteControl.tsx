@@ -108,7 +108,7 @@ export function MerchantQuoteControl({
   if (isLoading) {
     return (
       <div className="p-6 flex items-center justify-center">
-        <Loader2 className="w-6 h-6 text-orange-500 animate-spin" />
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
       </div>
     );
   }
@@ -160,7 +160,7 @@ export function MerchantQuoteControl({
             value={minPrice}
             onChange={(e) => setMinPrice(e.target.value)}
             className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                       text-white font-mono text-sm focus:outline-none focus:border-orange-500/50"
+                       text-white font-mono text-sm focus:outline-none focus:border-primary/50"
             placeholder="3.67"
           />
           <p className="text-[9px] text-white/30 font-mono mt-1">
@@ -181,7 +181,7 @@ export function MerchantQuoteControl({
               value={minSize}
               onChange={(e) => setMinSize(e.target.value)}
               className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                         text-white font-mono text-sm focus:outline-none focus:border-orange-500/50"
+                         text-white font-mono text-sm focus:outline-none focus:border-primary/50"
               placeholder="10"
             />
           </div>
@@ -196,7 +196,7 @@ export function MerchantQuoteControl({
               value={maxSize}
               onChange={(e) => setMaxSize(e.target.value)}
               className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                         text-white font-mono text-sm focus:outline-none focus:border-orange-500/50"
+                         text-white font-mono text-sm focus:outline-none focus:border-primary/50"
               placeholder="10000"
             />
           </div>
@@ -213,7 +213,7 @@ export function MerchantQuoteControl({
             value={slaMinutes}
             onChange={(e) => setSlaMinutes(e.target.value)}
             className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                       text-white font-mono text-sm focus:outline-none focus:border-orange-500/50"
+                       text-white font-mono text-sm focus:outline-none focus:border-primary/50"
             placeholder="15"
           />
           <p className="text-[9px] text-white/30 font-mono mt-1">
@@ -232,7 +232,7 @@ export function MerchantQuoteControl({
             value={liquidity}
             onChange={(e) => setLiquidity(e.target.value)}
             className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                       text-white font-mono text-sm focus:outline-none focus:border-orange-500/50"
+                       text-white font-mono text-sm focus:outline-none focus:border-primary/50"
             placeholder="1000"
           />
           <p className="text-[9px] text-white/30 font-mono mt-1">
@@ -244,8 +244,8 @@ export function MerchantQuoteControl({
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="w-full px-4 py-3 rounded-lg bg-orange-500 text-black font-medium font-mono
-                     hover:bg-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+          className="w-full px-4 py-3 rounded-lg bg-primary text-background font-medium font-mono
+                     hover:bg-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed
                      flex items-center justify-center gap-2"
         >
           {isSaving ? (

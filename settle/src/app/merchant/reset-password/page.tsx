@@ -34,13 +34,13 @@ function ResetPasswordForm() {
         </div>
         <div>
           <p className="text-sm text-white mb-1">Invalid Reset Link</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-foreground/35">
             This link is invalid or has expired. Please request a new password reset.
           </p>
         </div>
         <Link
           href="/merchant/forgot-password"
-          className="inline-block text-xs text-white/50 hover:text-white transition-colors"
+          className="inline-block text-xs text-white/50 hover:text-foreground transition-colors"
         >
           Request new reset link
         </Link>
@@ -88,13 +88,13 @@ function ResetPasswordForm() {
         </div>
         <div>
           <p className="text-sm text-white mb-1">Password Reset!</p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-foreground/35">
             Your password has been updated. Redirecting to sign in...
           </p>
         </div>
         <Link
           href="/merchant"
-          className="inline-block text-xs text-white/50 hover:text-white transition-colors"
+          className="inline-block text-xs text-white/50 hover:text-foreground transition-colors"
         >
           Go to sign in
         </Link>
@@ -111,7 +111,7 @@ function ResetPasswordForm() {
       )}
 
       <div>
-        <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">
+        <label className="text-xs text-foreground/35 uppercase tracking-wide mb-2 block">
           New Password
         </label>
         <div className="relative">
@@ -125,7 +125,7 @@ function ResetPasswordForm() {
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/35 hover:text-foreground transition-colors"
           >
             {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
@@ -136,7 +136,7 @@ function ResetPasswordForm() {
       </div>
 
       <div>
-        <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">
+        <label className="text-xs text-foreground/35 uppercase tracking-wide mb-2 block">
           Confirm Password
         </label>
         <div className="relative">
@@ -151,7 +151,7 @@ function ResetPasswordForm() {
           <button
             type="button"
             onClick={() => setShowConfirm(!showConfirm)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-foreground/35 hover:text-foreground transition-colors"
           >
             {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
@@ -165,7 +165,7 @@ function ResetPasswordForm() {
         whileTap={{ scale: 0.98 }}
         onClick={handleSubmit}
         disabled={isSubmitting || !isValid}
-        className="w-full py-3 rounded-xl text-sm font-bold bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+        className="w-full py-3 rounded-xl text-sm font-bold bg-white text-background hover:bg-accent transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
       >
         {isSubmitting ? (
           <>
@@ -184,7 +184,7 @@ export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-orange-500/[0.03] rounded-full blur-[150px]" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-primary/[0.03] rounded-full blur-[150px]" />
       </div>
 
       <div className="w-full max-w-sm relative z-10">
@@ -197,7 +197,7 @@ export default function ResetPasswordPage() {
             </span>
           </div>
           <h1 className="text-xl font-bold mb-2">Set New Password</h1>
-          <p className="text-sm text-gray-500">Choose a strong password for your account</p>
+          <p className="text-sm text-foreground/35">Choose a strong password for your account</p>
         </div>
 
         <div className="bg-white/[0.02] rounded-2xl border border-white/[0.04] p-6 space-y-4">
@@ -213,7 +213,7 @@ export default function ResetPasswordPage() {
         <div className="mt-6 text-center">
           <Link
             href="/merchant"
-            className="text-xs text-white/30 hover:text-white/60 transition-colors"
+            className="text-xs text-white/30 hover:text-foreground/60 transition-colors"
           >
             Back to sign in
           </Link>

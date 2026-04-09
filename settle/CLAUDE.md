@@ -135,7 +135,49 @@ Key: `isPlaceholderUser` (username starts with `open_order_` or `m2m_`) determin
 - Released by seller only (`actor_id === order.escrow_debited_entity_id`)
 - `"system"` actor type is NOT allowed in client-facing API — internal only
 - Cancel + refund is atomic (`atomicCancelWithRefund` with balance verification)
-- `payment_sent` orders auto-dispute after 24 hours (via `/api/orders/expire` cron)
+
+---
+
+## Auto-Cancellation & Expiration Rules
+
+Orders have multiple automated timeout/expiration paths. Two execution engines drive them:
+- **Cron endpoint** (`/api/orders/expire`, called externally on schedule) — handles rules 1 & 2.
+- **Payment-deadline worker** (`src/workers/payment-deadline-worker.ts`, polls every 30s) — handles rules 3, 4 & 5.
+
+**Default `expires_at`:** `NOW() + 15 minutes` on creation (configurable via `expiry_minutes`, clamped 1–1440 min). Extended to `NOW() + 120 minutes` on accept.
+
+| # | Rule | Timeout | From Status | To Status | Auto-Refund? | File |
+|---|---|---|---|---|---|---|
+| 1 | Pending expiry | 15 min (default) | `pending` | `expired` | No (no escrow) | `core-api/routes/expire.ts:33` |
+| 2 | Accepted/Escrowed timeout | 120 min from `accepted_at` | `accepted` / `escrowed` | `cancelled` (non-escrowed) or `disputed` (escrowed) | Yes if escrowed (via dispute) | `core-api/routes/expire.ts:34` |
+| 3 | Payment-sent auto-dispute | 24 hours from `payment_sent_at` | `payment_sent` | `disputed` | No (held for compliance review) | `settle/api/orders/expire/route.ts:23-34` |
+| 4 | Escrowed expiry | `expires_at` column passes | `escrowed` | `cancelled` + atomic refund | Yes → `atomicCancelWithRefund()` to `escrow_debited_entity_id` | `workers/payment-deadline-worker.ts:147-226` |
+| 5 | Dispute auto-resolve | 24 hours from `dispute_auto_resolve_at` | `disputed` | `cancelled` + atomic refund | Yes → refunded to escrow funder (seller) | `workers/payment-deadline-worker.ts:230-306` |
+
+**Timeline:**
+```
+[Order Created]
+    │
+    ├─ 15 min ─── no one accepts ──────────── → EXPIRED
+    │
+    ├─ Merchant accepts ──┐
+    │                     │ 120 min timeout
+    │                     ├── escrowed ─────── → DISPUTED (if escrowed)
+    │                     └── accepted ─────── → CANCELLED (if not escrowed)
+    │
+    ├─ Payment sent ──────── 24h no confirm ── → DISPUTED (compliance review)
+    │
+    ├─ Escrowed + expires_at passes ────────── → CANCELLED + auto-refund
+    │
+    └─ Disputed + 24h no resolution ────────── → CANCELLED + auto-refund
+```
+
+**`is_auto_cancelled` column:** exists in schema (migration 017), defaults to `false`, but is unused — no code path sets it.
+
+**DO NOT:**
+- Change timeout durations without updating both the cron endpoint AND the payment-deadline worker
+- Skip `atomicCancelWithRefund` for any cancellation that involves locked escrow
+- Auto-resolve disputes without refunding to `escrow_debited_entity_id`
 
 ---
 

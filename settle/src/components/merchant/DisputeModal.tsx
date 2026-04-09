@@ -54,25 +54,25 @@ export function DisputeModal({
                   </div>
                   <div>
                     <h2 className="text-sm font-semibold">Report Issue</h2>
-                    <p className="text-[11px] text-gray-500">Raise a dispute for this trade</p>
+                    <p className="text-[11px] text-foreground/35">Raise a dispute for this trade</p>
                   </div>
                 </div>
                 <button
                   onClick={() => onClose()}
-                  className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
+                  className="p-2 hover:bg-card rounded-lg transition-colors"
                 >
-                  <X className="w-4 h-4 text-gray-500" />
+                  <X className="w-4 h-4 text-foreground/35" />
                 </button>
               </div>
 
               {/* Body */}
               <div className="p-5 space-y-4">
-                <p className="text-[13px] text-gray-400">
+                <p className="text-[13px] text-foreground/40">
                   If you&apos;re having a problem with this trade, our support team will help resolve it.
                 </p>
 
                 <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Reason</label>
+                  <label className="text-xs text-foreground/35 uppercase tracking-wide mb-2 block">Reason</label>
                   <select
                     value={disputeReason}
                     onChange={(e) => setDisputeReason(e.target.value)}
@@ -88,7 +88,7 @@ export function DisputeModal({
                 </div>
 
                 <div>
-                  <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">Description</label>
+                  <label className="text-xs text-foreground/35 uppercase tracking-wide mb-2 block">Description</label>
                   <textarea
                     value={disputeDescription}
                     onChange={(e) => setDisputeDescription(e.target.value)}
@@ -103,7 +103,7 @@ export function DisputeModal({
               <div className="px-5 pb-5 flex gap-3">
                 <button
                   onClick={() => onClose()}
-                  className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
+                  className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-accent-subtle transition-colors"
                 >
                   Cancel
                 </button>
@@ -111,7 +111,7 @@ export function DisputeModal({
                   whileTap={{ scale: 0.98 }}
                   onClick={onSubmit}
                   disabled={!disputeReason || isSubmittingDispute}
-                  className="flex-[2] py-3 rounded-xl text-xs font-bold bg-red-500 text-white hover:bg-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-[2] py-3 rounded-xl text-xs font-bold bg-[var(--color-error)] text-foreground hover:bg-[var(--color-error)]/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isSubmittingDispute ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />

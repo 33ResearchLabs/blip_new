@@ -73,14 +73,14 @@ export function CorridorCreateModal({
                   </div>
                   <div>
                     <h2 className="text-sm font-semibold">Open Corridor</h2>
-                    <p className="text-[11px] text-gray-500">Set your trading parameters</p>
+                    <p className="text-[11px] text-foreground/35">Set your trading parameters</p>
                   </div>
                 </div>
                 <button
                   onClick={onClose}
-                  className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
+                  className="p-2 hover:bg-card rounded-lg transition-colors"
                 >
-                  <X className="w-4 h-4 text-gray-500" />
+                  <X className="w-4 h-4 text-foreground/35" />
                 </button>
               </div>
 
@@ -104,7 +104,7 @@ export function CorridorCreateModal({
                     </div>
                     <button
                       onClick={onRefreshBalance}
-                      className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
+                      className="p-2 hover:bg-card rounded-lg transition-colors"
                       title="Refresh balance"
                     >
                       <Activity className="w-4 h-4 text-white/70" />
@@ -114,7 +114,7 @@ export function CorridorCreateModal({
 
                 {/* Currency Pair */}
                 <div>
-                  <label className="text-[11px] text-gray-500 uppercase tracking-wide mb-2 block">Currency Pair</label>
+                  <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">Currency Pair</label>
                   <div className="flex items-center gap-3">
                     <div className="flex-1 bg-white/[0.04] rounded-xl p-3 flex items-center gap-2">
                       <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
@@ -122,7 +122,7 @@ export function CorridorCreateModal({
                       </div>
                       <div>
                         <p className="text-xs font-medium">USDT</p>
-                        <p className="text-[10px] text-gray-500">From</p>
+                        <p className="text-[10px] text-foreground/35">From</p>
                       </div>
                     </div>
                     <ArrowRight className="w-4 h-4 text-gray-600" />
@@ -130,7 +130,7 @@ export function CorridorCreateModal({
                       <span className="text-lg">{'\uD83C\uDDE6\uD83C\uDDEA'}</span>
                       <div>
                         <p className="text-xs font-medium">AED</p>
-                        <p className="text-[10px] text-gray-500">To</p>
+                        <p className="text-[10px] text-foreground/35">To</p>
                       </div>
                     </div>
                   </div>
@@ -138,7 +138,7 @@ export function CorridorCreateModal({
 
                 {/* Available Amount */}
                 <div>
-                  <label className="text-[11px] text-gray-500 uppercase tracking-wide mb-2 block">Amount to Offer (USDT)</label>
+                  <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">Amount to Offer (USDT)</label>
                   <div className="relative">
                     <input
                       type="text"
@@ -161,7 +161,7 @@ export function CorridorCreateModal({
                           setCorridorForm(prev => ({ ...prev, availableAmount: effectiveBalance!.toString() }));
                         }
                       }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-white/70 font-medium hover:text-white/50"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-white/70 font-medium hover:text-foreground/50"
                     >
                       MAX
                     </button>
@@ -172,12 +172,12 @@ export function CorridorCreateModal({
                       Exceeds your wallet balance
                     </p>
                   )}
-                  <p className="text-[10px] text-gray-500 mt-1 ml-1">Total USDT you want to make available for trading</p>
+                  <p className="text-[10px] text-foreground/35 mt-1 ml-1">Total USDT you want to make available for trading</p>
                 </div>
 
                 {/* Order Range */}
                 <div>
-                  <label className="text-[11px] text-gray-500 uppercase tracking-wide mb-2 block">Order Range (USDT)</label>
+                  <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">Order Range (USDT)</label>
                   <div className="flex items-center gap-3">
                     <div className="flex-1">
                       <input
@@ -188,7 +188,7 @@ export function CorridorCreateModal({
                         onChange={(e) => setCorridorForm(prev => ({ ...prev, minAmount: e.target.value.replace(/[^0-9.]/g, '') }))}
                         className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
                       />
-                      <p className="text-[10px] text-gray-500 mt-1 ml-1">Min per order</p>
+                      <p className="text-[10px] text-foreground/35 mt-1 ml-1">Min per order</p>
                     </div>
                     <span className="text-gray-600">&mdash;</span>
                     <div className="flex-1">
@@ -204,7 +204,7 @@ export function CorridorCreateModal({
                             : 'focus:ring-white/20'
                         }`}
                       />
-                      <p className="text-[10px] text-gray-500 mt-1 ml-1">Max per order</p>
+                      <p className="text-[10px] text-foreground/35 mt-1 ml-1">Max per order</p>
                     </div>
                   </div>
                   {parseFloat(corridorForm.maxAmount || '0') > parseFloat(corridorForm.availableAmount || '0') && corridorForm.availableAmount && (
@@ -218,7 +218,7 @@ export function CorridorCreateModal({
                 {/* Rate & Premium */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] text-gray-500 uppercase tracking-wide mb-2 block">Base Rate</label>
+                    <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">Base Rate</label>
                     <div className="relative">
                       <input
                         type="text"
@@ -228,11 +228,11 @@ export function CorridorCreateModal({
                         onChange={(e) => setCorridorForm(prev => ({ ...prev, rate: e.target.value.replace(/[^0-9.]/g, '') }))}
                         className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
                       />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-500">AED</span>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-foreground/35">AED</span>
                     </div>
                   </div>
                   <div>
-                    <label className="text-[11px] text-gray-500 uppercase tracking-wide mb-2 block">Your Fee</label>
+                    <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">Your Fee</label>
                     <div className="relative">
                       <input
                         type="text"
@@ -242,7 +242,7 @@ export function CorridorCreateModal({
                         onChange={(e) => setCorridorForm(prev => ({ ...prev, premium: e.target.value.replace(/[^0-9.]/g, '') }))}
                         className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
                       />
-                      <Percent className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500" />
+                      <Percent className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-foreground/35" />
                     </div>
                   </div>
                 </div>
@@ -253,7 +253,7 @@ export function CorridorCreateModal({
                     <Globe className="w-3.5 h-3.5 text-white" />
                     <span className="text-[11px] font-medium text-white">Corridor Preview</span>
                   </div>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-foreground/40">
                     Offering <span className="text-white/70 font-medium">{corridorForm.availableAmount || "0"} USDT</span> total. Accept orders from <span className="text-white font-medium">{corridorForm.minAmount || "100"}</span> to <span className="text-white font-medium">{corridorForm.maxAmount || "10,000"}</span> USDT at <span className="text-white font-medium">{corridorForm.rate || "3.67"}</span> AED + <span className="text-white font-medium">{corridorForm.premium || "0.25"}%</span> fee
                   </p>
                 </div>
@@ -263,7 +263,7 @@ export function CorridorCreateModal({
               <div className="px-5 pb-5 flex gap-3">
                 <button
                   onClick={onClose}
-                  className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
+                  className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-accent-subtle transition-colors"
                 >
                   Cancel
                 </button>
@@ -333,8 +333,8 @@ export function CorridorCreateModal({
                     !corridorForm.availableAmount ||
                     parseFloat(corridorForm.availableAmount) <= 0 ||
                     parseFloat(corridorForm.availableAmount) > (effectiveBalance || 0)
-                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                      : 'bg-white text-black hover:bg-white/90'
+                      ? 'bg-gray-600 text-foreground/40 cursor-not-allowed'
+                      : 'bg-white text-background hover:bg-accent'
                   }`}
                 >
                   <Plus className="w-3.5 h-3.5" />

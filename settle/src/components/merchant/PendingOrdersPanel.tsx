@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useRef, useState, useEffect } from "react";
+import { memo, useRef, useState, useEffect, useMemo } from "react";
 import {
   Search,
   SlidersHorizontal,
@@ -15,11 +15,16 @@ import {
   Loader2,
   ChevronDown,
   Check,
+  XCircle,
+  CheckCircle2,
+  AlertCircle,
+  CircleDot,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { CountdownRing } from "./CountdownRing";
 import { useMerchantStore } from "@/stores/merchantStore";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 
 interface PendingOrdersPanelProps {
   orders: any[];
@@ -240,7 +245,7 @@ const OrderList = memo(function OrderList({
                     </span>
                     <ArrowRight className="w-3 h-3 text-foreground/20" />
                     <span className="text-sm font-bold text-primary tabular-nums">
-                      {fiatTotal.toLocaleString()} AED
+                      {fiatTotal.toLocaleString()} {(mOrder as any).corridor_id === 'USDT_INR' ? 'INR' : 'AED'}
                     </span>
                     {yourCut > 0 && (
                       <span className="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
@@ -267,7 +272,7 @@ const OrderList = memo(function OrderList({
                         className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 flex items-center gap-1 ${
                           acceptingOrderId === mOrder.id
                             ? 'bg-primary/50 text-black/60 cursor-wait'
-                            : 'bg-primary text-black hover:bg-primary'
+                            : 'bg-primary text-background hover:bg-primary'
                         }`}
                       >
                         {acceptingOrderId === mOrder.id ? (
@@ -333,7 +338,7 @@ const OrderList = memo(function OrderList({
                     : isMineable
                       ? "glass-card border-white/[0.10] hover:border-primary/30 ring-1 ring-white/[0.04]"
                       : isHighPremium
-                        ? "glass-card border-foreground/[0.08] hover:border-white/[0.12]"
+                        ? "glass-card border-foreground/[0.08] hover:border-border-strong"
                         : "glass-card hover:border-foreground/[0.08]"
                 }`}
               >
@@ -424,7 +429,7 @@ const OrderList = memo(function OrderList({
                       </span>
                     )}
                     {order.hasMessages && order.unreadCount > 0 && (
-                      <span className="px-1 py-0.5 bg-primary text-black text-[9px] font-bold rounded">
+                      <span className="px-1 py-0.5 bg-primary text-background text-[9px] font-bold rounded">
                         {order.unreadCount}
                       </span>
                     )}
@@ -520,8 +525,8 @@ const OrderList = memo(function OrderList({
                         acceptingOrderId === order.id
                           ? "bg-primary/50 text-black/60 cursor-wait"
                           : isMineable
-                            ? "bg-primary text-black hover:bg-primary"
-                            : "bg-primary/80 text-black hover:bg-primary"
+                            ? "bg-primary text-background hover:bg-primary"
+                            : "bg-primary/80 text-background hover:bg-primary"
                       }`}
                     >
                       {acceptingOrderId === order.id ? (
@@ -582,6 +587,56 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
   const sortDropdownRef = useRef<HTMLDivElement>(null);
 
+  // ─── Tab switch: Market vs My Orders ─────────────────────────────
+  const merchantId = merchantInfo?.id as string | undefined;
+  const [view, setView] = useState<"market" | "mine">("market");
+  type MyOrdersFilter = "all" | "active" | "completed" | "cancelled" | "expired";
+  const [myFilter, setMyFilter] = useState<MyOrdersFilter>("all");
+  const [myOrders, setMyOrders] = useState<any[]>([]);
+  const [myOrdersLoading, setMyOrdersLoading] = useState(false);
+
+  // Derive whether a row was created by the logged-in merchant.
+  // Uses the canonical placeholder-user marker (`open_order_*` / `m2m_*`) plus
+  // a merchant_id / buyer_merchant_id match. This is the same convention used
+  // throughout the codebase (mappers.ts:46) — no business-logic change.
+  const isCreatedByMe = (order: any): boolean => {
+    if (!merchantId) return false;
+    const dbOrder = order?.dbOrder || order;
+    const username: string = dbOrder?.user?.username || "";
+    const isPlaceholder = username.startsWith("open_order_") || username.startsWith("m2m_");
+    if (!isPlaceholder) return false;
+    return dbOrder?.merchant_id === merchantId || dbOrder?.buyer_merchant_id === merchantId;
+  };
+
+  // Fetch the merchant's full order history (includes completed / cancelled /
+  // expired) when the My Orders tab is opened. Pending list alone is not enough
+  // because cancelled/expired drop out of the active feed.
+  useEffect(() => {
+    if (view !== "mine" || !merchantId) return;
+    let cancelled = false;
+    const load = async () => {
+      setMyOrdersLoading(true);
+      try {
+        const res = await fetchWithAuth(
+          `/api/merchant/orders?merchant_id=${merchantId}&status=pending,escrowed,accepted,payment_sent,payment_pending,payment_confirmed,completed,cancelled,expired,disputed`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        if (data?.success && Array.isArray(data.data)) {
+          setMyOrders(data.data);
+        }
+      } catch {
+        // Best-effort
+      } finally {
+        if (!cancelled) setMyOrdersLoading(false);
+      }
+    };
+    load();
+    const interval = setInterval(load, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [view, merchantId]);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (sortDropdownRef.current && !sortDropdownRef.current.contains(e.target as Node)) {
@@ -594,20 +649,61 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
     }
   }, [sortDropdownOpen]);
 
-  let displayOrders = [...orders];
+  let displayOrders: any[];
 
-  if (orderViewFilter === "new" && mempoolOrders.length > 0) {
-    // Deduplicate: skip mempool orders that already exist in the regular orders list
-    const regularOrderIds = new Set(orders.map((o: any) => o.id));
-    const uniqueMempool = mempoolOrders.filter(
-      (mo) => !regularOrderIds.has(mo.id),
-    );
-    const mempoolAsOrders = uniqueMempool.map((mo) => ({
-      ...mo,
-      isMempoolOrder: true,
-      isMyMempoolOrder: mo.creator_username === merchantInfo?.username,
+  if (view === "mine") {
+    // ─── MY ORDERS PATH ────────────────────────────────────────────
+    // Use the dedicated fetch (includes completed/cancelled/expired).
+    // Pass each through the same shape as `orders` by wrapping the raw db row
+    // as { ...dbRow, dbOrder: dbRow } so isCreatedByMe + downstream filters work
+    // without re-mapping. Existing card render reads from `order.dbOrder?.*` for
+    // cancellation_reason / accepted_at / merchant.display_name.
+    const wrapped = myOrders.map((dbRow: any) => ({
+      id: dbRow.id,
+      dbOrder: dbRow,
+      // Surface the few top-level fields the card uses for sort + search.
+      amount: typeof dbRow.crypto_amount === "string" ? parseFloat(dbRow.crypto_amount) : dbRow.crypto_amount,
+      total: typeof dbRow.fiat_amount === "string" ? parseFloat(dbRow.fiat_amount) : dbRow.fiat_amount,
+      rate: typeof dbRow.rate === "string" ? parseFloat(dbRow.rate) : dbRow.rate,
+      status: dbRow.status,
+      orderType: dbRow.type,
+      timestamp: new Date(dbRow.created_at),
+      expiresIn: 0,
     }));
-    displayOrders = [...mempoolAsOrders, ...displayOrders];
+
+    displayOrders = wrapped.filter((o: any) => isCreatedByMe(o));
+
+    // Secondary filter (All / Active / Completed / Cancelled / Expired).
+    // "Active" = the live, in-flight statuses.
+    if (myFilter !== "all") {
+      const activeStatuses = new Set(["pending", "escrowed", "accepted", "payment_pending", "payment_sent", "payment_confirmed", "disputed"]);
+      displayOrders = displayOrders.filter((o: any) => {
+        const s = o.status as string;
+        if (myFilter === "active") return activeStatuses.has(s);
+        if (myFilter === "completed") return s === "completed";
+        if (myFilter === "cancelled") return s === "cancelled";
+        if (myFilter === "expired") return s === "expired";
+        return true;
+      });
+    }
+  } else {
+    // ─── MARKET PATH (existing behavior) ───────────────────────────
+    // Same as before, with one explicit guard: hide rows the merchant created
+    // themselves so the marketplace shows only public/other-party orders.
+    displayOrders = [...orders].filter((o: any) => !isCreatedByMe(o));
+
+    if (orderViewFilter === "new" && mempoolOrders.length > 0) {
+      const regularOrderIds = new Set(displayOrders.map((o: any) => o.id));
+      const uniqueMempool = mempoolOrders.filter(
+        (mo) => !regularOrderIds.has(mo.id) && mo.creator_username !== merchantInfo?.username,
+      );
+      const mempoolAsOrders = uniqueMempool.map((mo) => ({
+        ...mo,
+        isMempoolOrder: true,
+        isMyMempoolOrder: false, // Market tab never shows own mempool orders
+      }));
+      displayOrders = [...mempoolAsOrders, ...displayOrders];
+    }
   }
 
   if (pendingFilter !== "all") {
@@ -695,28 +791,71 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-3 py-2 border-b border-section-divider">
+        {/* ─── Market / My Orders segmented control ─── */}
+        <div className="mb-2 inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06]">
+          <button
+            onClick={() => setView("market")}
+            className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+              view === "market"
+                ? "bg-foreground text-background shadow"
+                : "text-foreground/40 hover:text-foreground/60"
+            }`}
+          >
+            Market
+          </button>
+          <button
+            onClick={() => setView("mine")}
+            className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+              view === "mine"
+                ? "bg-foreground text-background shadow"
+                : "text-foreground/40 hover:text-foreground/60"
+            }`}
+          >
+            My Orders
+          </button>
+        </div>
+
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setOrderViewFilter("new")}
-              className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
-                orderViewFilter === "new"
-                  ? "bg-white/[0.08] text-white border border-white/[0.12]"
-                  : "text-foreground/30 hover:text-foreground/50"
-              }`}
-            >
-              Pending
-            </button>
-            <button
-              onClick={() => setOrderViewFilter("all")}
-              className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
-                orderViewFilter === "all"
-                  ? "bg-white/[0.08] text-white border border-white/[0.12]"
-                  : "text-foreground/30 hover:text-foreground/50"
-              }`}
-            >
-              All
-            </button>
+            {view === "market" ? (
+              <>
+                <button
+                  onClick={() => setOrderViewFilter("new")}
+                  className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
+                    orderViewFilter === "new"
+                      ? "bg-white/[0.08] text-white border border-white/[0.12]"
+                      : "text-foreground/30 hover:text-foreground/50"
+                  }`}
+                >
+                  Pending
+                </button>
+                <button
+                  onClick={() => setOrderViewFilter("all")}
+                  className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
+                    orderViewFilter === "all"
+                      ? "bg-white/[0.08] text-white border border-white/[0.12]"
+                      : "text-foreground/30 hover:text-foreground/50"
+                  }`}
+                >
+                  All
+                </button>
+              </>
+            ) : (
+              /* My Orders status filter row */
+              (["all", "active", "completed", "cancelled", "expired"] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setMyFilter(f)}
+                  className={`px-2 py-1 rounded text-[10px] font-medium transition-all capitalize ${
+                    myFilter === f
+                      ? "bg-white/[0.08] text-white border border-white/[0.12]"
+                      : "text-foreground/30 hover:text-foreground/50"
+                  }`}
+                >
+                  {f}
+                </button>
+              ))
+            )}
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -796,7 +935,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           <div className="relative" ref={sortDropdownRef}>
             <button
               onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
-              className="flex items-center gap-1 text-[9px] font-mono text-white/35 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-1.5 py-1.5 cursor-pointer hover:border-white/[0.10] transition-colors"
+              className="flex items-center gap-1 text-[9px] font-mono text-white/35 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-1.5 py-1.5 cursor-pointer hover:border-border-strong transition-colors"
             >
               {{ time: "Time", premium: "Premium", amount: "Size", rating: "Rating" }[pendingSortBy]}
               <ChevronDown className={`w-2.5 h-2.5 transition-transform ${sortDropdownOpen ? "rotate-180" : ""}`} />
@@ -960,15 +1099,151 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
         </AnimatePresence>
       </div>
 
-      {/* Orders List — Virtualized */}
-      <OrderList
-        filteredOrders={filteredOrders}
-        merchantInfo={merchantInfo}
-        onSelectOrder={onSelectOrder}
-        onSelectMempoolOrder={onSelectMempoolOrder}
-        onAcceptOrder={onAcceptOrder}
-        acceptingOrderId={acceptingOrderId}
-      />
+      {/* Orders List */}
+      {view === "market" ? (
+        <OrderList
+          filteredOrders={filteredOrders}
+          merchantInfo={merchantInfo}
+          onSelectOrder={onSelectOrder}
+          onSelectMempoolOrder={onSelectMempoolOrder}
+          onAcceptOrder={onAcceptOrder}
+          acceptingOrderId={acceptingOrderId}
+        />
+      ) : (
+        <MyOrdersList
+          orders={filteredOrders}
+          isLoading={myOrdersLoading}
+          onSelectOrder={onSelectOrder}
+        />
+      )}
+    </div>
+  );
+});
+
+// ─── My Orders list — non-virtualized, status-aware card render ────────
+const MY_STATUS_BADGE: Record<string, { label: string; cls: string; Icon: any }> = {
+  pending:           { label: "Pending",         cls: "bg-amber-500/10 text-amber-400 border-amber-500/20",     Icon: CircleDot },
+  escrowed:          { label: "Escrowed",        cls: "bg-purple-500/10 text-purple-400 border-purple-500/20", Icon: CircleDot },
+  accepted:          { label: "Accepted",        cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", Icon: CheckCircle2 },
+  payment_pending:   { label: "Payment Pending", cls: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",        Icon: CircleDot },
+  payment_sent:      { label: "Payment Sent",    cls: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",        Icon: CircleDot },
+  payment_confirmed: { label: "Confirmed",       cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", Icon: CheckCircle2 },
+  completed:         { label: "Completed",       cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", Icon: CheckCircle2 },
+  cancelled:         { label: "Cancelled",       cls: "bg-red-500/10 text-red-400 border-red-500/20",          Icon: XCircle },
+  expired:           { label: "Expired",         cls: "bg-foreground/[0.06] text-foreground/40 border-foreground/[0.10]", Icon: AlertCircle },
+  disputed:          { label: "Disputed",        cls: "bg-red-500/10 text-red-400 border-red-500/20",          Icon: AlertCircle },
+};
+
+const MyOrdersList = memo(function MyOrdersList({
+  orders,
+  isLoading,
+  onSelectOrder,
+}: {
+  orders: any[];
+  isLoading: boolean;
+  onSelectOrder: (order: any) => void;
+}) {
+  if (isLoading && orders.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="w-4 h-4 text-foreground/30 animate-spin" />
+      </div>
+    );
+  }
+  if (orders.length === 0) {
+    return (
+      <div className="flex-1 overflow-y-auto p-1.5">
+        <div className="flex flex-col items-center justify-center h-full gap-3 py-10">
+          <div className="w-10 h-10 rounded-full border border-foreground/[0.06] bg-foreground/[0.02] flex items-center justify-center">
+            <TrendingUp className="w-5 h-5 text-foreground/20" />
+          </div>
+          <p className="text-[11px] font-medium text-foreground/30">No orders</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5">
+      {orders.map((order: any) => {
+        const db = order.dbOrder || order;
+        const status: string = db.status || "pending";
+        const badge = MY_STATUS_BADGE[status] || MY_STATUS_BADGE.pending;
+        const StatusIcon = badge.Icon;
+        const amount = order.amount ?? 0;
+        const total = order.total ?? 0;
+        const rate = order.rate ?? 0;
+        const fiatCurrency = db.fiat_currency || "AED";
+        const createdAt = order.timestamp ?? new Date(db.created_at);
+        const isCancelled = status === "cancelled";
+        const isAccepted = !!db.accepted_at;
+
+        // Counterparty name when accepted/claimed
+        const acceptedByName: string | null = (() => {
+          if (!isAccepted) return null;
+          // M2M: counterparty is whichever side is NOT the creator. For
+          // a merchant-created order with placeholder user, the acceptor
+          // is whichever side filled in (buyer_merchant_id usually).
+          if (db.buyer_merchant?.display_name) return db.buyer_merchant.display_name;
+          if (db.merchant?.display_name) return db.merchant.display_name;
+          return db.user?.name || db.user?.username || null;
+        })();
+
+        const cancelReason: string | null = isCancelled
+          ? (db.cancellation_reason || db.cancel_request_reason || null)
+          : null;
+
+        return (
+          <button
+            key={order.id}
+            onClick={() => onSelectOrder(order)}
+            className="w-full text-left p-2.5 rounded-lg glass-card border border-foreground/[0.06] hover:border-foreground/[0.12] transition-colors"
+          >
+            {/* Header row: status badge + timestamp */}
+            <div className="flex items-center justify-between mb-1.5">
+              <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider border ${badge.cls}`}>
+                <StatusIcon className="w-2.5 h-2.5" />
+                {badge.label}
+              </span>
+              <span className="text-[9px] text-foreground/30 font-mono">
+                {createdAt instanceof Date ? createdAt.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+              </span>
+            </div>
+
+            {/* Amount + total */}
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="text-sm font-bold text-white tabular-nums">
+                {Math.round(amount).toLocaleString()} USDC
+              </span>
+              <ArrowRight className="w-3 h-3 text-foreground/20" />
+              <span className="text-sm font-bold text-primary tabular-nums">
+                {Math.round(total).toLocaleString()} {fiatCurrency}
+              </span>
+            </div>
+
+            {/* Rate + type */}
+            <div className="flex items-center gap-2 text-[10px] text-foreground/40 font-mono">
+              <span>@ {rate?.toFixed?.(2) ?? rate}</span>
+              <span className="text-foreground/15">·</span>
+              <span className="uppercase">{db.type}</span>
+            </div>
+
+            {/* Accepted by */}
+            {acceptedByName && !isCancelled && status !== "expired" && (
+              <div className="mt-1 text-[10px] text-foreground/50 font-mono">
+                Accepted by <span className="text-foreground/80 font-bold">{acceptedByName}</span>
+              </div>
+            )}
+
+            {/* Cancel reason */}
+            {cancelReason && (
+              <div className="mt-1.5 px-2 py-1 rounded bg-red-500/[0.06] border border-red-500/15 text-[10px] text-red-300/80 font-mono">
+                Reason: {cancelReason}
+              </div>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 });

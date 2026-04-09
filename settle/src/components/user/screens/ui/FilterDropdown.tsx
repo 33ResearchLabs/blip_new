@@ -66,14 +66,11 @@ export function FilterDropdown<T extends string>({
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex items-center gap-1 px-3 py-1 rounded-full transition-all"
+        className="flex items-center gap-1 px-3 py-1 rounded-full transition-all bg-foreground/[0.08] text-foreground border border-foreground/[0.12] hover:bg-foreground/[0.12]"
         style={{
           fontSize: 10,
           fontWeight: 700,
           letterSpacing: "0.05em",
-          background: "rgba(255,255,255,0.08)",
-          color: "#fff",
-          border: "1px solid rgba(255,255,255,0.12)",
         }}
       >
         <span>{activeLabel}</span>
@@ -92,11 +89,8 @@ export function FilterDropdown<T extends string>({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.12, ease: "easeOut" }}
-            className={`absolute ${align === "left" ? "left-0" : "right-0"} mt-1.5 z-50 min-w-[110px] rounded-xl overflow-hidden`}
+            className={`absolute ${align === "left" ? "left-0" : "right-0"} mt-1.5 z-50 min-w-[110px] rounded-xl overflow-hidden bg-background border border-foreground/[0.10] shadow-2xl`}
             style={{
-              background: "rgba(20,20,22,0.96)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.45)",
               backdropFilter: "blur(20px)",
               WebkitBackdropFilter: "blur(20px)",
             }}
@@ -113,13 +107,13 @@ export function FilterDropdown<T extends string>({
                       onChange(key);
                       setOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 transition-colors hover:bg-white/[0.08]"
+                    className={`w-full text-left px-3 py-2 transition-colors hover:bg-foreground/[0.08] ${
+                      selected ? "bg-foreground/[0.06] text-foreground" : "text-foreground/55"
+                    }`}
                     style={{
                       fontSize: 11,
                       fontWeight: 700,
                       letterSpacing: "0.04em",
-                      color: selected ? "#fff" : "rgba(255,255,255,0.55)",
-                      background: selected ? "rgba(255,255,255,0.06)" : "transparent",
                     }}
                   >
                     {label}

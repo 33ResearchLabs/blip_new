@@ -57,12 +57,16 @@ export async function GET(
           [order.merchant_id, order.buyer_merchant_id].filter(Boolean),
         ]
       );
-      members = presenceRows.map(row => ({
-        actorType: row.actor_type,
-        actorId: row.actor_id,
-        isOnline: row.is_online,
-        lastSeen: row.last_seen?.toISOString() || null,
-      }));
+      members = presenceRows.map(row => {
+        const lastSeen = row.last_seen?.toISOString() || null;
+        const fresh = lastSeen ? (Date.now() - new Date(lastSeen).getTime()) < 90_000 : false;
+        return {
+          actorType: row.actor_type,
+          actorId: row.actor_id,
+          isOnline: !!row.is_online && fresh,
+          lastSeen,
+        };
+      });
     } catch {
       // Table may not exist — Pusher presence handles this instead
     }

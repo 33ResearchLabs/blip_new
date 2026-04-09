@@ -52,6 +52,10 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
   const [activeContactName, setActiveContactName] = useState('');
   const [messages, setMessages] = useState<DirectChatMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isContactTyping, setIsContactTyping] = useState(false);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sentTypingRef = useRef<boolean>(false);
+  const sendStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pollConvRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollMsgRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -200,11 +204,94 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
 
     channel.bind(CHAT_EVENTS.DM_NEW, handleNewDM);
 
+    // Typing indicators (1:1 direct chat)
+    const handleTypingStart = (raw: unknown) => {
+      const data = raw as { senderId: string };
+      const currentContactId = activeContactIdRef.current;
+      console.log('[useDirectChat] TYPING_START received', { senderId: data.senderId, currentContactId });
+      if (!currentContactId || data.senderId !== currentContactId) return;
+      setIsContactTyping(true);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = setTimeout(() => setIsContactTyping(false), 5000);
+    };
+    const handleTypingStop = (raw: unknown) => {
+      const data = raw as { senderId: string };
+      const currentContactId = activeContactIdRef.current;
+      console.log('[useDirectChat] TYPING_STOP received', { senderId: data.senderId, currentContactId });
+      if (!currentContactId || data.senderId !== currentContactId) return;
+      setIsContactTyping(false);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    };
+    console.log('[useDirectChat] subscribing to typing on', channelName);
+    channel.bind(CHAT_EVENTS.TYPING_START, handleTypingStart);
+    channel.bind(CHAT_EVENTS.TYPING_STOP, handleTypingStop);
+
     return () => {
       channel.unbind(CHAT_EVENTS.DM_NEW, handleNewDM);
+      channel.unbind(CHAT_EVENTS.TYPING_START, handleTypingStart);
+      channel.unbind(CHAT_EVENTS.TYPING_STOP, handleTypingStop);
       pusher.unsubscribe(channelName);
     };
   }, [pusher, merchantId, scheduleFetchConversations]);
+
+  // Reset typing state when switching contacts
+  useEffect(() => {
+    setIsContactTyping(false);
+    sentTypingRef.current = false;
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    if (sendStopTimerRef.current) clearTimeout(sendStopTimerRef.current);
+  }, [activeContactId]);
+
+  // Send typing indicator (throttled) — call on every keystroke.
+  // Optionally accepts an `orderId` so we ALSO fire on the order channel,
+  // letting the counterpart see typing in their order chat view (e.g. user OrderDetailScreen).
+  const sendTyping = useCallback(async (orderId?: string) => {
+    const contactId = activeContactIdRef.current;
+    const contactType = activeContactType;
+    if (!contactId) return;
+
+    const fireDirectStart = async () => {
+      try {
+        await fetchWithAuth('/api/merchant/direct-messages/typing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contactType, contactId, isTyping: true }),
+        });
+      } catch { /* best-effort */ }
+    };
+    const fireDirectStop = async () => {
+      try {
+        await fetchWithAuth('/api/merchant/direct-messages/typing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contactType, contactId, isTyping: false }),
+        });
+      } catch { /* best-effort */ }
+    };
+    const fireOrderTyping = async (isTyping: boolean) => {
+      if (!orderId) return;
+      try {
+        await fetchWithAuth(`/api/orders/${orderId}/typing`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actor_type: 'merchant', is_typing: isTyping }),
+        });
+      } catch { /* best-effort */ }
+    };
+
+    if (!sentTypingRef.current) {
+      sentTypingRef.current = true;
+      fireDirectStart();
+      fireOrderTyping(true);
+    }
+
+    if (sendStopTimerRef.current) clearTimeout(sendStopTimerRef.current);
+    sendStopTimerRef.current = setTimeout(() => {
+      sentTypingRef.current = false;
+      fireDirectStop();
+      fireOrderTyping(false);
+    }, 2000);
+  }, [activeContactType]);
 
   // Message polling (5s) when chat is open — skip when Pusher delivers messages
   useEffect(() => {
@@ -231,11 +318,42 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
   }, [activeContactId, isPusherConnected]);
 
   const openChat = useCallback((targetId: string, targetType: 'user' | 'merchant', name: string) => {
-    setActiveContactId(targetId);
+    // If re-opening the SAME contact (e.g. clicking a notification for the
+    // chat that's already active), don't wipe messages — setState would be a
+    // no-op so the fetch effect wouldn't re-run, leaving the panel empty.
+    // Just refresh in place.
+    const isSameContact = activeContactIdRef.current === targetId;
     setActiveContactType(targetType);
     setActiveContactName(name);
-    setMessages([]);
-  }, []);
+    if (isSameContact) {
+      fetchMessagesRef.current(targetId);
+    } else {
+      setActiveContactId(targetId);
+      setMessages([]);
+    }
+
+    // Optimistically clear the unread badge for this contact in the local
+    // conversation list (the GET fetch on the active chat marks them read on
+    // the backend; we mirror that locally so the inbox badge updates immediately).
+    setConversations(prev => {
+      let removed = 0;
+      const next = prev.map(c => {
+        if (c.contact_target_id === targetId && c.contact_type === targetType) {
+          removed += c.unread_count || 0;
+          return { ...c, unread_count: 0 };
+        }
+        return c;
+      });
+      if (removed > 0) {
+        setTotalUnread(t => Math.max(0, t - removed));
+      }
+      return next;
+    });
+
+    // Refetch the authoritative list shortly after — picks up the server-side
+    // is_read updates from the messages GET so the badge stays cleared.
+    scheduleFetchConversations();
+  }, [scheduleFetchConversations]);
 
   const closeChat = useCallback(() => {
     setActiveContactId(null);
@@ -357,11 +475,13 @@ export function useDirectChat({ merchantId }: UseDirectChatOptions) {
     activeContactName,
     messages,
     isLoadingMessages,
+    isContactTyping,
 
     // Actions
     openChat,
     closeChat,
     sendMessage,
+    sendTyping,
     addContact,
     removeContact: removeContactById,
     toggleFavorite,

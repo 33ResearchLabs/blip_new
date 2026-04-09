@@ -22,7 +22,13 @@ export * from './v2';
 // Legacy exports for backwards compatibility
 export const USDT_DEVNET_MINT = new PublicKey('FT8zRmLcsbNvqjCMSiwQC5GdkZfGtsoj8r5k19H65X9Z');
 export const USDT_MAINNET_MINT = new PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB');
-export const DEVNET_RPC = 'https://api.devnet.solana.com';
+// Prefer the project-configured RPC (Helius/QuickNode/etc via NEXT_PUBLIC_SOLANA_RPC_URL).
+// The public api.devnet.solana.com endpoint is rate-limited and frequently
+// triggers "Failed to fetch" errors in the browser. Fall back to it only if
+// no env override is set.
+export const DEVNET_RPC =
+  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SOLANA_RPC_URL)
+    || 'https://api.devnet.solana.com';
 
 // Get connection
 export function getConnection(network: 'devnet' | 'mainnet-beta' = 'devnet'): Connection {

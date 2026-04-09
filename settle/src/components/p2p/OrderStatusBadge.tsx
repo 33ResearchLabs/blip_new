@@ -17,7 +17,7 @@ const STATUS_STYLES: Record<OrderStatus, { bg: string; text: string; border: str
   open: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
   accepted: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
   escrowed: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/30' },
-  payment_sent: { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
+  payment_sent: { bg: 'bg-primary/20', text: 'text-primary', border: 'border-primary/30' },
   completed: { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500/30' },
   cancelled: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
   expired: { bg: 'bg-zinc-500/20', text: 'text-zinc-400', border: 'border-zinc-500/30' },

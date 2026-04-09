@@ -296,6 +296,7 @@ export const merchantCreateOrderSchema = z.object({
   escrow_creator_wallet: z.string().nullish(),
   matched_offer_id: uuidSchema.nullish(), // Matched offer for M2M
   expiry_minutes: z.number().int().positive().optional(),
+  pair: z.enum(['usdt_aed', 'usdt_inr']).optional(), // Currency corridor selection
 });
 
 // Payment method schemas

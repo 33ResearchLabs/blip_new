@@ -119,7 +119,7 @@ export default function MempoolPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
     );
   }
@@ -137,7 +137,7 @@ export default function MempoolPage() {
           {/* Left: Back + Logo */}
           <button
             onClick={() => router.push('/merchant')}
-            className="p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
+            className="p-1.5 rounded-lg hover:bg-card transition-colors"
           >
             <ArrowLeft className="w-4 h-4 text-white/40" />
           </button>
@@ -153,7 +153,7 @@ export default function MempoolPage() {
           <div className="flex items-center gap-2 mx-auto">
             <nav className="flex items-center gap-0.5 bg-white/[0.03] rounded-lg p-[3px]">
               <span className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-white/[0.08] text-white flex items-center gap-1.5">
-                <Zap className="w-3.5 h-3.5 text-orange-400" />
+                <Zap className="w-3.5 h-3.5 text-primary" />
                 Priority Mempool
               </span>
             </nav>
@@ -165,7 +165,7 @@ export default function MempoolPage() {
           {/* Right: Merchant info */}
           <div className="flex items-center gap-2 shrink-0">
             <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white/[0.02] rounded border border-white/[0.06]">
-              <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
+              <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
               <span className="text-[9px] text-white/35 font-mono">Live</span>
             </div>
             <span className="text-[12px] font-medium text-white/60">

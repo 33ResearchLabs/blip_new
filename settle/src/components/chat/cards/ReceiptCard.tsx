@@ -53,7 +53,7 @@ const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }>
   releasing: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Releasing' },
   completed: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: 'Completed' },
   cancelled: { bg: 'bg-red-500/20', text: 'text-red-400', label: 'Cancelled' },
-  disputed: { bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'Disputed' },
+  disputed: { bg: 'bg-primary/20', text: 'text-primary', label: 'Disputed' },
   expired: { bg: 'bg-zinc-500/20', text: 'text-zinc-400', label: 'Expired' },
   // UI-mapped aliases (user side: mapDbStatusToUI)
   payment: { bg: 'bg-purple-500/20', text: 'text-purple-400', label: 'Escrowed' },
@@ -159,7 +159,7 @@ export function ReceiptCard({ data, currentStatus, theme = 'dark' }: ReceiptCard
 
         <div className="flex justify-between items-center">
           <span className={`text-xs ${t.label}`}>Fiat</span>
-          <span className="text-[15px] text-orange-500 font-bold font-mono tabular-nums">
+          <span className="text-[15px] text-primary font-bold font-mono tabular-nums">
             {formatAmount(data.fiat_amount)} {data.fiat_currency || ''}
           </span>
         </div>

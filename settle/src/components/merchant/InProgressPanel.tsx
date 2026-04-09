@@ -1,7 +1,8 @@
 'use client';
 
 import { memo, useRef, useState, useMemo } from 'react';
-import { Shield, Zap, ChevronRight, ChevronDown, Flame, ArrowRight, Clock, XCircle, Filter } from 'lucide-react';
+import { Shield, Zap, ChevronRight, ChevronDown, Flame, ArrowRight, Clock, XCircle, Filter, AlertTriangle } from 'lucide-react';
+import { CountdownRing } from './CountdownRing';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextActionFromStatus, MinimalStatus } from '@/lib/orders/statusResolver';
 
@@ -87,8 +88,16 @@ const InProgressOrderList = memo(function InProgressOrderList({
               <div
                 data-testid={`order-card-${order.id}`}
                 onClick={() => onSelectOrder(order)}
-                className="p-2.5 glass-card rounded-lg hover:border-foreground/[0.10] transition-colors cursor-pointer"
+                className="relative p-2.5 rounded-lg backdrop-blur-xl cursor-pointer transition-colors"
+                style={{ background: 'var(--card)', border: '1px solid color-mix(in srgb, var(--primary) 50%, transparent)' }}
+                onMouseEnter={(e) => e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--primary) 70%, transparent)'}
+                onMouseLeave={(e) => e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--primary) 50%, transparent)'}
               >
+                {/* Live pulse dot */}
+                <span className="absolute -top-1 -left-1 flex h-2.5 w-2.5 z-20">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-75 animate-ping" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
+                </span>
                 {/* Row 1: User + type on left, timer on right */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
@@ -110,7 +119,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
                   <div className="flex items-center gap-1.5 shrink-0">
                     {order.spreadPreference && (
                       <div className="flex items-center gap-0.5">
-                        <Flame className="w-2.5 h-2.5 text-orange-500/60 animate-pulse" />
+                        <Flame className="w-2.5 h-2.5 text-primary/60 animate-pulse" />
                         <span className="text-[9px] font-bold text-foreground/40 font-mono">
                           {order.spreadPreference === 'fastest' ? '5m' : order.spreadPreference === 'best' ? '15m' : '60m'}
                         </span>
@@ -123,13 +132,13 @@ const InProgressOrderList = memo(function InProgressOrderList({
                         <span className="text-[10px] font-bold font-mono text-emerald-400/60">No expiry</span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <span className={`text-sm font-bold font-mono tabular-nums ${
-                          order.expiresIn <= 120 ? 'text-red-400' : 'text-primary'
+                          order.expiresIn <= 120 ? 'text-[var(--color-error)]' : 'text-primary'
                         }`}>
                           {order.expiresIn > 0 ? formatTimeRemaining(order.expiresIn) : 'Expired'}
                         </span>
-                        <span className="animate-pulse" style={{ filter: order.expiresIn <= 120 ? 'drop-shadow(0 0 6px #ef4444)' : 'drop-shadow(0 0 4px #f97316)' }}>🔥</span>
+                        <CountdownRing remaining={order.expiresIn} total={7200} size={18} strokeWidth={2.5} />
                       </div>
                     )}
                   </div>
@@ -138,10 +147,10 @@ const InProgressOrderList = memo(function InProgressOrderList({
                 {/* Warning banner when under 5 minutes */}
                 {order.expiresIn > 0 && order.expiresIn <= 300 && order.minimalStatus !== 'payment_sent' && order.dbOrder?.status !== 'payment_sent' && order.dbOrder?.status !== 'payment_confirmed' && (
                   <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-2 ${
-                    order.expiresIn <= 120 ? 'bg-red-500/10 border border-red-500/20' : 'bg-primary/10 border border-primary/20'
+                    order.expiresIn <= 120 ? 'bg-[var(--color-error)]/10 border border-[var(--color-error)]/20' : 'bg-primary/10 border border-primary/20'
                   }`}>
-                    <span className="text-xs shrink-0">🔥</span>
-                    <span className={`text-[10px] font-bold ${order.expiresIn <= 120 ? 'text-red-400' : 'text-primary'}`}>
+                    <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${order.expiresIn <= 120 ? 'text-[var(--color-error)]' : 'text-primary'}`} />
+                    <span className={`text-[10px] font-bold ${order.expiresIn <= 120 ? 'text-[var(--color-error)]' : 'text-primary'}`}>
                       {order.expiresIn <= 120 ? 'Order expiring soon! Complete action now' : `Order expires in ${formatTimeRemaining(order.expiresIn)}`}
                     </span>
                   </div>
@@ -217,7 +226,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
                         onSelectOrder(order);
                       }
                     }}
-                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-primary rounded-lg text-[11px] text-white font-bold hover:bg-orange-600 transition-colors"
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-primary rounded-lg text-[11px] text-white font-bold hover:bg-primary/80 transition-colors"
                   >
                     <Zap className="w-3.5 h-3.5" />
                     {nextAction}
@@ -243,9 +252,9 @@ const InProgressOrderList = memo(function InProgressOrderList({
                       if (onOpenChat) onOpenChat(order);
                       else onSelectOrder(order);
                     }}
-                    className="mt-1.5 flex items-center gap-1.5 text-[10px] text-primary/80 font-medium hover:text-orange-300 transition-colors w-full"
+                    className="mt-1.5 flex items-center gap-1.5 text-[10px] text-primary/80 font-medium hover:text-primary/80 transition-colors w-full"
                   >
-                    <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-live-dot" />
+                    <div className="w-1.5 h-1.5 bg-primary rounded-full animate-live-dot" />
                     {order.unreadCount} new message{order.unreadCount > 1 ? 's' : ''}
                   </button>
                 )}

@@ -96,7 +96,7 @@ export const NotificationsPanel = memo(function NotificationsPanel({
                     }}
                     className={`p-2 rounded-lg border transition-colors cursor-pointer ${
                       hasUnread
-                        ? 'bg-foreground/[0.03] border-foreground/[0.08] hover:border-white/[0.12]'
+                        ? 'bg-foreground/[0.03] border-foreground/[0.08] hover:border-border-strong'
                         : 'bg-transparent border-foreground/[0.04] hover:border-foreground/[0.08]'
                     }`}
                   >

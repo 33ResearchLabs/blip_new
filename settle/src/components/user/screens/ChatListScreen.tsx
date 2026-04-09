@@ -61,12 +61,51 @@ export const ChatListScreen = ({
   const disputeOrders = filterByTime(orders.filter(o => o.dbStatus === 'disputed'));
   const disputeUnread = disputeOrders.reduce((sum, o) => sum + (o.unreadCount || 0), 0);
 
-  const displayOrders = activeTab === 'chats' ? chatOrders : disputeOrders;
+  // Group orders by merchant — one inbox row per contact, showing the most
+  // recent order/message and summing unread counts across all orders with them.
+  type Grouped = {
+    key: string;
+    representative: Order; // most recent order — click opens this one
+    orderCount: number;
+    totalUnread: number;
+  };
+  const groupByMerchant = (list: Order[]): Grouped[] => {
+    const map = new Map<string, Grouped>();
+    for (const o of list) {
+      const key = o.merchant?.id || o.merchant?.name || o.id;
+      const ts = (o.lastMessage?.createdAt?.getTime() || o.createdAt?.getTime() || 0);
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, { key, representative: o, orderCount: 1, totalUnread: o.unreadCount || 0 });
+      } else {
+        existing.orderCount += 1;
+        existing.totalUnread += o.unreadCount || 0;
+        const existingTs = (existing.representative.lastMessage?.createdAt?.getTime() || existing.representative.createdAt?.getTime() || 0);
+        if (ts > existingTs) existing.representative = o;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      const ta = a.representative.lastMessage?.createdAt?.getTime() || a.representative.createdAt?.getTime() || 0;
+      const tb = b.representative.lastMessage?.createdAt?.getTime() || b.representative.createdAt?.getTime() || 0;
+      return tb - ta;
+    });
+  };
 
-  const handleOpenChat = (order: Order) => {
+  const chatGroups = groupByMerchant(chatOrders);
+  const disputeGroups = groupByMerchant(disputeOrders);
+  const displayGroups = activeTab === 'chats' ? chatGroups : disputeGroups;
+
+  const handleOpenChat = (order: Order, group?: Grouped) => {
     setActiveOrderId(order.id);
     setScreen("chat-view");
-    setOrders(prev => prev.map(o => o.id === order.id ? { ...o, unreadCount: 0 } : o));
+    // Clear unread for ALL orders in the same group (same merchant), not just
+    // the representative — otherwise the grouped badge keeps showing the
+    // counts from sibling orders.
+    const groupKey = group?.key || order.merchant?.id || order.merchant?.name || order.id;
+    setOrders(prev => prev.map(o => {
+      const oKey = o.merchant?.id || o.merchant?.name || o.id;
+      return oKey === groupKey ? { ...o, unreadCount: 0 } : o;
+    }));
   };
 
   return (
@@ -107,13 +146,13 @@ export const ChatListScreen = ({
         >
           <MessageCircle size={13} strokeWidth={2.2} />
           <span style={{ fontSize: 12, fontWeight: 700 }}>Chats</span>
-          {chatOrders.length > 0 && (
+          {chatGroups.length > 0 && (
             <span style={{
               fontSize: 10, fontWeight: 800, minWidth: 18, textAlign: 'center',
               background: activeTab === 'chats' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)',
               borderRadius: 10, padding: '1px 5px',
             }}>
-              {chatOrders.length}
+              {chatGroups.length}
             </span>
           )}
         </button>
@@ -127,13 +166,13 @@ export const ChatListScreen = ({
         >
           <Shield size={13} strokeWidth={2.2} />
           <span style={{ fontSize: 12, fontWeight: 700 }}>Disputes</span>
-          {disputeOrders.length > 0 && (
+          {disputeGroups.length > 0 && (
             <span style={{
               fontSize: 10, fontWeight: 800, minWidth: 18, textAlign: 'center',
               background: activeTab === 'disputes' ? 'rgba(255,255,255,0.2)' : 'rgba(239,68,68,0.15)',
               borderRadius: 10, padding: '1px 5px',
             }}>
-              {disputeUnread > 0 ? disputeUnread : disputeOrders.length}
+              {disputeUnread > 0 ? disputeUnread : disputeGroups.length}
             </span>
           )}
         </button>
@@ -150,7 +189,7 @@ export const ChatListScreen = ({
 
       {/* ── List ── */}
       <div className="flex-1 px-5 pt-2 pb-24 overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
-        {displayOrders.length === 0 ? (
+        {displayGroups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-14 h-14 rounded-[18px] flex items-center justify-center mb-4"
               style={{ background: activeTab === 'disputes' ? 'rgba(239,68,68,0.1)' : '#ffffff', border: activeTab === 'disputes' ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(0,0,0,0.06)' }}>
@@ -168,16 +207,17 @@ export const ChatListScreen = ({
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {displayOrders.map((order, i) => {
-              const hasUnread = (order.unreadCount || 0) > 0;
+            {displayGroups.map((group, i) => {
+              const order = group.representative;
+              const hasUnread = group.totalUnread > 0;
               const initial = (order.merchant?.name || 'M').charAt(0).toUpperCase();
               const isDispute = order.dbStatus === 'disputed';
 
               return (
-                <motion.button key={order.id}
+                <motion.button key={group.key}
                   initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => handleOpenChat(order)}
+                  onClick={() => handleOpenChat(order, group)}
                   className="w-full rounded-[18px] p-3.5 flex items-center gap-3 text-left"
                   style={isDispute
                     ? { background: hasUnread ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.04)', border: `1.5px solid rgba(239,68,68,${hasUnread ? 0.3 : 0.1})` }
@@ -198,9 +238,9 @@ export const ChatListScreen = ({
                       }
                     </div>
                     {hasUnread && (
-                      <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center"
+                      <div className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center"
                         style={{ background: isDispute ? '#ef4444' : '#000', border: isDispute ? '2px solid #1a0a0a' : '2px solid #ffffff' }}>
-                        <span style={{ fontSize: 8, fontWeight: 800, color: '#fff' }}>{order.unreadCount}</span>
+                        <span style={{ fontSize: 8, fontWeight: 800, color: '#fff' }}>{group.totalUnread > 9 ? '9+' : group.totalUnread}</span>
                       </div>
                     )}
                   </div>
@@ -223,9 +263,11 @@ export const ChatListScreen = ({
                           : order.createdAt.toLocaleDateString()}
                       </p>
                     </div>
-                    {/* Order details — distinguishes multiple orders with same merchant */}
+                    {/* Order count — shown when this contact has multiple trades */}
                     <p style={{ fontSize: 11, fontWeight: 500, color: isDispute ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)', marginBottom: 2 }}>
-                      {order.type === 'buy' ? 'Buying' : 'Selling'} {parseFloat(order.cryptoAmount).toFixed(2)} USDC · {order.createdAt.toLocaleDateString()}
+                      {group.orderCount > 1
+                        ? `${group.orderCount} orders · latest ${order.type === 'buy' ? 'buying' : 'selling'} ${parseFloat(order.cryptoAmount).toFixed(2)} USDC`
+                        : `${order.type === 'buy' ? 'Buying' : 'Selling'} ${parseFloat(order.cryptoAmount).toFixed(2)} USDC · ${order.createdAt.toLocaleDateString()}`}
                     </p>
                     <p style={{
                       fontSize: 12,

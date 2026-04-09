@@ -23,7 +23,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; dot: string 
   pending:      { label: "Pending",      color: "text-blue-400",   dot: "bg-blue-500" },
   accepted:     { label: "Accepted",     color: "text-yellow-400", dot: "bg-yellow-500" },
   escrowed:     { label: "Escrowed",     color: "text-purple-400", dot: "bg-purple-500" },
-  payment_sent: { label: "Payment Sent", color: "text-primary", dot: "bg-orange-500" },
+  payment_sent: { label: "Payment Sent", color: "text-primary", dot: "bg-primary" },
   completed:    { label: "Completed",    color: "text-emerald-400",dot: "bg-emerald-500" },
   cancelled:    { label: "Cancelled",    color: "text-red-400",    dot: "bg-red-500" },
   disputed:     { label: "Disputed",     color: "text-red-400",    dot: "bg-red-500" },

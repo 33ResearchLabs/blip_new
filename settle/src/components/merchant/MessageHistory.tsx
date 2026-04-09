@@ -168,7 +168,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose, refreshTrigger
         {onClose && (
           <button
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-white/10 transition-colors"
+            className="p-1 rounded-lg hover:bg-accent-subtle transition-colors"
           >
             <X className="w-4 h-4 text-white/60" />
           </button>
@@ -196,7 +196,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose, refreshTrigger
               className={`px-3 py-1 text-xs font-medium rounded-full whitespace-nowrap transition-colors
                 ${statusFilter === status
                   ? 'bg-white/10 text-white border border-white/6'
-                  : 'bg-white/5 text-white/60 hover:bg-white/10 border border-transparent'
+                  : 'bg-white/5 text-white/60 hover:bg-accent-subtle border border-transparent'
                 }`}
             >
               {status ? status.replace('_', ' ') : 'All'}
@@ -222,7 +222,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose, refreshTrigger
               <button
                 key={conv.order_id}
                 onClick={() => handleOpenChat(conv)}
-                className="w-full px-4 py-3 hover:bg-white/5 transition-colors text-left group"
+                className="w-full px-4 py-3 hover:bg-card transition-colors text-left group"
               >
                 <div className="flex items-start gap-3">
                   {/* User Avatar */}
@@ -263,7 +263,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose, refreshTrigger
                         {conv.order_number}
                       </span>
                       <span className="text-xs text-white/30">•</span>
-                      <span className={`text-xs ${conv.order_type === 'buy' ? 'text-green-400/70' : 'text-orange-400/70'}`}>
+                      <span className={`text-xs ${conv.order_type === 'buy' ? 'text-green-400/70' : 'text-primary/70'}`}>
                         {conv.order_type === 'buy' ? 'Send' : 'Receive'}
                       </span>
                       <span className="text-xs text-white/50">
@@ -292,7 +292,7 @@ export function MessageHistory({ merchantId, onOpenChat, onClose, refreshTrigger
                   </div>
 
                   {/* Arrow */}
-                  <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-white/40 transition-colors
+                  <ChevronRight className="w-4 h-4 text-white/20 group-hover:text-foreground/40 transition-colors
                                           self-center flex-shrink-0" />
                 </div>
               </button>

@@ -44,12 +44,18 @@ const themeScript = `
     try {
       var theme = localStorage.getItem('theme');
       var lightThemes = ['light', 'clean'];
+      var bgMap = {
+        light: '#FDF6E3', clean: '#FFFFFF', navy: '#0B1120',
+        emerald: '#050705', orchid: '#1A1A2E', gold: '#1C1C1C', dark: '#060606'
+      };
       if (theme && theme !== 'dark') {
         document.documentElement.setAttribute('data-theme', theme);
         if (lightThemes.indexOf(theme) !== -1) {
           document.documentElement.classList.add('light');
         }
       }
+      var bg = bgMap[theme || 'dark'] || '#060606';
+      document.documentElement.style.backgroundColor = bg;
     } catch (e) {}
   })();
 `;

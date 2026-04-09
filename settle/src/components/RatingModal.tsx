@@ -97,7 +97,7 @@ export function RatingModal({
                   <Star
                     className={`w-9 h-9 transition-colors ${
                       star <= activeRating
-                        ? 'fill-orange-400 text-orange-400'
+                        ? 'fill-primary text-primary'
                         : 'text-white/10 hover:text-white/20'
                     }`}
                   />
@@ -109,7 +109,7 @@ export function RatingModal({
                 key={activeRating}
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-[12px] font-bold text-orange-400/80 text-center"
+                className="text-[12px] font-bold text-primary/80 text-center"
               >
                 {ratingLabels[activeRating - 1]}
               </motion.p>
@@ -125,7 +125,7 @@ export function RatingModal({
               maxLength={500}
               rows={3}
               className="w-full px-3 py-2.5 bg-white/[0.03] border border-white/[0.06] rounded-xl
-                         text-[12px] text-white placeholder:text-white/20 focus:outline-none focus:border-orange-500/30
+                         text-[12px] text-white placeholder:text-white/20 focus:outline-none focus:border-primary/30
                          resize-none transition-colors"
             />
             <p className="text-[10px] text-white/20 mt-1 text-right font-mono">
@@ -145,8 +145,8 @@ export function RatingModal({
             <button
               onClick={handleSubmit}
               disabled={rating === 0 || isSubmitting}
-              className="flex-1 px-3 py-2.5 rounded-xl bg-gradient-to-b from-orange-500 to-orange-600 text-black text-[12px] font-bold
-                         hover:from-orange-400 hover:to-orange-500 transition-all disabled:opacity-30 disabled:cursor-not-allowed
+              className="flex-1 px-3 py-2.5 rounded-xl bg-gradient-to-b from-primary to-primary/80 text-background text-[12px] font-bold
+                         hover:from-primary/80 hover:to-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed
                          flex items-center justify-center gap-1.5 shadow-[0_2px_12px_rgba(249,115,22,0.15)]"
             >
               {isSubmitting ? (

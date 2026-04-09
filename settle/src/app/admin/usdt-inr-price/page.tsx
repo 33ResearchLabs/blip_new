@@ -582,32 +582,32 @@ export default function UsdtPricePage() {
               {/* Final Price — what all users/merchants see */}
               <div className={`rounded-xl p-5 border ${
                 priceMode === "MANUAL"
-                  ? "bg-gradient-to-br from-orange-500/10 to-orange-500/5 border-orange-500/20"
+                  ? "bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20"
                   : "bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20"
               }`}>
                 <div className="flex items-center justify-between mb-3">
                   <span className={`text-xs font-medium uppercase tracking-wider ${
-                    priceMode === "MANUAL" ? "text-orange-400/60" : "text-primary/60"
+                    priceMode === "MANUAL" ? "text-primary/60" : "text-primary/60"
                   }`}>
                     Final Price
                   </span>
                   <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
                     priceMode === "MANUAL"
-                      ? "bg-orange-500/10 text-orange-400 border border-orange-500/20"
+                      ? "bg-primary/10 text-primary border border-primary/20"
                       : "bg-green-500/10 text-green-400 border border-green-500/20"
                   }`}>
                     {priceMode}
                   </span>
                 </div>
                 <div className={`text-2xl font-bold tabular-nums ${
-                  priceMode === "MANUAL" ? "text-orange-400" : "text-primary"
+                  priceMode === "MANUAL" ? "text-primary" : "text-primary"
                 }`}>
                   {priceMode === "MANUAL" && adminPriceSaved
                     ? formatPrice(priceData.pair, adminPriceSaved)
                     : formatPrice(priceData.pair, priceData.livePrice)}
                 </div>
                 <div className={`text-[10px] mt-1 ${
-                  priceMode === "MANUAL" ? "text-orange-400/40" : "text-primary/40"
+                  priceMode === "MANUAL" ? "text-primary/40" : "text-primary/40"
                 }`}>
                   {priceMode === "MANUAL"
                     ? "Admin-set manual price"
@@ -627,13 +627,13 @@ export default function UsdtPricePage() {
                   <h2 className="text-sm font-semibold">Price Mode</h2>
                   <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
                     priceMode === "MANUAL"
-                      ? "bg-orange-500/10 text-orange-400 border border-orange-500/20"
+                      ? "bg-primary/10 text-primary border border-primary/20"
                       : "bg-green-500/10 text-green-400 border border-green-500/20"
                   }`}>
                     {priceMode}
                   </span>
                   {priceMode === "MANUAL" && adminPriceSaved && (
-                    <span className="text-xs font-mono tabular-nums text-orange-400">
+                    <span className="text-xs font-mono tabular-nums text-primary">
                       {formatPrice(priceData.pair, adminPriceSaved)}
                     </span>
                   )}

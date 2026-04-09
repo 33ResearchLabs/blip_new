@@ -207,7 +207,7 @@ export function MerchantNavbar({
                       )}
                     </div>
                     <div className="border-t border-foreground/[0.06] py-1">
-                      <button onClick={handleLogout} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-red-400/70 hover:text-red-400 hover:bg-red-500/[0.06] transition-colors">
+                      <button onClick={handleLogout} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-red-400/70 hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/[0.06] transition-colors">
                         <LogOut className="w-4 h-4" /> Logout
                       </button>
                     </div>
@@ -318,7 +318,7 @@ export function MerchantNavbar({
               <div className="border-t border-foreground/[0.06] p-4">
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium hover:bg-red-500/20 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium hover:bg-[var(--color-error)]/20 transition-colors"
                 >
                   <LogOut className="w-4 h-4" /> Logout
                 </button>

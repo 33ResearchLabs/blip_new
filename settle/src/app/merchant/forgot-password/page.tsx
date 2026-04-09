@@ -42,7 +42,7 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen bg-background text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
       {/* Ambient background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-orange-500/[0.03] rounded-full blur-[150px]" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-primary/[0.03] rounded-full blur-[150px]" />
       </div>
 
       <div className="w-full max-w-sm relative z-10">
@@ -56,7 +56,7 @@ export default function ForgotPasswordPage() {
             </span>
           </div>
           <h1 className="text-xl font-bold mb-2">Reset Password</h1>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-foreground/35">
             {submitted
               ? "Check your email for a reset link"
               : "Enter your email to receive a reset link"}
@@ -74,7 +74,7 @@ export default function ForgotPasswordPage() {
               </div>
               <div>
                 <p className="text-sm text-white mb-1">Email sent!</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-foreground/35">
                   If an account with <span className="text-white/70">{email}</span> exists,
                   you&apos;ll receive a password reset link within a few minutes.
                 </p>
@@ -84,7 +84,7 @@ export default function ForgotPasswordPage() {
               </p>
               <button
                 onClick={() => { setSubmitted(false); setEmail(""); }}
-                className="text-xs text-white/40 hover:text-white transition-colors"
+                className="text-xs text-white/40 hover:text-foreground transition-colors"
               >
                 Try another email
               </button>
@@ -99,7 +99,7 @@ export default function ForgotPasswordPage() {
               )}
 
               <div>
-                <label className="text-xs text-gray-500 uppercase tracking-wide mb-2 block">
+                <label className="text-xs text-foreground/35 uppercase tracking-wide mb-2 block">
                   Email Address
                 </label>
                 <div className="relative">
@@ -119,7 +119,7 @@ export default function ForgotPasswordPage() {
                 whileTap={{ scale: 0.98 }}
                 onClick={handleSubmit}
                 disabled={isSubmitting || !email}
-                className="w-full py-3 rounded-xl text-sm font-bold bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl text-sm font-bold bg-white text-background hover:bg-accent transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
                   <>
@@ -138,7 +138,7 @@ export default function ForgotPasswordPage() {
         <div className="mt-6 text-center">
           <Link
             href="/merchant"
-            className="inline-flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs text-white/30 hover:text-foreground/60 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Back to sign in

@@ -87,9 +87,9 @@ const EVENT_CONFIG: Record<EventType, {
   },
   disputed: {
     icon: <AlertTriangle className="w-3.5 h-3.5" />,
-    bg: 'bg-orange-500/20',
-    iconColor: 'text-orange-400',
-    borderColor: 'border-orange-500/30',
+    bg: 'bg-primary/20',
+    iconColor: 'text-primary',
+    borderColor: 'border-primary/30',
   },
   extension_requested: {
     icon: <Clock className="w-3.5 h-3.5" />,

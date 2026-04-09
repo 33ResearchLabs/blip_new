@@ -285,7 +285,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
               </div>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-white/[0.06] rounded-xl transition-colors"
+                className="p-2 hover:bg-card rounded-xl transition-colors"
               >
                 <X className="w-4 h-4 text-white/40" />
               </button>
@@ -325,7 +325,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                           className={`group relative p-3.5 rounded-xl border transition-all ${
                             method.is_default
                               ? 'bg-gradient-to-r from-primary/[0.06] to-transparent border-primary/20'
-                              : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.10]'
+                              : 'bg-white/[0.02] border-white/[0.06] hover:border-border-strong'
                           }`}
                         >
                           <div className="flex items-center gap-3">
@@ -348,7 +348,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                               {!method.is_default && (
                                 <button
                                   onClick={() => handleSetDefault(method.id)}
-                                  className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors"
+                                  className="p-1.5 hover:bg-card rounded-lg transition-colors"
                                   title="Set as default"
                                 >
                                   <Star className="w-3.5 h-3.5 text-white/30 hover:text-primary" />
@@ -356,10 +356,10 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                               )}
                               <button
                                 onClick={() => handleRemoveMethod(method.id)}
-                                className="p-1.5 hover:bg-red-500/10 rounded-lg transition-colors"
+                                className="p-1.5 hover:bg-[var(--color-error)]/10 rounded-lg transition-colors"
                                 title="Remove"
                               >
-                                <Trash2 className="w-3.5 h-3.5 text-white/20 hover:text-red-400" />
+                                <Trash2 className="w-3.5 h-3.5 text-white/20 hover:text-[var(--color-error)]" />
                               </button>
                             </div>
                           </div>
@@ -396,7 +396,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                           className={`p-3 rounded-xl border transition-all text-left ${
                             selectedType === type.type
                               ? `bg-gradient-to-br ${type.gradient} ${type.border} ring-1 ${type.ring}`
-                              : 'bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]'
+                              : 'bg-white/[0.02] border-white/[0.06] hover:bg-card'
                           }`}
                         >
                           <div className="flex items-center gap-2.5">
@@ -432,14 +432,14 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                   <div className="flex gap-2.5 pt-1">
                     <button
                       onClick={() => { setShowAddForm(false); setError(null); }}
-                      className="flex-1 px-4 py-2.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] rounded-xl text-[12px] text-white/60 font-medium transition-all"
+                      className="flex-1 px-4 py-2.5 bg-white/[0.04] hover:bg-accent-subtle border border-white/[0.06] rounded-xl text-[12px] text-white/60 font-medium transition-all"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleAddMethod}
                       disabled={isLoading}
-                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-primary to-primary hover:from-primary/90 hover:to-primary/90 rounded-xl text-[12px] text-black font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+                      className="flex-1 px-4 py-2.5 bg-gradient-to-r from-primary to-primary hover:from-primary/90 hover:to-primary/90 rounded-xl text-[12px] text-background font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
                     >
                       {isLoading ? (
                         <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Adding...</>

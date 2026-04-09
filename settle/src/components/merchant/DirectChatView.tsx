@@ -22,10 +22,12 @@ interface DirectChatMessage {
 interface DirectChatViewProps {
   contactName: string;
   contactType: 'user' | 'merchant';
+  contactId?: string;
   messages: DirectChatMessage[];
   isLoading: boolean;
   isTyping?: boolean;
   onSendMessage: (text: string, imageUrl?: string) => void;
+  onTyping?: () => void;
   onBack: () => void;
   orderStatus?: string;
 }
@@ -53,13 +55,47 @@ function formatDateSeparator(date: Date): string {
 export function DirectChatView({
   contactName,
   contactType,
+  contactId,
   messages,
   isLoading,
   isTyping,
   onSendMessage,
+  onTyping,
   onBack,
   orderStatus,
 }: DirectChatViewProps) {
+  // ── Live presence (online/offline + last seen) ─────────────────────
+  const [presence, setPresence] = useState<{ isOnline: boolean; lastSeen: string | null } | null>(null);
+  useEffect(() => {
+    if (!contactId) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetchWithAuth(`/api/presence?actorType=${contactType}&actorId=${contactId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.success) {
+          setPresence({ isOnline: !!data.data?.isOnline, lastSeen: data.data?.lastSeen || null });
+        }
+      } catch {
+        // Best-effort
+      }
+    };
+    load();
+    const interval = setInterval(load, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [contactId, contactType]);
+
+  const formatLastSeen = (iso: string | null): string => {
+    if (!iso) return 'offline';
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diffMs / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+  };
   const [inputText, setInputText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -213,14 +249,24 @@ export function DirectChatView({
           <div className="w-6 h-6 rounded-md bg-foreground/[0.03] border border-foreground/[0.06] flex items-center justify-center text-xs">
             {emoji}
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase truncate">
-              {contactName}
-            </span>
-            {contactType === 'merchant' ? (
-              <Store className="w-2.5 h-2.5 text-primary/60" />
-            ) : (
-              <User className="w-2.5 h-2.5 text-foreground/25" />
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase truncate">
+                {contactName}
+              </span>
+              {contactType === 'merchant' ? (
+                <Store className="w-2.5 h-2.5 text-primary/60" />
+              ) : (
+                <User className="w-2.5 h-2.5 text-foreground/25" />
+              )}
+            </div>
+            {contactId && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${presence?.isOnline ? 'bg-green-500' : 'bg-white/25'}`} />
+                <span className={`text-[9px] font-mono ${presence?.isOnline ? 'text-green-400' : 'text-foreground/35'}`}>
+                  {presence?.isOnline ? 'Online' : `last seen ${formatLastSeen(presence?.lastSeen || null)}`}
+                </span>
+              </div>
             )}
           </div>
         </div>
@@ -230,7 +276,7 @@ export function DirectChatView({
       <div className="flex-1 overflow-y-auto px-3 py-2">
         {isLoading && messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="w-4 h-4 border-2 border-primary/40 border-t-orange-400 rounded-full animate-spin" />
+            <div className="w-4 h-4 border-2 border-primary/40 border-t-primary rounded-full animate-spin" />
           </div>
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-foreground/15">
@@ -430,7 +476,7 @@ export function DirectChatView({
             ref={inputRef}
             type="text"
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={(e) => { setInputText(e.target.value); onTyping?.(); }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -450,7 +496,7 @@ export function DirectChatView({
             disabled={!inputText.trim() && !pendingImage}
             className={`w-7 h-7 rounded-lg border transition-colors disabled:opacity-20 flex items-center justify-center ${
               pendingImage
-                ? 'bg-primary/30 border-primary/40 text-orange-300 hover:bg-primary/40'
+                ? 'bg-primary/30 border-primary/40 text-primary/80 hover:bg-primary/40'
                 : 'bg-primary/20 border-primary/30 text-primary hover:bg-primary/30'
             }`}
           >

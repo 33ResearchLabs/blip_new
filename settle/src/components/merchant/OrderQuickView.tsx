@@ -53,31 +53,31 @@ function LockedPaymentMethodCard({
   }
 
   return (
-    <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4 space-y-3">
+    <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
       <div className="flex items-center gap-2">
         <Lock className="w-3.5 h-3.5 text-primary" />
         <span className="text-[11px] text-primary uppercase tracking-wide font-bold">Send AED Here</span>
       </div>
       <div className="flex items-center gap-2">
         {typeIcon}
-        <span className="text-sm text-white font-medium">{lpm.label}</span>
-        <span className="text-[10px] text-white/30 uppercase">{lpm.type}</span>
+        <span className="text-sm text-foreground font-medium">{lpm.label}</span>
+        <span className="text-[10px] text-foreground/30 uppercase">{lpm.type}</span>
       </div>
       {fields.map(({ label, value, key, mono }) => (
         <div key={key} className="flex justify-between items-center">
-          <span className="text-white/50 text-sm">{label}</span>
+          <span className="text-foreground/50 text-sm">{label}</span>
           <button
             onClick={() => copyField(value, key)}
-            className="flex items-center gap-1 text-white hover:text-white/70 transition-colors"
+            className="flex items-center gap-1 text-foreground hover:text-foreground/70 transition-colors"
           >
             <span className={`text-sm ${mono ? 'font-mono' : ''}`}>{value}</span>
-            {copiedKey === key ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-white/30" />}
+            {copiedKey === key ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-foreground/30" />}
           </button>
         </div>
       ))}
-      <div className="flex justify-between items-center pt-2 border-t border-white/[0.04]">
-        <span className="text-white/50 text-sm">Amount</span>
-        <span className="text-base font-semibold text-white">{'\u062F.\u0625'} {amount.toLocaleString()}</span>
+      <div className="flex justify-between items-center pt-2 border-t border-foreground/[0.04]">
+        <span className="text-foreground/50 text-sm">Amount</span>
+        <span className="text-base font-semibold text-foreground">{'\u062F.\u0625'} {amount.toLocaleString()}</span>
       </div>
     </div>
   );
@@ -137,18 +137,18 @@ export function OrderQuickView({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[90%] max-w-md bg-card-solid rounded-2xl shadow-2xl border border-white/[0.08] overflow-hidden"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[90%] max-w-md bg-card-solid rounded-2xl shadow-2xl border border-foreground/[0.08] overflow-hidden"
           >
             {/* Header */}
-            <div className="px-5 py-4 border-b border-white/[0.04] flex items-center justify-between">
+            <div className="px-5 py-4 border-b border-foreground/[0.04] flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-2xl border border-white/[0.04]">
+                <div className="w-12 h-12 rounded-xl bg-foreground/5 flex items-center justify-center text-2xl border border-foreground/[0.04]">
                   {selectedOrder.emoji}
                 </div>
                 <div>
-                  <p className="text-base font-semibold text-white">{selectedOrder.user}</p>
+                  <p className="text-base font-semibold text-foreground">{selectedOrder.user}</p>
                   <div className="flex items-center gap-2">
-                    <p className="text-[11px] text-white/40">
+                    <p className="text-[11px] text-foreground/40">
                       {selectedOrder.orderType === 'buy' ? 'Selling' : 'Buying'} USDC
                     </p>
                     {selectedOrder.myRole && (
@@ -157,7 +157,7 @@ export function OrderQuickView({
                           ? 'bg-blue-500/20 text-blue-400'
                           : selectedOrder.myRole === 'seller'
                           ? 'bg-purple-500/20 text-purple-400'
-                          : 'bg-gray-500/20 text-gray-400'
+                          : 'bg-gray-500/20 text-foreground/40'
                       }`}>
                         {selectedOrder.myRole === 'buyer' ? 'YOU RECEIVE' : selectedOrder.myRole === 'seller' ? 'YOU SEND' : 'OBSERVER'}
                       </span>
@@ -167,9 +167,9 @@ export function OrderQuickView({
               </div>
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
+                className="p-2 hover:bg-foreground/[0.04] rounded-lg transition-colors"
               >
-                <X className="w-4 h-4 text-white/40" />
+                <X className="w-4 h-4 text-foreground/40" />
               </button>
             </div>
 
@@ -177,19 +177,19 @@ export function OrderQuickView({
             <div className="p-5 space-y-4">
               {/* Escrow Status */}
               {selectedOrder.escrowTxHash && (
-                <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl p-3">
+                <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-3">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
-                      <Shield className="w-4 h-4 text-white" />
+                    <div className="w-8 h-8 rounded-lg bg-foreground/5 flex items-center justify-center">
+                      <Shield className="w-4 h-4 text-foreground" />
                     </div>
-                    <span className="text-sm font-medium text-white">Escrow Secured</span>
+                    <span className="text-sm font-medium text-foreground">Escrow Secured</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <a
                       href={getSolscanTxUrl(selectedOrder.escrowTxHash)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs text-white/60 hover:text-white/80 transition-colors"
+                      className="flex items-center gap-1 text-xs text-foreground/60 hover:text-foreground/80 transition-colors"
                     >
                       View TX <ExternalLink className="w-3 h-3" />
                     </a>
@@ -208,24 +208,24 @@ export function OrderQuickView({
               )}
 
               {/* Order Details */}
-              <div className="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4 space-y-3">
+              <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-4 space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-white/40 uppercase tracking-wide">Amount</span>
-                  <span className="text-sm font-semibold text-white">${selectedOrder.amount.toLocaleString()} USDC</span>
+                  <span className="text-xs text-foreground/40 uppercase tracking-wide">Amount</span>
+                  <span className="text-sm font-semibold text-foreground">${selectedOrder.amount.toLocaleString()} USDC</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-white/40 uppercase tracking-wide">Total Fiat</span>
-                  <span className="text-sm font-semibold text-white">{'\u062F.\u0625'} {Math.round(selectedOrder.total).toLocaleString()}</span>
+                  <span className="text-xs text-foreground/40 uppercase tracking-wide">Total Fiat</span>
+                  <span className="text-sm font-semibold text-foreground">{'\u062F.\u0625'} {Math.round(selectedOrder.total).toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between items-center pt-2 border-t border-white/[0.04]">
-                  <span className="text-xs text-white/40 flex items-center gap-1">
+                <div className="flex justify-between items-center pt-2 border-t border-foreground/[0.04]">
+                  <span className="text-xs text-foreground/40 flex items-center gap-1">
                     <Lock className="w-3 h-3" />
                     Rate (Locked)
                   </span>
-                  <span className="text-xs font-mono text-white/50">1 USDC = {selectedOrder.rate} AED</span>
+                  <span className="text-xs font-mono text-foreground/50">1 USDC = {selectedOrder.rate} AED</span>
                 </div>
                 {selectedOrder.dbOrder?.accepted_at && (
-                  <p className="text-[10px] text-white/25 text-right -mb-1">
+                  <p className="text-[10px] text-foreground/25 text-right -mb-1">
                     Locked at {new Date(selectedOrder.dbOrder.accepted_at).toLocaleString()}
                   </p>
                 )}
@@ -264,7 +264,7 @@ export function OrderQuickView({
                         {typeIcon}
                         <span>Seller&apos;s Payment Method</span>
                       </div>
-                      <div className="text-sm text-white font-medium">{spm.name}</div>
+                      <div className="text-sm text-foreground font-medium">{spm.name}</div>
                       <div className="text-xs text-zinc-400">{detailStr}</div>
                       <div className="text-right text-sm font-semibold text-green-400">{Math.round(selectedOrder.total)} د.إ</div>
                     </div>
@@ -343,11 +343,11 @@ export function OrderQuickView({
 
                 if (popupSellerRole === 'seller' && (popupStatus === 'escrowed' || popupStatus === 'accepted')) {
                   return (
-                    <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg bg-white/[0.04] flex items-center justify-center shrink-0">
+                    <div className="bg-foreground/[0.04] border border-foreground/[0.06] rounded-xl p-3 flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-foreground/[0.04] flex items-center justify-center shrink-0">
                         <span className="text-xs">{'\u231B'}</span>
                       </div>
-                      <p className="text-xs text-white/50">
+                      <p className="text-xs text-foreground/50">
                         {popupAccepted
                           ? 'Waiting for buyer to mark payment as sent...'
                           : 'Escrow locked by user. Waiting for a merchant to accept...'}
@@ -385,7 +385,7 @@ export function OrderQuickView({
                       </span>
                     </div>
                     {cancelReason && (
-                      <p className="text-xs text-white/50 mb-3">{cancelReason}</p>
+                      <p className="text-xs text-foreground/50 mb-3">{cancelReason}</p>
                     )}
                     <div className="flex gap-2">
                       <motion.button
@@ -407,7 +407,7 @@ export function OrderQuickView({
                           onRespondToCancel?.(selectedOrder.id, false);
                           onClose();
                         }}
-                        className="flex-1 py-2.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-white/70 text-sm font-medium flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                        className="flex-1 py-2.5 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.08] text-foreground/70 text-sm font-medium flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
                       >
                         Continue Order
                       </motion.button>
@@ -422,7 +422,7 @@ export function OrderQuickView({
                   <Loader2 className="w-4 h-4 text-primary animate-spin" />
                   <div>
                     <p className="text-sm font-medium text-primary">Cancel Request Sent</p>
-                    <p className="text-xs text-white/40">Waiting for counterparty to approve</p>
+                    <p className="text-xs text-foreground/40">Waiting for counterparty to approve</p>
                   </div>
                 </div>
               );
@@ -464,8 +464,8 @@ export function OrderQuickView({
                 // Action button styles
                 const PRIMARY_STYLE = 'bg-primary/10 hover:bg-primary/20 border-primary/30 hover:border-primary/40 text-primary';
                 const PRIMARY_LOADING = 'bg-primary/5 border-primary/10 text-primary/50 cursor-wait';
-                const SECONDARY_STYLE = 'bg-red-500/10 hover:bg-red-500/20 border-red-500/30 hover:border-red-500/40 text-red-400';
-                const DISABLED_STYLE = 'bg-white/[0.04] border-white/[0.06] text-white/40 cursor-not-allowed';
+                const SECONDARY_STYLE = 'bg-red-500/10 hover:bg-[var(--color-error)]/20 border-red-500/30 hover:border-[var(--color-error)]/40 text-red-400';
+                const DISABLED_STYLE = 'bg-foreground/[0.04] border-foreground/[0.06] text-foreground/40 cursor-not-allowed';
 
                 const loading = isActionLoading(primary.type);
 
@@ -525,7 +525,7 @@ export function OrderQuickView({
                   onViewFullDetails(selectedOrder.id);
                   onClose();
                 }}
-                className="w-full py-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white text-sm font-medium flex items-center justify-center gap-2 border border-white/[0.04] transition-colors"
+                className="w-full py-3 rounded-xl bg-foreground/[0.04] hover:bg-foreground/[0.08] text-foreground text-sm font-medium flex items-center justify-center gap-2 border border-foreground/[0.04] transition-colors"
               >
                 <ExternalLink className="w-4 h-4" />
                 View Full Details
@@ -536,7 +536,7 @@ export function OrderQuickView({
                   onOpenChat(selectedOrder);
                   onClose();
                 }}
-                className="w-full py-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-white text-sm font-medium flex items-center justify-center gap-2 border border-white/[0.04] transition-colors"
+                className="w-full py-3 rounded-xl bg-foreground/[0.04] hover:bg-foreground/[0.08] text-foreground text-sm font-medium flex items-center justify-center gap-2 border border-foreground/[0.04] transition-colors"
               >
                 <MessageCircle className="w-4 h-4" />
                 Chat

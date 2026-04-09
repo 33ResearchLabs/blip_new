@@ -340,6 +340,9 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 <DirectChatView
                   contactName={directChat.activeContactName}
                   contactType={directChat.activeContactType}
+                  contactId={directChat.activeContactId}
+                  isTyping={directChat.isContactTyping}
+                  onTyping={directChat.sendTyping}
                   messages={directChat.messages}
                   isLoading={directChat.isLoadingMessages}
                   onSendMessage={(text, imageUrl) => {

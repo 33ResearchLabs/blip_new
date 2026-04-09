@@ -83,7 +83,7 @@ export default function PWAInstallBanner({
                 <motion.button
                   whileTap={{ scale: 0.98 }}
                   onClick={install}
-                  className="w-full py-3 rounded-xl text-sm font-bold text-black flex items-center justify-center gap-2 transition-colors"
+                  className="w-full py-3 rounded-xl text-sm font-bold text-background flex items-center justify-center gap-2 transition-colors"
                   style={{ backgroundColor: accentColor }}
                 >
                   <Download className="w-4 h-4" />

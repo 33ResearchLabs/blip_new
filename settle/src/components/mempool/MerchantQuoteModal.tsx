@@ -284,7 +284,7 @@ export function MerchantQuoteModal({
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="flex-1 px-3 py-2 bg-white text-black text-xs font-medium rounded
+                className="flex-1 px-3 py-2 bg-white text-background text-xs font-medium rounded
                            hover:bg-white/90 transition-colors disabled:opacity-50"
               >
                 {isSaving ? 'Saving...' : 'Save'}

@@ -219,22 +219,29 @@ export function PusherProvider({ children }: PusherProviderProps) {
         }
       };
 
-      // Error handler
+      // Error handler — Pusher fires connection errors as opaque event objects
+      // (often `{}` or `{ error: { data: { code, message }}}`). These are
+      // transient and recover on the next reconnect, so demote to warn and
+      // extract any meaningful fields if present.
       const handleError = (error: unknown) => {
         if (!isMountedRef.current) return;
 
-        // Suppress empty error objects (transient WebSocket connection failures)
-        const hasInfo = error && typeof error === 'object' && Object.keys(error as object).length > 0;
-        if (hasInfo) {
-          console.error('[Pusher] Error:', error);
-        } else {
-          console.warn('[Pusher] Connection error (transient — will auto-reconnect)');
-        }
-        const e = error as { error?: { data?: { code?: number } } };
+        const e = error as { error?: { data?: { code?: number; message?: string }; type?: string }; message?: string; type?: string };
+        const code = e?.error?.data?.code;
+        const message = e?.error?.data?.message || e?.message;
+        const type = e?.error?.type || e?.type;
 
-        if (e.error?.data?.code === 4004) {
+        // 4004 = connection limit reached → mark unavailable
+        if (code === 4004) {
           console.warn('[Pusher] Connection limit reached');
           setConnectionState('unavailable');
+          return;
+        }
+
+        // Only log when we have something useful; otherwise stay silent —
+        // PusherJS already auto-reconnects on transient WebSocket drops.
+        if (code || message || type) {
+          console.warn('[Pusher] Connection error', { code, type, message });
         }
       };
 

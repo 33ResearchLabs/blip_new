@@ -80,7 +80,7 @@ export function TopRatedSellers() {
                 className={`p-2.5 rounded-lg border transition-all ${
                   seller.rank <= 3
                     ? 'bg-primary/10 border-primary/20'
-                    : 'bg-white/[0.02] border-white/[0.04] hover:border-white/[0.08]'
+                    : 'bg-white/[0.02] border-white/[0.04] hover:border-border'
                 }`}
               >
                 <div className="flex items-center gap-2.5">

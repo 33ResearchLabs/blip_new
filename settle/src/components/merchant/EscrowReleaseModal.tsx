@@ -57,15 +57,15 @@ export function EscrowReleaseModal({
                   </div>
                   <div>
                     <h2 className="text-sm font-semibold">Release Escrow</h2>
-                    <p className="text-[11px] text-gray-500">Confirm payment & release USDC</p>
+                    <p className="text-[11px] text-foreground/35">Confirm payment & release USDC</p>
                   </div>
                 </div>
                 {!isReleasingEscrow && (
                   <button
                     onClick={onClose}
-                    className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
+                    className="p-2 hover:bg-card rounded-lg transition-colors"
                   >
-                    <X className="w-4 h-4 text-gray-500" />
+                    <X className="w-4 h-4 text-foreground/35" />
                   </button>
                 )}
               </div>
@@ -80,16 +80,16 @@ export function EscrowReleaseModal({
                     </div>
                     <div>
                       <p className="text-sm font-medium">{releaseOrder.user}</p>
-                      <p className="text-xs text-gray-500">Buy Order - Payment Received</p>
+                      <p className="text-xs text-foreground/35">Buy Order - Payment Received</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="text-[10px] text-gray-500 uppercase mb-1">Release Amount</p>
+                      <p className="text-[10px] text-foreground/35 uppercase mb-1">Release Amount</p>
                       <p className="text-lg font-bold text-white">{releaseOrder.amount} USDC</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-gray-500 uppercase mb-1">Fiat Received</p>
+                      <p className="text-[10px] text-foreground/35 uppercase mb-1">Fiat Received</p>
                       <p className="text-lg font-bold text-white">د.إ {Math.round(releaseOrder.total).toLocaleString()}</p>
                     </div>
                   </div>
@@ -98,8 +98,8 @@ export function EscrowReleaseModal({
                 {/* Escrow Details */}
                 {releaseOrder.escrowTradeId && (
                   <div className="flex items-center justify-between bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-                    <span className="text-xs text-gray-500">Escrow Trade ID</span>
-                    <span className="text-xs font-mono text-gray-400">#{releaseOrder.escrowTradeId}</span>
+                    <span className="text-xs text-foreground/35">Escrow Trade ID</span>
+                    <span className="text-xs font-mono text-foreground/40">#{releaseOrder.escrowTradeId}</span>
                   </div>
                 )}
 
@@ -133,7 +133,7 @@ export function EscrowReleaseModal({
                         href={getSolscanTxUrl(releaseTxHash)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-xs text-white hover:text-white transition-colors"
+                        className="flex items-center gap-2 text-xs text-white hover:text-foreground transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
                         View on Solscan
@@ -143,7 +143,7 @@ export function EscrowReleaseModal({
                           href={getBlipscanTradeUrl(releaseOrder.escrowPda)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-xs text-orange-400 hover:text-orange-300 transition-colors"
+                          className="flex items-center gap-2 text-xs text-primary hover:text-primary/80 transition-colors"
                         >
                           <ExternalLink className="w-3 h-3" />
                           BlipScan
@@ -212,7 +212,7 @@ export function EscrowReleaseModal({
                   <motion.button
                     whileTap={{ scale: 0.98 }}
                     onClick={onClose}
-                    className="flex-1 py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white transition-all"
+                    className="flex-1 py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-accent-subtle border border-white/6 hover:border-border-strong text-white transition-all"
                   >
                     Done
                   </motion.button>
@@ -221,7 +221,7 @@ export function EscrowReleaseModal({
                     <button
                       onClick={onClose}
                       disabled={isReleasingEscrow}
-                      className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] transition-colors disabled:opacity-50"
+                      className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-accent-subtle transition-colors disabled:opacity-50"
                     >
                       Cancel
                     </button>
@@ -231,8 +231,8 @@ export function EscrowReleaseModal({
                       disabled={isReleasingEscrow || !releaseOrder.escrowTradeId || !releaseOrder.escrowCreatorWallet || !releaseOrder.userWallet}
                       className={`flex-[2] py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
                         isReleasingEscrow || !releaseOrder.escrowTradeId || !releaseOrder.escrowCreatorWallet || !releaseOrder.userWallet
-                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                          : 'bg-orange-500 hover:bg-orange-400 text-black'
+                          ? 'bg-gray-600 text-foreground/40 cursor-not-allowed'
+                          : 'bg-primary hover:bg-primary text-background'
                       }`}
                     >
                       {isReleasingEscrow ? (

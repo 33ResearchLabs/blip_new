@@ -435,7 +435,7 @@ export default function WalletPage() {
                   <button
                     onClick={() => { setSetupTab('create'); setSetupError(''); }}
                     className={`flex-1 py-2.5 rounded-md text-xs font-mono font-medium transition-colors ${
-                      setupTab === 'create' ? 'bg-white/[0.08] text-white' : 'text-white/40 hover:text-white/60'
+                      setupTab === 'create' ? 'bg-white/[0.08] text-white' : 'text-white/40 hover:text-foreground/60'
                     }`}
                   >
                     Create New
@@ -443,7 +443,7 @@ export default function WalletPage() {
                   <button
                     onClick={() => { setSetupTab('import'); setSetupError(''); }}
                     className={`flex-1 py-2.5 rounded-md text-xs font-mono font-medium transition-colors ${
-                      setupTab === 'import' ? 'bg-white/[0.08] text-white' : 'text-white/40 hover:text-white/60'
+                      setupTab === 'import' ? 'bg-white/[0.08] text-white' : 'text-white/40 hover:text-foreground/60'
                     }`}
                   >
                     Import Key
@@ -589,7 +589,7 @@ export default function WalletPage() {
                   onClick={handleFinishSetup}
                   disabled={!backupDownloaded}
                   className="w-full py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white font-bold font-mono text-sm
-                             hover:bg-white/[0.08] transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                             hover:bg-accent-subtle transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
                 >
                   Continue to Wallet
                 </button>
@@ -654,7 +654,7 @@ export default function WalletPage() {
                       embeddedWallet?.deleteWallet();
                       setSetupTab('import');
                     }}
-                    className="text-[10px] text-white/40 hover:text-white/70 font-mono transition-colors flex items-center gap-1"
+                    className="text-[10px] text-white/40 hover:text-foreground/70 font-mono transition-colors flex items-center gap-1"
                   >
                     <Key className="w-3 h-3" />
                     Import with private key
@@ -664,7 +664,7 @@ export default function WalletPage() {
                       embeddedWallet?.deleteWallet();
                       setSetupTab('create');
                     }}
-                    className="text-[10px] text-white/30 hover:text-white/50 font-mono transition-colors flex items-center gap-1"
+                    className="text-[10px] text-white/30 hover:text-foreground/50 font-mono transition-colors flex items-center gap-1"
                   >
                     <Wallet className="w-3 h-3" />
                     Create new wallet
@@ -718,11 +718,11 @@ export default function WalletPage() {
               {/* Address card */}
               <div
                 onClick={handleCopyAddress}
-                className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-4 flex items-center justify-between cursor-pointer hover:border-white/[0.12] transition-colors group"
+                className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-4 flex items-center justify-between cursor-pointer hover:border-border-strong transition-colors group"
               >
                 <div>
                   <div className="text-[9px] text-white/30 font-mono uppercase mb-0.5">Wallet Address</div>
-                  <div className="text-sm text-white/80 font-mono group-hover:text-white transition-colors">{truncated}</div>
+                  <div className="text-sm text-white/80 font-mono group-hover:text-foreground transition-colors">{truncated}</div>
                 </div>
                 <div className="flex items-center gap-2">
                   {address && (
@@ -731,9 +731,9 @@ export default function WalletPage() {
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
+                      className="p-1.5 rounded-lg hover:bg-card transition-colors"
                     >
-                      <ExternalLink className="w-3.5 h-3.5 text-white/20 hover:text-white/40" />
+                      <ExternalLink className="w-3.5 h-3.5 text-white/20 hover:text-foreground/40" />
                     </a>
                   )}
                   {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4 text-white/30" />}
@@ -754,7 +754,7 @@ export default function WalletPage() {
                   <button
                     onClick={handleAirdropSol}
                     disabled={isAirdropping}
-                    className="py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-colors
+                    className="py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-card transition-colors
                                flex flex-col items-center gap-1.5 disabled:opacity-50"
                   >
                     {isAirdropping ? <Loader2 className="w-5 h-5 text-primary animate-spin" /> : <Droplets className="w-5 h-5 text-primary" />}
@@ -764,7 +764,7 @@ export default function WalletPage() {
                 <button
                   onClick={handleRefresh}
                   disabled={isRefreshing}
-                  className="py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-colors
+                  className="py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-card transition-colors
                              flex flex-col items-center gap-1.5 disabled:opacity-50"
                 >
                   <RefreshCw className={`w-5 h-5 text-primary ${isRefreshing ? 'animate-spin' : ''}`} />
@@ -773,7 +773,7 @@ export default function WalletPage() {
                 {!MOCK_MODE && (
                   <button
                     onClick={handleExportKey}
-                    className="py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-white/[0.05] transition-colors
+                    className="py-3 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:bg-card transition-colors
                                flex flex-col items-center gap-1.5"
                   >
                     <Download className="w-5 h-5 text-primary" />
@@ -844,7 +844,7 @@ export default function WalletPage() {
 
                   <button
                     onClick={() => embeddedWallet?.lockWallet()}
-                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/[0.02] transition-colors border-b border-white/[0.03]"
+                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-card transition-colors border-b border-white/[0.03]"
                   >
                     <Lock className="w-4 h-4 text-white/30" />
                     <span className="text-sm text-white/60 font-mono">Lock Wallet</span>
@@ -852,7 +852,7 @@ export default function WalletPage() {
 
                   <button
                     onClick={handleExportKey}
-                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-white/[0.02] transition-colors border-b border-white/[0.03]"
+                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-card transition-colors border-b border-white/[0.03]"
                   >
                     <Download className="w-4 h-4 text-white/30" />
                     <span className="text-sm text-white/60 font-mono">Download Backup</span>
@@ -860,7 +860,7 @@ export default function WalletPage() {
 
                   <button
                     onClick={() => setShowDeleteConfirm(true)}
-                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-red-500/5 transition-colors"
+                    className="w-full px-4 py-3 flex items-center gap-3 hover:bg-[var(--color-error)]/5 transition-colors"
                   >
                     <Trash2 className="w-4 h-4 text-red-400/50" />
                     <span className="text-sm text-red-400/60 font-mono">Delete Wallet</span>
@@ -976,7 +976,7 @@ export default function WalletPage() {
             {sendSuccess && (
               <button
                 onClick={() => { setShowSendModal(false); setSendSuccess(''); }}
-                className="w-full py-3 rounded-xl bg-white/[0.06] text-white/60 font-mono text-sm hover:bg-white/[0.08] transition-colors"
+                className="w-full py-3 rounded-xl bg-white/[0.06] text-white/60 font-mono text-sm hover:bg-accent-subtle transition-colors"
               >
                 Done
               </button>
@@ -995,11 +995,11 @@ export default function WalletPage() {
             </p>
             <div className="flex gap-2">
               <button onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl bg-white/[0.06] text-sm text-white/60 font-mono hover:bg-white/[0.08] transition-colors">
+                className="flex-1 py-2.5 rounded-xl bg-white/[0.06] text-sm text-white/60 font-mono hover:bg-accent-subtle transition-colors">
                 Cancel
               </button>
               <button onClick={handleDelete}
-                className="flex-1 py-2.5 rounded-xl bg-red-500/20 border border-red-500/30 text-sm text-red-400 font-mono hover:bg-red-500/30 transition-colors">
+                className="flex-1 py-2.5 rounded-xl bg-red-500/20 border border-red-500/30 text-sm text-red-400 font-mono hover:bg-[var(--color-error)]/30 transition-colors">
                 Delete
               </button>
             </div>

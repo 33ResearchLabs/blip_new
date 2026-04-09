@@ -50,7 +50,7 @@ export function MarketSnapshot() {
   if (isLoading) {
     return (
       <div className="p-4 flex items-center justify-center">
-        <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
+        <Loader2 className="w-5 h-5 text-primary animate-spin" />
       </div>
     );
   }
@@ -97,7 +97,7 @@ export function MarketSnapshot() {
               </div>
             )}
           </div>
-          <div className="text-2xl font-bold text-orange-500 font-mono">
+          <div className="text-2xl font-bold text-primary font-mono">
             {Number(corridor.ref_price).toFixed(6)}
           </div>
           <div className="text-[10px] text-white/40 font-mono mt-0.5">

@@ -131,7 +131,7 @@ export default function OpsPage() {
               setNeedsAuth(false);
               fetchData(tab);
             }}
-            className="w-full py-2 bg-primary text-black font-bold font-mono rounded-lg hover:bg-primary/80"
+            className="w-full py-2 bg-primary text-background font-bold font-mono rounded-lg hover:bg-primary/80"
           >
             Unlock
           </button>

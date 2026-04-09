@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, memo } from 'react';
-import { CheckCircle2, History, Star, XCircle, AlertTriangle, ChevronUp, ChevronDown, Clock, ArrowRight, Loader2, Lock } from 'lucide-react';
+import { useState, memo, useMemo } from 'react';
+import { CheckCircle2, History, Star, XCircle, AlertTriangle, ChevronUp, ChevronDown, Clock, ArrowRight, Loader2, Lock, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { TransactionsTab } from './TransactionsTab';
+import { FilterDropdown, type FilterOption } from '@/components/user/screens/ui/FilterDropdown';
+
+type ActivityTab = 'transactions' | 'completed' | 'failed' | 'open';
 
 interface ActivityPanelProps {
   merchantId: string | null;
@@ -26,7 +29,9 @@ export const ActivityPanel = memo(function ActivityPanel({
   onSelectOrder,
   onCollapseChange,
 }: ActivityPanelProps) {
-  const [activeTab, setActiveTab] = useState<'transactions' | 'completed' | 'failed' | 'open'>('transactions');
+  const [activeTab, setActiveTab] = useState<ActivityTab>('transactions');
+  // Bumping this counter triggers TransactionsTab to refetch the ledger.
+  const [txnRefreshKey, setTxnRefreshKey] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const handleCollapse = (collapsed: boolean) => {
@@ -59,6 +64,14 @@ export const ActivityPanel = memo(function ActivityPanel({
   const openCount = openOrders.length;
   const failedCount = cancelledOrders.length;
 
+  // Build dropdown options dynamically so the labels still show counts.
+  const activityOptions = useMemo<ReadonlyArray<FilterOption<ActivityTab>>>(() => [
+    { key: 'transactions', label: 'Txns' },
+    { key: 'completed',    label: completedOrders.length > 0 ? `Done ${completedOrders.length}` : 'Done' },
+    { key: 'failed',       label: failedCount > 0 ? `Failed ${failedCount}` : 'Failed' },
+    { key: 'open',         label: openCount > 0 ? `Open ${openCount}` : 'Open' },
+  ], [completedOrders.length, failedCount, openCount]);
+
   // Detect stuck orders: in-progress > 30 min or pending > 15 min
   const isStuck = (order: any): boolean => {
     const created = order.dbOrder?.created_at ? new Date(order.dbOrder.created_at) : order.timestamp;
@@ -82,9 +95,9 @@ export const ActivityPanel = memo(function ActivityPanel({
       case 'pending':
         return { label: 'PENDING', color: 'text-foreground/40 bg-foreground/[0.04] border-foreground/[0.06]' };
       case 'accepted':
-        return { label: 'ACCEPTED', color: 'text-primary/70 bg-primary/10 border-orange-500/20' };
+        return { label: 'ACCEPTED', color: 'text-primary/70 bg-primary/10 border-primary/20' };
       case 'escrowed':
-        return { label: 'ESCROWED', color: 'text-primary bg-primary/10 border-orange-500/20' };
+        return { label: 'ESCROWED', color: 'text-primary bg-primary/10 border-primary/20' };
       case 'payment_sent':
         return { label: 'PAID', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' };
       case 'payment_confirmed':
@@ -132,50 +145,33 @@ export const ActivityPanel = memo(function ActivityPanel({
               Activity
             </h2>
           </div>
-          <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-1.5">
+            {/* Refresh — only meaningful for the Txns tab (the other tabs
+                derive from the page-level orders state which auto-syncs). */}
+            {activeTab === 'transactions' && (
               <button
-                onClick={() => setActiveTab('transactions')}
-                className={`px-2 py-1 rounded text-[9px] font-medium transition-all ${
-                  activeTab === 'transactions'
-                    ? 'bg-white/[0.08] text-foreground/80 border border-white/[0.10]'
-                    : 'text-foreground/30 hover:text-foreground/50'
-                }`}
+                onClick={() => setTxnRefreshKey(k => k + 1)}
+                className="p-1 rounded hover:bg-foreground/[0.06] transition-colors text-foreground/30 hover:text-foreground/60"
+                title="Refresh transactions"
               >
-                Txns
+                <RefreshCw className="w-3 h-3" />
               </button>
-              <button
-                onClick={() => setActiveTab('completed')}
-                className={`px-2 py-1 rounded text-[9px] font-medium transition-all ${
-                  activeTab === 'completed'
-                    ? 'bg-white/[0.08] text-foreground/80 border border-white/[0.10]'
-                    : 'text-foreground/30 hover:text-foreground/50'
-                }`}
-              >
-                Done{completedOrders.length > 0 ? ` ${completedOrders.length}` : ''}
-              </button>
-              <button
-                onClick={() => setActiveTab('failed')}
-                className={`px-2 py-1 rounded text-[9px] font-medium transition-all ${
-                  activeTab === 'failed'
-                    ? 'bg-red-500/20 text-red-400 border border-red-500/20'
-                    : 'text-foreground/30 hover:text-foreground/50'
-                }`}
-              >
-                Failed{failedCount > 0 ? ` ${failedCount}` : ''}
-              </button>
-              <button
-                onClick={() => setActiveTab('open')}
-                className={`px-2 py-1 rounded text-[9px] font-medium transition-all relative ${
-                  activeTab === 'open'
-                    ? 'bg-primary/15 text-primary border border-orange-500/20'
-                    : 'text-foreground/30 hover:text-foreground/50'
-                }`}
-              >
-                Open{openCount > 0 ? ` ${openCount}` : ''}
-                {openOrders.some(isStuck) && (
-                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
-                )}
-              </button>
+            )}
+            <div className="relative flex items-center">
+              <FilterDropdown
+                ariaLabel="Activity filter"
+                value={activeTab}
+                onChange={setActiveTab}
+                options={activityOptions}
+              />
+              {/* Stuck-order indicator follows the dropdown trigger */}
+              {openOrders.some(isStuck) && (
+                <span
+                  className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full pointer-events-none"
+                  title="Stuck orders detected"
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -184,7 +180,7 @@ export const ActivityPanel = memo(function ActivityPanel({
       <div className="flex-1 overflow-hidden">
         {/* Transactions Tab */}
         {activeTab === 'transactions' && (
-          merchantId ? <TransactionsTab merchantId={merchantId} /> : (
+          merchantId ? <TransactionsTab merchantId={merchantId} refreshKey={txnRefreshKey} onSelectOrder={onSelectOrder} /> : (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="w-4 h-4 text-foreground/20 animate-spin" />
             </div>
@@ -253,7 +249,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                                   key={s}
                                   className={`w-2.5 h-2.5 ${
                                     s <= (order.dbOrder?.merchant_rating || 0)
-                                      ? 'fill-orange-400 text-primary'
+                                      ? 'fill-primary text-primary'
                                       : 'text-foreground/10'
                                   }`}
                                 />
@@ -314,7 +310,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                         </div>
                         <span className={`flex items-center gap-1 text-[10px] font-bold font-mono px-1.5 py-0.5 rounded border ${
                           isDisputed
-                            ? 'bg-primary/10 text-primary border-orange-500/20'
+                            ? 'bg-primary/10 text-primary border-primary/20'
                             : 'bg-foreground/[0.04] text-foreground/30 border-foreground/[0.06]'
                         }`}>
                           {isDisputed ? (
@@ -369,7 +365,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.02 }}
                       className={`p-2.5 glass-card rounded-lg transition-colors cursor-pointer ${
-                        stuck ? 'border-red-500/20 hover:border-red-500/30' : 'hover:border-foreground/[0.08]'
+                        stuck ? 'border-red-500/20 hover:border-[var(--color-error)]/30' : 'hover:border-foreground/[0.08]'
                       }`}
                       onClick={() => onSelectOrder?.(order.id)}
                     >

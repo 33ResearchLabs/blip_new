@@ -24,6 +24,7 @@ import { checkRateLimit, ORDER_LIMIT } from '@/lib/middleware/rateLimit';
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import { query } from '@/lib/db';
 import { signPriceProof } from '@/lib/price/priceProof';
+import { getFinalPrice } from '@/lib/price/usdtInrPrice';
 import { enrichOrderResponse } from '@/lib/orders/enrichOrderResponse';
 
 // Prevent Next.js from caching this route - orders must always be fresh
@@ -175,6 +176,13 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(errors);
     }
 
+    // Pair (currency corridor) — defaults to usdt_aed for backward compat.
+    // Drives the rate source AND the order's fiat_currency / corridor_id.
+    const pairFromBody = (body?.pair === 'usdt_inr' || body?.pair === 'USDT_INR') ? 'usdt_inr' : 'usdt_aed';
+    const corridorId = pairFromBody === 'usdt_inr' ? 'USDT_INR' : 'USDT_AED';
+    const fiatCurrency = pairFromBody === 'usdt_inr' ? 'INR' : 'AED';
+    const fallbackRate = pairFromBody === 'usdt_inr' ? 83.0 : 3.67;
+
     const {
       merchant_id,
       type,
@@ -267,20 +275,36 @@ export async function POST(request: NextRequest) {
     // Offer matching is disabled. Orders are created with corridor ref_price
     // and broadcast to all merchants for manual acceptance.
 
-    // --- Price engine: resolve rate from corridor ---
-    const corridorData = await fetchCorridorRefPrice('USDT_AED');
-    const FALLBACK_RATE = 3.67;
-    let effectiveRate = corridorData?.ref_price ?? FALLBACK_RATE;
+    // --- Price engine: resolve rate based on the selected pair ---
+    // Honor admin's manual price (same source as dashboard market card via
+    // getFinalPrice), and fall back to corridor VWAP / hardcoded fallback.
+    let effectiveRate = fallbackRate;
+    let priceProofRefPrice: number | null = null;
+    try {
+      const finalPrice = await getFinalPrice(pairFromBody);
+      if (finalPrice.price > 0) {
+        effectiveRate = finalPrice.price;
+        priceProofRefPrice = finalPrice.price;
+      }
+    } catch (err) {
+      logger.warn('getFinalPrice failed for order creation, falling back to corridor VWAP', { pair: pairFromBody, error: String(err) });
+    }
+    if (priceProofRefPrice === null) {
+      const corridorData = await fetchCorridorRefPrice(corridorId);
+      if (corridorData?.ref_price) {
+        effectiveRate = corridorData.ref_price;
+        priceProofRefPrice = corridorData.ref_price;
+      }
+    }
     effectiveRate = Math.round(effectiveRate * 10000) / 10000;
 
     let priceProofSig: string | null = null;
-    const priceProofRefPrice: number | null = corridorData?.ref_price ?? null;
     let priceProofExpiresAt: string | null = null;
 
-    if (corridorData) {
+    if (priceProofRefPrice !== null) {
       const proof = signPriceProof({
-        corridor_id: 'USDT_AED',
-        ref_price: corridorData.ref_price,
+        corridor_id: corridorId,
+        ref_price: priceProofRefPrice,
         order_rate: effectiveRate,
         deviation_bps: 0,
         timestamp: Date.now(),
@@ -311,7 +335,8 @@ export async function POST(request: NextRequest) {
       crypto_amount,
       fiat_amount: fiatAmount,
       effective_rate: effectiveRate,
-      ref_price: corridorData?.ref_price,
+      ref_price: priceProofRefPrice,
+      pair: pairFromBody,
       spread_preference,
     });
 
@@ -366,6 +391,9 @@ export async function POST(request: NextRequest) {
         auto_bump_enabled: autoBumpEnabled,
         next_bump_at: autoBumpEnabled ? new Date(Date.now() + bumpIntervalSec * 1000).toISOString() : null,
         expiry_minutes: expiry_minutes || 15,
+        // Currency corridor: drives DB columns orders.corridor_id and orders.fiat_currency
+        corridor_id: corridorId,
+        fiat_currency: fiatCurrency,
       },
     });
 

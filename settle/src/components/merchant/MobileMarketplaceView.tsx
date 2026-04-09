@@ -26,7 +26,7 @@ export function MobileMarketplaceView({
         <button
           onClick={() => setMarketSubTab('browse')}
           className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
-            marketSubTab === 'browse' ? 'bg-white/10 text-white' : 'text-gray-500'
+            marketSubTab === 'browse' ? 'bg-white/10 text-white' : 'text-foreground/35'
           }`}
         >
           <Globe className="w-3.5 h-3.5" />
@@ -35,7 +35,7 @@ export function MobileMarketplaceView({
         <button
           onClick={() => setMarketSubTab('offers')}
           className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
-            marketSubTab === 'offers' ? 'bg-white/10 text-white' : 'text-gray-500'
+            marketSubTab === 'offers' ? 'bg-white/10 text-white' : 'text-foreground/35'
           }`}
         >
           <Package className="w-3.5 h-3.5" />

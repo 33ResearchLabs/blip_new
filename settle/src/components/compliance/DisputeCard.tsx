@@ -277,7 +277,7 @@ export default function DisputeCard({
         <motion.button
           whileTap={{ scale: 0.95 }}
           onClick={() => onResolve?.(dispute)}
-          className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/80 rounded-lg text-xs font-bold text-black transition-all"
+          className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/80 rounded-lg text-xs font-bold text-background transition-all"
         >
           <Scale className="w-3.5 h-3.5" />
           Resolve

@@ -38,7 +38,7 @@ export function MempoolFilters({ filters, onChange, onReset }: MempoolFiltersPro
             Filters
           </span>
           {hasActiveFilters && (
-            <span className="text-[8px] px-1.5 py-0.5 bg-orange-500/20 text-orange-500 rounded font-mono font-bold">
+            <span className="text-[8px] px-1.5 py-0.5 bg-primary/20 text-primary rounded font-mono font-bold">
               ACTIVE
             </span>
           )}
@@ -77,7 +77,7 @@ export function MempoolFilters({ filters, onChange, onReset }: MempoolFiltersPro
                   onChange({ ...filters, minPremiumBps: e.target.value })
                 }
                 className="px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                           text-white font-mono text-xs focus:outline-none focus:border-orange-500/50
+                           text-white font-mono text-xs focus:outline-none focus:border-primary/50
                            placeholder:text-white/20"
               />
               <input
@@ -88,7 +88,7 @@ export function MempoolFilters({ filters, onChange, onReset }: MempoolFiltersPro
                   onChange({ ...filters, maxPremiumBps: e.target.value })
                 }
                 className="px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                           text-white font-mono text-xs focus:outline-none focus:border-orange-500/50
+                           text-white font-mono text-xs focus:outline-none focus:border-primary/50
                            placeholder:text-white/20"
               />
             </div>
@@ -106,7 +106,7 @@ export function MempoolFilters({ filters, onChange, onReset }: MempoolFiltersPro
                 value={filters.minAmount}
                 onChange={(e) => onChange({ ...filters, minAmount: e.target.value })}
                 className="px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                           text-white font-mono text-xs focus:outline-none focus:border-orange-500/50
+                           text-white font-mono text-xs focus:outline-none focus:border-primary/50
                            placeholder:text-white/20"
               />
               <input
@@ -115,7 +115,7 @@ export function MempoolFilters({ filters, onChange, onReset }: MempoolFiltersPro
                 value={filters.maxAmount}
                 onChange={(e) => onChange({ ...filters, maxAmount: e.target.value })}
                 className="px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg
-                           text-white font-mono text-xs focus:outline-none focus:border-orange-500/50
+                           text-white font-mono text-xs focus:outline-none focus:border-primary/50
                            placeholder:text-white/20"
               />
             </div>

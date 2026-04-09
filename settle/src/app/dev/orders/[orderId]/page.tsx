@@ -151,7 +151,7 @@ export default async function DevOrderDetailPage({
                     {order.status}
                   </span>
                   {isTransientStatus(order.status) && (
-                    <span className="ml-2 text-orange-400 text-xs">⚠ Transient/micro-status</span>
+                    <span className="ml-2 text-primary text-xs">⚠ Transient/micro-status</span>
                   )}
                 </dd>
               </div>
@@ -447,7 +447,7 @@ export default async function DevOrderDetailPage({
         {/* Payment Details (if exists) */}
         {order.payment_details && (
           <div className="mt-6 bg-gray-900 rounded-lg p-6 border border-gray-700">
-            <h2 className="text-xl font-semibold mb-4 text-orange-400">Payment Details</h2>
+            <h2 className="text-xl font-semibold mb-4 text-primary">Payment Details</h2>
             <pre className="text-xs text-gray-300 overflow-auto">
               {JSON.stringify(order.payment_details, null, 2)}
             </pre>

@@ -360,6 +360,27 @@ export async function notifyNewDirectMessage(data: {
 }
 
 /**
+ * Notify typing status for a direct (1:1) chat — sent to the recipient's private channel.
+ */
+export async function notifyDirectTyping(
+  senderType: 'user' | 'merchant',
+  senderId: string,
+  recipientType: 'user' | 'merchant',
+  recipientId: string,
+  isTyping: boolean,
+): Promise<void> {
+  const recipientChannel = recipientType === 'merchant'
+    ? getMerchantChannel(recipientId)
+    : getUserChannel(recipientId);
+  const event = isTyping ? CHAT_EVENTS.TYPING_START : CHAT_EVENTS.TYPING_STOP;
+  await triggerEvent(recipientChannel, event, {
+    senderType,
+    senderId,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+/**
  * Notify typing status
  */
 export async function notifyTyping(

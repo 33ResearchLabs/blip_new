@@ -412,8 +412,8 @@ export default function ArbiterDashboard() {
                     <div>
                       <p className="text-sm font-semibold">Dispute #{vote.order_id.slice(0, 8)}</p>
                       <div className="flex items-center gap-2 mt-1">
-                        <Clock className="w-3 h-3 text-orange-400" />
-                        <span className="text-xs text-orange-400">
+                        <Clock className="w-3 h-3 text-primary" />
+                        <span className="text-xs text-primary">
                           {formatTimeRemaining(vote.deadline)} remaining
                         </span>
                       </div>
@@ -506,7 +506,7 @@ export default function ArbiterDashboard() {
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
                   index === 0 ? 'bg-yellow-500/20 text-yellow-400' :
                   index === 1 ? 'bg-gray-400/20 text-gray-300' :
-                  index === 2 ? 'bg-orange-500/20 text-orange-400' :
+                  index === 2 ? 'bg-primary/20 text-primary' :
                   'bg-white/[0.05] text-gray-500'
                 }`}>
                   {index + 1}

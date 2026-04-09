@@ -40,12 +40,16 @@ const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 // Reusable class strings — mirror Card / SectionLabel / CardLabel conventions
 const CARD = "bg-surface-card border border-border-subtle";
 const CARD_STRONG = "bg-white/[0.08] border border-white/10";
-const AMBER_CARD = "bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.2)]";
-const AMBER_CARD_STRONG = "bg-[rgba(245,158,11,0.12)] border border-[rgba(245,158,11,0.25)]";
-const RED_CARD = "bg-[rgba(239,68,68,0.10)] border border-[rgba(239,68,68,0.20)]";
-const SHEET_BG = "bg-surface-card"; // use as overlay on surface-base (sheet bg = base + card overlay); approximated
+const AMBER_CARD =
+  "bg-[rgba(245,158,11,0.08)] border border-[rgba(245,158,11,0.2)]";
+const AMBER_CARD_STRONG =
+  "bg-[rgba(245,158,11,0.12)] border border-[rgba(245,158,11,0.25)]";
+const RED_CARD =
+  "bg-[rgba(239,68,68,0.10)] border border-[rgba(239,68,68,0.20)]";
+const SHEET_BG = "bg-surface-base bg-surface-card"; // opaque base + card overlay so content behind doesn't bleed through
 const PRIMARY_BTN = "bg-accent text-accent-text";
-const SECONDARY_BTN = "bg-white/[0.08] text-text-primary border border-white/10";
+const SECONDARY_BTN =
+  "bg-white/[0.08] text-text-primary border border-white/10";
 const MUTED_BTN = "bg-white/[0.08] text-text-secondary";
 
 export interface OrderDetailScreenProps {
@@ -321,22 +325,47 @@ export const OrderDetailScreen = ({
     };
   }, [pendingImage]);
 
-  // Handle typing indicator
+  // Handle typing indicator — fires order-channel typing AND direct-chat typing
+  // (so the merchant sees it whether they're in TradeChat or the Messages panel).
+  const directTypingSentRef = useLocalRef(false);
+  const directTypingStopTimerRef = useLocalRef<NodeJS.Timeout | null>(null);
   const handleTypingChange = useLocalCallback(
     (value: string) => {
       setChatMessage(value);
-      if (!activeChat || !sendTypingIndicator) return;
+      if (!activeChat) return;
 
-      // Send typing start
-      sendTypingIndicator(activeChat.id, true);
+      // 1) Order-channel typing (existing — for TradeChat / order chat views)
+      if (sendTypingIndicator) {
+        sendTypingIndicator(activeChat.id, true);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => {
+          sendTypingIndicator(activeChat.id, false);
+        }, 2000);
+      }
 
-      // Clear previous timeout and set new one to send typing stop
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = setTimeout(() => {
-        sendTypingIndicator(activeChat.id, false);
-      }, 2000);
+      // 2) Direct-chat typing — fires once per burst, stops after 2s idle
+      const merchantId = activeOrder?.merchant?.id;
+      if (merchantId) {
+        if (!directTypingSentRef.current) {
+          directTypingSentRef.current = true;
+          fetchWithAuth('/api/merchant/direct-messages/typing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contactType: 'merchant', contactId: merchantId, isTyping: true }),
+          }).catch(() => {});
+        }
+        if (directTypingStopTimerRef.current) clearTimeout(directTypingStopTimerRef.current);
+        directTypingStopTimerRef.current = setTimeout(() => {
+          directTypingSentRef.current = false;
+          fetchWithAuth('/api/merchant/direct-messages/typing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contactType: 'merchant', contactId: merchantId, isTyping: false }),
+          }).catch(() => {});
+        }, 2000);
+      }
     },
-    [activeChat, sendTypingIndicator, setChatMessage],
+    [activeChat, sendTypingIndicator, setChatMessage, activeOrder?.merchant?.id],
   );
 
   // Cleanup typing timeout
@@ -403,10 +432,7 @@ export const OrderDetailScreen = ({
                     ? "bg-text-primary"
                     : "bg-text-quaternary";
               return (
-                <div
-                  key={step}
-                  className={`flex-1 h-1.5 rounded-full ${bg}`}
-                />
+                <div key={step} className={`flex-1 h-1.5 rounded-full ${bg}`} />
               );
             })}
           </div>
@@ -820,7 +846,9 @@ export const OrderDetailScreen = ({
                     {/* Funds Locked indicator - show when escrow is locked */}
                     {activeOrder.step === 2 &&
                       activeOrder.dbStatus === "escrowed" && (
-                        <div className={`mt-2 flex items-center gap-2 rounded-lg px-3 py-2 ${CARD_STRONG}`}>
+                        <div
+                          className={`mt-2 flex items-center gap-2 rounded-lg px-3 py-2 ${CARD_STRONG}`}
+                        >
                           <div className="w-5 h-5 rounded-full flex items-center justify-center bg-white/[0.08]">
                             <Lock className="w-3 h-3 text-text-primary" />
                           </div>
@@ -906,9 +934,7 @@ export const OrderDetailScreen = ({
                                     </div>
                                   </div>
                                   {/* Grid pattern for map feel */}
-                                  <div
-                                    className="absolute inset-0 opacity-10 bg-[linear-gradient(rgba(0,0,0,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.15)_1px,transparent_1px)] bg-[length:40px_40px]"
-                                  />
+                                  <div className="absolute inset-0 opacity-10 bg-[linear-gradient(rgba(0,0,0,0.15)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.15)_1px,transparent_1px)] bg-[length:40px_40px]" />
                                 </div>
                                 <button
                                   onClick={() =>
@@ -927,7 +953,9 @@ export const OrderDetailScreen = ({
                               </div>
 
                               {/* Meeting Details */}
-                              <div className={`rounded-xl p-3 space-y-3 ${CARD}`}>
+                              <div
+                                className={`rounded-xl p-3 space-y-3 ${CARD}`}
+                              >
                                 <div>
                                   <p className="text-[11px] uppercase tracking-wide mb-1 text-text-tertiary">
                                     Meeting Location
@@ -985,12 +1013,14 @@ export const OrderDetailScreen = ({
                             </>
                           ) : (
                             <>
-                              <div className={`rounded-xl p-3 space-y-2 ${CARD}`}>
+                              <div
+                                className={`rounded-xl p-3 space-y-2 ${CARD}`}
+                              >
                                 {/* Locked payment method header */}
                                 {activeOrder.lockedPaymentMethod && (
                                   <div className="flex items-center gap-1.5 pb-2 border-b border-white/10">
-                                    <Lock className="w-3 h-3 text-orange-400" />
-                                    <span className="text-[10px] text-orange-400 font-bold uppercase tracking-wide">
+                                    <Lock className="w-3 h-3 text-primary" />
+                                    <span className="text-[10px] text-primary font-bold uppercase tracking-wide">
                                       Send payment to this method only
                                     </span>
                                   </div>
@@ -1361,7 +1391,9 @@ export const OrderDetailScreen = ({
                               {activeOrder.acceptorWalletAddress?.slice(0, 4)}
                               ...{activeOrder.acceptorWalletAddress?.slice(-4)}
                               ). Lock your{" "}
-                              {parseFloat(activeOrder.cryptoAmount).toFixed(2)}{" "}
+                              {parseFloat(activeOrder.cryptoAmount).toFixed(
+                                2,
+                              )}{" "}
                               USDT to the escrow. Funds will be released to this
                               wallet when you confirm payment received.
                             </p>
@@ -1522,8 +1554,8 @@ export const OrderDetailScreen = ({
                             {activeOrder.lockedPaymentMethod ? (
                               <div className="pt-2 space-y-1.5 border-t border-white/10">
                                 <div className="flex items-center gap-1.5">
-                                  <Lock className="w-3 h-3 text-orange-400" />
-                                  <span className="text-[11px] text-orange-400 font-semibold uppercase tracking-wide">
+                                  <Lock className="w-3 h-3 text-primary" />
+                                  <span className="text-[11px] text-primary font-semibold uppercase tracking-wide">
                                     Locked Payment Method
                                   </span>
                                 </div>
@@ -1578,7 +1610,7 @@ export const OrderDetailScreen = ({
 
                           <div className="mt-3 h-1 rounded-full overflow-hidden bg-white/[0.08]">
                             <motion.div
-                              className="h-full bg-orange-400"
+                              className="h-full bg-primary"
                               animate={{ x: ["-100%", "100%"] }}
                               transition={{
                                 duration: 1.5,
@@ -1756,7 +1788,11 @@ export const OrderDetailScreen = ({
                         : "bg-surface-card text-text-tertiary"
                     }`}
                   >
-                    {activeOrder.step >= 4 ? <Check className="w-4 h-4" /> : "4"}
+                    {activeOrder.step >= 4 ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      "4"
+                    )}
                   </div>
                   <div>
                     <p
@@ -1918,7 +1954,7 @@ export const OrderDetailScreen = ({
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30 }}
-              className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl p-6 ${SHEET_BG}`}
+              className={`fixed bottom-0  left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl p-6 ${SHEET_BG}`}
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -2025,7 +2061,7 @@ export const OrderDetailScreen = ({
                     </p>
                     <div className="flex items-center gap-1.5">
                       <ConnectionIndicator isConnected={true} />
-                      <p className="text-[11px] text-orange-500">Online</p>
+                      <p className="text-[11px] text-primary">Online</p>
                     </div>
                   </div>
                 </div>
@@ -2045,7 +2081,9 @@ export const OrderDetailScreen = ({
                         const data = JSON.parse(msg.text);
                         return (
                           <div key={msg.id} className="flex justify-center">
-                            <div className={`w-full max-w-[90%] rounded-2xl p-4 ${RED_CARD}`}>
+                            <div
+                              className={`w-full max-w-[90%] rounded-2xl p-4 ${RED_CARD}`}
+                            >
                               <div className="flex items-center gap-2 mb-2">
                                 <AlertTriangle className="w-4 h-4 text-[#ef4444]" />
                                 <span className="text-[13px] font-semibold text-[#ef4444]">
@@ -2079,7 +2117,9 @@ export const OrderDetailScreen = ({
                         const data = JSON.parse(msg.text);
                         return (
                           <div key={msg.id} className="flex justify-center">
-                            <div className={`w-full max-w-[90%] rounded-2xl p-4 ${CARD_STRONG}`}>
+                            <div
+                              className={`w-full max-w-[90%] rounded-2xl p-4 ${CARD_STRONG}`}
+                            >
                               <div className="flex items-center gap-2 mb-2">
                                 <Shield className="w-4 h-4 text-text-secondary" />
                                 <span className="text-[13px] font-semibold text-text-secondary">
@@ -2143,7 +2183,9 @@ export const OrderDetailScreen = ({
                         const data = JSON.parse(msg.text);
                         return (
                           <div key={msg.id} className="flex justify-center">
-                            <div className={`w-full max-w-[90%] rounded-2xl p-4 ${CARD_STRONG}`}>
+                            <div
+                              className={`w-full max-w-[90%] rounded-2xl p-4 ${CARD_STRONG}`}
+                            >
                               <div className="flex items-center gap-2 mb-2">
                                 <Check className="w-4 h-4 text-text-primary" />
                                 <span className="text-[13px] font-semibold text-text-primary">
@@ -2292,7 +2334,9 @@ export const OrderDetailScreen = ({
                     (m) => m.messageType === "resolution",
                   ) && (
                     <div className="flex justify-center">
-                      <div className={`w-full max-w-[90%] rounded-2xl p-4 ${CARD}`}>
+                      <div
+                        className={`w-full max-w-[90%] rounded-2xl p-4 ${CARD}`}
+                      >
                         <div className="flex items-center gap-2 mb-2">
                           <Shield className="w-4 h-4 text-text-secondary" />
                           <span className="text-[13px] font-semibold text-text-secondary">
@@ -2300,9 +2344,7 @@ export const OrderDetailScreen = ({
                           </span>
                         </div>
                         <p className="text-[14px] mb-1 text-text-primary">
-                          <span className="text-text-tertiary">
-                            Decision:
-                          </span>{" "}
+                          <span className="text-text-tertiary">Decision:</span>{" "}
                           {disputeInfo.proposed_resolution.replace(/_/g, " ")}
                         </p>
                         {disputeInfo.resolution_notes && (

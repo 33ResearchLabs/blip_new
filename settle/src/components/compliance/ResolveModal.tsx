@@ -109,7 +109,7 @@ export default function ResolveModal({
                       onClick={() => setResolveForm((prev) => ({ ...prev, resolution: "split" }))}
                       className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
                         resolveForm.resolution === "split"
-                          ? "border-orange-500/50 bg-primary/10"
+                          ? "border-primary/50 bg-primary/10"
                           : "border-border hover:border-[var(--color-border-medium)] bg-[var(--color-bg-tertiary)]"
                       }`}
                     >
@@ -201,7 +201,7 @@ export default function ResolveModal({
                     whileTap={{ scale: 0.98 }}
                     onClick={onResolve}
                     disabled={!resolveForm.resolution}
-                    className="flex-1 py-3 rounded-xl text-sm font-bold bg-primary text-black hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                    className="flex-1 py-3 rounded-xl text-sm font-bold bg-primary text-background hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
                   >
                     <Check className="w-4 h-4" />
                     Propose

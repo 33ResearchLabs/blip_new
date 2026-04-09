@@ -22,8 +22,12 @@ export const TREASURY_WALLET = new PublicKey('8G55Mg2QmeR5LTz1Ckp8fH2cYh4H3HpLHz
 // Fee basis points (2.5% = 250 bps)
 export const FEE_BPS = 250;
 
-// Devnet RPC
-export const DEVNET_RPC = 'https://api.devnet.solana.com';
+// Devnet RPC — prefer the project-configured RPC (Helius/QuickNode via
+// NEXT_PUBLIC_SOLANA_RPC_URL). The public api.devnet.solana.com endpoint is
+// rate-limited and frequently triggers "Failed to fetch" errors in the browser.
+export const DEVNET_RPC =
+  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SOLANA_RPC_URL)
+    || 'https://api.devnet.solana.com';
 
 // Compliance/DAO wallets for dispute resolution
 // These wallets have authority to release or refund escrow in disputed orders

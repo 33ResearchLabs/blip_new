@@ -6,12 +6,51 @@
  * VWAP with time decay every 30s and writes to corridor_prices.
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { getFinalPrice } from '@/lib/price/usdtInrPrice';
 
-const FALLBACK_RATE = 3.67;
+const FALLBACK_RATES: Record<string, number> = {
+  USDT_AED: 3.67,
+  USDT_INR: 83.0,
+};
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // Pair query: accepts usdt_aed / usdt_inr (lowercase) or USDT_AED / USDT_INR.
+  // Defaults to USDT_AED for backward compatibility.
+  const pairParam = (request.nextUrl.searchParams.get('pair') || 'usdt_aed').toLowerCase();
+  const pairId = pairParam === 'usdt_inr' ? 'usdt_inr' : 'usdt_aed';
+  const corridorId = pairId === 'usdt_inr' ? 'USDT_INR' : 'USDT_AED';
+  const FALLBACK_RATE = FALLBACK_RATES[corridorId] ?? 3.67;
+
+  // 1. Honor the admin's manual price (single source of truth used by the
+  //    dashboard market card via /api/price). When the admin sets MANUAL mode,
+  //    return that price. When in LIVE mode, getFinalPrice falls back to the
+  //    latest tick. Either way, this matches what the merchant dashboard shows
+  //    so the ConfigPanel calculates spreads off the same number.
+  try {
+    const finalPrice = await getFinalPrice(pairId);
+    if (finalPrice.price > 0) {
+      return NextResponse.json({
+        success: true,
+        data: {
+          corridor_id: corridorId,
+          ref_price: finalPrice.price,
+          volume_5m: 0,
+          avg_fill_time_sec: 0,
+          active_merchants_count: 0,
+          updated_at: new Date().toISOString(),
+          calculation_method: finalPrice.mode === 'MANUAL' ? 'admin_manual' : 'live_tick',
+          is_fallback: false,
+          is_stale: false,
+          confidence: finalPrice.mode === 'MANUAL' ? 'admin' : 'live',
+        },
+      });
+    }
+  } catch (err) {
+    console.warn('[DynamicRate] getFinalPrice failed, falling back to corridor VWAP:', err);
+  }
+
   try {
     const rows = await query<{
       corridor_id: string;
@@ -22,15 +61,15 @@ export async function GET() {
     }>(
       `SELECT corridor_id, ref_price, volume_5m, confidence, updated_at
        FROM corridor_prices
-       WHERE corridor_id = 'USDT_AED'`,
-      []
+       WHERE corridor_id = $1`,
+      [corridorId]
     );
 
     if (!rows[0]) {
       return NextResponse.json({
         success: true,
         data: {
-          corridor_id: 'USDT_AED',
+          corridor_id: corridorId,
           ref_price: FALLBACK_RATE,
           volume_5m: 0,
           avg_fill_time_sec: 0,
@@ -68,7 +107,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: {
-        corridor_id: 'USDT_AED',
+        corridor_id: corridorId,
         ref_price: FALLBACK_RATE,
         volume_5m: 0,
         avg_fill_time_sec: 0,

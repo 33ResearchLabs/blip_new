@@ -63,9 +63,9 @@ const ScoreBadge = ({ tier, score }: { tier: string; score: number }) => {
   const tierStyles = {
     diamond: "bg-white/10 text-white border-white/6",
     gold: "bg-white/10 text-white border-white/6",
-    silver: "bg-gray-400/20 text-gray-300 border-gray-400/30",
+    silver: "bg-gray-400/20 text-foreground/60 border-gray-400/30",
     bronze: "bg-white/10 text-white/70 border-white/6",
-    unranked: "bg-gray-600/20 text-gray-500 border-gray-600/30",
+    unranked: "bg-gray-600/20 text-foreground/35 border-gray-600/30",
   };
 
   const tierIcons = {
@@ -192,16 +192,16 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Globe className="w-5 h-5 text-orange-400" />
+          <Globe className="w-5 h-5 text-primary" />
           <h2 className="text-sm font-semibold">Marketplace</h2>
-          <span className="text-xs text-gray-500">({offers.length} offers)</span>
+          <span className="text-xs text-foreground/35">({offers.length} offers)</span>
           {refPrice && (
             <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
               refPrice.confidence === "high"
                 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                 : refPrice.confidence === "medium"
-                ? "bg-orange-500/10 text-orange-400 border-orange-500/20"
-                : "bg-gray-500/10 text-gray-400 border-gray-500/20"
+                ? "bg-primary/10 text-primary border-primary/20"
+                : "bg-gray-500/10 text-foreground/40 border-gray-500/20"
             }`}>
               Ref: {refPrice.price.toFixed(4)} AED
             </span>
@@ -210,9 +210,9 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
         <button
           onClick={fetchOffers}
           disabled={isLoading}
-          className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
+          className="p-2 hover:bg-card rounded-lg transition-colors"
         >
-          <RefreshCw className={`w-4 h-4 text-gray-400 ${isLoading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`w-4 h-4 text-foreground/40 ${isLoading ? "animate-spin" : ""}`} />
         </button>
       </div>
 
@@ -222,11 +222,11 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
         <div className="relative">
           <button
             onClick={() => setShowSortDropdown(!showSortDropdown)}
-            className="flex items-center gap-2 px-3 py-2 bg-card-solid rounded-xl border border-white/[0.04] text-xs hover:border-white/[0.08] transition-colors"
+            className="flex items-center gap-2 px-3 py-2 bg-card-solid rounded-xl border border-white/[0.04] text-xs hover:border-border transition-colors"
           >
-            <TrendingUp className="w-3.5 h-3.5 text-orange-400" />
+            <TrendingUp className="w-3.5 h-3.5 text-primary" />
             <span>{sortOption?.label || "Best Overall"}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+            <ChevronDown className="w-3.5 h-3.5 text-foreground/35" />
           </button>
 
           <AnimatePresence>
@@ -252,12 +252,12 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                         }}
                         className={`w-full flex flex-col items-start px-3 py-2 rounded-lg text-left transition-colors ${
                           sortBy === option.value
-                            ? "bg-orange-500/10 text-orange-400"
-                            : "hover:bg-white/[0.04] text-white"
+                            ? "bg-primary/10 text-primary"
+                            : "hover:bg-card text-white"
                         }`}
                       >
                         <span className="text-xs font-medium">{option.label}</span>
-                        <span className="text-[10px] text-gray-500">{option.description}</span>
+                        <span className="text-[10px] text-foreground/35">{option.description}</span>
                       </button>
                     ))}
                   </div>
@@ -276,7 +276,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 typeFilter === type
                   ? "bg-white/[0.08] text-white"
-                  : "text-gray-500 hover:text-gray-300"
+                  : "text-foreground/35 hover:text-foreground/70"
               }`}
             >
               {type === "all" ? "All" : type === "buy" ? "Buy" : "Sell"}
@@ -293,7 +293,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                 paymentFilter === method
                   ? "bg-white/[0.08] text-white"
-                  : "text-gray-500 hover:text-gray-300"
+                  : "text-foreground/35 hover:text-foreground/70"
               }`}
             >
               {method === "all" ? "All" : method === "bank" ? "Bank" : "Cash"}
@@ -303,18 +303,18 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
       </div>
 
       {/* Ranking Notice */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-orange-500/5 rounded-xl border border-orange-500/10">
-        <TrendingUp className="w-4 h-4 text-orange-400" />
-        <span className="text-[11px] text-gray-400">
-          Offers ranked by <span className="text-orange-400 font-medium">BlipScore</span> — a composite of price, reliability, and speed
+      <div className="flex items-center gap-2 px-3 py-2 bg-primary/5 rounded-xl border border-primary/10">
+        <TrendingUp className="w-4 h-4 text-primary" />
+        <span className="text-[11px] text-foreground/40">
+          Offers ranked by <span className="text-primary font-medium">BlipScore</span> — a composite of price, reliability, and speed
         </span>
       </div>
 
       {/* Loading State */}
       {isLoading && (
         <div className="flex flex-col items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 text-orange-400 animate-spin mb-3" />
-          <p className="text-sm text-gray-500">Loading marketplace...</p>
+          <Loader2 className="w-8 h-8 text-primary animate-spin mb-3" />
+          <p className="text-sm text-foreground/35">Loading marketplace...</p>
         </div>
       )}
 
@@ -325,7 +325,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
           <p className="text-sm text-red-400 mb-3">{error}</p>
           <button
             onClick={fetchOffers}
-            className="px-4 py-2 bg-white/[0.04] hover:bg-white/[0.08] rounded-lg text-xs transition-colors"
+            className="px-4 py-2 bg-white/[0.04] hover:bg-accent-subtle rounded-lg text-xs transition-colors"
           >
             Try Again
           </button>
@@ -337,7 +337,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
         <div className="flex flex-col items-center justify-center py-16">
           <Globe className="w-12 h-12 text-gray-600 mb-3" />
           <p className="text-sm font-medium text-white mb-1">No offers available</p>
-          <p className="text-xs text-gray-500 text-center max-w-xs">
+          <p className="text-xs text-foreground/35 text-center max-w-xs">
             There are no active offers matching your filters. Try adjusting your filters or check back later.
           </p>
         </div>
@@ -351,7 +351,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
               key={offer.id}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-4 bg-card-solid rounded-xl border border-white/[0.04] hover:border-white/[0.08] transition-all"
+              className="p-4 bg-card-solid rounded-xl border border-white/[0.04] hover:border-border transition-all"
             >
               <div className="flex items-start gap-3">
                 {/* Merchant Avatar + Name */}
@@ -375,7 +375,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                     {offer.blipScore && !offer.blipScore.isTrusted && <TrustWarning />}
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-500 mb-2">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-foreground/35 mb-2">
                     <span className="flex items-center gap-1">
                       <Star className="w-3 h-3 text-white" />
                       {offer.merchant.rating.toFixed(1)} ({offer.merchant.rating_count})
@@ -393,11 +393,11 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                     <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
                       offer.type === "buy"
                         ? "bg-green-500/10 text-green-400"
-                        : "bg-orange-500/10 text-orange-400"
+                        : "bg-primary/10 text-primary"
                     }`}>
                       {offer.type === "buy" ? "BUYING USDC" : "SELLING USDC"}
                     </span>
-                    <span className="px-2 py-0.5 bg-white/[0.04] rounded text-[10px] text-gray-400">
+                    <span className="px-2 py-0.5 bg-white/[0.04] rounded text-[10px] text-foreground/40">
                       {offer.payment_method === "bank" ? "Bank" : "Cash"}
                       {offer.bank_name && ` • ${offer.bank_name}`}
                       {offer.location_name && ` • ${offer.location_name}`}
@@ -410,17 +410,17 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                   <p className="text-lg font-bold text-white">
                     {offer.rate.toFixed(4)}
                   </p>
-                  <p className="text-[10px] text-gray-500 mb-2">
+                  <p className="text-[10px] text-foreground/35 mb-2">
                     AED/USDC
                     {refPrice && (() => {
                       const dev = Math.abs(offer.rate - refPrice.price) / refPrice.price;
                       const devPct = (dev * 100).toFixed(1);
-                      const color = dev < 0.02 ? "text-emerald-400" : dev < 0.05 ? "text-orange-400" : "text-red-400";
+                      const color = dev < 0.02 ? "text-emerald-400" : dev < 0.05 ? "text-primary" : "text-red-400";
                       const sign = offer.rate >= refPrice.price ? "+" : "-";
                       return <span className={`ml-1 ${color}`}>({sign}{devPct}%)</span>;
                     })()}
                   </p>
-                  <p className="text-[10px] text-gray-500">
+                  <p className="text-[10px] text-foreground/35">
                     {offer.min_amount.toLocaleString()} - {offer.max_amount.toLocaleString()} USDC
                   </p>
                 </div>
@@ -428,12 +428,12 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
 
               {/* Take Action */}
               <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center justify-between">
-                <div className="text-[10px] text-gray-500">
+                <div className="text-[10px] text-foreground/35">
                   Available: <span className="text-white font-medium">{offer.available_amount.toLocaleString()} USDC</span>
                 </div>
                 <button
                   onClick={() => onTakeOffer(offer)}
-                  className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-400 text-black rounded-lg text-xs font-medium transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary text-background rounded-lg text-xs font-medium transition-colors"
                 >
                   <span>Take Offer</span>
                   <ArrowRight className="w-3.5 h-3.5" />

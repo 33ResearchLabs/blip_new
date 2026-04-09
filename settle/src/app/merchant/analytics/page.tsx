@@ -72,7 +72,7 @@ export default function AnalyticsPage() {
         <div className="px-4 h-14 flex items-center gap-4">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#ff6b35] to-[#ff8c50] flex items-center justify-center text-black font-bold text-sm">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#ff6b35] to-[#ff8c50] flex items-center justify-center text-background font-bold text-sm">
               B
             </div>
             <span className="text-sm font-semibold hidden sm:block">Merchant</span>
@@ -82,7 +82,7 @@ export default function AnalyticsPage() {
           <nav className="flex items-center gap-1 ml-4">
             <Link
               href="/merchant"
-              className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-all"
+              className="px-3 py-1.5 text-xs font-medium text-foreground/40 hover:text-foreground hover:bg-card rounded-lg transition-all"
             >
               Console
             </Link>
@@ -94,7 +94,7 @@ export default function AnalyticsPage() {
             </Link>
             <Link
               href="/merchant/settings"
-              className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-white hover:bg-white/[0.04] rounded-lg transition-all"
+              className="px-3 py-1.5 text-xs font-medium text-foreground/40 hover:text-foreground hover:bg-card rounded-lg transition-all"
             >
               Settings
             </Link>
@@ -132,7 +132,7 @@ export default function AnalyticsPage() {
             </div>
             <div className="hidden sm:block">
               <p className="text-xs font-medium">{merchantInfo?.display_name || merchantInfo?.business_name || 'Merchant'}</p>
-              <p className="text-[10px] text-gray-500">{merchantInfo?.rating?.toFixed(2) || '5.00'}★</p>
+              <p className="text-[10px] text-foreground/35">{merchantInfo?.rating?.toFixed(2) || '5.00'}★</p>
             </div>
           </div>
         </div>
@@ -144,7 +144,7 @@ export default function AnalyticsPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-xl font-bold">Analytics</h1>
-            <p className="text-xs text-gray-500 mt-0.5">Performance overview and insights</p>
+            <p className="text-xs text-foreground/35 mt-0.5">Performance overview and insights</p>
           </div>
 
           {/* Timeframe Selector */}
@@ -155,8 +155,8 @@ export default function AnalyticsPage() {
                 onClick={() => setTimeframe(tf)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                   timeframe === tf
-                    ? "bg-[#ff6b35] text-black"
-                    : "text-gray-400 hover:text-white"
+                    ? "bg-[#ff6b35] text-background"
+                    : "text-foreground/40 hover:text-foreground"
                 }`}
               >
                 {tf === "all" ? "All Time" : tf}
@@ -172,7 +172,7 @@ export default function AnalyticsPage() {
               <div className="w-8 h-8 rounded-lg bg-[#ff6b35]/10 flex items-center justify-center">
                 <Activity className="w-4 h-4 text-[#ff6b35]" />
               </div>
-              <span className="text-xs text-gray-500">Total Trades</span>
+              <span className="text-xs text-foreground/35">Total Trades</span>
             </div>
             <p className="text-2xl font-bold">{totalTrades}</p>
             <div className="flex items-center gap-1 mt-1">
@@ -186,7 +186,7 @@ export default function AnalyticsPage() {
               <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
                 <TrendingUp className="w-4 h-4 text-emerald-400" />
               </div>
-              <span className="text-xs text-gray-500">Volume</span>
+              <span className="text-xs text-foreground/35">Volume</span>
             </div>
             <p className="text-2xl font-bold">${Math.round(totalVolume / 1000)}k</p>
             <div className="flex items-center gap-1 mt-1">
@@ -200,7 +200,7 @@ export default function AnalyticsPage() {
               <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
                 <Wallet className="w-4 h-4 text-amber-400" />
               </div>
-              <span className="text-xs text-gray-500">Earnings</span>
+              <span className="text-xs text-foreground/35">Earnings</span>
             </div>
             <p className="text-2xl font-bold">${Math.round(totalEarnings)}</p>
             <div className="flex items-center gap-1 mt-1">
@@ -214,7 +214,7 @@ export default function AnalyticsPage() {
               <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
                 <Zap className="w-4 h-4 text-purple-400" />
               </div>
-              <span className="text-xs text-gray-500">Avg Response</span>
+              <span className="text-xs text-foreground/35">Avg Response</span>
             </div>
             <p className="text-2xl font-bold">{avgResponseTime}s</p>
             <div className="flex items-center gap-1 mt-1">
@@ -229,7 +229,7 @@ export default function AnalyticsPage() {
           <div className="lg:col-span-2 bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold">Weekly Volume</h3>
-              <div className="flex items-center gap-3 text-[10px] text-gray-500">
+              <div className="flex items-center gap-3 text-[10px] text-foreground/35">
                 <div className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full bg-[#ff6b35]" />
                   Volume
@@ -258,7 +258,7 @@ export default function AnalyticsPage() {
                       </div>
                     </motion.div>
                   </div>
-                  <span className="text-[10px] text-gray-500">{day.day}</span>
+                  <span className="text-[10px] text-foreground/35">{day.day}</span>
                 </div>
               ))}
             </div>
@@ -272,7 +272,7 @@ export default function AnalyticsPage() {
               {/* Success Rate */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs text-gray-400">Success Rate</span>
+                  <span className="text-xs text-foreground/40">Success Rate</span>
                   <span className="text-sm font-bold text-emerald-400">98.2%</span>
                 </div>
                 <div className="h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
@@ -288,7 +288,7 @@ export default function AnalyticsPage() {
               {/* Rating */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs text-gray-400">Average Rating</span>
+                  <span className="text-xs text-foreground/40">Average Rating</span>
                   <div className="flex items-center gap-1">
                     <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
                     <span className="text-sm font-bold">4.92</span>
@@ -307,7 +307,7 @@ export default function AnalyticsPage() {
               {/* Bond Utilization */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs text-gray-400">Bond Utilization</span>
+                  <span className="text-xs text-foreground/40">Bond Utilization</span>
                   <span className="text-sm font-bold">32%</span>
                 </div>
                 <div className="h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
@@ -323,7 +323,7 @@ export default function AnalyticsPage() {
               {/* Disputes */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs text-gray-400">Disputes (30d)</span>
+                  <span className="text-xs text-foreground/40">Disputes (30d)</span>
                   <span className="text-sm font-bold text-emerald-400">0</span>
                 </div>
                 <div className="h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
@@ -336,11 +336,11 @@ export default function AnalyticsPage() {
             <div className="mt-6 p-3 bg-gradient-to-r from-[#ff6b35]/10 to-amber-500/10 rounded-lg border border-[#ff6b35]/20">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff6b35] to-amber-500 flex items-center justify-center">
-                  <Award className="w-5 h-5 text-black" />
+                  <Award className="w-5 h-5 text-background" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold">Tier 3 Merchant</p>
-                  <p className="text-[10px] text-gray-500">847 trades · 4.92★</p>
+                  <p className="text-[10px] text-foreground/35">847 trades · 4.92★</p>
                 </div>
               </div>
             </div>
@@ -369,7 +369,7 @@ export default function AnalyticsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{trade.user}</p>
-                    <p className="text-[10px] text-gray-500">${trade.amount.toLocaleString()} USDC</p>
+                    <p className="text-[10px] text-foreground/35">${trade.amount.toLocaleString()} USDC</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-semibold text-emerald-400">+${trade.profit}</p>
@@ -384,7 +384,7 @@ export default function AnalyticsPage() {
           <div className="bg-[#0d0d0d] rounded-xl border border-white/[0.04] p-4">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold">Top Users</h3>
-              <div className="flex items-center gap-1 text-[10px] text-gray-500">
+              <div className="flex items-center gap-1 text-[10px] text-foreground/35">
                 <Users className="w-3 h-3" />
                 By volume
               </div>
@@ -404,7 +404,7 @@ export default function AnalyticsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{user.name}</p>
-                    <p className="text-[10px] text-gray-500">{user.trades} trades</p>
+                    <p className="text-[10px] text-foreground/35">{user.trades} trades</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-semibold">${Math.round(user.volume / 1000)}k</p>

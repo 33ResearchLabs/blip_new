@@ -208,7 +208,7 @@ export function OrderInspector({
 
                 <div>
                   <div className="text-[10px] text-white/40 font-mono uppercase mb-1">Current Price</div>
-                  <div className="text-2xl font-bold text-orange-500 font-mono">
+                  <div className="text-2xl font-bold text-primary font-mono">
                     {Number(order.current_offer_price).toFixed(6)}
                   </div>
                   <div className="text-[10px] text-white/40 font-mono">AED/USDT</div>
@@ -234,7 +234,7 @@ export function OrderInspector({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <div className="text-[10px] text-white/40 font-mono uppercase mb-1">Premium</div>
-                  <div className="text-lg font-bold text-orange-500 font-mono">
+                  <div className="text-lg font-bold text-primary font-mono">
                     +{premiumPercent}%
                   </div>
                   <div className="text-[10px] text-white/40 font-mono">
@@ -271,8 +271,8 @@ export function OrderInspector({
                 <button
                   onClick={handleBump}
                   disabled={isBumping}
-                  className="flex-1 px-4 py-3 rounded-lg bg-orange-500/20 border border-orange-500/30
-                             text-orange-500 hover:bg-orange-500/30 transition-colors font-medium font-mono
+                  className="flex-1 px-4 py-3 rounded-lg bg-primary/20 border border-primary/30
+                             text-primary hover:bg-primary/30 transition-colors font-medium font-mono
                              disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isBumping ? (
@@ -299,8 +299,8 @@ export function OrderInspector({
                   <button
                     onClick={handleAccept}
                     disabled={isAccepting}
-                    className="flex-1 px-4 py-3 rounded-lg bg-orange-500 text-black font-medium font-mono
-                               hover:bg-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+                    className="flex-1 px-4 py-3 rounded-lg bg-primary text-background font-medium font-mono
+                               hover:bg-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed
                                flex items-center justify-center gap-2"
                   >
                     {isAccepting ? (
@@ -328,7 +328,7 @@ export function OrderInspector({
 
               {isLoadingEvents ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
+                  <Loader2 className="w-5 h-5 text-primary animate-spin" />
                 </div>
               ) : events.length === 0 ? (
                 <div className="text-center py-8 text-white/40 text-sm font-mono">
@@ -342,7 +342,7 @@ export function OrderInspector({
                       className="p-3 bg-white/[0.02] border border-white/[0.04] rounded-lg"
                     >
                       <div className="flex items-start gap-3">
-                        <div className="text-orange-500 mt-0.5">
+                        <div className="text-primary mt-0.5">
                           {getEventIcon(event.event_type)}
                         </div>
                         <div className="flex-1">

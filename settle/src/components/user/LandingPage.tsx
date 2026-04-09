@@ -30,7 +30,7 @@ export function LandingPage({
     <div className="min-h-screen bg-surface-base text-text-primary flex flex-col items-center justify-center p-4 relative overflow-hidden">
       {/* Ambient background — themable via currentColor on a transparent layer */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden text-text-primary">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-orange-500/[0.05] rounded-full blur-[150px]" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-primary/[0.05] rounded-full blur-[150px]" />
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[300px] rounded-full blur-[200px]"
           style={{ background: 'rgba(127, 127, 127, 0.04)' }} />
       </div>

@@ -24,7 +24,7 @@ export default function WelcomeA() {
     <div className="min-h-screen bg-[#060606] text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
       {/* Ambient glow */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[700px] h-[500px] bg-orange-500/[0.04] rounded-full blur-[160px]" />
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[700px] h-[500px] bg-primary/[0.04] rounded-full blur-[160px]" />
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[900px] h-[350px] bg-white/[0.015] rounded-full blur-[200px]" />
       </div>
 
@@ -76,7 +76,7 @@ export default function WelcomeA() {
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.97 }}
-              className="w-full py-4 rounded-2xl text-[15px] font-bold flex items-center justify-center gap-2 bg-white text-black"
+              className="w-full py-4 rounded-2xl text-[15px] font-bold flex items-center justify-center gap-2 bg-white text-background"
             >
               Get Started
               <ArrowRight className="w-4 h-4" />

@@ -435,7 +435,11 @@ export async function getAllPendingOrdersForMerchant(
         -- Unclaimed sell orders (merchant_id IS NULL, broadcast to all merchants)
         OR (o.merchant_id IS NULL AND o.status IN ('pending', 'escrowed') AND o.accepted_at IS NULL)
 
-        -- All orders where I'm the assigned merchant
+        -- All orders where I'm the assigned merchant — INCLUDES terminal statuses
+        -- on purpose. The frontend filters this list per-tab (pendingOrders by
+        -- status='pending', completedOrders by status='completed', etc.), and
+        -- the Activity panel's Completed / Failed tabs depend on these rows
+        -- being in the global orders array.
         OR (o.merchant_id = $1)
 
         -- Orders I created as buyer_merchant (M2M orders I initiated)
@@ -820,26 +824,29 @@ export async function updateOrderStatus(
         };
       }
 
-      // Check if this is a merchant claiming an order (Uber-like model)
-      // When a merchant accepts a pending or escrowed order, reassign the order to them
-      // For sell orders: user locks escrow first (status = 'escrowed'), then merchant accepts
-      const isMerchantClaiming =
-        actorType === 'merchant' &&
-        (oldStatus === 'pending' || oldStatus === 'escrowed') &&
-        newStatus === 'accepted' &&
-        currentOrder.merchant_id !== actorId;
-
-      // Check if this is M2M acceptance (merchant accepting another merchant's order)
-      // In M2M: original merchant stays as merchant_id, acceptor becomes buyer_merchant_id
-      // IMPORTANT: Only treat as M2M if the order was created by a merchant (placeholder user),
-      // NOT when a real user created the order. For user-created orders, the accepting merchant
-      // should replace merchant_id (via isMerchantClaiming), not set buyer_merchant_id.
+      // Look up the order's user to detect merchant-created broadcast orders
+      // (placeholder usernames `open_order_*` / `m2m_*`).
       const userResult = await client.query(
         'SELECT username FROM users WHERE id = $1',
         [currentOrder.user_id]
       );
       const username = userResult.rows[0]?.username || '';
       const isPlaceholderUser = username.startsWith('open_order_') || username.startsWith('m2m_');
+
+      // Check if this is a merchant claiming an order (Uber-like model)
+      // When a merchant accepts a pending or escrowed order, reassign the order to them.
+      // CRITICAL: do NOT treat merchant-created broadcast orders (placeholder user) as
+      // claimable — those go through the M2M acceptance path below, which sets
+      // buyer_merchant_id instead of overwriting merchant_id (the creator's seller role).
+      const isMerchantClaiming =
+        actorType === 'merchant' &&
+        (oldStatus === 'pending' || oldStatus === 'escrowed') &&
+        newStatus === 'accepted' &&
+        currentOrder.merchant_id !== actorId &&
+        !isPlaceholderUser;
+
+      // Check if this is M2M acceptance (merchant accepting another merchant's order)
+      // In M2M: original merchant stays as merchant_id, acceptor becomes buyer_merchant_id
       const isM2MAcceptance =
         actorType === 'merchant' &&
         (oldStatus === 'escrowed' || oldStatus === 'pending') &&

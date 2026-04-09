@@ -55,7 +55,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </button>
               <button
                 onClick={() => window.location.href = '/merchant'}
-                className="px-4 py-2.5 rounded-xl bg-orange-500 text-black text-sm font-bold hover:bg-orange-400 transition-colors"
+                className="px-4 py-2.5 rounded-xl bg-primary text-background text-sm font-bold hover:bg-primary transition-colors"
               >
                 Go to Dashboard
               </button>

@@ -34,6 +34,9 @@ export interface ChatMessage {
   // with messages constructed before this field existed.
   clientId?: string;
   seq?: number;
+  // Per-message order context. Optional for backward compat — populated once
+  // chats are merged per (user, merchant) and each message carries its own orderId.
+  orderId?: string;
 }
 
 export interface PresenceMember {
@@ -753,8 +756,12 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       // Don't retry if server already rejected access for this order
       if (markReadBlockedRef.current.has(window.orderId)) return;
 
-      // Skip if no unread messages
-      if (window.unread === 0) return;
+      // NOTE: We deliberately do NOT bail when window.unread === 0.
+      // For dispute chats opened via openChat(), the per-window unread counter
+      // is never incremented for messages that arrived BEFORE the window was
+      // opened — those messages still need their server-side is_read flag set
+      // so the inbox badge clears. The 5-second throttle below + the backend
+      // idempotency make this safe to call unconditionally.
 
       // Throttle: at most once per 5 seconds per order
       const now = Date.now();

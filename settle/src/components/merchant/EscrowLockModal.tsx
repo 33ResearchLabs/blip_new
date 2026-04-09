@@ -61,15 +61,15 @@ export function EscrowLockModal({
                   </div>
                   <div>
                     <h2 className="text-sm font-semibold">Lock Escrow</h2>
-                    <p className="text-[11px] text-gray-500">Secure USDC for this trade</p>
+                    <p className="text-[11px] text-foreground/35">Secure USDC for this trade</p>
                   </div>
                 </div>
                 {!isLockingEscrow && (
                   <button
                     onClick={onClose}
-                    className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
+                    className="p-2 hover:bg-card rounded-lg transition-colors"
                   >
-                    <X className="w-4 h-4 text-gray-500" />
+                    <X className="w-4 h-4 text-foreground/35" />
                   </button>
                 )}
               </div>
@@ -84,7 +84,7 @@ export function EscrowLockModal({
                     </div>
                     <div>
                       <p className="text-sm font-medium">{escrowOrder.user}</p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-foreground/35">
                         {escrowOrder.orderType === 'sell'
                           ? 'Sell Order — anyone can accept'
                           : `Buy Order — ${escrowOrder.user}`}
@@ -93,11 +93,11 @@ export function EscrowLockModal({
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="text-[10px] text-gray-500 uppercase mb-1">Amount</p>
+                      <p className="text-[10px] text-foreground/35 uppercase mb-1">Amount</p>
                       <p className="text-lg font-bold text-white">{escrowOrder.amount} USDC</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-gray-500 uppercase mb-1">Fiat Value</p>
+                      <p className="text-[10px] text-foreground/35 uppercase mb-1">Fiat Value</p>
                       <p className="text-lg font-bold text-white">د.إ {Math.round(escrowOrder.total).toLocaleString()}</p>
                     </div>
                   </div>
@@ -105,11 +105,32 @@ export function EscrowLockModal({
 
                 {/* Wallet Balance */}
                 <div className="flex items-center justify-between bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-                  <span className="text-xs text-gray-500">Your USDC Balance</span>
+                  <span className="text-xs text-foreground/35">Your USDC Balance</span>
                   <span className={`text-sm font-bold ${(effectiveBalance || 0) >= escrowOrder.amount ? 'text-white' : 'text-red-400'}`}>
                     {effectiveBalance?.toFixed(2) || '0.00'} USDC
                   </span>
                 </div>
+
+                {/* Counterparty Wallet */}
+                {(() => {
+                  const counterpartyWallet = escrowOrder.buyerMerchantWallet || escrowOrder.acceptorWallet || escrowOrder.userWallet;
+                  if (!counterpartyWallet) return null;
+                  const short = `${counterpartyWallet.slice(0, 6)}...${counterpartyWallet.slice(-4)}`;
+                  return (
+                    <div className="flex items-center justify-between bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+                      <span className="text-xs text-foreground/35">Counterparty Wallet</span>
+                      <a
+                        href={`https://solscan.io/account/${counterpartyWallet}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-sm font-mono text-primary hover:text-primary/80 transition-colors"
+                      >
+                        {short}
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  );
+                })()}
 
                 {/* Transaction Status */}
                 {isLockingEscrow && !escrowTxHash && (
@@ -141,7 +162,7 @@ export function EscrowLockModal({
                         href={getSolscanTxUrl(escrowTxHash)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-xs text-white hover:text-white transition-colors"
+                        className="flex items-center gap-2 text-xs text-white hover:text-foreground transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
                         View on Solscan
@@ -223,7 +244,7 @@ export function EscrowLockModal({
                   <motion.button
                     whileTap={{ scale: 0.98 }}
                     onClick={onClose}
-                    className="flex-1 py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white transition-all"
+                    className="flex-1 py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-accent-subtle border border-white/6 hover:border-border-strong text-white transition-all"
                   >
                     Done
                   </motion.button>
@@ -232,7 +253,7 @@ export function EscrowLockModal({
                     <button
                       onClick={onClose}
                       disabled={isLockingEscrow}
-                      className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] transition-colors disabled:opacity-50"
+                      className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-accent-subtle transition-colors disabled:opacity-50"
                     >
                       Cancel
                     </button>
@@ -243,7 +264,7 @@ export function EscrowLockModal({
                         isLockingEscrow ||
                         (effectiveBalance || 0) < escrowOrder.amount
                       }
-                      className="flex-[2] py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="flex-[2] py-3 rounded-xl text-sm font-bold bg-primary hover:bg-primary/80 text-background transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {isLockingEscrow ? (
                         <>

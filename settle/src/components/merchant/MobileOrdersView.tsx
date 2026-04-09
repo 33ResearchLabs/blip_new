@@ -74,13 +74,13 @@ export function MobileOrdersView({
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500 truncate">{order.message}</p>
+                    <p className="text-xs text-foreground/35 truncate">{order.message}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-bold text-white/70">
                       {order.currency === 'AED' ? '\u062F.\u0625' : '$'}{order.amount.toLocaleString()}
                     </p>
-                    <p className="text-[10px] text-gray-500">
+                    <p className="text-[10px] text-foreground/35">
                       {order.timestamp.toLocaleDateString()}
                     </p>
                   </div>
@@ -91,23 +91,23 @@ export function MobileOrdersView({
                     onClick={() => {
                       // TODO: Handle big order acceptance
                     }}
-                    className="flex-1 h-8 bg-white/10 hover:bg-white/20 border border-white/6 rounded-lg text-xs font-medium text-white/70 flex items-center justify-center gap-1.5 transition-colors"
+                    className="flex-1 h-8 bg-white/10 hover:bg-accent-subtle border border-white/6 rounded-lg text-xs font-medium text-white/70 flex items-center justify-center gap-1.5 transition-colors"
                   >
                     <DollarSign className="w-3.5 h-3.5" />
                     Contact
                   </motion.button>
                   <button
                     onClick={() => onDismissBigOrder(order.id)}
-                    className="h-8 w-8 border border-white/10 hover:border-red-500/30 hover:bg-red-500/10 rounded-lg flex items-center justify-center transition-colors group"
+                    className="h-8 w-8 border border-white/10 hover:border-[var(--color-error)]/30 hover:bg-[var(--color-error)]/10 rounded-lg flex items-center justify-center transition-colors group"
                   >
-                    <X className="w-4 h-4 text-gray-500 group-hover:text-red-400" />
+                    <X className="w-4 h-4 text-foreground/35 group-hover:text-[var(--color-error)]" />
                   </button>
                 </div>
               </motion.div>
             ))}
           </div>
           {bigOrders.length > 3 && (
-            <button className="w-full py-2 text-xs text-white/40 hover:text-white/70 transition-colors">
+            <button className="w-full py-2 text-xs text-white/40 hover:text-foreground/70 transition-colors">
               View all {bigOrders.length} whale orders
             </button>
           )}
@@ -122,9 +122,9 @@ export function MobileOrdersView({
             animate={{ opacity: [0.4, 1, 0.4] }}
             transition={{ duration: 1.5, repeat: Infinity }}
           />
-          <span className="text-xs font-mono text-gray-400 uppercase tracking-wide">Pending</span>
+          <span className="text-xs font-mono text-foreground/40 uppercase tracking-wide">Pending</span>
         </div>
-        <span className="text-xs font-mono text-gray-400">{pendingOrders.length}</span>
+        <span className="text-xs font-mono text-foreground/40">{pendingOrders.length}</span>
       </div>
 
       {pendingOrders.length > 0 ? (
@@ -134,7 +134,7 @@ export function MobileOrdersView({
               key={order.id}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="px-2 py-3 hover:bg-white/[0.02] transition-colors"
+              className="px-2 py-3 hover:bg-card transition-colors"
             >
               {/* Main Row */}
               <div className="flex items-center gap-3">
@@ -158,22 +158,22 @@ export function MobileOrdersView({
                     {order.spreadPreference && (
                       <span className={`w-1.5 h-1.5 rounded-full ${
                         order.spreadPreference === 'fastest' ? 'bg-red-400' :
-                        order.spreadPreference === 'cheap' ? 'bg-orange-400' : 'bg-orange-500'
+                        order.spreadPreference === 'cheap' ? 'bg-primary' : 'bg-primary'
                       }`} title={order.spreadPreference} />
                     )}
                     {order.isMyOrder && (
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded">YOURS</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 bg-primary/20 text-primary rounded">YOURS</span>
                     )}
                     {order.isNew && !order.isMyOrder && (
                       <span className="text-[10px] font-mono px-1.5 py-0.5 bg-white/5 text-white/70 rounded">NEW</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs font-mono text-gray-400">
+                    <span className="text-xs font-mono text-foreground/40">
                       {order.amount.toLocaleString()} <span className="text-gray-600">USDC</span>
                     </span>
                     <ArrowRight className="w-3 h-3 text-gray-600" />
-                    <span className="text-xs font-mono text-gray-400">
+                    <span className="text-xs font-mono text-foreground/40">
                       {order.total.toLocaleString()} <span className="text-gray-600">AED</span>
                     </span>
                   </div>
@@ -182,11 +182,11 @@ export function MobileOrdersView({
                 {/* Timer & Earnings */}
                 <div className="text-right">
                   {order.isMyOrder ? (
-                    <span className="text-[10px] font-mono text-orange-400/70">Waiting...</span>
+                    <span className="text-[10px] font-mono text-primary/70">Waiting...</span>
                   ) : (
                     <>
                       <div className="text-[10px] font-mono text-white">+${Math.round(order.amount * 0.005)}</div>
-                      <div className={`flex items-center gap-1 text-sm font-mono font-bold ${order.expiresIn <= 120 ? "text-red-400" : "text-orange-400"}`}>
+                      <div className={`flex items-center gap-1 text-sm font-mono font-bold ${order.expiresIn <= 120 ? "text-red-400" : "text-primary"}`}>
                         {order.expiresIn <= 0 ? "Expired" : order.expiresIn >= 3600 ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m` : order.expiresIn >= 60 ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s` : `${order.expiresIn}s`}
                         <span className="animate-pulse" style={{ filter: order.expiresIn <= 120 ? 'drop-shadow(0 0 6px #ef4444)' : 'drop-shadow(0 0 4px #f97316)' }}>🔥</span>
                       </div>
@@ -203,7 +203,7 @@ export function MobileOrdersView({
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-1.5 py-1.5 px-2 bg-white/5 rounded-lg text-[10px] font-mono text-white hover:bg-white/10 transition-colors"
+                    className="flex items-center gap-1.5 py-1.5 px-2 bg-white/5 rounded-lg text-[10px] font-mono text-white hover:bg-accent-subtle transition-colors"
                   >
                     <Shield className="w-3 h-3" />
                     <span>View TX</span>
@@ -215,7 +215,7 @@ export function MobileOrdersView({
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="flex items-center gap-1.5 py-1.5 px-2 bg-orange-500/10 border border-orange-500/20 rounded-lg text-[10px] font-mono text-orange-400 hover:bg-orange-500/15 transition-colors"
+                      className="flex items-center gap-1.5 py-1.5 px-2 bg-primary/10 border border-primary/20 rounded-lg text-[10px] font-mono text-primary hover:bg-primary/15 transition-colors"
                     >
                       <span>BlipScan</span>
                       <ExternalLink className="w-3 h-3" />
@@ -234,7 +234,7 @@ export function MobileOrdersView({
                     className={`flex-1 h-11 border rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
                       acceptingOrderId === order.id
                         ? 'bg-white/[0.03] border-white/[0.06] text-white/50 cursor-wait'
-                        : 'bg-white/[0.06] hover:bg-white/[0.1] border-white/[0.1] text-white'
+                        : 'bg-card hover:bg-accent-subtle border-border text-foreground'
                     }`}
                   >
                     {acceptingOrderId === order.id ? (
@@ -246,9 +246,9 @@ export function MobileOrdersView({
                 )}
                 <button
                   onClick={() => { onOpenChat(order); setMobileView('chat'); }}
-                  className={`h-11 w-11 border border-white/10 hover:border-white/20 rounded-lg flex items-center justify-center transition-colors ${order.isMyOrder ? 'flex-1' : ''}`}
+                  className={`h-11 w-11 border border-white/10 hover:border-border-strong rounded-lg flex items-center justify-center transition-colors ${order.isMyOrder ? 'flex-1' : ''}`}
                 >
-                  <MessageCircle className="w-4 h-4 text-gray-400" />
+                  <MessageCircle className="w-4 h-4 text-foreground/40" />
                 </button>
               </div>
             </motion.div>
@@ -257,7 +257,7 @@ export function MobileOrdersView({
       ) : (
         <div className="flex flex-col items-center justify-center py-16 text-gray-600">
           <Activity className="w-8 h-8 mb-2 opacity-20" />
-          <p className="text-xs text-gray-500 font-mono">Waiting for orders...</p>
+          <p className="text-xs text-foreground/35 font-mono">Waiting for orders...</p>
         </div>
       )}
     </div>

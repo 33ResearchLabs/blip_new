@@ -2,6 +2,13 @@
 
 import { useState, useEffect, memo } from 'react';
 import { Star, Trophy, ChevronUp, ChevronDown, Shield } from 'lucide-react';
+import { FilterDropdown, type FilterOption } from '@/components/user/screens/ui/FilterDropdown';
+
+const LEADERBOARD_OPTIONS: ReadonlyArray<FilterOption<'traders' | 'rated' | 'reputation'>> = [
+  { key: 'traders',    label: 'Volume' },
+  { key: 'rated',      label: 'Rated'  },
+  { key: 'reputation', label: 'Rep'    },
+];
 
 interface LeaderboardEntry {
   rank: number;
@@ -27,7 +34,7 @@ interface RepLeaderboardEntry {
 
 const TIER_SHORT: Record<string, { label: string; cls: string }> = {
   newcomer: { label: 'NEW', cls: 'text-foreground/30' },
-  bronze: { label: 'BRZ', cls: 'text-orange-700' },
+  bronze: { label: 'BRZ', cls: 'text-primary/70' },
   silver: { label: 'SLV', cls: 'text-foreground/50' },
   gold: { label: 'GLD', cls: 'text-yellow-400' },
   platinum: { label: 'PLT', cls: 'text-blue-200' },
@@ -96,39 +103,13 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
             )}
           </div>
           {!isCollapsed && (
-            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setLeaderboardTab('traders')}
-                  className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
-                    leaderboardTab === 'traders'
-                      ? 'bg-white/[0.08] text-foreground/80 border border-white/[0.10]'
-                      : 'text-foreground/30 hover:text-foreground/50'
-                  }`}
-                >
-                  Volume
-                </button>
-                <button
-                  onClick={() => setLeaderboardTab('rated')}
-                  className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
-                    leaderboardTab === 'rated'
-                      ? 'bg-white/[0.08] text-foreground/80 border border-white/[0.10]'
-                      : 'text-foreground/30 hover:text-foreground/50'
-                  }`}
-                >
-                  Rated
-                </button>
-                <button
-                  onClick={() => setLeaderboardTab('reputation')}
-                  className={`px-2 py-1 rounded text-[10px] font-medium transition-all ${
-                    leaderboardTab === 'reputation'
-                      ? 'bg-white/[0.08] text-foreground/80 border border-white/[0.10]'
-                      : 'text-foreground/30 hover:text-foreground/50'
-                  }`}
-                >
-                  Rep
-                </button>
-              </div>
+            <div onClick={(e) => e.stopPropagation()}>
+              <FilterDropdown
+                ariaLabel="Leaderboard sort"
+                value={leaderboardTab}
+                onChange={setLeaderboardTab}
+                options={LEADERBOARD_OPTIONS}
+              />
             </div>
           )}
         </div>
@@ -201,7 +182,7 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
                     : `$${Math.round(entry.totalVolume)}`}
                 </span>
                 <span className="w-11 text-right flex items-center justify-end gap-0.5 text-primary/70 shrink-0">
-                  <Star className="w-3 h-3 fill-orange-400/60 text-primary/60" />
+                  <Star className="w-3 h-3 fill-primary/60 text-primary/60" />
                   {entry.rating.toFixed(1)}
                 </span>
               </div>

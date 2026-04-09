@@ -212,7 +212,7 @@ export function CorridorLPPanel({ merchantId }: CorridorLPPanelProps) {
                       {copiedField === ff.id + '-iban' ? (
                         <Check className="w-3 h-3 text-green-400" />
                       ) : (
-                        <Copy className="w-3 h-3 text-white/20 hover:text-white/40" />
+                        <Copy className="w-3 h-3 text-white/20 hover:text-foreground/40" />
                       )}
                     </button>
                   </div>

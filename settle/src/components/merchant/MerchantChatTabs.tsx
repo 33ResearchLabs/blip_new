@@ -155,14 +155,14 @@ export function MerchantChatTabs({
           </div>
           <div className="flex items-center gap-1.5">
             {(totalUnread + disputeUnread) > 0 && (
-              <span className="text-[10px] border border-orange-500/30 text-orange-400 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
+              <span className="text-[10px] border border-primary/30 text-primary px-1.5 py-0.5 rounded-full font-mono tabular-nums">
                 {totalUnread + disputeUnread}
               </span>
             )}
             {onClose && (
               <button
                 onClick={onClose}
-                className="p-1 rounded hover:bg-white/[0.06] transition-colors text-white/20 hover:text-white/40"
+                className="p-1 rounded hover:bg-card transition-colors text-white/20 hover:text-foreground/40"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -178,20 +178,20 @@ export function MerchantChatTabs({
           className={`flex-1 px-3 py-1.5 text-[10px] font-mono font-medium transition-colors relative ${
             activeTab === 'direct'
               ? 'text-white/80'
-              : 'text-white/30 hover:text-white/50'
+              : 'text-white/30 hover:text-foreground/50'
           }`}
         >
           <div className="flex items-center justify-center gap-1.5">
             <MessageCircle className="w-3 h-3" />
             <span>Direct</span>
             {totalUnread > 0 && (
-              <span className="w-4 h-4 bg-orange-500 text-black text-[8px] font-bold rounded-full flex items-center justify-center">
+              <span className="w-4 h-4 bg-primary text-background text-[8px] font-bold rounded-full flex items-center justify-center">
                 {totalUnread > 9 ? '9+' : totalUnread}
               </span>
             )}
           </div>
           {activeTab === 'direct' && (
-            <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-orange-500 rounded-full" />
+            <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary rounded-full" />
           )}
         </button>
         <button
@@ -199,7 +199,7 @@ export function MerchantChatTabs({
           className={`flex-1 px-3 py-1.5 text-[10px] font-mono font-medium transition-colors relative ${
             activeTab === 'disputes'
               ? 'text-white/80'
-              : 'text-white/30 hover:text-white/50'
+              : 'text-white/30 hover:text-foreground/50'
           }`}
         >
           <div className="flex items-center justify-center gap-1.5">
@@ -237,7 +237,7 @@ export function MerchantChatTabs({
           /* ── Direct Messages Tab ── */
           isLoading ? (
             <div className="flex items-center justify-center h-full">
-              <div className="w-4 h-4 border-2 border-orange-500/40 border-t-orange-400 rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-primary/40 border-t-primary rounded-full animate-spin" />
             </div>
           ) : filteredDirect.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-white/15">
@@ -250,7 +250,7 @@ export function MerchantChatTabs({
                 <button
                   key={conv.contact_id}
                   onClick={() => onOpenChat(conv.contact_target_id, conv.contact_type, conv.nickname || conv.username)}
-                  className="w-full p-2 glass-card rounded-lg hover:border-white/[0.10] transition-colors text-left group"
+                  className="w-full p-2 glass-card rounded-lg hover:border-border-strong transition-colors text-left group"
                 >
                   <div className="flex items-center gap-2">
                     <div className="relative flex-shrink-0">
@@ -258,7 +258,7 @@ export function MerchantChatTabs({
                         {getUserEmoji(conv.username)}
                       </div>
                       {conv.unread_count > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-black text-[9px] font-bold rounded-full flex items-center justify-center">
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-background text-[9px] font-bold rounded-full flex items-center justify-center">
                           {conv.unread_count > 9 ? '9+' : conv.unread_count}
                         </span>
                       )}
@@ -269,7 +269,7 @@ export function MerchantChatTabs({
                           {conv.nickname || conv.username}
                         </span>
                         {conv.contact_type === 'merchant' && (
-                          <Store className="w-2.5 h-2.5 text-orange-400/60" />
+                          <Store className="w-2.5 h-2.5 text-primary/60" />
                         )}
                         {conv.is_favorite && (
                           <Star className="w-2.5 h-2.5 text-white/40 fill-white/40" />
@@ -288,7 +288,7 @@ export function MerchantChatTabs({
                         <div className="flex items-center gap-1 mt-0.5">
                           {conv.last_message.sender_type === 'merchant' && (
                             <CheckCheck className={`w-2.5 h-2.5 flex-shrink-0 ${
-                              conv.last_message.is_read ? 'text-orange-400/60' : 'text-white/15'
+                              conv.last_message.is_read ? 'text-primary/60' : 'text-white/15'
                             }`} />
                           )}
                           <p className={`text-[10px] truncate ${
@@ -299,7 +299,7 @@ export function MerchantChatTabs({
                         </div>
                       )}
                     </div>
-                    <ChevronRight className="w-3 h-3 text-white/10 group-hover:text-white/25 transition-colors self-center flex-shrink-0" />
+                    <ChevronRight className="w-3 h-3 text-white/10 group-hover:text-foreground/25 transition-colors self-center flex-shrink-0" />
                   </div>
                 </button>
               ))}
@@ -321,8 +321,28 @@ export function MerchantChatTabs({
               {filteredDisputes.map((conv) => (
                 <button
                   key={conv.order_id}
-                  onClick={() => onOpenDisputeChat?.(conv.order_id, conv.user.username)}
-                  className="w-full p-2 glass-card rounded-lg hover:border-red-500/20 transition-colors text-left group"
+                  onClick={() => {
+                    // Optimistically clear unread for this dispute so the badge
+                    // disappears instantly. DisputeChatView calls markAsRead on
+                    // mount which updates the backend; the next poll (15s) will
+                    // confirm the cleared state.
+                    setDisputeConversations(prev => {
+                      let removed = 0;
+                      const next = prev.map(c => {
+                        if (c.order_id === conv.order_id) {
+                          removed += c.unread_count || 0;
+                          return { ...c, unread_count: 0 };
+                        }
+                        return c;
+                      });
+                      if (removed > 0) setDisputeUnread(t => Math.max(0, t - removed));
+                      return next;
+                    });
+                    // Refetch shortly after so the server-side state syncs back.
+                    setTimeout(() => fetchDisputes(), 1500);
+                    onOpenDisputeChat?.(conv.order_id, conv.user.username);
+                  }}
+                  className="w-full p-2 glass-card rounded-lg hover:border-[var(--color-error)]/20 transition-colors text-left group"
                 >
                   <div className="flex items-center gap-2">
                     <div className="relative flex-shrink-0">
@@ -369,7 +389,7 @@ export function MerchantChatTabs({
                         </div>
                       )}
                     </div>
-                    <ChevronRight className="w-3 h-3 text-white/10 group-hover:text-red-400/30 transition-colors self-center flex-shrink-0" />
+                    <ChevronRight className="w-3 h-3 text-white/10 group-hover:text-[var(--color-error)]/30 transition-colors self-center flex-shrink-0" />
                   </div>
                 </button>
               ))}

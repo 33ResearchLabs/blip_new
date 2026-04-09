@@ -307,7 +307,7 @@ export default function ComplianceDashboard() {
                   whileTap={{ scale: 0.98 }}
                   onClick={handleLogin}
                   disabled={isLoading}
-                  className="w-full py-3 rounded-xl text-sm font-bold bg-primary text-black hover:bg-primary/80 transition-colors disabled:opacity-50"
+                  className="w-full py-3 rounded-xl text-sm font-bold bg-primary text-background hover:bg-primary/80 transition-colors disabled:opacity-50"
                 >
                   {isLoading ? "Signing in..." : "Sign In with Email"}
                 </motion.button>
@@ -408,7 +408,7 @@ export default function ComplianceDashboard() {
             >
               <Bell className="w-4 h-4 text-[var(--color-text-secondary)]" />
               {notifications.filter(n => !n.read).length > 0 && (
-                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-primaryrounded-full text-[8px] font-bold flex items-center justify-center text-black">
+                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-primaryrounded-full text-[8px] font-bold flex items-center justify-center text-background">
                   {notifications.filter(n => !n.read).length}
                 </span>
               )}
@@ -804,7 +804,7 @@ export default function ComplianceDashboard() {
                               setSelectedDispute(dispute);
                               setShowResolveModal(true);
                             }}
-                            className="flex-1 py-2.5 bg-primaryrounded-xl text-sm font-bold text-black flex items-center justify-center gap-2"
+                            className="flex-1 py-2.5 bg-primaryrounded-xl text-sm font-bold text-background flex items-center justify-center gap-2"
                           >
                             <Scale className="w-4 h-4" />
                             Resolve
@@ -979,7 +979,7 @@ export default function ComplianceDashboard() {
                           }}
                           className="w-12 h-12 rounded-xl bg-primaryflex items-center justify-center"
                         >
-                          <Send className="w-5 h-5 text-black" />
+                          <Send className="w-5 h-5 text-background" />
                         </motion.button>
                       </div>
                     </div>
@@ -1062,7 +1062,7 @@ export default function ComplianceDashboard() {
               <MessageCircle className="w-4 h-4 text-primary" />
               <span className="text-sm font-semibold">Dispute Chats</span>
               {totalUnread > 0 && (
-                <span className="ml-auto w-5 h-5 bg-primaryrounded-full text-[10px] font-bold flex items-center justify-center text-black">
+                <span className="ml-auto w-5 h-5 bg-primaryrounded-full text-[10px] font-bold flex items-center justify-center text-background">
                   {totalUnread}
                 </span>
               )}
@@ -1220,7 +1220,7 @@ export default function ComplianceDashboard() {
                         </p>
                       </div>
                       {chat.unread > 0 && (
-                        <span className="w-5 h-5 bg-primaryrounded-full text-[10px] font-bold flex items-center justify-center text-black">
+                        <span className="w-5 h-5 bg-primaryrounded-full text-[10px] font-bold flex items-center justify-center text-background">
                           {chat.unread}
                         </span>
                       )}

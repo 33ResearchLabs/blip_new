@@ -57,15 +57,15 @@ export function EscrowCancelModal({
                   </div>
                   <div>
                     <h2 className="text-sm font-semibold">Cancel & Withdraw</h2>
-                    <p className="text-[11px] text-gray-500">Refund escrow to your wallet</p>
+                    <p className="text-[11px] text-foreground/35">Refund escrow to your wallet</p>
                   </div>
                 </div>
                 {!isCancellingEscrow && (
                   <button
                     onClick={onClose}
-                    className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
+                    className="p-2 hover:bg-card rounded-lg transition-colors"
                   >
-                    <X className="w-4 h-4 text-gray-500" />
+                    <X className="w-4 h-4 text-foreground/35" />
                   </button>
                 )}
               </div>
@@ -80,16 +80,16 @@ export function EscrowCancelModal({
                     </div>
                     <div>
                       <p className="text-sm font-medium">{cancelOrder.user}</p>
-                      <p className="text-xs text-gray-500">Buy Order - Escrow Locked</p>
+                      <p className="text-xs text-foreground/35">Buy Order - Escrow Locked</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <p className="text-[10px] text-gray-500 uppercase mb-1">Withdraw Amount</p>
+                      <p className="text-[10px] text-foreground/35 uppercase mb-1">Withdraw Amount</p>
                       <p className="text-lg font-bold text-white/70">{cancelOrder.amount} USDC</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-gray-500 uppercase mb-1">Order Total</p>
+                      <p className="text-[10px] text-foreground/35 uppercase mb-1">Order Total</p>
                       <p className="text-lg font-bold text-white">د.إ {Math.round(cancelOrder.total).toLocaleString()}</p>
                     </div>
                   </div>
@@ -98,8 +98,8 @@ export function EscrowCancelModal({
                 {/* Escrow Details */}
                 {cancelOrder.escrowTradeId && (
                   <div className="flex items-center justify-between bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-                    <span className="text-xs text-gray-500">Escrow Trade ID</span>
-                    <span className="text-xs font-mono text-gray-400">#{cancelOrder.escrowTradeId}</span>
+                    <span className="text-xs text-foreground/35">Escrow Trade ID</span>
+                    <span className="text-xs font-mono text-foreground/40">#{cancelOrder.escrowTradeId}</span>
                   </div>
                 )}
 
@@ -133,7 +133,7 @@ export function EscrowCancelModal({
                         href={getSolscanTxUrl(cancelTxHash)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-xs text-white hover:text-white transition-colors"
+                        className="flex items-center gap-2 text-xs text-white hover:text-foreground transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
                         View on Solscan
@@ -194,7 +194,7 @@ export function EscrowCancelModal({
                   <motion.button
                     whileTap={{ scale: 0.98 }}
                     onClick={onClose}
-                    className="flex-1 py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white transition-all"
+                    className="flex-1 py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-accent-subtle border border-white/6 hover:border-border-strong text-white transition-all"
                   >
                     Done
                   </motion.button>
@@ -203,7 +203,7 @@ export function EscrowCancelModal({
                     <button
                       onClick={onClose}
                       disabled={isCancellingEscrow}
-                      className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-white/[0.08] transition-colors disabled:opacity-50"
+                      className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-accent-subtle transition-colors disabled:opacity-50"
                     >
                       Back
                     </button>
@@ -211,7 +211,7 @@ export function EscrowCancelModal({
                       whileTap={{ scale: 0.98 }}
                       onClick={onExecute}
                       disabled={isCancellingEscrow || !cancelOrder.escrowTradeId || !cancelOrder.escrowCreatorWallet}
-                      className="flex-[2] py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-white/20 border border-white/6 hover:border-white/12 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      className="flex-[2] py-3 rounded-xl text-sm font-bold bg-white/10 hover:bg-accent-subtle border border-white/6 hover:border-border-strong text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {isCancellingEscrow ? (
                         <>

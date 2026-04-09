@@ -22,6 +22,7 @@ import {
   TRADER_CUT_CONFIG,
 } from "@/lib/orders/mappers";
 import { useNotifications } from "@/hooks/useNotifications";
+import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import { useOrderFetching } from "@/hooks/useOrderFetching";
 import { useDashboardAuth } from "@/hooks/useDashboardAuth";
 import { useEscrowOperations } from "@/hooks/useEscrowOperations";
@@ -205,6 +206,9 @@ export default function MerchantDashboard() {
   const { notifications, addNotification, markNotificationRead } =
     useNotifications(merchantId, isLoggedIn);
 
+  // Send presence heartbeat so other parties see this merchant as online
+  usePresenceHeartbeat(!!merchantId && isLoggedIn);
+
   const escrow = useEscrowOperations({
     solanaWallet,
     effectiveBalance,
@@ -309,7 +313,7 @@ export default function MerchantDashboard() {
 
   const directChat = useDirectChat({ merchantId: merchantId || undefined });
 
-  const { chatWindows, openChat, closeChat, sendMessage } = useWebSocketChat({
+  const { chatWindows, openChat, closeChat, sendMessage, sendTypingIndicator } = useWebSocketChat({
     maxWindows: 10,
     actorType: "merchant",
     actorId: merchantId || undefined,
@@ -404,12 +408,13 @@ export default function MerchantDashboard() {
   } = orderActions;
 
   const handleDirectOrderCreation = useCallback(
-    (tradeType?: "buy" | "sell", priorityFee?: number) => {
+    (tradeType?: "buy" | "sell", priorityFee?: number, pair?: "usdt_aed" | "usdt_inr") => {
       rawHandleDirectOrderCreation(
         openTradeForm,
         setOpenTradeForm,
         tradeType,
         priorityFee,
+        pair,
       );
     },
     [rawHandleDirectOrderCreation, openTradeForm, setOpenTradeForm],
@@ -638,12 +643,12 @@ export default function MerchantDashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background text-white flex items-center justify-center p-4">
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
         <div className="text-center">
-          <div className="w-16 h-16 rounded-2xl bg-white/[0.08] border border-white/[0.08] flex items-center justify-center mx-auto mb-4">
-            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          <div className="w-16 h-16 rounded-2xl bg-card border border-border flex items-center justify-center mx-auto mb-4">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
           </div>
-          <p className="text-sm text-gray-400">Loading...</p>
+          <p className="text-sm text-foreground/40">Loading...</p>
         </div>
       </div>
     );
@@ -656,8 +661,8 @@ export default function MerchantDashboard() {
         <div className="min-h-screen bg-background flex items-center justify-center p-4">
           <div className="w-full max-w-sm space-y-6">
             <div className="text-center">
-              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center">
-                <svg className="w-7 h-7 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+              <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <svg className="w-7 h-7 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
               </div>
               <h1 className="text-xl font-bold text-white">Two-Factor Authentication</h1>
               <p className="text-sm text-white/40 mt-1">Enter the 6-digit code from your authenticator app</p>
@@ -677,7 +682,7 @@ export default function MerchantDashboard() {
               value={totpCode}
               onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
               placeholder="000000"
-              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-4 text-2xl text-white text-center font-mono tracking-[0.4em] placeholder:text-white/10 outline-none focus:border-orange-500/30 transition-colors"
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-4 text-2xl text-white text-center font-mono tracking-[0.4em] placeholder:text-white/10 outline-none focus:border-primary/30 transition-colors"
               autoFocus
               onKeyDown={(e) => { if (e.key === 'Enter' && totpCode.length === 6) handle2FAVerify(); }}
             />
@@ -685,7 +690,7 @@ export default function MerchantDashboard() {
             <button
               onClick={handle2FAVerify}
               disabled={isVerifying2FA || totpCode.length !== 6}
-              className="w-full py-3.5 rounded-xl bg-orange-500/15 border border-orange-500/25 text-orange-400 font-semibold text-sm hover:bg-orange-500/25 transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-xl bg-primary/15 border border-primary/25 text-primary font-semibold text-sm hover:bg-primary/25 transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
             >
               {isVerifying2FA ? (
                 <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> Verifying...</>
@@ -694,7 +699,7 @@ export default function MerchantDashboard() {
 
             <button
               onClick={cancel2FA}
-              className="w-full py-2.5 text-sm text-white/30 hover:text-white/50 transition-colors"
+              className="w-full py-2.5 text-sm text-white/30 hover:text-foreground/50 transition-colors"
             >
               Back to login
             </button>
@@ -759,7 +764,7 @@ export default function MerchantDashboard() {
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() => setShowTransactionHistory(true)}
-              className="p-2 rounded-lg transition-all bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.05]"
+              className="p-2 rounded-lg transition-all bg-white/[0.03] hover:bg-card border border-white/[0.05]"
               title="Transaction History"
             >
               <History className="w-[18px] h-[18px] text-white/40" />
@@ -767,7 +772,7 @@ export default function MerchantDashboard() {
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() => setShowPaymentMethods(true)}
-              className="p-2 rounded-lg transition-all bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.05]"
+              className="p-2 rounded-lg transition-all bg-white/[0.03] hover:bg-card border border-white/[0.05]"
               title="Payment Methods"
             >
               <Plus className="w-[18px] h-[18px] text-white/40" />

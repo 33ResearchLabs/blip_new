@@ -145,7 +145,7 @@ export function AnalyticsDashboard({ merchantId }: AnalyticsDashboardProps) {
           <button
             onClick={() => setShowPeriodDropdown(!showPeriodDropdown)}
             className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg text-sm text-white/80
-                       hover:bg-white/10 transition-colors"
+                       hover:bg-accent-subtle transition-colors"
           >
             {periods.find(p => p.value === period)?.label}
             <ChevronDown className="w-4 h-4" />
@@ -159,7 +159,7 @@ export function AnalyticsDashboard({ merchantId }: AnalyticsDashboardProps) {
                     setPeriod(p.value);
                     setShowPeriodDropdown(false);
                   }}
-                  className={`w-full px-4 py-2 text-sm text-left hover:bg-white/10 transition-colors
+                  className={`w-full px-4 py-2 text-sm text-left hover:bg-accent-subtle transition-colors
                     ${period === p.value ? 'text-emerald-400' : 'text-white/80'}`}
                 >
                   {p.label}

@@ -195,7 +195,7 @@ function TimelineStep({ status, label, time, isFirst, isLast }: TimelineStepProp
         return {
           dot: 'bg-gray-600',
           line: 'bg-gray-700',
-          text: 'text-gray-500',
+          text: 'text-foreground/35',
         };
     }
   };
@@ -211,7 +211,7 @@ function TimelineStep({ status, label, time, isFirst, isLast }: TimelineStepProp
       <div className="flex flex-col items-center min-w-[60px]">
         <div className={`w-3 h-3 rounded-full ${styles.dot} ring-2 ring-black/50`}>
           {status === 'completed' && (
-            <Check className="w-3 h-3 text-black p-0.5" />
+            <Check className="w-3 h-3 text-background p-0.5" />
           )}
         </div>
         <span className={`text-[10px] mt-1 whitespace-nowrap ${styles.text}`}>
@@ -489,9 +489,9 @@ export function TradeChat({
         <div className="px-4 py-3 flex items-center gap-3">
           <button
             onClick={onBack}
-            className="p-2 hover:bg-white/[0.04] rounded-lg transition-colors"
+            className="p-2 hover:bg-card rounded-lg transition-colors"
           >
-            <ChevronLeft className="w-5 h-5 text-gray-400" />
+            <ChevronLeft className="w-5 h-5 text-foreground/40" />
           </button>
 
           <div className="flex-1 min-w-0">
@@ -507,7 +507,7 @@ export function TradeChat({
               )}
             </div>
             {tradeInfo && (
-              <p className="text-xs text-gray-500 truncate">
+              <p className="text-xs text-foreground/35 truncate">
                 {tradeInfo.orderType === 'buy' ? 'Selling' : 'Buying'} {tradeInfo.cryptoAmount} USDC • {tradeInfo.fiatAmount.toLocaleString()} {tradeInfo.fiatCurrency}
               </p>
             )}
@@ -522,7 +522,7 @@ export function TradeChat({
               <div className="w-6 h-6 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
                 <span className="text-[10px]">{userEmoji || getUserEmoji(tradeInfo?.user.username || userName || 'User')}</span>
               </div>
-              <span className="text-gray-400">
+              <span className="text-foreground/40">
                 {tradeInfo?.user.username || userName || 'User'}
                 {tradeInfo?.user.rating && (
                   <span className="text-white/70 ml-1">★ {tradeInfo.user.rating.toFixed(1)}</span>
@@ -537,7 +537,7 @@ export function TradeChat({
               <div className="w-6 h-6 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
                 <Store className="w-3 h-3 text-primary" />
               </div>
-              <span className="text-gray-400">
+              <span className="text-foreground/40">
                 {tradeInfo?.merchant.displayName || 'Merchant'}
               </span>
             </div>
@@ -578,8 +578,8 @@ export function TradeChat({
             {/* Timeline header */}
             <div className="px-4 py-3 border-b border-white/[0.04] bg-card-solid/50">
               <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-gray-500" />
-                <span className="text-xs font-medium text-gray-400">Order Timeline</span>
+                <Clock className="w-4 h-4 text-foreground/35" />
+                <span className="text-xs font-medium text-foreground/40">Order Timeline</span>
               </div>
             </div>
 
@@ -627,7 +627,7 @@ export function TradeChat({
             {/* System messages / Event log - Show last 10 only */}
             <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
               {systemMessages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-gray-500">
+                <div className="flex flex-col items-center justify-center py-8 text-foreground/35">
                   <Bot className="w-10 h-10 mb-2 opacity-30" />
                   <p className="text-xs">No events yet</p>
                 </div>
@@ -636,7 +636,7 @@ export function TradeChat({
                   {/* Show indicator if there are more than 10 events */}
                   {systemMessages.length > 10 && (
                     <div className="text-center py-2 border-b border-white/[0.04] mb-2">
-                      <span className="text-[10px] text-gray-500">
+                      <span className="text-[10px] text-foreground/35">
                         Showing last 10 of {systemMessages.length} events
                       </span>
                     </div>
@@ -766,14 +766,14 @@ export function TradeChat({
                 className={`flex-1 px-4 py-3 flex items-center justify-center gap-2 text-xs font-medium transition-colors relative ${
                   activeChatTab === 'order'
                     ? 'text-primary'
-                    : 'text-gray-500 hover:text-gray-400'
+                    : 'text-foreground/35 hover:text-foreground/50'
                 }`}
               >
                 <MessageSquare className="w-4 h-4" />
                 <span>Order Chat</span>
                 {chatMessages.length > 0 && (
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                    activeChatTab === 'order' ? 'bg-primary/20 text-primary' : 'bg-gray-700 text-gray-400'
+                    activeChatTab === 'order' ? 'bg-primary/20 text-primary' : 'bg-gray-700 text-foreground/40'
                   }`}>
                     {chatMessages.length}
                   </span>
@@ -789,7 +789,7 @@ export function TradeChat({
                 className={`flex-1 px-4 py-3 flex items-center justify-center gap-2 text-xs font-medium transition-colors relative ${
                   activeChatTab === 'direct'
                     ? 'text-primary'
-                    : 'text-gray-500 hover:text-gray-400'
+                    : 'text-foreground/35 hover:text-foreground/50'
                 }`}
               >
                 <Users className="w-4 h-4" />
@@ -811,7 +811,7 @@ export function TradeChat({
                     <Loader2 className="w-6 h-6 text-primary animate-spin" />
                   </div>
                 ) : chatMessages.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                  <div className="flex flex-col items-center justify-center py-12 text-foreground/35">
                     <MessageSquare className="w-10 h-10 mb-2 opacity-30" />
                     <p className="text-sm">No order messages yet</p>
                     <p className="text-xs mt-1">Messages about this trade will appear here</p>
@@ -851,7 +851,7 @@ export function TradeChat({
                             className="max-w-[90%]"
                           >
                             <ReceiptCard data={receiptData} currentStatus={tradeInfo?.status} />
-                            <span className="text-[10px] text-gray-500 mt-1 block">
+                            <span className="text-[10px] text-foreground/35 mt-1 block">
                               {formatTime(msg.timestamp)}
                             </span>
                           </motion.div>
@@ -874,7 +874,7 @@ export function TradeChat({
                                 <Bot className="w-3.5 h-3.5 text-amber-400" />
                                 <span className="text-[10px] text-amber-400 font-medium">Trade Bot</span>
                               </div>
-                              <p className="text-[13px] text-gray-300 whitespace-pre-line leading-relaxed">{msg.text}</p>
+                              <p className="text-[13px] text-foreground/60 whitespace-pre-line leading-relaxed">{msg.text}</p>
                               <span className="text-[10px] text-gray-600 mt-1.5 block">
                                 {formatTime(msg.timestamp)}
                               </span>
@@ -912,7 +912,7 @@ export function TradeChat({
                                 msg.from === 'compliance' || msg.senderType === 'compliance'
                                   ? 'bg-red-500/20 text-gray-200 border border-red-500/30'
                                   : msg.from === 'me'
-                                    ? 'bg-primary text-black'
+                                    ? 'bg-primary text-background'
                                     : 'bg-[#1f1f1f] text-gray-200'
                               }`}
                             >
@@ -938,7 +938,7 @@ export function TradeChat({
                                   ? 'text-red-400/50'
                                   : msg.from === 'me'
                                     ? 'text-black/50'
-                                    : 'text-gray-500'
+                                    : 'text-foreground/35'
                               }`}>
                                 {formatTime(msg.timestamp)}
                               </span>
@@ -956,7 +956,7 @@ export function TradeChat({
 
             {/* Direct Chat Content */}
             {activeChatTab === 'direct' && (
-              <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+              <div className="flex flex-col items-center justify-center py-12 text-foreground/35">
                 <Users className="w-10 h-10 mb-2 opacity-30" />
                 <p className="text-sm">Direct Chat</p>
                 <p className="text-xs mt-1 text-center px-4">
@@ -992,6 +992,17 @@ export function TradeChat({
           )}
 
           {/* Input area */}
+          {(() => {
+            const isChatClosed = ['completed', 'cancelled', 'expired'].includes(tradeInfo?.status || '');
+            return isChatClosed ? (
+              <div className="p-3 bg-card-solid border-t border-white/[0.04]">
+                <div className="px-4 py-3 rounded-xl bg-white/[0.02] border border-white/[0.06] text-center">
+                  <p className="text-[11px] text-white/40 font-mono uppercase tracking-wider">
+                    Chat closed — order {tradeInfo?.status}
+                  </p>
+                </div>
+              </div>
+            ) : (
           <div className="p-3 bg-card-solid border-t border-white/[0.04]">
             <input
               ref={fileInputRef}
@@ -1005,13 +1016,13 @@ export function TradeChat({
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isUploading}
                 className="w-12 h-12 rounded-xl bg-[#1f1f1f] flex items-center justify-center
-                           disabled:opacity-50 transition-opacity hover:bg-[#2a2a2a]"
+                           disabled:opacity-50 transition-opacity hover:bg-card-solid"
                 title="Attach image"
               >
                 {isUploading ? (
-                  <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                  <Loader2 className="w-5 h-5 text-foreground/40 animate-spin" />
                 ) : (
-                  <Paperclip className="w-5 h-5 text-gray-400" />
+                  <Paperclip className="w-5 h-5 text-foreground/40" />
                 )}
               </button>
               <input
@@ -1023,7 +1034,7 @@ export function TradeChat({
                 onKeyDown={handleKeyDown}
                 placeholder={pendingImage ? "Add a caption..." : "Type a message..."}
                 className="flex-1 bg-[#1f1f1f] rounded-xl px-4 py-3 outline-none text-sm
-                           text-white placeholder:text-gray-500 focus:ring-1 focus:ring-primary/50"
+                           text-white placeholder:text-foreground/35 focus:ring-1 focus:ring-primary/50"
               />
               <motion.button
                 data-testid="chat-send"
@@ -1032,17 +1043,19 @@ export function TradeChat({
                 disabled={!messageText.trim() && !pendingImage}
                 className={`w-12 h-12 rounded-xl flex items-center justify-center
                            disabled:opacity-50 disabled:cursor-not-allowed transition-opacity ${
-                             pendingImage ? 'bg-orange-600' : 'bg-primary'
+                             pendingImage ? 'bg-primary/80' : 'bg-primary'
                            }`}
               >
                 {isUploading ? (
-                  <Loader2 className="w-5 h-5 text-black animate-spin" />
+                  <Loader2 className="w-5 h-5 text-background animate-spin" />
                 ) : (
-                  <Send className="w-5 h-5 text-black" />
+                  <Send className="w-5 h-5 text-background" />
                 )}
               </motion.button>
             </div>
           </div>
+            );
+          })()}
         </div>
       </div>
     </div>

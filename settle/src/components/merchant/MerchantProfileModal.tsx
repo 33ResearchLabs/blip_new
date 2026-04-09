@@ -70,8 +70,8 @@ const PRESET_AVATARS = [
 
 const TIER_COLORS: Record<string, string> = {
   newcomer: 'text-white/40',
-  bronze: 'text-orange-700',
-  silver: 'text-gray-300',
+  bronze: 'text-primary/70',
+  silver: 'text-foreground/60',
   gold: 'text-yellow-400',
   platinum: 'text-blue-200',
   diamond: 'text-cyan-300',
@@ -184,9 +184,9 @@ export function MerchantProfileModal({
         >
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 hover:bg-white/[0.04] rounded-lg transition-colors z-10"
+            className="absolute top-4 right-4 p-2 hover:bg-card rounded-lg transition-colors z-10"
           >
-            <X className="w-5 h-5 text-gray-400" />
+            <X className="w-5 h-5 text-foreground/40" />
           </button>
 
           {/* Header with reputation */}
@@ -283,8 +283,8 @@ export function MerchantProfileModal({
                   disabled={isUploading}
                   className={`relative aspect-square rounded-full overflow-hidden border-2 transition-all ${
                     selectedPreset === avatarUrl
-                      ? 'border-primary ring-2 ring-orange-500/30'
-                      : 'border-white/10 hover:border-white/30'
+                      ? 'border-primary ring-2 ring-primary/30'
+                      : 'border-white/10 hover:border-border-strong'
                   } ${isUploading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   <img src={avatarUrl} alt={`Avatar ${index + 1}`} className="absolute inset-0 w-full h-full object-cover" />
@@ -310,7 +310,7 @@ export function MerchantProfileModal({
           <div className="p-6 border-t border-white/[0.06]">
             <button
               onClick={onClose}
-              className="w-full px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-sm"
+              className="w-full px-4 py-2 bg-white/5 hover:bg-accent-subtle rounded-lg transition-colors text-sm"
             >
               Close
             </button>

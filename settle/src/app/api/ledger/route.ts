@@ -53,7 +53,38 @@ export async function GET(request: NextRequest) {
     const params: any[] = [];
 
     if (merchantId) {
-      sql = `SELECT * FROM v_merchant_ledger WHERE merchant_id = $1`;
+      // UNION ledger entries with cancelled/expired orders that have no ledger entry
+      // so they appear in the activity feed even without fund movement
+      sql = `
+        SELECT vml.*, NULL::text AS counterparty_name
+        FROM v_merchant_ledger vml WHERE merchant_id = $1
+        UNION ALL
+        SELECT
+          o.id,
+          $1::uuid AS merchant_id,
+          'ORDER_CANCELLED' AS entry_type,
+          o.crypto_amount AS amount,
+          'USDT' AS asset,
+          o.id AS related_order_id,
+          NULL AS related_tx_hash,
+          COALESCE(o.cancellation_reason, 'Order cancelled') AS description,
+          '{}'::jsonb AS metadata,
+          COALESCE(o.cancelled_at, o.created_at) AS created_at,
+          o.order_number,
+          o.type AS order_type,
+          o.status AS order_status,
+          COALESCE(u.username, bm.business_name) AS counterparty_name
+        FROM orders o
+        LEFT JOIN users u ON o.user_id = u.id
+        LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
+        WHERE (o.merchant_id = $1 OR o.buyer_merchant_id = $1)
+          AND o.status IN ('cancelled', 'expired')
+          AND NOT EXISTS (
+            SELECT 1 FROM ledger_entries le
+            WHERE le.related_order_id = o.id
+              AND le.account_id = $1
+          )
+      `;
       params.push(merchantId);
     } else {
       sql = `SELECT * FROM v_user_ledger WHERE user_id = $1`;

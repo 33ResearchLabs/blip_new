@@ -339,6 +339,38 @@ export function OrderDetailsPanel({
   const [showSeller, setShowSeller] = useState(true);
   const [showEscrow, setShowEscrow] = useState(false);
 
+  // ── Live presence (online/offline + last seen) — hooks must run on every
+  // render, so they live above the early `if (!order) return` below.
+  type PresenceMember = {
+    actorType: string;
+    actorId: string;
+    isOnline: boolean;
+    lastSeen: string | null;
+  };
+  const [presenceMembers, setPresenceMembers] = useState<PresenceMember[]>([]);
+  useEffect(() => {
+    if (!orderId) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetchWithAuth(`/api/orders/${orderId}/presence`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.success) {
+          setPresenceMembers(data.data?.members || []);
+        }
+      } catch {
+        // Best-effort
+      }
+    };
+    load();
+    const interval = setInterval(load, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [orderId]);
+
   useEffect(() => {
     const fetchOrder = async () => {
       setIsLoading(true);
@@ -400,7 +432,10 @@ export function OrderDetailsPanel({
 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.92)', backdropFilter:'blur(16px)'}}>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center"
+        style={{ background: "rgba(0,0,0,0.92)", backdropFilter: "blur(16px)" }}
+      >
         <div className="bg-card-solid border border-white/[0.08] rounded-2xl p-8">
           <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
@@ -410,13 +445,16 @@ export function OrderDetailsPanel({
 
   if (!order) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center" style={{background:'rgba(0,0,0,0.92)', backdropFilter:'blur(16px)'}}>
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center"
+        style={{ background: "rgba(0,0,0,0.92)", backdropFilter: "blur(16px)" }}
+      >
         <div className="bg-card-solid border border-white/[0.08] rounded-2xl p-8 text-center">
           <XCircle className="w-12 h-12 text-red-400 mx-auto mb-2" />
           <p className="text-white">Order not found</p>
           <button
             onClick={onClose}
-            className="mt-4 px-4 py-2 bg-white/10 rounded-lg text-white hover:bg-white/20"
+            className="mt-4 px-4 py-2 bg-white/10 rounded-lg text-white hover:bg-accent-subtle"
           >
             Close
           </button>
@@ -428,6 +466,43 @@ export function OrderDetailsPanel({
   const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
   const StatusIcon = statusConfig.icon;
   const username = order.user?.name || order.user?.username || "User";
+
+  const formatLastSeen = (iso: string | null): string => {
+    if (!iso) return "offline";
+    const diffMs = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diffMs / 60000);
+    if (m < 1) return "just now";
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+  };
+
+  const PresenceBadge = ({
+    actorType,
+    actorId,
+  }: {
+    actorType: "user" | "merchant";
+    actorId?: string;
+  }) => {
+    if (!actorId) return null;
+    const member = presenceMembers.find(
+      (m) => m.actorType === actorType && m.actorId === actorId,
+    );
+    const isOnline = !!member?.isOnline;
+    return (
+      <span className="flex items-center gap-1 text-xs">
+        <span
+          className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-green-500" : "bg-white/25"}`}
+        />
+        <span className={isOnline ? "text-green-400" : "text-white/40"}>
+          {isOnline
+            ? "Online"
+            : `last seen ${formatLastSeen(member?.lastSeen || null)}`}
+        </span>
+      </span>
+    );
+  };
 
   // Determine buyer and seller based on order type and M2M status
   const isBuyOrder = order.type === "buy";
@@ -499,821 +574,795 @@ export function OrderDetailsPanel({
   return (
     <div className="fixed inset-0 z-50" onClick={onClose}>
       {/* Blur backdrop */}
-      <div className="absolute inset-0 backdrop-blur-xl" />
+      <div className="absolute inset-0 backdrop-blur-sm" />
       {/* Modal container */}
       <div className="relative h-full flex items-center justify-center p-4">
         <div
-          className="bg-card-solid rounded-2xl w-full max-w-lg max-h-[90vh] overflow-hidden border border-white/10"
+          className="bg-card-solid rounded-2xl w-full max-w-sm max-h-[75vh] overflow-y-auto border border-border"
           onClick={(e) => e.stopPropagation()}
         >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/[0.02]">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-white">
-                {order.order_number}
-              </h2>
-              <span
-                data-testid="order-status"
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium
-                ${statusConfig.color} ${statusConfig.bgColor}`}
-              >
-                <StatusIcon className="w-3 h-3" />
-                {statusConfig.label}
-              </span>
-            </div>
-            <p className="text-xs text-white/50 mt-0.5">
-              Created {formatDate(order.created_at)}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {onOpenChat && (
-              <button
-                onClick={handleOpenChat}
-                className="p-2 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
-                title="Open Chat"
-              >
-                <MessageCircle className="w-4 h-4" />
-              </button>
-            )}
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-            >
-              <X className="w-4 h-4 text-white/60" />
-            </button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="overflow-y-auto max-h-[calc(90vh-64px)] p-4 space-y-3">
-          {/* Trade Summary */}
-          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs text-white/50">Amount</p>
-                <p className="text-base font-bold text-white">
-                  {Number(order.crypto_amount).toLocaleString()}{" "}
-                  {order.crypto_currency}
-                </p>
-                <p className="text-sm text-white/70">
-                  {Number(order.fiat_amount).toLocaleString()}{" "}
-                  {order.fiat_currency}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-white/50">Rate</p>
-                <p className="text-sm font-medium text-white">
-                  1 {order.crypto_currency} = {Number(order.rate).toFixed(2)}{" "}
-                  {order.fiat_currency}
-                </p>
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/[0.02]">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-white">
+                  {order.order_number}
+                </h2>
                 <span
-                  className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium
-                  ${order.type === "buy" ? "bg-green-500/20 text-green-400" : "bg-primary/20 text-primary"}`}
+                  data-testid="order-status"
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium
+                ${statusConfig.color} ${statusConfig.bgColor}`}
                 >
-                  {order.type === "buy" ? "Send USDT" : "Receive USDT"}
+                  <StatusIcon className="w-3 h-3" />
+                  {statusConfig.label}
                 </span>
               </div>
+              <p className="text-xs text-white/50 mt-0.5">
+                Created {formatDate(order.created_at)}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {onOpenChat && (
+                <button
+                  onClick={handleOpenChat}
+                  className="p-2 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
+                  title="Open Chat"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-2 rounded-lg hover:bg-accent-subtle transition-colors"
+              >
+                <X className="w-4 h-4 text-white/60" />
+              </button>
             </div>
           </div>
 
-          {/* Buyer Info */}
-          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
-            <button
-              onClick={() => setShowBuyer(!showBuyer)}
-              className="w-full flex items-center justify-between text-xs font-medium text-white/50"
-            >
-              <span className="flex items-center gap-2">
-                <User className="w-3.5 h-3.5" /> Buyer
-              </span>
-              {showBuyer ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </button>
-            {showBuyer && (
-              <div className="flex items-center justify-between mt-2">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-8 h-8 rounded-full bg-white/5 border border-white/6
-                                flex items-center justify-center text-sm"
-                  >
-                    🦊
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-white">
-                      {buyerName}
-                    </p>
-                    <div className="flex items-center gap-1.5 text-xs text-white/50">
-                      <span>{buyerTrades || 0} trades</span>
-                      <span>•</span>
-                      <div className="flex items-center gap-0.5">
-                        {[1, 2, 3, 4, 5].map((s) => (
-                          <Star
-                            key={s}
-                            className={`w-3 h-3 ${s <= Math.round(buyerRating || 0) ? "fill-primary text-primary" : "text-white/15"}`}
-                          />
-                        ))}
-                      </div>
-                      {buyerRating != null && (
-                        <span className="text-xs font-mono">
-                          {buyerRating.toFixed(1)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+          {/* Content */}
+          <div className="overflow-y-auto max-h-[calc(90vh-64px)] p-4 space-y-3">
+            {/* Trade Summary */}
+            <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-white/50">Amount</p>
+                  <p className="text-base font-bold text-white">
+                    {Number(order.crypto_amount).toLocaleString()}{" "}
+                    {order.crypto_currency}
+                  </p>
+                  <p className="text-sm text-white/70">
+                    {Number(order.fiat_amount).toLocaleString()}{" "}
+                    {order.fiat_currency}
+                  </p>
                 </div>
-                {buyerWallet && (
-                  <button
-                    onClick={() => handleCopy(buyerWallet, "buyer_wallet")}
-                    className="flex items-center gap-1 px-2 py-1 bg-white/[0.04] rounded-lg text-xs text-white/60
-                             hover:bg-white/[0.08] transition-colors border border-white/[0.06]"
+                <div className="text-right">
+                  <p className="text-xs text-white/50">Rate</p>
+                  <p className="text-sm font-medium text-white">
+                    1 {order.crypto_currency} = {Number(order.rate).toFixed(2)}{" "}
+                    {order.fiat_currency}
+                  </p>
+                  <span
+                    className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-medium
+                  ${order.type === "buy" ? "bg-green-500/20 text-green-400" : "bg-primary/20 text-primary"}`}
                   >
-                    <Wallet className="w-4 h-4" />
-                    {truncateHash(buyerWallet)}
-                    {copiedField === "buyer_wallet" ? (
-                      <Check className="w-3 h-3 text-white/70" />
-                    ) : (
-                      <Copy className="w-3 h-3" />
-                    )}
-                  </button>
-                )}
+                    {order.type === "buy" ? "Send USDT" : "Receive USDT"}
+                  </span>
+                </div>
               </div>
-            )}
-          </div>
+            </div>
 
-          {/* Seller Info */}
-          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
-            <button
-              onClick={() => setShowSeller(!showSeller)}
-              className="w-full flex items-center justify-between text-xs font-medium text-white/50"
-            >
-              <span className="flex items-center gap-2">
-                <Store className="w-3.5 h-3.5" /> Seller
-              </span>
-              {showSeller ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </button>
-            {showSeller && (
-              <div className="flex items-center justify-between mt-2">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-8 h-8 rounded-full bg-white/5 border border-white/6
-                                flex items-center justify-center text-sm"
-                  >
-                    🏪
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-white">
-                      {sellerName}
-                    </p>
-                    <div className="flex items-center gap-1.5 text-xs text-white/50">
-                      <span>{sellerTrades || 0} trades</span>
-                      <span>•</span>
-                      <div className="flex items-center gap-0.5">
-                        {[1, 2, 3, 4, 5].map((s) => (
-                          <Star
-                            key={s}
-                            className={`w-3 h-3 ${s <= Math.round(sellerRating || 0) ? "fill-primary text-primary" : "text-white/15"}`}
-                          />
-                        ))}
-                      </div>
-                      {sellerRating != null && (
-                        <span className="text-xs font-mono">
-                          {sellerRating.toFixed(1)}
-                        </span>
-                      )}
-                      {order.merchant?.is_online && isBuyOrder && (
-                        <span className="text-white/70">• Online</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                {sellerWallet && (
-                  <button
-                    onClick={() => handleCopy(sellerWallet, "seller_wallet")}
-                    className="flex items-center gap-1 px-2 py-1 bg-white/[0.04] rounded-lg text-xs text-white/60
-                             hover:bg-white/[0.08] transition-colors border border-white/[0.06]"
-                  >
-                    <Wallet className="w-4 h-4" />
-                    {truncateHash(sellerWallet)}
-                    {copiedField === "seller_wallet" ? (
-                      <Check className="w-3 h-3 text-white/70" />
-                    ) : (
-                      <Copy className="w-3 h-3" />
-                    )}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Bank/Payment Details */}
-          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
-            <button
-              onClick={() => setShowBankDetails(!showBankDetails)}
-              className="w-full flex items-center justify-between text-xs font-medium text-white/50 mb-2"
-            >
-              <span className="flex items-center gap-2">
-                {order.payment_method === "bank" ? (
-                  <Building2 className="w-4 h-4" />
-                ) : (
-                  <MapPin className="w-4 h-4" />
-                )}
-                Payment Details
-              </span>
-              {showBankDetails ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </button>
-            {showBankDetails &&
-              (order.payment_method === "bank" ? (
-                <div className="space-y-3">
-                  {/* Merchant/Offer Bank Details */}
-                  <div className="space-y-2">
-                    <p className="text-[11px] text-white/30 uppercase tracking-wide font-medium">
-                      Merchant Bank
-                    </p>
-                    {order.merchant_payment_method
-                      ? [
-                          {
-                            label: "Method",
-                            value: order.merchant_payment_method.name,
-                            key: "merchant_method",
-                          },
-                          {
-                            label: "Details",
-                            value: order.merchant_payment_method.details,
-                            key: "merchant_details",
-                            mono: true,
-                          },
-                        ].map(({ label, value, key, mono }) => (
-                          <div
-                            key={key}
-                            className="flex justify-between items-center"
-                          >
-                            <span className="text-white/50">{label}</span>
-                            {value ? (
-                              <button
-                                onClick={() => handleCopy(value, key)}
-                                className="flex items-center gap-1 text-white hover:text-white/70 transition-colors"
-                              >
-                                <span className={mono ? "font-mono" : ""}>
-                                  {value}
-                                </span>
-                                {copiedField === key ? (
-                                  <Check className="w-3 h-3 text-green-400" />
-                                ) : (
-                                  <Copy className="w-3 h-3 text-white/30" />
-                                )}
-                              </button>
-                            ) : (
-                              <span className="text-white/30">-</span>
-                            )}
-                          </div>
-                        ))
-                      : [
-                          {
-                            label: "Bank",
-                            value:
-                              order.offer?.bank_name ||
-                              order.payment_details?.bank_name,
-                            key: "merchant_bank",
-                          },
-                          {
-                            label: "Account Name",
-                            value:
-                              order.offer?.bank_account_name ||
-                              order.payment_details?.bank_account_name ||
-                              order.payment_details?.account_name,
-                            key: "merchant_name",
-                          },
-                          {
-                            label: "IBAN",
-                            value:
-                              order.offer?.bank_iban ||
-                              order.payment_details?.bank_iban ||
-                              order.payment_details?.iban,
-                            key: "merchant_iban",
-                            mono: true,
-                          },
-                        ].map(({ label, value, key, mono }) => (
-                          <div
-                            key={key}
-                            className="flex justify-between items-center"
-                          >
-                            <span className="text-white/50">{label}</span>
-                            {value ? (
-                              <button
-                                onClick={() => handleCopy(value, key)}
-                                className="flex items-center gap-1 text-white hover:text-white/70 transition-colors"
-                              >
-                                <span className={mono ? "font-mono" : ""}>
-                                  {value}
-                                </span>
-                                {copiedField === key ? (
-                                  <Check className="w-3 h-3 text-green-400" />
-                                ) : (
-                                  <Copy className="w-3 h-3 text-white/30" />
-                                )}
-                              </button>
-                            ) : (
-                              <span className="text-white/30">-</span>
-                            )}
-                          </div>
-                        ))}
-                  </div>
-
-                  {/* User's Locked Payment Method (where merchant sends fiat) */}
-                  {order.locked_payment_method
-                    ? (() => {
-                        const lpm = order.locked_payment_method!;
-                        const typeIcon =
-                          lpm.type === "upi" ? (
-                            <Smartphone className="w-3.5 h-3.5 text-green-400" />
-                          ) : lpm.type === "bank" ? (
-                            <Building2 className="w-3.5 h-3.5 text-blue-400" />
-                          ) : (
-                            <CreditCard className="w-3.5 h-3.5 text-purple-400" />
-                          );
-
-                        // Build display fields based on type
-                        const fields: {
-                          label: string;
-                          value: string;
-                          key: string;
-                          mono?: boolean;
-                        }[] = [];
-                        if (lpm.type === "bank") {
-                          if (lpm.details.bank_name)
-                            fields.push({
-                              label: "Bank",
-                              value: lpm.details.bank_name,
-                              key: "lpm_bank",
-                            });
-                          if (lpm.details.account_name)
-                            fields.push({
-                              label: "Account Name",
-                              value: lpm.details.account_name,
-                              key: "lpm_name",
-                            });
-                          if (lpm.details.iban)
-                            fields.push({
-                              label: "IBAN",
-                              value: lpm.details.iban,
-                              key: "lpm_iban",
-                              mono: true,
-                            });
-                        } else if (lpm.type === "upi") {
-                          if (lpm.details.upi_id)
-                            fields.push({
-                              label: "UPI ID",
-                              value: lpm.details.upi_id,
-                              key: "lpm_upi",
-                              mono: true,
-                            });
-                          if (lpm.details.provider)
-                            fields.push({
-                              label: "Provider",
-                              value: lpm.details.provider,
-                              key: "lpm_provider",
-                            });
-                        } else if (lpm.type === "cash") {
-                          if (lpm.details.location_name)
-                            fields.push({
-                              label: "Location",
-                              value: lpm.details.location_name,
-                              key: "lpm_location",
-                            });
-                          if (lpm.details.location_address)
-                            fields.push({
-                              label: "Address",
-                              value: lpm.details.location_address,
-                              key: "lpm_address",
-                            });
-                          if (lpm.details.meeting_instructions)
-                            fields.push({
-                              label: "Instructions",
-                              value: lpm.details.meeting_instructions,
-                              key: "lpm_instructions",
-                            });
-                        } else {
-                          if (lpm.details.method_name)
-                            fields.push({
-                              label: "Method",
-                              value: lpm.details.method_name,
-                              key: "lpm_method",
-                            });
-                          if (lpm.details.account_identifier)
-                            fields.push({
-                              label: "Account",
-                              value: lpm.details.account_identifier,
-                              key: "lpm_account",
-                              mono: true,
-                            });
-                          if (lpm.details.instructions)
-                            fields.push({
-                              label: "Instructions",
-                              value: lpm.details.instructions,
-                              key: "lpm_instructions",
-                            });
-                        }
-
-                        return (
-                          <div className="space-y-2 pt-3 border-t border-white/[0.06]">
-                            <div className="flex items-center gap-1.5">
-                              <Lock className="w-3 h-3 text-primary" />
-                              <p className="text-[11px] text-primary uppercase tracking-wide font-bold">
-                                Send AED Here
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 mb-1">
-                              {typeIcon}
-                              <span className="text-[13px] text-white font-medium">
-                                {lpm.label}
-                              </span>
-                              <span className="text-[10px] text-white/30 uppercase">
-                                {lpm.type}
-                              </span>
-                            </div>
-                            {fields.map(({ label, value, key, mono }) => (
-                              <div
-                                key={key}
-                                className="flex justify-between items-center"
-                              >
-                                <span className="text-white/50">{label}</span>
-                                {value ? (
-                                  <button
-                                    onClick={() => handleCopy(value, key)}
-                                    className="flex items-center gap-1 text-white hover:text-white/70 transition-colors"
-                                  >
-                                    <span className={mono ? "font-mono" : ""}>
-                                      {value}
-                                    </span>
-                                    {copiedField === key ? (
-                                      <Check className="w-3 h-3 text-green-400" />
-                                    ) : (
-                                      <Copy className="w-3 h-3 text-white/30" />
-                                    )}
-                                  </button>
-                                ) : (
-                                  <span className="text-white/30">-</span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()
-                    : order.payment_details?.user_bank_account
-                      ? (() => {
-                          // Legacy fallback: user_bank_account from payment_details
-                          const uba = order.payment_details!.user_bank_account!;
-                          const isStructured =
-                            typeof uba === "object" && "bank_name" in uba;
-                          if (isStructured) {
-                            const details = uba as {
-                              bank_name: string;
-                              account_name: string;
-                              iban: string;
-                            };
-                            return (
-                              <div className="space-y-2 pt-3 border-t border-white/[0.06]">
-                                <p className="text-[11px] text-white/30 uppercase tracking-wide font-medium">
-                                  User Bank (Send AED here)
-                                </p>
-                                {[
-                                  {
-                                    label: "Bank",
-                                    value: details.bank_name,
-                                    key: "user_bank",
-                                  },
-                                  {
-                                    label: "Account Name",
-                                    value: details.account_name,
-                                    key: "user_name",
-                                  },
-                                  {
-                                    label: "IBAN",
-                                    value: details.iban,
-                                    key: "user_iban",
-                                    mono: true,
-                                  },
-                                ].map(({ label, value, key, mono }) => (
-                                  <div
-                                    key={key}
-                                    className="flex justify-between items-center"
-                                  >
-                                    <span className="text-white/50">
-                                      {label}
-                                    </span>
-                                    {value ? (
-                                      <button
-                                        onClick={() => handleCopy(value, key)}
-                                        className="flex items-center gap-1 text-white hover:text-white/70 transition-colors"
-                                      >
-                                        <span
-                                          className={mono ? "font-mono" : ""}
-                                        >
-                                          {value}
-                                        </span>
-                                        {copiedField === key ? (
-                                          <Check className="w-3 h-3 text-green-400" />
-                                        ) : (
-                                          <Copy className="w-3 h-3 text-white/30" />
-                                        )}
-                                      </button>
-                                    ) : (
-                                      <span className="text-white/30">-</span>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            );
-                          }
-                          // Legacy plain string
-                          return (
-                            <div className="pt-3 border-t border-white/[0.06]">
-                              <p className="text-[11px] text-white/30 uppercase tracking-wide font-medium mb-2">
-                                User Bank (Send AED here)
-                              </p>
-                              <div className="flex justify-between items-center">
-                                <span className="text-white font-mono text-sm">
-                                  {uba as string}
-                                </span>
-                                <button
-                                  onClick={() =>
-                                    handleCopy(
-                                      uba as string,
-                                      "user_bank_legacy",
-                                    )
-                                  }
-                                  className="p-1 rounded hover:bg-white/10"
-                                >
-                                  {copiedField === "user_bank_legacy" ? (
-                                    <Check className="w-3 h-3 text-green-400" />
-                                  ) : (
-                                    <Copy className="w-3 h-3 text-white/30" />
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })()
-                      : null}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-white/50">Location</span>
-                    <span className="text-white">
-                      {order.offer?.location_name ||
-                        order.payment_details?.location_name ||
-                        "-"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/50">Address</span>
-                    <span className="text-white">
-                      {order.offer?.location_address ||
-                        order.payment_details?.location_address ||
-                        "-"}
-                    </span>
-                  </div>
-                </div>
-              ))}
-          </div>
-
-          {/* sAED corridor bridge info removed — not in this version */}
-
-          {/* Escrow & Blockchain Details */}
-          {(order.escrow_tx_hash ||
-            order.escrow_pda ||
-            order.escrow_trade_pda ||
-            order.release_tx_hash ||
-            order.escrow_address) && (
-            <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
+            {/* Buyer Info */}
+            <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
               <button
-                onClick={() => setShowEscrow(!showEscrow)}
-                className="w-full flex items-center justify-between text-sm font-medium text-white/50"
+                onClick={() => setShowBuyer(!showBuyer)}
+                className="w-full flex items-center justify-between text-xs font-medium text-white/50"
               >
                 <span className="flex items-center gap-2">
-                  <Shield className="w-4 h-4" /> Escrow & Blockchain
+                  <User className="w-3.5 h-3.5" /> Buyer
                 </span>
-                {showEscrow ? (
+                {showBuyer ? (
                   <ChevronUp className="w-4 h-4" />
                 ) : (
                   <ChevronDown className="w-4 h-4" />
                 )}
               </button>
-              {showEscrow && (
-                <div className="space-y-3 mt-3">
-                  {/* Trade ID */}
-                  {order.escrow_trade_id && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/50 flex items-center gap-1">
-                        <Hash className="w-3 h-3" /> Trade ID
-                      </span>
-                      <span className="text-white font-mono">
-                        {order.escrow_trade_id}
-                      </span>
+              {showBuyer && (
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center text-sm shrink-0">
+                      🦊
                     </div>
-                  )}
-
-                  {/* Escrow PDA with Blipscan link */}
-                  {(order.escrow_pda || order.escrow_trade_pda) && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/50">Escrow PDA</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() =>
-                            handleCopy(
-                              order.escrow_pda || order.escrow_trade_pda!,
-                              "escrow_pda",
-                            )
-                          }
-                          className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
-                        >
-                          {truncateHash(
-                            order.escrow_pda || order.escrow_trade_pda!,
-                            8,
-                            6,
-                          )}
-                          {copiedField === "escrow_pda" ? (
-                            <Check className="w-3 h-3 text-white/70" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
-                        <a
-                          href={getBlipscanTradeUrl(
-                            order.escrow_pda || order.escrow_trade_pda!,
-                          )}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:text-primary/80 transition-colors"
-                          title="View on Blipscan"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-white truncate">{buyerName}</p>
+                      <div className="flex flex-wrap items-center gap-1 text-[10px] text-white/50">
+                        <span>{buyerTrades || 0} trades</span>
+                        <span>•</span>
+                        <div className="flex items-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <Star key={s} className={`w-2.5 h-2.5 ${s <= Math.round(buyerRating || 0) ? "fill-primary text-primary" : "text-white/15"}`} />
+                          ))}
+                        </div>
+                        {buyerRating != null && <span className="font-mono">{buyerRating.toFixed(1)}</span>}
+                        <span>•</span>
+                        <PresenceBadge
+                          actorType={isM2M ? "merchant" : isBuyOrder ? "user" : "merchant"}
+                          actorId={isM2M ? order.buyer_merchant?.id : isBuyOrder ? order.user?.id : order.merchant?.id}
+                        />
                       </div>
                     </div>
-                  )}
-
-                  {/* Escrow Address */}
-                  {order.escrow_address && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/50">Escrow Address</span>
-                      <button
-                        onClick={() =>
-                          handleCopy(order.escrow_address!, "escrow_addr")
-                        }
-                        className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
-                      >
-                        {truncateHash(order.escrow_address, 8, 6)}
-                        {copiedField === "escrow_addr" ? (
-                          <Check className="w-3 h-3 text-white/70" />
-                        ) : (
-                          <Copy className="w-3 h-3" />
-                        )}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Deposit TX */}
-                  {order.escrow_tx_hash && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/50">Deposit TX</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() =>
-                            handleCopy(order.escrow_tx_hash!, "deposit_tx")
-                          }
-                          className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
-                        >
-                          {truncateHash(order.escrow_tx_hash)}
-                          {copiedField === "deposit_tx" ? (
-                            <Check className="w-3 h-3 text-white/70" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
-                        <a
-                          href={getSolscanUrl(order.escrow_tx_hash)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-white/70 hover:text-white/70 transition-colors"
-                          title="View on Solscan"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Block/Slot */}
-                  {order.escrow_slot && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/50 flex items-center gap-1">
-                        <LinkIcon className="w-3 h-3" /> Slot
-                      </span>
-                      <span className="text-white font-mono">
-                        {order.escrow_slot.toLocaleString()}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Release TX */}
-                  {order.release_tx_hash && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/50">Release TX</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() =>
-                            handleCopy(order.release_tx_hash!, "release_tx")
-                          }
-                          className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
-                        >
-                          {truncateHash(order.release_tx_hash)}
-                          {copiedField === "release_tx" ? (
-                            <Check className="w-3 h-3 text-white/70" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
-                        <a
-                          href={getSolscanUrl(order.release_tx_hash)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-white/70 hover:text-white/70 transition-colors"
-                          title="View on Solscan"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Release Slot */}
-                  {order.release_slot && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/50 flex items-center gap-1">
-                        <LinkIcon className="w-3 h-3" /> Release Slot
-                      </span>
-                      <span className="text-white font-mono">
-                        {order.release_slot.toLocaleString()}
-                      </span>
-                    </div>
+                  </div>
+                  {buyerWallet && (
+                    <button
+                      onClick={() => handleCopy(buyerWallet, "buyer_wallet")}
+                      className="flex items-center gap-1 px-2 py-1 bg-white/[0.04] rounded-lg text-[10px] text-white/60 hover:bg-accent-subtle transition-colors border border-white/[0.06] w-full"
+                    >
+                      <Wallet className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{truncateHash(buyerWallet)}</span>
+                      {copiedField === "buyer_wallet" ? <Check className="w-3 h-3 text-white/70 shrink-0 ml-auto" /> : <Copy className="w-3 h-3 shrink-0 ml-auto" />}
+                    </button>
                   )}
                 </div>
               )}
             </div>
-          )}
 
-          {/* Timeline */}
-          <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
-            <button
-              onClick={() => setShowTimeline(!showTimeline)}
-              className="w-full flex items-center justify-between text-xs font-medium text-white/50 mb-2"
-            >
-              <span className="flex items-center gap-2">
-                <Clock className="w-4 h-4" /> Timeline
-              </span>
-              {showTimeline ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
+            {/* Seller Info */}
+            <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
+              <button
+                onClick={() => setShowSeller(!showSeller)}
+                className="w-full flex items-center justify-between text-xs font-medium text-white/50"
+              >
+                <span className="flex items-center gap-2">
+                  <Store className="w-3.5 h-3.5" /> Seller
+                </span>
+                {showSeller ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </button>
+              {showSeller && (
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center text-sm shrink-0">
+                      🏪
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-white truncate">{sellerName}</p>
+                      <div className="flex flex-wrap items-center gap-1 text-[10px] text-white/50">
+                        <span>{sellerTrades || 0} trades</span>
+                        <span>•</span>
+                        <div className="flex items-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <Star key={s} className={`w-2.5 h-2.5 ${s <= Math.round(sellerRating || 0) ? "fill-primary text-primary" : "text-white/15"}`} />
+                          ))}
+                        </div>
+                        {sellerRating != null && <span className="font-mono">{sellerRating.toFixed(1)}</span>}
+                        <span>•</span>
+                        <PresenceBadge
+                          actorType={isM2M || isBuyOrder ? "merchant" : "user"}
+                          actorId={isM2M || isBuyOrder ? order.merchant?.id : order.user?.id}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {sellerWallet && (
+                    <button
+                      onClick={() => handleCopy(sellerWallet, "seller_wallet")}
+                      className="flex items-center gap-1 px-2 py-1 bg-white/[0.04] rounded-lg text-[10px] text-white/60 hover:bg-accent-subtle transition-colors border border-white/[0.06] w-full"
+                    >
+                      <Wallet className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{truncateHash(sellerWallet)}</span>
+                      {copiedField === "seller_wallet" ? <Check className="w-3 h-3 text-white/70 shrink-0 ml-auto" /> : <Copy className="w-3 h-3 shrink-0 ml-auto" />}
+                    </button>
+                  )}
+                </div>
               )}
-            </button>
-            {showTimeline && (
-              <div className="space-y-3">
-                {TIMELINE_STEPS.map((step, index) => {
-                  const timestamp = order[step.field as keyof OrderDetails] as
-                    | string
-                    | undefined;
-                  const isCompleted = !!timestamp;
-                  const isCurrent = order.status === step.status;
+            </div>
 
-                  // Skip steps after cancellation/dispute
-                  if (
-                    ["cancelled", "disputed", "expired"].includes(
-                      order.status,
-                    ) &&
-                    !isCompleted &&
-                    index > 0
-                  ) {
-                    return null;
-                  }
+            {/* Bank/Payment Details */}
+            <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.06]">
+              <button
+                onClick={() => setShowBankDetails(!showBankDetails)}
+                className="w-full flex items-center justify-between text-xs font-medium text-white/50 mb-2"
+              >
+                <span className="flex items-center gap-2">
+                  {order.payment_method === "bank" ? (
+                    <Building2 className="w-4 h-4" />
+                  ) : (
+                    <MapPin className="w-4 h-4" />
+                  )}
+                  Payment Details
+                </span>
+                {showBankDetails ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </button>
+              {showBankDetails &&
+                (order.payment_method === "bank" ? (
+                  <div className="space-y-3">
+                    {/* Merchant/Offer Bank Details */}
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-white/30 uppercase tracking-wide font-medium">
+                        Merchant Bank
+                      </p>
+                      {order.merchant_payment_method
+                        ? [
+                            {
+                              label: "Method",
+                              value: order.merchant_payment_method.name,
+                              key: "merchant_method",
+                            },
+                            {
+                              label: "Details",
+                              value: order.merchant_payment_method.details,
+                              key: "merchant_details",
+                              mono: true,
+                            },
+                          ].map(({ label, value, key, mono }) => (
+                            <div
+                              key={key}
+                              className="flex justify-between items-center"
+                            >
+                              <span className="text-[11px] text-white/50">{label}</span>
+                              {value ? (
+                                <button
+                                  onClick={() => handleCopy(value, key)}
+                                  className="flex items-center gap-1 text-[11px] text-white hover:text-foreground/70 transition-colors max-w-[60%] text-right"
+                                >
+                                  <span className={`truncate ${mono ? "font-mono" : ""}`}>
+                                    {value}
+                                  </span>
+                                  {copiedField === key ? (
+                                    <Check className="w-3 h-3 text-green-400" />
+                                  ) : (
+                                    <Copy className="w-3 h-3 text-white/30" />
+                                  )}
+                                </button>
+                              ) : (
+                                <span className="text-white/30">-</span>
+                              )}
+                            </div>
+                          ))
+                        : [
+                            {
+                              label: "Bank",
+                              value:
+                                order.offer?.bank_name ||
+                                order.payment_details?.bank_name,
+                              key: "merchant_bank",
+                            },
+                            {
+                              label: "Account Name",
+                              value:
+                                order.offer?.bank_account_name ||
+                                order.payment_details?.bank_account_name ||
+                                order.payment_details?.account_name,
+                              key: "merchant_name",
+                            },
+                            {
+                              label: "IBAN",
+                              value:
+                                order.offer?.bank_iban ||
+                                order.payment_details?.bank_iban ||
+                                order.payment_details?.iban,
+                              key: "merchant_iban",
+                              mono: true,
+                            },
+                          ].map(({ label, value, key, mono }) => (
+                            <div
+                              key={key}
+                              className="flex justify-between items-center"
+                            >
+                              <span className="text-[11px] text-white/50">{label}</span>
+                              {value ? (
+                                <button
+                                  onClick={() => handleCopy(value, key)}
+                                  className="flex items-center gap-1 text-[11px] text-white hover:text-foreground/70 transition-colors max-w-[60%] text-right"
+                                >
+                                  <span className={`truncate ${mono ? "font-mono" : ""}`}>
+                                    {value}
+                                  </span>
+                                  {copiedField === key ? (
+                                    <Check className="w-3 h-3 text-green-400" />
+                                  ) : (
+                                    <Copy className="w-3 h-3 text-white/30" />
+                                  )}
+                                </button>
+                              ) : (
+                                <span className="text-white/30">-</span>
+                              )}
+                            </div>
+                          ))}
+                    </div>
 
-                  return (
-                    <div key={step.status} className="flex items-start gap-3">
-                      <div
-                        className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0
+                    {/* User's Locked Payment Method (where merchant sends fiat) */}
+                    {order.locked_payment_method
+                      ? (() => {
+                          const lpm = order.locked_payment_method!;
+                          const typeIcon =
+                            lpm.type === "upi" ? (
+                              <Smartphone className="w-3.5 h-3.5 text-green-400" />
+                            ) : lpm.type === "bank" ? (
+                              <Building2 className="w-3.5 h-3.5 text-blue-400" />
+                            ) : (
+                              <CreditCard className="w-3.5 h-3.5 text-purple-400" />
+                            );
+
+                          // Build display fields based on type
+                          const fields: {
+                            label: string;
+                            value: string;
+                            key: string;
+                            mono?: boolean;
+                          }[] = [];
+                          if (lpm.type === "bank") {
+                            if (lpm.details.bank_name)
+                              fields.push({
+                                label: "Bank",
+                                value: lpm.details.bank_name,
+                                key: "lpm_bank",
+                              });
+                            if (lpm.details.account_name)
+                              fields.push({
+                                label: "Account Name",
+                                value: lpm.details.account_name,
+                                key: "lpm_name",
+                              });
+                            if (lpm.details.iban)
+                              fields.push({
+                                label: "IBAN",
+                                value: lpm.details.iban,
+                                key: "lpm_iban",
+                                mono: true,
+                              });
+                          } else if (lpm.type === "upi") {
+                            if (lpm.details.upi_id)
+                              fields.push({
+                                label: "UPI ID",
+                                value: lpm.details.upi_id,
+                                key: "lpm_upi",
+                                mono: true,
+                              });
+                            if (lpm.details.provider)
+                              fields.push({
+                                label: "Provider",
+                                value: lpm.details.provider,
+                                key: "lpm_provider",
+                              });
+                          } else if (lpm.type === "cash") {
+                            if (lpm.details.location_name)
+                              fields.push({
+                                label: "Location",
+                                value: lpm.details.location_name,
+                                key: "lpm_location",
+                              });
+                            if (lpm.details.location_address)
+                              fields.push({
+                                label: "Address",
+                                value: lpm.details.location_address,
+                                key: "lpm_address",
+                              });
+                            if (lpm.details.meeting_instructions)
+                              fields.push({
+                                label: "Instructions",
+                                value: lpm.details.meeting_instructions,
+                                key: "lpm_instructions",
+                              });
+                          } else {
+                            if (lpm.details.method_name)
+                              fields.push({
+                                label: "Method",
+                                value: lpm.details.method_name,
+                                key: "lpm_method",
+                              });
+                            if (lpm.details.account_identifier)
+                              fields.push({
+                                label: "Account",
+                                value: lpm.details.account_identifier,
+                                key: "lpm_account",
+                                mono: true,
+                              });
+                            if (lpm.details.instructions)
+                              fields.push({
+                                label: "Instructions",
+                                value: lpm.details.instructions,
+                                key: "lpm_instructions",
+                              });
+                          }
+
+                          return (
+                            <div className="space-y-2 pt-3 border-t border-white/[0.06]">
+                              <div className="flex items-center gap-1.5">
+                                <Lock className="w-3 h-3 text-primary" />
+                                <p className="text-[11px] text-primary uppercase tracking-wide font-bold">
+                                  Send AED Here
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 mb-1">
+                                {typeIcon}
+                                <span className="text-[13px] text-white font-medium">
+                                  {lpm.label}
+                                </span>
+                                <span className="text-[10px] text-white/30 uppercase">
+                                  {lpm.type}
+                                </span>
+                              </div>
+                              {fields.map(({ label, value, key, mono }) => (
+                                <div
+                                  key={key}
+                                  className="flex justify-between items-center"
+                                >
+                                  <span className="text-white/50">{label}</span>
+                                  {value ? (
+                                    <button
+                                      onClick={() => handleCopy(value, key)}
+                                      className="flex items-center gap-1 text-white hover:text-foreground/70 transition-colors"
+                                    >
+                                      <span className={mono ? "font-mono" : ""}>
+                                        {value}
+                                      </span>
+                                      {copiedField === key ? (
+                                        <Check className="w-3 h-3 text-green-400" />
+                                      ) : (
+                                        <Copy className="w-3 h-3 text-white/30" />
+                                      )}
+                                    </button>
+                                  ) : (
+                                    <span className="text-white/30">-</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()
+                      : order.payment_details?.user_bank_account
+                        ? (() => {
+                            // Legacy fallback: user_bank_account from payment_details
+                            const uba =
+                              order.payment_details!.user_bank_account!;
+                            const isStructured =
+                              typeof uba === "object" && "bank_name" in uba;
+                            if (isStructured) {
+                              const details = uba as {
+                                bank_name: string;
+                                account_name: string;
+                                iban: string;
+                              };
+                              return (
+                                <div className="space-y-2 pt-3 border-t border-white/[0.06]">
+                                  <p className="text-[11px] text-white/30 uppercase tracking-wide font-medium">
+                                    User Bank (Send AED here)
+                                  </p>
+                                  {[
+                                    {
+                                      label: "Bank",
+                                      value: details.bank_name,
+                                      key: "user_bank",
+                                    },
+                                    {
+                                      label: "Account Name",
+                                      value: details.account_name,
+                                      key: "user_name",
+                                    },
+                                    {
+                                      label: "IBAN",
+                                      value: details.iban,
+                                      key: "user_iban",
+                                      mono: true,
+                                    },
+                                  ].map(({ label, value, key, mono }) => (
+                                    <div
+                                      key={key}
+                                      className="flex justify-between items-center"
+                                    >
+                                      <span className="text-white/50">
+                                        {label}
+                                      </span>
+                                      {value ? (
+                                        <button
+                                          onClick={() => handleCopy(value, key)}
+                                          className="flex items-center gap-1 text-white hover:text-foreground/70 transition-colors"
+                                        >
+                                          <span
+                                            className={mono ? "font-mono" : ""}
+                                          >
+                                            {value}
+                                          </span>
+                                          {copiedField === key ? (
+                                            <Check className="w-3 h-3 text-green-400" />
+                                          ) : (
+                                            <Copy className="w-3 h-3 text-white/30" />
+                                          )}
+                                        </button>
+                                      ) : (
+                                        <span className="text-white/30">-</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            }
+                            // Legacy plain string
+                            return (
+                              <div className="pt-3 border-t border-white/[0.06]">
+                                <p className="text-[11px] text-white/30 uppercase tracking-wide font-medium mb-2">
+                                  User Bank (Send AED here)
+                                </p>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-white font-mono text-sm">
+                                    {uba as string}
+                                  </span>
+                                  <button
+                                    onClick={() =>
+                                      handleCopy(
+                                        uba as string,
+                                        "user_bank_legacy",
+                                      )
+                                    }
+                                    className="p-1 rounded hover:bg-accent-subtle"
+                                  >
+                                    {copiedField === "user_bank_legacy" ? (
+                                      <Check className="w-3 h-3 text-green-400" />
+                                    ) : (
+                                      <Copy className="w-3 h-3 text-white/30" />
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })()
+                        : null}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-white/50">Location</span>
+                      <span className="text-white">
+                        {order.offer?.location_name ||
+                          order.payment_details?.location_name ||
+                          "-"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/50">Address</span>
+                      <span className="text-white">
+                        {order.offer?.location_address ||
+                          order.payment_details?.location_address ||
+                          "-"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+
+            {/* sAED corridor bridge info removed — not in this version */}
+
+            {/* Escrow & Blockchain Details */}
+            {(order.escrow_tx_hash ||
+              order.escrow_pda ||
+              order.escrow_trade_pda ||
+              order.release_tx_hash ||
+              order.escrow_address) && (
+              <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
+                <button
+                  onClick={() => setShowEscrow(!showEscrow)}
+                  className="w-full flex items-center justify-between text-sm font-medium text-white/50"
+                >
+                  <span className="flex items-center gap-2">
+                    <Shield className="w-4 h-4" /> Escrow & Blockchain
+                  </span>
+                  {showEscrow ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
+                </button>
+                {showEscrow && (
+                  <div className="space-y-3 mt-3">
+                    {/* Trade ID */}
+                    {order.escrow_trade_id && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-white/50 flex items-center gap-1">
+                          <Hash className="w-3 h-3" /> Trade ID
+                        </span>
+                        <span className="text-white font-mono">
+                          {order.escrow_trade_id}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Escrow PDA with Blipscan link */}
+                    {(order.escrow_pda || order.escrow_trade_pda) && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-white/50">Escrow PDA</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() =>
+                              handleCopy(
+                                order.escrow_pda || order.escrow_trade_pda!,
+                                "escrow_pda",
+                              )
+                            }
+                            className="flex items-center gap-1 text-white/80 hover:text-foreground transition-colors"
+                          >
+                            {truncateHash(
+                              order.escrow_pda || order.escrow_trade_pda!,
+                              8,
+                              6,
+                            )}
+                            {copiedField === "escrow_pda" ? (
+                              <Check className="w-3 h-3 text-white/70" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
+                          <a
+                            href={getBlipscanTradeUrl(
+                              order.escrow_pda || order.escrow_trade_pda!,
+                            )}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:text-primary/80 transition-colors"
+                            title="View on Blipscan"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Escrow Address */}
+                    {order.escrow_address && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-white/50">Escrow Address</span>
+                        <button
+                          onClick={() =>
+                            handleCopy(order.escrow_address!, "escrow_addr")
+                          }
+                          className="flex items-center gap-1 text-white/80 hover:text-foreground transition-colors"
+                        >
+                          {truncateHash(order.escrow_address, 8, 6)}
+                          {copiedField === "escrow_addr" ? (
+                            <Check className="w-3 h-3 text-white/70" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Deposit TX */}
+                    {order.escrow_tx_hash && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-white/50">Deposit TX</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() =>
+                              handleCopy(order.escrow_tx_hash!, "deposit_tx")
+                            }
+                            className="flex items-center gap-1 text-white/80 hover:text-foreground transition-colors"
+                          >
+                            {truncateHash(order.escrow_tx_hash)}
+                            {copiedField === "deposit_tx" ? (
+                              <Check className="w-3 h-3 text-white/70" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
+                          <a
+                            href={getSolscanUrl(order.escrow_tx_hash)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-white/70 hover:text-foreground/70 transition-colors"
+                            title="View on Solscan"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Block/Slot */}
+                    {order.escrow_slot && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-white/50 flex items-center gap-1">
+                          <LinkIcon className="w-3 h-3" /> Slot
+                        </span>
+                        <span className="text-white font-mono">
+                          {order.escrow_slot.toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Release TX */}
+                    {order.release_tx_hash && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-white/50">Release TX</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() =>
+                              handleCopy(order.release_tx_hash!, "release_tx")
+                            }
+                            className="flex items-center gap-1 text-white/80 hover:text-foreground transition-colors"
+                          >
+                            {truncateHash(order.release_tx_hash)}
+                            {copiedField === "release_tx" ? (
+                              <Check className="w-3 h-3 text-white/70" />
+                            ) : (
+                              <Copy className="w-3 h-3" />
+                            )}
+                          </button>
+                          <a
+                            href={getSolscanUrl(order.release_tx_hash)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-white/70 hover:text-foreground/70 transition-colors"
+                            title="View on Solscan"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Release Slot */}
+                    {order.release_slot && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-white/50 flex items-center gap-1">
+                          <LinkIcon className="w-3 h-3" /> Release Slot
+                        </span>
+                        <span className="text-white font-mono">
+                          {order.release_slot.toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Timeline */}
+            <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
+              <button
+                onClick={() => setShowTimeline(!showTimeline)}
+                className="w-full flex items-center justify-between text-xs font-medium text-white/50 mb-2"
+              >
+                <span className="flex items-center gap-2">
+                  <Clock className="w-4 h-4" /> Timeline
+                </span>
+                {showTimeline ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </button>
+              {showTimeline && (
+                <div className="space-y-3">
+                  {TIMELINE_STEPS.map((step, index) => {
+                    const timestamp = order[
+                      step.field as keyof OrderDetails
+                    ] as string | undefined;
+                    const isCompleted = !!timestamp;
+                    const isCurrent = order.status === step.status;
+
+                    // Skip steps after cancellation/dispute
+                    if (
+                      ["cancelled", "disputed", "expired"].includes(
+                        order.status,
+                      ) &&
+                      !isCompleted &&
+                      index > 0
+                    ) {
+                      return null;
+                    }
+
+                    return (
+                      <div key={step.status} className="flex items-start gap-3">
+                        <div
+                          className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0
                         ${
                           isCompleted
                             ? "bg-white/10 text-white/70"
@@ -1321,425 +1370,427 @@ export function OrderDetailsPanel({
                               ? "bg-yellow-500/20 text-yellow-400 animate-pulse"
                               : "bg-white/5 text-white/20"
                         }`}
-                      >
-                        {isCompleted ? (
-                          <Check className="w-3 h-3" />
-                        ) : (
-                          <span className="w-2 h-2 rounded-full bg-current" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p
-                          className={`text-sm ${isCompleted ? "text-white" : "text-white/40"}`}
                         >
-                          {step.label}
+                          {isCompleted ? (
+                            <Check className="w-3 h-3" />
+                          ) : (
+                            <span className="w-2 h-2 rounded-full bg-current" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className={`text-sm ${isCompleted ? "text-white" : "text-white/40"}`}
+                          >
+                            {step.label}
+                          </p>
+                          {timestamp && (
+                            <p className="text-xs text-white/40">
+                              {formatDate(timestamp)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Show cancellation/dispute if applicable */}
+                  {order.cancelled_at && (
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center flex-shrink-0">
+                        <XCircle className="w-3 h-3" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-red-400">
+                          {order.status === "expired" ? "Expired" : "Cancelled"}
                         </p>
-                        {timestamp && (
-                          <p className="text-xs text-white/40">
-                            {formatDate(timestamp)}
+                        <p className="text-xs text-white/40">
+                          {formatDate(order.cancelled_at)}
+                        </p>
+                        {order.cancellation_reason && (
+                          <p className="text-xs text-white/50 mt-1">
+                            {order.cancellation_reason}
                           </p>
                         )}
                       </div>
                     </div>
-                  );
-                })}
+                  )}
+                </div>
+              )}
+            </div>
 
-                {/* Show cancellation/dispute if applicable */}
-                {order.cancelled_at && (
-                  <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center flex-shrink-0">
-                      <XCircle className="w-3 h-3" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm text-red-400">
-                        {order.status === "expired" ? "Expired" : "Cancelled"}
+            {/* Dispute Info */}
+            {order.dispute && (
+              <div className="bg-white/5 border border-white/6 rounded-xl p-4">
+                <h3 className="text-sm font-medium text-white/70 mb-3 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" /> Dispute
+                </h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-white/50">Reason</span>
+                    <span className="text-white">{order.dispute.reason}</span>
+                  </div>
+                  {order.dispute.description && (
+                    <div>
+                      <span className="text-white/50">Description</span>
+                      <p className="text-white mt-1">
+                        {order.dispute.description}
                       </p>
-                      <p className="text-xs text-white/40">
-                        {formatDate(order.cancelled_at)}
-                      </p>
-                      {order.cancellation_reason && (
-                        <p className="text-xs text-white/50 mt-1">
-                          {order.cancellation_reason}
-                        </p>
-                      )}
                     </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-white/50">Status</span>
+                    <span className="text-white/70">
+                      {order.dispute.status}
+                    </span>
+                  </div>
+                  {order.dispute.resolution && (
+                    <div>
+                      <span className="text-white/50">Resolution</span>
+                      <p className="text-white mt-1">
+                        {order.dispute.resolution}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Extensions */}
+            {(order.extension_count || 0) > 0 && (
+              <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
+                <h3 className="text-sm font-medium text-white/50 mb-2">
+                  Extensions
+                </h3>
+                <p className="text-white">
+                  {order.extension_count} of {order.max_extensions || 3}{" "}
+                  extensions used
+                </p>
+              </div>
+            )}
+
+            {/* Pending Extension Request Banner */}
+            {order.extension_requested_by && (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
+                    <svg
+                      className="w-4 h-4 text-amber-400"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-white">
+                      Time Extension Requested
+                    </p>
+                    <p className="text-xs text-white/50">
+                      {order.extension_requested_by === "user"
+                        ? "Buyer"
+                        : "Seller"}{" "}
+                      wants +
+                      {(order.extension_minutes || 0) >= 60
+                        ? `${Math.round((order.extension_minutes || 0) / 60)} hour${Math.round((order.extension_minutes || 0) / 60) > 1 ? "s" : ""}`
+                        : `${order.extension_minutes || 0} minutes`}
+                    </p>
+                  </div>
+                </div>
+                {onRespondToExtension && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => onRespondToExtension(order.id, true)}
+                      className="flex-1 py-2 rounded-xl bg-amber-500/20 text-amber-300 text-sm font-semibold hover:bg-amber-500/30"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => onRespondToExtension(order.id, false)}
+                      className="flex-1 py-2 rounded-xl bg-white/[0.06] text-white/70 text-sm font-semibold hover:bg-accent-subtle"
+                    >
+                      Decline
+                    </button>
                   </div>
                 )}
               </div>
             )}
-          </div>
 
-          {/* Dispute Info */}
-          {order.dispute && (
-            <div className="bg-white/5 border border-white/6 rounded-xl p-4">
-              <h3 className="text-sm font-medium text-white/70 mb-3 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" /> Dispute
-              </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-white/50">Reason</span>
-                  <span className="text-white">{order.dispute.reason}</span>
-                </div>
-                {order.dispute.description && (
-                  <div>
-                    <span className="text-white/50">Description</span>
-                    <p className="text-white mt-1">
-                      {order.dispute.description}
-                    </p>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-white/50">Status</span>
-                  <span className="text-white/70">{order.dispute.status}</span>
-                </div>
-                {order.dispute.resolution && (
-                  <div>
-                    <span className="text-white/50">Resolution</span>
-                    <p className="text-white mt-1">
-                      {order.dispute.resolution}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+            {/* Cancel Request Banner */}
+            {order.cancel_requested_by &&
+              (() => {
+                // Determine if the current merchant is the one who requested cancellation
+                const isM2M = !!order.buyer_merchant;
+                const iRequestedIt =
+                  order.cancel_requested_by === "merchant" && !isM2M;
+                // In M2M: if cancel_requested_by is 'merchant', the OTHER merchant requested it
+                // (because the requester sees success feedback from the API, not this banner)
+                // We need to check: am I the buyer or seller? The requester's actor_id isn't stored
+                // in cancel_requested_by, so for M2M we assume the counterparty requested it
+                const counterpartyRequested =
+                  order.cancel_requested_by === "user" ||
+                  (order.cancel_requested_by === "merchant" && isM2M);
 
-          {/* Extensions */}
-          {(order.extension_count || 0) > 0 && (
-            <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06]">
-              <h3 className="text-sm font-medium text-white/50 mb-2">
-                Extensions
-              </h3>
-              <p className="text-white">
-                {order.extension_count} of {order.max_extensions || 3}{" "}
-                extensions used
-              </p>
-            </div>
-          )}
+                if (counterpartyRequested) {
+                  const requesterLabel =
+                    order.cancel_requested_by === "user"
+                      ? "User"
+                      : order.buyer_merchant?.display_name ||
+                        order.buyer_merchant?.business_name ||
+                        "Counterparty";
+                  return (
+                    <div className="bg-primary/10 border border-primary/20 rounded-xl p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <XCircle className="w-5 h-5 text-primary" />
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-white">
+                            Cancel Requested by {requesterLabel}
+                          </p>
+                          <p className="text-xs text-white/50">
+                            {order.cancel_request_reason ||
+                              "Requested cancellation"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            await onRespondToCancel?.(order.id, true);
+                            onClose();
+                          }}
+                          disabled={isRequestingCancel}
+                          className="flex-1 py-2.5 rounded-xl bg-primary/20 text-primary/80 text-sm font-semibold hover:bg-primary/30 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          {isRequestingCancel ? (
+                            <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                          ) : null}
+                          Agree to Cancel
+                        </button>
+                        <button
+                          onClick={async () => {
+                            await onRespondToCancel?.(order.id, false);
+                            onClose();
+                          }}
+                          disabled={isRequestingCancel}
+                          className="flex-1 py-2.5 rounded-xl bg-white/[0.06] text-white/70 text-sm font-semibold hover:bg-accent-subtle disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Continue Order
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
 
-          {/* Pending Extension Request Banner */}
-          {order.extension_requested_by && (
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
-                  <svg
-                    className="w-4 h-4 text-amber-400"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-white">
-                    Time Extension Requested
-                  </p>
-                  <p className="text-xs text-white/50">
-                    {order.extension_requested_by === "user"
-                      ? "Buyer"
-                      : "Seller"}{" "}
-                    wants +
-                    {(order.extension_minutes || 0) >= 60
-                      ? `${Math.round((order.extension_minutes || 0) / 60)} hour${Math.round((order.extension_minutes || 0) / 60) > 1 ? "s" : ""}`
-                      : `${order.extension_minutes || 0} minutes`}
-                  </p>
-                </div>
-              </div>
-              {onRespondToExtension && (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => onRespondToExtension(order.id, true)}
-                    className="flex-1 py-2 rounded-xl bg-amber-500/20 text-amber-300 text-sm font-semibold hover:bg-amber-500/30"
-                  >
-                    Accept
-                  </button>
-                  <button
-                    onClick={() => onRespondToExtension(order.id, false)}
-                    className="flex-1 py-2 rounded-xl bg-white/[0.06] text-white/70 text-sm font-semibold hover:bg-white/[0.10]"
-                  >
-                    Decline
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Cancel Request Banner */}
-          {order.cancel_requested_by &&
-            (() => {
-              // Determine if the current merchant is the one who requested cancellation
-              const isM2M = !!order.buyer_merchant;
-              const iRequestedIt =
-                order.cancel_requested_by === "merchant" && !isM2M;
-              // In M2M: if cancel_requested_by is 'merchant', the OTHER merchant requested it
-              // (because the requester sees success feedback from the API, not this banner)
-              // We need to check: am I the buyer or seller? The requester's actor_id isn't stored
-              // in cancel_requested_by, so for M2M we assume the counterparty requested it
-              const counterpartyRequested =
-                order.cancel_requested_by === "user" ||
-                (order.cancel_requested_by === "merchant" && isM2M);
-
-              if (counterpartyRequested) {
-                const requesterLabel =
-                  order.cancel_requested_by === "user"
-                    ? "User"
-                    : order.buyer_merchant?.display_name ||
-                      order.buyer_merchant?.business_name ||
-                      "Counterparty";
+                // I requested it — show waiting state
                 return (
                   <div className="bg-primary/10 border border-primary/20 rounded-xl p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <XCircle className="w-5 h-5 text-primary" />
+                    <div className="flex items-center gap-3">
+                      <Clock className="w-5 h-5 text-primary animate-pulse" />
                       <div className="flex-1">
                         <p className="text-sm font-semibold text-white">
-                          Cancel Requested by {requesterLabel}
+                          Cancel Request Sent
                         </p>
                         <p className="text-xs text-white/50">
-                          {order.cancel_request_reason ||
-                            "Requested cancellation"}
+                          {isM2M
+                            ? "Waiting for counterparty to approve cancellation"
+                            : "Waiting for user to approve cancellation"}
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={async () => {
-                          await onRespondToCancel?.(order.id, true);
-                          onClose();
-                        }}
-                        disabled={isRequestingCancel}
-                        className="flex-1 py-2.5 rounded-xl bg-primary/20 text-primary/80 text-sm font-semibold hover:bg-primary/30 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {isRequestingCancel ? (
-                          <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                        ) : null}
-                        Agree to Cancel
-                      </button>
-                      <button
-                        onClick={async () => {
-                          await onRespondToCancel?.(order.id, false);
-                          onClose();
-                        }}
-                        disabled={isRequestingCancel}
-                        className="flex-1 py-2.5 rounded-xl bg-white/[0.06] text-white/70 text-sm font-semibold hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        Continue Order
-                      </button>
-                    </div>
                   </div>
                 );
-              }
+              })()}
 
-              // I requested it — show waiting state
-              return (
-                <div className="bg-primary/10 border border-primary/20 rounded-xl p-4">
+            {/* Inactivity Warning */}
+            {order.inactivity_warned_at &&
+              order.status !== "disputed" &&
+              !["completed", "cancelled", "expired"].includes(order.status) && (
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
                   <div className="flex items-center gap-3">
-                    <Clock className="w-5 h-5 text-primary animate-pulse" />
+                    <AlertTriangle className="w-5 h-5 text-yellow-400" />
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-white">
-                        Cancel Request Sent
+                      <p className="text-sm font-semibold text-yellow-300">
+                        Inactivity Warning
                       </p>
                       <p className="text-xs text-white/50">
-                        {isM2M
-                          ? "Waiting for counterparty to approve cancellation"
-                          : "Waiting for user to approve cancellation"}
+                        No activity for 15+ minutes. Complete or cancel soon to
+                        avoid auto-escalation.
                       </p>
                     </div>
                   </div>
+                </div>
+              )}
+
+            {/* Dispute Auto-Resolve Countdown */}
+            {order.status === "disputed" && order.dispute_auto_resolve_at && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                <div className="flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-red-400" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-red-300">
+                      Dispute Timer
+                    </p>
+                    <p className="text-xs text-white/50">
+                      {new Date(order.dispute_auto_resolve_at) > new Date()
+                        ? `Auto-refund to escrow funder in ${Math.max(0, Math.round((new Date(order.dispute_auto_resolve_at).getTime() - Date.now()) / 3600000))}h ${Math.max(0, Math.round(((new Date(order.dispute_auto_resolve_at).getTime() - Date.now()) % 3600000) / 60000))}m`
+                        : "Auto-refund processing..."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Request Cancel Button — for merchant to initiate */}
+            {!order.cancel_requested_by &&
+              ![
+                "completed",
+                "cancelled",
+                "expired",
+                "disputed",
+                "pending",
+                "payment_sent",
+              ].includes(order.status) && (
+                <button
+                  onClick={async () => {
+                    await onRequestCancel?.(order.id);
+                    onClose();
+                  }}
+                  disabled={isRequestingCancel}
+                  className="w-full py-2.5 rounded-xl bg-primary/10 text-primary text-sm font-medium flex items-center justify-center gap-2
+                         hover:bg-primary/20 transition-colors border border-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {isRequestingCancel ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                      Requesting...
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4" />
+                      Request Cancellation
+                    </>
+                  )}
+                </button>
+              )}
+
+            {/* Action Buttons - uses deriveOrderUI for consistent status/actions */}
+            {(() => {
+              // Don't render action buttons until ALL required data is available
+              // This prevents button flicker during initial load / hydration
+              if (!merchantId) return null;
+              if (!(order as any).dbOrder && !order.status) return null;
+              if (
+                (order as any).myRole === undefined &&
+                (order as any).dbOrder?.my_role === undefined
+              )
+                return null;
+
+              const ui = deriveOrderUI(order, merchantId);
+
+              // Don't show action buttons for terminal states
+              if (ui.isTerminal) return null;
+
+              // Map handler names to actual callbacks
+              const handleAction = (handler: string) => {
+                switch (handler) {
+                  case "acceptOrder":
+                    onAcceptOrder?.(order.id);
+                    onClose();
+                    break;
+                  case "lockEscrow":
+                    onLockEscrow?.(order.id);
+                    onClose();
+                    break;
+                  case "signAndProceed":
+                  case "signToClaimOrder":
+                    onAcceptOrder?.(order.id);
+                    onClose();
+                    break;
+                  case "markFiatPaymentSent":
+                    onMarkPaymentSent?.(order.id);
+                    onClose();
+                    break;
+                  case "confirmPayment":
+                  case "openReleaseModal":
+                    onConfirmPayment?.(order.id);
+                    onClose();
+                    break;
+                  case "openDisputeModal":
+                    onOpenDispute?.(order.id);
+                    onClose();
+                    break;
+                  case "cancelOrderWithoutEscrow":
+                  case "openCancelModal":
+                    onCancelOrder?.(order.id);
+                    onClose();
+                    break;
+                  case "none":
+                  default:
+                    break;
+                }
+              };
+
+              const variantClasses = {
+                green:
+                  "bg-primary/20 text-primary hover:bg-primary/30 border-primary/30",
+                blue: "bg-white/[0.06] text-white/80 hover:bg-accent-subtle border-white/[0.10]",
+                red: "bg-white/[0.04] text-white/50 hover:bg-accent-subtle border-white/[0.06]",
+                gold: "bg-primary/20 text-primary hover:bg-primary/30 border-primary/30",
+              };
+
+              return (
+                <div className="space-y-2">
+                  {ui.primaryAction && (
+                    <button
+                      data-testid="order-primary-action"
+                      onClick={() => handleAction(ui.primaryAction!.handler)}
+                      disabled={ui.primaryAction.disabled}
+                      className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2
+                               transition-colors border ${variantClasses[ui.primaryAction.variant]}
+                               ${ui.primaryAction.disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+                      title={ui.primaryAction.disabledReason}
+                    >
+                      <Zap className="w-5 h-5" />
+                      {ui.primaryAction.label}
+                    </button>
+                  )}
+                  {ui.nextStepText && (
+                    <p className="text-xs text-white/40 text-center">
+                      {ui.nextStepText}
+                    </p>
+                  )}
+                  {ui.secondaryAction && (
+                    <button
+                      data-testid="order-secondary-action"
+                      onClick={() => handleAction(ui.secondaryAction!.handler)}
+                      className="w-full py-2 rounded-xl bg-red-500/10 text-red-400 font-medium flex items-center justify-center gap-2
+                               hover:bg-[var(--color-error)]/20 transition-colors border border-red-500/20 text-sm"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      {ui.secondaryAction.label}
+                    </button>
+                  )}
                 </div>
               );
             })()}
 
-          {/* Inactivity Warning */}
-          {order.inactivity_warned_at &&
-            order.status !== "disputed" &&
-            !["completed", "cancelled", "expired"].includes(order.status) && (
-              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
-                <div className="flex items-center gap-3">
-                  <AlertTriangle className="w-5 h-5 text-yellow-400" />
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-yellow-300">
-                      Inactivity Warning
-                    </p>
-                    <p className="text-xs text-white/50">
-                      No activity for 15+ minutes. Complete or cancel soon to
-                      avoid auto-escalation.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-          {/* Dispute Auto-Resolve Countdown */}
-          {order.status === "disputed" && order.dispute_auto_resolve_at && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
-              <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-red-400" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-red-300">
-                    Dispute Timer
-                  </p>
-                  <p className="text-xs text-white/50">
-                    {new Date(order.dispute_auto_resolve_at) > new Date()
-                      ? `Auto-refund to escrow funder in ${Math.max(0, Math.round((new Date(order.dispute_auto_resolve_at).getTime() - Date.now()) / 3600000))}h ${Math.max(0, Math.round(((new Date(order.dispute_auto_resolve_at).getTime() - Date.now()) % 3600000) / 60000))}m`
-                      : "Auto-refund processing..."}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Request Cancel Button — for merchant to initiate */}
-          {!order.cancel_requested_by &&
-            ![
-              "completed",
-              "cancelled",
-              "expired",
-              "disputed",
-              "pending",
-              "payment_sent",
-            ].includes(order.status) && (
+            {/* Chat Button (Bottom) */}
+            {onOpenChat && (
               <button
-                onClick={async () => {
-                  await onRequestCancel?.(order.id);
-                  onClose();
-                }}
-                disabled={isRequestingCancel}
-                className="w-full py-2.5 rounded-xl bg-primary/10 text-primary text-sm font-medium flex items-center justify-center gap-2
-                         hover:bg-primary/20 transition-colors border border-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={handleOpenChat}
+                className="w-full py-3 rounded-xl bg-primary/20 text-primary font-semibold flex items-center justify-center gap-2
+                         hover:bg-primary/30 transition-colors border border-primary/30"
               >
-                {isRequestingCancel ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                    Requesting...
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="w-4 h-4" />
-                    Request Cancellation
-                  </>
-                )}
+                <MessageCircle className="w-5 h-5" />
+                Open Chat with {username}
               </button>
             )}
-
-          {/* Action Buttons - uses deriveOrderUI for consistent status/actions */}
-          {(() => {
-            // Don't render action buttons until ALL required data is available
-            // This prevents button flicker during initial load / hydration
-            if (!merchantId) return null;
-            if (!(order as any).dbOrder && !order.status) return null;
-            if (
-              (order as any).myRole === undefined &&
-              (order as any).dbOrder?.my_role === undefined
-            )
-              return null;
-
-            const ui = deriveOrderUI(order, merchantId);
-
-            // Don't show action buttons for terminal states
-            if (ui.isTerminal) return null;
-
-            // Map handler names to actual callbacks
-            const handleAction = (handler: string) => {
-              switch (handler) {
-                case "acceptOrder":
-                  onAcceptOrder?.(order.id);
-                  onClose();
-                  break;
-                case "lockEscrow":
-                  onLockEscrow?.(order.id);
-                  onClose();
-                  break;
-                case "signAndProceed":
-                case "signToClaimOrder":
-                  onAcceptOrder?.(order.id);
-                  onClose();
-                  break;
-                case "markFiatPaymentSent":
-                  onMarkPaymentSent?.(order.id);
-                  onClose();
-                  break;
-                case "confirmPayment":
-                case "openReleaseModal":
-                  onConfirmPayment?.(order.id);
-                  onClose();
-                  break;
-                case "openDisputeModal":
-                  onOpenDispute?.(order.id);
-                  onClose();
-                  break;
-                case "cancelOrderWithoutEscrow":
-                case "openCancelModal":
-                  onCancelOrder?.(order.id);
-                  onClose();
-                  break;
-                case "none":
-                default:
-                  break;
-              }
-            };
-
-            const variantClasses = {
-              green:
-                "bg-primary/20 text-primary hover:bg-primary/30 border-primary/30",
-              blue: "bg-white/[0.06] text-white/80 hover:bg-white/[0.10] border-white/[0.10]",
-              red: "bg-white/[0.04] text-white/50 hover:bg-white/[0.08] border-white/[0.06]",
-              gold: "bg-primary/20 text-primary hover:bg-primary/30 border-primary/30",
-            };
-
-            return (
-              <div className="space-y-2">
-                {ui.primaryAction && (
-                  <button
-                    data-testid="order-primary-action"
-                    onClick={() => handleAction(ui.primaryAction!.handler)}
-                    disabled={ui.primaryAction.disabled}
-                    className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2
-                               transition-colors border ${variantClasses[ui.primaryAction.variant]}
-                               ${ui.primaryAction.disabled ? "opacity-50 cursor-not-allowed" : ""}`}
-                    title={ui.primaryAction.disabledReason}
-                  >
-                    <Zap className="w-5 h-5" />
-                    {ui.primaryAction.label}
-                  </button>
-                )}
-                {ui.nextStepText && (
-                  <p className="text-xs text-white/40 text-center">
-                    {ui.nextStepText}
-                  </p>
-                )}
-                {ui.secondaryAction && (
-                  <button
-                    data-testid="order-secondary-action"
-                    onClick={() => handleAction(ui.secondaryAction!.handler)}
-                    className="w-full py-2 rounded-xl bg-red-500/10 text-red-400 font-medium flex items-center justify-center gap-2
-                               hover:bg-red-500/20 transition-colors border border-red-500/20 text-sm"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    {ui.secondaryAction.label}
-                  </button>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Chat Button (Bottom) */}
-          {onOpenChat && (
-            <button
-              onClick={handleOpenChat}
-              className="w-full py-3 rounded-xl bg-primary/20 text-primary font-semibold flex items-center justify-center gap-2
-                         hover:bg-primary/30 transition-colors border border-primary/30"
-            >
-              <MessageCircle className="w-5 h-5" />
-              Open Chat with {username}
-            </button>
-          )}
+          </div>
         </div>
-      </div>
       </div>
     </div>
   );

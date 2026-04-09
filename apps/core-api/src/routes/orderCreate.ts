@@ -106,17 +106,22 @@ interface CreateOrderPayload {
  * Build the field/value arrays for order INSERT outside the transaction
  * to keep the lock window as short as possible.
  */
-function buildOrderInsertParams(data: CreateOrderPayload) {
+function buildOrderInsertParams(data: CreateOrderPayload & { corridor_id?: string; fiat_currency?: string }) {
+  // Honor caller-provided fiat_currency / corridor_id (drives INR vs AED).
+  // Default to AED corridor when not specified for backward compatibility.
+  const fiatCurrency = (data.fiat_currency === 'INR' ? 'INR' : 'AED');
+  const corridorId = (data.corridor_id === 'USDT_INR' ? 'USDT_INR' : 'USDT_AED');
+
   const fields = [
     'user_id', 'merchant_id', 'offer_id', 'type', 'payment_method',
     'crypto_amount', 'fiat_amount', 'crypto_currency', 'fiat_currency', 'rate',
-    'payment_details', 'status',
+    'payment_details', 'status', 'corridor_id',
   ];
   const values: unknown[] = [
     data.user_id, data.merchant_id, data.offer_id, data.type, data.payment_method,
-    data.crypto_amount, data.fiat_amount, 'USDC', 'AED', data.rate,
+    data.crypto_amount, data.fiat_amount, 'USDC', fiatCurrency, data.rate,
     data.payment_details ? JSON.stringify(data.payment_details) : null,
-    data.escrow_tx_hash ? 'escrowed' : 'pending',
+    data.escrow_tx_hash ? 'escrowed' : 'pending', corridorId,
   ];
 
   const optionals: [string, unknown][] = [

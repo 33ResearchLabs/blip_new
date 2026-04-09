@@ -2,6 +2,7 @@
 
 import "./user-theme.css";
 import { LandingPage } from "@/components/user/LandingPage";
+import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { motion, AnimatePresence } from "framer-motion";
@@ -128,6 +129,9 @@ export default function Home() {
     fetchBankAccounts,
     fetchResolvedDisputes,
   });
+
+  // Send presence heartbeat so other parties (merchants) see this user as online
+  usePresenceHeartbeat(!!auth.userId);
 
   // Trade creation
   const tradeCreation = useUserTradeCreation({

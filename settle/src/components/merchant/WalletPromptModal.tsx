@@ -36,19 +36,19 @@ export function WalletPromptModal({
                 <Wallet className="w-8 h-8 text-white/70" />
               </div>
               <h3 className="text-xl font-bold text-white mb-2">Connect Your Wallet</h3>
-              <p className="text-gray-400 text-sm mb-6">
+              <p className="text-foreground/40 text-sm mb-6">
                 Connect your Solana wallet to receive payments from escrow releases. This wallet will be saved to your account.
               </p>
               <div className="flex gap-3">
                 <button
                   onClick={onDismiss}
-                  className="flex-1 px-4 py-3 rounded-xl border border-white/10 text-gray-400 font-medium text-sm hover:bg-white/5 transition-colors"
+                  className="flex-1 px-4 py-3 rounded-xl border border-white/10 text-foreground/40 font-medium text-sm hover:bg-card transition-colors"
                 >
                   Later
                 </button>
                 <button
                   onClick={onConnect}
-                  className="flex-1 px-4 py-3 rounded-xl bg-white/20 text-white font-medium text-sm hover:bg-white/[0.15] transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-3 rounded-xl bg-white/20 text-white font-medium text-sm hover:bg-accent-subtle transition-colors flex items-center justify-center gap-2"
                 >
                   <Wallet className="w-4 h-4" />
                   Connect Wallet

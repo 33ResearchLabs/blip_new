@@ -168,7 +168,6 @@ export function useOrderActions({
       const uiStatus = hasOnChainEscrow ? "escrow" : "active";
       playSound('click');
       addNotification('system', `Order accepted! ${nextStepMsg}`, order.id);
-      handleOpenChat(order);
       await afterMutationReconcile(order.id, { status: uiStatus as "escrow" | "active", expiresIn: 1800 });
     } catch (error) {
       console.error("Error accepting order:", error);
@@ -673,6 +672,7 @@ export function useOrderActions({
     setOpenTradeForm: (form: { tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: 'bank' | 'cash'; spreadPreference: 'best' | 'fastest' | 'cheap'; expiryMinutes: 15 | 90 }) => void,
     tradeType?: 'buy' | 'sell',
     priorityFee?: number,
+    pair: 'usdt_aed' | 'usdt_inr' = 'usdt_aed',
   ) => {
     if (!merchantId || isCreatingTrade) return;
 
@@ -698,6 +698,7 @@ export function useOrderActions({
           paymentMethod: openTradeForm.paymentMethod,
           spreadPreference: openTradeForm.spreadPreference,
           priorityFee: priorityFee || 0,
+          pair,
         };
 
         // Create temporary order for escrow modal — counterparty is TBD
@@ -738,6 +739,7 @@ export function useOrderActions({
             payment_method: openTradeForm.paymentMethod,
             spread_preference: openTradeForm.spreadPreference,
             priority_fee: priorityFee || 0,
+            pair, // 'usdt_aed' | 'usdt_inr' — drives corridor + fiat_currency
           }),
         });
 

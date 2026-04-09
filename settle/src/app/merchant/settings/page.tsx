@@ -366,7 +366,7 @@ export default function MerchantSettingsPage() {
         <div className="h-[50px] flex items-center px-4 gap-3 max-w-5xl mx-auto">
           <Link
             href="/merchant"
-            className="flex items-center gap-2 text-white/60 hover:text-white transition-colors"
+            className="flex items-center gap-2 text-white/60 hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="text-[13px] font-medium hidden sm:inline">Dashboard</span>
@@ -397,7 +397,7 @@ export default function MerchantSettingsPage() {
                   className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all whitespace-nowrap ${
                     activeTab === tab.id
                       ? 'bg-white/[0.08] text-white'
-                      : 'text-white/40 hover:text-white/60 hover:bg-white/[0.03]'
+                      : 'text-white/40 hover:text-foreground/60 hover:bg-card'
                   }`}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
@@ -409,7 +409,7 @@ export default function MerchantSettingsPage() {
             <div className="hidden md:block mt-auto pt-8">
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium text-red-400/70 hover:text-red-400 hover:bg-red-500/[0.06] transition-all w-full"
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium text-red-400/70 hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/[0.06] transition-all w-full"
               >
                 <LogOut className="w-4 h-4" />
                 Logout
@@ -477,7 +477,7 @@ export default function MerchantSettingsPage() {
                       className={`relative aspect-square rounded-full overflow-hidden border-2 transition-all ${
                         selectedAvatar === url
                           ? 'border-primary ring-2 ring-primary/30 scale-110'
-                          : 'border-white/10 hover:border-white/30'
+                          : 'border-white/10 hover:border-border-strong'
                       }`}
                     >
                       <img src={url} alt={`Avatar ${i + 1}`} className="absolute inset-0 w-full h-full object-cover" />
@@ -542,7 +542,7 @@ export default function MerchantSettingsPage() {
                 whileTap={{ scale: 0.98 }}
                 onClick={handleSaveProfile}
                 disabled={isSaving}
-                className="w-full py-3 rounded-xl bg-primary text-black font-bold text-sm hover:bg-primary transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-primary text-background font-bold text-sm hover:bg-primary transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isSaving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -556,7 +556,7 @@ export default function MerchantSettingsPage() {
               {merchantId && (
                 <Link
                   href={`/merchant/profile/${merchantId}`}
-                  className="flex items-center justify-center gap-2 text-sm text-white/40 hover:text-white/60 transition-colors"
+                  className="flex items-center justify-center gap-2 text-sm text-white/40 hover:text-foreground/60 transition-colors"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   View your public profile
@@ -601,7 +601,7 @@ export default function MerchantSettingsPage() {
                   </div>
                   <button
                     onClick={() => handleCopyField(merchant?.id || merchantId || '', 'merchant_id')}
-                    className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors shrink-0 ml-2"
+                    className="p-1.5 hover:bg-card rounded-lg transition-colors shrink-0 ml-2"
                   >
                     {copiedField === 'merchant_id' ? (
                       <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -622,7 +622,7 @@ export default function MerchantSettingsPage() {
                   {merchant?.wallet_address && (
                     <button
                       onClick={() => handleCopyField(merchant.wallet_address, 'wallet')}
-                      className="p-1.5 hover:bg-white/[0.06] rounded-lg transition-colors shrink-0 ml-2"
+                      className="p-1.5 hover:bg-card rounded-lg transition-colors shrink-0 ml-2"
                     >
                       {copiedField === 'wallet' ? (
                         <Check className="w-3.5 h-3.5 text-emerald-400" />
@@ -700,7 +700,7 @@ export default function MerchantSettingsPage() {
                   />
                   <button
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/30 hover:text-white/50"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/30 hover:text-foreground/50"
                   >
                     {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -716,7 +716,7 @@ export default function MerchantSettingsPage() {
                   />
                   <button
                     onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/30 hover:text-white/50"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/30 hover:text-foreground/50"
                   >
                     {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -733,7 +733,7 @@ export default function MerchantSettingsPage() {
                 <button
                   onClick={handleChangePassword}
                   disabled={isChangingPassword || !currentPassword || !newPassword || !confirmNewPassword}
-                  className="w-full py-3 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white/80 font-medium text-sm hover:bg-white/[0.10] transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white/80 font-medium text-sm hover:bg-accent-subtle transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
                 >
                   {isChangingPassword && <Loader2 className="w-4 h-4 animate-spin" />}
                   {isChangingPassword ? 'Changing...' : 'Change Password'}
@@ -751,7 +751,7 @@ export default function MerchantSettingsPage() {
                 <label className="text-xs text-red-400/60 font-mono uppercase tracking-wider mb-3 block">Danger Zone</label>
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-red-500/20 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-[var(--color-error)]/20 transition-colors"
                 >
                   <LogOut className="w-4 h-4" />
                   Log Out
@@ -811,7 +811,7 @@ export default function MerchantSettingsPage() {
                       </div>
                       <button
                         onClick={() => handleDeleteBank(bank.id)}
-                        className="p-2 text-white/20 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                        className="p-2 text-white/20 hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 rounded-lg transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -822,7 +822,7 @@ export default function MerchantSettingsPage() {
                 {bankAccounts.length > 0 && !showAddBank && (
                   <button
                     onClick={() => setShowAddBank(true)}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-white/[0.08] text-sm text-white/30 hover:text-white/50 hover:border-white/[0.12] transition-colors"
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-white/[0.08] text-sm text-white/30 hover:text-foreground/50 hover:border-border-strong transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                     Add Another Account
@@ -841,7 +841,7 @@ export default function MerchantSettingsPage() {
                     <label className="text-xs text-white/40 font-mono uppercase tracking-wider">Add Bank Account</label>
                     <button
                       onClick={() => setShowAddBank(false)}
-                      className="text-xs text-white/30 hover:text-white/50 transition-colors"
+                      className="text-xs text-white/30 hover:text-foreground/50 transition-colors"
                     >
                       Cancel
                     </button>
@@ -874,7 +874,7 @@ export default function MerchantSettingsPage() {
                   <button
                     onClick={handleAddBank}
                     disabled={isAddingBank || !newBank.bank_name || !newBank.account_name || !newBank.iban}
-                    className="w-full py-3 rounded-xl bg-primary text-black font-bold text-sm hover:bg-primary transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-xl bg-primary text-background font-bold text-sm hover:bg-primary transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
                   >
                     {isAddingBank && <Loader2 className="w-4 h-4 animate-spin" />}
                     {isAddingBank ? 'Adding...' : 'Add Bank Account'}
@@ -922,7 +922,7 @@ export default function MerchantSettingsPage() {
 
               <button
                 onClick={handleSaveNotifications}
-                className="w-full py-3 rounded-xl bg-primary text-black font-bold text-sm hover:bg-primary transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-primary text-background font-bold text-sm hover:bg-primary transition-colors flex items-center justify-center gap-2"
               >
                 Save Preferences
               </button>
@@ -951,7 +951,7 @@ export default function MerchantSettingsPage() {
           <div className="md:hidden mt-8 pt-6 border-t border-white/[0.04]">
             <button
               onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-red-500/20 transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-[var(--color-error)]/20 transition-colors"
             >
               <LogOut className="w-4 h-4" />
               Log Out
@@ -1359,7 +1359,7 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
         is2FAEnabled ? (
           <button
             onClick={() => { setStep('disable'); setError(null); }}
-            className="w-full py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-[var(--color-error)]/20 transition-colors flex items-center justify-center gap-2"
           >
             <Shield className="w-4 h-4" />
             Disable 2FA
@@ -1368,7 +1368,7 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
           <button
             onClick={handleSetup}
             disabled={isSubmitting}
-            className="w-full py-3 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white/80 font-medium text-sm hover:bg-white/[0.10] transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white/80 font-medium text-sm hover:bg-accent-subtle transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
           >
             {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
             {isSubmitting ? 'Setting up...' : 'Enable 2FA'}
@@ -1414,7 +1414,7 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
           <div className="flex gap-2">
             <button
               onClick={() => { setStep('idle'); setError(null); setOtpCode(''); }}
-              className="flex-1 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white/50 font-medium text-sm hover:bg-white/[0.08] transition-colors"
+              className="flex-1 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white/50 font-medium text-sm hover:bg-accent-subtle transition-colors"
             >
               Cancel
             </button>
@@ -1456,14 +1456,14 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
           <div className="flex gap-2">
             <button
               onClick={() => { setStep('idle'); setError(null); setDisablePassword(''); setDisableCode(''); }}
-              className="flex-1 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white/50 font-medium text-sm hover:bg-white/[0.08] transition-colors"
+              className="flex-1 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white/50 font-medium text-sm hover:bg-accent-subtle transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleDisable}
               disabled={isSubmitting || !disablePassword || disableCode.length !== 6}
-              className="flex-1 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-red-500/20 transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+              className="flex-1 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-[var(--color-error)]/20 transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
             >
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
               {isSubmitting ? 'Disabling...' : 'Disable 2FA'}
@@ -1555,7 +1555,7 @@ function ActiveSessionsSection() {
           <button
             onClick={handleRevokeAll}
             disabled={isRevokingAll}
-            className="text-[10px] text-red-400/70 hover:text-red-400 font-medium transition-colors flex items-center gap-1"
+            className="text-[10px] text-red-400/70 hover:text-[var(--color-error)] font-medium transition-colors flex items-center gap-1"
           >
             {isRevokingAll ? <Loader2 className="w-3 h-3 animate-spin" /> : <LogOut className="w-3 h-3" />}
             Logout All Devices
@@ -1644,7 +1644,7 @@ function ActiveSessionsSection() {
                     <button
                       onClick={() => handleRevoke(session.id)}
                       disabled={isRevoking === session.id}
-                      className="px-3 py-1.5 rounded-lg text-[10px] font-medium bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-colors flex-shrink-0 flex items-center gap-1.5 mt-1"
+                      className="px-3 py-1.5 rounded-lg text-[10px] font-medium bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-[var(--color-error)]/20 transition-colors flex-shrink-0 flex items-center gap-1.5 mt-1"
                     >
                       {isRevoking === session.id
                         ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -1677,7 +1677,7 @@ const THEME_PREVIEWS: Record<string, { bg: string; sidebar: string; card: string
 
 function ThemePreviewCard({ colors, isActive }: { colors: typeof THEME_PREVIEWS['dark']; isActive: boolean }) {
   return (
-    <div className={`rounded-lg overflow-hidden border-2 transition-all ${isActive ? 'border-[var(--primary)] ring-2 ring-[var(--primary)]/20' : 'border-white/[0.08] hover:border-white/[0.15]'}`}>
+    <div className={`rounded-lg overflow-hidden border-2 transition-all ${isActive ? 'border-[var(--primary)] ring-2 ring-[var(--primary)]/20' : 'border-border hover:border-border-strong'}`}>
       <div className="flex h-[72px]" style={{ backgroundColor: colors.bg }}>
         <div className="w-[28%] flex flex-col p-1 gap-0.5" style={{ backgroundColor: colors.sidebar }}>
           <div className="h-1.5 w-8 rounded-full" style={{ backgroundColor: colors.muted, opacity: 0.4 }} />
@@ -1748,10 +1748,10 @@ function ThemeSection() {
             Previewing <span className="font-semibold" style={{ color: 'var(--primary)' }}>{THEMES.find(t => t.id === previewing)?.label}</span>
           </span>
           <div className="flex gap-2">
-            <button onClick={handleApply} className="px-3 py-1 rounded-lg text-[11px] font-medium text-black" style={{ backgroundColor: 'var(--primary)' }}>
+            <button onClick={handleApply} className="px-3 py-1 rounded-lg text-[11px] font-medium text-background" style={{ backgroundColor: 'var(--primary)' }}>
               Apply
             </button>
-            <button onClick={handleCancel} className="px-3 py-1 rounded-lg text-[11px] font-medium bg-white/[0.06] text-white/60 hover:text-white transition-colors">
+            <button onClick={handleCancel} className="px-3 py-1 rounded-lg text-[11px] font-medium bg-white/[0.06] text-white/60 hover:text-foreground transition-colors">
               Cancel
             </button>
           </div>
@@ -1778,7 +1778,7 @@ function ThemeSection() {
                   </span>
                 </div>
                 {!isActive && (
-                  <button onClick={() => handlePreview(t.id)} className="text-[9px] text-white/30 hover:text-white/60 font-medium transition-colors">
+                  <button onClick={() => handlePreview(t.id)} className="text-[9px] text-white/30 hover:text-foreground/60 font-medium transition-colors">
                     Preview
                   </button>
                 )}
