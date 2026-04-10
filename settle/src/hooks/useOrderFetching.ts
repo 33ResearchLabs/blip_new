@@ -372,8 +372,11 @@ export function useOrderFetching({
       refetchSingleOrder(orderId);
       resolve();
     }, 800));
-    // Full list refetch ensures enrichOrderResponse recomputes primaryAction
-    debouncedFetchOrders();
+    // Skip full list refetch when Pusher is connected — incremental updates
+    // from useRealtimeOrders handle state sync. Only refetch balance.
+    if (!isPusherConnectedRef.current) {
+      debouncedFetchOrders();
+    }
     refreshBalance();
   }, [refetchSingleOrder, debouncedFetchOrders, refreshBalance]);
 

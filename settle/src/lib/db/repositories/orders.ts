@@ -304,7 +304,8 @@ export async function getMerchantOrders(
  */
 export async function getAllPendingOrdersForMerchant(
   merchantId: string,
-  status?: OrderStatus[]
+  status?: OrderStatus[],
+  options?: { cursor?: string; limit?: number }
 ): Promise<OrderWithRelations[]> {
   // is_my_order logic:
   // - For pending/escrowed orders: true if I created it (buyer_merchant_id OR escrow_creator_wallet matches my wallet)
@@ -393,10 +394,10 @@ export async function getAllPendingOrdersForMerchant(
              )
              ELSE NULL
            END as merchant_payment_method,
-           COALESCE(chat_agg.unread_count, 0) as unread_count,
-           COALESCE(chat_agg.message_count, 0) as message_count,
-           chat_latest.content as last_human_message,
-           chat_latest.sender_type as last_human_message_sender
+           COALESCE(chat_combined.unread_count, 0) as unread_count,
+           COALESCE(chat_combined.message_count, 0) as message_count,
+           chat_combined.last_content as last_human_message,
+           chat_combined.last_sender as last_human_message_sender
     FROM orders o
     JOIN users u ON o.user_id = u.id
     LEFT JOIN merchants m ON o.merchant_id = m.id
@@ -414,15 +415,11 @@ export async function getAllPendingOrdersForMerchant(
     LEFT JOIN LATERAL (
       SELECT
         COUNT(*) FILTER (WHERE cm.sender_type != 'merchant' AND cm.sender_type != 'system' AND cm.message_type != 'system' AND cm.is_read = false)::int as unread_count,
-        COUNT(*) FILTER (WHERE cm.message_type != 'system')::int as message_count
+        COUNT(*) FILTER (WHERE cm.message_type != 'system')::int as message_count,
+        (SELECT cm2.content FROM chat_messages cm2 WHERE cm2.order_id = o.id AND cm2.message_type != 'system' AND cm2.sender_type != 'system' ORDER BY cm2.created_at DESC LIMIT 1) as last_content,
+        (SELECT cm2.sender_type FROM chat_messages cm2 WHERE cm2.order_id = o.id AND cm2.message_type != 'system' AND cm2.sender_type != 'system' ORDER BY cm2.created_at DESC LIMIT 1) as last_sender
       FROM chat_messages cm WHERE cm.order_id = o.id
-    ) chat_agg ON true
-    LEFT JOIN LATERAL (
-      SELECT cm.content, cm.sender_type
-      FROM chat_messages cm
-      WHERE cm.order_id = o.id AND cm.message_type != 'system' AND cm.sender_type != 'system'
-      ORDER BY cm.created_at DESC LIMIT 1
-    ) chat_latest ON true
+    ) chat_combined ON true
     WHERE (
         -- OPEN orders: broadcast pending/escrowed that are NOT yet taken by another merchant
         (o.status IN ('pending', 'escrowed')
@@ -450,11 +447,19 @@ export async function getAllPendingOrdersForMerchant(
   const params: unknown[] = [merchantId];
 
   if (status && status.length > 0) {
-    sql += ` AND o.status = ANY($2)`;
     params.push(status);
+    sql += ` AND o.status = ANY($${params.length})`;
   }
 
-  sql += ' ORDER BY o.created_at DESC LIMIT 200';
+  // Cursor-based pagination: use created_at for stable ordering
+  // Avoids large OFFSET scans as order count grows
+  if (options?.cursor) {
+    params.push(options.cursor);
+    sql += ` AND o.created_at < $${params.length}::timestamptz`;
+  }
+
+  const pageLimit = options?.limit || 200;
+  sql += ` ORDER BY o.created_at DESC LIMIT ${pageLimit}`;
 
   console.log('[DB] getAllPendingOrdersForMerchant for merchant:', merchantId);
   const results = await query<OrderWithRelations>(sql, params);

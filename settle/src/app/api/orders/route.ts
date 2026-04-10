@@ -121,37 +121,37 @@ export async function POST(request: NextRequest) {
       return forbiddenResponse('You can only create orders for yourself');
     }
 
-    // Verify user exists
-    const userExists = await verifyUser(user_id);
-    if (!userExists) {
-      return validationErrorResponse(['User not found']);
-    }
-
-    // Detection guard: log warning if user is creating orders too fast
+    // Quick synchronous validations first (no DB calls)
     guardOrderCreation(user_id, type, crypto_amount);
 
-    // Idempotency: prevent duplicate order creation (double-click, network retry)
-    // Use explicit header if provided, otherwise auto-generate from order params + 30s window
     const explicitKey = getIdempotencyKey(request);
-    const timeWindow = Math.floor(Date.now() / 30000); // 30-second buckets
+    const timeWindow = Math.floor(Date.now() / 30000);
     const autoKey = createHash('sha256')
       .update(`create_order:${user_id}:${type}:${crypto_amount}:${payment_method || 'bank'}:${timeWindow}`)
       .digest('hex');
     const idempotencyKey = explicitKey || autoKey;
 
-    // Buy orders require buyer_wallet_address so merchant can release escrow
     if (type === 'buy' && !buyer_wallet_address) {
       return validationErrorResponse(['buyer_wallet_address is required for buy orders. Please connect your wallet.']);
     }
 
-    // Sell orders (user receives fiat): validate payment_method_id if provided
+    // Parallelize independent DB lookups: user verification + payment method check
+    // These don't depend on each other and can run concurrently.
+    const [userExists, verifiedPm] = await Promise.all([
+      verifyUser(user_id),
+      payment_method_id ? verifyPaymentMethodOwnership(payment_method_id, user_id) : Promise.resolve(null),
+    ]);
+
+    if (!userExists) {
+      return validationErrorResponse(['User not found']);
+    }
+
     let verifiedPaymentMethodId: string | undefined;
     if (payment_method_id) {
-      const pm = await verifyPaymentMethodOwnership(payment_method_id, user_id);
-      if (!pm) {
+      if (!verifiedPm) {
         return validationErrorResponse(['Invalid or inactive payment method']);
       }
-      verifiedPaymentMethodId = pm.id;
+      verifiedPaymentMethodId = verifiedPm.id;
     }
 
     // ── SELL ORDERS: manual merchant-claim model (no offer matching) ────

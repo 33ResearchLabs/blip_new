@@ -213,21 +213,18 @@ export async function POST(request: NextRequest) {
       return forbiddenResponse('You can only create orders for yourself');
     }
 
-    // Verify the creating merchant exists
-    const merchantExists = await verifyMerchant(merchant_id);
+    // Verify merchant(s) exist — parallelize if M2M
+    const isM2MTrade = !!target_merchant_id && target_merchant_id !== merchant_id;
+    const [merchantExists, targetMerchantExists] = await Promise.all([
+      verifyMerchant(merchant_id),
+      isM2MTrade ? verifyMerchant(target_merchant_id) : Promise.resolve(true),
+    ]);
+
     if (!merchantExists) {
       return validationErrorResponse(['Merchant not found']);
     }
-
-    // M2M Trading: If target_merchant_id is provided, trade with another merchant
-    const isM2MTrade = !!target_merchant_id && target_merchant_id !== merchant_id;
-
-    if (isM2MTrade) {
-      // Verify target merchant exists
-      const targetMerchantExists = await verifyMerchant(target_merchant_id);
-      if (!targetMerchantExists) {
-        return validationErrorResponse(['Target merchant not found or not active']);
-      }
+    if (isM2MTrade && !targetMerchantExists) {
+      return validationErrorResponse(['Target merchant not found or not active']);
     }
 
     // Create a placeholder user for merchant-initiated orders

@@ -453,7 +453,7 @@ export const StatusCard = memo(function StatusCard({
         {/* Active Corridor Selector */}
         <div className="glass-card rounded-lg p-2">
           <span className="text-[9px] text-foreground/25 font-mono uppercase tracking-wider block mb-1.5">
-            corridir Pair
+            Corridor Pair
           </span>
           <div className="flex gap-1.5">
             {CORRIDORS.map((c) => {
@@ -472,7 +472,7 @@ export const StatusCard = memo(function StatusCard({
                   <span
                     className={`text-[10px] font-bold font-mono block ${isActive ? "text-primary" : "text-foreground/35"}`}
                   >
-                    {c.fiat}
+                    USDT / {c.fiat}
                   </span>
                   {price ? (
                     <span

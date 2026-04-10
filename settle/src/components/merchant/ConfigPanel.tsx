@@ -174,6 +174,7 @@ export const ConfigPanel = memo(function ConfigPanel({
   // Merchant payment methods (replaces the static Bank/Cash buttons).
   const [paymentMethods, setPaymentMethods] = useState<MerchantPaymentMethod[]>([]);
   const [showAddPm, setShowAddPm] = useState(false);
+  const [showPmDropdown, setShowPmDropdown] = useState(false);
   const [newPm, setNewPm] = useState<{ type: 'bank' | 'cash' | 'card' | 'mobile' | 'crypto'; name: string; details: string }>({ type: 'bank', name: '', details: '' });
   const [savingPm, setSavingPm] = useState(false);
 
@@ -287,7 +288,7 @@ export const ConfigPanel = memo(function ConfigPanel({
               </span>
               {/* Corridor badge — driven by StatusCard trading pair */}
               <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono tracking-wider bg-primary/10 text-primary border border-primary/20">
-                {pair === "usdt_inr" ? "INR" : "AED"}
+                USDT / {pair === "usdt_inr" ? "INR" : "AED"}
               </span>
             </div>
             <button
@@ -346,45 +347,67 @@ export const ConfigPanel = memo(function ConfigPanel({
           )}
         </div>
 
-        {/* Payment Methods — dynamic from merchant's saved methods */}
-        <div>
-          <div className="flex flex-wrap gap-1.5">
-            {paymentMethods.length === 0 && !showAddPm && (
-              <span className="text-[10px] text-foreground/30 font-mono py-1.5 px-1">
-                No payment methods yet
-              </span>
-            )}
-            {paymentMethods.map((pm) => {
-              const isSelected = openTradeForm.paymentMethod === pm.type;
-              return (
+        {/* Payment Methods — dropdown */}
+        <div className="relative">
+          {(() => {
+            const pmIcon = (type: string) =>
+              type === 'bank' ? '🏦' : type === 'cash' ? '💵' : type === 'card' ? '💳' : type === 'mobile' ? '📱' : '💰';
+            const selectedPm = paymentMethods.find((pm) => pm.type === openTradeForm.paymentMethod);
+            return (
+              <>
                 <button
-                  key={pm.id}
-                  onClick={() =>
-                    setOpenTradeForm({ ...openTradeForm, paymentMethod: pm.type as 'bank' | 'cash' })
-                  }
-                  className={`py-1.5 px-2.5 rounded-lg text-[11px] font-bold transition-all border flex items-center gap-1 ${
-                    isSelected
-                      ? "bg-foreground/[0.08] text-foreground/90 border-foreground/[0.12]"
-                      : "bg-foreground/[0.02] text-foreground/40 hover:bg-foreground/[0.05] border-foreground/[0.04]"
-                  }`}
-                  title={pm.details}
+                  onClick={() => setShowPmDropdown(!showPmDropdown)}
+                  className="w-full flex items-center justify-between py-2 px-3 rounded-xl bg-foreground/[0.03] border border-foreground/[0.08] hover:border-foreground/[0.15] transition-all"
                 >
-                  <span className="text-[10px]">
-                    {pm.type === 'bank' ? '🏦' : pm.type === 'cash' ? '💵' : pm.type === 'card' ? '💳' : pm.type === 'mobile' ? '📱' : '💰'}
-                  </span>
-                  <span className="truncate max-w-[100px]">{pm.name}</span>
+                  {selectedPm ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px]">{pmIcon(selectedPm.type)}</span>
+                      <span className="text-[11px] font-bold text-foreground/80">{selectedPm.name}</span>
+                      <span className="text-[9px] text-foreground/30 font-mono uppercase">{selectedPm.type}</span>
+                    </div>
+                  ) : paymentMethods.length === 0 ? (
+                    <span className="text-[11px] text-foreground/30">No payment methods</span>
+                  ) : (
+                    <span className="text-[11px] text-foreground/40">Select payment method</span>
+                  )}
+                  <ChevronDown className={`w-3.5 h-3.5 text-foreground/30 transition-transform ${showPmDropdown ? 'rotate-180' : ''}`} />
                 </button>
-              );
-            })}
-            <button
-              onClick={() => setShowAddPm(true)}
-              className="py-1.5 px-2 rounded-lg text-[11px] font-bold bg-foreground/[0.02] text-foreground/40 hover:bg-foreground/[0.05] border border-foreground/[0.04] flex items-center gap-1"
-              title="Add payment method"
-            >
-              <Plus className="w-3 h-3" />
-              Add
-            </button>
-          </div>
+
+                {showPmDropdown && (
+                  <div className="absolute z-30 top-full left-0 right-0 mt-1 rounded-xl border border-foreground/[0.08] bg-card-solid shadow-lg overflow-hidden">
+                    {paymentMethods.map((pm) => {
+                      const isSelected = openTradeForm.paymentMethod === pm.type;
+                      return (
+                        <button
+                          key={pm.id}
+                          onClick={() => {
+                            setOpenTradeForm({ ...openTradeForm, paymentMethod: pm.type as 'bank' | 'cash' });
+                            setShowPmDropdown(false);
+                          }}
+                          className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
+                            isSelected
+                              ? "bg-primary/[0.06] text-foreground/90"
+                              : "hover:bg-foreground/[0.04] text-foreground/60"
+                          }`}
+                        >
+                          <span className="text-[11px]">{pmIcon(pm.type)}</span>
+                          <span className="text-[11px] font-bold flex-1 truncate">{pm.name}</span>
+                          <span className="text-[9px] text-foreground/25 font-mono uppercase">{pm.type}</span>
+                        </button>
+                      );
+                    })}
+                    <button
+                      onClick={() => { setShowAddPm(true); setShowPmDropdown(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-left border-t border-foreground/[0.06] hover:bg-foreground/[0.04] transition-colors"
+                    >
+                      <Plus className="w-3 h-3 text-primary/60" />
+                      <span className="text-[11px] font-bold text-primary/70">Add Payment Method</span>
+                    </button>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {/* Inline add-payment-method form */}
           {showAddPm && (
