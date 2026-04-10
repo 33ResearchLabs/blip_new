@@ -3,7 +3,7 @@ import { query } from '@/lib/db';
 import { verifyWalletSignature } from '@/lib/solana/verifySignature';
 import { checkRateLimit, AUTH_LIMIT, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
 import { requireTokenAuth } from '@/lib/middleware/auth';
-import { updateMerchantOnlineStatus, createDefaultMerchantOffers, serializeMerchant } from '@/lib/db/repositories/merchants';
+import { updateMerchantOnlineStatus, serializeMerchant } from '@/lib/db/repositories/merchants';
 import { generateSessionToken, generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
 import { createSession, getSessionIdFromRefreshCookie } from '@/lib/auth/sessions';
 import { validateUsername } from '@/lib/validation/username';
@@ -249,17 +249,6 @@ export async function POST(request: NextRequest) {
         // Update online status
         await updateMerchantOnlineStatus(merchant.id, true);
 
-        // Check if merchant has any offers, if not create default ones
-        const existingOffers = await query(
-          `SELECT id FROM merchant_offers WHERE merchant_id = $1 LIMIT 1`,
-          [merchant.id]
-        );
-
-        if (existingOffers.length === 0) {
-          console.log('[API] No offers found for merchant, creating defaults:', merchant.id);
-          const displayName = merchant.display_name || merchant.username || 'Merchant';
-          await createDefaultMerchantOffers(merchant.id, displayName);
-        }
 
         console.log('[API] Merchant login successful:', merchant.id, merchant.username);
 
@@ -418,8 +407,6 @@ export async function POST(request: NextRequest) {
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'signup' }).catch(() => {});
 
-      // Auto-create default offers for new merchant (so they can start receiving orders immediately)
-      await createDefaultMerchantOffers(merchant.id, username);
 
       const createPayload = { actorId: merchant.id, actorType: 'merchant' as const };
       const createToken = generateSessionToken(createPayload);
@@ -889,8 +876,6 @@ export async function POST(request: NextRequest) {
       // Fire-and-forget: device + IP tracking for signup
       trackRequest(request, { entityId: merchant.id, entityType: 'merchant', action: 'signup' }).catch(() => {});
 
-      // Auto-create default offers
-      await createDefaultMerchantOffers(merchant.id, merchant.display_name);
 
       // Send verification email
       try {

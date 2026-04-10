@@ -122,6 +122,8 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
     lockedPaymentMethod: dbOrder.locked_payment_method || null,
     // Merchant's payment method (where buyer sends fiat to merchant)
     merchantPaymentMethod: mpm || null,
+    // Per-order rating
+    userRating: dbOrder.user_rating || null,
   };
 }
 

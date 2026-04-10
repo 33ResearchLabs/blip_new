@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
     await query(`DELETE FROM chat_messages`);
     await query(`DELETE FROM order_events`);
     await query(`DELETE FROM disputes`);
+    await query(`DELETE FROM ratings`);
     await query(`DELETE FROM reviews`);
     await query(`DELETE FROM orders`);
 

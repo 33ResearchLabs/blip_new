@@ -87,6 +87,9 @@ export interface DbOrder {
   locked_payment_method?: LockedPaymentMethod | null;
   // Merchant's payment method (where buyer sends fiat)
   merchant_payment_method?: MerchantPaymentMethod | null;
+  // Per-order rating fields
+  user_rating?: number | null;
+  user_rated_at?: string | null;
 }
 
 // UI Order type (maps DB order to UI)
@@ -145,6 +148,8 @@ export interface Order {
   lastActivityAt?: Date | null;
   disputedAt?: Date | null;
   disputeAutoResolveAt?: Date | null;
+  // Per-order rating (already submitted by this user)
+  userRating?: number | null;
   // Locked payment method for this order (fiat receiver's chosen method)
   lockedPaymentMethod?: LockedPaymentMethod | null;
   // Merchant's payment method (where buyer sends fiat to merchant)

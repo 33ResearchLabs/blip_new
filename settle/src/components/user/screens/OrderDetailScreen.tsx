@@ -72,6 +72,7 @@ export interface OrderDetailScreenProps {
   confirmFiatReceived: () => void;
   rating: number;
   setRating: (r: number) => void;
+  submitReview?: (orderId: string, rating: number, reviewText?: string) => Promise<void>;
   copied: boolean;
   handleCopy: (text: string) => void;
   // Extension
@@ -177,6 +178,7 @@ export const OrderDetailScreen = ({
   confirmFiatReceived,
   rating,
   setRating,
+  submitReview,
   copied,
   handleCopy,
   extensionRequest,
@@ -219,6 +221,7 @@ export const OrderDetailScreen = ({
   const [showEmojiPicker, setShowEmojiPicker] = useLocalState(false);
   const [isUploading, setIsUploading] = useLocalState(false);
   const [copiedField, setCopiedField] = useLocalState<string | null>(null);
+  const [reviewText, setReviewText] = useLocalState("");
 
   const copyField = useLocalCallback(
     (field: string, text: string) => {
@@ -1825,30 +1828,76 @@ export const OrderDetailScreen = ({
               </div>
 
               {/* Rating - only for completed orders */}
-              {activeOrder.status === "complete" && activeOrder.step >= 4 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`rounded-2xl p-4 text-center ${CARD}`}
-                >
-                  <p className="text-[15px] mb-3 text-text-secondary">
-                    Rate your experience
-                  </p>
-                  <div className="flex justify-center gap-2">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button key={star} onClick={() => setRating(star)}>
-                        <Star
-                          className={`w-8 h-8 ${
-                            star <= rating
-                              ? "fill-warning text-warning"
-                              : "text-text-quaternary"
-                          }`}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
+              {activeOrder.status === "complete" && activeOrder.step >= 4 && (() => {
+                const alreadyRated = !!(activeOrder.userRating);
+                const displayRating = alreadyRated ? activeOrder.userRating! : rating;
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`rounded-2xl p-4 text-center ${CARD}`}
+                  >
+                    <p className="text-[15px] mb-3 text-text-secondary">
+                      {alreadyRated ? "Your rating" : "Rate your experience"}
+                    </p>
+                    <div className="flex justify-center gap-2">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          disabled={alreadyRated}
+                          onClick={() => {
+                            if (alreadyRated) return;
+                            setRating(star);
+                          }}
+                        >
+                          <Star
+                            className={`w-8 h-8 ${
+                              star <= displayRating
+                                ? "fill-warning text-warning"
+                                : "text-text-quaternary"
+                            } ${alreadyRated ? "opacity-80" : ""}`}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                    {/* Expandable review text + submit — shows after selecting stars */}
+                    <AnimatePresence>
+                      {!alreadyRated && rating > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <textarea
+                            placeholder="Write a short review (optional)..."
+                            value={reviewText}
+                            onChange={(e) => setReviewText(e.target.value)}
+                            maxLength={200}
+                            className="w-full mt-3 p-3 rounded-xl text-[13px] text-text-primary bg-surface-active border border-border-medium resize-none outline-none placeholder:text-text-quaternary"
+                            rows={2}
+                          />
+                          <button
+                            onClick={async () => {
+                              await submitReview?.(activeOrder.id, rating, reviewText || undefined);
+                              setReviewText("");
+                              setRating(0);
+                            }}
+                            className="w-full mt-2 py-2.5 rounded-xl text-[14px] font-semibold bg-accent text-accent-text"
+                          >
+                            Submit Review
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                    {alreadyRated && (
+                      <p className="text-[12px] text-text-quaternary mt-2">
+                        You rated this trade {activeOrder.userRating} star{activeOrder.userRating !== 1 ? "s" : ""}
+                      </p>
+                    )}
+                  </motion.div>
+                );
+              })()}
             </div>
           )}
 

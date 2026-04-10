@@ -44,14 +44,14 @@ export async function updateMerchantRating(id: string): Promise<void> {
   await query(
     `UPDATE merchants m
      SET rating = (
-       SELECT COALESCE(AVG(r.rating), 5.0)
-       FROM reviews r
-       WHERE r.reviewee_id = m.id AND r.reviewee_type = 'merchant'
+       SELECT COALESCE(AVG(r.rating), 0)
+       FROM ratings r
+       WHERE r.rated_id = m.id AND r.rated_type = 'merchant'
      ),
      rating_count = (
        SELECT COUNT(*)
-       FROM reviews r
-       WHERE r.reviewee_id = m.id AND r.reviewee_type = 'merchant'
+       FROM ratings r
+       WHERE r.rated_id = m.id AND r.rated_type = 'merchant'
      )
      WHERE m.id = $1`,
     [id]
@@ -99,27 +99,6 @@ export async function updateMerchant(
   return result;
 }
 
-/**
- * Create default sell + buy bank offers for a new merchant.
- * Extracted from auth/merchant/route.ts where it was duplicated 3 times.
- */
-export async function createDefaultMerchantOffers(merchantId: string, displayName: string): Promise<void> {
-  try {
-    await query(
-      `INSERT INTO merchant_offers (merchant_id, type, payment_method, rate, min_amount, max_amount, available_amount, bank_name, bank_account_name, bank_iban, is_active)
-       VALUES ($1, 'sell', 'bank', 3.67, 100, 50000, 50000, 'Emirates NBD', $2, 'AE070331234567890123456', true)`,
-      [merchantId, displayName]
-    );
-    await query(
-      `INSERT INTO merchant_offers (merchant_id, type, payment_method, rate, min_amount, max_amount, available_amount, bank_name, bank_account_name, bank_iban, is_active)
-       VALUES ($1, 'buy', 'bank', 3.65, 100, 50000, 50000, 'Emirates NBD', $2, 'AE070331234567890123456', true)`,
-      [merchantId, displayName]
-    );
-    console.log('[DB] Default offers created for merchant:', merchantId);
-  } catch (err) {
-    console.error('[DB] Failed to create default offers:', err);
-  }
-}
 
 /**
  * Serialize a merchant DB row to the API response DTO.

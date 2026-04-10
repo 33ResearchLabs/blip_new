@@ -171,7 +171,8 @@ export async function POST(request: NextRequest) {
     return successResponse(newRating, 201);
   } catch (error) {
     console.error('Error creating rating:', error);
-    if (error instanceof Error && error.message.includes('duplicate key')) {
+    const errMsg = error instanceof Error ? error.message : '';
+    if (errMsg.includes('duplicate key') || errMsg.includes('already rated')) {
       return validationErrorResponse(['You have already rated this order']);
     }
     return errorResponse('Internal server error');

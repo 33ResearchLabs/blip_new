@@ -598,6 +598,37 @@ export function useUserOrderActions({
     }
   };
 
+  const submitRating = useCallback(async (orderId: string, ratingValue: number, reviewText?: string) => {
+    if (!userId) return;
+    try {
+      const res = await fetchWithAuth('/api/ratings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_id: orderId,
+          rater_type: 'user',
+          rater_id: userId,
+          rating: ratingValue,
+          review_text: reviewText || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.showWarning(data.error || 'Failed to submit review');
+        return;
+      }
+      // Update local order state with the rating
+      setOrders(prev => prev.map(o =>
+        o.id === orderId ? { ...o, userRating: ratingValue } : o
+      ));
+      playSound('click');
+      toast.show({ type: 'complete', title: 'Review Submitted', message: `You rated this trade ${ratingValue} star${ratingValue !== 1 ? 's' : ''}`, duration: 4000 });
+    } catch (err) {
+      console.error('Failed to submit rating:', err);
+      toast.showWarning('Failed to submit review. Please try again.');
+    }
+  }, [userId, setOrders, playSound, toast]);
+
   return {
     // Dispute
     showDisputeModal, setShowDisputeModal,
@@ -621,5 +652,6 @@ export function useUserOrderActions({
     markPaymentSent,
     confirmFiatReceived,
     fetchDisputeInfo,
+    submitRating,
   };
 }

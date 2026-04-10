@@ -368,6 +368,7 @@ export default function Home() {
               confirmFiatReceived={orderActions.confirmFiatReceived}
               rating={rating}
               setRating={setRating}
+              submitReview={orderActions.submitRating}
               copied={copied}
               handleCopy={handleCopy}
               extensionRequest={orderActions.extensionRequest}

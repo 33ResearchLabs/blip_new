@@ -62,6 +62,7 @@ export async function POST(request: Request) {
       success: true,
       message: 'Database reset complete',
       tables_cleared: [
+        'ratings',
         'reviews',
         'chat_messages',
         'order_events',

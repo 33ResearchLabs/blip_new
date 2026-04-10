@@ -253,14 +253,14 @@ async function getUserStats(userId: string): Promise<EntityStats | null> {
       COALESCE(AVG(rating), 0)::numeric as average_rating,
       COUNT(*) FILTER (WHERE rating = 5)::int as five_star_count,
       COUNT(*) FILTER (WHERE rating = 1)::int as one_star_count
-    FROM reviews WHERE reviewee_id = $1 AND reviewee_type = 'user'`,
+    FROM ratings WHERE rated_id = $1 AND rated_type = 'user'`,
     [userId]
   );
 
-  // Get recent reviews for trend
+  // Get recent ratings for trend
   const recentReviews = await query<{ rating: number; created_at: Date }>(
-    `SELECT rating, created_at FROM reviews
-     WHERE reviewee_id = $1 AND reviewee_type = 'user'
+    `SELECT rating, created_at FROM ratings
+     WHERE rated_id = $1 AND rated_type = 'user'
      ORDER BY created_at DESC LIMIT 10`,
     [userId]
   );
@@ -405,14 +405,14 @@ async function getMerchantStats(merchantId: string): Promise<EntityStats | null>
       COALESCE(AVG(rating), 0)::numeric as average_rating,
       COUNT(*) FILTER (WHERE rating = 5)::int as five_star_count,
       COUNT(*) FILTER (WHERE rating = 1)::int as one_star_count
-    FROM reviews WHERE reviewee_id = $1 AND reviewee_type = 'merchant'`,
+    FROM ratings WHERE rated_id = $1 AND rated_type = 'merchant'`,
     [merchantId]
   );
 
-  // Get recent reviews for trend
+  // Get recent ratings for trend
   const recentReviews = await query<{ rating: number; created_at: Date }>(
-    `SELECT rating, created_at FROM reviews
-     WHERE reviewee_id = $1 AND reviewee_type = 'merchant'
+    `SELECT rating, created_at FROM ratings
+     WHERE rated_id = $1 AND rated_type = 'merchant'
      ORDER BY created_at DESC LIMIT 10`,
     [merchantId]
   );

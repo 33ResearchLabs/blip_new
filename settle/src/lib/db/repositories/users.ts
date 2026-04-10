@@ -145,14 +145,14 @@ export async function updateUserRating(id: string): Promise<void> {
   await query(
     `UPDATE users u
      SET rating = (
-       SELECT COALESCE(AVG(r.rating), 5.0)
-       FROM reviews r
-       WHERE r.reviewee_id = u.id AND r.reviewee_type = 'user'
+       SELECT COALESCE(AVG(r.rating), 0)
+       FROM ratings r
+       WHERE r.rated_id = u.id AND r.rated_type = 'user'
      ),
      rating_count = (
        SELECT COUNT(*)::int
-       FROM reviews r
-       WHERE r.reviewee_id = u.id AND r.reviewee_type = 'user'
+       FROM ratings r
+       WHERE r.rated_id = u.id AND r.rated_type = 'user'
      )
      WHERE u.id = $1`,
     [id]

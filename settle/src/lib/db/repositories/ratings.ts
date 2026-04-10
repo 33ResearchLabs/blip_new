@@ -45,7 +45,7 @@ export interface OrderRatingStatus {
   user_rated_at?: string;
 }
 
-// Create a new rating
+// Create a new rating and sync to reviews table
 export async function createRating(data: {
   order_id: string;
   rater_type: 'merchant' | 'user';
@@ -58,6 +58,7 @@ export async function createRating(data: {
   const result = await queryOne<Rating>(
     `INSERT INTO ratings (order_id, rater_type, rater_id, rated_type, rated_id, rating, review_text)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (order_id, rater_type, rater_id) DO NOTHING
      RETURNING *`,
     [
       data.order_id,
@@ -69,6 +70,36 @@ export async function createRating(data: {
       data.review_text || null,
     ]
   );
+
+  // Already rated — return existing
+  if (!result) {
+    const existing = await queryOne<Rating>(
+      `SELECT * FROM ratings WHERE order_id = $1 AND rater_type = $2 AND rater_id = $3`,
+      [data.order_id, data.rater_type, data.rater_id]
+    );
+    return existing!;
+  }
+
+  // Sync to reviews table (per-order review tracking)
+  try {
+    await query(
+      `INSERT INTO reviews (order_id, reviewer_type, reviewer_id, reviewee_type, reviewee_id, rating, comment)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (order_id) DO NOTHING`,
+      [
+        data.order_id,
+        data.rater_type,
+        data.rater_id,
+        data.rated_type,
+        data.rated_id,
+        data.rating,
+        data.review_text || null,
+      ]
+    );
+  } catch {
+    // Non-critical — ratings table is the source of truth
+  }
+
   return result!;
 }
 

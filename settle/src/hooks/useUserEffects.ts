@@ -325,6 +325,8 @@ export function useUserEffects({
         ...mappedRealtimeOrder,
         // Preserve cancelRequest from list if realtime doesn't have it yet (optimistic update)
         cancelRequest: mappedRealtimeOrder.cancelRequest ?? orderFromList?.cancelRequest ?? null,
+        // Preserve userRating from list (set by optimistic update after submitRating)
+        userRating: orderFromList?.userRating ?? mappedRealtimeOrder.userRating ?? null,
       }
     : orderFromList;
 

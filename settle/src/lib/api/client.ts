@@ -168,7 +168,7 @@ export const orders = {
       body: JSON.stringify({ reader_type: readerType }),
     }),
 
-  // Review
+  // Review — writes to /api/ratings (syncs to both ratings + reviews tables)
   submitReview: (
     orderId: string,
     data: {
@@ -180,9 +180,15 @@ export const orders = {
       comment?: string;
     }
   ) =>
-    request(`/orders/${orderId}/review`, {
+    request(`/ratings`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        order_id: orderId,
+        rater_type: data.reviewer_type,
+        rater_id: data.reviewer_id,
+        rating: data.rating,
+        review_text: data.comment,
+      }),
     }),
 };
 

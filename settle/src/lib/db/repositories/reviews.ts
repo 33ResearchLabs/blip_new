@@ -4,7 +4,7 @@ import { updateMerchantRating } from './merchants';
 import { updateUserRating } from './users';
 import { recordReputationEvent } from '../../reputation';
 
-// Reviews
+// Reviews — per-order review tracking
 export async function getReviewByOrderId(orderId: string): Promise<Review | null> {
   return queryOne<Review>('SELECT * FROM reviews WHERE order_id = $1', [orderId]);
 }
