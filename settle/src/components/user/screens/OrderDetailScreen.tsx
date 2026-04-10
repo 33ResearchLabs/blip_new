@@ -48,6 +48,16 @@ const RED_CARD = "bg-error-dim border border-error-border";
 // both themes — and pairs with the dark scrim above it.
 const SHEET_BG = "bg-surface-base";
 const PRIMARY_BTN = "bg-accent text-accent-text";
+
+/** Map fiat currency code to display symbol */
+function fiatSym(code: string | undefined | null): string {
+  switch ((code || "").toUpperCase()) {
+    case "INR": return "₹";
+    case "USD": return "$";
+    case "AED": return "د.إ";
+    default: return (code || "AED").toUpperCase();
+  }
+}
 const SECONDARY_BTN = "bg-surface-active text-text-primary border border-border-medium";
 const MUTED_BTN = "bg-surface-active text-text-secondary";
 
@@ -410,7 +420,7 @@ export const OrderDetailScreen = ({
                 {parseFloat(activeOrder.cryptoAmount).toFixed(2)} USDC
               </p>
               <p className="text-[13px] text-text-secondary">
-                {"\u062F.\u0625"}{" "}
+                {fiatSym(activeOrder.fiatCode)}{" "}
                 {parseFloat(activeOrder.fiatAmount).toLocaleString()}
               </p>
             </div>
@@ -984,7 +994,7 @@ export const OrderDetailScreen = ({
                                       Cash Amount
                                     </span>
                                     <span className="text-[17px] font-semibold text-text-primary">
-                                      {"\u062F.\u0625"}{" "}
+                                      {fiatSym(activeOrder.fiatCode)}{" "}
                                       {parseFloat(
                                         activeOrder.fiatAmount,
                                       ).toLocaleString()}
@@ -1315,7 +1325,7 @@ export const OrderDetailScreen = ({
                                     </span>
                                     <div className="flex items-center gap-1.5">
                                       <span className="text-[17px] font-semibold text-text-primary">
-                                        {"\u062F.\u0625"}{" "}
+                                        {fiatSym(activeOrder.fiatCode)}{" "}
                                         {parseFloat(
                                           activeOrder.fiatAmount,
                                         ).toLocaleString()}
@@ -1545,7 +1555,7 @@ export const OrderDetailScreen = ({
                                 Expected payment
                               </span>
                               <span className="text-[15px] font-semibold text-text-primary">
-                                {"\u062F.\u0625"}{" "}
+                                {fiatSym(activeOrder.fiatCode)}{" "}
                                 {parseFloat(
                                   activeOrder.fiatAmount,
                                 ).toLocaleString()}
@@ -1731,7 +1741,7 @@ export const OrderDetailScreen = ({
                         <div className="mt-3">
                           <div className={`rounded-xl p-3 mb-3 ${CARD_STRONG}`}>
                             <p className="text-[13px] text-text-primary">
-                              Merchant has sent {"\u062F.\u0625"}{" "}
+                              Merchant has sent {fiatSym(activeOrder.fiatCode)}{" "}
                               {parseFloat(
                                 activeOrder.fiatAmount,
                               ).toLocaleString()}{" "}

@@ -102,7 +102,7 @@ function TxRow({ order, index, onPress, avatarUrl }: { order: Order; index: numb
       {/* Amount */}
       <div className="text-right shrink-0">
         <p className="text-[15px] font-bold text-text-primary tracking-[-0.015em] font-mono">
-          {isBuy ? '-' : '+'}{'\u062F.\u0625'}{amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          {isBuy ? '-' : '+'}{order.fiatCode === 'INR' ? '₹' : order.fiatCode === 'USD' ? '$' : 'د.إ'}{amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
         </p>
         <p className="text-[11px] font-medium text-text-tertiary mt-0.5 font-mono">
           {parseFloat(order.cryptoAmount).toFixed(2)} USDT
