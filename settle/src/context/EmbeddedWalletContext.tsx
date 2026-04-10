@@ -263,7 +263,7 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
     if (!encrypted) return false;
 
     try {
-      const kp = await decryptWallet(encrypted, password);
+      const kp = await decryptWallet(encrypted, password.trim());
       setKeypair(kp);
       setWalletState('unlocked');
       lastActivityRef.current = Date.now();

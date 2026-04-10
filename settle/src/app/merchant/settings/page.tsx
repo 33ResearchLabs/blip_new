@@ -950,11 +950,11 @@ export default function MerchantSettingsPage() {
             <ReputationTab merchantId={merchantId} />
           )}
 
-          {activeTab === 'ledger' && merchantId && (
+          {activeTab === 'ledger' && (merchantId || merchant?.id) && (
             <div>
               <h2 className="text-lg font-bold mb-1">Wallet Ledger</h2>
               <p className="text-sm text-white/40 mb-6">View your complete USDT transaction history with running balances.</p>
-              <WalletLedger merchantId={merchantId} />
+              <WalletLedger merchantId={merchantId || merchant?.id} />
             </div>
           )}
 

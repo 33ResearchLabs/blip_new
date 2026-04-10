@@ -104,11 +104,16 @@ function TransactionCard({
   const fiatAmount: number = order.total ?? cryptoAmount * (order.rate || 0);
   const orderNumber: string = order.dbOrder?.order_number || "";
 
+  // Merchant perspective: order type is from user's view.
+  // buy order = user buys, merchant SELLS (crypto goes out → red/minus)
+  // sell order = user sells, merchant BUYS (crypto comes in → green/plus)
   const isBuy = orderType === "buy";
   const isSell = orderType === "sell";
-  const Icon = isBuy ? ArrowDownLeft : isSell ? ArrowUpRight : Repeat;
-  const amountColor = isBuy ? "text-emerald-400" : isSell ? "text-red-400" : "text-foreground/80";
-  const amountPrefix = isBuy ? "+" : isSell ? "-" : "";
+  const merchantSold = isBuy;   // merchant sold crypto
+  const merchantBought = isSell; // merchant bought crypto
+  const Icon = merchantBought ? ArrowDownLeft : merchantSold ? ArrowUpRight : Repeat;
+  const amountColor = merchantBought ? "text-emerald-400" : merchantSold ? "text-red-400" : "text-foreground/80";
+  const amountPrefix = merchantBought ? "+" : merchantSold ? "-" : "";
   const tagLabel = isBuy ? "BUY" : isSell ? "SELL" : "TRADE";
   const tagCls = isBuy
     ? "bg-emerald-500/10 text-emerald-400"

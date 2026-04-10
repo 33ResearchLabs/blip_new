@@ -34,7 +34,7 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
 
     setIsLoading(true);
     try {
-      const { keypair, encrypted } = await generateWallet(password);
+      const { keypair, encrypted } = await generateWallet(password.trim());
       saveEncryptedWallet(encrypted);
       setCreatedKeypair(keypair);
       setBackupKey(exportPrivateKey(keypair));
@@ -52,7 +52,7 @@ export function EmbeddedWalletSetup({ onWalletCreated, onClose }: EmbeddedWallet
 
     setIsLoading(true);
     try {
-      const { keypair, encrypted } = await importWallet(privateKeyInput.trim(), password);
+      const { keypair, encrypted } = await importWallet(privateKeyInput.trim(), password.trim());
       saveEncryptedWallet(encrypted);
       onWalletCreated(keypair);
     } catch (err: any) {

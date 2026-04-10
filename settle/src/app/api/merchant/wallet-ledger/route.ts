@@ -133,28 +133,39 @@ export async function GET(request: NextRequest) {
     ep.push(offset);
     const offsetIdx = ep.length;
 
+    // Compute running balance anchored to the merchant's current wallet balance.
+    // Formula: wallet_balance - total_of_all_visible_entries + cumulative_sum_up_to_this_entry
+    // This ensures the latest entry's balance_after = current wallet balance.
+    const walletBalanceRows = await query<{ balance: number }>(
+      'SELECT balance FROM merchants WHERE id = $1::uuid',
+      [merchantId]
+    );
+    const walletBalance = parseFloat(String(walletBalanceRows[0]?.balance ?? 0));
+
     const entries = await query<WalletLedgerEntry>(
-      `SELECT
-        le.id,
-        le.entry_type,
-        le.amount,
-        le.balance_before,
-        le.balance_after,
-        le.description,
-        le.related_order_id,
-        o.order_number,
-        o.type AS order_type,
-        COALESCE(u.username, bm.business_name) AS counterparty_name,
-        le.created_at
-       FROM ledger_entries le
-       LEFT JOIN orders o ON le.related_order_id = o.id
-       LEFT JOIN users u ON o.user_id = u.id
-       LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
-       WHERE le.account_type = 'merchant'
-         AND le.account_id = $1::uuid
-         AND le.entry_type NOT IN ('FEE', 'FEE_EARNING')${entriesDateFilter}${entriesTypeFilter}
-       ORDER BY le.created_at DESC
-       LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
+      `SELECT * FROM (
+        SELECT
+          le.id,
+          le.entry_type,
+          le.amount,
+          (${walletBalance} - COALESCE(SUM(le.amount) OVER (), 0) + COALESCE(SUM(le.amount) OVER (ORDER BY le.created_at ASC, le.id ASC) - le.amount, 0)) AS balance_before,
+          (${walletBalance} - COALESCE(SUM(le.amount) OVER (), 0) + COALESCE(SUM(le.amount) OVER (ORDER BY le.created_at ASC, le.id ASC), 0)) AS balance_after,
+          le.description,
+          le.related_order_id,
+          o.order_number,
+          o.type AS order_type,
+          COALESCE(u.username, bm.business_name) AS counterparty_name,
+          le.created_at
+        FROM ledger_entries le
+        LEFT JOIN orders o ON le.related_order_id = o.id
+        LEFT JOIN users u ON o.user_id = u.id
+        LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
+        WHERE le.account_type = 'merchant'
+          AND le.account_id = $1::uuid
+          AND le.entry_type NOT IN ('FEE', 'FEE_EARNING')${entriesDateFilter}${entriesTypeFilter}
+      ) sub
+      ORDER BY created_at DESC
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       ep
     );
 

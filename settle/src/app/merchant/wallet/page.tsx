@@ -195,7 +195,7 @@ export default function WalletPage() {
     setUnlockError('');
     setUnlockLoading(true);
     try {
-      const ok = await embeddedWallet?.unlockWallet(unlockPassword);
+      const ok = await embeddedWallet?.unlockWallet(unlockPassword.trim());
       if (!ok) { setUnlockError('Wrong password'); setUnlockPassword(''); }
     } catch {
       setUnlockError('Failed to decrypt wallet');
@@ -290,7 +290,7 @@ export default function WalletPage() {
         if (!encrypted) throw new Error('Wallet not found');
         const pw = prompt('Enter wallet password to sign transaction');
         if (!pw) { setIsSending(false); return; }
-        const kp = await decryptWallet(encrypted, pw);
+        const kp = await decryptWallet(encrypted, pw.trim());
         tx.sign(kp);
 
         const sig = await connection.sendRawTransaction(tx.serialize());
@@ -333,7 +333,7 @@ export default function WalletPage() {
         if (!encrypted) throw new Error('Wallet not found');
         const pw = prompt('Enter wallet password to sign transaction');
         if (!pw) { setIsSending(false); return; }
-        const kp = await decryptWallet(encrypted, pw);
+        const kp = await decryptWallet(encrypted, pw.trim());
         tx.sign(kp);
 
         const sig = await connection.sendRawTransaction(tx.serialize());
@@ -360,7 +360,7 @@ export default function WalletPage() {
     const encrypted = loadEncryptedWallet();
     if (!encrypted) { showAlert('Error', 'No wallet found', 'error'); return; }
 
-    decryptWallet(encrypted, pw).then(kp => {
+    decryptWallet(encrypted, pw.trim()).then(kp => {
       const key = exportPrivateKey(kp);
       const blob = new Blob(
         [`Blip Money — Wallet Export\n\nPublic Key: ${kp.publicKey.toBase58()}\nPrivate Key: ${key}\n\nKeep this file safe.\nExported: ${new Date().toISOString()}\n`],

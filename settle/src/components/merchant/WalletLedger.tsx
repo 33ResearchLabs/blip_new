@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Wallet, ArrowUpRight, ArrowDownRight, Download, ChevronDown,
+  ArrowUpRight, ArrowDownRight, Download, ChevronDown,
   ChevronLeft, ChevronRight, Loader2, BookOpen, Filter,
   TrendingUp, TrendingDown, RefreshCw,
 } from 'lucide-react';
@@ -40,6 +40,7 @@ interface Pagination {
 
 interface WalletLedgerProps {
   merchantId: string;
+  walletBalance?: number | null;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -158,7 +159,7 @@ function exportToCSV(entries: LedgerEntry[], summary: LedgerSummary) {
 
 // ─── Component ───────────────────────────────────────────────────────
 
-export function WalletLedger({ merchantId }: WalletLedgerProps) {
+export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [summary, setSummary] = useState<LedgerSummary | null>(null);
   const [pagination, setPagination] = useState<Pagination | null>(null);
@@ -216,20 +217,21 @@ export function WalletLedger({ merchantId }: WalletLedgerProps) {
     <div className="space-y-5">
       {/* Summary Cards */}
       {summary && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
-                <Wallet className="w-4 h-4" />
-              </span>
-              <span className="text-xs text-white/50">Current Balance</span>
+        <div className={`grid ${walletBalance != null ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
+          {walletBalance != null && (
+            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">
+                  <TrendingUp className="w-4 h-4" />
+                </span>
+                <span className="text-xs text-white/50">Wallet Balance</span>
+              </div>
+              <p className="text-2xl font-bold text-white font-mono tabular-nums">
+                {formatUSDT(walletBalance)}
+              </p>
+              <p className="text-[10px] text-white/35 mt-1">USDT (on-chain)</p>
             </div>
-            <p className="text-2xl font-bold text-white font-mono tabular-nums">
-              {formatUSDT(summary.current_balance)}
-            </p>
-            <p className="text-[10px] text-white/35 mt-1">USDT</p>
-          </div>
-
+          )}
           <div className="bg-white/5 rounded-xl p-4 border border-white/10">
             <div className="flex items-center gap-2 mb-2">
               <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
@@ -351,7 +353,7 @@ export function WalletLedger({ merchantId }: WalletLedgerProps) {
       {/* Ledger Table */}
       <div className="bg-white/[0.03] rounded-xl border border-white/10 overflow-hidden">
         {/* Table Header */}
-        <div className="grid grid-cols-[1fr_140px_120px_120px_120px] gap-2 px-4 py-2.5 border-b border-white/10 bg-white/[0.03]">
+        <div className="grid grid-cols-[1fr_120px_100px_100px_120px] gap-2 px-4 py-2.5 border-b border-white/10 bg-white/[0.03]">
           <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider">Transaction</span>
           <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">Amount</span>
           <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">Before</span>
@@ -387,7 +389,7 @@ export function WalletLedger({ merchantId }: WalletLedgerProps) {
               return (
                 <div
                   key={entry.id}
-                  className="grid grid-cols-[1fr_140px_120px_120px_120px] gap-2 px-4 py-3 hover:bg-white/[0.03] transition-colors items-center"
+                  className="grid grid-cols-[1fr_120px_100px_100px_120px] gap-2 px-4 py-3 hover:bg-white/[0.03] transition-colors items-center"
                 >
                   {/* Transaction Info */}
                   <div className="flex items-center gap-3 min-w-0">

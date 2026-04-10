@@ -35,6 +35,25 @@ export function useOrderActions({
 }: UseOrderActionsParams) {
   const merchantId = useMerchantStore(s => s.merchantId);
   const orders = useMerchantStore(s => s.orders);
+
+  // Sync merchant DB balance from Solana wallet after trade completion.
+  // This ensures ledger entries have accurate balance_before/balance_after.
+  const syncBalance = async () => {
+    if (!merchantId || !solanaWallet.usdtBalance) return;
+    try {
+      await solanaWallet.refreshBalances();
+      const balance = solanaWallet.usdtBalance;
+      if (balance != null) {
+        await fetchWithAuth('/api/merchant/sync-balance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ merchant_id: merchantId, balance }),
+        });
+      }
+    } catch {
+      // Non-critical — balance will sync on next trade
+    }
+  };
   const setOrders = useMerchantStore(s => s.setOrders);
 
   // ─── Local state ───
@@ -486,6 +505,7 @@ export function useOrderActions({
           playSound('trade_complete');
           addNotification('complete', `Trade completed with ${order.user}!`, order.id);
           await afterMutationReconcile(order.id, { status: "completed" as const });
+          syncBalance();
         }
       }
     } catch (error) {
@@ -520,6 +540,7 @@ export function useOrderActions({
       if (data.success) {
         playSound('trade_complete');
         await afterMutationReconcile(orderId, { status: "completed" as const });
+        syncBalance();
       }
     } catch (error) {
       console.error("Error completing order:", error);
@@ -649,8 +670,9 @@ export function useOrderActions({
           }
 
           playSound('trade_complete');
-          addNotification('complete', `Order completed - ${order.amount} USDC released to buyer`, orderId);
+          addNotification('complete', `Order completed - ${order.amount} USDT released to buyer`, orderId);
           await afterMutationReconcile(orderId, { status: "completed" as const });
+          syncBalance();
         } catch (error) {
           const errMsg = error instanceof Error ? error.message : String(error);
           console.error("Error confirming payment:", error);
