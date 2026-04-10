@@ -39,6 +39,10 @@ export interface MerchantDesktopLayoutProps {
   isMerchantOnline: boolean;
   setIsMerchantOnline: React.Dispatch<React.SetStateAction<boolean>>;
 
+  // Corridor
+  activeCorridor: string;
+  onCorridorChange: (corridorId: string) => void;
+
   // Config panel
   openTradeForm: any;
   setOpenTradeForm: (v: any) => void;
@@ -92,6 +96,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     mempoolOrders, leaderboardData,
     merchantId, merchantInfo, effectiveBalance, todayEarnings,
     isMerchantOnline, setIsMerchantOnline,
+    activeCorridor, onCorridorChange,
     openTradeForm, setOpenTradeForm, isCreatingTrade,
     handleDirectOrderCreation, refreshBalance,
     setSelectedOrderPopup, setSelectedMempoolOrder, setSelectedOrderId,
@@ -133,6 +138,8 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 lockedInEscrow={245.5}
                 isOnline={isMerchantOnline}
                 merchantId={merchantId || undefined}
+                activeCorridor={activeCorridor}
+                onCorridorChange={onCorridorChange}
                 onToggleOnline={() => setIsMerchantOnline((prev) => !prev)}
                 onOpenCorridor={() => window.open("/merchant/mempool", "_blank")}
               />
@@ -142,6 +149,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 merchantId={merchantId}
                 merchantInfo={merchantInfo}
                 effectiveBalance={effectiveBalance}
+                activeCorridor={activeCorridor}
                 openTradeForm={openTradeForm}
                 setOpenTradeForm={setOpenTradeForm}
                 isCreatingTrade={isCreatingTrade}
@@ -231,6 +239,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 onSelectOrder={setSelectedOrderPopup}
                 collapsed={completedCollapsed}
                 onCollapseChange={setCompletedCollapsed}
+                walletBalance={effectiveBalance}
               />
             </div>
             {!isWideScreen && activityCollapsed && inProgressCollapsed && completedCollapsed && (

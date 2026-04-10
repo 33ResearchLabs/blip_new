@@ -175,7 +175,7 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
                     {entry.displayName}
                   </span>
                 </div>
-                <span className="w-7 text-right text-foreground/25 shrink-0 tabular-nums">{entry.completedCount || entry.totalTrades}t</span>
+                <span className="w-7 text-right text-foreground/25 shrink-0 tabular-nums">{entry.completedCount || entry.totalTrades}T</span>
                 <span className="w-14 text-right text-foreground/40 font-bold shrink-0 tabular-nums">
                   {entry.totalVolume >= 1000
                     ? `$${(entry.totalVolume / 1000).toFixed(1)}k`

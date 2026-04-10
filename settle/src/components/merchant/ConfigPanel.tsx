@@ -29,6 +29,7 @@ interface ConfigPanelProps {
   merchantId: string | null;
   merchantInfo: any;
   effectiveBalance: number | null;
+  activeCorridor?: string;
   openTradeForm: {
     tradeType: "buy" | "sell";
     cryptoAmount: string;
@@ -160,16 +161,15 @@ export const ConfigPanel = memo(function ConfigPanel({
   merchantId,
   merchantInfo,
   effectiveBalance,
+  activeCorridor = 'USDT_AED',
   openTradeForm,
   setOpenTradeForm,
   isCreatingTrade,
   onCreateOrder,
   refreshBalance,
 }: ConfigPanelProps) {
-  // Local AED/INR toggle — flips which corridor rate ConfigPanel reads and
-  // which currency labels render. Purely a price-display toggle; does NOT
-  // touch order roles, state machine, or business logic.
-  const [pair, setPair] = useState<"usdt_aed" | "usdt_inr">("usdt_aed");
+  // Derive pair from activeCorridor (set in StatusCard trading pair selector)
+  const pair = activeCorridor === 'USDT_INR' ? 'usdt_inr' : 'usdt_aed' as const;
 
   // Merchant payment methods (replaces the static Bank/Cash buttons).
   const [paymentMethods, setPaymentMethods] = useState<MerchantPaymentMethod[]>([]);
@@ -285,31 +285,10 @@ export const ConfigPanel = memo(function ConfigPanel({
               <span className="text-[11px] font-bold text-foreground/50 uppercase tracking-wider">
                 Amount
               </span>
-              {/* AED / INR currency toggle */}
-              <div className="flex items-center gap-0.5 ml-2 p-0.5 rounded-md bg-foreground/[0.04] border border-foreground/[0.08]">
-                <button
-                  type="button"
-                  onClick={() => setPair("usdt_aed")}
-                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono tracking-wider transition-colors ${
-                    pair === "usdt_aed"
-                      ? "bg-primary/20 text-primary"
-                      : "text-foreground/40 hover:text-foreground/60"
-                  }`}
-                >
-                  AED
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPair("usdt_inr")}
-                  className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono tracking-wider transition-colors ${
-                    pair === "usdt_inr"
-                      ? "bg-primary/20 text-primary"
-                      : "text-foreground/40 hover:text-foreground/60"
-                  }`}
-                >
-                  INR
-                </button>
-              </div>
+              {/* Corridor badge — driven by StatusCard trading pair */}
+              <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono tracking-wider bg-primary/10 text-primary border border-primary/20">
+                {pair === "usdt_inr" ? "INR" : "AED"}
+              </span>
             </div>
             <button
               onClick={() =>

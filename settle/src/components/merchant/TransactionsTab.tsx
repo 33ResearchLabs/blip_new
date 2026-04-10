@@ -200,81 +200,95 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
                     const StatusIcon = badge.Icon;
                     const asset = entry.asset || "USDT";
                     const orderType = entry.order_type;
-                    // Merchant perspective: order_type is from user's view.
-                    // buy order = user buys, merchant SELLS. sell order = user sells, merchant BUYS.
-                    const merchantAction = orderType === "buy" ? "Sold" : "Bought";
-                    const label = isCancelledEntry
-                      ? `Order Cancelled`
-                      : orderType
-                        ? `You ${merchantAction} ${asset}`
-                        : (isIncoming ? `Received ${asset}` : `Sent ${asset}`);
-                    const formattedAmount = isCancelledEntry
-                      ? `${Number(entry.amount).toFixed(0)} ${asset}`
-                      : `${isIncoming ? "+" : ""}${Number(entry.amount).toFixed(2)} ${asset}`;
-                    const subtitleParts: string[] = [];
-                    if (entry.order_number) subtitleParts.push(`Order #${entry.order_number}`);
-                    if (entry.counterparty_name) subtitleParts.push(`with ${entry.counterparty_name}`);
-                    const subtitle = subtitleParts.join(" · ");
+                    const absAmount = Math.abs(Number(entry.amount)).toFixed(2);
+
+                    // Cancelled orders
+                    if (isCancelledEntry) {
+                      return (
+                        <div
+                          key={entry.id}
+                          className="flex items-center gap-2.5 px-2 py-2.5 rounded-lg hover:bg-foreground/[0.04] transition-colors cursor-pointer"
+                          onClick={() => entry.related_order_id && onSelectOrder?.(entry.related_order_id)}
+                        >
+                          <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border bg-foreground/5 border-foreground/10">
+                            <XCircle className="w-3.5 h-3.5 text-foreground/30" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] font-semibold text-foreground/50">Order Cancelled</p>
+                            <p className="text-[10px] text-foreground/30 font-mono truncate">
+                              {entry.order_number ? `#${entry.order_number}` : ''}{entry.counterparty_name ? ` · ${entry.counterparty_name}` : ''}
+                            </p>
+                          </div>
+                          <span className="text-[12px] font-mono text-foreground/35 tabular-nums shrink-0">
+                            {absAmount} {asset}
+                          </span>
+                        </div>
+                      );
+                    }
+
+                    // Trade entries: show You Got / You Paid
+                    // Merchant perspective: buy order = merchant sold, sell order = merchant bought
+                    const merchantSold = orderType === "buy";
+                    const gotLabel = merchantSold ? "Got" : "Got";
+                    const paidLabel = merchantSold ? "Paid" : "Paid";
+                    const cryptoAmount = absAmount;
 
                     return (
                       <div
                         key={entry.id}
-                        className="flex items-start gap-2.5 px-2 py-2 rounded-lg hover:bg-foreground/[0.04] transition-colors cursor-pointer"
+                        className="flex items-start gap-2.5 px-2 py-2.5 rounded-lg hover:bg-foreground/[0.04] transition-colors cursor-pointer"
                         onClick={() => entry.related_order_id && onSelectOrder?.(entry.related_order_id)}
                       >
                         {/* Direction icon */}
                         <div
                           className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 border ${
-                            isCancelledEntry
-                              ? "bg-foreground/5 border-foreground/10"
-                              : isIncoming
-                                ? "bg-emerald-500/10 border-emerald-500/20"
-                                : "bg-red-500/10 border-red-500/20"
+                            isIncoming
+                              ? "bg-[var(--color-success)]/10 border-[var(--color-success)]/20"
+                              : "bg-[var(--color-error)]/10 border-[var(--color-error)]/20"
                           }`}
                         >
-                          {isCancelledEntry ? (
-                            <XCircle className="w-3.5 h-3.5 text-foreground/30" />
-                          ) : isIncoming ? (
-                            <ArrowDownRight className="w-3.5 h-3.5 text-emerald-400" />
+                          {isIncoming ? (
+                            <ArrowDownRight className="w-3.5 h-3.5 text-[var(--color-success)]" />
                           ) : (
-                            <ArrowUpRight className="w-3.5 h-3.5 text-red-400" />
+                            <ArrowUpRight className="w-3.5 h-3.5 text-[var(--color-error)]" />
                           )}
                         </div>
 
                         {/* Body */}
                         <div className="flex-1 min-w-0">
-                          {/* Row 1: label + amount */}
+                          {/* Row 1: Got/Paid label + amount on right */}
                           <div className="flex items-baseline justify-between gap-2 mb-0.5">
                             <span className="text-[12px] font-semibold text-foreground/85 truncate">
-                              {label}
+                              {isIncoming ? (
+                                <><span className="text-[var(--color-success)]">{gotLabel}</span> {cryptoAmount} {asset}</>
+                              ) : (
+                                <><span className="text-[var(--color-error)]">{paidLabel}</span> {cryptoAmount} {asset}</>
+                              )}
                             </span>
                             <span
-                              className={`text-[13px] font-bold font-mono tabular-nums shrink-0 ${
-                                isCancelledEntry ? "text-foreground/35" : isIncoming ? "text-emerald-400" : "text-red-400"
+                              className={`text-[12px] font-bold font-mono tabular-nums shrink-0 ${
+                                isIncoming ? "text-[var(--color-success)]" : "text-[var(--color-error)]"
                               }`}
                             >
-                              {formattedAmount}
+                              {isIncoming ? "+" : ""}{Number(entry.amount).toFixed(2)}
                             </span>
                           </div>
 
-                          {/* Row 2: subtitle (order # · counterparty) */}
-                          {subtitle && (
-                            <div className="text-[10px] text-foreground/45 font-mono truncate mb-1">
-                              {subtitle}
-                            </div>
-                          )}
-
-                          {/* Row 3: status badge + relative time */}
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider border ${badge.cls}`}
-                            >
-                              <StatusIcon className="w-2.5 h-2.5" />
-                              {badge.label}
-                            </span>
-                            <span className="text-[9px] text-foreground/35 font-mono">
-                              · {formatTimestamp(entry.created_at, new Date())}
-                            </span>
+                          {/* Row 2: status dot · order # · counterparty · time */}
+                          <div className="flex items-center gap-1 text-[10px] text-foreground/35 font-mono truncate">
+                            <StatusIcon className={`w-2.5 h-2.5 shrink-0 ${
+                              status === 'completed' ? 'text-[var(--color-success)]'
+                              : status === 'failed' || status === 'cancelled' ? 'text-[var(--color-error)]'
+                              : 'text-foreground/30'
+                            }`} />
+                            <span className={`shrink-0 ${
+                              status === 'completed' ? 'text-[var(--color-success)]'
+                              : status === 'failed' || status === 'cancelled' ? 'text-[var(--color-error)]'
+                              : 'text-foreground/40'
+                            }`}>{badge.label}</span>
+                            {entry.order_number && <span>· #{entry.order_number}</span>}
+                            {entry.counterparty_name && <span>· {entry.counterparty_name}</span>}
+                            <span>· {formatTimestamp(entry.created_at, new Date())}</span>
                           </div>
                         </div>
                       </div>

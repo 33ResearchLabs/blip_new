@@ -14,6 +14,7 @@ interface CompletedOrdersPanelProps {
   onSelectOrder: (order: any) => void;
   collapsed?: boolean;
   onCollapseChange?: (collapsed: boolean) => void;
+  walletBalance?: number | null;
 }
 
 // ─── Pure helpers ─────────────────────────────────────────────────────
@@ -88,9 +89,11 @@ function formatRelative(date: Date, now: Date): string {
 function TransactionCard({
   order,
   onClick,
+  balanceAfter,
 }: {
   order: any;
   onClick: () => void;
+  balanceAfter?: number;
 }) {
   const completedAt =
     order.dbOrder?.completed_at || order.dbOrder?.updated_at || order.timestamp;
@@ -104,21 +107,30 @@ function TransactionCard({
   const fiatAmount: number = order.total ?? cryptoAmount * (order.rate || 0);
   const orderNumber: string = order.dbOrder?.order_number || "";
 
+  // Fee calculation — net amount after platform fee
+  const feePercent = order.protocolFeePercent
+    ?? parseFloat(String(order.dbOrder?.protocol_fee_percentage ?? 0));
+  const feeAmount = cryptoAmount * (feePercent / 100);
+  const netCryptoAmount = cryptoAmount - feeAmount;
+  const netFiatAmount = fiatAmount - (fiatAmount * (feePercent / 100));
+
   // Merchant perspective: order type is from user's view.
-  // buy order = user buys, merchant SELLS (crypto goes out → red/minus)
-  // sell order = user sells, merchant BUYS (crypto comes in → green/plus)
+  // buy order = user buys, merchant SELLS (crypto goes out, fiat comes in)
+  // sell order = user sells, merchant BUYS (crypto comes in, fiat goes out)
   const isBuy = orderType === "buy";
   const isSell = orderType === "sell";
-  const merchantSold = isBuy;   // merchant sold crypto
-  const merchantBought = isSell; // merchant bought crypto
+  const merchantSold = isBuy;   // merchant sold crypto, got fiat
+  const merchantBought = isSell; // merchant bought crypto, paid fiat
+
+  // Show what the merchant GOT (net after fee)
+  // Sold: merchant got fiat (net) → show fiat in green
+  // Bought: merchant got crypto (net) → show crypto in green
   const Icon = merchantBought ? ArrowDownLeft : merchantSold ? ArrowUpRight : Repeat;
-  const amountColor = merchantBought ? "text-emerald-400" : merchantSold ? "text-red-400" : "text-foreground/80";
-  const amountPrefix = merchantBought ? "+" : merchantSold ? "-" : "";
-  const tagLabel = isBuy ? "BUY" : isSell ? "SELL" : "TRADE";
-  const tagCls = isBuy
-    ? "bg-emerald-500/10 text-emerald-400"
-    : isSell
-      ? "bg-red-500/10 text-red-400"
+  const tagLabel = merchantSold ? "SELL" : merchantBought ? "BUY" : "TRADE";
+  const tagCls = merchantSold
+    ? "bg-[var(--color-error)]/10 text-[var(--color-error)]"
+    : merchantBought
+      ? "bg-[var(--color-success)]/10 text-[var(--color-success)]"
       : "bg-foreground/[0.06] text-foreground/50";
 
   return (
@@ -154,14 +166,41 @@ function TransactionCard({
         </div>
       </div>
 
-      {/* Right: amounts */}
+      {/* Right: amount + balance after */}
       <div className="flex flex-col items-end shrink-0">
-        <span className={`text-[12px] font-bold font-mono tabular-nums ${amountColor}`}>
-          {amountPrefix}{Math.round(cryptoAmount).toLocaleString()} {cryptoCode}
-        </span>
-        <span className="text-[9px] text-foreground/30 font-mono tabular-nums">
-          {formatConverted(fiatAmount, fiatCode)}
-        </span>
+        {merchantSold ? (
+          <>
+            <span className="text-[12px] font-bold font-mono tabular-nums text-[var(--color-error)]">
+              -{Math.round(cryptoAmount).toLocaleString()} {cryptoCode}
+            </span>
+            <span className="text-[9px] text-foreground/30 font-mono tabular-nums">
+              {formatConverted(fiatAmount, fiatCode)}
+            </span>
+          </>
+        ) : merchantBought ? (
+          <>
+            <span className="text-[12px] font-bold font-mono tabular-nums text-[var(--color-success)]">
+              +{Math.round(netCryptoAmount).toLocaleString()} {cryptoCode}
+            </span>
+            <span className="text-[9px] text-foreground/30 font-mono tabular-nums">
+              {formatConverted(fiatAmount, fiatCode)}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="text-[12px] font-bold font-mono tabular-nums text-foreground/80">
+              {Math.round(cryptoAmount).toLocaleString()} {cryptoCode}
+            </span>
+            <span className="text-[9px] text-foreground/30 font-mono tabular-nums">
+              {formatConverted(fiatAmount, fiatCode)}
+            </span>
+          </>
+        )}
+        {balanceAfter != null && (
+          <span className="text-[9px] text-foreground/40 font-mono tabular-nums mt-0.5">
+            Bal: {Math.round(balanceAfter).toLocaleString()} USDT
+          </span>
+        )}
       </div>
     </button>
   );
@@ -174,7 +213,31 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({
   onSelectOrder,
   collapsed = false,
   onCollapseChange,
+  walletBalance,
 }: CompletedOrdersPanelProps) {
+  // Compute running balance backwards from current wallet balance.
+  // Orders are sorted newest-first, so we subtract each order's net effect.
+  const balanceAfterMap = useMemo(() => {
+    if (walletBalance == null) return new Map<string, number>();
+    const map = new Map<string, number>();
+    let running = walletBalance;
+    for (const o of orders) {
+      const orderType = o.orderType || o.dbOrder?.type;
+      const amount = o.amount || 0;
+      const feePercent = o.protocolFeePercent ?? parseFloat(String(o.dbOrder?.protocol_fee_percentage ?? 0));
+      const fee = amount * (feePercent / 100);
+      map.set(o.id, running);
+      // Work backwards: reverse the effect of this trade
+      if (orderType === "buy") {
+        // Merchant sold crypto: balance went down by (amount)
+        running += amount;
+      } else {
+        // Merchant bought crypto: balance went up by (amount - fee)
+        running -= (amount - fee);
+      }
+    }
+    return map;
+  }, [orders, walletBalance]);
   // Group orders by day label. Each unique date (Today / Yesterday / Mar 24 / ...)
   // gets its own bucket, in the order it first appears in `orders` (which is
   // already sorted newest-first by the parent).
@@ -251,6 +314,7 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({
                       key={order.id}
                       order={order}
                       onClick={() => onSelectOrder(order)}
+                      balanceAfter={balanceAfterMap.get(order.id)}
                     />
                   ))}
                 </div>

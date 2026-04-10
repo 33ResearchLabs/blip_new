@@ -202,8 +202,8 @@ const OrderList = memo(function OrderList({
                       <span className="text-xs font-medium text-white truncate">
                         {mOrder.creator_username || `#${mOrder.order_number}`}
                       </span>
-                      <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-primary/10 border-primary/20 text-primary">
-                        SEND
+                      <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-[var(--color-error)]/10 border-[var(--color-error)]/20 text-[var(--color-error)]">
+                        You Pay
                       </span>
                       <span className="flex items-center gap-0.5 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border bg-primary/10 border-primary/20 text-primary">
                         <Zap className="w-2.5 h-2.5" />
@@ -221,31 +221,68 @@ const OrderList = memo(function OrderList({
                         liveExpiry <= 120 ? "text-red-400" : "text-primary"
                       }`}
                     >
-                      {liveExpiry <= 0 ? "Expired" : liveExpiry >= 3600 ? `${Math.floor(liveExpiry / 3600)}h ${Math.floor((liveExpiry % 3600) / 60)}m` : liveExpiry >= 60 ? `${Math.floor(liveExpiry / 60)}m ${liveExpiry % 60}s` : `${liveExpiry}s`}
-                      <span className="animate-pulse" style={{ filter: liveExpiry <= 120 ? 'drop-shadow(0 0 6px #ef4444)' : 'drop-shadow(0 0 4px #f97316)' }}>🔥</span>
+                      {liveExpiry <= 0
+                        ? "Expired"
+                        : liveExpiry >= 3600
+                          ? `${Math.floor(liveExpiry / 3600)}h ${Math.floor((liveExpiry % 3600) / 60)}m`
+                          : liveExpiry >= 60
+                            ? `${Math.floor(liveExpiry / 60)}m ${liveExpiry % 60}s`
+                            : `${liveExpiry}s`}
+                      <span
+                        className="animate-pulse"
+                        style={{
+                          filter:
+                            liveExpiry <= 120
+                              ? "drop-shadow(0 0 6px #ef4444)"
+                              : "drop-shadow(0 0 4px #f97316)",
+                        }}
+                      >
+                        🔥
+                      </span>
                     </div>
                   </div>
 
                   {/* Warning banner when under 5 minutes */}
                   {liveExpiry > 0 && liveExpiry <= 300 && (
-                    <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-1 ${
-                      liveExpiry <= 120 ? 'bg-red-500/10 border border-red-500/20' : 'bg-primary/10 border border-primary/20'
-                    }`}>
+                    <div
+                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-1 ${
+                        liveExpiry <= 120
+                          ? "bg-red-500/10 border border-red-500/20"
+                          : "bg-primary/10 border border-primary/20"
+                      }`}
+                    >
                       <span className="text-xs shrink-0">🔥</span>
-                      <span className={`text-[10px] font-bold ${liveExpiry <= 120 ? 'text-red-400' : 'text-primary'}`}>
-                        {liveExpiry <= 120 ? 'Expiring soon! Act now' : `Expires in ${Math.floor(liveExpiry / 60)}m ${liveExpiry % 60}s`}
+                      <span
+                        className={`text-[10px] font-bold ${liveExpiry <= 120 ? "text-red-400" : "text-primary"}`}
+                      >
+                        {liveExpiry <= 120
+                          ? "Expiring soon! Act now"
+                          : `Expires in ${Math.floor(liveExpiry / 60)}m ${liveExpiry % 60}s`}
                       </span>
                     </div>
                   )}
 
-                  {/* Row 2: Amount + profit */}
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-sm font-bold text-white tabular-nums">
-                      {Math.round(amount).toLocaleString()} USDT
+                  {/* Row 2: You Pay / You Get */}
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm tabular-nums">
+                      <span className="text-[10px] text-[var(--color-error)] font-mono mr-1">
+                        Pay
+                      </span>
+                      <span className="font-bold text-foreground">
+                        {Math.round(amount).toLocaleString()} USDT
+                      </span>
                     </span>
                     <ArrowRight className="w-3 h-3 text-foreground/20" />
-                    <span className="text-sm font-bold text-primary tabular-nums">
-                      {fiatTotal.toLocaleString()} {(mOrder as any).corridor_id === 'USDT_INR' ? 'INR' : 'AED'}
+                    <span className="text-sm tabular-nums">
+                      <span className="text-[10px] text-[var(--color-success)] font-mono mr-1">
+                        Get
+                      </span>
+                      <span className="font-bold text-[var(--color-success)]">
+                        {fiatTotal.toLocaleString()}{" "}
+                        {(mOrder as any).corridor_id === "USDT_INR"
+                          ? "INR"
+                          : "AED"}
+                      </span>
                     </span>
                     {yourCut > 0 && (
                       <span className="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
@@ -267,28 +304,40 @@ const OrderList = memo(function OrderList({
                     <div className="flex-1" />
                     {!isMyMempoolOrder && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); onAcceptOrder(mOrder); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAcceptOrder(mOrder);
+                        }}
                         disabled={acceptingOrderId === mOrder.id}
                         className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 flex items-center gap-1 ${
                           acceptingOrderId === mOrder.id
-                            ? 'bg-primary/50 text-black/60 cursor-wait'
-                            : 'bg-primary text-background hover:bg-primary'
+                            ? "bg-primary/50 text-black/60 cursor-wait"
+                            : "bg-primary text-background hover:bg-primary"
                         }`}
                       >
                         {acceptingOrderId === mOrder.id ? (
-                          <><Loader2 className="w-3 h-3 animate-spin" /> Accepting...</>
-                        ) : order.dbOrder?.primaryAction?.label || (order.escrowTxHash ? 'MINE' : 'ACCEPT')}
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />{" "}
+                            Accepting...
+                          </>
+                        ) : (
+                          order.dbOrder?.primaryAction?.label ||
+                          (order.escrowTxHash ? "MINE" : "ACCEPT")
+                        )}
                       </button>
                     )}
                   </div>
                   {/* Countdown timer bar (bottom) */}
                   {(() => {
                     const total = Math.max(1, mOrder.seconds_until_expiry || 1);
-                    const pct = Math.max(0, Math.min(100, (liveExpiry / total) * 100));
+                    const pct = Math.max(
+                      0,
+                      Math.min(100, (liveExpiry / total) * 100),
+                    );
                     return (
                       <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground/[0.04] rounded-b-lg overflow-hidden">
                         <div
-                          className={`h-full transition-[width] duration-1000 ease-linear ${liveExpiry <= 120 ? 'bg-red-400' : 'bg-primary'}`}
+                          className={`h-full transition-[width] duration-1000 ease-linear ${liveExpiry <= 120 ? "bg-red-400" : "bg-primary"}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -313,7 +362,8 @@ const OrderList = memo(function OrderList({
           const isM2MOrder = !!order.buyerMerchantId && isPlaceholderUser;
           const isMyOwnOrder = isM2MOrder
             ? order.buyerMerchantId === merchantInfo?.id
-            : (!!order.isMyOrder || (isPlaceholderUser && order.orderMerchantId === merchantInfo?.id));
+            : !!order.isMyOrder ||
+              (isPlaceholderUser && order.orderMerchantId === merchantInfo?.id);
 
           return (
             <div
@@ -377,11 +427,11 @@ const OrderList = memo(function OrderList({
                     <span
                       className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
                         order.orderType === "buy"
-                          ? "bg-primary/10 border-primary/20 text-primary"
-                          : "bg-foreground/[0.06] border-foreground/[0.08] text-foreground/50"
+                          ? "bg-[var(--color-error)]/10 border-[var(--color-error)]/20 text-[var(--color-error)]"
+                          : "bg-[var(--color-success)]/10 border-[var(--color-success)]/20 text-[var(--color-success)]"
                       }`}
                     >
-                      {order.orderType === "buy" ? "SEND" : "RECEIVE"}
+                      {order.orderType === "buy" ? "You Pay" : "You Get"}
                     </span>
                     {order.spreadPreference && (
                       <span
@@ -440,23 +490,41 @@ const OrderList = memo(function OrderList({
                       order.expiresIn <= 120 ? "text-red-400" : "text-primary"
                     }`}
                   >
-                    {order.expiresIn <= 0 ? "Expired" : order.expiresIn >= 3600 ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m` : order.expiresIn >= 60 ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s` : `${order.expiresIn}s`}
-                    <CountdownRing remaining={order.expiresIn} total={900} size={18} strokeWidth={2.5} />
+                    {order.expiresIn <= 0
+                      ? "Expired"
+                      : order.expiresIn >= 3600
+                        ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
+                        : order.expiresIn >= 60
+                          ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s`
+                          : `${order.expiresIn}s`}
+                    <CountdownRing
+                      remaining={order.expiresIn}
+                      total={900}
+                      size={18}
+                      strokeWidth={2.5}
+                    />
                   </div>
                 </div>
 
                 {/* Payment method badge with icon */}
                 {(() => {
-                  const pmType = order.lockedPaymentMethod?.type
-                    || order.dbOrder?.payment_method
-                    || (order.userBankDetails ? 'bank' : null);
+                  const pmType =
+                    order.lockedPaymentMethod?.type ||
+                    order.dbOrder?.payment_method ||
+                    (order.userBankDetails ? "bank" : null);
                   if (!pmType) return null;
-                  const config: Record<string, { label: string; icon: string }> = {
-                    bank: { label: 'Bank', icon: '🏦' },
-                    cash: { label: 'Cash', icon: '💵' },
-                    upi:  { label: 'UPI',  icon: '📱' },
+                  const config: Record<
+                    string,
+                    { label: string; icon: string }
+                  > = {
+                    bank: { label: "Bank", icon: "🏦" },
+                    cash: { label: "Cash", icon: "💵" },
+                    upi: { label: "UPI", icon: "📱" },
                   };
-                  const { label, icon } = config[pmType] || { label: pmType.toUpperCase(), icon: '💳' };
+                  const { label, icon } = config[pmType] || {
+                    label: pmType.toUpperCase(),
+                    icon: "💳",
+                  };
                   return (
                     <div className="flex justify-end mb-1.5">
                       <span className="flex items-center gap-1 text-[9px] font-semibold px-1.5 py-0.5 rounded border border-border text-secondary">
@@ -467,17 +535,53 @@ const OrderList = memo(function OrderList({
                   );
                 })()}
 
-                {/* Row 2: Amount + profit */}
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="text-sm font-bold text-white tabular-nums">
-                    {Math.round(order.amount).toLocaleString()}{" "}
-                    {order.fromCurrency}
-                  </span>
-                  <ArrowRight className="w-3 h-3 text-foreground/20" />
-                  <span className="text-sm font-bold text-primary tabular-nums">
-                    {Math.round(order.total).toLocaleString()}{" "}
-                    {order.toCurrency}
-                  </span>
+                {/* Row 2: You Pay / You Get */}
+                <div className="flex items-center gap-2 mb-1">
+                  {order.orderType === "buy" ? (
+                    <>
+                      <span className="text-sm tabular-nums">
+                        <span className="text-[10px] text-[var(--color-error)] font-mono mr-1">
+                          Pay
+                        </span>
+                        <span className="font-bold text-foreground">
+                          {Math.round(order.amount).toLocaleString()}{" "}
+                          {order.fromCurrency}
+                        </span>
+                      </span>
+                      <ArrowRight className="w-3 h-3 text-foreground/20" />
+                      <span className="text-sm tabular-nums">
+                        <span className="text-[10px] text-[var(--color-success)] font-mono mr-1">
+                          Get
+                        </span>
+                        <span className="font-bold text-[var(--color-success)]">
+                          {Math.round(order.total).toLocaleString()}{" "}
+                          {order.toCurrency}
+                        </span>
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-sm tabular-nums">
+                        <span className="text-[10px] text-[var(--color-success)] font-mono mr-1">
+                          Get
+                        </span>
+                        <span className="font-bold text-[var(--color-success)]">
+                          {Math.round(order.amount).toLocaleString()}{" "}
+                          {order.fromCurrency}
+                        </span>
+                      </span>
+                      <ArrowRight className="w-3 h-3 text-foreground/20" />
+                      <span className="text-sm tabular-nums">
+                        <span className="text-[10px] text-[var(--color-error)] font-mono mr-1">
+                          Pay
+                        </span>
+                        <span className="font-bold text-foreground">
+                          {Math.round(order.total).toLocaleString()}{" "}
+                          {order.toCurrency}
+                        </span>
+                      </span>
+                    </>
+                  )}
                   {order.protocolFeePercent != null &&
                     order.protocolFeePercent > 0 && (
                       <span className="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
@@ -519,7 +623,10 @@ const OrderList = memo(function OrderList({
                   {!isMyOwnOrder && (
                     <button
                       data-testid="order-primary-action"
-                      onClick={(e) => { e.stopPropagation(); onAcceptOrder(order); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAcceptOrder(order);
+                      }}
                       disabled={acceptingOrderId === order.id}
                       className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 flex items-center gap-1 ${
                         acceptingOrderId === order.id
@@ -530,19 +637,28 @@ const OrderList = memo(function OrderList({
                       }`}
                     >
                       {acceptingOrderId === order.id ? (
-                        <><Loader2 className="w-3 h-3 animate-spin" /> Accepting...</>
-                      ) : order.dbOrder?.primaryAction?.label || (isMineable ? "MINE" : "ACCEPT")}
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />{" "}
+                          Accepting...
+                        </>
+                      ) : (
+                        order.dbOrder?.primaryAction?.label ||
+                        (isMineable ? "MINE" : "ACCEPT")
+                      )}
                     </button>
                   )}
                 </div>
                 {/* Countdown timer bar (bottom) */}
                 {(() => {
                   const total = 900;
-                  const pct = Math.max(0, Math.min(100, (order.expiresIn / total) * 100));
+                  const pct = Math.max(
+                    0,
+                    Math.min(100, (order.expiresIn / total) * 100),
+                  );
                   return (
                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground/[0.04]">
                       <div
-                        className={`h-full transition-[width] duration-1000 ease-linear ${order.expiresIn <= 120 ? 'bg-red-400' : 'bg-primary'}`}
+                        className={`h-full transition-[width] duration-1000 ease-linear ${order.expiresIn <= 120 ? "bg-red-400" : "bg-primary"}`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -583,14 +699,21 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   const orderFilters = useMerchantStore((s) => s.orderFilters);
   const setOrderFilters = useMerchantStore((s) => s.setOrderFilters);
 
-  // Sort dropdown state
+  // Dropdown states
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const sortDropdownRef = useRef<HTMLDivElement>(null);
 
-  // ─── Tab switch: Market vs My Orders ─────────────────────────────
+  // ─── Tab switch: All / Pending / My Orders ─────────────────────────
   const merchantId = merchantInfo?.id as string | undefined;
-  const [view, setView] = useState<"market" | "mine">("market");
-  type MyOrdersFilter = "all" | "active" | "completed" | "cancelled" | "expired";
+  type ViewTab = "all" | "pending" | "mine";
+  const [view, setView] = useState<ViewTab>("pending");
+  type MyOrdersFilter =
+    | "all"
+    | "active"
+    | "completed"
+    | "cancelled"
+    | "expired";
   const [myFilter, setMyFilter] = useState<MyOrdersFilter>("all");
   const [myOrders, setMyOrders] = useState<any[]>([]);
   const [myOrdersLoading, setMyOrdersLoading] = useState(false);
@@ -603,22 +726,26 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
     if (!merchantId) return false;
     const dbOrder = order?.dbOrder || order;
     const username: string = dbOrder?.user?.username || "";
-    const isPlaceholder = username.startsWith("open_order_") || username.startsWith("m2m_");
+    const isPlaceholder =
+      username.startsWith("open_order_") || username.startsWith("m2m_");
     if (!isPlaceholder) return false;
-    return dbOrder?.merchant_id === merchantId || dbOrder?.buyer_merchant_id === merchantId;
+    return (
+      dbOrder?.merchant_id === merchantId ||
+      dbOrder?.buyer_merchant_id === merchantId
+    );
   };
 
   // Fetch the merchant's full order history (includes completed / cancelled /
   // expired) when the My Orders tab is opened. Pending list alone is not enough
   // because cancelled/expired drop out of the active feed.
   useEffect(() => {
-    if (view !== "mine" || !merchantId) return;
+    if (!merchantId) return;
     let cancelled = false;
     const load = async () => {
       setMyOrdersLoading(true);
       try {
         const res = await fetchWithAuth(
-          `/api/merchant/orders?merchant_id=${merchantId}&status=pending,escrowed,accepted,payment_sent,payment_pending,payment_confirmed,completed,cancelled,expired,disputed`
+          `/api/merchant/orders?merchant_id=${merchantId}&status=pending,escrowed,accepted,payment_sent,payment_pending,payment_confirmed,completed,cancelled,expired,disputed`,
         );
         if (!res.ok) return;
         const data = await res.json();
@@ -634,49 +761,80 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
     };
     load();
     const interval = setInterval(load, 15000);
-    return () => { cancelled = true; clearInterval(interval); };
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [view, merchantId]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (sortDropdownRef.current && !sortDropdownRef.current.contains(e.target as Node)) {
+      if (
+        sortDropdownRef.current &&
+        !sortDropdownRef.current.contains(e.target as Node)
+      ) {
         setSortDropdownOpen(false);
       }
+      setFilterDropdownOpen(false);
     };
-    if (sortDropdownOpen) {
+    if (sortDropdownOpen || filterDropdownOpen) {
       document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+      return () =>
+        document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [sortDropdownOpen]);
+  }, [sortDropdownOpen, filterDropdownOpen]);
 
-  let displayOrders: any[];
-
-  if (view === "mine") {
-    // ─── MY ORDERS PATH ────────────────────────────────────────────
-    // Use the dedicated fetch (includes completed/cancelled/expired).
-    // Pass each through the same shape as `orders` by wrapping the raw db row
-    // as { ...dbRow, dbOrder: dbRow } so isCreatedByMe + downstream filters work
-    // without re-mapping. Existing card render reads from `order.dbOrder?.*` for
-    // cancellation_reason / accepted_at / merchant.display_name.
-    const wrapped = myOrders.map((dbRow: any) => ({
+  // Wrap my orders from the dedicated fetch into the same shape as UI orders
+  const wrappedMyOrders = myOrders.map((dbRow: any) => {
+    const userName =
+      dbRow.user?.name ||
+      dbRow.user?.username ||
+      dbRow.merchant?.display_name ||
+      "Trader";
+    return {
       id: dbRow.id,
       dbOrder: dbRow,
-      // Surface the few top-level fields the card uses for sort + search.
-      amount: typeof dbRow.crypto_amount === "string" ? parseFloat(dbRow.crypto_amount) : dbRow.crypto_amount,
-      total: typeof dbRow.fiat_amount === "string" ? parseFloat(dbRow.fiat_amount) : dbRow.fiat_amount,
-      rate: typeof dbRow.rate === "string" ? parseFloat(dbRow.rate) : dbRow.rate,
+      amount:
+        typeof dbRow.crypto_amount === "string"
+          ? parseFloat(dbRow.crypto_amount)
+          : dbRow.crypto_amount,
+      total:
+        typeof dbRow.fiat_amount === "string"
+          ? parseFloat(dbRow.fiat_amount)
+          : dbRow.fiat_amount,
+      rate:
+        typeof dbRow.rate === "string" ? parseFloat(dbRow.rate) : dbRow.rate,
       status: dbRow.status,
       orderType: dbRow.type,
       timestamp: new Date(dbRow.created_at),
       expiresIn: 0,
-    }));
+      fromCurrency: dbRow.crypto_currency || "USDT",
+      toCurrency: dbRow.fiat_currency || "AED",
+      user: userName,
+      emoji: userName.charAt(0)?.toUpperCase() || "🔸",
+      order_number: dbRow.order_number,
+      protocolFeePercent: parseFloat(
+        String(dbRow.protocol_fee_percentage ?? 0),
+      ),
+    };
+  });
 
-    displayOrders = wrapped.filter((o: any) => isCreatedByMe(o));
+  let displayOrders: any[];
 
-    // Secondary filter (All / Active / Completed / Cancelled / Expired).
-    // "Active" = the live, in-flight statuses.
+  if (view === "mine") {
+    // ─── MY ORDERS: merchant's own orders (last 7 days) ────────────
+    displayOrders = wrappedMyOrders.filter((o: any) => isCreatedByMe(o));
+
     if (myFilter !== "all") {
-      const activeStatuses = new Set(["pending", "escrowed", "accepted", "payment_pending", "payment_sent", "payment_confirmed", "disputed"]);
+      const activeStatuses = new Set([
+        "pending",
+        "escrowed",
+        "accepted",
+        "payment_pending",
+        "payment_sent",
+        "payment_confirmed",
+        "disputed",
+      ]);
       displayOrders = displayOrders.filter((o: any) => {
         const s = o.status as string;
         if (myFilter === "active") return activeStatuses.has(s);
@@ -686,24 +844,57 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
         return true;
       });
     }
-  } else {
-    // ─── MARKET PATH (existing behavior) ───────────────────────────
-    // Same as before, with one explicit guard: hide rows the merchant created
-    // themselves so the marketplace shows only public/other-party orders.
-    displayOrders = [...orders].filter((o: any) => !isCreatedByMe(o));
+  } else if (view === "pending") {
+    // ─── PENDING: all pending orders (market + mine) ───────────────
+    const pendingStatuses = new Set(["pending", "escrowed"]);
+    const marketOrders = [...orders].filter((o: any) =>
+      pendingStatuses.has(o.status || o.dbOrder?.status),
+    );
+    const myPending = wrappedMyOrders.filter(
+      (o: any) => isCreatedByMe(o) && pendingStatuses.has(o.status),
+    );
 
-    if (orderViewFilter === "new" && mempoolOrders.length > 0) {
-      const regularOrderIds = new Set(displayOrders.map((o: any) => o.id));
+    // Merge and deduplicate
+    const seenIds = new Set(marketOrders.map((o: any) => o.id));
+    const uniqueMyPending = myPending.filter((o: any) => !seenIds.has(o.id));
+    displayOrders = [...marketOrders, ...uniqueMyPending];
+
+    // Add mempool orders
+    if (mempoolOrders.length > 0) {
+      const allIds = new Set(displayOrders.map((o: any) => o.id));
+      const uniqueMempool = mempoolOrders.filter((mo) => !allIds.has(mo.id));
+      const mempoolAsOrders = uniqueMempool.map((mo) => ({
+        ...mo,
+        isMempoolOrder: true,
+        isMyMempoolOrder: mo.creator_username === merchantInfo?.username,
+      }));
+      displayOrders = [...mempoolAsOrders, ...displayOrders];
+    }
+  } else {
+    // ─── ALL: everything (market orders + my orders combined) ──────
+    const marketOrders = [...orders];
+
+    // Add mempool orders
+    let allOrders = [...marketOrders];
+    if (mempoolOrders.length > 0) {
+      const regularIds = new Set(allOrders.map((o: any) => o.id));
       const uniqueMempool = mempoolOrders.filter(
-        (mo) => !regularOrderIds.has(mo.id) && mo.creator_username !== merchantInfo?.username,
+        (mo) => !regularIds.has(mo.id),
       );
       const mempoolAsOrders = uniqueMempool.map((mo) => ({
         ...mo,
         isMempoolOrder: true,
-        isMyMempoolOrder: false, // Market tab never shows own mempool orders
+        isMyMempoolOrder: mo.creator_username === merchantInfo?.username,
       }));
-      displayOrders = [...mempoolAsOrders, ...displayOrders];
+      allOrders = [...mempoolAsOrders, ...allOrders];
     }
+
+    // Merge my orders (for completed/cancelled that aren't in the active feed)
+    const allIds = new Set(allOrders.map((o: any) => o.id));
+    const uniqueMyOrders = wrappedMyOrders.filter(
+      (o: any) => !allIds.has(o.id) && isCreatedByMe(o),
+    );
+    displayOrders = [...allOrders, ...uniqueMyOrders];
   }
 
   if (pendingFilter !== "all") {
@@ -791,74 +982,28 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-3 py-2 border-b border-section-divider">
-        {/* ─── Market / My Orders segmented control ─── */}
-        <div className="mb-2 inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06]">
-          <button
-            onClick={() => setView("market")}
-            className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
-              view === "market"
-                ? "bg-foreground text-background shadow"
-                : "text-foreground/40 hover:text-foreground/60"
-            }`}
-          >
-            Market
-          </button>
-          <button
-            onClick={() => setView("mine")}
-            className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
-              view === "mine"
-                ? "bg-foreground text-background shadow"
-                : "text-foreground/40 hover:text-foreground/60"
-            }`}
-          >
-            My Orders
-          </button>
-        </div>
-
+        {/* ─── Row 1: Tabs + controls ─── */}
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1">
-            {view === "market" ? (
-              <>
-                <button
-                  onClick={() => setOrderViewFilter("new")}
-                  className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
-                    orderViewFilter === "new"
-                      ? "bg-white/[0.08] text-white border border-white/[0.12]"
-                      : "text-foreground/30 hover:text-foreground/50"
-                  }`}
-                >
-                  Pending
-                </button>
-                <button
-                  onClick={() => setOrderViewFilter("all")}
-                  className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
-                    orderViewFilter === "all"
-                      ? "bg-white/[0.08] text-white border border-white/[0.12]"
-                      : "text-foreground/30 hover:text-foreground/50"
-                  }`}
-                >
-                  All
-                </button>
-              </>
-            ) : (
-              /* My Orders status filter row */
-              (["all", "active", "completed", "cancelled", "expired"] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setMyFilter(f)}
-                  className={`px-2 py-1 rounded text-[10px] font-medium transition-all capitalize ${
-                    myFilter === f
-                      ? "bg-white/[0.08] text-white border border-white/[0.12]"
-                      : "text-foreground/30 hover:text-foreground/50"
-                  }`}
-                >
-                  {f}
-                </button>
-              ))
-            )}
+          <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06]">
+            {(["all", "pending", "mine"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setView(tab)}
+                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+                  view === tab
+                    ? "bg-foreground text-background shadow"
+                    : "text-foreground/40 hover:text-foreground/60"
+                }`}
+              >
+                {tab === "all"
+                  ? "All"
+                  : tab === "pending"
+                    ? "Pending"
+                    : "My Orders"}
+              </button>
+            ))}
           </div>
-
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <div className="flex items-center gap-1 px-1.5 py-0.5 bg-foreground/[0.02] rounded border border-foreground/[0.06]">
               <div className="w-1.5 h-1.5 bg-primary rounded-full animate-live-dot" />
               <span className="text-[9px] text-white/35 font-mono">Live</span>
@@ -878,12 +1023,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
             </button>
             <button
               onClick={() => setShowOrderFilters(!showOrderFilters)}
-              className={`p-1 rounded transition-all ${
-                showOrderFilters ||
-                Object.values(orderFilters).some((v) => v !== "all")
-                  ? "bg-white/[0.08] text-foreground/60"
-                  : "hover:bg-foreground/[0.04] text-foreground/25"
-              }`}
+              className={`p-1 rounded transition-all ${showOrderFilters || Object.values(orderFilters).some((v) => v !== "all") ? "bg-white/[0.08] text-foreground/60" : "hover:bg-foreground/[0.04] text-foreground/25"}`}
             >
               <SlidersHorizontal className="w-3 h-3" />
             </button>
@@ -893,34 +1033,28 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           </div>
         </div>
 
-        {/* Quick Filters */}
-        <div className="flex flex-wrap items-center gap-1 mb-1.5">
-          {(["all", "mineable", "premium", "large", "expiring"] as const).map(
-            (f) => (
+        {/* ─── My Orders sub-filter (only when My Orders tab active) ─── */}
+        {view === "mine" && (
+          <div className="flex items-center gap-1 mb-2">
+            {(
+              ["all", "active", "completed", "cancelled", "expired"] as const
+            ).map((f) => (
               <button
                 key={f}
-                onClick={() => setPendingFilter(f)}
-                className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-all ${
-                  pendingFilter === f
-                    ? "bg-white/[0.08] text-foreground/80 border border-white/[0.10]"
-                    : "text-foreground/25 hover:text-foreground/40"
+                onClick={() => setMyFilter(f)}
+                className={`px-2 py-1 rounded text-[10px] font-medium transition-all capitalize ${
+                  myFilter === f
+                    ? "bg-white/[0.08] text-white border border-white/[0.12]"
+                    : "text-foreground/30 hover:text-foreground/50"
                 }`}
               >
-                {f === "all"
-                  ? "All"
-                  : f === "mineable"
-                    ? "Mineable"
-                    : f === "premium"
-                      ? "High Premium"
-                      : f === "large"
-                        ? "Large"
-                        : "Expiring"}
+                {f}
               </button>
-            ),
-          )}
-        </div>
+            ))}
+          </div>
+        )}
 
-        {/* Search + Sort */}
+        {/* Search + Filter + Sort */}
         <div className="flex items-center gap-1.5">
           <div className="flex-1 flex items-center gap-1.5 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-2.5 py-1.5">
             <Search className="w-3 h-3 text-foreground/20" />
@@ -932,13 +1066,87 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
               className="flex-1 bg-transparent text-[11px] text-white placeholder:text-foreground/15 outline-none font-mono"
             />
           </div>
+
+          {/* Filter dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
+              className={`flex items-center gap-1 text-[9px] font-mono bg-foreground/[0.02] border rounded-lg px-1.5 py-1.5 cursor-pointer transition-colors ${
+                pendingFilter !== "all"
+                  ? "text-primary border-primary/30 bg-primary/5"
+                  : "text-white/35 border-foreground/[0.06] hover:border-border-strong"
+              }`}
+            >
+              {
+                {
+                  all: "Filter",
+                  mineable: "Mineable",
+                  premium: "Premium",
+                  large: "Large",
+                  expiring: "Expiring",
+                }[pendingFilter]
+              }
+              <ChevronDown
+                className={`w-2.5 h-2.5 transition-transform ${filterDropdownOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+            <AnimatePresence>
+              {filterDropdownOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute right-0 top-full mt-1 z-30 bg-card-solid border border-foreground/[0.08] rounded-lg shadow-xl py-1 min-w-[120px]"
+                >
+                  {(
+                    ["all", "mineable", "premium", "large", "expiring"] as const
+                  ).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => {
+                        setPendingFilter(f);
+                        setFilterDropdownOpen(false);
+                      }}
+                      className={`w-full px-3 py-1.5 text-left text-[10px] font-medium transition-colors ${
+                        pendingFilter === f
+                          ? "text-primary bg-primary/5"
+                          : "text-foreground/60 hover:bg-foreground/[0.04]"
+                      }`}
+                    >
+                      {f === "all"
+                        ? "All"
+                        : f === "mineable"
+                          ? "Mineable"
+                          : f === "premium"
+                            ? "High Premium"
+                            : f === "large"
+                              ? "Large"
+                              : "Expiring"}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Sort dropdown */}
           <div className="relative" ref={sortDropdownRef}>
             <button
               onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
               className="flex items-center gap-1 text-[9px] font-mono text-white/35 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-1.5 py-1.5 cursor-pointer hover:border-border-strong transition-colors"
             >
-              {{ time: "Time", premium: "Premium", amount: "Size", rating: "Rating" }[pendingSortBy]}
-              <ChevronDown className={`w-2.5 h-2.5 transition-transform ${sortDropdownOpen ? "rotate-180" : ""}`} />
+              {
+                {
+                  time: "Time",
+                  premium: "Premium",
+                  amount: "Size",
+                  rating: "Rating",
+                }[pendingSortBy]
+              }
+              <ChevronDown
+                className={`w-2.5 h-2.5 transition-transform ${sortDropdownOpen ? "rotate-180" : ""}`}
+              />
             </button>
             <AnimatePresence>
               {sortDropdownOpen && (
@@ -949,12 +1157,14 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                   transition={{ duration: 0.15 }}
                   className="absolute right-0 top-full mt-1 z-50 min-w-[100px] bg-[#1a1a1a] border border-foreground/[0.08] rounded-lg shadow-xl overflow-hidden"
                 >
-                  {([
-                    { value: "time", label: "Time" },
-                    { value: "premium", label: "Premium" },
-                    { value: "amount", label: "Size" },
-                    { value: "rating", label: "Rating" },
-                  ] as const).map((option) => (
+                  {(
+                    [
+                      { value: "time", label: "Time" },
+                      { value: "premium", label: "Premium" },
+                      { value: "amount", label: "Size" },
+                      { value: "rating", label: "Rating" },
+                    ] as const
+                  ).map((option) => (
                     <button
                       key={option.value}
                       onClick={() => {
@@ -1100,7 +1310,13 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       </div>
 
       {/* Orders List */}
-      {view === "market" ? (
+      {view === "mine" ? (
+        <MyOrdersList
+          orders={filteredOrders}
+          isLoading={myOrdersLoading}
+          onSelectOrder={onSelectOrder}
+        />
+      ) : (
         <OrderList
           filteredOrders={filteredOrders}
           merchantInfo={merchantInfo}
@@ -1109,29 +1325,66 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           onAcceptOrder={onAcceptOrder}
           acceptingOrderId={acceptingOrderId}
         />
-      ) : (
-        <MyOrdersList
-          orders={filteredOrders}
-          isLoading={myOrdersLoading}
-          onSelectOrder={onSelectOrder}
-        />
       )}
     </div>
   );
 });
 
 // ─── My Orders list — non-virtualized, status-aware card render ────────
-const MY_STATUS_BADGE: Record<string, { label: string; cls: string; Icon: any }> = {
-  pending:           { label: "Pending",         cls: "bg-amber-500/10 text-amber-400 border-amber-500/20",     Icon: CircleDot },
-  escrowed:          { label: "Escrowed",        cls: "bg-purple-500/10 text-purple-400 border-purple-500/20", Icon: CircleDot },
-  accepted:          { label: "Accepted",        cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", Icon: CheckCircle2 },
-  payment_pending:   { label: "Payment Pending", cls: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",        Icon: CircleDot },
-  payment_sent:      { label: "Payment Sent",    cls: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",        Icon: CircleDot },
-  payment_confirmed: { label: "Confirmed",       cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", Icon: CheckCircle2 },
-  completed:         { label: "Completed",       cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", Icon: CheckCircle2 },
-  cancelled:         { label: "Cancelled",       cls: "bg-red-500/10 text-red-400 border-red-500/20",          Icon: XCircle },
-  expired:           { label: "Expired",         cls: "bg-foreground/[0.06] text-foreground/40 border-foreground/[0.10]", Icon: AlertCircle },
-  disputed:          { label: "Disputed",        cls: "bg-red-500/10 text-red-400 border-red-500/20",          Icon: AlertCircle },
+const MY_STATUS_BADGE: Record<
+  string,
+  { label: string; cls: string; Icon: any }
+> = {
+  pending: {
+    label: "Pending",
+    cls: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    Icon: CircleDot,
+  },
+  escrowed: {
+    label: "Escrowed",
+    cls: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+    Icon: CircleDot,
+  },
+  accepted: {
+    label: "Accepted",
+    cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    Icon: CheckCircle2,
+  },
+  payment_pending: {
+    label: "Payment Pending",
+    cls: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+    Icon: CircleDot,
+  },
+  payment_sent: {
+    label: "Payment Sent",
+    cls: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+    Icon: CircleDot,
+  },
+  payment_confirmed: {
+    label: "Confirmed",
+    cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    Icon: CheckCircle2,
+  },
+  completed: {
+    label: "Completed",
+    cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    Icon: CheckCircle2,
+  },
+  cancelled: {
+    label: "Cancelled",
+    cls: "bg-red-500/10 text-red-400 border-red-500/20",
+    Icon: XCircle,
+  },
+  expired: {
+    label: "Expired",
+    cls: "bg-foreground/[0.06] text-foreground/40 border-foreground/[0.10]",
+    Icon: AlertCircle,
+  },
+  disputed: {
+    label: "Disputed",
+    cls: "bg-red-500/10 text-red-400 border-red-500/20",
+    Icon: AlertCircle,
+  },
 };
 
 const MyOrdersList = memo(function MyOrdersList({
@@ -1157,7 +1410,9 @@ const MyOrdersList = memo(function MyOrdersList({
           <div className="w-10 h-10 rounded-full border border-foreground/[0.06] bg-foreground/[0.02] flex items-center justify-center">
             <TrendingUp className="w-5 h-5 text-foreground/20" />
           </div>
-          <p className="text-[11px] font-medium text-foreground/30">No orders</p>
+          <p className="text-[11px] font-medium text-foreground/30">
+            No orders
+          </p>
         </div>
       </div>
     );
@@ -1184,13 +1439,14 @@ const MyOrdersList = memo(function MyOrdersList({
           // M2M: counterparty is whichever side is NOT the creator. For
           // a merchant-created order with placeholder user, the acceptor
           // is whichever side filled in (buyer_merchant_id usually).
-          if (db.buyer_merchant?.display_name) return db.buyer_merchant.display_name;
+          if (db.buyer_merchant?.display_name)
+            return db.buyer_merchant.display_name;
           if (db.merchant?.display_name) return db.merchant.display_name;
           return db.user?.name || db.user?.username || null;
         })();
 
         const cancelReason: string | null = isCancelled
-          ? (db.cancellation_reason || db.cancel_request_reason || null)
+          ? db.cancellation_reason || db.cancel_request_reason || null
           : null;
 
         return (
@@ -1201,24 +1457,67 @@ const MyOrdersList = memo(function MyOrdersList({
           >
             {/* Header row: status badge + timestamp */}
             <div className="flex items-center justify-between mb-1.5">
-              <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider border ${badge.cls}`}>
+              <span
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider border ${badge.cls}`}
+              >
                 <StatusIcon className="w-2.5 h-2.5" />
                 {badge.label}
               </span>
               <span className="text-[9px] text-foreground/30 font-mono">
-                {createdAt instanceof Date ? createdAt.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                {createdAt instanceof Date
+                  ? createdAt.toLocaleString([], {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : ""}
               </span>
             </div>
 
-            {/* Amount + total */}
-            <div className="flex items-center gap-1.5 mb-1">
-              <span className="text-sm font-bold text-white tabular-nums">
-                {Math.round(amount).toLocaleString()} USDT
-              </span>
-              <ArrowRight className="w-3 h-3 text-foreground/20" />
-              <span className="text-sm font-bold text-primary tabular-nums">
-                {Math.round(total).toLocaleString()} {fiatCurrency}
-              </span>
+            {/* Amount: You Pay / You Get */}
+            <div className="flex items-center gap-2 mb-1">
+              {order.orderType === "buy" ? (
+                <>
+                  <span className="text-sm tabular-nums">
+                    <span className="text-[10px] text-[var(--color-error)] font-mono mr-1">
+                      Pay
+                    </span>
+                    <span className="font-bold text-foreground">
+                      {Math.round(amount).toLocaleString()} USDT
+                    </span>
+                  </span>
+                  <ArrowRight className="w-3 h-3 text-foreground/20" />
+                  <span className="text-sm tabular-nums">
+                    <span className="text-[10px] text-[var(--color-success)] font-mono mr-1">
+                      Get
+                    </span>
+                    <span className="font-bold text-[var(--color-success)]">
+                      {Math.round(total).toLocaleString()} {fiatCurrency}
+                    </span>
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm tabular-nums">
+                    <span className="text-[10px] text-[var(--color-success)] font-mono mr-1">
+                      Get
+                    </span>
+                    <span className="font-bold text-[var(--color-success)]">
+                      {Math.round(amount).toLocaleString()} USDT
+                    </span>
+                  </span>
+                  <ArrowRight className="w-3 h-3 text-foreground/20" />
+                  <span className="text-sm tabular-nums">
+                    <span className="text-[10px] text-[var(--color-error)] font-mono mr-1">
+                      Pay
+                    </span>
+                    <span className="font-bold text-foreground">
+                      {Math.round(total).toLocaleString()} {fiatCurrency}
+                    </span>
+                  </span>
+                </>
+              )}
             </div>
 
             {/* Rate + type */}
@@ -1231,7 +1530,10 @@ const MyOrdersList = memo(function MyOrdersList({
             {/* Accepted by */}
             {acceptedByName && !isCancelled && status !== "expired" && (
               <div className="mt-1 text-[10px] text-foreground/50 font-mono">
-                Accepted by <span className="text-foreground/80 font-bold">{acceptedByName}</span>
+                Accepted by{" "}
+                <span className="text-foreground/80 font-bold">
+                  {acceptedByName}
+                </span>
               </div>
             )}
 

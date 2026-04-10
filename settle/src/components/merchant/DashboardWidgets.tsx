@@ -14,6 +14,8 @@ interface DashboardWidgetsProps {
   lockedInEscrow: number;
   isOnline: boolean;
   merchantId?: string;
+  activeCorridor?: string;
+  onCorridorChange?: (corridorId: string) => void;
   onToggleOnline?: () => void;
   onOpenCorridor?: () => void;
 }
@@ -28,6 +30,8 @@ export const DashboardWidgets = memo(function DashboardWidgets({
   lockedInEscrow,
   isOnline,
   merchantId,
+  activeCorridor,
+  onCorridorChange,
   onToggleOnline,
   onOpenCorridor,
 }: DashboardWidgetsProps) {
@@ -43,6 +47,8 @@ export const DashboardWidgets = memo(function DashboardWidgets({
           rank={rank}
           isOnline={isOnline}
           merchantId={merchantId}
+          activeCorridor={activeCorridor}
+          onCorridorChange={onCorridorChange}
           onToggleOnline={onToggleOnline}
           onOpenCorridor={onOpenCorridor}
         />
