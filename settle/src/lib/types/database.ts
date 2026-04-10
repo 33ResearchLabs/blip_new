@@ -4,7 +4,7 @@
 export type KycStatus = 'none' | 'pending' | 'verified' | 'rejected';
 export type MerchantStatus = 'pending' | 'active' | 'suspended' | 'banned';
 export type OfferType = 'buy' | 'sell';
-export type PaymentMethod = 'bank' | 'cash';
+export type PaymentMethod = 'bank' | 'cash' | 'card' | 'upi' | 'mobile' | 'other';
 export type RateType = 'fixed' | 'market_margin';
 export type OrderStatus =
   | 'pending'

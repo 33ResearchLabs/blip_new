@@ -80,17 +80,9 @@ BEGIN
   WHERE id = p_order_id
   RETURNING * INTO v_updated;
 
-  -- Log ledger entry for the escrow lock
-  PERFORM log_ledger_entry(
-    p_actor_type,
-    p_actor_id,
-    'ESCROW_LOCK',
-    -v_amount,
-    'USDT',
-    p_order_id,
-    p_tx_hash,
-    'Escrow locked for order ' || p_order_id::TEXT
-  );
+  -- NOTE: Ledger entry is created by the auto_log_order_ledger trigger
+  -- on the orders table when escrow_tx_hash is set. Do NOT call
+  -- log_ledger_entry here to avoid duplicate entries.
 
   RETURN jsonb_build_object(
     'success', true,

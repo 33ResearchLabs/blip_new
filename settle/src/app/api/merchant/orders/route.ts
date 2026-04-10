@@ -176,6 +176,13 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(errors);
     }
 
+    // Dry run: validate only, don't create order.
+    // Used by frontend to pre-validate BEFORE locking escrow on-chain.
+    const isDryRun = request.nextUrl.searchParams.get('dry_run') === 'true';
+    if (isDryRun) {
+      return successResponse({ valid: true });
+    }
+
     // Pair (currency corridor) — defaults to usdt_aed for backward compat.
     // Drives the rate source AND the order's fiat_currency / corridor_id.
     const pairFromBody = (body?.pair === 'usdt_inr' || body?.pair === 'USDT_INR') ? 'usdt_inr' : 'usdt_aed';

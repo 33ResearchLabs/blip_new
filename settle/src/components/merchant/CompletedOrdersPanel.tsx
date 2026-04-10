@@ -97,7 +97,7 @@ function TransactionCard({
   const completedDate = completedAt ? new Date(completedAt) : null;
   const orderType: "buy" | "sell" | undefined =
     order.orderType || order.dbOrder?.type;
-  const cryptoCode: string = order.fromCurrency || "USDC";
+  const cryptoCode: string = order.fromCurrency || "USDT";
   const fiatCode: string =
     order.toCurrency || order.dbOrder?.fiat_currency || "AED";
   const cryptoAmount: number = order.amount || 0;

@@ -74,6 +74,26 @@ export function useTradeCreation({
           setIsCreatingTrade(false);
           return;
         }
+
+        // Pre-validate order payload BEFORE locking escrow on-chain.
+        // This prevents the critical scenario where escrow is locked but
+        // order creation fails due to validation (e.g. invalid payment_method).
+        const preValidateRes = await fetchWithAuth("/api/merchant/orders?dry_run=true", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            merchant_id: merchantId, type: openTradeForm.tradeType,
+            crypto_amount: parseFloat(openTradeForm.cryptoAmount),
+            payment_method: openTradeForm.paymentMethod, spread_preference: openTradeForm.spreadPreference,
+            matched_offer_id: matchedOffer?.id,
+          }),
+        });
+        if (!preValidateRes.ok) {
+          const preData = await preValidateRes.json().catch(() => ({}));
+          setCreateTradeError(preData.error || preData.details?.[0] || 'Order validation failed — escrow not locked.');
+          setIsCreatingTrade(false);
+          return;
+        }
+
         const escrowResult: { success: boolean; txHash: string; tradeId?: number; tradePda?: string; escrowPda?: string; error?: string } = await solanaWallet.depositToEscrowOpen({ amount: parseFloat(openTradeForm.cryptoAmount), side: 'sell' });
         if (!escrowResult.success || !escrowResult.txHash) throw new Error(escrowResult.error || 'Escrow transaction failed');
         const res = await fetchWithAuth("/api/merchant/orders", {

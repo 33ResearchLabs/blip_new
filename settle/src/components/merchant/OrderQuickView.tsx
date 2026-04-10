@@ -223,7 +223,7 @@ export function OrderQuickView({
                   <div className="flex items-center gap-2">
                     <p className="text-[11px] text-foreground/40">
                       {selectedOrder.orderType === "buy" ? "Selling" : "Buying"}{" "}
-                      USDC
+                      USDT
                     </p>
                     {selectedOrder.myRole && (
                       <span
@@ -296,7 +296,7 @@ export function OrderQuickView({
                     Amount
                   </span>
                   <span className="text-sm font-semibold text-foreground">
-                    ${selectedOrder.amount.toLocaleString()} USDC
+                    ${selectedOrder.amount.toLocaleString()} USDT
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
@@ -314,7 +314,7 @@ export function OrderQuickView({
                     Rate (Locked)
                   </span>
                   <span className="text-xs font-mono text-foreground/50">
-                    1 USDC = {selectedOrder.rate} {selectedOrder.toCurrency || 'AED'}
+                    1 USDT = {selectedOrder.rate} {selectedOrder.toCurrency || 'AED'}
                   </span>
                 </div>
                 {selectedOrder.dbOrder?.accepted_at && (

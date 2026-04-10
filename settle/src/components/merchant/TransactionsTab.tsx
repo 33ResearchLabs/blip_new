@@ -200,10 +200,13 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
                     const StatusIcon = badge.Icon;
                     const asset = entry.asset || "USDT";
                     const orderType = entry.order_type;
+                    // Merchant perspective: order_type is from user's view.
+                    // buy order = user buys, merchant SELLS. sell order = user sells, merchant BUYS.
+                    const merchantAction = orderType === "buy" ? "Sold" : "Bought";
                     const label = isCancelledEntry
                       ? `Order Cancelled`
                       : orderType
-                        ? `You ${orderType === "buy" ? "Bought" : "Sold"} ${asset}`
+                        ? `You ${merchantAction} ${asset}`
                         : (isIncoming ? `Received ${asset}` : `Sent ${asset}`);
                     const formattedAmount = isCancelledEntry
                       ? `${Number(entry.amount).toFixed(0)} ${asset}`

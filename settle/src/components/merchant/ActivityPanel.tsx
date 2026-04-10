@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, memo, useMemo } from 'react';
+import { useState, memo, useMemo, useRef, useEffect } from 'react';
 import { CheckCircle2, History, Star, XCircle, AlertTriangle, ChevronUp, ChevronDown, Clock, ArrowRight, Loader2, Lock, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { TransactionsTab } from './TransactionsTab';
@@ -33,6 +33,16 @@ export const ActivityPanel = memo(function ActivityPanel({
   // Bumping this counter triggers TransactionsTab to refetch the ledger.
   const [txnRefreshKey, setTxnRefreshKey] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Auto-refresh transactions when completed/cancelled orders change
+  const prevCountRef = useRef(completedOrders.length + cancelledOrders.length);
+  useEffect(() => {
+    const newCount = completedOrders.length + cancelledOrders.length;
+    if (newCount !== prevCountRef.current) {
+      prevCountRef.current = newCount;
+      setTxnRefreshKey(k => k + 1);
+    }
+  }, [completedOrders.length, cancelledOrders.length]);
 
   const handleCollapse = (collapsed: boolean) => {
     setIsCollapsed(collapsed);
@@ -391,7 +401,7 @@ export const ActivityPanel = memo(function ActivityPanel({
                       {/* Amount + escrow status */}
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-sm font-bold text-foreground/60 tabular-nums">
-                          {Math.round(order.amount).toLocaleString()} {order.fromCurrency || 'USDC'}
+                          {Math.round(order.amount).toLocaleString()} {order.fromCurrency || 'USDT'}
                         </span>
                         {hasEscrow && (
                           <span className="flex items-center gap-1 text-[9px] text-foreground/30 font-mono">

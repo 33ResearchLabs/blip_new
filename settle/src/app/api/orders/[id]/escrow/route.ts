@@ -167,17 +167,9 @@ export async function POST(
       return forbiddenResponse("You do not have access to this order");
     }
 
-    // Acquire row-level lock to prevent parallel escrow locks (double-spend)
-    const { query: lockQuery } = await import("@/lib/db");
-    const lockResult = await lockQuery(
-      `SELECT id FROM orders WHERE id = $1 FOR UPDATE`,
-      [id]
-    );
-    if (!lockResult || lockResult.length === 0) {
-      return notFoundResponse("Order");
-    }
-
     // Fetch order FRESH from DB (skip cache — merchant_id may have just been set by accept)
+    // NOTE: No row-level lock here — core-api's escrow_order_v1 handles atomicity
+    // via SELECT FOR UPDATE inside the stored procedure.
     const { invalidateOrderCache } = await import("@/lib/cache");
     invalidateOrderCache(id);
     const depositOrder = await getOrderWithRelations(id);

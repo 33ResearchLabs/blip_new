@@ -45,7 +45,7 @@ export const actorTypeSchema = z.enum(['user', 'merchant', 'system', 'compliance
 
 export const offerTypeSchema = z.enum(['buy', 'sell']);
 
-export const paymentMethodSchema = z.enum(['bank', 'cash']);
+export const paymentMethodSchema = z.enum(['bank', 'cash', 'card', 'upi', 'mobile', 'other']);
 
 export const paymentMethodTypeSchema = z.enum(['bank', 'upi', 'cash', 'other']);
 
