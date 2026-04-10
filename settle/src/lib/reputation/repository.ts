@@ -569,7 +569,7 @@ export async function updateReputationScore(
       score.consistency_score,
       score.trust_score,
       score.tier,
-      score.badges,
+      JSON.stringify(score.badges || []),
     ]
   );
 

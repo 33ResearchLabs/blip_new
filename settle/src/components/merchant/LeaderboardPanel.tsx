@@ -3,6 +3,7 @@
 import { useState, useEffect, memo } from 'react';
 import { Star, Trophy, ChevronUp, ChevronDown, Shield } from 'lucide-react';
 import { FilterDropdown, type FilterOption } from '@/components/user/screens/ui/FilterDropdown';
+import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 
 const LEADERBOARD_OPTIONS: ReadonlyArray<FilterOption<'traders' | 'rated' | 'reputation'>> = [
   { key: 'traders',    label: 'Volume' },
@@ -64,7 +65,7 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
 
   useEffect(() => {
     if (leaderboardTab === 'reputation' && repData.length === 0) {
-      fetch('/api/reputation?action=leaderboard&entityType=merchant&limit=20')
+      fetchWithAuth('/api/reputation?action=leaderboard&entityType=merchant&limit=20')
         .then(r => r.json())
         .then(data => {
           if (data.success && data.data?.leaderboard) {
