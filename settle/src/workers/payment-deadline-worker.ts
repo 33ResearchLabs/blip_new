@@ -142,6 +142,115 @@ async function processDeadlineExpiries(): Promise<void> {
   }
 }
 
+// ── Job 1b: Pending expiry → expired (no escrow involved) ───────────────
+//
+// Mirrors the /v1/orders/expire cron behaviour for the simple pending case
+// so the worker is self-sufficient and we don't depend on an external cron
+// hitting the endpoint. Only handles the pending → expired transition; the
+// 120-min accepted/escrowed timeout is still left to the cron route since
+// it overlaps with our escrow-expiry + payment-deadline jobs below.
+
+async function processPendingExpiries(): Promise<void> {
+  try {
+    const { query } = await import('@/lib/db');
+    const pendingRows = await query<{
+      id: string;
+      user_id: string;
+      merchant_id: string;
+      buyer_merchant_id: string | null;
+      order_number: string;
+      type: string;
+      order_version: number;
+    }>(
+      `SELECT id, user_id, merchant_id, buyer_merchant_id, order_number, type, order_version
+       FROM orders
+       WHERE status = 'pending'
+         AND payment_sent_at IS NULL
+         AND created_at < NOW() - INTERVAL '15 minutes'
+       LIMIT $1`,
+      [BATCH_SIZE]
+    );
+
+    if (pendingRows.length === 0) return;
+
+    let expiredCount = 0;
+
+    for (const order of pendingRows) {
+      try {
+        // Status + version guard prevents racing with a concurrent ACCEPT.
+        const updateResult = await transaction(async (client) => {
+          const upd = await client.query(
+            `UPDATE orders
+             SET status = 'expired',
+                 cancelled_at = NOW(),
+                 cancelled_by = 'system',
+                 cancellation_reason = 'Order expired - no one accepted within 15 minutes',
+                 order_version = order_version + 1
+             WHERE id = $1
+               AND status = 'pending'
+               AND order_version = $2
+             RETURNING id`,
+            [order.id, order.order_version]
+          );
+          if (upd.rows.length === 0) return false;
+
+          await client.query(
+            `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
+             VALUES ($1, 'pending_expired', 'system', $1, 'pending', 'expired', $2)`,
+            [
+              order.id,
+              JSON.stringify({ reason: 'Order expired - no merchant accepted', auto_expired: true }),
+            ]
+          );
+
+          await client.query(
+            `INSERT INTO notification_outbox (event_type, order_id, payload)
+             VALUES ('ORDER_EXPIRED', $1, $2)`,
+            [
+              order.id,
+              JSON.stringify({
+                orderId: order.id,
+                userId: order.user_id,
+                merchantId: order.merchant_id,
+                buyerMerchantId: order.buyer_merchant_id,
+                status: 'expired',
+                previousStatus: 'pending',
+                orderNumber: order.order_number,
+                orderType: order.type,
+                reason: 'Order expired - no merchant accepted',
+                updatedAt: new Date().toISOString(),
+              }),
+            ]
+          );
+
+          return true;
+        });
+
+        if (updateResult) {
+          invalidateOrderCache(order.id);
+          expiredCount++;
+        }
+      } catch (orderErr) {
+        logger.error('[PendingExpiry] Failed to expire order', {
+          orderId: order.id,
+          error: orderErr instanceof Error ? orderErr.message : String(orderErr),
+        });
+      }
+    }
+
+    if (expiredCount > 0) {
+      logger.info('[PendingExpiry] Pending orders expired', {
+        count: expiredCount,
+        total: pendingRows.length,
+      });
+    }
+  } catch (error) {
+    logger.error('[PendingExpiry] Worker error', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 // ── Job 2: Escrow expiry → auto-cancel with refund (FUND SAFETY) ──────
 
 async function processEscrowExpiries(): Promise<void> {
@@ -390,6 +499,7 @@ async function processStuckOnChainEscrows(): Promise<void> {
 // ── Worker lifecycle ────────────────────────────────────────────────────
 
 async function runCycle(): Promise<void> {
+  await processPendingExpiries();
   await processDeadlineExpiries();
   await processEscrowExpiries();
   await processDisputeAutoResolve();
@@ -399,7 +509,7 @@ async function runCycle(): Promise<void> {
 async function start() {
   console.log('[payment-deadline] Worker started');
   console.log(`[payment-deadline] Checking every ${WORKER_INTERVAL_MS}ms`);
-  console.log('[payment-deadline] Jobs: payment deadline expiry + escrow expiry + dispute auto-resolve + on-chain escrow refund');
+  console.log('[payment-deadline] Jobs: pending expiry + payment deadline expiry + escrow expiry + dispute auto-resolve + on-chain escrow refund');
 
   // Initial run
   await runCycle();
@@ -427,4 +537,4 @@ if (require.main === module) {
   });
 }
 
-export { start, processDeadlineExpiries, processEscrowExpiries, processDisputeAutoResolve, processStuckOnChainEscrows };
+export { start, processPendingExpiries, processDeadlineExpiries, processEscrowExpiries, processDisputeAutoResolve, processStuckOnChainEscrows };

@@ -184,4 +184,25 @@ app.prepare().then(async () => {
   } catch (priceErr) {
     console.warn('> Price tick collector not available:', priceErr.message);
   }
+
+  // Start payment-deadline worker — handles pending/escrowed/disputed/payment_sent
+  // expiries and stuck on-chain escrow refunds. Without this worker, escrowed
+  // orders never auto-cancel-and-refund, leaving user funds locked indefinitely.
+  try {
+    const { spawn } = require('child_process');
+    const path = require('path');
+    const npxBin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    const deadlineScript = path.join(__dirname, 'src/workers/payment-deadline-worker.ts');
+    const deadlineWorker = spawn(npxBin, ['tsx', deadlineScript], {
+      stdio: 'inherit',
+      env: { ...process.env },
+      cwd: __dirname,
+    });
+    deadlineWorker.on('exit', (code) => {
+      if (code !== 0) console.error(`> Payment-deadline worker exited with code ${code}`);
+    });
+    console.log('> Payment-deadline worker started (pid:', deadlineWorker.pid + ')');
+  } catch (deadlineErr) {
+    console.warn('> Payment-deadline worker not available:', deadlineErr.message);
+  }
 });
