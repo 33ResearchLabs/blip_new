@@ -101,7 +101,14 @@ function checkRate(ip: string, bucket: string, maxReqs: number, windowSec: numbe
 // Route Classification
 // =============================================================================
 
-const PUBLIC_EXACT = new Set(['/api/health', '/api/convert', '/api/pusher/auth', '/api/dev-unlock']);
+const PUBLIC_EXACT = new Set([
+  '/api/health',
+  '/api/convert',
+  '/api/pusher/auth',
+  '/api/dev-unlock',
+  // 2FA login challenge — caller has a one-time pendingToken in body, NOT a session yet
+  '/api/2fa/verify-login',
+]);
 
 function isPublicRoute(pathname: string, method: string): boolean {
   if (PUBLIC_EXACT.has(pathname)) return true;

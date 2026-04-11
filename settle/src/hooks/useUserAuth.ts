@@ -69,14 +69,15 @@ export function useUserAuth({
       }
       const data = await res.json();
       if (data.success && data.data.user) {
-        setUserId(data.data.user.id);
+        const user = data.data.user;
+        setUserId(user.id);
         setUserWallet(walletAddress);
-        setUserName(data.data.user.name || 'User');
+        setUserName(user.name || 'User');
         localStorage.setItem('blip_wallet', walletAddress);
         if (data.data.token) useMerchantStore.getState().setSessionToken(data.data.token);
-        fetchOrders(data.data.user.id);
-        fetchBankAccounts(data.data.user.id);
-        fetchResolvedDisputes(data.data.user.id);
+        fetchOrders(user.id);
+        fetchBankAccounts(user.id);
+        fetchResolvedDisputes(user.id);
         return true;
       }
       return false;

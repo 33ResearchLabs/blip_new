@@ -283,7 +283,8 @@ export async function getVerifiedAuthContext(
   // Dev-mode header auth: validate via refresh cookie's session.
   try {
     if (auth.sessionId) {
-      // v2 token: check this specific session (cached, 30s TTL)
+      // v2 token: check this specific session against the DB on EVERY request
+      // (no positive cache — revocations must be enforced instantly)
       const valid = await isSessionValid(auth.sessionId);
       if (!valid) {
         console.warn('[AUTH] Rejecting request — session revoked or expired', {
@@ -404,7 +405,12 @@ export async function requireAuth(
   request: NextRequest,
 ): Promise<AuthContext | NextResponse> {
   const auth = await getVerifiedAuthContext(request);
-  if (!auth) return unauthorizedResponse('Authentication required');
+  if (!auth) {
+    return unauthorizedResponse(
+      'Your session has expired. Please log in again to continue.',
+      'SESSION_EXPIRED',
+    );
+  }
 
   // Blacklist check — blocks hard-banned users/devices/IPs
   const blacklistResult = await checkBlacklist(request, auth);
@@ -665,9 +671,12 @@ export async function canAccessOrder(
 /**
  * Create unauthorized response
  */
-export function unauthorizedResponse(message = 'Unauthorized'): NextResponse {
+export function unauthorizedResponse(
+  message = 'Your session has expired. Please log in again.',
+  code = 'SESSION_EXPIRED',
+): NextResponse {
   return NextResponse.json(
-    { success: false, error: message },
+    { success: false, error: message, code },
     { status: 401 }
   );
 }
@@ -675,9 +684,12 @@ export function unauthorizedResponse(message = 'Unauthorized'): NextResponse {
 /**
  * Create forbidden response
  */
-export function forbiddenResponse(message = 'Access denied'): NextResponse {
+export function forbiddenResponse(
+  message = 'You don\'t have permission to do this.',
+  code = 'FORBIDDEN',
+): NextResponse {
   return NextResponse.json(
-    { success: false, error: message },
+    { success: false, error: message, code },
     { status: 403 }
   );
 }

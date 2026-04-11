@@ -41,7 +41,10 @@ export async function GET(
     const isOwner = auth.actorType === 'user' && auth.actorId === id;
     if (!isOwner && auth.actorType !== 'system') {
       logger.auth.forbidden(`GET /api/users/${id}/payment-methods`, auth.actorId, 'Not owner');
-      return forbiddenResponse('You can only access your own payment methods');
+      return forbiddenResponse(
+        'Your session has expired. Please log in again to view your payment methods.',
+        'SESSION_EXPIRED',
+      );
     }
 
     const user = await getUserById(id);
@@ -77,7 +80,10 @@ export async function POST(
     const isOwner = auth.actorType === 'user' && auth.actorId === id;
     if (!isOwner && auth.actorType !== 'system') {
       logger.auth.forbidden(`POST /api/users/${id}/payment-methods`, auth.actorId, 'Not owner');
-      return forbiddenResponse('You can only add payment methods to your own profile');
+      return forbiddenResponse(
+        'Your session has expired. Please log in again to add a payment method.',
+        'SESSION_EXPIRED',
+      );
     }
 
     const user = await getUserById(id);

@@ -189,15 +189,23 @@ export function useDashboardAuth({
 
   const handle2FAVerify = useCallback(async () => {
     if (!pending2FA || !/^\d{6}$/.test(totpCode)) return;
+    // Re-entrancy guard: pending tokens are single-use, so a double-fire
+    // (StrictMode, double click, etc.) would consume the token on the first
+    // call and then fail on the second with "Invalid or expired login token".
+    if (isVerifying2FA) return;
     setIsVerifying2FA(true);
     setLoginError('');
+
+    // Snapshot the token now so we can clear it from state immediately —
+    // prevents any concurrent invocation from re-using the same value.
+    const tokenForThisCall = pending2FA.pendingToken;
 
     try {
       const res = await fetchWithAuth('/api/2fa/verify-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          pendingToken: pending2FA.pendingToken,
+          pendingToken: tokenForThisCall,
           code: totpCode,
         }),
       });
@@ -215,7 +223,13 @@ export function useDashboardAuth({
           setTimeout(() => setShowWalletPrompt(true), 500);
         }
       } else {
-        setLoginError(data.error || 'Invalid authenticator code');
+        if (data.error?.includes('Invalid or expired login token')) {
+          setLoginError('Your login session timed out. Please log in again.');
+          // Force user back to the login screen so they get a fresh pending token
+          setPending2FA(null);
+        } else {
+          setLoginError(data.error || 'Invalid authenticator code');
+        }
         setTotpCode('');
       }
     } catch {
@@ -223,7 +237,7 @@ export function useDashboardAuth({
     } finally {
       setIsVerifying2FA(false);
     }
-  }, [pending2FA, totpCode, isMockMode, setMerchantId, setMerchantInfo, setIsLoggedIn, setShowWalletPrompt, setSessionToken]);
+  }, [pending2FA, totpCode, isVerifying2FA, isMockMode, setMerchantId, setMerchantInfo, setIsLoggedIn, setShowWalletPrompt, setSessionToken]);
 
   const cancel2FA = useCallback(() => {
     setPending2FA(null);

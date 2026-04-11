@@ -257,12 +257,12 @@ export default function MerchantSettingsPage() {
       setPasswordError(`Passwords do not match${lenDiff}`);
       return;
     }
-    if (trimmedNew.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
+    if (trimmedNew.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
       return;
     }
-    if (trimmedNew.length > 12) {
-      setPasswordError('Password must be at most 12 characters');
+    if (trimmedNew.length > 24) {
+      setPasswordError('Password must be at most 24 characters');
       return;
     }
 
@@ -349,9 +349,27 @@ export default function MerchantSettingsPage() {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('blip_merchant');
-    localStorage.removeItem('merchant_info');
+  const handleLogout = async () => {
+    // Best-effort: revoke server-side session so the refresh cookie can't
+    // resurrect the token. Don't block on failure — local logout still works.
+    try {
+      await fetchWithAuth('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+    } catch { /* offline / network error — proceed with local logout */ }
+
+    try {
+      useMerchantStore.getState().setSessionToken(null);
+      useMerchantStore.getState().setMerchantId?.(null);
+      useMerchantStore.getState().setMerchantInfo?.(null as any);
+    } catch { /* store not hydrated */ }
+    try {
+      localStorage.removeItem('blip_merchant');
+      localStorage.removeItem('merchant_info');
+      sessionStorage.removeItem('blip_session_token');
+    } catch { /* SSR */ }
     window.location.href = '/merchant';
   };
 
@@ -712,7 +730,7 @@ export default function MerchantSettingsPage() {
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="Current password"
-                    maxLength={12}
+                    maxLength={24}
                     autoComplete="off"
                     className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-primary/30 transition-colors"
                   />
@@ -730,8 +748,8 @@ export default function MerchantSettingsPage() {
                     type={showNewPassword ? 'text' : 'password'}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="New password (6–12 chars)"
-                    maxLength={12}
+                    placeholder="New password (8–24 chars)"
+                    maxLength={24}
                     autoComplete="new-password"
                     className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-primary/30 transition-colors"
                   />
@@ -750,7 +768,7 @@ export default function MerchantSettingsPage() {
                     value={confirmNewPassword}
                     onChange={(e) => setConfirmNewPassword(e.target.value)}
                     placeholder="Confirm new password"
-                    maxLength={12}
+                    maxLength={24}
                     autoComplete="new-password"
                     className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-primary/30 transition-colors"
                   />
@@ -1258,6 +1276,7 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
   const [manualSecret, setManualSecret] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [disablePassword, setDisablePassword] = useState('');
+  const [showDisablePassword, setShowDisablePassword] = useState(false);
   const [disableCode, setDisableCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1657,13 +1676,23 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
         <div className="space-y-3">
           <p className="text-xs text-white/40">Enter your password and current authenticator code to disable 2FA.</p>
 
-          <input
-            type="password"
-            value={disablePassword}
-            onChange={(e) => setDisablePassword(e.target.value)}
-            placeholder="Current password"
-            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
-          />
+          <div className="relative">
+            <input
+              type={showDisablePassword ? 'text' : 'password'}
+              value={disablePassword}
+              onChange={(e) => setDisablePassword(e.target.value)}
+              placeholder="Current password"
+              autoComplete="current-password"
+              className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-primary/30 transition-colors"
+            />
+            <button
+              type="button"
+              onClick={() => setShowDisablePassword(!showDisablePassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 z-10 text-foreground/60 hover:text-foreground"
+            >
+              {showDisablePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
 
           <input
             type="text"
@@ -1742,16 +1771,36 @@ function ActiveSessionsSection() {
   };
 
   const handleRevokeAll = async () => {
+    if (!confirm('Log out of ALL devices including this one? You will need to log in again.')) {
+      return;
+    }
     setIsRevokingAll(true);
     try {
       const res = await fetchWithAuth('/api/auth/sessions', { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
-        setSessions([]);
+        // Wipe ALL local merchant state — token, store, localStorage —
+        // because every session was just revoked server-side. The next
+        // navigation must force a fresh login.
+        try {
+          useMerchantStore.getState().setSessionToken(null);
+          useMerchantStore.getState().setMerchantId?.(null);
+          useMerchantStore.getState().setMerchantInfo?.(null as any);
+        } catch { /* store not hydrated */ }
+        try {
+          localStorage.removeItem('blip_merchant');
+          localStorage.removeItem('merchant_info');
+          sessionStorage.removeItem('blip_session_token');
+        } catch { /* SSR */ }
+        // Hard navigation so the new page tree boots without any cached
+        // auth context, which is exactly what we want after a global logout.
+        window.location.href = '/merchant?logged_out=all';
+      } else {
+        alert(data.error || 'Failed to log out of all devices. Please try again.');
+        setIsRevokingAll(false);
       }
     } catch {
-      // ignore
-    } finally {
+      alert('Network error. Please check your connection and try again.');
       setIsRevokingAll(false);
     }
   };

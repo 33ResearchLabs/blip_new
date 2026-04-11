@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/middleware/auth';
 import { getActiveSessions, revokeAllSessions, revokeSession, parseDeviceDetails } from '@/lib/auth/sessions';
+import { REFRESH_TOKEN_COOKIE } from '@/lib/auth/sessionToken';
 
 // GET — List active sessions
 export async function GET(request: NextRequest) {
@@ -65,10 +66,20 @@ export async function DELETE(request: NextRequest) {
     // Revoke ALL sessions (logout everywhere)
     const count = await revokeAllSessions(auth.actorId, auth.actorType);
 
-    return NextResponse.json({
+    // Clear refresh token cookie so the current device can't silently
+    // refresh into a new session — caller must log in again.
+    const response = NextResponse.json({
       success: true,
-      data: { revoked: count, message: `${count} session(s) revoked` },
+      data: { revoked: count, message: `${count} session(s) revoked`, loggedOut: true },
     });
+    response.cookies.set(REFRESH_TOKEN_COOKIE, '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/api/auth',
+      maxAge: 0,
+    });
+    return response;
   } catch {
     return NextResponse.json(
       { success: false, error: 'Failed to revoke sessions' },

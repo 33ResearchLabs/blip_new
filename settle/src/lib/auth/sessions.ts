@@ -150,6 +150,9 @@ export async function rotateRefreshToken(
     `UPDATE sessions SET is_revoked = true, revoked_at = NOW(), replaced_by = $1 WHERE id = $2`,
     [newSession.id, session.id]
   );
+  // Invalidate the rotated session in the local cache so any in-flight
+  // request that arrives after the rotation can't replay the old token.
+  invalidateSessionCache(session.id);
 
   return { payload, newRefreshToken, sessionId: newSession.id };
 }
@@ -194,23 +197,34 @@ export async function getActiveSessions(entityId: string, entityType: string): P
   );
 }
 
-// ── Per-session validation with cache ─────────────────────────────────
+// ── Per-session validation ─────────────────────────────────────────────
+//
+// Strict policy: every request that carries a session-bound token revalidates
+// the session against the database. There is NO positive cache — we never
+// trust an in-memory "still valid" result, because that's how revocations
+// leak across devices. The DB lookup is a single primary-key index hit
+// (~1 ms) so the cost is acceptable for the safety guarantee.
+//
+// We keep a small negative cache that flags KNOWN-revoked session IDs for
+// 60 s. This is purely an optimization to short-circuit replay attempts of
+// already-killed tokens; it can never let a valid request through.
 
-// In-memory cache: sessionId → { valid: boolean, expiresAt: number }
-// Avoids DB hit on every request. 30-second TTL ensures revocations propagate quickly.
-const sessionValidityCache = new Map<string, { valid: boolean; cachedAt: number }>();
-const SESSION_CACHE_TTL = 30_000; // 30 seconds
+const revokedNegativeCache = new Map<string, number>(); // sessionId → cachedAt
+const NEGATIVE_TTL_MS = 60_000;
+const NEGATIVE_CACHE_MAX = 10_000;
 
 /**
  * Check if a specific session is valid (not revoked, not expired).
  * Used by auth middleware for v2 tokens that embed a sessionId.
- * Cached for 30 seconds to avoid DB hit on every request.
+ *
+ * STRICT MODE: hits the DB on every call. The only short-circuit is for
+ * sessions known to be revoked.
  */
 export async function isSessionValid(sessionId: string): Promise<boolean> {
-  // Check cache first
-  const cached = sessionValidityCache.get(sessionId);
-  if (cached && Date.now() - cached.cachedAt < SESSION_CACHE_TTL) {
-    return cached.valid;
+  // Cheap rejection path for known-revoked sessions
+  const negCachedAt = revokedNegativeCache.get(sessionId);
+  if (negCachedAt && Date.now() - negCachedAt < NEGATIVE_TTL_MS) {
+    return false;
   }
 
   const session = await queryOne<{ is_revoked: boolean; expires_at: string }>(
@@ -218,30 +232,35 @@ export async function isSessionValid(sessionId: string): Promise<boolean> {
     [sessionId]
   );
 
-  const valid = !!session && !session.is_revoked && new Date(session.expires_at) > new Date();
+  const valid =
+    !!session &&
+    !session.is_revoked &&
+    new Date(session.expires_at) > new Date();
 
-  // Cache the result (including negative results — invalid sessions stay invalid)
-  sessionValidityCache.set(sessionId, { valid, cachedAt: Date.now() });
-
-  // Prune cache if it grows too large (prevent memory leak from expired entries)
-  if (sessionValidityCache.size > 10_000) {
-    const now = Date.now();
-    for (const [key, entry] of sessionValidityCache) {
-      if (now - entry.cachedAt > SESSION_CACHE_TTL) sessionValidityCache.delete(key);
+  if (!valid) {
+    // Remember the negative result so we don't pay the DB hit for replays
+    revokedNegativeCache.set(sessionId, Date.now());
+    if (revokedNegativeCache.size > NEGATIVE_CACHE_MAX) {
+      const now = Date.now();
+      for (const [key, ts] of revokedNegativeCache) {
+        if (now - ts > NEGATIVE_TTL_MS) revokedNegativeCache.delete(key);
+      }
     }
   }
 
   return valid;
 }
 
-/** Invalidate a session from the cache (call after revocation) */
+/** Mark a session as revoked in the negative cache. Called after explicit
+ *  revocation so any process-local replay short-circuits without a DB hit. */
 export function invalidateSessionCache(sessionId: string): void {
-  sessionValidityCache.delete(sessionId);
+  revokedNegativeCache.set(sessionId, Date.now());
 }
 
-/** Invalidate all cached sessions for an entity (call after revokeAll) */
+/** Clear the negative cache. Called after a global revoke; the next access
+ *  for any session re-validates against the DB. */
 export function invalidateAllSessionCaches(): void {
-  sessionValidityCache.clear();
+  revokedNegativeCache.clear();
 }
 
 /**

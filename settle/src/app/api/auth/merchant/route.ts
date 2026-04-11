@@ -791,9 +791,15 @@ export async function POST(request: NextRequest) {
       }
 
       const trimmedNew = String(new_password).trim();
-      if (trimmedNew.length < 6) {
+      if (trimmedNew.length < 8) {
         return NextResponse.json(
-          { success: false, error: 'New password must be at least 6 characters' },
+          { success: false, error: 'New password must be at least 8 characters' },
+          { status: 400 }
+        );
+      }
+      if (trimmedNew.length > 24) {
+        return NextResponse.json(
+          { success: false, error: 'New password must be at most 24 characters' },
           { status: 400 }
         );
       }
@@ -856,9 +862,15 @@ export async function POST(request: NextRequest) {
       }
 
       // Validate password
-      if (password.length < 6) {
+      if (password.length < 8) {
         return NextResponse.json(
-          { success: false, error: 'Password must be at least 6 characters' },
+          { success: false, error: 'Password must be at least 8 characters' },
+          { status: 400 }
+        );
+      }
+      if (password.length > 24) {
+        return NextResponse.json(
+          { success: false, error: 'Password must be at most 24 characters' },
           { status: 400 }
         );
       }

@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getUserByWallet, createUser } from '@/lib/db/repositories/users';
 import { getMerchantByWallet } from '@/lib/db/repositories/merchants';
 import { walletAuthSchema } from '@/lib/validation/schemas';
@@ -10,6 +10,8 @@ import {
 import { checkRateLimit, AUTH_LIMIT } from '@/lib/middleware/rateLimit';
 import { logger } from '@/lib/logger';
 import { guardAuthVelocity } from '@/lib/guards';
+import { generateAccessToken, REFRESH_TOKEN_COOKIE, REFRESH_COOKIE_OPTIONS } from '@/lib/auth/sessionToken';
+import { createSession } from '@/lib/auth/sessions';
 
 // Connect wallet - creates user if not exists
 export async function POST(request: NextRequest) {
@@ -69,10 +71,33 @@ export async function POST(request: NextRequest) {
       logger.info('New user created', { userId: user.id, walletAddress: wallet_address });
     }
 
-    return successResponse({
-      type: 'user',
-      user,
+    // Issue session + access token so subsequent user-scoped routes
+    // (e.g. POST /api/users/{id}/payment-methods) can authorize the
+    // request via the Bearer header rather than relying on x-user-id.
+    const payload = { actorId: user.id, actorType: 'user' as const };
+    let sessionId: string | undefined;
+    let refreshToken: string | null = null;
+    try {
+      const sess = await createSession(payload, request);
+      if (sess) { sessionId = sess.sessionId; refreshToken = sess.refreshToken; }
+    } catch {
+      // Proceed without session tracking — the access token still works
+    }
+    const accessToken = generateAccessToken({ ...payload, sessionId });
+
+    const response = NextResponse.json({
+      success: true,
+      data: {
+        type: 'user',
+        user,
+        token: accessToken,
+        accessToken,
+      },
     });
+    if (refreshToken) {
+      response.cookies.set(REFRESH_TOKEN_COOKIE, refreshToken, REFRESH_COOKIE_OPTIONS);
+    }
+    return response;
   } catch (error) {
     logger.api.error('POST', '/api/auth/wallet', error as Error);
     return errorResponse('Internal server error');

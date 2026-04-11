@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Check,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { BottomNav } from "./BottomNav";
+import { PaymentMethodSelector, type PaymentMethodItem } from "../PaymentMethodSelector";
 import type { Screen, Order, BankAccount } from "./types";
 import type { MutableRefObject } from "react";
 
@@ -34,6 +36,7 @@ const REP_BAR_H = ["h-2", "h-3", "h-4", "h-5", "h-6"]; // 8,12,16,20,24px
 export interface ProfileScreenProps {
   screen: Screen;
   setScreen: (s: Screen) => void;
+  userId: string | null;
   userName: string;
   completedOrders: Order[];
   timedOutOrders: Order[];
@@ -100,6 +103,7 @@ export interface ProfileScreenProps {
 export const ProfileScreen = ({
   screen,
   setScreen,
+  userId,
   userName,
   completedOrders,
   timedOutOrders,
@@ -134,6 +138,10 @@ export const ProfileScreen = ({
   setLoginForm,
   maxW,
 }: ProfileScreenProps) => {
+  // Local "selected" state for the PaymentMethodSelector — in profile context
+  // there's no trade to attach a method to, so this is purely a visual hint
+  // for which method is currently shown as the trigger card.
+  const [profilePaymentMethodId, setProfilePaymentMethodId] = useState<string | null>(null);
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
 
@@ -272,6 +280,18 @@ export const ProfileScreen = ({
               <Wallet size={16} className="text-accent-text" /> Connect Wallet
             </motion.button>
           )}
+        </div>
+
+        {/* Payment Methods — supports bank, UPI, cash, and other types.
+            Reuses the same component the trade screen uses so users can
+            add/manage payment methods directly from their profile. */}
+        <p className={`${SECTION_LABEL} block mb-2`}>Payment Methods</p>
+        <div className="mb-3">
+          <PaymentMethodSelector
+            userId={userId}
+            selectedId={profilePaymentMethodId}
+            onSelect={(m) => setProfilePaymentMethodId(m?.id ?? null)}
+          />
         </div>
 
         {/* Bank Accounts */}

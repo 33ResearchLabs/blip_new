@@ -192,6 +192,63 @@ function shouldAttemptRefresh(url: string): boolean {
   return !NO_REFRESH_PATHS.some(path => url.includes(path));
 }
 
+// Routes where a 401 is normal (login attempt) and should NOT trigger a forced logout
+const NO_FORCED_LOGOUT_PATHS = [
+  '/api/auth/refresh',
+  '/api/auth/merchant',
+  '/api/auth/user',
+  '/api/auth/compliance',
+  '/api/auth/admin',
+  '/api/auth/wallet',
+  '/api/2fa/verify-login',
+];
+
+function shouldForceLogoutOn401(url: string): boolean {
+  return !NO_FORCED_LOGOUT_PATHS.some(path => url.includes(path));
+}
+
+// Coalesce concurrent forced-logout calls so we wipe state + redirect once
+let forcedLogoutInProgress = false;
+
+/**
+ * Hard logout: wipe all client-side auth state and redirect to the appropriate
+ * login page. Called when the server says our session is no longer valid
+ * (401 after a failed refresh) — we MUST stop using the dead token.
+ */
+function forceLogoutAndRedirect(): void {
+  if (forcedLogoutInProgress) return;
+  forcedLogoutInProgress = true;
+  if (typeof window === 'undefined') return;
+
+  try {
+    // Wipe Zustand store (sessionToken, merchantId, merchantInfo)
+    useMerchantStore.getState().setSessionToken(null);
+    const setMerchantId = (useMerchantStore.getState() as any).setMerchantId;
+    const setMerchantInfo = (useMerchantStore.getState() as any).setMerchantInfo;
+    if (typeof setMerchantId === 'function') setMerchantId(null);
+    if (typeof setMerchantInfo === 'function') setMerchantInfo(null);
+  } catch { /* store not hydrated — ignore */ }
+
+  try {
+    sessionStorage.removeItem('blip_session_token');
+    localStorage.removeItem('blip_merchant');
+    localStorage.removeItem('merchant_info');
+    localStorage.removeItem('blip_user');
+    localStorage.removeItem('compliance_member');
+  } catch { /* SSR — ignore */ }
+
+  // Pick the right login page based on where the user currently is
+  const path = window.location.pathname;
+  let target = '/';
+  if (path.startsWith('/merchant')) target = '/merchant?session=expired';
+  else if (path.startsWith('/admin')) target = '/admin?session=expired';
+  else if (path.startsWith('/compliance')) target = '/compliance?session=expired';
+  else target = '/?session=expired';
+
+  // Use replace so the dead-token page can't be reached via Back button
+  window.location.replace(target);
+}
+
 /**
  * Drop-in replacement for window.fetch with auth headers injected.
  * Signature matches fetch() exactly.
@@ -257,17 +314,29 @@ async function executeWithRefresh(
   // Attempt silent refresh
   const newToken = await refreshAccessToken();
   if (!newToken) {
-    // Refresh failed — return original 401
+    // Refresh failed — server has rejected the session entirely.
+    // Wipe local auth state and force the user to log in again.
+    if (shouldForceLogoutOn401(url)) {
+      forceLogoutAndRedirect();
+    }
     return response;
   }
 
   // Retry with new token
   const retryHeaders = getAuthHeaders(); // re-read (now has new token)
-  return fetch(input, {
+  const retryResponse = await fetch(input, {
     ...init,
     headers: {
       ...retryHeaders,
       ...init?.headers,
     },
   });
+
+  // If the retry STILL returned 401, the new access token is also being
+  // rejected — the session was revoked between refresh and retry. Force logout.
+  if (retryResponse.status === 401 && shouldForceLogoutOn401(url)) {
+    forceLogoutAndRedirect();
+  }
+
+  return retryResponse;
 }

@@ -61,7 +61,10 @@ export async function POST(
     const isOwner = auth.actorType === 'merchant' && auth.actorId === id;
     if (!isOwner && auth.actorType !== 'system') {
       logger.auth.forbidden(`POST /api/merchant/${id}/payment-methods`, auth.actorId, 'Not owner');
-      return forbiddenResponse('You can only add payment methods to your own profile');
+      return forbiddenResponse(
+        'Your session has expired. Please log in again to add a payment method.',
+        'SESSION_EXPIRED',
+      );
     }
 
     const merchantExists = await verifyMerchant(id);

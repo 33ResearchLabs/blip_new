@@ -128,10 +128,21 @@ export const PaymentMethodSelector = ({
         setShowAddForm(false);
         setExpanded(false);
       } else {
-        setFormError(data.error || "Failed to add payment method");
+        // Map machine codes / HTTP status to friendly messages
+        if (res.status === 401 || data.code === 'SESSION_EXPIRED') {
+          setFormError('Your session has expired. Please log in again.');
+        } else if (res.status === 403) {
+          setFormError(data.error || "You don't have permission to do this.");
+        } else if (res.status === 429) {
+          setFormError('Too many requests. Please wait a moment and try again.');
+        } else if (res.status >= 500) {
+          setFormError('Server error. Please try again in a moment.');
+        } else {
+          setFormError(data.error || 'Failed to add payment method');
+        }
       }
     } catch {
-      setFormError("Network error. Please try again.");
+      setFormError("Network error. Please check your connection and try again.");
     } finally {
       setSaving(false);
     }
