@@ -244,11 +244,15 @@ export default function MerchantSettingsPage() {
   };
 
   const handleChangePassword = async () => {
-    if (newPassword !== confirmNewPassword) {
+    const trimmedCurrent = currentPassword.trim();
+    const trimmedNew = newPassword.trim();
+    const trimmedConfirm = confirmNewPassword.trim();
+
+    if (trimmedNew !== trimmedConfirm) {
       setPasswordError('Passwords do not match');
       return;
     }
-    if (newPassword.length < 6) {
+    if (trimmedNew.length < 6) {
       setPasswordError('Password must be at least 6 characters');
       return;
     }
@@ -264,8 +268,8 @@ export default function MerchantSettingsPage() {
         body: JSON.stringify({
           action: 'change_password',
           merchant_id: merchantId || merchant?.id,
-          current_password: currentPassword,
-          new_password: newPassword,
+          current_password: trimmedCurrent,
+          new_password: trimmedNew,
         }),
       });
 

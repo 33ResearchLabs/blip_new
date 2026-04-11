@@ -30,7 +30,23 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
         notifQueueRef.current = [];
         notifTimerRef.current = null;
         if (batch.length > 0) {
-          setNotifications(prev => [...batch.reverse(), ...prev].slice(0, 50));
+          setNotifications(prev => {
+            // Dedupe within the batch + against existing by (orderId, type, message)
+            // — protects against rapid-fire duplicate addNotification() calls
+            // (e.g. same Pusher event delivered through multiple channels).
+            const seenKeys = new Set(
+              prev.map(n => `${n.orderId || ''}|${n.type}|${n.message}`)
+            );
+            const fresh: Notification[] = [];
+            for (const n of batch.reverse()) {
+              const key = `${n.orderId || ''}|${n.type}|${n.message}`;
+              if (seenKeys.has(key)) continue;
+              seenKeys.add(key);
+              fresh.push(n);
+            }
+            if (fresh.length === 0) return prev;
+            return [...fresh, ...prev].slice(0, 50);
+          });
         }
       }, 200);
     }
@@ -84,7 +100,25 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
               read: true,
               orderId: n.order_id,
             }));
-            setNotifications(prev => [...prev, ...history]);
+            // Dedupe by id (e.g. db-${n.id}) AND by (orderId, type, message)
+            // so a remount + history refetch can't append the same items
+            // twice, and a real-time notification already in state for the
+            // same event won't get a stale "read: true" copy appended either.
+            setNotifications(prev => {
+              const seenIds = new Set(prev.map(n => n.id));
+              const seenKeys = new Set(
+                prev.map(n => `${n.orderId || ''}|${n.type}|${n.message}`)
+              );
+              const dedup = history.filter((n: Notification) => {
+                if (seenIds.has(n.id)) return false;
+                const key = `${n.orderId || ''}|${n.type}|${n.message}`;
+                if (seenKeys.has(key)) return false;
+                seenKeys.add(key);
+                return true;
+              });
+              if (dedup.length === 0) return prev;
+              return [...prev, ...dedup];
+            });
           }
         })
         .catch(() => {});

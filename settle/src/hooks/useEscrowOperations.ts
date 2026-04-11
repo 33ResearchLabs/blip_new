@@ -134,6 +134,7 @@ export function useEscrowOperations({
     }
 
     if (!solanaWallet.connected) {
+      playSound('error');
       addNotification('system', 'Please connect your wallet to lock escrow.');
       setShowWalletModal(true);
       return;
@@ -361,6 +362,7 @@ export function useEscrowOperations({
     if (!merchantId) return;
 
     if (!solanaWallet.connected) {
+      playSound('error');
       addNotification('system', 'Please connect your wallet to release escrow.');
       setShowWalletModal(true);
       return;
@@ -538,6 +540,7 @@ export function useEscrowOperations({
     if (!merchantId) return;
 
     if (!solanaWallet.connected) {
+      playSound('error');
       addNotification('system', 'Please connect your wallet to cancel escrow.');
       setShowWalletModal(true);
       return;

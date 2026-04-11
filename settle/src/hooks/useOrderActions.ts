@@ -78,6 +78,7 @@ export function useOrderActions({
 
     // Always require wallet before accepting — you'll need it for escrow lock or release
     if (!solanaWallet.walletAddress) {
+      playSound('error');
       addNotification('system', 'Please connect your wallet first to accept orders.', order.id);
       setShowWalletModal(true);
       setAcceptingOrderId(null);
@@ -272,6 +273,7 @@ export function useOrderActions({
     if (!merchantId) return;
 
     if (!solanaWallet.connected) {
+      playSound('error');
       addNotification('system', 'Please connect your wallet to sign.');
       setShowWalletModal(true);
       return;
@@ -363,6 +365,7 @@ export function useOrderActions({
     if (!merchantId) return;
 
     if (!solanaWallet.connected) {
+      playSound('error');
       addNotification('system', 'Please connect your wallet to sign.');
       setShowWalletModal(true);
       return;
@@ -824,6 +827,7 @@ export function useOrderActions({
     if (!merchantId) return false;
 
     if (!solanaWallet.connected || !solanaWallet.walletAddress) {
+      playSound('error');
       addNotification('system', 'Please connect your wallet first.', order.id);
       setShowWalletModal(true);
       return false;
