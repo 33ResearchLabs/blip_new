@@ -98,6 +98,7 @@ export default function MerchantSettingsPage() {
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
@@ -249,11 +250,19 @@ export default function MerchantSettingsPage() {
     const trimmedConfirm = confirmNewPassword.trim();
 
     if (trimmedNew !== trimmedConfirm) {
-      setPasswordError('Passwords do not match');
+      const lenDiff =
+        trimmedNew.length !== trimmedConfirm.length
+          ? ` (${trimmedNew.length} vs ${trimmedConfirm.length} chars)`
+          : '';
+      setPasswordError(`Passwords do not match${lenDiff}`);
       return;
     }
     if (trimmedNew.length < 6) {
       setPasswordError('Password must be at least 6 characters');
+      return;
+    }
+    if (trimmedNew.length > 12) {
+      setPasswordError('Password must be at most 12 characters');
       return;
     }
 
@@ -703,11 +712,14 @@ export default function MerchantSettingsPage() {
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="Current password"
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
+                    maxLength={12}
+                    autoComplete="off"
+                    className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-primary/30 transition-colors"
                   />
                   <button
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/30 hover:text-foreground/50"
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 z-10 text-foreground/60 hover:text-foreground"
                   >
                     {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -718,24 +730,38 @@ export default function MerchantSettingsPage() {
                     type={showNewPassword ? 'text' : 'password'}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="New password (min 6 chars)"
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
+                    placeholder="New password (6–12 chars)"
+                    maxLength={12}
+                    autoComplete="new-password"
+                    className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-primary/30 transition-colors"
                   />
                   <button
                     onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/30 hover:text-foreground/50"
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 z-10 text-foreground/60 hover:text-foreground"
                   >
                     {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
 
-                <input
-                  type="password"
-                  value={confirmNewPassword}
-                  onChange={(e) => setConfirmNewPassword(e.target.value)}
-                  placeholder="Confirm new password"
-                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                    maxLength={12}
+                    autoComplete="new-password"
+                    className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 pr-10 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:border-primary/30 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 z-10 text-foreground/60 hover:text-foreground"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
 
                 <button
                   onClick={handleChangePassword}
@@ -1227,7 +1253,7 @@ interface SessionData {
 function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
   const [is2FAEnabled, setIs2FAEnabled] = useState(false);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
-  const [step, setStep] = useState<'idle' | 'setup' | 'verify' | 'disable'>('idle');
+  const [step, setStep] = useState<'idle' | 'setup' | 'verify' | 'backup' | 'disable' | 'regenerate'>('idle');
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [manualSecret, setManualSecret] = useState('');
   const [otpCode, setOtpCode] = useState('');
@@ -1236,6 +1262,9 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [backupCodesAcked, setBackupCodesAcked] = useState(false);
+  const [regenCode, setRegenCode] = useState('');
 
   // Fetch 2FA status on mount (with timeout)
   useEffect(() => {
@@ -1288,12 +1317,79 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
       const data = await res.json();
       if (data.success) {
         setIs2FAEnabled(true);
-        setStep('idle');
-        setSuccess('Two-factor authentication enabled!');
         setOtpCode('');
-        setTimeout(() => setSuccess(null), 4000);
+        // Show recovery codes returned by the API — user MUST save them
+        if (Array.isArray(data.data?.backupCodes) && data.data.backupCodes.length > 0) {
+          setBackupCodes(data.data.backupCodes);
+          setBackupCodesAcked(false);
+          setStep('backup');
+        } else {
+          setStep('idle');
+          setSuccess('Two-factor authentication enabled!');
+          setTimeout(() => setSuccess(null), 4000);
+        }
       } else {
         setError(data.error || 'Invalid code');
+      }
+    } catch {
+      setError('Network error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDownloadCodes = () => {
+    if (backupCodes.length === 0) return;
+    const text = [
+      'Blip Money — 2FA Recovery Codes',
+      '',
+      'Each code can be used ONCE if you lose access to your authenticator app.',
+      'Keep this file somewhere safe (password manager / printed copy).',
+      '',
+      ...backupCodes,
+      '',
+      `Generated: ${new Date().toISOString()}`,
+    ].join('\n');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `blip-money-2fa-recovery-codes-${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyCodes = async () => {
+    if (backupCodes.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(backupCodes.join('\n'));
+      setSuccess('Recovery codes copied to clipboard');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch {
+      setError('Failed to copy. Please select and copy manually.');
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (!/^\d{6}$/.test(regenCode)) { setError('Enter a 6-digit code'); return; }
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const res = await fetchWithAuth('/api/2fa/regenerate-codes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: regenCode }),
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data?.backupCodes)) {
+        setBackupCodes(data.data.backupCodes);
+        setBackupCodesAcked(false);
+        setRegenCode('');
+        setStep('backup');
+      } else {
+        setError(data.error || 'Failed to regenerate codes');
       }
     } catch {
       setError('Network error');
@@ -1372,13 +1468,22 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
       {/* Idle — show enable/disable button */}
       {step === 'idle' && (
         is2FAEnabled ? (
-          <button
-            onClick={() => { setStep('disable'); setError(null); }}
-            className="w-full py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-[var(--color-error)]/20 transition-colors flex items-center justify-center gap-2"
-          >
-            <Shield className="w-4 h-4" />
-            Disable 2FA
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={() => { setStep('regenerate'); setError(null); setRegenCode(''); }}
+              className="w-full py-3 rounded-xl bg-foreground/[0.04] border border-foreground/[0.08] text-foreground/80 font-medium text-sm hover:bg-foreground/[0.08] transition-colors flex items-center justify-center gap-2"
+            >
+              <Shield className="w-4 h-4" />
+              Regenerate Recovery Codes
+            </button>
+            <button
+              onClick={() => { setStep('disable'); setError(null); }}
+              className="w-full py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-medium text-sm hover:bg-[var(--color-error)]/20 transition-colors flex items-center justify-center gap-2"
+            >
+              <Shield className="w-4 h-4" />
+              Disable 2FA
+            </button>
+          </div>
         ) : (
           <button
             onClick={handleSetup}
@@ -1389,6 +1494,108 @@ function TwoFactorSection({ merchantId }: { merchantId: string | null }) {
             {isSubmitting ? 'Setting up...' : 'Enable 2FA'}
           </button>
         )
+      )}
+
+      {/* Backup recovery codes — shown ONCE after successful enable / regen */}
+      {step === 'backup' && (
+        <div className="space-y-3">
+          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
+            <p className="font-bold mb-1">Save these recovery codes</p>
+            <p className="text-amber-300/80">
+              Each code can be used <span className="font-bold">once</span> if you lose access to your authenticator app.
+              They will not be shown again.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-foreground/[0.04] border border-foreground/[0.08]">
+            {backupCodes.map((c, i) => (
+              <div
+                key={i}
+                className="text-sm font-mono tabular-nums text-foreground/90 text-center py-1.5 px-2 bg-foreground/[0.04] rounded"
+              >
+                {c}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              onClick={handleDownloadCodes}
+              className="flex-1 py-2.5 rounded-xl bg-foreground/[0.06] border border-foreground/[0.10] text-foreground/80 font-medium text-xs hover:bg-foreground/[0.10] transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              Download .txt
+            </button>
+            <button
+              onClick={handleCopyCodes}
+              className="flex-1 py-2.5 rounded-xl bg-foreground/[0.06] border border-foreground/[0.10] text-foreground/80 font-medium text-xs hover:bg-foreground/[0.10] transition-colors flex items-center justify-center gap-1.5"
+            >
+              <Check className="w-3.5 h-3.5" />
+              Copy
+            </button>
+          </div>
+
+          <label className="flex items-center gap-2 text-xs text-foreground/60 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={backupCodesAcked}
+              onChange={(e) => setBackupCodesAcked(e.target.checked)}
+              className="w-3.5 h-3.5 accent-primary"
+            />
+            I have saved my recovery codes in a safe place
+          </label>
+
+          <button
+            onClick={() => {
+              setStep('idle');
+              setBackupCodes([]);
+              setBackupCodesAcked(false);
+              setSuccess('Two-factor authentication enabled!');
+              setTimeout(() => setSuccess(null), 4000);
+            }}
+            disabled={!backupCodesAcked}
+            className="w-full py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 font-medium text-sm hover:bg-emerald-500/25 transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+          >
+            <Check className="w-4 h-4" />
+            Done
+          </button>
+        </div>
+      )}
+
+      {/* Regenerate codes — require fresh OTP */}
+      {step === 'regenerate' && (
+        <div className="space-y-3">
+          <p className="text-xs text-foreground/50">
+            Enter your current authenticator code to generate new recovery codes.
+            Old codes will be invalidated.
+          </p>
+          <input
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            value={regenCode}
+            onChange={(e) => setRegenCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="6-digit authenticator code"
+            className="w-full bg-foreground/[0.04] border border-foreground/[0.08] rounded-xl px-4 py-3 text-sm text-foreground text-center font-mono tracking-[0.3em] placeholder:text-foreground/30 placeholder:tracking-normal outline-none focus:border-primary/30 transition-colors"
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setStep('idle'); setRegenCode(''); setError(null); }}
+              className="flex-1 py-3 rounded-xl bg-foreground/[0.04] border border-foreground/[0.06] text-foreground/50 font-medium text-sm hover:bg-foreground/[0.08] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleRegenerate}
+              disabled={isSubmitting || regenCode.length !== 6}
+              className="flex-1 py-3 rounded-xl bg-primary/15 border border-primary/25 text-primary font-medium text-sm hover:bg-primary/25 transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
+            >
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+              {isSubmitting ? 'Generating...' : 'Generate New Codes'}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Setup — show QR code and verify */}

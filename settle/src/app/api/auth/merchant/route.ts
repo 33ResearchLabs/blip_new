@@ -769,6 +769,72 @@ export async function POST(request: NextRequest) {
       return emailResponse;
     }
 
+    // Change Password (authenticated merchant)
+    if (action === 'change_password') {
+      const { merchant_id, current_password, new_password } = body;
+
+      if (!merchant_id || !current_password || !new_password) {
+        return NextResponse.json(
+          { success: false, error: 'merchant_id, current_password and new_password are required' },
+          { status: 400 }
+        );
+      }
+
+      // Authorization: actor must be the same merchant
+      const auth = await requireTokenAuth(request);
+      if (auth instanceof NextResponse) return auth;
+      if (auth.actorType !== 'merchant' || auth.actorId !== merchant_id) {
+        return NextResponse.json(
+          { success: false, error: 'You can only change your own password' },
+          { status: 403 }
+        );
+      }
+
+      const trimmedNew = String(new_password).trim();
+      if (trimmedNew.length < 6) {
+        return NextResponse.json(
+          { success: false, error: 'New password must be at least 6 characters' },
+          { status: 400 }
+        );
+      }
+
+      // Load existing hash
+      const rows = await query<{ password_hash: string | null }>(
+        `SELECT password_hash FROM merchants WHERE id = $1`,
+        [merchant_id]
+      );
+      const merchantRow = rows[0];
+      if (!merchantRow || !merchantRow.password_hash) {
+        return NextResponse.json(
+          { success: false, error: 'Merchant has no password set' },
+          { status: 400 }
+        );
+      }
+
+      // Verify current password
+      const pwResult = verifyPassword(String(current_password).trim(), merchantRow.password_hash);
+      if (!pwResult.valid) {
+        return NextResponse.json(
+          { success: false, error: 'Current password is incorrect' },
+          { status: 401 }
+        );
+      }
+
+      // Update with new hash
+      const newHash = hashPassword(trimmedNew);
+      await query(
+        `UPDATE merchants SET password_hash = $1, updated_at = NOW() WHERE id = $2`,
+        [newHash, merchant_id]
+      );
+
+      console.log('[API] Merchant password changed:', merchant_id);
+
+      return NextResponse.json({
+        success: true,
+        data: { message: 'Password changed successfully' },
+      });
+    }
+
     // Email/Password Registration
     if (action === 'register') {
       const { email, password, business_name } = body;

@@ -12,7 +12,7 @@ import { encrypt, decrypt } from '@/lib/utils/encryption';
 import { query, queryOne } from '@/lib/db';
 
 // ── Config ──────────────────────────────────────────────────────────
-const ISSUER = process.env.TOTP_ISSUER || 'Blip';
+const ISSUER = process.env.TOTP_ISSUER || 'Blip Money';
 const WINDOW = parseInt(process.env.TOTP_WINDOW || '1', 10); // Allow ±1 time step for clock drift
 const TEMP_TOKEN_TTL_SEC = 5 * 60; // 5 min expiry for pending login tokens
 const MAX_ATTEMPTS_PER_WINDOW = 5; // Max failed OTP attempts per 15-min window
@@ -133,6 +133,95 @@ export async function getTotpStatus(
     secret: row.totp_secret,
     verifiedAt: row.totp_verified_at,
   };
+}
+
+// ── Backup Codes ────────────────────────────────────────────────────
+
+const BACKUP_CODE_COUNT = 10;
+const BACKUP_CODE_BYTES = 5; // → 10 hex chars per code
+
+/**
+ * Generate N plaintext backup codes (for one-time display) and their
+ * SHA-256 hashes (to be stored in DB).
+ *
+ * Format: `XXXX-XXXX-XX` (10 hex chars with dashes for readability).
+ */
+export function generateBackupCodes(): { plaintext: string[]; hashes: string[] } {
+  const plaintext: string[] = [];
+  const hashes: string[] = [];
+  for (let i = 0; i < BACKUP_CODE_COUNT; i++) {
+    const raw = randomBytes(BACKUP_CODE_BYTES).toString('hex'); // 10 chars
+    const formatted = `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 10)}`;
+    plaintext.push(formatted);
+    hashes.push(hashBackupCode(formatted));
+  }
+  return { plaintext, hashes };
+}
+
+/**
+ * Hash a backup code for storage / comparison.
+ * We normalize before hashing so users can paste with or without dashes.
+ */
+function hashBackupCode(code: string): string {
+  const normalized = code.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  return createHash('sha256').update(normalized).digest('hex');
+}
+
+/**
+ * Replace the stored backup codes for an actor.
+ */
+export async function storeBackupCodes(
+  actorId: string,
+  actorType: ActorType,
+  hashes: string[],
+): Promise<void> {
+  const table = getTable(actorType);
+  await query(
+    `UPDATE ${table} SET totp_backup_codes = $1 WHERE id = $2`,
+    [hashes, actorId]
+  );
+}
+
+/**
+ * Verify a backup code against stored hashes. If valid, atomically removes
+ * that hash so the code cannot be reused. Returns true on success.
+ */
+export async function consumeBackupCode(
+  actorId: string,
+  actorType: ActorType,
+  code: string,
+): Promise<boolean> {
+  const table = getTable(actorType);
+  const hash = hashBackupCode(code);
+  const row = await queryOne<{ totp_backup_codes: string[] }>(
+    `SELECT totp_backup_codes FROM ${table} WHERE id = $1`,
+    [actorId]
+  );
+  if (!row) return false;
+  const codes = row.totp_backup_codes || [];
+  if (!codes.includes(hash)) return false;
+
+  const remaining = codes.filter((c) => c !== hash);
+  await query(
+    `UPDATE ${table} SET totp_backup_codes = $1 WHERE id = $2`,
+    [remaining, actorId]
+  );
+  return true;
+}
+
+/**
+ * Count the number of unused backup codes remaining.
+ */
+export async function countBackupCodes(
+  actorId: string,
+  actorType: ActorType,
+): Promise<number> {
+  const table = getTable(actorType);
+  const row = await queryOne<{ totp_backup_codes: string[] }>(
+    `SELECT totp_backup_codes FROM ${table} WHERE id = $1`,
+    [actorId]
+  );
+  return (row?.totp_backup_codes || []).length;
 }
 
 // ── Pending Login Tokens ────────────────────────────────────────────
