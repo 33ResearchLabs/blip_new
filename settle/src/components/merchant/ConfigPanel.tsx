@@ -161,7 +161,7 @@ export const ConfigPanel = memo(function ConfigPanel({
   merchantId,
   merchantInfo,
   effectiveBalance,
-  activeCorridor = 'USDT_AED',
+  activeCorridor = 'USDT_INR',
   openTradeForm,
   setOpenTradeForm,
   isCreatingTrade,

@@ -213,10 +213,11 @@ export const PaymentMethodSelector = ({
             className="overflow-hidden"
           >
             <div className="mt-1 space-y-1 max-h-[240px] overflow-y-auto">
-              {methods.map((m) => {
+              {/* Show only methods OTHER than the currently selected one —
+                  the selected one is already rendered as the trigger card above. */}
+              {methods.filter((m) => m.id !== selectedId).map((m) => {
                 const cfg = TYPE_CONFIG[m.type];
                 const Ic = cfg.Icon;
-                const isSel = m.id === selectedId;
                 return (
                   <button
                     key={m.id}
@@ -225,10 +226,7 @@ export const PaymentMethodSelector = ({
                       setExpanded(false);
                     }}
                     className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition-colors"
-                    style={isSel
-                      ? { background: colors.surface.card, border: `2px solid ${colors.accent.primary}` }
-                      : { background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }
-                    }
+                    style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
                   >
                     <div
                       className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
@@ -245,11 +243,6 @@ export const PaymentMethodSelector = ({
                       </p>
                       <p className="text-[11px] text-text-secondary truncate">{getSubtext(m)}</p>
                     </div>
-                    {isSel && (
-                      <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center shrink-0">
-                        <Check className="w-3 h-3 text-accent-text" />
-                      </div>
-                    )}
                   </button>
                 );
               })}

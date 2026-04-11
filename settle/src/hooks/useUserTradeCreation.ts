@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Screen, TradeType, TradePreference, PaymentMethod, Order, Offer, DbOrder } from "@/components/user/screens/types";
 import { mapDbOrderToUI } from "@/components/user/screens/helpers";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
@@ -38,9 +38,26 @@ export function useUserTradeCreation({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bank");
   const [amount, setAmount] = useState("");
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
-  const [currentRate, setCurrentRate] = useState(3.67);
-  const [selectedPair, setSelectedPair] = useState<'usdt_aed' | 'usdt_inr'>('usdt_aed');
+  // Initial fallback matches the default selectedPair below (INR ≈ 92, AED ≈ 3.67).
+  // This prevents the home screen from briefly showing an AED-shaped number with an INR label.
+  const [currentRate, setCurrentRate] = useState(92);
+  const [selectedPair, setSelectedPair] = useState<'usdt_aed' | 'usdt_inr'>('usdt_inr');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Keep currentRate in sync with selectedPair: fetch the live rate whenever
+  // the corridor changes (and on mount). This is the source of truth for the
+  // home-screen rate label and the trade-creation conversion preview.
+  useEffect(() => {
+    let cancelled = false;
+    fetchWithAuth(`/api/prices/current?pair=${selectedPair}`)
+      .then((res) => res.json())
+      .then((j) => {
+        if (cancelled) return;
+        if (j?.success && j.data?.price) setCurrentRate(j.data.price);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [selectedPair]);
 
   // Escrow transaction state
   const [escrowTxStatus, setEscrowTxStatus] = useState<'idle' | 'connecting' | 'signing' | 'confirming' | 'recording' | 'success' | 'error'>('idle');

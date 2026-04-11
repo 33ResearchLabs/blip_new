@@ -60,7 +60,7 @@ export const StatusCard = memo(function StatusCard({
   cancelledOrders,
   isOnline,
   merchantId,
-  activeCorridor = "USDT_AED",
+  activeCorridor = "USDT_INR",
   onCorridorChange,
   onToggleOnline,
   onOpenCorridor,

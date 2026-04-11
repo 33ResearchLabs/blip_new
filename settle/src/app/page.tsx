@@ -277,6 +277,7 @@ export default function Home() {
               completedOrders={completedOrders}
               pendingOrders={pendingOrders}
               currentRate={tradeCreation.currentRate}
+              selectedPair={tradeCreation.selectedPair}
               screen={screen}
               setScreen={setScreen}
               setTradeType={tradeCreation.setTradeType}

@@ -12,9 +12,18 @@ import {
   TrendingUp,
   TrendingDown,
 } from "lucide-react";
-import type { Screen, TradeType, TradePreference, PaymentMethod } from "./types";
-import { PaymentMethodSelector, type PaymentMethodItem } from "../PaymentMethodSelector";
+import type {
+  Screen,
+  TradeType,
+  TradePreference,
+  PaymentMethod,
+} from "./types";
+import {
+  PaymentMethodSelector,
+  type PaymentMethodItem,
+} from "../PaymentMethodSelector";
 import { BottomNav } from "./BottomNav";
+import { FilterDropdown } from "./ui/FilterDropdown";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 
 type RatePair = "usdt_aed" | "usdt_inr";
@@ -27,7 +36,8 @@ interface PriceData {
 }
 
 const CARD = "bg-surface-card border border-border-subtle";
-const SECTION_LABEL = "text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase";
+const SECTION_LABEL =
+  "text-[10px] font-bold tracking-[0.22em] text-text-tertiary uppercase";
 
 export interface TradeCreationScreenProps {
   screen: Screen;
@@ -48,8 +58,8 @@ export interface TradeCreationScreenProps {
   solanaWallet: { connected: boolean; usdtBalance: number | null };
   selectedPaymentMethodId: string | null;
   onSelectPaymentMethod: (method: PaymentMethodItem | null) => void;
-  selectedPair?: 'usdt_aed' | 'usdt_inr';
-  onPairChange?: (pair: 'usdt_aed' | 'usdt_inr') => void;
+  selectedPair?: "usdt_aed" | "usdt_inr";
+  onPairChange?: (pair: "usdt_aed" | "usdt_inr") => void;
   setCurrentRate?: (rate: number) => void;
 }
 
@@ -66,7 +76,8 @@ function RateSparkline({
   positive: boolean;
 }) {
   const data = RATE_OFFSETS.map((o) => rate + o);
-  const w = 120, h = 36;
+  const w = 120,
+    h = 36;
   const min = Math.min(...data),
     max = Math.max(...data),
     rng = max - min || 0.01;
@@ -85,7 +96,12 @@ function RateSparkline({
   const color = positive ? "var(--color-success)" : "var(--color-error)";
 
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+    <svg
+      width={w}
+      height={h}
+      viewBox={`0 0 ${w} ${h}`}
+      preserveAspectRatio="none"
+    >
       <defs>
         <linearGradient id="rs-fill" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.18" />
@@ -93,7 +109,15 @@ function RateSparkline({
         </linearGradient>
       </defs>
       <path d={area} fill="url(#rs-fill)" />
-      <path d={line} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
+      <path
+        d={line}
+        fill="none"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity="0.8"
+      />
     </svg>
   );
 }
@@ -125,7 +149,9 @@ export const TradeCreationScreen = ({
   const hasAmount = !!amount && parseFloat(amount) > 0;
 
   // ── AED / INR display toggle ──
-  const [ratePair, setRatePairLocal] = useState<RatePair>(selectedPair || "usdt_aed");
+  const [ratePair, setRatePairLocal] = useState<RatePair>(
+    selectedPair || "usdt_inr",
+  );
   const setRatePair = (p: RatePair) => {
     setRatePairLocal(p);
     onPairChange?.(p);
@@ -143,35 +169,63 @@ export const TradeCreationScreen = ({
         if (cancelled) return;
         if (j?.success && j.data) {
           setRateData(j.data as PriceData);
-          if ((j.data as PriceData).price) setCurrentRate?.((j.data as PriceData).price);
+          if ((j.data as PriceData).price)
+            setCurrentRate?.((j.data as PriceData).price);
         } else setRateData(null);
       })
-      .catch(() => { if (!cancelled) setRateData(null); })
-      .finally(() => { if (!cancelled) setRateLoading(false); });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (!cancelled) setRateData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setRateLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [ratePair]);
 
   const displayRate = rateData?.price ?? null;
   const rateCurrency = ratePair === "usdt_aed" ? "AED" : "INR";
   const rateSymbol = ratePair === "usdt_inr" ? "₹" : "\u062F.\u0625";
-  const rateDecimals = ratePair === "usdt_aed" ? 3 : 2;
+  const rateDecimals = 2;
 
   return (
     <div className="flex flex-col h-dvh overflow-hidden bg-surface-base">
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <header className="px-5 pt-10 pb-3 flex items-center gap-4 z-10 shrink-0">
+      <header className="relative px-5 pt-10 pb-3 flex items-start gap-3 z-30 shrink-0">
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={() => setScreen("home")}
           className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-surface-raised border border-border-subtle"
         >
-          <ChevronLeft size={20} strokeWidth={2} className="text-text-secondary" />
+          <ChevronLeft
+            size={20}
+            strokeWidth={2}
+            className="text-text-secondary"
+          />
         </motion.button>
-        <div>
-          <p className="text-[11px] font-bold tracking-[0.22em] text-text-tertiary uppercase mb-0.5">
-            P2P Exchange
-          </p>
-          <p className="text-[22px] font-extrabold tracking-[-0.03em] text-text-primary">
+        <div className="flex-1 min-w-0">
+          {/* Top row: small label + corridor selector */}
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <p className="text-[11px] font-bold tracking-[0.22em] text-text-tertiary uppercase truncate">
+              P2P Exchange
+            </p>
+            <FilterDropdown
+              className="shrink-0"
+              value={ratePair}
+              onChange={(p) => setRatePair(p)}
+              ariaLabel="Select corridor"
+              align="right"
+              options={
+                [
+                  { key: "usdt_aed", label: "AED" },
+                  { key: "usdt_inr", label: "INR" },
+                ] as const
+              }
+            />
+          </div>
+          {/* Big title — full width, no competing element */}
+          <p className="text-[22px] font-extrabold tracking-[-0.03em] text-text-primary truncate">
             Trade USDT
           </p>
         </div>
@@ -181,37 +235,76 @@ export const TradeCreationScreen = ({
       <div className="flex-1 px-5 pb-28 z-10 flex flex-col gap-3 overflow-y-auto no-scrollbar">
         {/* ── Buy / Sell — big cards ───────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-3 shrink-0">
-          {([
-            { type: 'buy' as const, label: 'Buy USDT', sub: `Pay ${ratePair === 'usdt_inr' ? 'INR' : 'AED'}, get USDT`, Icon: ArrowDownLeft, activeClass: 'border-[1.5px] border-success', dotClass: 'bg-success', iconBgOn: 'bg-success/15', iconOn: 'text-success' },
-            { type: 'sell' as const, label: 'Sell USDT', sub: `Send USDT, get ${ratePair === 'usdt_inr' ? 'INR' : 'AED'}`, Icon: ArrowUpRight, activeClass: 'border-[1.5px] border-error', dotClass: 'bg-error', iconBgOn: 'bg-error/15', iconOn: 'text-error' },
-          ] as const).map(({ type, label, sub, Icon, activeClass, dotClass, iconBgOn, iconOn }) => {
-            const on = tradeType === type;
-            return (
-              <motion.button
-                key={type}
-                whileTap={{ scale: 0.96 }}
-                onClick={() => setTradeType(type)}
-                className={`flex items-center justify-between rounded-[20px] py-3 px-3.5 bg-surface-card ${
-                  on ? activeClass : 'border border-border-subtle'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center ${
-                    on ? iconBgOn : 'bg-surface-active'
-                  }`}>
-                    <Icon size={18} strokeWidth={2.5} className={on ? iconOn : 'text-text-tertiary'} />
+          {(
+            [
+              {
+                type: "buy" as const,
+                label: "Buy USDT",
+                sub: `Pay ${ratePair === "usdt_inr" ? "INR" : "AED"}, get USDT`,
+                Icon: ArrowDownLeft,
+                activeClass: "border-[1.5px] border-success",
+                dotClass: "bg-success",
+                iconBgOn: "bg-success/15",
+                iconOn: "text-success",
+              },
+              {
+                type: "sell" as const,
+                label: "Sell USDT",
+                sub: `Send USDT, get ${ratePair === "usdt_inr" ? "INR" : "AED"}`,
+                Icon: ArrowUpRight,
+                activeClass: "border-[1.5px] border-error",
+                dotClass: "bg-error",
+                iconBgOn: "bg-error/15",
+                iconOn: "text-error",
+              },
+            ] as const
+          ).map(
+            ({
+              type,
+              label,
+              sub,
+              Icon,
+              activeClass,
+              dotClass,
+              iconBgOn,
+              iconOn,
+            }) => {
+              const on = tradeType === type;
+              return (
+                <motion.button
+                  key={type}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => setTradeType(type)}
+                  className={`flex items-center justify-between rounded-[20px] py-3 px-3.5 bg-surface-card ${
+                    on ? activeClass : "border border-border-subtle"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-8 h-8 rounded-[10px] flex items-center justify-center ${
+                        on ? iconBgOn : "bg-surface-active"
+                      }`}
+                    >
+                      <Icon
+                        size={18}
+                        strokeWidth={2.5}
+                        className={on ? iconOn : "text-text-tertiary"}
+                      />
+                    </div>
+                    <div className="flex flex-col text-left">
+                      <p className="text-[16px] font-bold text-text-primary">
+                        {label}
+                      </p>
+                      <p className="text-[10px] font-medium text-text-tertiary">
+                        {sub}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex flex-col text-left">
-                    <p className="text-[16px] font-bold text-text-primary">{label}</p>
-                    <p className="text-[10px] font-medium text-text-tertiary">{sub}</p>
-                  </div>
-                </div>
-                {on && (
-                  <div className={`w-2 h-2 rounded-full ${dotClass}`} />
-                )}
-              </motion.button>
-            );
-          })}
+                  {on && <div className={`w-2 h-2 rounded-full ${dotClass}`} />}
+                </motion.button>
+              );
+            },
+          )}
         </div>
 
         {/* ── Market Rate Card ─────────────────────────────────────────── */}
@@ -225,26 +318,9 @@ export const TradeCreationScreen = ({
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-[5px]">
                 <p className={SECTION_LABEL}>
-                  {rateData?.mode === "MANUAL" ? "Rate" : "Live Rate"} {"\u00B7"} USDT / {rateCurrency}
+                  {rateData?.mode === "MANUAL" ? "Rate" : "Live Rate"}{" "}
+                  {"\u00B7"} USDT / {rateCurrency}
                 </p>
-                {/* AED / INR pair toggle */}
-                <div className="flex rounded-full overflow-hidden border border-border-subtle">
-                  {(["usdt_aed", "usdt_inr"] as const).map((p) => {
-                    const on = ratePair === p;
-                    return (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setRatePair(p)}
-                        className={`text-[8px] font-bold tracking-[0.1em] px-2 py-[2px] transition-colors ${
-                          on ? "bg-surface-active text-text-primary" : "bg-transparent text-text-tertiary"
-                        }`}
-                      >
-                        {p === "usdt_aed" ? "AED" : "INR"}
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
               <div className="flex items-baseline gap-2 min-h-[32px]">
                 {rateLoading || displayRate === null ? (
@@ -255,9 +331,12 @@ export const TradeCreationScreen = ({
                 ) : (
                   <>
                     <span className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-[1.1]">
-                      {rateSymbol}{displayRate.toFixed(rateDecimals)}
+                      {rateSymbol}
+                      {displayRate.toFixed(rateDecimals)}
                     </span>
-                    <span className="text-[13px] font-semibold text-text-tertiary">{rateCurrency}</span>
+                    <span className="text-[13px] font-semibold text-text-tertiary">
+                      {rateCurrency}
+                    </span>
                   </>
                 )}
               </div>
@@ -267,13 +346,18 @@ export const TradeCreationScreen = ({
                 ) : (
                   <TrendingDown size={11} className="text-error" />
                 )}
-                <span className={`text-[11px] font-bold ${ratePositive ? "text-success" : "text-error"}`}>
+                <span
+                  className={`text-[11px] font-bold ${ratePositive ? "text-success" : "text-error"}`}
+                >
                   {ratePositive ? "+0.24%" : "-0.18%"} today
                 </span>
               </div>
             </div>
             <div className="shrink-0 opacity-90">
-              <RateSparkline rate={displayRate ?? (ratePair === "usdt_aed" ? 3.672 : 92.5)} positive={ratePositive} />
+              <RateSparkline
+                rate={displayRate ?? (ratePair === "usdt_aed" ? 3.672 : 92.5)}
+                positive={ratePositive}
+              />
             </div>
           </div>
           <div className="flex items-center justify-between px-5 py-2.5 border-t border-border-subtle bg-surface-hover">
@@ -290,9 +374,11 @@ export const TradeCreationScreen = ({
         </motion.div>
 
         {/* ── Amount input ──────────────────────────────────────────────── */}
-        <div className={`w-full rounded-[28px] mb-3 flex flex-col items-center py-2 px-3 ${CARD}`}>
+        <div
+          className={`w-full rounded-[28px] mb-3 flex flex-col items-center py-2 px-3 ${CARD}`}
+        >
           <p className="text-[10px] font-bold tracking-[0.28em] text-text-tertiary uppercase mb-2">
-            {tradeType === 'buy' ? 'You Pay (USDT)' : 'You Sell (USDT)'}
+            {tradeType === "buy" ? "You Pay (USDT)" : "You Sell (USDT)"}
           </p>
 
           <div className="flex items-baseline justify-center gap-1.5">
@@ -300,10 +386,12 @@ export const TradeCreationScreen = ({
               type="text"
               inputMode="decimal"
               value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+              onChange={(e) =>
+                setAmount(e.target.value.replace(/[^0-9.]/g, ""))
+              }
               placeholder="0"
               className={`text-[52px] font-extrabold tracking-[-0.06em] leading-none bg-transparent border-0 outline-none text-right max-w-64 ${
-                hasAmount ? 'text-text-primary' : 'text-text-quaternary'
+                hasAmount ? "text-text-primary" : "text-text-quaternary"
               }`}
               style={{ width: `${Math.max(38, (amount.length || 1) * 30)}px` }}
             />
@@ -320,15 +408,22 @@ export const TradeCreationScreen = ({
               </span>
             ) : (
               <>
-                <span className={`text-[24px] font-bold tracking-[-0.02em] ${
-                  hasAmount ? 'text-text-secondary' : 'text-text-quaternary'
-                }`}>
+                <span
+                  className={`text-[24px] font-bold tracking-[-0.02em] ${
+                    hasAmount ? "text-text-secondary" : "text-text-quaternary"
+                  }`}
+                >
                   {rateSymbol}{" "}
                   {hasAmount && displayRate !== null
-                    ? (parseFloat(amount) * displayRate).toLocaleString(undefined, { maximumFractionDigits: 2 })
-                    : '0'}
+                    ? (parseFloat(amount) * displayRate).toLocaleString(
+                        undefined,
+                        { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                      )
+                    : "0.00"}
                 </span>
-                <span className="text-[13px] font-semibold text-text-tertiary">{rateCurrency}</span>
+                <span className="text-[13px] font-semibold text-text-tertiary">
+                  {rateCurrency}
+                </span>
               </>
             )}
           </div>
@@ -377,51 +472,72 @@ export const TradeCreationScreen = ({
                 <p className="text-[15px] font-extrabold text-text-primary">
                   {tradeType === "buy"
                     ? `${parseFloat(amount || "0").toFixed(2)} USDT`
-                    : `${'\u062F.\u0625'}${parseFloat(fiatAmount || "0").toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                    : `${"\u062F.\u0625"}${parseFloat(fiatAmount || "0").toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                 </p>
               </div>
             </motion.div>
           )}
         </div>
 
-        {/* ── Payment Method ───────────────────────────────────────────── */}
-        <div className="mb-3">
-          <p className="text-[10px] font-bold tracking-[0.28em] text-text-tertiary uppercase mb-2">
-            Pay via
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            {([
-              { method: 'bank' as const, label: 'Bank Transfer', sub: 'Wire / IBAN', Icon: Building2 },
-              { method: 'cash' as const, label: 'Cash', sub: 'Meet in person', Icon: Banknote },
-            ] as const).map(({ method, label, sub, Icon }) => {
-              const on = paymentMethod === method;
-              return (
-                <motion.button
-                  key={method}
-                  whileTap={{ scale: 0.96 }}
-                  onClick={() => setPaymentMethod(method)}
-                  className={`flex items-center justify-between rounded-[16px] py-2.5 px-3 bg-surface-card ${
-                    on ? 'border-[1.5px] border-text-secondary shadow-[0_4px_14px_rgba(0,0,0,0.3)]' : 'border border-border-subtle'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-[10px] flex items-center justify-center bg-surface-active">
-                      <Icon size={16} className="text-text-secondary" />
+        {/* ── Payment Method ─────────────────────────────────────────────
+            BUY mode  → simple Bank / Cash type toggle (user pays the merchant)
+            SELL mode → PaymentMethodSelector below (user picks a specific
+                        receiving account, which already covers bank/cash/upi).
+            We render only ONE of these to avoid the duplicate-section issue. */}
+        {tradeType === "buy" ? (
+          <div className="mb-3">
+            <p className="text-[10px] font-bold tracking-[0.28em] text-text-tertiary uppercase mb-2">
+              Pay via
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {(
+                [
+                  {
+                    method: "bank" as const,
+                    label: "Bank Transfer",
+                    sub: "Wire / IBAN",
+                    Icon: Building2,
+                  },
+                  {
+                    method: "cash" as const,
+                    label: "Cash",
+                    sub: "Meet in person",
+                    Icon: Banknote,
+                  },
+                ] as const
+              ).map(({ method, label, sub, Icon }) => {
+                const on = paymentMethod === method;
+                return (
+                  <motion.button
+                    key={method}
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => setPaymentMethod(method)}
+                    className={`flex items-center justify-between rounded-[16px] py-2.5 px-3 bg-surface-card ${
+                      on
+                        ? "border-[1.5px] border-text-secondary shadow-[0_4px_14px_rgba(0,0,0,0.3)]"
+                        : "border border-border-subtle"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-[10px] flex items-center justify-center bg-surface-active">
+                        <Icon size={16} className="text-text-secondary" />
+                      </div>
+                      <div className="flex flex-col">
+                        <p className="text-[14px] font-bold text-text-primary">
+                          {label}
+                        </p>
+                        <p className="text-[10px] font-medium text-text-tertiary">
+                          {sub}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex flex-col">
-                      <p className="text-[14px] font-bold text-text-primary">{label}</p>
-                      <p className="text-[10px] font-medium text-text-tertiary">{sub}</p>
-                    </div>
-                  </div>
-                  {on && <div className="w-2 h-2 rounded-full bg-accent" />}
-                </motion.button>
-              );
-            })}
+                    {on && <div className="w-2 h-2 rounded-full bg-accent" />}
+                  </motion.button>
+                );
+              })}
+            </div>
           </div>
-        </div>
-
-        {/* Payment Method Selector — shown when selling crypto (user receives fiat) */}
-        {tradeType === 'sell' && (
+        ) : (
           <div className="mb-3">
             <PaymentMethodSelector
               userId={userId}
@@ -437,14 +553,34 @@ export const TradeCreationScreen = ({
             Priority
           </p>
           <div className="flex gap-2.5">
-            {([
-              // Speed indicators reuse the semantic palette: warning = fastest/most expensive,
-              // info = balanced, success = cheapest. Inline-style strings reference the CSS
-              // variables so the colors flip with the active theme.
-              { key: 'fast' as const, label: 'Fastest', sub: '~2 min', fee: '3.0%', barHex: 'var(--color-warning)' },
-              { key: 'best' as const, label: 'Best Rate', sub: '~8 min', fee: '2.5%', barHex: 'var(--color-info)' },
-              { key: 'cheap' as const, label: 'Cheapest', sub: '~15 min', fee: '1.5%', barHex: 'var(--color-success)' },
-            ] as const).map(({ key, label, sub, fee, barHex }) => {
+            {(
+              [
+                // Speed indicators reuse the semantic palette: warning = fastest/most expensive,
+                // info = balanced, success = cheapest. Inline-style strings reference the CSS
+                // variables so the colors flip with the active theme.
+                {
+                  key: "fast" as const,
+                  label: "Fastest",
+                  sub: "~2 min",
+                  fee: "3.0%",
+                  barHex: "var(--color-warning)",
+                },
+                {
+                  key: "best" as const,
+                  label: "Best Rate",
+                  sub: "~8 min",
+                  fee: "2.5%",
+                  barHex: "var(--color-info)",
+                },
+                {
+                  key: "cheap" as const,
+                  label: "Cheapest",
+                  sub: "~15 min",
+                  fee: "1.5%",
+                  barHex: "var(--color-success)",
+                },
+              ] as const
+            ).map(({ key, label, sub, fee, barHex }) => {
               const on = tradePreference === key;
               return (
                 <motion.button
@@ -452,20 +588,37 @@ export const TradeCreationScreen = ({
                   whileTap={{ scale: 0.96 }}
                   onClick={() => setTradePreference(key)}
                   className={`flex-1 rounded-[16px] py-2.5 px-3 bg-surface-card ${
-                    on ? 'border-[1.5px]' : 'border border-border-subtle'
+                    on ? "border-[1.5px]" : "border border-border-subtle"
                   }`}
-                  style={on ? { borderColor: barHex, boxShadow: `0 2px 10px ${barHex}22` } : undefined}
+                  style={
+                    on
+                      ? {
+                          borderColor: barHex,
+                          boxShadow: `0 2px 10px ${barHex}22`,
+                        }
+                      : undefined
+                  }
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col items-start leading-tight">
-                      <p className="text-[12px] font-bold text-text-primary">{label}</p>
-                      <p className="text-[10px] font-medium text-text-tertiary">{sub}</p>
+                      <p className="text-[12px] font-bold text-text-primary">
+                        {label}
+                      </p>
+                      <p className="text-[10px] font-medium text-text-tertiary">
+                        {sub}
+                      </p>
                     </div>
                     <div
                       className="flex items-center justify-center h-5 px-1 rounded-full border"
-                      style={{ background: `${barHex}15`, borderColor: `${barHex}40` }}
+                      style={{
+                        background: `${barHex}15`,
+                        borderColor: `${barHex}40`,
+                      }}
                     >
-                      <span className="text-[11px] font-semibold leading-none" style={{ color: barHex }}>
+                      <span
+                        className="text-[11px] font-semibold leading-none"
+                        style={{ color: barHex }}
+                      >
                         {fee}
                       </span>
                     </div>
@@ -483,15 +636,15 @@ export const TradeCreationScreen = ({
           disabled={!hasAmount || isLoading || !userId}
           className={`w-full flex items-center justify-center gap-2 shrink-0 min-h-12 rounded-[14px] text-[14px] font-bold tracking-[-0.01em] ${
             hasAmount && !isLoading
-              ? 'bg-accent text-accent-text border border-border-strong shadow-[0_4px_16px_rgba(0,0,0,0.2)]'
-              : 'bg-surface-card text-text-quaternary border border-border-subtle'
+              ? "bg-accent text-accent-text border border-border-strong shadow-[0_4px_16px_rgba(0,0,0,0.2)]"
+              : "bg-surface-card text-text-quaternary border border-border-subtle"
           }`}
         >
           {isLoading ? (
             <Loader2 size={16} className="animate-spin" />
           ) : hasAmount ? (
             <>
-              {tradeType === 'buy' ? 'Receive' : 'Send'} {amount} USDT
+              {tradeType === "buy" ? "Receive" : "Send"} {amount} USDT
               <ArrowUpRight size={16} strokeWidth={2} />
             </>
           ) : (
@@ -506,7 +659,7 @@ export const TradeCreationScreen = ({
         >
           Large amount?{" "}
           <span className="text-text-secondary font-bold">
-            Create a custom offer {'\u2192'}
+            Create a custom offer {"\u2192"}
           </span>
         </button>
       </div>

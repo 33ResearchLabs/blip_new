@@ -57,7 +57,7 @@ export default function MerchantDashboard() {
   const [showPaymentMethods, setShowPaymentMethods] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [activeCorridor, setActiveCorridor] = useState('USDT_AED');
+  const [activeCorridor, setActiveCorridor] = useState('USDT_INR');
   const [showOpenTradeModal, setShowOpenTradeModal] = useState(false);
   const [showMerchantQuoteModal, setShowMerchantQuoteModal] = useState(false);
   const [showMessageHistory, setShowMessageHistory] = useState(false);

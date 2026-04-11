@@ -724,6 +724,21 @@ export function useOrderActions({
 
     const effectiveTradeType = tradeType || openTradeForm.tradeType;
 
+    // Wallet must be connected for BOTH buy and sell:
+    //  - SELL: merchant locks USDT in escrow (needs wallet to sign)
+    //  - BUY:  merchant receives USDT after the trade (needs wallet to receive)
+    // Mirrors the same check used in acceptOrder() — error sound + notification
+    // + opens the wallet modal so the merchant can connect.
+    if (!solanaWallet.walletAddress) {
+      playSound('error');
+      addNotification(
+        'system',
+        `Please connect your wallet to place a ${effectiveTradeType} order.`,
+      );
+      setShowWalletModal(true);
+      return;
+    }
+
     setIsCreatingTrade(true);
     setCreateTradeError(null);
 

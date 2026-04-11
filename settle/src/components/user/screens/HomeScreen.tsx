@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useState as useStateHook, useEffect } from "react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
+import { showAlert } from "@/context/ModalContext";
 import { HomeSparkline } from "./HomeDecorations";
 import { BottomNav } from "./BottomNav";
 import type { Screen, Order } from "./types";
@@ -31,6 +32,8 @@ export interface HomeScreenProps {
   completedOrders: Order[];
   pendingOrders: Order[];
   currentRate: number;
+  /** Currently selected fiat corridor — drives the rate-label currency */
+  selectedPair?: 'usdt_aed' | 'usdt_inr';
   screen: Screen;
   setScreen: (s: Screen) => void;
   setTradeType: (t: "buy" | "sell") => void;
@@ -115,7 +118,7 @@ function TxRow({ order, index, onPress, avatarUrl }: { order: Order; index: numb
 // ─── Wallet balance + chart + actions ───────────────────────────────────
 function WalletBalanceSection({
   displayBalance, isWalletReady,
-  solanaWallet, embeddedWallet, completedOrders, currentRate,
+  solanaWallet, embeddedWallet, completedOrders, currentRate, selectedPair,
   setShowWalletModal, setShowWalletSetup, setShowWalletUnlock,
   setTradeType, setScreen,
 }: {
@@ -125,6 +128,7 @@ function WalletBalanceSection({
   embeddedWallet?: { state: 'none' | 'locked' | 'unlocked' };
   completedOrders: Order[];
   currentRate: number;
+  selectedPair?: 'usdt_aed' | 'usdt_inr';
   setShowWalletModal: (v: boolean) => void;
   setShowWalletSetup: (v: boolean) => void;
   setShowWalletUnlock: (v: boolean) => void;
@@ -133,7 +137,9 @@ function WalletBalanceSection({
 }) {
   const balance  = displayBalance ?? 0;
   const balWhole = Math.floor(balance).toLocaleString();
-  const balDec   = (balance % 1).toFixed(2).slice(1); 
+  const balDec   = (balance % 1).toFixed(2).slice(1);
+  // Currency label tracks the active corridor (defaults to INR — see useUserTradeCreation).
+  const fiatLabel = selectedPair === 'usdt_aed' ? 'AED' : 'INR';
 
    const d = new Date();
   d.setDate(d.getDate() - 7);
@@ -149,7 +155,7 @@ function WalletBalanceSection({
             <motion.div animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.8, repeat: Infinity }}
               className="w-[5px] h-[5px] rounded-full bg-success" />
             <span className="text-[10px] font-semibold text-text-tertiary tracking-[0.05em] font-mono">
-              {currentRate} AED
+              {currentRate.toFixed(2)} {fiatLabel}
             </span>
           </div>
         </div>
@@ -224,20 +230,25 @@ function WalletBalanceSection({
         className="flex justify-around mt-7"
       >
         {([
-          { label: 'Send',     Icon: ArrowUpRight,  primary: false,  fn: () => { setTradeType('sell'); setScreen('trade'); } },
-          { label: 'Pay',      Icon: ArrowDownLeft, primary: false, fn: () => { setTradeType('buy');  setScreen('trade'); } },
-          { label: 'Activity', Icon: Activity,      primary: false, fn: () => setScreen('orders') },
-          { label: 'Deposit',  Icon: QrCode,        primary: false, fn: () => setScreen('chats') },
-        ] as const).map(({ label, Icon, primary, fn }) => (
+          { label: 'Buy',      Icon: ArrowDownLeft, primary: false, comingSoon: false, fn: () => { setTradeType('buy');  setScreen('trade'); } },
+          { label: 'Sell',     Icon: ArrowUpRight,  primary: false, comingSoon: false, fn: () => { setTradeType('sell'); setScreen('trade'); } },
+          { label: 'Activity', Icon: Activity,      primary: false, comingSoon: false, fn: () => setScreen('orders') },
+          { label: 'Deposit',  Icon: QrCode,        primary: false, comingSoon: true,  fn: () => showAlert('Coming Soon', 'Deposits will be available in an upcoming release.', 'info') },
+        ] as const).map(({ label, Icon, primary, comingSoon, fn }) => (
           <motion.button key={label} whileTap={{ scale: 0.91 }} onClick={fn}
             className="flex flex-col items-center gap-2 cursor-pointer">
-            <div className={`flex items-center justify-center w-14 h-14 rounded-[18px] ${
+            <div className={`relative flex items-center justify-center w-14 h-14 rounded-[18px] ${
               primary
                 ? 'bg-accent shadow-[0_4px_20px_rgba(255,255,255,0.08)]'
                 : 'bg-surface-card border border-border-subtle'
-            }`}>
+            } ${comingSoon ? 'opacity-60' : ''}`}>
               <Icon size={22} strokeWidth={2}
                 className={primary ? 'text-accent-text' : 'text-text-secondary'} />
+              {comingSoon && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-[1px] rounded-full bg-surface-active border border-border-medium text-[7px] font-bold tracking-[0.06em] text-text-secondary uppercase">
+                  Soon
+                </span>
+              )}
             </div>
             <span className={`text-[9px] font-bold uppercase tracking-[0.12em] ${
               primary ? 'text-text-primary' : 'text-text-secondary'
@@ -259,6 +270,7 @@ export const HomeScreen = ({
   completedOrders,
   pendingOrders,
   currentRate,
+  selectedPair,
   screen,
   setScreen,
   setTradeType,
@@ -417,6 +429,7 @@ export const HomeScreen = ({
             embeddedWallet={embeddedWallet}
             completedOrders={completedOrders}
             currentRate={currentRate}
+            selectedPair={selectedPair}
             setShowWalletModal={setShowWalletModal}
             setShowWalletSetup={setShowWalletSetup}
             setShowWalletUnlock={setShowWalletUnlock}
