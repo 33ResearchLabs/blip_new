@@ -741,6 +741,20 @@ export default function MerchantDashboard() {
   const activeContactOrderStatus =
     activeContactOrder?.dbOrder?.status || activeContactOrder?.status;
 
+  // Determine if there's an active (non-terminal) trade with this contact.
+  // Chat should only be allowed during active trades to prevent off-platform contact.
+  const TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'expired']);
+  const hasActiveOrderWithContact = directChat.activeContactId
+    ? orders.some((o) => {
+        const isContactInOrder =
+          o.dbOrder?.user_id === directChat.activeContactId ||
+          o.buyerMerchantId === directChat.activeContactId;
+        if (!isContactInOrder) return false;
+        const status = o.dbOrder?.status || o.status;
+        return status && !TERMINAL_STATUSES.has(status);
+      })
+    : false;
+
   return (
     <div
       data-testid="merchant-dashboard"
@@ -849,6 +863,7 @@ export default function MerchantDashboard() {
         markNotificationRead={markNotificationRead}
         directChat={directChat}
         activeContactOrderStatus={activeContactOrderStatus}
+        hasActiveOrderWithContact={hasActiveOrderWithContact}
         playSound={playSound}
       />
 
@@ -873,6 +888,7 @@ export default function MerchantDashboard() {
         merchantId={merchantId}
         directChat={directChat}
         activeContactOrderStatus={activeContactOrderStatus}
+        hasActiveOrderWithContact={hasActiveOrderWithContact}
         playSound={playSound}
         merchantInfo={merchantInfo}
         historyTab={historyTab}
@@ -1068,6 +1084,7 @@ export default function MerchantDashboard() {
         showMessageHistory={showMessageHistory}
         setShowMessageHistory={setShowMessageHistory}
         activeContactOrderStatus={activeContactOrderStatus}
+        hasActiveOrderWithContact={hasActiveOrderWithContact}
         playSound={playSound}
       />
 

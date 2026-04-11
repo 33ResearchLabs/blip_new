@@ -31,7 +31,6 @@ interface StatusCardProps {
   todayEarnings: number;
   completedOrders: number;
   cancelledOrders: number;
-  rank: number;
   isOnline: boolean;
   merchantId?: string;
   activeCorridor?: string;
@@ -59,7 +58,6 @@ export const StatusCard = memo(function StatusCard({
   todayEarnings,
   completedOrders,
   cancelledOrders,
-  rank,
   isOnline,
   merchantId,
   activeCorridor = "USDT_AED",
@@ -359,12 +357,6 @@ export const StatusCard = memo(function StatusCard({
                 </span>
               </span>
             )}
-            <span className="text-foreground/25">
-              RNK{" "}
-              <span className="text-foreground/70 font-bold">
-                {rank > 0 ? `#${rank}` : "—"}
-              </span>
-            </span>
             <span className="text-foreground/25">
               WIN{" "}
               <span className="text-foreground/70 font-bold">

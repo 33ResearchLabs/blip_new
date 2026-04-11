@@ -909,6 +909,17 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
     return () => { cancelled = true; };
   }, [pusher, pusher?.isConnected, actorType, mapDbMessageToUI]);
 
+  // Refetch messages for an order's chat window — used by private-channel
+  // listeners to force a sync when a message arrives via a fallback path.
+  const refetchMessagesForOrder = useCallback(
+    (orderId: string) => {
+      const window = chatWindowsRef.current.find((w) => w.orderId === orderId);
+      if (!window) return;
+      fetchMessagesRef.current(orderId, window.id);
+    },
+    []
+  );
+
   return {
     chatWindows,
     isConnected: pusher?.isConnected || false,
@@ -918,6 +929,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
     sendMessage,
     markAsRead,
     sendTypingIndicator,
+    refetchMessagesForOrder,
   };
 }
 

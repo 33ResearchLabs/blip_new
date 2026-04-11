@@ -267,10 +267,21 @@ const row = await queryOne<T>('SELECT ...', [params]);
 const result = await transaction(async (client) => { ... });
 ```
 
+**Migration rules — ALWAYS create a new migration file for schema changes:**
+- Any schema change (new table, column, index, function, trigger, constraint) MUST be a new file in `database/migrations/NNN_description.sql`
+- Never edit an existing migration file that has already been deployed
+- Never run ad-hoc SQL on production or local DB without committing the same change as a migration
+- New migration file number = highest existing number + 1
+- Migrations must be **idempotent** (`IF NOT EXISTS`, `IF EXISTS`, `CREATE OR REPLACE`, `DROP IF EXISTS`) — they re-run on every core-api startup
+- After creating a migration: run it on local DB, verify it works, then commit + push so production migration runner picks it up
+- If a migration depends on dropping a function/object first, include the `DROP IF EXISTS` BEFORE the `CREATE` in the same file
+
 **DO NOT:**
 - Use `CREATE INDEX CONCURRENTLY` in migrations (core-api wraps migrations in transactions)
 - Use string interpolation in SQL (always parameterized `$1`, `$2`)
 - Forget `IF NOT EXISTS` / `IF EXISTS` in migrations (must be re-runnable)
+- Apply SQL changes directly to DB without a corresponding migration file in git
+- Edit a migration file that has already been deployed to production (create a new one instead)
 
 ---
 

@@ -208,6 +208,7 @@ export interface MerchantModalsProps {
   showMessageHistory: boolean;
   setShowMessageHistory: (v: boolean) => void;
   activeContactOrderStatus: string | undefined;
+  hasActiveOrderWithContact?: boolean;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
 }
 
@@ -242,7 +243,7 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
     cancelOrderWithoutEscrow, respondToCancelRequest, handleOpenChat,
     selectedOrderId, setSelectedOrderId, openChat, setActiveChatId, directChat,
     openDisputeModal, requestCancelOrder, openCancelModal, fetchOrders, toast,
-    showMessageHistory, setShowMessageHistory, activeContactOrderStatus, playSound,
+    showMessageHistory, setShowMessageHistory, activeContactOrderStatus, hasActiveOrderWithContact, playSound,
   } = props;
 
   return (
@@ -487,6 +488,7 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
                 onSendMessage={(text, imageUrl) => { directChat.sendMessage(text, imageUrl); playSound("send"); }}
                 onBack={() => directChat.closeChat()}
                 orderStatus={activeContactOrderStatus}
+                hasActiveOrder={hasActiveOrderWithContact}
               />
             ) : (
               <MerchantChatTabs

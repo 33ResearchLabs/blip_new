@@ -84,6 +84,7 @@ export interface MerchantDesktopLayoutProps {
   // Chat
   directChat: any;
   activeContactOrderStatus: string | undefined;
+  hasActiveOrderWithContact?: boolean;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
 }
 
@@ -108,7 +109,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     leaderboardCollapsed, setLeaderboardCollapsed,
     leaderboardTab, setLeaderboardTab,
     notifications, markNotificationRead,
-    directChat, activeContactOrderStatus, playSound,
+    directChat, activeContactOrderStatus, hasActiveOrderWithContact, playSound,
   } = props;
 
   return (
@@ -132,8 +133,6 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 todayEarnings={todayEarnings}
                 completedOrders={completedOrders.length}
                 cancelledOrders={cancelledOrders.length}
-                avgResponseMins={0}
-                rank={12}
                 balance={effectiveBalance || 0}
                 lockedInEscrow={245.5}
                 isOnline={isMerchantOnline}
@@ -360,6 +359,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                   }}
                   onBack={() => directChat.closeChat()}
                   orderStatus={activeContactOrderStatus}
+                  hasActiveOrder={hasActiveOrderWithContact}
                 />
               ) : (
                 <MerchantChatTabs

@@ -41,6 +41,7 @@ export interface MerchantMobileContentProps {
   merchantId: string | null;
   directChat: any;
   activeContactOrderStatus: string | undefined;
+  hasActiveOrderWithContact?: boolean;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
 
   // History
@@ -79,7 +80,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
     acceptOrder, acceptingOrderId, handleOpenChat, dismissBigOrder,
     markingDone, openEscrowModal, markFiatPaymentSent, confirmPayment,
     openDisputeModal, openCancelModal,
-    merchantId, directChat, activeContactOrderStatus, playSound,
+    merchantId, directChat, activeContactOrderStatus, hasActiveOrderWithContact, playSound,
     merchantInfo, historyTab, setHistoryTab,
     effectiveBalance, totalTradedVolume, todayEarnings, pendingEarnings,
     setShowAnalytics, setShowWalletModal, handleLogout,
@@ -141,6 +142,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
               merchantId={merchantId}
               directChat={directChat}
               orderStatus={activeContactOrderStatus}
+              hasActiveOrder={hasActiveOrderWithContact}
               playSound={playSound}
             />
           )}

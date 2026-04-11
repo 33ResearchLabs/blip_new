@@ -367,7 +367,7 @@ export const HomeScreen = ({
               <motion.button whileTap={{ scale: 0.92 }} onClick={() => setScreen('profile')}>
                 <div className="relative w-10 h-10 rounded-full flex items-center justify-center bg-accent">
                   <span className="text-[15px] font-extrabold text-accent-text">
-                    {userName.charAt(0).toUpperCase()}
+                    {(userName || 'U').charAt(0).toUpperCase()}
                   </span>
                   {/* <ConnectionIndicator isConnected={!!userId} /> */}
                 </div>

@@ -56,14 +56,29 @@ export async function GET(request: NextRequest) {
       corridor_id: string;
       ref_price: string;
       volume_5m: string;
+      avg_fill_time_sec: number;
+      active_merchants_count: number;
       confidence: string;
       updated_at: Date;
     }>(
-      `SELECT corridor_id, ref_price, volume_5m, confidence, updated_at
+      `SELECT corridor_id, ref_price, volume_5m, avg_fill_time_sec, active_merchants_count, confidence, updated_at
        FROM corridor_prices
        WHERE corridor_id = $1`,
       [corridorId]
     );
+
+    // Compute fill time live from recent completed orders (last 24h) so the
+    // value always reflects reality, even if the worker is behind.
+    const fillRows = await query<{ avg_fill_time_sec: number | null }>(
+      `SELECT AVG(EXTRACT(EPOCH FROM (completed_at - created_at)))::INTEGER as avg_fill_time_sec
+       FROM orders
+       WHERE status = 'completed'
+         AND corridor_id = $1
+         AND completed_at IS NOT NULL
+         AND completed_at > NOW() - INTERVAL '24 hours'`,
+      [corridorId]
+    );
+    const liveAvgFillTimeSec = fillRows[0]?.avg_fill_time_sec ?? null;
 
     if (!rows[0]) {
       return NextResponse.json({
@@ -72,7 +87,7 @@ export async function GET(request: NextRequest) {
           corridor_id: corridorId,
           ref_price: FALLBACK_RATE,
           volume_5m: 0,
-          avg_fill_time_sec: 0,
+          avg_fill_time_sec: liveAvgFillTimeSec ?? 0,
           active_merchants_count: 0,
           updated_at: new Date().toISOString(),
           calculation_method: 'fallback',
@@ -92,8 +107,8 @@ export async function GET(request: NextRequest) {
         corridor_id: row.corridor_id,
         ref_price: parseFloat(row.ref_price),
         volume_5m: parseFloat(row.volume_5m || '0'),
-        avg_fill_time_sec: 0,
-        active_merchants_count: 0,
+        avg_fill_time_sec: liveAvgFillTimeSec ?? row.avg_fill_time_sec ?? 0,
+        active_merchants_count: row.active_merchants_count ?? 0,
         updated_at: row.updated_at,
         calculation_method: 'worker_vwap',
         is_fallback: false,

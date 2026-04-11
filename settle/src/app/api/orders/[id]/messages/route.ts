@@ -183,11 +183,8 @@ export async function POST(
       return forbiddenResponse('You do not have access to this order');
     }
 
-    // Don't allow messages on completed/cancelled/expired orders
-    const terminalStatuses = ['completed', 'cancelled', 'expired'];
-    if (terminalStatuses.includes(order.status)) {
-      return validationErrorResponse([`Cannot send messages on ${order.status} orders`]);
-    }
+    // Chat remains available regardless of order status — participants can
+    // still message each other after completion/cancellation/expiry.
 
     const message = await sendMessage({
       order_id: id,

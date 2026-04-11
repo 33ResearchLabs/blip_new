@@ -84,6 +84,27 @@ export function useOrderActions({
       return;
     }
 
+    // For BUY orders: merchant is the seller (sends crypto, receives fiat).
+    // The user needs the merchant's bank/UPI details to send fiat — so the
+    // merchant MUST have at least one active payment method before accepting.
+    if (isBuyOrder) {
+      try {
+        const pmRes = await fetchWithAuth(`/api/merchant/${merchantId}/payment-methods`);
+        if (pmRes.ok) {
+          const pmData = await pmRes.json();
+          const activeMethods = (pmData?.data || []).filter((pm: any) => pm.is_active !== false);
+          if (activeMethods.length === 0) {
+            addNotification('system', 'You need to add a payment method before accepting buy orders. Go to Settings → Payments.', order.id);
+            playSound('error');
+            setAcceptingOrderId(null);
+            return;
+          }
+        }
+      } catch {
+        // Non-blocking: if the check fails, allow accept (server will validate)
+      }
+    }
+
     try {
       // If escrow is already funded by seller, call acceptTrade on-chain first
       if (hasOnChainEscrow) {

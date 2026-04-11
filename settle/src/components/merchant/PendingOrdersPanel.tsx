@@ -19,12 +19,15 @@ import {
   CheckCircle2,
   AlertCircle,
   CircleDot,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { CountdownRing } from "./CountdownRing";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { useSounds } from "@/hooks/useSounds";
 
 interface PendingOrdersPanelProps {
   orders: any[];
@@ -694,6 +697,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   const setPendingSortBy = useMerchantStore((s) => s.setPendingSortBy);
   const soundEnabled = useMerchantStore((s) => s.soundEnabled);
   const setSoundEnabled = useMerchantStore((s) => s.setSoundEnabled);
+  const { playSound } = useSounds();
   const showOrderFilters = useMerchantStore((s) => s.showOrderFilters);
   const setShowOrderFilters = useMerchantStore((s) => s.setShowOrderFilters);
   const orderFilters = useMerchantStore((s) => s.orderFilters);
@@ -1009,11 +1013,23 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
               <span className="text-[9px] text-white/35 font-mono">Live</span>
             </div>
             <button
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              className="p-1 hover:bg-foreground/[0.04] rounded transition-colors text-[10px] text-foreground/30"
-              title={soundEnabled ? "Mute" : "Unmute"}
+              onClick={() => {
+                const next = !soundEnabled;
+                setSoundEnabled(next);
+                // Play confirmation ping when enabling. This click also acts as
+                // the required user gesture to unlock the browser's AudioContext.
+                if (next) {
+                  setTimeout(() => playSound?.('notification'), 0);
+                }
+              }}
+              className={`p-1 rounded border transition-all ${
+                soundEnabled
+                  ? "bg-primary/15 border-primary/30 text-primary ring-1 ring-primary/20"
+                  : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/30 hover:bg-foreground/[0.05]"
+              }`}
+              title={soundEnabled ? "Sound on — click to mute" : "Sound off — click to enable"}
             >
-              {soundEnabled ? "🔊" : "🔇"}
+              {soundEnabled ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
             </button>
             <button
               onClick={fetchOrders}

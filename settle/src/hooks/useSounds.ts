@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef } from 'react';
+import { useMerchantStore } from '@/stores/merchantStore';
 
 type SoundType = 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete';
 
@@ -18,6 +19,10 @@ export function useSounds() {
   const playTone = useCallback((frequency: number, duration: number, type: OscillatorType = 'sine', volume: number = 0.3) => {
     try {
       const ctx = getAudioContext();
+      // Browsers suspend AudioContext until a user gesture — resume if needed
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
       const oscillator = ctx.createOscillator();
       const gainNode = ctx.createGain();
 
@@ -40,6 +45,9 @@ export function useSounds() {
   }, [getAudioContext]);
 
   const playSound = useCallback((sound: SoundType) => {
+    // Read latest value from Zustand store so toggle takes effect immediately
+    // without needing the callback to be re-created on each store update.
+    if (!useMerchantStore.getState().soundEnabled) return;
     switch (sound) {
       case 'message':
         // Pleasant notification chime - two quick ascending tones

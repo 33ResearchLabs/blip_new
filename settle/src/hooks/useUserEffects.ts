@@ -7,6 +7,8 @@ import { usePusher } from "@/context/PusherContext";
 import { useRealtimeChat } from "@/hooks/useRealtimeChat";
 import { useRealtimeOrder } from "@/hooks/useRealtimeOrder";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { getUserChannel } from "@/lib/pusher/channels";
+import { CHAT_EVENTS } from "@/lib/pusher/events";
 
 interface UseUserEffectsParams {
   userId: string | null;
@@ -102,6 +104,7 @@ export function useUserEffects({
     sendMessage: sendChatMessage,
     sendTypingIndicator,
     markAsRead,
+    refetchMessagesForOrder,
   } = useRealtimeChat({
     actorType: "user",
     actorId: userId || undefined,
@@ -135,6 +138,75 @@ export function useUserEffects({
       }
     },
   });
+
+  // ── User private-channel chat listener ─────────────────────────────────
+  // The order-channel subscription in useRealtimeChat only fires after the
+  // user opens a chat window. Until then, merchant messages broadcast to
+  // private-order-{id} are missed and only show up after refresh.
+  // The bridge in /api/merchant/direct-messages also publishes the same
+  // chat:message-new event to the user's private channel — listen there as
+  // a safety net so the UI updates instantly regardless of subscription state.
+  const pusherCtx = usePusher();
+  const refetchMessagesForOrderRef = useRef(refetchMessagesForOrder);
+  refetchMessagesForOrderRef.current = refetchMessagesForOrder;
+  useEffect(() => {
+    if (!userId || !pusherCtx) return;
+    const channelName = getUserChannel(userId);
+    const channel = pusherCtx.subscribe(channelName);
+    if (!channel) return;
+
+    const seenIds = new Set<string>();
+    const handler = (raw: unknown) => {
+      const data = raw as {
+        messageId?: string;
+        orderId?: string;
+        senderType?: string;
+        senderId?: string | null;
+        content?: string;
+        messageType?: string;
+        imageUrl?: string;
+        createdAt?: string;
+      };
+      if (!data.messageId || !data.orderId) return;
+      if (seenIds.has(data.messageId)) return;
+      seenIds.add(data.messageId);
+      // Bound the dedup set
+      if (seenIds.size > 200) {
+        const it = seenIds.values();
+        for (let i = 0; i < 100; i++) it.next();
+      }
+      // Skip my own outgoing messages — server may publish to both channels.
+      if (data.senderType === 'user' && data.senderId === userId) return;
+
+      // Update the order's lastMessage + unread count in the inbox.
+      setOrders(prev => prev.map(o => {
+        if (o.id !== data.orderId) return o;
+        return {
+          ...o,
+          unreadCount: (o.unreadCount || 0) + 1,
+          lastMessage: {
+            content: data.content || '',
+            fromMerchant: data.senderType === 'merchant',
+            createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
+          },
+        };
+      }));
+
+      // Force the open chat window (if any) to refetch its messages so the
+      // newly-arrived merchant DM appears in the chat UI without a refresh.
+      // The dedup-by-id path in useRealtimeChat prevents duplicates if the
+      // order-channel listener also delivered it.
+      if (data.orderId) {
+        refetchMessagesForOrderRef.current?.(data.orderId);
+      }
+    };
+
+    channel.bind(CHAT_EVENTS.MESSAGE_NEW, handler);
+    return () => {
+      channel.unbind(CHAT_EVENTS.MESSAGE_NEW, handler);
+      pusherCtx.unsubscribe(channelName);
+    };
+  }, [userId, pusherCtx, setOrders]);
 
   // Real-time order updates for active order
   const { order: realtimeOrder, refetch: refetchActiveOrder } = useRealtimeOrder(activeOrderId, {
@@ -318,7 +390,16 @@ export function useUserEffects({
 
   // Active order: merge real-time data with list data, preserving optimistic updates
   const orderFromList = orders.find(o => o.id === activeOrderId);
-  const mappedRealtimeOrder = realtimeOrder ? mapDbOrderToUI(realtimeOrder as unknown as DbOrder) : null;
+  // Wrap mapper in try/catch — defensive against malformed realtime data
+  let mappedRealtimeOrder: Order | null = null;
+  if (realtimeOrder) {
+    try {
+      mappedRealtimeOrder = mapDbOrderToUI(realtimeOrder as unknown as DbOrder);
+    } catch (err) {
+      console.error('[useUserEffects] mapDbOrderToUI failed:', err);
+      mappedRealtimeOrder = null;
+    }
+  }
   const activeOrder = mappedRealtimeOrder
     ? {
         ...orderFromList,
@@ -386,20 +467,14 @@ export function useUserEffects({
 
       if (timeLeft <= 0) {
         clearInterval(interval);
-        const expiredOrder = orders.find(o => o.id === activeOrderId);
-        if (expiredOrder) {
-          setOrders(prev => prev.filter(o => o.id !== activeOrderId));
-
-          fetchWithAuth(`/api/orders/${activeOrderId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              status: 'expired',
-              actor_type: 'system',
-              actor_id: '00000000-0000-0000-0000-000000000000',
-            }),
-          }).catch(console.error);
-        }
+        // Mark the order as expired locally — server-side expiration is handled
+        // by the cron worker (settle/api/orders/expire). We do NOT call PATCH
+        // with actor_type='system' from the client (forbidden per CLAUDE.md).
+        setOrders(prev => prev.map(o =>
+          o.id === activeOrderId
+            ? { ...o, status: 'expired' as OrderStatus, dbStatus: 'expired' }
+            : o
+        ));
         setPendingTradeData(null);
         setScreen("home");
         playSound('error');
@@ -454,7 +529,13 @@ export function useUserEffects({
   const prevChatViewOrderRef = useRef<string | null>(null);
   useEffect(() => {
     const order = activeOrderRef.current;
-    if (screen === "chat-view" && order && order.id !== prevChatViewOrderRef.current) {
+    // Auto-subscribe to the order's chat channel whenever the user is on the
+    // order screen OR the dedicated chat-view screen. Without this, the user
+    // never subscribes to private-order-{id} until they explicitly click the
+    // chat button — and any merchant message that arrives in the meantime
+    // only shows up on refresh (when GET /messages re-fetches the inserted row).
+    const shouldSubscribe = (screen === "chat-view" || screen === "order") && !!order;
+    if (shouldSubscribe && order.id !== prevChatViewOrderRef.current) {
       prevChatViewOrderRef.current = order.id;
       openChatRef.current(
         order.merchant?.name || 'Merchant',
@@ -467,7 +548,7 @@ export function useUserEffects({
         if (chat) markAsReadRef.current(chat.id);
       }, 500);
     }
-    if (screen !== "chat-view") {
+    if (!shouldSubscribe) {
       prevChatViewOrderRef.current = null;
     }
   }, [screen, activeOrder?.id]); // eslint-disable-line react-hooks/exhaustive-deps

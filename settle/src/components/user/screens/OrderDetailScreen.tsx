@@ -384,13 +384,45 @@ export const OrderDetailScreen = ({
     };
   }, []);
 
+  // Guard: if activeOrder is null/undefined (briefly during state transitions
+  // like trade completion), show a loading state instead of crashing.
+  if (!activeOrder) {
+    return (
+      <div className="min-h-[100dvh] bg-surface-base flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-6 h-6 text-text-secondary animate-spin mx-auto mb-2" />
+          <p className="text-[13px] text-text-secondary">Loading order...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Guard: if merchant data is missing (rare — usually mapDbOrderToUI provides
+  // a fallback), show a recovery state with a back button.
+  if (!activeOrder.merchant) {
+    return (
+      <div className="min-h-[100dvh] bg-surface-base flex flex-col items-center justify-center px-5">
+        <div className="text-center mb-4">
+          <p className="text-[15px] font-medium text-text-primary mb-1">Order data unavailable</p>
+          <p className="text-[13px] text-text-secondary">Please refresh or go back to home.</p>
+        </div>
+        <button
+          onClick={() => setScreen("home")}
+          className="px-5 py-2.5 rounded-xl bg-accent text-accent-text text-[14px] font-semibold"
+        >
+          Back to Home
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-[100dvh] bg-surface-base">
       <div className="h-12" />
 
       <div className="px-5 py-4 flex items-center">
         <button
-          onClick={() => setScreen(previousScreen || "home")}
+          onClick={() => setScreen(previousScreen && previousScreen !== "order" ? previousScreen : "home")}
           className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle"
         >
           <ChevronLeft className="w-5 h-5 text-text-secondary" />
@@ -1026,6 +1058,25 @@ export const OrderDetailScreen = ({
                             </>
                           ) : (
                             <>
+                              {/* Warning when merchant has no payment method configured */}
+                              {!activeOrder.merchantPaymentMethod &&
+                                !activeOrder.lockedPaymentMethod &&
+                                !activeOrder.merchant.bank &&
+                                !activeOrder.merchant.iban && (
+                                  <div className={`rounded-xl p-3 mb-2 border border-warning-border bg-warning-dim`}>
+                                    <div className="flex items-start gap-2">
+                                      <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                                      <div className="flex-1">
+                                        <p className="text-[13px] font-semibold text-warning mb-1">
+                                          Payment method not provided
+                                        </p>
+                                        <p className="text-[11px] text-text-secondary">
+                                          The merchant hasn&apos;t shared their payment details. Tap Chat to ask for their bank/UPI info before sending payment.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               <div
                                 className={`rounded-xl p-3 space-y-2 ${CARD}`}
                               >
@@ -1989,7 +2040,7 @@ export const OrderDetailScreen = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => setScreen(previousScreen || "home")}
+            onClick={() => setScreen("home")}
             className="w-full mt-4 py-4 rounded-2xl text-[17px] font-semibold bg-surface-raised border border-border-medium text-text-primary"
           >
             Done

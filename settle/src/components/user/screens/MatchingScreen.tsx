@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { ChevronLeft, Check, Clock } from "lucide-react";
 import type { Screen, OrderStatus, OrderStep } from "./types";
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
 
 const CARD = "bg-surface-card border border-border-subtle";
 
@@ -193,20 +193,29 @@ export const MatchingScreen = ({
               onClick={async () => {
                 if (activeOrderId && userId) {
                   try {
-                    const res = await fetchWithAuth(`/api/orders/${activeOrderId}`, {
-                      method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
+                    // Use action endpoint with CANCEL action — backend resolves
+                    // the target status. Action endpoint requires Idempotency-Key
+                    // for financial transitions per CLAUDE.md.
+                    const res = await fetchWithAuth(`/api/orders/${activeOrderId}/action`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Idempotency-Key': generateIdempotencyKey(),
+                      },
                       body: JSON.stringify({
-                        status: 'cancelled',
+                        action: 'CANCEL',
                         actor_type: 'user',
                         actor_id: userId,
                         reason: 'User cancelled order',
                       }),
                     });
                     const data = await res.json();
-                    if (data.success) {
+                    if (res.ok && data.success) {
                       setOrders((prev: any[]) => prev.filter((o: any) => o.id !== activeOrderId));
                       toast.showOrderCancelled('You cancelled the order');
+                    } else {
+                      console.error('Failed to cancel order:', data.error);
+                      toast.showWarning(data.error || 'Failed to cancel order');
                     }
                   } catch (err) {
                     console.error('Failed to cancel order:', err);

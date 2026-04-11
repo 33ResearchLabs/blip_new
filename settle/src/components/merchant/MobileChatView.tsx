@@ -22,6 +22,7 @@ export interface MobileChatViewProps {
     openChat: (targetId: string, targetType: 'user' | 'merchant', name: string) => void;
   };
   orderStatus?: string;
+  hasActiveOrder?: boolean;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
 }
 
@@ -29,6 +30,7 @@ export function MobileChatView({
   merchantId,
   directChat,
   orderStatus,
+  hasActiveOrder,
   playSound,
 }: MobileChatViewProps) {
   return (
@@ -48,6 +50,7 @@ export function MobileChatView({
           }}
           onBack={() => directChat.closeChat()}
           orderStatus={orderStatus}
+          hasActiveOrder={hasActiveOrder}
         />
       ) : merchantId ? (
         <MerchantChatTabs

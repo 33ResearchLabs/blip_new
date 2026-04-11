@@ -97,18 +97,20 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(['Merchant not found']);
     }
 
-    // Verify an active order relationship exists between sender and recipient
-    const activeOrderRows = await query<{ id: string }>(
+    // Verify the parties have an existing order relationship (any status).
+    // Active-order requirement is removed: post-trade chat must remain open
+    // so participants can message each other even after completion/cancellation.
+    // We still block strangers — there must have been at least one prior trade.
+    const relationshipRows = await query<{ id: string }>(
       `SELECT id FROM orders
        WHERE ((merchant_id = $1 AND user_id = $2) OR (merchant_id = $2 AND user_id = $1)
               OR (buyer_merchant_id = $1 AND user_id = $2) OR (buyer_merchant_id = $2 AND user_id = $1)
               OR (merchant_id = $1 AND buyer_merchant_id = $2) OR (merchant_id = $2 AND buyer_merchant_id = $1))
-         AND status NOT IN ('completed', 'cancelled', 'expired')
        LIMIT 1`,
       [merchant_id, targetId]
     );
-    if (activeOrderRows.length === 0) {
-      return forbiddenResponse('Direct messages require an active order between parties');
+    if (relationshipRows.length === 0) {
+      return forbiddenResponse('Direct messages require a prior order relationship between parties');
     }
 
     const message = await sendDirectMessage({
@@ -134,35 +136,53 @@ export async function POST(request: NextRequest) {
       createdAt: message.created_at?.toISOString?.() || new Date().toISOString(),
     }).catch(err => console.error('[DM] Pusher notification failed:', err));
 
-    // Bridge: also insert into chat_messages so user sees it in order chat
+    // Bridge: also insert into chat_messages so user sees it in order chat.
+    // Mirror to the most recent order between the parties REGARDLESS of status —
+    // user-side has no direct-message listener, so the order chat is the only
+    // surface where users see merchant DMs (including post-trade messages).
     try {
-      // Find the active (non-terminal) order between merchant and recipient
-      const orderRows = await query<{ id: string }>(
-        `SELECT id FROM orders
+      const orderRows = await query<{
+        id: string;
+        user_id: string;
+        merchant_id: string | null;
+        buyer_merchant_id: string | null;
+      }>(
+        `SELECT id, user_id, merchant_id, buyer_merchant_id FROM orders
          WHERE ((merchant_id = $1 AND user_id = $2) OR (merchant_id = $2 AND user_id = $1)
                 OR (buyer_merchant_id = $1 AND user_id = $2) OR (buyer_merchant_id = $2 AND user_id = $1)
                 OR (merchant_id = $1 AND buyer_merchant_id = $2) OR (merchant_id = $2 AND buyer_merchant_id = $1))
-           AND status NOT IN ('completed', 'cancelled', 'expired')
          ORDER BY created_at DESC LIMIT 1`,
         [merchant_id, targetId]
       );
       if (orderRows.length > 0) {
-        const orderId = orderRows[0].id;
-        await query(
+        const order = orderRows[0];
+        const orderId = order.id;
+        // RETURNING the actual chat_messages row id + created_at so the Pusher
+        // event payload matches what GET /messages will later return — without
+        // this, dedup-by-id in the client fails and the message renders twice
+        // (once via Pusher, once via REST fetch).
+        const insertedRows = await query<{ id: string; created_at: Date; seq: number | null }>(
           `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type, image_url)
-           VALUES ($1, 'merchant', $2, $3, $4, $5)`,
+           VALUES ($1, 'merchant', $2, $3, $4, $5)
+           RETURNING id, created_at, seq`,
           [orderId, merchant_id, content, message_type || 'text', image_url || null]
         );
-        // Notify via Pusher order channel so user gets it in real-time
+        const inserted = insertedRows[0];
+        // Notify via Pusher order channel + recipient's private channel so the
+        // user gets it in real-time even if the order chat isn't open.
         notifyNewMessage({
           orderId,
-          messageId: message.id,
+          messageId: inserted.id,
           senderType: 'merchant',
           senderId: merchant_id,
           content,
           messageType: message_type || 'text',
           imageUrl: image_url,
-          createdAt: message.created_at?.toISOString?.() || new Date().toISOString(),
+          createdAt: inserted.created_at?.toISOString?.() || new Date().toISOString(),
+          userId: order.user_id,
+          merchantId: order.merchant_id ?? undefined,
+          buyerMerchantId: order.buyer_merchant_id ?? undefined,
+          seq: inserted.seq ?? undefined,
         }).catch(() => {});
       }
     } catch (bridgeErr) {

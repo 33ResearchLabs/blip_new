@@ -143,10 +143,10 @@ export const ProfileScreen = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-[16px] flex items-center justify-center shrink-0 bg-surface-raised border border-border-subtle">
-              <span className="text-[20px] font-extrabold text-text-primary">{userName.charAt(0).toUpperCase()}</span>
+              <span className="text-[20px] font-extrabold text-text-primary">{(userName || 'U').charAt(0).toUpperCase()}</span>
             </div>
             <div>
-              <p className="text-[20px] font-extrabold tracking-[-0.03em] text-text-primary leading-[1.1]">{userName}</p>
+              <p className="text-[20px] font-extrabold tracking-[-0.03em] text-text-primary leading-[1.1]">{userName || 'User'}</p>
               <p className="text-[11px] font-semibold text-text-tertiary font-mono mt-0.5">
                 {solanaWallet.connected && solanaWallet.walletAddress
                   ? `${solanaWallet.walletAddress.slice(0, 6)}...${solanaWallet.walletAddress.slice(-4)}`

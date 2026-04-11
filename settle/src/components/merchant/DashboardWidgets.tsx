@@ -8,8 +8,6 @@ interface DashboardWidgetsProps {
   todayEarnings: number;
   completedOrders: number;
   cancelledOrders: number;
-  avgResponseMins: number;
-  rank: number;
   balance: number;
   lockedInEscrow: number;
   isOnline: boolean;
@@ -24,8 +22,6 @@ export const DashboardWidgets = memo(function DashboardWidgets({
   todayEarnings,
   completedOrders,
   cancelledOrders,
-  avgResponseMins,
-  rank,
   balance,
   lockedInEscrow,
   isOnline,
@@ -44,7 +40,6 @@ export const DashboardWidgets = memo(function DashboardWidgets({
           todayEarnings={todayEarnings}
           completedOrders={completedOrders}
           cancelledOrders={cancelledOrders}
-          rank={rank}
           isOnline={isOnline}
           merchantId={merchantId}
           activeCorridor={activeCorridor}

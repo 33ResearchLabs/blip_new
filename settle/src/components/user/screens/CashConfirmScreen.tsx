@@ -64,10 +64,10 @@ export const CashConfirmScreen = ({
           <p className="text-[11px] uppercase tracking-wide mb-3 text-text-tertiary">Meeting with</p>
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full flex items-center justify-center text-lg font-semibold bg-border-medium border border-border-medium text-text-primary">
-              {selectedOffer.merchant.display_name.charAt(0)}
+              {(selectedOffer.merchant?.display_name || 'M').charAt(0)}
             </div>
             <div className="flex-1">
-              <p className="text-[17px] font-medium text-text-primary">{selectedOffer.merchant.display_name}</p>
+              <p className="text-[17px] font-medium text-text-primary">{selectedOffer.merchant?.display_name || 'Merchant'}</p>
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1">
                   <Star className="w-3 h-3 fill-warning text-text-secondary" />

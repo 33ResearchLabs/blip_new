@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
              OR (merchant_id = $1 AND buyer_merchant_id = $2)
              OR (merchant_id = $2 AND buyer_merchant_id = $1)
            )
-         ORDER BY updated_at DESC NULLS LAST, created_at DESC
+         ORDER BY created_at DESC
          LIMIT 5`,
         [senderId, contactId]
       );

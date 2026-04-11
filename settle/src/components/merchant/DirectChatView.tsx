@@ -30,6 +30,7 @@ interface DirectChatViewProps {
   onTyping?: () => void;
   onBack: () => void;
   orderStatus?: string;
+  hasActiveOrder?: boolean;
 }
 
 function getUserEmoji(username: string): string {
@@ -63,6 +64,7 @@ export function DirectChatView({
   onTyping,
   onBack,
   orderStatus,
+  hasActiveOrder = true,
 }: DirectChatViewProps) {
   // ── Live presence (online/offline + last seen) ─────────────────────
   const [presence, setPresence] = useState<{ isOnline: boolean; lastSeen: string | null } | null>(null);
@@ -463,6 +465,15 @@ export function DirectChatView({
           <button onClick={() => setUploadError(null)} className="text-red-400/60 hover:text-red-400">
             <X className="w-3 h-3" />
           </button>
+        </div>
+      )}
+
+      {/* No active order info banner — chat still works */}
+      {!hasActiveOrder && (
+        <div className="mx-2 mb-1 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+          <p className="text-[10px] text-amber-400/80">
+            No active trade with this {contactType}. You can still send messages.
+          </p>
         </div>
       )}
 
