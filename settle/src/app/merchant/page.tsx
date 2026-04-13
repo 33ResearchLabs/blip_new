@@ -581,6 +581,11 @@ export default function MerchantDashboard() {
       if (isUnclaimedEscrow(o)) return false;
       if (hasMyEscrow(o)) return true;
       return !isOrderExpired(o);
+    }).sort((a, b) => {
+      // Newest first
+      const aTime = new Date(a.dbOrder?.created_at || a.createdAt || 0).getTime();
+      const bTime = new Date(b.dbOrder?.created_at || b.createdAt || 0).getTime();
+      return bTime - aTime;
     });
   }, [orders, merchantId]);
 
