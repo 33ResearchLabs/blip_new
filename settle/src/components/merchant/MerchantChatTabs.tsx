@@ -272,7 +272,7 @@ export function MerchantChatTabs({
                             {isBuy ? 'BUY' : 'SELL'}
                           </span>
                           <span className="text-xs font-medium text-white/70 truncate">
-                            {conv.crypto_amount} USDC
+                            {Number(conv.crypto_amount).toFixed(2)} USDC
                           </span>
                           <span className="text-[9px] text-white/20">→</span>
                           <span className="text-[10px] text-white/50 font-mono">
@@ -374,7 +374,7 @@ export function MerchantChatTabs({
                       <div className="flex items-center gap-2 text-[9px] text-white/30 font-mono">
                         <span>{conv.user.username}</span>
                         <span className="text-white/10">·</span>
-                        <span>${conv.crypto_amount.toLocaleString()}</span>
+                        <span>${Number(conv.crypto_amount).toFixed(2)}</span>
                         {conv.last_message && (
                           <>
                             <span className="text-white/10">·</span>
