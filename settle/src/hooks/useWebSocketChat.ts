@@ -157,6 +157,11 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
 
   const wsContext = useWebSocketChatContextOptional();
   const pusher = usePusherOptional();
+
+  // ── DIAGNOSTIC: verify this hook is loaded and running ──
+  useEffect(() => {
+    console.log('[useWebSocketChat] HOOK MOUNTED', { actorType, actorId, hasPusher: !!pusher, pusherConnected: pusher?.isConnected });
+  }, [actorType, actorId, pusher]);
   const subscribedOrdersRef = useRef<Set<string>>(new Set());
   const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
@@ -175,6 +180,64 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   // Use ref to always have access to latest actorId
   const actorIdRef = useRef(actorId);
   actorIdRef.current = actorId;
+
+  // ── Delivery ACK: 300ms debounce batch ──────────────────────────────
+  // When merchant receives messages, batch-acknowledge them as "delivered"
+  // so the sender sees ✓✓ grey. Multiple messages in a burst are batched.
+  const deliveryAckBufferRef = useRef<Map<string, Set<string>>>(new Map());
+  const deliveryAckTimerRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  const flushDeliveryAck = useCallback(
+    (orderId: string) => {
+      const ids = deliveryAckBufferRef.current.get(orderId);
+      if (!ids || ids.size === 0) return;
+      const messageIds = Array.from(ids);
+      deliveryAckBufferRef.current.delete(orderId);
+      deliveryAckTimerRef.current.delete(orderId);
+
+      fetchWithAuth(`/api/orders/${orderId}/messages`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delivered',
+          message_ids: messageIds,
+          reader_type: actorType,
+        }),
+      }).catch(() => {
+        // Retry once after 2s
+        setTimeout(() => {
+          fetchWithAuth(`/api/orders/${orderId}/messages`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'delivered',
+              message_ids: messageIds,
+              reader_type: actorType,
+            }),
+          }).catch(() => {});
+        }, 2000);
+      });
+    },
+    [actorType],
+  );
+
+  const queueDeliveryAck = useCallback(
+    (orderId: string, messageId: string) => {
+      if (!deliveryAckBufferRef.current.has(orderId)) {
+        deliveryAckBufferRef.current.set(orderId, new Set());
+      }
+      deliveryAckBufferRef.current.get(orderId)!.add(messageId);
+
+      // Reset the debounce timer — flush after 300ms of quiet
+      const existing = deliveryAckTimerRef.current.get(orderId);
+      if (existing) clearTimeout(existing);
+      deliveryAckTimerRef.current.set(
+        orderId,
+        setTimeout(() => flushDeliveryAck(orderId), 300),
+      );
+    },
+    [flushDeliveryAck],
+  );
 
   // Set actor in WebSocket context
   useEffect(() => {
@@ -285,6 +348,12 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   const handlePusherMessage = useCallback(
     (rawData: unknown) => {
       const event = rawData as PusherChatMessageEvent;
+      console.log('[useWebSocketChat] ORDER CHANNEL MESSAGE:', {
+        messageId: event?.messageId,
+        orderId: event?.orderId,
+        senderType: event?.senderType,
+        content: event?.content?.substring(0, 30),
+      });
       if (!event?.messageId || !event?.orderId) return;
 
       // Track lastSeq for reconnect catch-up
@@ -343,6 +412,8 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
           const newUnread = message.from !== 'me' && w.minimized ? w.unread + 1 : w.unread;
           if (message.from !== 'me') {
             onNewMessage?.(w.orderId!, message);
+            // Auto-delivery ACK: tell the sender we received it (→ ✓✓ grey)
+            queueDeliveryAck(event.orderId, message.id);
           }
           return {
             ...w,
@@ -353,7 +424,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         })
       );
     },
-    [actorType, onNewMessage]
+    [actorType, onNewMessage, queueDeliveryAck]
   );
 
   // Phase 3: subscribe to Pusher private-order-X for every chat window's order.
@@ -398,10 +469,13 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
     };
 
     // Subscribe to any orderId we haven't subscribed to yet
+    console.log('[useWebSocketChat] ORDER CHANNEL CHECK:', { orderIds, alreadySubscribed: Array.from(pusherSubscribedRef.current.keys()) });
     for (const orderId of orderIds) {
       if (pusherSubscribedRef.current.get(orderId)) continue;
-      const channel = pusher.subscribe(getOrderChannel(orderId));
-      if (!channel) continue;
+      const channelName = getOrderChannel(orderId);
+      console.log('[useWebSocketChat] SUBSCRIBING order channel:', channelName);
+      const channel = pusher.subscribe(channelName);
+      if (!channel) { console.log('[useWebSocketChat] FAILED order subscribe:', channelName); continue; }
       channel.bind(CHAT_EVENTS.MESSAGE_NEW, handlePusherMessage);
       channel.bind(CHAT_EVENTS.MESSAGES_DELIVERED, handleDelivered);
       channel.bind(CHAT_EVENTS.MESSAGES_READ, handleRead);
@@ -430,25 +504,39 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   // inbox can update (unread badges, last message preview) even when
   // no chat window is open for that order.
   useEffect(() => {
-    if (!pusher || actorType !== 'merchant' || !actorId) return;
+    if (!pusher || actorType !== 'merchant' || !actorId) {
+      console.log('[useWebSocketChat] MERCHANT CHANNEL SKIP', { hasPusher: !!pusher, actorType, actorId });
+      return;
+    }
 
     const { getMerchantChannel } = require('@/lib/pusher/channels');
     const channelName = getMerchantChannel(actorId);
+    console.log('[useWebSocketChat] SUBSCRIBING merchant channel:', channelName);
     const channel = pusher.subscribe(channelName);
-    if (!channel) return;
+    if (!channel) {
+      console.log('[useWebSocketChat] FAILED to subscribe merchant channel');
+      return;
+    }
+    console.log('[useWebSocketChat] SUBSCRIBED merchant channel:', channelName);
 
     const handlePrivateMessage = (rawData: unknown) => {
       const data = rawData as PusherChatMessageEvent;
+      console.log('[useWebSocketChat] MERCHANT CHANNEL EVENT RECEIVED:', {
+        orderId: data?.orderId,
+        messageId: data?.messageId,
+        senderType: data?.senderType,
+      });
+
       if (!data?.orderId || !data?.messageId) return;
 
-      // If we already have a chat window for this order, the order-channel
-      // handler will process it (dedup-by-id). Skip here to avoid double processing.
       const existingWindow = chatWindowsRef.current.find(w => w.orderId === data.orderId);
-      if (existingWindow) return;
+      if (existingWindow) {
+        console.log('[useWebSocketChat] skipping (window exists, order channel will handle)');
+        return;
+      }
 
-      // No chat window open — fire the onNewMessage callback so the parent
-      // (merchant page) can update inbox badges, last message preview, etc.
       if (data.senderType !== actorType) {
+        console.log('[useWebSocketChat] FIRING onNewMessage for inbox update');
         const message: ChatMessage = {
           id: data.messageId,
           from: 'them',
@@ -465,6 +553,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
     channel.bind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateMessage);
 
     return () => {
+      console.log('[useWebSocketChat] UNSUBSCRIBING merchant channel:', channelName);
       channel.unbind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateMessage);
     };
   }, [pusher, actorType, actorId, onNewMessage]);

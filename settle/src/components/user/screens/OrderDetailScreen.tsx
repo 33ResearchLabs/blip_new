@@ -64,6 +64,9 @@ function fiatSym(code: string | undefined | null): string {
 const SECONDARY_BTN = "bg-surface-active text-text-primary border border-border-medium";
 const MUTED_BTN = "bg-surface-active text-text-secondary";
 
+// Shared expiry timer — used on both user and merchant order detail screens
+import { OrderExpiryTimer } from '@/components/shared/OrderExpiryTimer';
+
 export interface OrderDetailScreenProps {
   setScreen: (s: Screen) => void;
   previousScreen?: Screen;
@@ -598,13 +601,26 @@ export const OrderDetailScreen = ({
               );
             })}
           </div>
-          <p className="text-[13px] text-text-secondary">
-            {activeOrder.status === "cancelled"
-              ? "Order Cancelled"
-              : activeOrder.status === "expired"
-                ? "Order Expired"
-                : `Step ${activeOrder.step} of 4`}
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-[13px] text-text-secondary">
+              {activeOrder.status === "cancelled"
+                ? "Order Cancelled"
+                : activeOrder.status === "expired"
+                  ? "Order Expired"
+                  : `Step ${activeOrder.step} of 4`}
+            </p>
+            {/* Expiry countdown — visible in all active states */}
+            {activeOrder.expiresAt &&
+              activeOrder.status !== "cancelled" &&
+              activeOrder.status !== "expired" &&
+              activeOrder.status !== "complete" && (
+              <OrderExpiryTimer
+                expiresAt={activeOrder.expiresAt}
+                status={activeOrder.dbStatus}
+                viewerRole={activeOrder.type === 'buy' ? 'buyer' : 'seller'}
+              />
+            )}
+          </div>
         </div>
 
         {/* Escrow Status Section - Show for sell orders with escrow */}
@@ -785,15 +801,14 @@ export const OrderDetailScreen = ({
             </motion.div>
           )}
 
-        {/* Inactivity Warning OR Extension Granted Banner */}
+        {/* Inactivity Warning / Extension Sent / Extension Granted Banner */}
         {activeOrder.inactivityWarned &&
           activeOrder.status !== "disputed" &&
           activeOrder.status !== "complete" &&
           activeOrder.status !== "cancelled" &&
           activeOrder.status !== "expired" && (
             (() => {
-              // If the order was extended AFTER the inactivity warning,
-              // show "Extension Granted" instead of the scary warning.
+              // Priority 1: Extension was granted (extended after warning)
               const wasExtended = activeOrder.lastExtendedAt &&
                 (!activeOrder.lastActivityAt ||
                   new Date(activeOrder.lastExtendedAt).getTime() >
@@ -823,6 +838,35 @@ export const OrderDetailScreen = ({
                 );
               }
 
+              // Priority 2: I sent an extension request, waiting for merchant
+              if (extensionRequest && extensionRequest.requestedBy === "user" && extensionRequest.orderId === activeOrder.id) {
+                const durLabel = extensionRequest.extensionMinutes >= 60
+                  ? `${Math.round(extensionRequest.extensionMinutes / 60)} hour${Math.round(extensionRequest.extensionMinutes / 60) > 1 ? 's' : ''}`
+                  : `${extensionRequest.extensionMinutes} minutes`;
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`rounded-2xl p-4 mb-4 ${CARD}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-active">
+                        <Loader2 className="w-5 h-5 text-text-secondary animate-spin" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-[15px] font-semibold text-text-primary">
+                          Extension Request Sent
+                        </p>
+                        <p className="text-[13px] text-text-secondary">
+                          Waiting for merchant to approve +{durLabel} extension
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              }
+
+              // Priority 3: No extension sent — show warning
               return (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
