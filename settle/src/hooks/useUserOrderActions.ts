@@ -37,6 +37,25 @@ export function useUserOrderActions({
   setIsLoading,
   fetchOrders,
 }: UseUserOrderActionsParams) {
+  // Helper: optimistically update an order AND clear action buttons instantly.
+  // This prevents the "toast fires but old button still visible" problem.
+  const optimisticOrderUpdate = useCallback((orderId: string, updates: Record<string, unknown>) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== orderId) return o;
+      const updated = { ...o, ...updates };
+      // Clear backend-driven action buttons so they don't flash stale state
+      if ((updated as any).dbOrder) {
+        (updated as any).dbOrder = {
+          ...(updated as any).dbOrder,
+          primaryAction: null,
+          secondaryAction: null,
+          ...(updates.dbStatus ? { status: updates.dbStatus } : {}),
+        };
+      }
+      return updated;
+    }));
+  }, [setOrders]);
+
   // Dispute state
   const [showDisputeModal, setShowDisputeModal] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
@@ -163,24 +182,14 @@ export function useUserOrderActions({
       }
 
       // Success! Update UI immediately — don't wait for refetch.
-      // Clear primaryAction so the old button disappears INSTANTLY.
       setTxProgress(prev => completeTx(prev));
       setTimeout(() => setTxProgress(INITIAL_TX_STATE), 3000);
 
-      setOrders(prev => prev.map(o => {
-        if (o.id !== activeOrder.id) return o;
-        const updated = { ...o, status: "waiting" as OrderStatus, step: 3 as OrderStep, dbStatus: 'payment_sent' };
-        // Clear backend-driven action buttons so they don't flash the old state
-        if ((updated as any).dbOrder) {
-          (updated as any).dbOrder = {
-            ...(updated as any).dbOrder,
-            primaryAction: { type: 'DISABLED', label: 'Payment Sent', description: 'Waiting for merchant to confirm.' },
-            secondaryAction: null,
-            status: 'payment_sent',
-          };
-        }
-        return updated;
-      }));
+      optimisticOrderUpdate(activeOrder.id, {
+        status: "waiting" as OrderStatus,
+        step: 3 as OrderStep,
+        dbStatus: 'payment_sent',
+      });
     } catch (err) {
       console.error('Failed to mark payment sent:', err);
       setTxProgress(prev => failTx(prev, 'Network error. Please try again.'));
@@ -279,9 +288,9 @@ export function useUserOrderActions({
                 console.error('[Release] Direct completion failed:', patchErr);
               }
             }
-            setOrders(prev => prev.map(o =>
-              o.id === activeOrder.id ? { ...o, status: "complete" as OrderStatus, step: 4 as OrderStep, dbStatus: 'completed' } : o
-            ));
+            optimisticOrderUpdate(activeOrder.id, {
+              status: "complete" as OrderStatus, step: 4 as OrderStep, dbStatus: 'completed',
+            });
             playSound('trade_complete');
             if (solanaWallet.connected) solanaWallet.refreshBalances();
             setIsLoading(false);
