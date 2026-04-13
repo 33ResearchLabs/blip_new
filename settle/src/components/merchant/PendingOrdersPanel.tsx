@@ -942,9 +942,12 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       return 0;
     });
   } else {
+    // Default sort: newest first (by created_at descending)
     displayOrders = [...displayOrders].sort((a, b) => {
       if ((a as any).isMempoolOrder || (b as any).isMempoolOrder) return 0;
-      return a.expiresIn - b.expiresIn;
+      const aTime = new Date(a.dbOrder?.created_at || a.createdAt || 0).getTime();
+      const bTime = new Date(b.dbOrder?.created_at || b.createdAt || 0).getTime();
+      return bTime - aTime;
     });
   }
 
