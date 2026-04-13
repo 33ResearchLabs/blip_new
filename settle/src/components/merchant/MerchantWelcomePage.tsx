@@ -145,64 +145,350 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
 
       <main className="relative pt-14">
         {/* ─── HERO ──────────────────────────────────────────── */}
-        <section className="px-6 pt-20 pb-24 max-w-4xl mx-auto text-center">
-          <motion.div
-            variants={stagger}
-            initial="hidden"
-            animate="visible"
-            className="flex flex-col items-center"
-          >
-            <motion.div variants={fadeUp}>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-[11px] font-bold uppercase tracking-widest mb-6">
-                <Store className="w-3 h-3" /> Merchant Portal
+        <section className="px-6 pt-16 pb-16 max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-10 lg:gap-8 items-center">
+            {/* Left — text content */}
+            <motion.div
+              variants={stagger}
+              initial="hidden"
+              animate="visible"
+              className="flex flex-col items-start text-left"
+            >
+              <motion.div variants={fadeUp}>
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-[11px] font-bold uppercase tracking-widest mb-6">
+                  <Store className="w-3 h-3" /> For Liquidity Providers
+                </div>
+              </motion.div>
+
+              <motion.h1
+                variants={fadeUp}
+                className="text-4xl sm:text-5xl md:text-[3.5rem] font-extrabold text-foreground leading-[1.1] tracking-tight mb-5"
+              >
+                Own the{" "}
+                <span className="text-primary">Flow</span>
+                <br />
+                of <span className="text-primary">Money</span>
+              </motion.h1>
+
+              <motion.p
+                variants={fadeUp}
+                className="text-base sm:text-lg text-foreground/40 max-w-md leading-relaxed mb-8"
+              >
+                Launch your P2P desk, control spreads,
+                and earn on every transaction.
+                Powered by on-chain escrow and real-time settlement.
+              </motion.p>
+
+              <motion.div
+                variants={fadeUp}
+                className="flex flex-col sm:flex-row items-start gap-3 w-full sm:w-auto mb-8"
+              >
+                <button
+                  onClick={onGetStarted}
+                  className="w-full sm:w-auto px-8 py-3.5 bg-primary text-white rounded-2xl font-bold text-sm hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
+                >
+                  Start Your Desk <ChevronRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={onSignIn}
+                  className="w-full sm:w-auto px-8 py-3.5 bg-foreground/[0.04] border border-foreground/[0.06] text-foreground rounded-2xl font-bold text-sm hover:bg-foreground/[0.08] transition-all"
+                >
+                  Login to Dashboard
+                </button>
+              </motion.div>
+
+              <motion.p variants={fadeUp} className="text-[11px] text-foreground/20 tracking-wide">
+                No custody &middot; No counterparty risk &middot; Fully on-chain
+              </motion.p>
+            </motion.div>
+
+            {/* Right — 3D dashboard mockup */}
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3, duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
+              className="relative hidden lg:block"
+            >
+              {/* Ambient glow behind the mockup */}
+              <div className="absolute -inset-10 bg-primary/[0.06] rounded-full blur-[100px]" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[300px] bg-primary/[0.08] rounded-full blur-[80px]" />
+
+              {/* 3D perspective container */}
+              <div className="relative" style={{ perspective: '1200px' }}>
+                <div
+                  className="relative rounded-2xl overflow-hidden border border-white/[0.06] bg-[#080810] shadow-2xl shadow-black/70"
+                  style={{
+                    transform: 'rotateY(-8deg) rotateX(4deg)',
+                    transformOrigin: 'center center',
+                  }}
+                >
+                  {/* ── Navbar ── */}
+                  <div className="flex items-center justify-between px-3 py-1.5 bg-[#0a0a14] border-b border-white/[0.04]">
+                    <div className="flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-primary fill-primary" />
+                      <span className="text-[10px] font-bold text-white/70">Blip <span className="italic font-normal text-white/40">money</span></span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {['Dashboard', 'Wallet', 'Settings'].map((t, i) => (
+                        <span key={t} className={`text-[8px] px-2 py-1 rounded-md font-mono ${i === 0 ? 'bg-white/[0.06] text-white/70' : 'text-white/30'}`}>{t}</span>
+                      ))}
+                    </div>
+                    <div className="w-5 h-5 rounded-full bg-white/[0.06] border border-white/[0.08]" />
+                  </div>
+
+                  {/* ── Body: 3-panel layout ── */}
+                  <div className="flex" style={{ height: 420 }}>
+                    {/* Panel 1: Dashboard widgets */}
+                    <div className="w-[130px] p-2.5 border-r border-white/[0.04] flex flex-col gap-2.5">
+                      {/* Balance */}
+                      <div className="rounded-lg bg-white/[0.02] border border-white/[0.03] p-2.5">
+                        <p className="text-[7px] text-white/20 uppercase tracking-wider mb-0.5">Balance</p>
+                        <p className="text-xl font-bold text-white font-mono leading-tight">5,150</p>
+                        <p className="text-[9px] text-white/25 font-mono">USDC</p>
+                      </div>
+                      {/* Escrow */}
+                      <div className="rounded-lg bg-white/[0.02] border border-white/[0.03] p-2.5">
+                        <p className="text-[7px] text-white/20 uppercase tracking-wider mb-0.5">In Escrow</p>
+                        <p className="text-sm font-bold text-primary/70 font-mono">1,432</p>
+                      </div>
+                      {/* Today earnings */}
+                      <div className="rounded-lg bg-white/[0.02] border border-white/[0.03] p-2.5">
+                        <p className="text-[7px] text-white/20 uppercase tracking-wider mb-0.5">Today</p>
+                        <p className="text-sm font-bold text-green-400/80 font-mono">+295.50</p>
+                      </div>
+                      {/* Completed */}
+                      <div className="rounded-lg bg-white/[0.02] border border-white/[0.03] p-2.5">
+                        <p className="text-[7px] text-white/20 uppercase tracking-wider mb-0.5">Completed</p>
+                        <p className="text-sm font-bold text-white/50 font-mono">24</p>
+                      </div>
+                      {/* Status */}
+                      <div className="flex items-center gap-1 px-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                        <span className="text-[7px] text-white/30">Online</span>
+                      </div>
+                      {/* Mini chart */}
+                      <div className="flex items-end gap-[2px] h-6 px-1 mt-auto">
+                        {[30, 50, 35, 65, 45, 80, 55, 40, 70, 85, 60, 75].map((h, i) => (
+                          <div key={i} className="flex-1 rounded-[1px] bg-primary/25" style={{ height: `${h}%` }} />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Panel 2: Pending Orders */}
+                    <div className="w-[190px] border-r border-white/[0.04] flex flex-col">
+                      <div className="px-2 py-1.5 border-b border-white/[0.03] flex items-center justify-between">
+                        <span className="text-[8px] font-bold text-white/40 uppercase tracking-wider font-mono">Pending</span>
+                        <span className="text-[7px] px-1 py-0.5 rounded bg-primary/10 text-primary font-mono font-bold">4</span>
+                      </div>
+                      <div className="flex-1 overflow-hidden p-1.5 space-y-1">
+                        {[
+                          { user: 'crypto_trader01', pay: '196 USDC', get: '18,032 INR', time: '14:23', pref: 'FAST' },
+                          { user: 'shubh_trade', pay: '112 USDC', get: '10,640 INR', time: '11:45', pref: 'BEST' },
+                          { user: 'deep_finance', pay: '500 USDC', get: '46,100 INR', time: '08:12', pref: 'FAST' },
+                          { user: 'alpha_pay', pay: '250 USDC', get: '23,050 INR', time: '05:30', pref: 'BEST' },
+                        ].map((o, i) => (
+                          <div key={i} className="rounded-lg bg-white/[0.015] border border-white/[0.03] p-2 relative">
+                            {/* Pulse dot */}
+                            <div className="absolute top-1.5 left-1.5 w-1 h-1 rounded-full bg-primary animate-ping opacity-40" />
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[8px] text-white/50 font-mono pl-2">{o.user}</span>
+                              <span className="text-[7px] font-bold text-white/60 font-mono">{o.time}</span>
+                            </div>
+                            <div className="flex items-center gap-1 mb-1">
+                              <span className="text-[8px] text-red-400/70 font-mono">Pay</span>
+                              <span className="text-[8px] text-white/50 font-mono font-medium">{o.pay}</span>
+                              <span className="text-[7px] text-white/15">→</span>
+                              <span className="text-[8px] text-emerald-400/70 font-mono">Get</span>
+                              <span className="text-[8px] text-emerald-400/80 font-mono font-medium">{o.get}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className={`text-[6px] px-1 py-0.5 rounded border font-mono font-bold ${
+                                o.pref === 'FAST' ? 'text-primary/80 bg-primary/10 border-primary/20' : 'text-blue-400/80 bg-blue-500/10 border-blue-500/20'
+                              }`}>{o.pref}</span>
+                              <div className="px-2 py-0.5 rounded bg-primary/20 text-[7px] text-primary font-bold font-mono">ACCEPT</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Panel 3: In Progress */}
+                    <div className="flex-1 flex flex-col">
+                      <div className="px-2 py-1.5 border-b border-white/[0.03] flex items-center justify-between">
+                        <span className="text-[8px] font-bold text-white/40 uppercase tracking-wider font-mono">In Progress</span>
+                        <span className="text-[7px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono font-bold">4</span>
+                      </div>
+                      {/* Filter pills */}
+                      <div className="flex gap-1 px-2 py-1 border-b border-white/[0.03]">
+                        {['All', 'Escrowed', 'Paid'].map((f, i) => (
+                          <span key={f} className={`text-[7px] px-1.5 py-0.5 rounded font-mono ${i === 0 ? 'bg-primary/15 text-primary border border-primary/20' : 'text-white/25 bg-white/[0.02]'}`}>{f}</span>
+                        ))}
+                      </div>
+                      <div className="flex-1 overflow-hidden p-1.5 space-y-1">
+                        {[
+                          { user: 'gorav_research1', usdc: '350 USDC', fiat: '32,200 INR', status: 'Escrowed', sColor: 'text-purple-400 bg-purple-500/10', action: 'CONFIRM PAYMENT' },
+                          { user: 'proto_network0', usdc: '196 USDC', fiat: '18,032 INR', status: 'Payment Sent', sColor: 'text-yellow-400 bg-yellow-500/10', action: 'RELEASE ESCROW' },
+                          { user: 'alpha_trade', usdc: '88 USDC', fiat: '8,100 INR', status: 'Accepted', sColor: 'text-blue-400 bg-blue-500/10', action: 'LOCK ESCROW' },
+                        ].map((o, i) => (
+                          <div key={i} className="rounded-lg bg-white/[0.015] border border-white/[0.03] p-2 relative">
+                            <div className="absolute top-1.5 left-1.5 w-1 h-1 rounded-full bg-primary" />
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[8px] text-white/50 font-mono pl-2">{o.user}</span>
+                              <span className={`text-[7px] px-1 py-0.5 rounded font-mono font-medium ${o.sColor}`}>{o.status}</span>
+                            </div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-[9px] text-white/60 font-mono font-medium">{o.usdc}</span>
+                              <span className="text-[8px] text-white/30 font-mono">{o.fiat}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="px-2 py-0.5 rounded bg-primary/20 text-[6px] text-primary font-bold font-mono tracking-wide">{o.action}</div>
+                              <div className="w-4 h-4 rounded bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
+                                <MessageSquare className="w-2 h-2 text-white/25" />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Panel 4: Activity / Leaderboard */}
+                    <div className="w-[130px] border-l border-white/[0.04] flex flex-col">
+                      <div className="px-2 py-1.5 border-b border-white/[0.03]">
+                        <span className="text-[8px] font-bold text-white/40 uppercase tracking-wider font-mono">Leaderboard</span>
+                      </div>
+                      <div className="flex-1 p-1.5 space-y-1 overflow-hidden">
+                        {[
+                          { rank: 1, name: 'shubh_trade', vol: '$48.2K', medal: 'text-yellow-400' },
+                          { rank: 2, name: 'crypto_desk', vol: '$35.1K', medal: 'text-gray-300' },
+                          { rank: 3, name: 'gorav_pay', vol: '$28.7K', medal: 'text-orange-400' },
+                          { rank: 4, name: 'deep_finance', vol: '$22.0K', medal: 'text-white/20' },
+                          { rank: 5, name: 'proto_net', vol: '$18.5K', medal: 'text-white/20' },
+                        ].map((t) => (
+                          <div key={t.rank} className="flex items-center gap-1.5 py-1 px-1.5 rounded bg-white/[0.01]">
+                            <span className={`text-[8px] font-bold font-mono ${t.medal}`}>#{t.rank}</span>
+                            <span className="text-[8px] text-white/40 font-mono truncate flex-1">{t.name}</span>
+                            <span className="text-[7px] text-white/25 font-mono">{t.vol}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Activity section */}
+                      <div className="border-t border-white/[0.03]">
+                        <div className="px-2 py-1.5">
+                          <span className="text-[8px] font-bold text-white/40 uppercase tracking-wider font-mono">Activity</span>
+                        </div>
+                        <div className="px-1.5 pb-1.5 space-y-1">
+                          {[
+                            { text: 'Order #BM-2604 completed', time: '2m', color: 'text-green-400/50' },
+                            { text: 'New order from user', time: '5m', color: 'text-primary/50' },
+                            { text: 'Escrow locked', time: '8m', color: 'text-purple-400/50' },
+                          ].map((a, i) => (
+                            <div key={i} className="flex items-start gap-1">
+                              <div className={`w-1 h-1 rounded-full mt-1 ${a.color.replace('text-', 'bg-')}`} />
+                              <div className="flex-1">
+                                <p className="text-[7px] text-white/30 leading-tight">{a.text}</p>
+                                <p className="text-[6px] text-white/15 font-mono">{a.time} ago</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Panel 5: Chat / Notifications */}
+                    <div className="w-[110px] border-l border-white/[0.04] flex flex-col">
+                      <div className="px-2 py-1.5 border-b border-white/[0.03] flex items-center justify-between">
+                        <span className="text-[8px] font-bold text-white/40 uppercase tracking-wider font-mono">Chat</span>
+                        <span className="w-3 h-3 rounded-full bg-primary/20 text-[7px] text-primary font-bold flex items-center justify-center">2</span>
+                      </div>
+                      <div className="flex-1 p-1.5 space-y-1 overflow-hidden">
+                        {[
+                          { user: 'gorav_re...', msg: 'Payment sent check', unread: 2, online: true },
+                          { user: 'proto_net...', msg: 'Hello, ready to trade', unread: 1, online: true },
+                          { user: 'shubh_tr...', msg: 'Thanks confirmed', unread: 0, online: false },
+                        ].map((c, i) => (
+                          <div key={i} className="rounded-lg bg-white/[0.015] border border-white/[0.03] p-1.5">
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <div className="relative">
+                                <div className="w-4 h-4 rounded bg-white/[0.04] flex items-center justify-center text-[6px] text-white/40">{c.user.charAt(0).toUpperCase()}</div>
+                                {c.online && <div className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-green-500 border border-[#080810]" />}
+                              </div>
+                              <span className="text-[7px] text-white/50 font-mono flex-1 truncate">{c.user}</span>
+                              {c.unread > 0 && <span className="w-3 h-3 rounded-full bg-primary text-[6px] text-white font-bold flex items-center justify-center">{c.unread}</span>}
+                            </div>
+                            <p className="text-[6px] text-white/25 truncate pl-5">{c.msg}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Notifications */}
+                      <div className="border-t border-white/[0.03] p-1.5 space-y-1">
+                        <div className="px-0.5 mb-0.5">
+                          <span className="text-[7px] font-bold text-white/30 uppercase tracking-wider font-mono">Alerts</span>
+                        </div>
+                        <div className="rounded bg-primary/[0.06] border border-primary/10 p-1.5">
+                          <p className="text-[6px] text-primary/60 leading-tight">New order received from crypto_trader01</p>
+                        </div>
+                        <div className="rounded bg-green-500/[0.06] border border-green-500/10 p-1.5">
+                          <p className="text-[6px] text-green-400/60 leading-tight">Payment confirmed for #BM-2604</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom status bar */}
+                  <div className="flex items-center justify-between px-3 py-1 bg-[#0a0a14] border-t border-white/[0.04]">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                      <span className="text-[7px] text-white/25 font-mono">Connected</span>
+                    </div>
+                    <span className="text-[7px] text-white/15 font-mono">Settle v1.0</span>
+                  </div>
+                </div>
+
+                {/* Floating "Spread Control" card — offset top-right */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.8, duration: 0.5 }}
+                  className="absolute -top-4 -right-6 w-44 rounded-xl bg-background/95 border border-foreground/[0.08] p-3 shadow-xl shadow-black/40 backdrop-blur-sm"
+                  style={{ transform: 'rotateY(-4deg)' }}
+                >
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <TrendingUp className="w-3 h-3 text-primary" />
+                    <span className="text-[9px] font-bold text-primary/80 uppercase tracking-wider">Spread Control</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-foreground/40">+2.5% Spread</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-green-400/70 font-mono">+2.5%</span>
+                      <ChevronRight className="w-3 h-3 text-foreground/20" />
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Floating notification pill — bottom-left */}
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 1.0, duration: 0.5 }}
+                  className="absolute -bottom-3 -left-4 flex items-center gap-2 px-3 py-2 rounded-xl bg-background/95 border border-foreground/[0.08] shadow-xl shadow-black/40 backdrop-blur-sm"
+                >
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-[9px] text-foreground/50 font-mono">3 orders in progress</span>
+                </motion.div>
               </div>
             </motion.div>
-
-            <motion.h1
-              variants={fadeUp}
-              className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-foreground leading-[1.1] tracking-tight mb-5"
-            >
-              Run Your Own{" "}
-              <span className="text-primary">P2P Desk</span>
-            </motion.h1>
-
-            <motion.p
-              variants={fadeUp}
-              className="text-base sm:text-lg text-foreground/40 max-w-xl leading-relaxed mb-10"
-            >
-              Create liquidity, set your own spreads, and earn from every trade.
-              Backed by on-chain escrow and real-time settlement on Blip Money.
-            </motion.p>
-
-            <motion.div
-              variants={fadeUp}
-              className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto"
-            >
-              <button
-                onClick={onGetStarted}
-                className="w-full sm:w-auto px-8 py-3.5 bg-primary text-white rounded-2xl font-bold text-sm hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
-              >
-                Start as Merchant <ChevronRight className="w-4 h-4" />
-              </button>
-              <button
-                onClick={onSignIn}
-                className="w-full sm:w-auto px-8 py-3.5 bg-foreground/[0.04] border border-foreground/[0.06] text-foreground rounded-2xl font-bold text-sm hover:bg-foreground/[0.08] transition-all"
-              >
-                I Have an Account
-              </button>
-            </motion.div>
-          </motion.div>
+          </div>
 
           {/* Stats strip */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6, duration: 0.5 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-20 pt-10 border-t border-foreground/[0.04]"
+            className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-16 pt-10 border-t border-foreground/[0.04]"
           >
             {stats.map((s, i) => (
               <div key={i} className="text-center">
-                <div className="text-xl sm:text-2xl font-bold text-foreground mb-1 font-mono">
+                <div className="text-xl sm:text-2xl font-bold text-primary mb-1 font-mono">
                   {s.value}
                 </div>
                 <div className="text-[11px] text-foreground/30 uppercase tracking-wider">
