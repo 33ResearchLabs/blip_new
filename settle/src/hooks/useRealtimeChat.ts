@@ -170,19 +170,26 @@ interface UseRealtimeChatOptions {
 }
 
 /**
- * Determine 'from' field based on sender type and current actor
+ * Determine 'from' field based on sender type/id and current actor type/id.
+ * For M2M trades both parties are 'merchant' — we must compare IDs too.
  */
 function determineSender(
   senderType: string,
   messageType: string,
   myActorType: string,
+  senderId?: string,
+  myActorId?: string,
 ): "me" | "them" | "system" | "compliance" {
   // System-generated messages
   if (senderType === "system" || SYSTEM_MESSAGE_TYPES.has(messageType)) {
     return "system";
   }
-  // My own message
+  // My own message — match by ID when both IDs are available (M2M safe),
+  // fall back to type-only comparison for backward compat
   if (senderType === myActorType) {
+    if (senderId && myActorId) {
+      return senderId === myActorId ? "me" : "them";
+    }
     return "me";
   }
   // Compliance officer message (when I'm not compliance)
@@ -278,6 +285,8 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         dbMsg.sender_type,
         dbMsg.message_type,
         myActorType,
+        dbMsg.sender_id,
+        actorId,
       );
       return {
         id: dbMsg.id,
@@ -321,6 +330,8 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         event.senderType,
         event.messageType,
         myActorType,
+        event.senderId ?? undefined,
+        actorId,
       );
       return {
         id: event.messageId,
@@ -508,8 +519,12 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
 
       // Handle typing indicators
       const handleTypingStart = (rawData: unknown) => {
-        const data = rawData as PusherTypingEvent;
-        if (data.orderId !== orderId || data.actorType === actorType) return;
+        const data = rawData as PusherTypingEvent & { actorId?: string };
+        // M2M safe: if actorId is present, compare by ID; otherwise fall back to type
+        const isFromMe = data.actorId && actorId
+          ? data.actorId === actorId
+          : data.actorType === actorType;
+        if (data.orderId !== orderId || isFromMe) return;
 
         setChatWindows((prev) =>
           prev.map((w) => {
@@ -546,8 +561,11 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       };
 
       const handleTypingStop = (rawData: unknown) => {
-        const data = rawData as PusherTypingEvent;
-        if (data.orderId !== orderId || data.actorType === actorType) return;
+        const data = rawData as PusherTypingEvent & { actorId?: string };
+        const isFromMe = data.actorId && actorId
+          ? data.actorId === actorId
+          : data.actorType === actorType;
+        if (data.orderId !== orderId || isFromMe) return;
 
         setChatWindows((prev) =>
           prev.map((w) => {
@@ -568,8 +586,13 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
           orderId: string;
           messageIds: string[];
           deliveredBy: string;
+          deliveredById?: string;
         };
-        if (data.orderId !== orderId || data.deliveredBy === actorType) return;
+        // M2M safe: compare by ID when available, fall back to type
+        const isFromMe = data.deliveredById && actorId
+          ? data.deliveredById === actorId
+          : data.deliveredBy === actorType;
+        if (data.orderId !== orderId || isFromMe) return;
 
         const deliveredSet = new Set(data.messageIds);
         setChatWindows((prev) =>
@@ -598,9 +621,14 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         const data = rawData as {
           orderId: string;
           readerType: string;
+          readerId?: string;
           readAt: string;
         };
-        if (data.orderId !== orderId || data.readerType === actorType) return;
+        // M2M safe: compare by ID when available, fall back to type
+        const isFromMe = data.readerId && actorId
+          ? data.readerId === actorId
+          : data.readerType === actorType;
+        if (data.orderId !== orderId || isFromMe) return;
 
         setChatWindows((prev) =>
           prev.map((w) => {

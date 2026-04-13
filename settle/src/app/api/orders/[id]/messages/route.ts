@@ -52,8 +52,8 @@ export async function GET(
       return notFoundResponse('Order');
     }
 
-    // Authorization check
-    const canAccess = await canAccessOrder(auth, id);
+    // Authorization check — pass prefetched order to avoid duplicate DB query
+    const canAccess = await canAccessOrder(auth, id, order);
     if (!canAccess) {
       logger.auth.forbidden(`GET /api/orders/${id}/messages`, auth.actorId, 'Not order participant');
       return forbiddenResponse('You do not have access to this order');
@@ -518,8 +518,8 @@ export async function PATCH(
       return notFoundResponse('Order');
     }
 
-    // Authorization check
-    const canAccess = await canAccessOrder(auth, id);
+    // Authorization check — pass prefetched order to avoid duplicate DB query
+    const canAccess = await canAccessOrder(auth, id, order);
     if (!canAccess) {
       logger.auth.forbidden(`PATCH /api/orders/${id}/messages`, auth.actorId, 'Not order participant');
       return forbiddenResponse('You do not have access to this order');
@@ -551,6 +551,7 @@ export async function PATCH(
             orderId: id,
             messageIds: result.map((r: any) => r.id),
             deliveredBy: auth.actorType,
+            deliveredById: auth.actorId, // M2M safe
             deliveredAt: new Date().toISOString(),
           }).catch(() => {});
         }
@@ -573,13 +574,14 @@ export async function PATCH(
     await markMessagesAsRead(id, reader_type, auth.actorId);
 
     // Also update status to 'seen' for all unread messages from the other party
+    // M2M safe: use ID-based filter so merchant A's read doesn't mark their own messages
     await query(
       `UPDATE chat_messages
        SET status = 'seen'
        WHERE order_id = $1
-         AND sender_type != $2
+         AND NOT (sender_type = $2 AND sender_id = $3)
          AND (status IS NULL OR status IN ('sent', 'delivered'))`,
-      [id, reader_type]
+      [id, reader_type, auth.actorId]
     ).catch(() => {});
 
     // Clear Redis unread counter for the reader
@@ -593,7 +595,7 @@ export async function PATCH(
     }
 
     // Trigger real-time notification (multi-device: also emit on user's private channel)
-    notifyMessagesRead(id, reader_type, new Date().toISOString());
+    notifyMessagesRead(id, reader_type, new Date().toISOString(), auth.actorId);
 
     // Multi-device sync: emit on the reader's private channel so other tabs/devices
     // update their UI without polling.

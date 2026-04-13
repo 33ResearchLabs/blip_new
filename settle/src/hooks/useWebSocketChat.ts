@@ -137,12 +137,18 @@ const SYSTEM_MESSAGE_TYPES: MessageType[] = [
 function determineSender(
   senderType: string,
   messageType: string,
-  myActorType: string
+  myActorType: string,
+  senderId?: string,
+  myActorId?: string,
 ): 'me' | 'them' | 'system' | 'compliance' {
   if (senderType === 'system' || SYSTEM_MESSAGE_TYPES.includes(messageType as MessageType)) {
     return 'system';
   }
+  // M2M safe: compare by ID when both IDs available, fall back to type
   if (senderType === myActorType) {
+    if (senderId && myActorId) {
+      return senderId === myActorId ? 'me' : 'them';
+    }
     return 'me';
   }
   if (senderType === 'compliance') {
@@ -249,7 +255,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   // Convert DB message to UI message
   const mapDbMessageToUI = useCallback(
     (dbMsg: DbMessage, myActorType: string): ChatMessage => {
-      const from = determineSender(dbMsg.sender_type, dbMsg.message_type, myActorType);
+      const from = determineSender(dbMsg.sender_type, dbMsg.message_type, myActorType, dbMsg.sender_id, actorId);
       return {
         id: dbMsg.id,
         from,
@@ -276,7 +282,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   const mapWSMessageToUI = useCallback(
     (event: WSNewMessageEvent, myActorType: string): ChatMessage => {
       const { data } = event;
-      const from = determineSender(data.senderType, data.messageType, myActorType);
+      const from = determineSender(data.senderType, data.messageType, myActorType, data.senderId ?? undefined, actorId);
       // Phase 3: WS event may also carry clientId/seq if the WS server is updated
       // to forward them. Until then these fields are undefined and the dedup
       // path falls back to id-based dedup (which still works).
@@ -362,7 +368,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         if (event.seq > current) lastSeqRef.current.set(event.orderId, event.seq);
       }
 
-      const from = determineSender(event.senderType, event.messageType, actorType);
+      const from = determineSender(event.senderType, event.messageType, actorType, event.senderId ?? undefined, actorId);
       const message: ChatMessage = {
         id: event.messageId,
         from,
@@ -438,8 +444,12 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
 
     // ── Delivery + Read handlers (same pattern as useRealtimeChat) ──
     const handleDelivered = (rawData: unknown) => {
-      const data = rawData as { orderId: string; messageIds: string[]; deliveredBy: string };
-      if (data.deliveredBy === actorType) return;
+      const data = rawData as { orderId: string; messageIds: string[]; deliveredBy: string; deliveredById?: string };
+      // M2M safe: compare by ID when available
+      const isFromMe = data.deliveredById && actorId
+        ? data.deliveredById === actorId
+        : data.deliveredBy === actorType;
+      if (isFromMe) return;
       const deliveredSet = new Set(data.messageIds);
       setChatWindows(prev => prev.map(w => {
         if (w.orderId !== data.orderId) return w;
@@ -455,8 +465,12 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
     };
 
     const handleRead = (rawData: unknown) => {
-      const data = rawData as { orderId: string; readerType: string };
-      if (data.readerType === actorType) return;
+      const data = rawData as { orderId: string; readerType: string; readerId?: string };
+      // M2M safe: compare by ID when available
+      const isFromMe = data.readerId && actorId
+        ? data.readerId === actorId
+        : data.readerType === actorType;
+      if (isFromMe) return;
       setChatWindows(prev => prev.map(w => {
         if (w.orderId !== data.orderId) return w;
         return {

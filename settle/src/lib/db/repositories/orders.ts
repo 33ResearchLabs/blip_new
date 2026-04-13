@@ -421,7 +421,7 @@ export async function getAllPendingOrdersForMerchant(
     ) seller_offer ON o.buyer_merchant_id IS NOT NULL
     LEFT JOIN LATERAL (
       SELECT
-        COUNT(*) FILTER (WHERE cm.sender_type != 'merchant' AND cm.sender_type != 'system' AND cm.message_type != 'system' AND cm.is_read = false)::int as unread_count,
+        COUNT(*) FILTER (WHERE NOT (cm.sender_type = 'merchant' AND cm.sender_id = $1) AND cm.sender_type != 'system' AND cm.message_type != 'system' AND cm.is_read = false)::int as unread_count,
         COUNT(*) FILTER (WHERE cm.message_type != 'system')::int as message_count,
         (SELECT cm2.content FROM chat_messages cm2 WHERE cm2.order_id = o.id AND cm2.message_type != 'system' AND cm2.sender_type != 'system' ORDER BY cm2.created_at DESC LIMIT 1) as last_content,
         (SELECT cm2.sender_type FROM chat_messages cm2 WHERE cm2.order_id = o.id AND cm2.message_type != 'system' AND cm2.sender_type != 'system' ORDER BY cm2.created_at DESC LIMIT 1) as last_sender
@@ -2208,15 +2208,28 @@ export async function markMessagesAsRead(
   readerType: ActorType,
   readerId?: string  // Phase 3: optional for backward compat with existing callers
 ): Promise<void> {
-  // Existing path: keep the global is_read bit working so legacy queries
-  // (e.g. order list unread badge) continue to function unchanged.
-  // This ALWAYS runs — it's the byte-identical legacy behavior.
-  await query(
-    `UPDATE chat_messages
-     SET is_read = true, read_at = NOW()
-     WHERE order_id = $1 AND sender_type != $2 AND is_read = false`,
-    [orderId, readerType]
-  );
+  // Mark messages as read. For M2M trades where both parties are 'merchant',
+  // the type-only filter (sender_type != reader_type) would never match.
+  // When readerId is available, use ID-based filter for correctness.
+  if (readerId) {
+    // M2M safe: mark messages not sent by this specific actor
+    await query(
+      `UPDATE chat_messages
+       SET is_read = true, read_at = NOW()
+       WHERE order_id = $1
+         AND NOT (sender_type = $2 AND sender_id = $3)
+         AND is_read = false`,
+      [orderId, readerType, readerId]
+    );
+  } else {
+    // Legacy fallback: type-only comparison (works for U2M)
+    await query(
+      `UPDATE chat_messages
+       SET is_read = true, read_at = NOW()
+       WHERE order_id = $1 AND sender_type != $2 AND is_read = false`,
+      [orderId, readerType]
+    );
+  }
 
   // Phase 3: per-actor read state. Dual-write to chat_message_reads so we
   // can serve correct unread counts in 3-party (user + merchant + compliance)
@@ -2232,7 +2245,8 @@ export async function markMessagesAsRead(
         `INSERT INTO chat_message_reads (message_id, actor_type, actor_id, read_at)
          SELECT cm.id, $2, $3, NOW()
          FROM chat_messages cm
-         WHERE cm.order_id = $1 AND cm.sender_type != $2
+         WHERE cm.order_id = $1
+           AND NOT (cm.sender_type = $2 AND cm.sender_id = $3)
          ON CONFLICT (message_id, actor_type, actor_id) DO NOTHING`,
         [orderId, readerType, readerId]
       );

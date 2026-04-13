@@ -318,13 +318,15 @@ export async function notifyNewMessage(data: ChatMessageData): Promise<void> {
 export async function notifyMessagesRead(
   orderId: string,
   readerType: 'user' | 'merchant' | 'system' | 'compliance',
-  readAt: string
+  readAt: string,
+  readerId?: string,
 ): Promise<void> {
   const channel = getOrderChannel(orderId);
 
   await triggerEvent(channel, CHAT_EVENTS.MESSAGES_READ, {
     orderId,
     readerType,
+    readerId, // M2M safe: allows ID-based filtering
     readAt,
   });
 }
@@ -386,7 +388,8 @@ export async function notifyDirectTyping(
 export async function notifyTyping(
   orderId: string,
   actorType: 'user' | 'merchant' | 'compliance',
-  isTyping: boolean
+  isTyping: boolean,
+  actorId?: string,
 ): Promise<void> {
   const channel = getOrderChannel(orderId);
   const event = isTyping ? CHAT_EVENTS.TYPING_START : CHAT_EVENTS.TYPING_STOP;
@@ -394,6 +397,7 @@ export async function notifyTyping(
   await triggerEvent(channel, event, {
     orderId,
     actorType,
+    actorId, // M2M safe: allows ID-based filtering when both parties are merchants
     timestamp: new Date().toISOString(),
   });
 }

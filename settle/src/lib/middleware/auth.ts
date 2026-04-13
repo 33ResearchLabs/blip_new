@@ -594,10 +594,13 @@ export async function canComplianceAccessOrder(
  */
 export async function canAccessOrder(
   auth: AuthContext,
-  orderId: string
+  orderId: string,
+  /** Optional: pass an already-fetched order to avoid a duplicate DB query */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  prefetchedOrder?: any,
 ): Promise<boolean> {
   try {
-    const order = await getOrderById(orderId);
+    const order = prefetchedOrder ?? await getOrderById(orderId);
     if (!order) return false;
 
     if (auth.actorType === 'user') {

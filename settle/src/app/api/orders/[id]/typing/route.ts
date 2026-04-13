@@ -74,8 +74,8 @@ export async function POST(
       return successResponse({ sent: false, reason: 'Order is closed' });
     }
 
-    // Trigger real-time typing notification
-    await notifyTyping(id, actor_type, is_typing);
+    // Trigger real-time typing notification (pass actorId for M2M support)
+    await notifyTyping(id, actor_type, is_typing, auth.actorId);
 
     return successResponse({ sent: true });
   } catch (error) {
