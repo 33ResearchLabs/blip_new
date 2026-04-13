@@ -1,26 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { MessageCircle, Search, X, ChevronRight, CheckCheck, Star, Users, Store, Shield, AlertTriangle } from 'lucide-react';
+import { MessageCircle, Search, X, ChevronRight, CheckCheck, Shield, AlertTriangle, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
-
-interface DirectConversation {
-  contact_id: string;
-  contact_type: 'user' | 'merchant';
-  contact_target_id: string;
-  username: string;
-  nickname: string | null;
-  is_favorite: boolean;
-  trades_count: number;
-  last_message: {
-    content: string;
-    sender_type: string;
-    created_at: string;
-    is_read: boolean;
-  } | null;
-  unread_count: number;
-  last_activity: string | null;
-}
+import type { OrderConversation } from '@/hooks/useMerchantConversations';
 
 interface DisputeConversation {
   order_id: string;
@@ -51,11 +34,12 @@ interface DisputeConversation {
 
 interface MerchantChatTabsProps {
   merchantId: string;
-  conversations: DirectConversation[];
+  orderConversations: OrderConversation[];
   totalUnread: number;
   isLoading: boolean;
-  onOpenChat: (targetId: string, targetType: 'user' | 'merchant', username: string) => void;
+  onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
   onOpenDisputeChat?: (orderId: string, userName: string) => void;
+  onClearUnread?: (orderId: string) => void;
   onClose?: () => void;
 }
 
@@ -91,19 +75,32 @@ function getSenderLabel(senderType: string): string {
   return '';
 }
 
+function getStatusColor(status: string): string {
+  switch (status) {
+    case 'accepted': return 'text-blue-400 bg-blue-500/15';
+    case 'escrowed': return 'text-purple-400 bg-purple-500/15';
+    case 'payment_sent': return 'text-yellow-400 bg-yellow-500/15';
+    case 'completed': return 'text-green-400 bg-green-500/15';
+    case 'cancelled': case 'expired': return 'text-white/30 bg-white/[0.04]';
+    case 'disputed': return 'text-red-400 bg-red-500/15';
+    default: return 'text-white/40 bg-white/[0.04]';
+  }
+}
+
 export function MerchantChatTabs({
   merchantId,
-  conversations,
+  orderConversations,
   totalUnread,
   isLoading,
-  onOpenChat,
+  onOpenOrderChat,
   onOpenDisputeChat,
+  onClearUnread,
   onClose,
 }: MerchantChatTabsProps) {
-  const [activeTab, setActiveTab] = useState<'direct' | 'disputes'>('direct');
+  const [activeTab, setActiveTab] = useState<'orders' | 'disputes'>('orders');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Dispute conversations state
+  // Dispute conversations state (fetched independently)
   const [disputeConversations, setDisputeConversations] = useState<DisputeConversation[]>([]);
   const [disputeUnread, setDisputeUnread] = useState(0);
   const [isLoadingDisputes, setIsLoadingDisputes] = useState(false);
@@ -119,22 +116,20 @@ export function MerchantChatTabs({
         setDisputeConversations(data.data.conversations || []);
         setDisputeUnread(data.data.tabCounts?.disputeUnread || 0);
       }
-    } catch {
-      // Best-effort
-    } finally {
-      setIsLoadingDisputes(false);
-    }
+    } catch { /* best-effort */ }
+    finally { setIsLoadingDisputes(false); }
   }, [merchantId]);
 
-  // Fetch disputes on mount and poll
   useEffect(() => {
     fetchDisputes();
     const interval = setInterval(fetchDisputes, 15000);
     return () => clearInterval(interval);
   }, [fetchDisputes]);
 
-  const filteredDirect = conversations.filter(conv =>
-    (conv.nickname || conv.username).toLowerCase().includes(searchQuery.toLowerCase())
+  // Filter: search by order number or username
+  const filteredOrders = orderConversations.filter(conv =>
+    conv.order_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    conv.user.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const filteredDisputes = disputeConversations.filter(conv =>
@@ -174,32 +169,28 @@ export function MerchantChatTabs({
       {/* Tabs */}
       <div className="flex border-b border-white/[0.04]">
         <button
-          onClick={() => setActiveTab('direct')}
+          onClick={() => setActiveTab('orders')}
           className={`flex-1 px-3 py-1.5 text-[10px] font-mono font-medium transition-colors relative ${
-            activeTab === 'direct'
-              ? 'text-white/80'
-              : 'text-white/30 hover:text-foreground/50'
+            activeTab === 'orders' ? 'text-white/80' : 'text-white/30 hover:text-foreground/50'
           }`}
         >
           <div className="flex items-center justify-center gap-1.5">
             <MessageCircle className="w-3 h-3" />
-            <span>Direct</span>
+            <span>Orders</span>
             {totalUnread > 0 && (
               <span className="w-4 h-4 bg-primary text-background text-[8px] font-bold rounded-full flex items-center justify-center">
                 {totalUnread > 9 ? '9+' : totalUnread}
               </span>
             )}
           </div>
-          {activeTab === 'direct' && (
+          {activeTab === 'orders' && (
             <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary rounded-full" />
           )}
         </button>
         <button
           onClick={() => setActiveTab('disputes')}
           className={`flex-1 px-3 py-1.5 text-[10px] font-mono font-medium transition-colors relative ${
-            activeTab === 'disputes'
-              ? 'text-white/80'
-              : 'text-white/30 hover:text-foreground/50'
+            activeTab === 'disputes' ? 'text-white/80' : 'text-white/30 hover:text-foreground/50'
           }`}
         >
           <div className="flex items-center justify-center gap-1.5">
@@ -223,7 +214,7 @@ export function MerchantChatTabs({
           <Search className="w-3 h-3 text-white/20" />
           <input
             type="text"
-            placeholder={activeTab === 'direct' ? 'Search contacts...' : 'Search disputes...'}
+            placeholder={activeTab === 'orders' ? 'Search orders...' : 'Search disputes...'}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 bg-transparent text-[11px] text-white placeholder:text-white/15 outline-none font-mono"
@@ -233,80 +224,101 @@ export function MerchantChatTabs({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-1.5">
-        {activeTab === 'direct' ? (
-          /* ── Direct Messages Tab ── */
+        {activeTab === 'orders' ? (
+          /* ── Orders Tab ── */
           isLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="w-4 h-4 border-2 border-primary/40 border-t-primary rounded-full animate-spin" />
             </div>
-          ) : filteredDirect.length === 0 ? (
+          ) : filteredOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-white/15">
-              <Users className="w-8 h-8 mb-2 opacity-30" />
-              <p className="text-[10px] font-mono">{searchQuery ? 'No matches' : 'No messages yet'}</p>
+              <MessageCircle className="w-8 h-8 mb-2 opacity-30" />
+              <p className="text-[10px] font-mono">{searchQuery ? 'No matches' : 'No order chats yet'}</p>
             </div>
           ) : (
             <div className="space-y-1">
-              {filteredDirect.map((conv) => (
-                <button
-                  key={conv.contact_id}
-                  onClick={() => onOpenChat(conv.contact_target_id, conv.contact_type, conv.nickname || conv.username)}
-                  className="w-full p-2 glass-card rounded-lg hover:border-border-strong transition-colors text-left group"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-shrink-0">
-                      <div className="w-8 h-8 rounded-lg bg-white/[0.03] border border-white/[0.06] flex items-center justify-center text-sm">
-                        {getUserEmoji(conv.username)}
-                      </div>
-                      {conv.unread_count > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-background text-[9px] font-bold rounded-full flex items-center justify-center">
-                          {conv.unread_count > 9 ? '9+' : conv.unread_count}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="text-xs font-medium text-white/70 truncate">
-                          {conv.nickname || conv.username}
-                        </span>
-                        {conv.contact_type === 'merchant' && (
-                          <Store className="w-2.5 h-2.5 text-primary/60" />
-                        )}
-                        {conv.is_favorite && (
-                          <Star className="w-2.5 h-2.5 text-white/40 fill-white/40" />
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 text-[9px] text-white/30 font-mono">
-                        <span>{conv.trades_count} trade{conv.trades_count !== 1 ? 's' : ''}</span>
-                        {conv.last_message && (
-                          <>
-                            <span className="text-white/10">·</span>
-                            <span>{formatRelativeTime(conv.last_message.created_at)}</span>
-                          </>
-                        )}
-                      </div>
-                      {conv.last_message && (
-                        <div className="flex items-center gap-1 mt-0.5">
-                          {conv.last_message.sender_type === 'merchant' && (
-                            <CheckCheck className={`w-2.5 h-2.5 flex-shrink-0 ${
-                              conv.last_message.is_read ? 'text-primary/60' : 'text-white/15'
-                            }`} />
-                          )}
-                          <p className={`text-[10px] truncate ${
-                            conv.unread_count > 0 ? 'text-white/60 font-medium' : 'text-white/30'
-                          }`}>
-                            {truncate(conv.last_message.content, 35)}
-                          </p>
+              {filteredOrders.map((conv) => {
+                const isBuy = conv.order_type === 'buy';
+                const TypeIcon = isBuy ? ArrowDownLeft : ArrowUpRight;
+                const typeColor = isBuy ? 'text-green-400' : 'text-orange-400';
+                const typeBg = isBuy ? 'bg-green-500/10 border-green-500/20' : 'bg-orange-500/10 border-orange-500/20';
+
+                return (
+                  <button
+                    key={conv.order_id}
+                    onClick={() => {
+                      onClearUnread?.(conv.order_id);
+                      onOpenOrderChat(conv.order_id, conv.user.username, conv.order_number, conv.order_type);
+                    }}
+                    className="w-full p-2 glass-card rounded-lg hover:border-border-strong transition-colors text-left group"
+                  >
+                    <div className="flex items-center gap-2">
+                      {/* Order type icon */}
+                      <div className="relative flex-shrink-0">
+                        <div className={`w-8 h-8 rounded-lg border flex items-center justify-center ${typeBg}`}>
+                          <TypeIcon className={`w-4 h-4 ${typeColor}`} />
                         </div>
-                      )}
+                        {conv.unread_count > 0 && (
+                          <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-background text-[9px] font-bold rounded-full flex items-center justify-center">
+                            {conv.unread_count > 9 ? '9+' : conv.unread_count}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Order info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className={`text-[10px] font-bold ${typeColor}`}>
+                            {isBuy ? 'BUY' : 'SELL'}
+                          </span>
+                          <span className="text-xs font-medium text-white/70 truncate">
+                            {conv.crypto_amount} USDC
+                          </span>
+                          <span className="text-[9px] text-white/20">→</span>
+                          <span className="text-[10px] text-white/50 font-mono">
+                            {conv.fiat_currency === 'INR' ? '₹' : conv.fiat_currency}{' '}
+                            {Number(conv.fiat_amount).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[9px] text-white/30 font-mono">
+                          <span>#{conv.order_number}</span>
+                          <span className="text-white/10">·</span>
+                          <span>{conv.user.username}</span>
+                          <span className="text-white/10">·</span>
+                          <span className={`text-[8px] px-1 py-0.5 rounded ${getStatusColor(conv.order_status)}`}>
+                            {conv.order_status}
+                          </span>
+                          {conv.last_message && (
+                            <>
+                              <span className="text-white/10">·</span>
+                              <span>{formatRelativeTime(conv.last_message.created_at)}</span>
+                            </>
+                          )}
+                        </div>
+                        {conv.last_message && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            {conv.last_message.sender_type === 'merchant' && (
+                              <CheckCheck className={`w-2.5 h-2.5 flex-shrink-0 ${
+                                conv.last_message.is_read ? 'text-primary/60' : 'text-white/15'
+                              }`} />
+                            )}
+                            <p className={`text-[10px] truncate ${
+                              conv.unread_count > 0 ? 'text-white/60 font-medium' : 'text-white/30'
+                            }`}>
+                              {truncate(conv.last_message.content, 35)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      <ChevronRight className="w-3 h-3 text-white/10 group-hover:text-foreground/25 transition-colors self-center flex-shrink-0" />
                     </div>
-                    <ChevronRight className="w-3 h-3 text-white/10 group-hover:text-foreground/25 transition-colors self-center flex-shrink-0" />
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )
         ) : (
-          /* ── Disputes Tab ── */
+          /* ── Disputes Tab ── (unchanged) */
           isLoadingDisputes ? (
             <div className="flex items-center justify-center h-full">
               <div className="w-4 h-4 border-2 border-red-500/40 border-t-red-400 rounded-full animate-spin" />
@@ -322,10 +334,6 @@ export function MerchantChatTabs({
                 <button
                   key={conv.order_id}
                   onClick={() => {
-                    // Optimistically clear unread for this dispute so the badge
-                    // disappears instantly. DisputeChatView calls markAsRead on
-                    // mount which updates the backend; the next poll (15s) will
-                    // confirm the cleared state.
                     setDisputeConversations(prev => {
                       let removed = 0;
                       const next = prev.map(c => {
@@ -338,7 +346,6 @@ export function MerchantChatTabs({
                       if (removed > 0) setDisputeUnread(t => Math.max(0, t - removed));
                       return next;
                     });
-                    // Refetch shortly after so the server-side state syncs back.
                     setTimeout(() => fetchDisputes(), 1500);
                     onOpenDisputeChat?.(conv.order_id, conv.user.username);
                   }}

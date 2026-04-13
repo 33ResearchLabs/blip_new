@@ -6,7 +6,7 @@ import { Bell, Plus, Loader2, History, X } from "lucide-react";
 import { usePusher } from "@/context/PusherContext";
 import { useSounds } from "@/hooks/useSounds";
 import { useWebSocketChat } from "@/hooks/useWebSocketChat";
-import { useDirectChat } from "@/hooks/useDirectChat";
+// useDirectChat removed — replaced by order-based chat via useMerchantConversations
 import {
   NotificationToastContainer,
   useToast,
@@ -290,7 +290,25 @@ export default function MerchantDashboard() {
     debouncedFetchOrders,
   });
 
-  const { fetchOrderConversations } = useMerchantConversations();
+  const {
+    orderConversations, totalUnread: chatTotalUnread, isLoadingConversations,
+    fetchOrderConversations, scheduleFetch: scheduleConversationsFetch, clearUnreadForOrder,
+  } = useMerchantConversations();
+
+  // ── Order-based chat state ──────────────────────────────────────────
+  const [activeOrderChat, setActiveOrderChat] = useState<{
+    orderId: string; userName: string; orderNumber: string; orderType?: 'buy' | 'sell';
+  } | null>(null);
+
+  const onOpenOrderChat = useCallback((orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => {
+    clearUnreadForOrder(orderId);
+    setActiveOrderChat({ orderId, userName, orderNumber, orderType });
+  }, [clearUnreadForOrder]);
+
+  const onCloseOrderChat = useCallback(() => {
+    setActiveOrderChat(null);
+    scheduleConversationsFetch();
+  }, [scheduleConversationsFetch]);
 
   const { debouncedFetchConversations, fetchOrderConversationsRef } =
     useMerchantEffects({
@@ -312,8 +330,6 @@ export default function MerchantDashboard() {
       autoRefundEscrow,
     });
 
-  const directChat = useDirectChat({ merchantId: merchantId || undefined });
-
   const { chatWindows, openChat, closeChat, sendMessage, sendTypingIndicator } = useWebSocketChat({
     maxWindows: 10,
     actorType: "merchant",
@@ -333,48 +349,12 @@ export default function MerchantDashboard() {
   const handleOpenChat = useCallback(
     (order: Order) => {
       if (!merchantId) return;
-      const dbOrder = order.dbOrder;
-      let targetId: string;
-      let targetType: "user" | "merchant";
-      let targetName: string;
-
-      if (order.myRole === "buyer") {
-        if (dbOrder?.merchant_id && dbOrder.merchant_id !== merchantId) {
-          targetId = dbOrder.merchant_id;
-          targetType = "merchant";
-          targetName =
-            dbOrder.merchant_username ||
-            dbOrder.merchant_display_name ||
-            order.user ||
-            "Seller";
-        } else {
-          targetId = dbOrder?.user_id || order.user || "";
-          targetType = "user";
-          targetName = order.user || "User";
-        }
-      } else {
-        if (
-          dbOrder?.buyer_merchant_id &&
-          dbOrder.buyer_merchant_id !== merchantId
-        ) {
-          targetId = dbOrder.buyer_merchant_id;
-          targetType = "merchant";
-          targetName =
-            dbOrder.buyer_merchant_username ||
-            dbOrder.buyer_merchant_display_name ||
-            order.user ||
-            "Buyer";
-        } else {
-          targetId = dbOrder?.user_id || order.user || "";
-          targetType = "user";
-          targetName = order.user || "User";
-        }
-      }
-      if (!targetId) return;
-      directChat.addContact(targetId, targetType);
-      directChat.openChat(targetId, targetType, targetName);
+      const userName = order.user || 'User';
+      const orderNumber = order.dbOrder?.order_number || '';
+      const orderType = order.dbOrder?.type;
+      onOpenOrderChat(order.id, userName, orderNumber, orderType);
     },
-    [merchantId, directChat],
+    [merchantId, onOpenOrderChat],
   );
 
   const orderActions = useOrderActions({
@@ -640,7 +620,7 @@ export default function MerchantDashboard() {
       ),
     [ongoingOrders],
   );
-  const totalUnread = directChat.totalUnread;
+  const totalUnread = chatTotalUnread;
 
   if (isLoading) {
     return (
@@ -730,30 +710,7 @@ export default function MerchantDashboard() {
     );
   }
 
-  // Find the latest order status for the active DM contact (for ReceiptCard)
-  const activeContactOrder = directChat.activeContactId
-    ? orders.find(
-        (o) =>
-          o.dbOrder?.user_id === directChat.activeContactId ||
-          o.buyerMerchantId === directChat.activeContactId,
-      )
-    : undefined;
-  const activeContactOrderStatus =
-    activeContactOrder?.dbOrder?.status || activeContactOrder?.status;
-
-  // Determine if there's an active (non-terminal) trade with this contact.
-  // Chat should only be allowed during active trades to prevent off-platform contact.
-  const TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'expired']);
-  const hasActiveOrderWithContact = directChat.activeContactId
-    ? orders.some((o) => {
-        const isContactInOrder =
-          o.dbOrder?.user_id === directChat.activeContactId ||
-          o.buyerMerchantId === directChat.activeContactId;
-        if (!isContactInOrder) return false;
-        const status = o.dbOrder?.status || o.status;
-        return status && !TERMINAL_STATUSES.has(status);
-      })
-    : false;
+  // Old contact-based derived state removed — now order-based
 
   return (
     <div
@@ -861,9 +818,13 @@ export default function MerchantDashboard() {
         setLeaderboardTab={setLeaderboardTab}
         notifications={notifications}
         markNotificationRead={markNotificationRead}
-        directChat={directChat}
-        activeContactOrderStatus={activeContactOrderStatus}
-        hasActiveOrderWithContact={hasActiveOrderWithContact}
+        orderConversations={orderConversations}
+        totalUnread={chatTotalUnread}
+        isLoadingConversations={isLoadingConversations}
+        activeOrderChat={activeOrderChat}
+        onOpenOrderChat={onOpenOrderChat}
+        onCloseOrderChat={onCloseOrderChat}
+        onClearUnread={clearUnreadForOrder}
         playSound={playSound}
       />
 
@@ -886,9 +847,13 @@ export default function MerchantDashboard() {
         openDisputeModal={openDisputeModal}
         openCancelModal={openCancelModal}
         merchantId={merchantId}
-        directChat={directChat}
-        activeContactOrderStatus={activeContactOrderStatus}
-        hasActiveOrderWithContact={hasActiveOrderWithContact}
+        orderConversations={orderConversations}
+        chatTotalUnread={chatTotalUnread}
+        isLoadingConversations={isLoadingConversations}
+        activeOrderChat={activeOrderChat}
+        onOpenOrderChat={onOpenOrderChat}
+        onCloseOrderChat={onCloseOrderChat}
+        onClearUnread={clearUnreadForOrder}
         playSound={playSound}
         merchantInfo={merchantInfo}
         historyTab={historyTab}
@@ -1075,7 +1040,6 @@ export default function MerchantDashboard() {
         setSelectedOrderId={setSelectedOrderId}
         openChat={openChat}
         setActiveChatId={setActiveChatId}
-        directChat={directChat}
         openDisputeModal={openDisputeModal}
         requestCancelOrder={requestCancelOrder}
         openCancelModal={openCancelModal}
@@ -1083,8 +1047,13 @@ export default function MerchantDashboard() {
         toast={toast}
         showMessageHistory={showMessageHistory}
         setShowMessageHistory={setShowMessageHistory}
-        activeContactOrderStatus={activeContactOrderStatus}
-        hasActiveOrderWithContact={hasActiveOrderWithContact}
+        orderConversations={orderConversations}
+        chatTotalUnread={chatTotalUnread}
+        isLoadingConversations={isLoadingConversations}
+        activeOrderChat={activeOrderChat}
+        onOpenOrderChat={onOpenOrderChat}
+        onCloseOrderChat={onCloseOrderChat}
+        onClearUnread={clearUnreadForOrder}
         playSound={playSound}
       />
 

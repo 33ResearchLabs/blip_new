@@ -7,6 +7,7 @@ import type { Order } from "@/types/merchant";
 import { MobileOrdersView } from "@/components/merchant/MobileOrdersView";
 import { MobileEscrowView } from "@/components/merchant/MobileEscrowView";
 import { MobileChatView } from "@/components/merchant/MobileChatView";
+import type { OrderConversation } from "@/hooks/useMerchantConversations";
 import { MobileHistoryView } from "@/components/merchant/MobileHistoryView";
 import { MobileMarketplaceView } from "@/components/merchant/MobileMarketplaceView";
 import { MobileHomeView } from "@/components/merchant/MobileHomeView";
@@ -37,11 +38,15 @@ export interface MerchantMobileContentProps {
   openDisputeModal: (orderId: string) => void;
   openCancelModal: (order: Order) => void;
 
-  // Chat
+  // Chat (order-based)
   merchantId: string | null;
-  directChat: any;
-  activeContactOrderStatus: string | undefined;
-  hasActiveOrderWithContact?: boolean;
+  orderConversations: OrderConversation[];
+  chatTotalUnread: number;
+  isLoadingConversations: boolean;
+  activeOrderChat: { orderId: string; userName: string; orderNumber: string; orderType?: 'buy' | 'sell' } | null;
+  onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
+  onCloseOrderChat: () => void;
+  onClearUnread: (orderId: string) => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
 
   // History
@@ -80,7 +85,8 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
     acceptOrder, acceptingOrderId, handleOpenChat, dismissBigOrder,
     markingDone, openEscrowModal, markFiatPaymentSent, confirmPayment,
     openDisputeModal, openCancelModal,
-    merchantId, directChat, activeContactOrderStatus, hasActiveOrderWithContact, playSound,
+    merchantId, orderConversations, chatTotalUnread, isLoadingConversations,
+    activeOrderChat, onOpenOrderChat, onCloseOrderChat, onClearUnread, playSound,
     merchantInfo, historyTab, setHistoryTab,
     effectiveBalance, totalTradedVolume, todayEarnings, pendingEarnings,
     setShowAnalytics, setShowWalletModal, handleLogout,
@@ -140,9 +146,13 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
           {mobileView === "chat" && (
             <MobileChatView
               merchantId={merchantId}
-              directChat={directChat}
-              orderStatus={activeContactOrderStatus}
-              hasActiveOrder={hasActiveOrderWithContact}
+              orderConversations={orderConversations}
+              totalUnread={chatTotalUnread}
+              isLoadingConversations={isLoadingConversations}
+              activeOrderChat={activeOrderChat}
+              onOpenOrderChat={onOpenOrderChat}
+              onCloseOrderChat={onCloseOrderChat}
+              onClearUnread={onClearUnread}
               playSound={playSound}
             />
           )}

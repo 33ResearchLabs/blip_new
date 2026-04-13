@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import type { Order } from "@/types/merchant";
 import { useState } from "react";
-import { DirectChatView } from "@/components/merchant/DirectChatView";
+import { OrderChatView } from "@/components/merchant/OrderChatView";
 import { MerchantChatTabs } from "@/components/merchant/MerchantChatTabs";
 import { DisputeChatView } from "@/components/merchant/DisputeChatView";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
@@ -197,18 +197,22 @@ export interface MerchantModalsProps {
   setSelectedOrderId: (v: string | null) => void;
   openChat: (name: string, emoji: string, orderId: string) => void;
   setActiveChatId: (v: string | null) => void;
-  directChat: any;
   openDisputeModal: (orderId: string) => void;
   requestCancelOrder: (orderId: string) => void;
   openCancelModal: (order: Order) => void;
   fetchOrders: () => Promise<void>;
   toast: any;
 
-  // Message history panel
+  // Message history panel (order-based)
   showMessageHistory: boolean;
   setShowMessageHistory: (v: boolean) => void;
-  activeContactOrderStatus: string | undefined;
-  hasActiveOrderWithContact?: boolean;
+  orderConversations: any[];
+  chatTotalUnread: number;
+  isLoadingConversations: boolean;
+  activeOrderChat: { orderId: string; userName: string; orderNumber: string; orderType?: 'buy' | 'sell' } | null;
+  onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
+  onCloseOrderChat: () => void;
+  onClearUnread: (orderId: string) => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
 }
 
@@ -241,9 +245,12 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
     confirmingOrderId, cancellingOrderId, isRequestingCancel,
     acceptOrder, openEscrowModal, markFiatPaymentSent, confirmPayment,
     cancelOrderWithoutEscrow, respondToCancelRequest, handleOpenChat,
-    selectedOrderId, setSelectedOrderId, openChat, setActiveChatId, directChat,
+    selectedOrderId, setSelectedOrderId, openChat, setActiveChatId,
     openDisputeModal, requestCancelOrder, openCancelModal, fetchOrders, toast,
-    showMessageHistory, setShowMessageHistory, activeContactOrderStatus, hasActiveOrderWithContact, playSound,
+    showMessageHistory, setShowMessageHistory,
+    orderConversations, chatTotalUnread, isLoadingConversations,
+    activeOrderChat, onOpenOrderChat, onCloseOrderChat, onClearUnread,
+    playSound,
   } = props;
 
   return (
@@ -415,19 +422,10 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
           orderId={selectedOrderId}
           merchantId={merchantId}
           onClose={() => setSelectedOrderId(null)}
-          onOpenChat={(orderId, targetId, targetType, targetName) => {
+          onOpenChat={(orderId, _targetId, _targetType, targetName) => {
             const order = orders.find((o) => o.id === orderId);
-            if (order && (order.status === "disputed" || order.dbOrder?.status === "disputed")) {
-              openChat(order.user || targetName || "Dispute Chat", "📋", orderId);
-              setActiveChatId(orderId);
-              setSelectedOrderId(null);
-              return;
-            }
-            if (targetId && targetType && targetName) {
-              directChat.addContact(targetId, targetType);
-              directChat.openChat(targetId, targetType, targetName);
-            } else {
-              if (order) handleOpenChat(order);
+            if (order) {
+              handleOpenChat(order);
             }
             setSelectedOrderId(null);
           }}
@@ -476,27 +474,24 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
                 onBack={() => { setActiveDisputeOrderId(null); setActiveDisputeUserName(''); }}
                 onSendSound={() => playSound("send")}
               />
-            ) : directChat.activeContactId ? (
-              <DirectChatView
-                contactName={directChat.activeContactName}
-                contactType={directChat.activeContactType}
-                contactId={directChat.activeContactId}
-                isTyping={directChat.isContactTyping}
-                onTyping={directChat.sendTyping}
-                messages={directChat.messages}
-                isLoading={directChat.isLoadingMessages}
-                onSendMessage={(text, imageUrl) => { directChat.sendMessage(text, imageUrl); playSound("send"); }}
-                onBack={() => directChat.closeChat()}
-                orderStatus={activeContactOrderStatus}
-                hasActiveOrder={hasActiveOrderWithContact}
+            ) : activeOrderChat ? (
+              <OrderChatView
+                orderId={activeOrderChat.orderId}
+                merchantId={merchantId}
+                userName={activeOrderChat.userName}
+                orderNumber={activeOrderChat.orderNumber}
+                orderType={activeOrderChat.orderType}
+                onBack={onCloseOrderChat}
+                onSendSound={() => playSound("send")}
               />
             ) : (
               <MerchantChatTabs
                 merchantId={merchantId}
-                conversations={directChat.conversations}
-                totalUnread={directChat.totalUnread}
-                isLoading={directChat.isLoadingConversations}
-                onOpenChat={(targetId, targetType, username) => directChat.openChat(targetId, targetType, username)}
+                orderConversations={orderConversations}
+                totalUnread={chatTotalUnread}
+                isLoading={isLoadingConversations}
+                onOpenOrderChat={onOpenOrderChat}
+                onClearUnread={onClearUnread}
                 onOpenDisputeChat={(orderId, userName) => {
                   setActiveDisputeOrderId(orderId);
                   setActiveDisputeUserName(userName);

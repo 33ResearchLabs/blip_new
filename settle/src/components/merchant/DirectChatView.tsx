@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { ArrowLeft, Send, Store, User, CheckCheck, Paperclip, Loader2, X, Image as ImageIcon } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { ReceiptCard } from '@/components/chat/cards/ReceiptCard';
+import { ImageMessageBubble, type ImageUploadStatus } from '@/components/chat/ImageMessageBubble';
+import { compressImage } from '@/lib/utils/compressImage';
 import dynamic from 'next/dynamic';
 
 const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
@@ -27,10 +29,12 @@ interface DirectChatViewProps {
   isLoading: boolean;
   isTyping?: boolean;
   onSendMessage: (text: string, imageUrl?: string) => void;
-  onTyping?: () => void;
+  onTyping?: (orderId?: string) => void;
   onBack: () => void;
   orderStatus?: string;
   hasActiveOrder?: boolean;
+  /** Active order ID for this contact — needed to fire typing events on the order channel */
+  activeOrderId?: string;
 }
 
 function getUserEmoji(username: string): string {
@@ -65,7 +69,25 @@ export function DirectChatView({
   onBack,
   orderStatus,
   hasActiveOrder = true,
+  activeOrderId,
 }: DirectChatViewProps) {
+  // ── Mark order messages as read when merchant opens/views chat ──────
+  // This fires the PATCH mark-read on the ORDER channel so the user sees ✓✓ blue.
+  // Without this, the user's chat never gets read acknowledgment from the merchant.
+  // Also re-fires when new messages arrive (messages.length changes) to ACK them.
+  const lastAckedCountRef = useRef(0);
+  useEffect(() => {
+    if (!activeOrderId) return;
+    // Only fire when there are new messages to acknowledge
+    if (messages.length === lastAckedCountRef.current && lastAckedCountRef.current > 0) return;
+    lastAckedCountRef.current = messages.length;
+    fetchWithAuth(`/api/orders/${activeOrderId}/messages`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reader_type: 'merchant' }),
+    }).catch(() => {});
+  }, [activeOrderId, messages.length]);
+
   // ── Live presence (online/offline + last seen) ─────────────────────
   const [presence, setPresence] = useState<{ isOnline: boolean; lastSeen: string | null } | null>(null);
   useEffect(() => {
@@ -106,6 +128,30 @@ export function DirectChatView({
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emoji = getUserEmoji(contactName);
+
+  // ── Optimistic image uploads — WhatsApp-style ──────────────────────
+  interface PendingUpload {
+    tempId: string;
+    localUrl: string;
+    caption: string;
+    file: File;
+    status: ImageUploadStatus;
+    progress: number;
+    abortController: AbortController | null;
+    createdAt: number;
+  }
+  const [pendingUploads, setPendingUploads] = useState<Map<string, PendingUpload>>(new Map());
+  const pendingUploadsRef = useRef(pendingUploads);
+  pendingUploadsRef.current = pendingUploads;
+
+  // Abort all in-flight uploads on unmount
+  useEffect(() => {
+    return () => {
+      for (const entry of pendingUploadsRef.current.values()) {
+        if (entry.abortController) entry.abortController.abort();
+      }
+    };
+  }, []);
 
   // Fetch live order statuses for receipt cards — poll every 10s to track status changes
   const [receiptStatuses, setReceiptStatuses] = useState<Record<string, string>>({});
@@ -169,15 +215,16 @@ export function DirectChatView({
   };
 
   // Store file locally + show preview (no upload yet)
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) return;
-    if (!file.type.startsWith('image/')) return;
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawFile = e.target.files?.[0];
+    if (!rawFile) return;
+    if (rawFile.size > 10 * 1024 * 1024) return;
+    if (!rawFile.type.startsWith('image/')) return;
+    if (fileInputRef.current) fileInputRef.current.value = '';
 
+    const file = await compressImage(rawFile, { maxDimension: 1600, quality: 0.8 });
     const previewUrl = URL.createObjectURL(file);
     setPendingImage({ file, previewUrl });
-    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const clearPendingImage = () => {
@@ -187,59 +234,167 @@ export function DirectChatView({
 
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // Upload to Cloudinary then send message + image URL together
-  const uploadAndSend = async () => {
-    if (!pendingImage) return;
-    setIsUploading(true);
-    setUploadError(null);
+  /**
+   * WhatsApp-style optimistic image upload:
+   *  1. Insert optimistic bubble instantly (local preview)
+   *  2. Upload to Cloudinary in background with XHR progress
+   *  3. On success: send real message, remove pending
+   *  4. On failure: show retry button
+   */
+  const startImageUpload = useCallback(async (
+    file: File,
+    localUrl: string,
+    caption: string,
+    tempId: string,
+  ) => {
+    const abortController = new AbortController();
+    const uploadTimeout = setTimeout(() => abortController.abort(), 30_000);
+
+    setPendingUploads(prev => {
+      const next = new Map(prev);
+      const existing = prev.get(tempId);
+      next.set(tempId, {
+        tempId, localUrl, caption, file,
+        status: 'uploading', progress: 0,
+        abortController,
+        createdAt: existing?.createdAt ?? Date.now(),
+      });
+      return next;
+    });
+
+    // Auto-scroll to see the new optimistic bubble
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    });
+
     try {
+      // Step 1: Get Cloudinary signature
       const sigRes = await fetchWithAuth('/api/upload/signature', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId: 'direct-chat' }),
+        signal: abortController.signal,
       });
-      if (!sigRes.ok) {
-        setUploadError(sigRes.status === 401 ? 'Session expired — please refresh the page' : 'Failed to prepare upload');
-        setIsUploading(false);
-        return;
-      }
+      if (!sigRes.ok) throw new Error('Signature request failed');
       const sigData = await sigRes.json();
-      if (!sigData.success) {
-        setUploadError(sigData.error || 'Failed to prepare upload');
-        setIsUploading(false);
-        return;
-      }
+      if (!sigData.success) throw new Error('Invalid signature');
       const sig = sigData.data;
 
+      if (!sig.signature || !sig.timestamp || !sig.apiKey || !sig.cloudName || !sig.folder) {
+        throw new Error('Incomplete upload credentials');
+      }
+
+      setPendingUploads(prev => {
+        const next = new Map(prev);
+        const entry = next.get(tempId);
+        if (entry) next.set(tempId, { ...entry, progress: 20 });
+        return next;
+      });
+
+      // Step 2: Upload with XHR for progress tracking
       const formData = new FormData();
-      formData.append('file', pendingImage.file);
+      formData.append('file', file);
       formData.append('signature', sig.signature);
       formData.append('timestamp', sig.timestamp.toString());
       formData.append('api_key', sig.apiKey);
       formData.append('folder', sig.folder);
 
+      const imageUrl = await new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`);
 
-      const uploadRes = await fetch(
-        `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`,
-        { method: 'POST', body: formData }
-      );
-      if (uploadRes.ok) {
-        const result = await uploadRes.json();
-        const text = inputText.trim() || 'Photo';
-        onSendMessage(text, result.secure_url);
-        setInputText('');
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = 20 + Math.round((e.loaded / e.total) * 70);
+            setPendingUploads(prev => {
+              const next = new Map(prev);
+              const entry = next.get(tempId);
+              if (entry) next.set(tempId, { ...entry, progress: pct });
+              return next;
+            });
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText).secure_url);
+          } else {
+            reject(new Error(`Upload failed: ${xhr.status}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Network error'));
+
+        abortController.signal.addEventListener('abort', () => xhr.abort());
+        if (abortController.signal.aborted) { xhr.abort(); return; }
+
+        xhr.send(formData);
+      });
+
+      // Step 3: Send the real chat message
+      setPendingUploads(prev => {
+        const next = new Map(prev);
+        const entry = next.get(tempId);
+        if (entry) next.set(tempId, { ...entry, progress: 95 });
+        return next;
+      });
+
+      onSendMessage(caption || 'Photo', imageUrl);
+
+      // Step 4: Remove from pending
+      clearTimeout(uploadTimeout);
+      setPendingUploads(prev => {
+        const next = new Map(prev);
+        next.delete(tempId);
+        return next;
+      });
+
+    } catch (err: any) {
+      clearTimeout(uploadTimeout);
+      if (err?.name === 'AbortError' || abortController.signal.aborted) {
+        setPendingUploads(prev => {
+          const next = new Map(prev);
+          next.delete(tempId);
+          return next;
+        });
       } else {
-        console.error('[DirectChatView] Cloudinary upload failed:', uploadRes.status, await uploadRes.text().catch(() => ''));
-        setUploadError('Upload failed — please try again');
+        console.error('[DirectChatView] Image upload error:', err);
+        setPendingUploads(prev => {
+          const next = new Map(prev);
+          const entry = next.get(tempId);
+          if (entry) next.set(tempId, { ...entry, status: 'failed', progress: 0, abortController: null });
+          return next;
+        });
       }
-    } catch (err) {
-      console.error('[DirectChatView] Image upload error:', err);
-      setUploadError('Upload failed — check your connection');
-    } finally {
-      setIsUploading(false);
-      clearPendingImage();
     }
-  };
+  }, [onSendMessage]);
+
+  const cancelUpload = useCallback((tempId: string) => {
+    const entry = pendingUploadsRef.current.get(tempId);
+    if (entry?.abortController) entry.abortController.abort();
+    setPendingUploads(prev => {
+      const next = new Map(prev);
+      next.delete(tempId);
+      return next;
+    });
+  }, []);
+
+  const retryUpload = useCallback((tempId: string) => {
+    const entry = pendingUploadsRef.current.get(tempId);
+    if (!entry) return;
+    startImageUpload(entry.file, entry.localUrl, entry.caption, tempId);
+  }, [startImageUpload]);
+
+  /** Called when user confirms image send from preview */
+  const handleImageConfirm = useCallback(async () => {
+    if (!pendingImage) return;
+    const tempId = `temp-img-${Date.now()}`;
+    const file = await compressImage(pendingImage.file, { maxDimension: 1600, quality: 0.8 });
+    const localUrl = pendingImage.previewUrl;
+    const caption = inputText.trim();
+    setPendingImage(null); // Close preview
+    setInputText('');
+    startImageUpload(file, localUrl, caption, tempId);
+  }, [pendingImage, inputText, startImageUpload]);
 
   // Cleanup preview URL on unmount
   useEffect(() => {
@@ -278,10 +433,19 @@ export function DirectChatView({
             </div>
             {contactId && (
               <div className="flex items-center gap-1 mt-0.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${presence?.isOnline ? 'bg-green-500' : 'bg-white/25'}`} />
-                <span className={`text-[9px] font-mono ${presence?.isOnline ? 'text-green-400' : 'text-foreground/35'}`}>
-                  {presence?.isOnline ? 'Online' : `last seen ${formatLastSeen(presence?.lastSeen || null)}`}
-                </span>
+                {isTyping ? (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                    <span className="text-[9px] font-mono text-green-400">typing...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className={`w-1.5 h-1.5 rounded-full ${presence?.isOnline ? 'bg-green-500' : 'bg-white/25'}`} />
+                    <span className={`text-[9px] font-mono ${presence?.isOnline ? 'text-green-400' : 'text-foreground/35'}`}>
+                      {presence?.isOnline ? 'Online' : `last seen ${formatLastSeen(presence?.lastSeen || null)}`}
+                    </span>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -403,16 +567,25 @@ export function DirectChatView({
                 </div>
               );
             })}
-            {/* Typing indicator */}
-            {isTyping && (
-              <div className="flex items-center gap-1.5 px-2 py-1">
-                <div className="flex gap-0.5">
-                  <div className="w-1 h-1 rounded-full bg-white/30 animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-1 h-1 rounded-full bg-white/30 animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-1 h-1 rounded-full bg-white/30 animate-bounce" style={{ animationDelay: '300ms' }} />
+            {/* Pending image upload bubbles — optimistic UI */}
+            {pendingUploads.size > 0 && (
+              Array.from(pendingUploads.values())
+              .sort((a, b) => a.createdAt - b.createdAt)
+              .map((upload) => (
+                <div key={upload.tempId} className="flex justify-end mt-1">
+                  <div className="max-w-[80%] px-2.5 py-1.5 rounded-lg rounded-br-sm bg-primary/10 border border-primary/15">
+                    <ImageMessageBubble
+                      imageUrl={upload.localUrl}
+                      caption={upload.caption || undefined}
+                      uploadStatus={upload.status}
+                      uploadProgress={upload.progress}
+                      onCancel={() => cancelUpload(upload.tempId)}
+                      onRetry={() => retryUpload(upload.tempId)}
+                      isOwn
+                    />
+                  </div>
                 </div>
-                <span className="text-[9px] text-foreground/30 font-mono">{contactName} typing...</span>
-              </div>
+              ))
             )}
             <div ref={messagesEndRef} />
           </div>
@@ -511,11 +684,11 @@ export function DirectChatView({
             ref={inputRef}
             type="text"
             value={inputText}
-            onChange={(e) => { setInputText(e.target.value); onTyping?.(); }}
+            onChange={(e) => { setInputText(e.target.value); onTyping?.(activeOrderId); }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (pendingImage) { uploadAndSend(); } else { handleSend(); }
+                if (pendingImage) { handleImageConfirm(); } else { handleSend(); }
                 setShowEmojiPicker(false);
               }
             }}
@@ -525,7 +698,7 @@ export function DirectChatView({
           />
           <button
             onClick={() => {
-              if (pendingImage) { uploadAndSend(); } else { handleSend(); }
+              if (pendingImage) { handleImageConfirm(); } else { handleSend(); }
               setShowEmojiPicker(false);
             }}
             disabled={!inputText.trim() && !pendingImage}

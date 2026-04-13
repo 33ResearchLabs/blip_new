@@ -16,9 +16,10 @@ import { ActivityPanel } from "@/components/merchant/ActivityPanel";
 import { CompletedOrdersPanel } from "@/components/merchant/CompletedOrdersPanel";
 import { NotificationsPanel } from "@/components/merchant/NotificationsPanel";
 import { useState } from "react";
-import { DirectChatView } from "@/components/merchant/DirectChatView";
+import { OrderChatView } from "@/components/merchant/OrderChatView";
 import { MerchantChatTabs } from "@/components/merchant/MerchantChatTabs";
 import { DisputeChatView } from "@/components/merchant/DisputeChatView";
+import type { OrderConversation } from "@/hooks/useMerchantConversations";
 
 export interface MerchantDesktopLayoutProps {
   isWideScreen: boolean;
@@ -81,10 +82,14 @@ export interface MerchantDesktopLayoutProps {
   notifications: any[];
   markNotificationRead: (id: string) => void;
 
-  // Chat
-  directChat: any;
-  activeContactOrderStatus: string | undefined;
-  hasActiveOrderWithContact?: boolean;
+  // Chat (order-based)
+  orderConversations: OrderConversation[];
+  totalUnread: number;
+  isLoadingConversations: boolean;
+  activeOrderChat: { orderId: string; userName: string; orderNumber: string; orderType?: 'buy' | 'sell' } | null;
+  onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
+  onCloseOrderChat: () => void;
+  onClearUnread: (orderId: string) => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
 }
 
@@ -109,7 +114,9 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     leaderboardCollapsed, setLeaderboardCollapsed,
     leaderboardTab, setLeaderboardTab,
     notifications, markNotificationRead,
-    directChat, activeContactOrderStatus, hasActiveOrderWithContact, playSound,
+    orderConversations, totalUnread, isLoadingConversations,
+    activeOrderChat, onOpenOrderChat, onCloseOrderChat, onClearUnread,
+    playSound,
   } = props;
 
   return (
@@ -344,34 +351,24 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                   onBack={() => { setActiveDisputeOrderId(null); setActiveDisputeUserName(''); }}
                   onSendSound={() => playSound("send")}
                 />
-              ) : directChat.activeContactId ? (
-                <DirectChatView
-                  contactName={directChat.activeContactName}
-                  contactType={directChat.activeContactType}
-                  contactId={directChat.activeContactId}
-                  isTyping={directChat.isContactTyping}
-                  onTyping={directChat.sendTyping}
-                  messages={directChat.messages}
-                  isLoading={directChat.isLoadingMessages}
-                  onSendMessage={(text, imageUrl) => {
-                    directChat.sendMessage(text, imageUrl);
-                    playSound("send");
-                  }}
-                  onBack={() => directChat.closeChat()}
-                  orderStatus={activeContactOrderStatus}
-                  hasActiveOrder={hasActiveOrderWithContact}
+              ) : activeOrderChat ? (
+                <OrderChatView
+                  orderId={activeOrderChat.orderId}
+                  merchantId={merchantId || ""}
+                  userName={activeOrderChat.userName}
+                  orderNumber={activeOrderChat.orderNumber}
+                  orderType={activeOrderChat.orderType}
+                  onBack={onCloseOrderChat}
+                  onSendSound={() => playSound("send")}
                 />
               ) : (
                 <MerchantChatTabs
                   merchantId={merchantId || ""}
-                  conversations={directChat.conversations}
-                  totalUnread={directChat.totalUnread}
-                  isLoading={directChat.isLoadingConversations}
-                  onOpenChat={(targetId, targetType, username) => {
-                    directChat.addContact(targetId, targetType).then(() => {
-                      directChat.openChat(targetId, targetType, username);
-                    });
-                  }}
+                  orderConversations={orderConversations}
+                  totalUnread={totalUnread}
+                  isLoading={isLoadingConversations}
+                  onOpenOrderChat={onOpenOrderChat}
+                  onClearUnread={onClearUnread}
                   onOpenDisputeChat={(orderId, userName) => {
                     setActiveDisputeOrderId(orderId);
                     setActiveDisputeUserName(userName);

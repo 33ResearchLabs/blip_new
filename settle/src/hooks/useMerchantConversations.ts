@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useMerchantStore } from "@/stores/merchantStore";
-import type { DbOrder } from "@/types/merchant";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { usePusherOptional } from '@/context/PusherContext';
+import { getMerchantChannel } from '@/lib/pusher/channels';
+import { CHAT_EVENTS } from '@/lib/pusher/events';
 
-interface OrderConversation {
+export interface OrderConversation {
   order_id: string;
   order_number: string;
   order_status: string;
@@ -36,25 +38,14 @@ interface OrderConversation {
 
 export function useMerchantConversations() {
   const merchantId = useMerchantStore(s => s.merchantId);
+  const pusher = usePusherOptional();
 
   const [orderConversations, setOrderConversations] = useState<OrderConversation[]>([]);
+  const [totalUnread, setTotalUnread] = useState(0);
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
-  const [activeChatOrderDetails, setActiveChatOrderDetails] = useState<DbOrder | null>(null);
-
-  const fetchOrderDetailsForChat = useCallback(async (orderId: string) => {
-    try {
-      const res = await fetchWithAuth(`/api/orders/${orderId}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.success && data.data) {
-        setActiveChatOrderDetails(data.data);
-      }
-    } catch (error) {
-      console.error('[Chat] Failed to fetch order details:', error);
-    }
-  }, []);
 
   const convAbortRef = useRef<AbortController | null>(null);
+
   const fetchOrderConversations = useCallback(async () => {
     if (!merchantId) return;
     convAbortRef.current?.abort();
@@ -63,11 +54,15 @@ export function useMerchantConversations() {
 
     setIsLoadingConversations(true);
     try {
-      const res = await fetchWithAuth(`/api/merchant/messages?merchant_id=${merchantId}&limit=50`, { signal: controller.signal });
+      const res = await fetchWithAuth(
+        `/api/merchant/messages?merchant_id=${merchantId}&limit=50`,
+        { signal: controller.signal }
+      );
       if (!res.ok) return;
       const data = await res.json();
       if (data.success) {
         setOrderConversations(data.data.conversations || []);
+        setTotalUnread(data.data.totalUnread || 0);
       }
     } catch (error) {
       if ((error as Error).name === 'AbortError') return;
@@ -77,12 +72,79 @@ export function useMerchantConversations() {
     }
   }, [merchantId]);
 
+  // Debounced refresh — multiple callers within 500ms share one fetch
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const scheduleFetch = useCallback(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      fetchOrderConversations();
+    }, 500);
+  }, [fetchOrderConversations]);
+
+  // Initial fetch on mount
+  useEffect(() => {
+    if (!merchantId) return;
+    fetchOrderConversations();
+  }, [merchantId, fetchOrderConversations]);
+
+  // Polling fallback when Pusher is not connected (15s interval)
+  const isPusherConnected = !!(pusher as any)?.isConnected;
+  useEffect(() => {
+    if (!merchantId || isPusherConnected) return;
+    const interval = setInterval(fetchOrderConversations, 15000);
+    return () => clearInterval(interval);
+  }, [merchantId, isPusherConnected, fetchOrderConversations]);
+
+  // Pusher-driven refresh: listen for new messages on merchant channel
+  useEffect(() => {
+    if (!pusher || !merchantId) return;
+
+    const channelName = getMerchantChannel(merchantId);
+    const channel = pusher.subscribe(channelName);
+    if (!channel) return;
+
+    // Any new message → refresh inbox
+    const handleNewMessage = () => scheduleFetch();
+    // Message preview update → refresh inbox
+    const handlePreview = () => scheduleFetch();
+
+    channel.bind(CHAT_EVENTS.MESSAGE_NEW, handleNewMessage);
+    if (CHAT_EVENTS.MESSAGE_PREVIEW) {
+      channel.bind(CHAT_EVENTS.MESSAGE_PREVIEW, handlePreview);
+    }
+
+    return () => {
+      channel.unbind(CHAT_EVENTS.MESSAGE_NEW, handleNewMessage);
+      if (CHAT_EVENTS.MESSAGE_PREVIEW) {
+        channel.unbind(CHAT_EVENTS.MESSAGE_PREVIEW, handlePreview);
+      }
+    };
+  }, [pusher, merchantId, scheduleFetch]);
+
+  // Optimistically clear unread for an order (instant badge update)
+  const clearUnreadForOrder = useCallback((orderId: string) => {
+    setOrderConversations(prev => {
+      let removed = 0;
+      const next = prev.map(c => {
+        if (c.order_id === orderId) {
+          removed += c.unread_count || 0;
+          return { ...c, unread_count: 0 };
+        }
+        return c;
+      });
+      if (removed > 0) setTotalUnread(t => Math.max(0, t - removed));
+      return next;
+    });
+    // Refetch shortly to sync with server
+    setTimeout(scheduleFetch, 1500);
+  }, [scheduleFetch]);
+
   return {
     orderConversations,
+    totalUnread,
     isLoadingConversations,
-    activeChatOrderDetails,
-    setActiveChatOrderDetails,
-    fetchOrderDetailsForChat,
     fetchOrderConversations,
+    scheduleFetch,
+    clearUnreadForOrder,
   };
 }
