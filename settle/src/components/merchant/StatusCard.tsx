@@ -426,7 +426,7 @@ export const StatusCard = memo(function StatusCard({
             <TrendingUp className="w-2.5 h-2.5 text-primary" />
             <span className="text-[10px] font-bold text-primary font-mono tabular-nums">
               {todayEarnings > 0 ? "+" : ""}
-              {todayEarnings.toFixed(2)} USDT
+              {todayEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
             </span>
             <span className="text-[9px] text-primary/50 font-mono">24h</span>
           </div>
@@ -435,7 +435,7 @@ export const StatusCard = memo(function StatusCard({
         {/* Locked escrow indicator */}
         {lockedInEscrow > 0 && (
           <div className="mt-1.5 text-[9px] text-foreground/15 font-mono relative z-10">
-            {lockedInEscrow.toFixed(0)} locked in escrow
+            {lockedInEscrow.toLocaleString('en-US', { maximumFractionDigits: 0 })} locked in escrow
           </div>
         )}
       </div>

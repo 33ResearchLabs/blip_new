@@ -107,7 +107,7 @@ export function EscrowLockModal({
                 <div className="flex items-center justify-between bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
                   <span className="text-xs text-foreground/35">Your USDC Balance</span>
                   <span className={`text-sm font-bold ${(effectiveBalance || 0) >= escrowOrder.amount ? 'text-white' : 'text-red-400'}`}>
-                    {effectiveBalance?.toFixed(2) || '0.00'} USDC
+                    {effectiveBalance != null ? effectiveBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'} USDC
                   </span>
                 </div>
 
