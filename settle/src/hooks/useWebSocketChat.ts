@@ -365,12 +365,46 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
       .map((w) => w.orderId)
       .filter((id): id is string => !!id);
 
+    // ── Delivery + Read handlers (same pattern as useRealtimeChat) ──
+    const handleDelivered = (rawData: unknown) => {
+      const data = rawData as { orderId: string; messageIds: string[]; deliveredBy: string };
+      if (data.deliveredBy === actorType) return;
+      const deliveredSet = new Set(data.messageIds);
+      setChatWindows(prev => prev.map(w => {
+        if (w.orderId !== data.orderId) return w;
+        return {
+          ...w,
+          messages: w.messages.map(m =>
+            m.from === 'me' && deliveredSet.has(m.id) && m.status !== 'read'
+              ? { ...m, status: 'delivered' as const }
+              : m
+          ),
+        };
+      }));
+    };
+
+    const handleRead = (rawData: unknown) => {
+      const data = rawData as { orderId: string; readerType: string };
+      if (data.readerType === actorType) return;
+      setChatWindows(prev => prev.map(w => {
+        if (w.orderId !== data.orderId) return w;
+        return {
+          ...w,
+          messages: w.messages.map(m =>
+            m.from === 'me' ? { ...m, isRead: true, status: 'read' as const } : m
+          ),
+        };
+      }));
+    };
+
     // Subscribe to any orderId we haven't subscribed to yet
     for (const orderId of orderIds) {
       if (pusherSubscribedRef.current.get(orderId)) continue;
       const channel = pusher.subscribe(getOrderChannel(orderId));
       if (!channel) continue;
       channel.bind(CHAT_EVENTS.MESSAGE_NEW, handlePusherMessage);
+      channel.bind(CHAT_EVENTS.MESSAGES_DELIVERED, handleDelivered);
+      channel.bind(CHAT_EVENTS.MESSAGES_READ, handleRead);
       pusherSubscribedRef.current.set(orderId, true);
     }
 
@@ -380,12 +414,60 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
       if (!activeIds.has(orderId)) {
         const channel = pusher.subscribe(getOrderChannel(orderId));
         channel?.unbind(CHAT_EVENTS.MESSAGE_NEW, handlePusherMessage);
+        channel?.unbind(CHAT_EVENTS.MESSAGES_DELIVERED, handleDelivered);
+        channel?.unbind(CHAT_EVENTS.MESSAGES_READ, handleRead);
         pusher.unsubscribe(getOrderChannel(orderId));
         pusherSubscribedRef.current.delete(orderId);
         lastSeqRef.current.delete(orderId);
       }
     }
   }, [pusher, chatWindows, handlePusherMessage]);
+
+  // ── Merchant private channel listener ────────────────────────────────
+  // The order-channel subscription (above) only fires when a chat window exists.
+  // But messages can arrive for orders the merchant hasn't opened yet.
+  // Subscribe to the merchant's private channel for MESSAGE_NEW so the
+  // inbox can update (unread badges, last message preview) even when
+  // no chat window is open for that order.
+  useEffect(() => {
+    if (!pusher || actorType !== 'merchant' || !actorId) return;
+
+    const { getMerchantChannel } = require('@/lib/pusher/channels');
+    const channelName = getMerchantChannel(actorId);
+    const channel = pusher.subscribe(channelName);
+    if (!channel) return;
+
+    const handlePrivateMessage = (rawData: unknown) => {
+      const data = rawData as PusherChatMessageEvent;
+      if (!data?.orderId || !data?.messageId) return;
+
+      // If we already have a chat window for this order, the order-channel
+      // handler will process it (dedup-by-id). Skip here to avoid double processing.
+      const existingWindow = chatWindowsRef.current.find(w => w.orderId === data.orderId);
+      if (existingWindow) return;
+
+      // No chat window open — fire the onNewMessage callback so the parent
+      // (merchant page) can update inbox badges, last message preview, etc.
+      if (data.senderType !== actorType) {
+        const message: ChatMessage = {
+          id: data.messageId,
+          from: 'them',
+          text: data.content || '',
+          timestamp: new Date(data.createdAt),
+          messageType: data.messageType,
+          imageUrl: data.imageUrl,
+          senderName: data.senderName,
+        };
+        onNewMessage?.(data.orderId, message);
+      }
+    };
+
+    channel.bind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateMessage);
+
+    return () => {
+      channel.unbind(CHAT_EVENTS.MESSAGE_NEW, handlePrivateMessage);
+    };
+  }, [pusher, actorType, actorId, onNewMessage]);
 
   // Phase 3: reconnect catch-up. When Pusher reconnects, fetch any messages
   // we missed during the gap via /api/orders/:id/messages?after_seq=<lastSeq>.

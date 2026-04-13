@@ -849,8 +849,12 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       });
     }
   } else if (view === "pending") {
-    // ─── PENDING: all pending orders (market + mine) ───────────────
-    const pendingStatuses = new Set(["pending", "escrowed"]);
+    // ─── PENDING: orders waiting to be accepted (NOT escrowed/active) ──
+    // Escrowed orders belong in "In Progress", not here. Including them
+    // caused a bug where the order showed "Expired" (stale local countdown
+    // from the original 15-min pending window) even though the order was
+    // actively escrowed with an extended 120-min deadline.
+    const pendingStatuses = new Set(["pending"]);
     const marketOrders = [...orders].filter((o: any) =>
       pendingStatuses.has(o.status || o.dbOrder?.status),
     );
