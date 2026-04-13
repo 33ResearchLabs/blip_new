@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Real-time Chat Hook
@@ -7,28 +7,42 @@
  * Supports: text, image, file messages, typing indicators, presence, compliance
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
-import { usePusherOptional } from '@/context/PusherContext';
-import { getOrderChannel, getOrderPresenceChannel } from '@/lib/pusher/channels';
-import { CHAT_EVENTS } from '@/lib/pusher/events';
+import { useState, useEffect, useCallback, useRef } from "react";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { usePusherOptional } from "@/context/PusherContext";
+import {
+  getOrderChannel,
+  getOrderPresenceChannel,
+} from "@/lib/pusher/channels";
+import { CHAT_EVENTS } from "@/lib/pusher/events";
 
 export interface ChatMessage {
   id: string;
-  from: 'me' | 'them' | 'system' | 'compliance';
+  from: "me" | "them" | "system" | "compliance";
   text: string;
   timestamp: Date;
-  messageType?: 'text' | 'image' | 'file' | 'system' | 'receipt' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
+  messageType?:
+    | "text"
+    | "image"
+    | "file"
+    | "system"
+    | "receipt"
+    | "dispute"
+    | "resolution"
+    | "resolution_proposed"
+    | "resolution_rejected"
+    | "resolution_accepted"
+    | "resolution_finalized";
   receiptData?: Record<string, unknown> | null;
   imageUrl?: string | null;
   fileUrl?: string | null;
   fileName?: string | null;
   fileSize?: number | null;
   mimeType?: string | null;
-  senderType?: 'user' | 'merchant' | 'compliance' | 'system';
+  senderType?: "user" | "merchant" | "compliance" | "system";
   senderName?: string;
   isRead?: boolean;
-  status?: 'sending' | 'sent' | 'delivered' | 'read';
+  status?: "sending" | "sent" | "delivered" | "read";
   isHighlighted?: boolean;
   // Phase 3: idempotency + ordering. Both optional for backward compat
   // with messages constructed before this field existed.
@@ -40,7 +54,7 @@ export interface ChatMessage {
 }
 
 export interface PresenceMember {
-  actorType: 'user' | 'merchant' | 'compliance' | 'system';
+  actorType: "user" | "merchant" | "compliance" | "system";
   actorId: string;
   isOnline: boolean;
   lastSeen?: string;
@@ -65,11 +79,22 @@ export interface ChatWindow {
 interface DbMessage {
   id: string;
   order_id: string;
-  sender_type: 'user' | 'merchant' | 'compliance' | 'system';
+  sender_type: "user" | "merchant" | "compliance" | "system";
   sender_id: string;
   sender_name?: string;
   content: string;
-  message_type: 'text' | 'image' | 'file' | 'system' | 'receipt' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
+  message_type:
+    | "text"
+    | "image"
+    | "file"
+    | "system"
+    | "receipt"
+    | "dispute"
+    | "resolution"
+    | "resolution_proposed"
+    | "resolution_rejected"
+    | "resolution_accepted"
+    | "resolution_finalized";
   receipt_data?: Record<string, unknown> | null;
   image_url?: string | null;
   file_url?: string | null;
@@ -79,7 +104,7 @@ interface DbMessage {
   created_at: string;
   is_read: boolean;
   is_highlighted?: boolean;
-  status?: 'sent' | 'delivered' | 'seen';
+  status?: "sent" | "delivered" | "seen";
   // Phase 3 — present on rows after migration 076
   client_id?: string | null;
   seq?: number | null;
@@ -89,11 +114,21 @@ interface DbMessage {
 interface PusherMessageEvent {
   messageId: string;
   orderId: string;
-  senderType: 'user' | 'merchant' | 'compliance' | 'system';
+  senderType: "user" | "merchant" | "compliance" | "system";
   senderId: string | null;
   senderName?: string;
   content: string;
-  messageType: 'text' | 'image' | 'file' | 'system' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
+  messageType:
+    | "text"
+    | "image"
+    | "file"
+    | "system"
+    | "dispute"
+    | "resolution"
+    | "resolution_proposed"
+    | "resolution_rejected"
+    | "resolution_accepted"
+    | "resolution_finalized";
   imageUrl?: string | null;
   fileUrl?: string | null;
   fileName?: string | null;
@@ -108,15 +143,20 @@ interface PusherMessageEvent {
 // Pusher typing event
 interface PusherTypingEvent {
   orderId: string;
-  actorType: 'user' | 'merchant' | 'compliance';
+  actorType: "user" | "merchant" | "compliance";
   actorName?: string;
   timestamp: string;
 }
 
 // System message types that should be rendered as 'system' sender
 const SYSTEM_MESSAGE_TYPES = new Set([
-  'dispute', 'resolution', 'resolution_proposed',
-  'resolution_rejected', 'resolution_accepted', 'resolution_finalized', 'system',
+  "dispute",
+  "resolution",
+  "resolution_proposed",
+  "resolution_rejected",
+  "resolution_accepted",
+  "resolution_finalized",
+  "system",
 ]);
 
 interface UseRealtimeChatOptions {
@@ -125,7 +165,7 @@ interface UseRealtimeChatOptions {
   // Consumers (e.g. inbox preview) need to look up the order to update its
   // lastMessage / unreadCount, so they need the real order id.
   onNewMessage?: (orderId: string, message: ChatMessage) => void;
-  actorType?: 'user' | 'merchant' | 'compliance';
+  actorType?: "user" | "merchant" | "compliance";
   actorId?: string;
 }
 
@@ -135,26 +175,26 @@ interface UseRealtimeChatOptions {
 function determineSender(
   senderType: string,
   messageType: string,
-  myActorType: string
-): 'me' | 'them' | 'system' | 'compliance' {
+  myActorType: string,
+): "me" | "them" | "system" | "compliance" {
   // System-generated messages
-  if (senderType === 'system' || SYSTEM_MESSAGE_TYPES.has(messageType)) {
-    return 'system';
+  if (senderType === "system" || SYSTEM_MESSAGE_TYPES.has(messageType)) {
+    return "system";
   }
   // My own message
   if (senderType === myActorType) {
-    return 'me';
+    return "me";
   }
   // Compliance officer message (when I'm not compliance)
-  if (senderType === 'compliance') {
-    return 'compliance';
+  if (senderType === "compliance") {
+    return "compliance";
   }
   // Other party
-  return 'them';
+  return "them";
 }
 
 export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
-  const { maxWindows = 3, onNewMessage, actorType = 'user', actorId } = options;
+  const { maxWindows = 3, onNewMessage, actorType = "user", actorId } = options;
   const [chatWindows, setChatWindows] = useState<ChatWindow[]>([]);
 
   const pusher = usePusherOptional();
@@ -175,55 +215,65 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   const deliveryAckBufferRef = useRef<Map<string, Set<string>>>(new Map());
   const deliveryAckTimerRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
-  const queueDeliveryAck = useCallback((orderId: string, messageId: string) => {
-    // Add to buffer
-    if (!deliveryAckBufferRef.current.has(orderId)) {
-      deliveryAckBufferRef.current.set(orderId, new Set());
-    }
-    deliveryAckBufferRef.current.get(orderId)!.add(messageId);
+  const queueDeliveryAck = useCallback(
+    (orderId: string, messageId: string) => {
+      // Add to buffer
+      if (!deliveryAckBufferRef.current.has(orderId)) {
+        deliveryAckBufferRef.current.set(orderId, new Set());
+      }
+      deliveryAckBufferRef.current.get(orderId)!.add(messageId);
 
-    // Debounce: flush after 300ms of no new messages for this order
-    const existingTimer = deliveryAckTimerRef.current.get(orderId);
-    if (existingTimer) clearTimeout(existingTimer);
+      // Debounce: flush after 300ms of no new messages for this order
+      const existingTimer = deliveryAckTimerRef.current.get(orderId);
+      if (existingTimer) clearTimeout(existingTimer);
 
-    deliveryAckTimerRef.current.set(orderId, setTimeout(() => {
-      const ids = deliveryAckBufferRef.current.get(orderId);
-      if (!ids || ids.size === 0) return;
-
-      const messageIds = Array.from(ids);
-      deliveryAckBufferRef.current.delete(orderId);
-      deliveryAckTimerRef.current.delete(orderId);
-
-      // Single batch PATCH for all messages in this 300ms window
-      fetchWithAuth(`/api/orders/${orderId}/messages`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'delivered',
-          message_ids: messageIds,
-          reader_type: actorType,
-        }),
-      }).catch(() => {
-        // Retry once after 2s
+      deliveryAckTimerRef.current.set(
+        orderId,
         setTimeout(() => {
+          const ids = deliveryAckBufferRef.current.get(orderId);
+          if (!ids || ids.size === 0) return;
+
+          const messageIds = Array.from(ids);
+          deliveryAckBufferRef.current.delete(orderId);
+          deliveryAckTimerRef.current.delete(orderId);
+
+          // Single batch PATCH for all messages in this 300ms window
           fetchWithAuth(`/api/orders/${orderId}/messages`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              action: 'delivered',
+              action: "delivered",
               message_ids: messageIds,
               reader_type: actorType,
             }),
-          }).catch(() => {});
-        }, 2000);
-      });
-    }, 300));
-  }, [actorType]);
+          }).catch(() => {
+            // Retry once after 2s
+            setTimeout(() => {
+              fetchWithAuth(`/api/orders/${orderId}/messages`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "delivered",
+                  message_ids: messageIds,
+                  reader_type: actorType,
+                }),
+              }).catch(() => {});
+            }, 2000);
+          });
+        }, 300),
+      );
+    },
+    [actorType],
+  );
 
   // Convert DB message to UI message
   const mapDbMessageToUI = useCallback(
     (dbMsg: DbMessage, myActorType: string): ChatMessage => {
-      const from = determineSender(dbMsg.sender_type, dbMsg.message_type, myActorType);
+      const from = determineSender(
+        dbMsg.sender_type,
+        dbMsg.message_type,
+        myActorType,
+      );
       return {
         id: dbMsg.id,
         from,
@@ -243,25 +293,30 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         // Map DB status enum to frontend status enum.
         // DB uses 'seen', frontend uses 'read' — must translate here.
         // Priority: is_read flag → DB status → fallback to 'sent'.
-        status: from === 'me'
-          ? dbMsg.is_read || dbMsg.status === 'seen'
-            ? 'read'
-            : dbMsg.status === 'delivered'
-              ? 'delivered'
-              : 'sent'
-          : undefined,
+        status:
+          from === "me"
+            ? dbMsg.is_read || dbMsg.status === "seen"
+              ? "read"
+              : dbMsg.status === "delivered"
+                ? "delivered"
+                : "sent"
+            : undefined,
         // Phase 3: carry through for ordering + dedup. Both null on legacy rows.
         clientId: dbMsg.client_id ?? undefined,
         seq: dbMsg.seq ?? undefined,
       };
     },
-    []
+    [],
   );
 
   // Convert Pusher event to UI message
   const mapPusherMessageToUI = useCallback(
     (event: PusherMessageEvent, myActorType: string): ChatMessage => {
-      const from = determineSender(event.senderType, event.messageType, myActorType);
+      const from = determineSender(
+        event.senderType,
+        event.messageType,
+        myActorType,
+      );
       return {
         id: event.messageId,
         from,
@@ -276,37 +331,42 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         senderType: event.senderType,
         senderName: event.senderName,
         isRead: false,
-        status: from === 'me' ? 'sent' : undefined,
+        status: from === "me" ? "sent" : undefined,
         // Phase 3: optimistic temp replacement matches by clientId.
         clientId: event.clientId ?? undefined,
         seq: event.seq ?? undefined,
       };
     },
-    []
+    [],
   );
 
   // Fetch initial messages for an order
   const fetchMessages = useCallback(
     async (orderId: string, chatId: string) => {
       try {
-        const authParam = actorId ? `?user_id=${actorId}` : '';
-        const res = await fetchWithAuth(`/api/orders/${orderId}/messages${authParam}`);
+        const authParam = actorId ? `?user_id=${actorId}` : "";
+        const res = await fetchWithAuth(
+          `/api/orders/${orderId}/messages${authParam}`,
+        );
         if (!res.ok) {
-          console.log('Messages API not available - using demo mode', res.status);
+          console.log(
+            "Messages API not available - using demo mode",
+            res.status,
+          );
           return;
         }
         const data = await res.json();
 
         if (data.success && data.data) {
           const messages: ChatMessage[] = data.data.map((m: DbMessage) =>
-            mapDbMessageToUI(m, actorType)
+            mapDbMessageToUI(m, actorType),
           );
 
           // Phase 3: seed lastSeq from the highest seq in the initial fetch
           // so the first reconnect catch-up only pulls truly missed messages.
           let maxSeq = 0;
           for (const m of messages) {
-            if (typeof m.seq === 'number' && m.seq > maxSeq) maxSeq = m.seq;
+            if (typeof m.seq === "number" && m.seq > maxSeq) maxSeq = m.seq;
           }
           if (maxSeq > 0) {
             const current = lastSeqRef.current.get(orderId) || 0;
@@ -317,14 +377,14 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
             prev.map((w) => {
               if (w.id !== chatId) return w;
               return { ...w, messages };
-            })
+            }),
           );
         }
       } catch (error) {
-        console.log('Messages API error - running in demo mode', error);
+        console.log("Messages API error - running in demo mode", error);
       }
     },
-    [actorType, actorId, mapDbMessageToUI]
+    [actorType, actorId, mapDbMessageToUI],
   );
 
   // Stable ref for fetchMessages so polling interval doesn't recreate
@@ -332,26 +392,23 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   fetchMessagesRef.current = fetchMessages;
 
   // Fetch presence for an order
-  const fetchPresence = useCallback(
-    async (orderId: string, chatId: string) => {
-      try {
-        const res = await fetchWithAuth(`/api/orders/${orderId}/presence`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.success && data.data?.members) {
-          setChatWindows((prev) =>
-            prev.map((w) => {
-              if (w.id !== chatId) return w;
-              return { ...w, presence: data.data.members };
-            })
-          );
-        }
-      } catch {
-        // Presence is best-effort
+  const fetchPresence = useCallback(async (orderId: string, chatId: string) => {
+    try {
+      const res = await fetchWithAuth(`/api/orders/${orderId}/presence`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.success && data.data?.members) {
+        setChatWindows((prev) =>
+          prev.map((w) => {
+            if (w.id !== chatId) return w;
+            return { ...w, presence: data.data.members };
+          }),
+        );
       }
-    },
-    []
-  );
+    } catch {
+      // Presence is best-effort
+    }
+  }, []);
 
   // Subscribe to real-time messages for an order
   const subscribeToOrder = useCallback(
@@ -373,7 +430,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         const message = mapPusherMessageToUI(data, actorType);
 
         // Phase 3: track lastSeq per order for reconnect catch-up.
-        if (typeof message.seq === 'number') {
+        if (typeof message.seq === "number") {
           const current = lastSeqRef.current.get(orderId) || 0;
           if (message.seq > current) {
             lastSeqRef.current.set(orderId, message.seq);
@@ -387,13 +444,15 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
             // Phase 3: dedup by id FIRST. The same message may arrive via the
             // order channel + a private channel + the reconnect catch-up path.
             // Whoever wins, we drop the rest.
-            if (w.messages.some(m => m.id === message.id)) return w;
+            if (w.messages.some((m) => m.id === message.id)) return w;
 
             // Phase 3: replace optimistic temp by clientId (NOT by index).
             // The previous "first temp_*" approach swapped the wrong message
             // when multiple sends were in flight.
-            if (message.from === 'me' && message.clientId) {
-              const idx = w.messages.findIndex(m => m.clientId === message.clientId);
+            if (message.from === "me" && message.clientId) {
+              const idx = w.messages.findIndex(
+                (m) => m.clientId === message.clientId,
+              );
               if (idx >= 0) {
                 const newMessages = [...w.messages];
                 newMessages[idx] = message;
@@ -403,8 +462,10 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
 
             // Backward-compat fallback: server didn't echo a clientId
             // (legacy path), use the old "first temp" replacement.
-            if (message.from === 'me' && !message.clientId) {
-              const tempIndex = w.messages.findIndex(m => m.id.startsWith('temp_'));
+            if (message.from === "me" && !message.clientId) {
+              const tempIndex = w.messages.findIndex((m) =>
+                m.id.startsWith("temp_"),
+              );
               if (tempIndex >= 0) {
                 const newMessages = [...w.messages];
                 newMessages[tempIndex] = message;
@@ -414,9 +475,9 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
 
             // Add new message
             const newUnread =
-              message.from !== 'me' && w.minimized ? w.unread + 1 : w.unread;
+              message.from !== "me" && w.minimized ? w.unread + 1 : w.unread;
 
-            if (message.from !== 'me') {
+            if (message.from !== "me") {
               // Pass the real order id, not the synthetic chat-window id —
               // consumers use this to update orders[].lastMessage / unreadCount.
               onNewMessage?.(w.orderId, message);
@@ -429,11 +490,14 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
 
             return {
               ...w,
-              messages: [...w.messages.filter((m) => !m.id.startsWith('temp_')), message],
+              messages: [
+                ...w.messages.filter((m) => !m.id.startsWith("temp_")),
+                message,
+              ],
               unread: newUnread,
               isTyping: false, // Clear typing on new message
             };
-          })
+          }),
         );
       };
 
@@ -445,22 +509,35 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         setChatWindows((prev) =>
           prev.map((w) => {
             if (w.orderId !== orderId) return w;
-            return { ...w, isTyping: true, typingActorType: data.actorType, typingActorName: data.actorName };
-          })
+            return {
+              ...w,
+              isTyping: true,
+              typingActorType: data.actorType,
+              typingActorName: data.actorName,
+            };
+          }),
         );
 
         // Auto-clear typing after 5 seconds
         const key = `${orderId}:${data.actorType}`;
         const existingTimeout = typingTimeoutsRef.current.get(key);
         if (existingTimeout) clearTimeout(existingTimeout);
-        typingTimeoutsRef.current.set(key, setTimeout(() => {
-          setChatWindows((prev) =>
-            prev.map((w) => {
-              if (w.orderId !== orderId) return w;
-              return { ...w, isTyping: false, typingActorType: undefined, typingActorName: undefined };
-            })
-          );
-        }, 5000));
+        typingTimeoutsRef.current.set(
+          key,
+          setTimeout(() => {
+            setChatWindows((prev) =>
+              prev.map((w) => {
+                if (w.orderId !== orderId) return w;
+                return {
+                  ...w,
+                  isTyping: false,
+                  typingActorType: undefined,
+                  typingActorName: undefined,
+                };
+              }),
+            );
+          }, 5000),
+        );
       };
 
       const handleTypingStop = (rawData: unknown) => {
@@ -470,14 +547,23 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         setChatWindows((prev) =>
           prev.map((w) => {
             if (w.orderId !== orderId) return w;
-            return { ...w, isTyping: false, typingActorType: undefined, typingActorName: undefined };
-          })
+            return {
+              ...w,
+              isTyping: false,
+              typingActorType: undefined,
+              typingActorName: undefined,
+            };
+          }),
         );
       };
 
       // Handle messages delivered (sender sees ✓✓)
       const handleMessagesDelivered = (rawData: unknown) => {
-        const data = rawData as { orderId: string; messageIds: string[]; deliveredBy: string };
+        const data = rawData as {
+          orderId: string;
+          messageIds: string[];
+          deliveredBy: string;
+        };
         if (data.orderId !== orderId || data.deliveredBy === actorType) return;
 
         const deliveredSet = new Set(data.messageIds);
@@ -488,19 +574,27 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
               ...w,
               messages: w.messages.map((m) => {
                 // Only update MY messages that were delivered
-                if (m.from === 'me' && deliveredSet.has(m.id) && m.status !== 'read') {
-                  return { ...m, status: 'delivered' as const };
+                if (
+                  m.from === "me" &&
+                  deliveredSet.has(m.id) &&
+                  m.status !== "read"
+                ) {
+                  return { ...m, status: "delivered" as const };
                 }
                 return m;
               }),
             };
-          })
+          }),
         );
       };
 
       // Handle messages read (sender sees ✓✓ blue)
       const handleMessagesRead = (rawData: unknown) => {
-        const data = rawData as { orderId: string; readerType: string; readAt: string };
+        const data = rawData as {
+          orderId: string;
+          readerType: string;
+          readAt: string;
+        };
         if (data.orderId !== orderId || data.readerType === actorType) return;
 
         setChatWindows((prev) =>
@@ -509,10 +603,12 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
             return {
               ...w,
               messages: w.messages.map((m) =>
-                m.from === 'me' ? { ...m, isRead: true, status: 'read' as const } : m
+                m.from === "me"
+                  ? { ...m, isRead: true, status: "read" as const }
+                  : m,
               ),
             };
-          })
+          }),
         );
       };
 
@@ -530,44 +626,85 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       const presenceChannel = pusher.subscribe(presenceChannelName);
       if (presenceChannel) {
         // Build presence list from Pusher member events
-        const updatePresenceFromMembers = (members: { each: (cb: (m: { id: string; info: { type: string; name?: string } }) => void) => void }) => {
+        const updatePresenceFromMembers = (members: {
+          each: (
+            cb: (m: {
+              id: string;
+              info: { type: string; name?: string };
+            }) => void,
+          ) => void;
+        }) => {
           const list: PresenceMember[] = [];
-          members.each((m: { id: string; info: { type: string; name?: string } }) => {
-            list.push({ actorType: m.info.type as PresenceMember['actorType'], actorId: m.id, isOnline: true });
-          });
+          members.each(
+            (m: { id: string; info: { type: string; name?: string } }) => {
+              list.push({
+                actorType: m.info.type as PresenceMember["actorType"],
+                actorId: m.id,
+                isOnline: true,
+              });
+            },
+          );
           setChatWindows((prev) =>
-            prev.map((w) => (w.orderId === orderId ? { ...w, presence: list } : w))
+            prev.map((w) =>
+              w.orderId === orderId ? { ...w, presence: list } : w,
+            ),
           );
         };
 
-        presenceChannel.bind('pusher:subscription_succeeded', (rawMembers: unknown) => {
-          const members = rawMembers as { each: (cb: (m: { id: string; info: { type: string; name?: string } }) => void) => void };
-          updatePresenceFromMembers(members);
-        });
+        presenceChannel.bind(
+          "pusher:subscription_succeeded",
+          (rawMembers: unknown) => {
+            const members = rawMembers as {
+              each: (
+                cb: (m: {
+                  id: string;
+                  info: { type: string; name?: string };
+                }) => void,
+              ) => void;
+            };
+            updatePresenceFromMembers(members);
+          },
+        );
 
-        presenceChannel.bind('pusher:member_added', (rawMember: unknown) => {
-          const member = rawMember as { id: string; info: { type: string; name?: string } };
+        presenceChannel.bind("pusher:member_added", (rawMember: unknown) => {
+          const member = rawMember as {
+            id: string;
+            info: { type: string; name?: string };
+          };
           setChatWindows((prev) =>
             prev.map((w) => {
               if (w.orderId !== orderId) return w;
               if (w.presence.some((p) => p.actorId === member.id)) return w;
-              return { ...w, presence: [...w.presence, { actorType: member.info.type as PresenceMember['actorType'], actorId: member.id, isOnline: true }] };
-            })
+              return {
+                ...w,
+                presence: [
+                  ...w.presence,
+                  {
+                    actorType: member.info.type as PresenceMember["actorType"],
+                    actorId: member.id,
+                    isOnline: true,
+                  },
+                ],
+              };
+            }),
           );
         });
 
-        presenceChannel.bind('pusher:member_removed', (rawMember: unknown) => {
+        presenceChannel.bind("pusher:member_removed", (rawMember: unknown) => {
           const member = rawMember as { id: string };
           setChatWindows((prev) =>
             prev.map((w) => {
               if (w.orderId !== orderId) return w;
-              return { ...w, presence: w.presence.filter((p) => p.actorId !== member.id) };
-            })
+              return {
+                ...w,
+                presence: w.presence.filter((p) => p.actorId !== member.id),
+              };
+            }),
           );
         });
       }
     },
-    [pusher, actorType, mapPusherMessageToUI, fetchMessages, onNewMessage]
+    [pusher, actorType, mapPusherMessageToUI, fetchMessages, onNewMessage],
   );
 
   // Unsubscribe from an order's channels (private + presence)
@@ -579,7 +716,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       pusher.unsubscribe(getOrderPresenceChannel(orderId));
       subscribedChannelsRef.current.delete(orderId);
     },
-    [pusher]
+    [pusher],
   );
 
   // Retry subscriptions when Pusher connects (only on pusher change)
@@ -602,7 +739,9 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
     if (isPusherConnected) return;
 
     const interval = setInterval(() => {
-      const windows = chatWindowsRef.current.filter((w) => w.orderId && !w.minimized);
+      const windows = chatWindowsRef.current.filter(
+        (w) => w.orderId && !w.minimized,
+      );
       if (windows.length === 0) return;
       // Round-robin: fetch one window per tick
       const idx = pollTickRef.current % windows.length;
@@ -630,9 +769,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   const openChat = useCallback(
     (user: string, emoji: string, orderId?: string) => {
       setChatWindows((prev) => {
-        const existingIndex = prev.findIndex(
-          (w) => w.orderId === orderId
-        );
+        const existingIndex = prev.findIndex((w) => w.orderId === orderId);
 
         if (existingIndex >= 0) {
           const existing = prev[existingIndex];
@@ -640,13 +777,13 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
             setTimeout(() => subscribeToOrder(orderId, existing.id), 0);
           }
           return prev.map((w, i) =>
-            i === existingIndex ? { ...w, minimized: false, unread: 0 } : w
+            i === existingIndex ? { ...w, minimized: false, unread: 0 } : w,
           );
         }
 
         // Check if there's a window with same user but different order
         const userMatchIndex = prev.findIndex(
-          (w) => w.user === user && w.orderId !== orderId
+          (w) => w.user === user && w.orderId !== orderId,
         );
 
         if (userMatchIndex >= 0 && orderId) {
@@ -657,8 +794,16 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
           setTimeout(() => subscribeToOrder(orderId, existing.id), 0);
           return prev.map((w, i) =>
             i === userMatchIndex
-              ? { ...w, orderId, minimized: false, unread: 0, messages: [], presence: [], isFrozen: false }
-              : w
+              ? {
+                  ...w,
+                  orderId,
+                  minimized: false,
+                  unread: 0,
+                  messages: [],
+                  presence: [],
+                  isFrozen: false,
+                }
+              : w,
           );
         }
 
@@ -692,7 +837,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         return updated;
       });
     },
-    [maxWindows, subscribeToOrder, unsubscribeFromOrder]
+    [maxWindows, subscribeToOrder, unsubscribeFromOrder],
   );
 
   const closeChat = useCallback(
@@ -705,40 +850,54 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         return prev.filter((w) => w.id !== chatId);
       });
     },
-    [unsubscribeFromOrder]
+    [unsubscribeFromOrder],
   );
 
   const toggleMinimize = useCallback((chatId: string) => {
     setChatWindows((prev) =>
       prev.map((w) =>
         w.id === chatId
-          ? { ...w, minimized: !w.minimized, unread: w.minimized ? 0 : w.unread }
-          : w
-      )
+          ? {
+              ...w,
+              minimized: !w.minimized,
+              unread: w.minimized ? 0 : w.unread,
+            }
+          : w,
+      ),
     );
   }, []);
 
   const sendMessage = useCallback(
-    async (chatId: string, text: string, imageUrl?: string, fileData?: { fileUrl: string; fileName: string; fileSize: number; mimeType: string }) => {
+    async (
+      chatId: string,
+      text: string,
+      imageUrl?: string,
+      fileData?: {
+        fileUrl: string;
+        fileName: string;
+        fileSize: number;
+        mimeType: string;
+      },
+    ) => {
       if (!text.trim() && !imageUrl && !fileData) return;
 
       const window = chatWindowsRef.current.find((w) => w.id === chatId);
       if (!window?.orderId || !actorId) {
-        console.error('Cannot send message: missing orderId or actorId');
+        console.error("Cannot send message: missing orderId or actorId");
         return;
       }
 
       // Determine message type
-      let messageType: string = 'text';
-      if (fileData) messageType = 'file';
-      else if (imageUrl) messageType = 'image';
+      let messageType: string = "text";
+      if (fileData) messageType = "file";
+      else if (imageUrl) messageType = "image";
 
       // Phase 3: client-generated UUID for idempotent sends and for
       // server-echo-based optimistic temp replacement.
       // crypto.randomUUID is available in all modern browsers + node 19+;
       // fallback to a timestamp-based pseudo-uuid for very old environments.
       const clientId =
-        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -747,18 +906,18 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       const tempId = `temp_${clientId}`;
       const tempMessage: ChatMessage = {
         id: tempId,
-        clientId,  // ◄ Phase 3: enables replace-by-clientId on Pusher echo
-        from: 'me',
+        clientId, // ◄ Phase 3: enables replace-by-clientId on Pusher echo
+        from: "me",
         text,
         timestamp: new Date(),
-        messageType: messageType as ChatMessage['messageType'],
+        messageType: messageType as ChatMessage["messageType"],
         imageUrl,
         fileUrl: fileData?.fileUrl,
         fileName: fileData?.fileName,
         fileSize: fileData?.fileSize,
         mimeType: fileData?.mimeType,
         isRead: false,
-        status: 'sending',
+        status: "sending",
       };
 
       setChatWindows((prev) =>
@@ -768,45 +927,50 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
             ...w,
             messages: [...w.messages, tempMessage],
           };
-        })
+        }),
       );
 
       try {
-        const res = await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sender_type: actorType,
-            sender_id: actorId,
-            content: text || undefined,
-            message_type: messageType,
-            image_url: imageUrl,
-            file_url: fileData?.fileUrl,
-            file_name: fileData?.fileName,
-            file_size: fileData?.fileSize,
-            mime_type: fileData?.mimeType,
-            client_id: clientId,  // ◄ Phase 3: server dedupes on this
-          }),
-        });
+        const res = await fetchWithAuth(
+          `/api/orders/${window.orderId}/messages`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sender_type: actorType,
+              sender_id: actorId,
+              content: text || undefined,
+              message_type: messageType,
+              image_url: imageUrl,
+              file_url: fileData?.fileUrl,
+              file_name: fileData?.fileName,
+              file_size: fileData?.fileSize,
+              mime_type: fileData?.mimeType,
+              client_id: clientId, // ◄ Phase 3: server dedupes on this
+            }),
+          },
+        );
 
         if (!res.ok) {
-          console.log('Messages API not available - demo mode');
+          console.log("Messages API not available - demo mode");
           // Update status to sent even in demo mode
           setChatWindows((prev) =>
             prev.map((w) => {
               if (w.id !== chatId) return w;
               return {
                 ...w,
-                messages: w.messages.map(m => m.id === tempId ? { ...m, status: 'sent' as const } : m),
+                messages: w.messages.map((m) =>
+                  m.id === tempId ? { ...m, status: "sent" as const } : m,
+                ),
               };
-            })
+            }),
           );
           return;
         }
 
         const data = await res.json();
         if (!data.success) {
-          throw new Error(data.error || 'Failed to send message');
+          throw new Error(data.error || "Failed to send message");
         }
 
         // Immediately update temp message with real ID + 'sent' status.
@@ -820,17 +984,19 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
               return {
                 ...w,
                 messages: w.messages.map((m) =>
-                  m.id === tempId ? { ...m, id: realMessage.id, status: 'sent' as const } : m
+                  m.id === tempId
+                    ? { ...m, id: realMessage.id, status: "sent" as const }
+                    : m,
                 ),
               };
-            })
+            }),
           );
         }
       } catch (error) {
-        console.log('Send message error - demo mode, keeping local message');
+        console.log("Send message error - demo mode, keeping local message");
       }
     },
-    [actorType, actorId]
+    [actorType, actorId],
   );
 
   // Track orders where markAsRead has been rejected or recently called
@@ -859,25 +1025,28 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       markReadLastCallRef.current.set(window.orderId, now);
 
       setChatWindows((prev) =>
-        prev.map((w) => (w.id === chatId ? { ...w, unread: 0 } : w))
+        prev.map((w) => (w.id === chatId ? { ...w, unread: 0 } : w)),
       );
 
       try {
-        const res = await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            reader_type: actorType,
-          }),
-        });
+        const res = await fetchWithAuth(
+          `/api/orders/${window.orderId}/messages`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              reader_type: actorType,
+            }),
+          },
+        );
         if (res.status === 403) {
           markReadBlockedRef.current.add(window.orderId);
         }
       } catch (error) {
-        console.error('Error marking messages as read:', error);
+        console.error("Error marking messages as read:", error);
       }
     },
-    [actorType]
+    [actorType],
   );
 
   // Throttled typing indicator — only send start once per session, stop after 2s idle
@@ -893,8 +1062,8 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
 
       const sendTypingApi = (typing: boolean) =>
         fetchWithAuth(`/api/orders/${orderId}/typing`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ actor_type: actorType, is_typing: typing }),
         }).catch(() => {});
 
@@ -903,10 +1072,13 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         if (isTypingSentRef.current.get(orderId)) {
           const existing = typingIdleTimerRef.current.get(orderId);
           if (existing) clearTimeout(existing);
-          typingIdleTimerRef.current.set(orderId, setTimeout(() => {
-            isTypingSentRef.current.delete(orderId);
-            sendTypingApi(false);
-          }, 2000));
+          typingIdleTimerRef.current.set(
+            orderId,
+            setTimeout(() => {
+              isTypingSentRef.current.delete(orderId);
+              sendTypingApi(false);
+            }, 2000),
+          );
           return; // No API call — already told server we're typing
         }
 
@@ -914,10 +1086,13 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         isTypingSentRef.current.set(orderId, true);
 
         // Schedule auto-stop after 2s idle
-        typingIdleTimerRef.current.set(orderId, setTimeout(() => {
-          isTypingSentRef.current.delete(orderId);
-          sendTypingApi(false);
-        }, 2000));
+        typingIdleTimerRef.current.set(
+          orderId,
+          setTimeout(() => {
+            isTypingSentRef.current.delete(orderId);
+            sendTypingApi(false);
+          }, 2000),
+        );
 
         await sendTypingApi(true);
       } else {
@@ -933,7 +1108,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         }
       }
     },
-    [actorType]
+    [actorType],
   );
 
   // Phase 3: reconnect catch-up. When Pusher transitions back to 'connected'
@@ -957,21 +1132,24 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         if (!subscribedChannelsRef.current.get(orderId)) continue;
         try {
           const res = await fetchWithAuth(
-            `/api/orders/${orderId}/messages?after_seq=${lastSeq}`
+            `/api/orders/${orderId}/messages?after_seq=${lastSeq}`,
           );
           if (!res.ok) continue;
           const data = await res.json();
-          const fresh: DbMessage[] = data?.success ? (data.data || []) : [];
+          const fresh: DbMessage[] = data?.success ? data.data || [] : [];
           if (!fresh.length) continue;
 
           // Find the chat window that owns this orderId
-          const targetWindow = chatWindowsRef.current.find(w => w.orderId === orderId);
+          const targetWindow = chatWindowsRef.current.find(
+            (w) => w.orderId === orderId,
+          );
           if (!targetWindow) continue;
 
           let newMaxSeq = lastSeq;
           const mapped: ChatMessage[] = fresh.map((m) => {
             const ui = mapDbMessageToUI(m, actorType);
-            if (typeof ui.seq === 'number' && ui.seq > newMaxSeq) newMaxSeq = ui.seq;
+            if (typeof ui.seq === "number" && ui.seq > newMaxSeq)
+              newMaxSeq = ui.seq;
             return ui;
           });
 
@@ -983,31 +1161,33 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
               const append = mapped.filter((m) => !seen.has(m.id));
               if (append.length === 0) return w;
               return { ...w, messages: [...w.messages, ...append] };
-            })
+            }),
           );
 
           if (newMaxSeq > lastSeq) {
             lastSeqRef.current.set(orderId, newMaxSeq);
           }
         } catch (err) {
-          console.warn('[useRealtimeChat] reconnect catch-up failed', { orderId, err });
+          console.warn("[useRealtimeChat] reconnect catch-up failed", {
+            orderId,
+            err,
+          });
         }
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [pusher, pusher?.isConnected, actorType, mapDbMessageToUI]);
 
   // Refetch messages for an order's chat window — used by private-channel
   // listeners to force a sync when a message arrives via a fallback path.
-  const refetchMessagesForOrder = useCallback(
-    (orderId: string) => {
-      const window = chatWindowsRef.current.find((w) => w.orderId === orderId);
-      if (!window) return;
-      fetchMessagesRef.current(orderId, window.id);
-    },
-    []
-  );
+  const refetchMessagesForOrder = useCallback((orderId: string) => {
+    const window = chatWindowsRef.current.find((w) => w.orderId === orderId);
+    if (!window) return;
+    fetchMessagesRef.current(orderId, window.id);
+  }, []);
 
   // ── Infinite-scroll pagination: load older messages ──────────────────────
   //
@@ -1017,7 +1197,9 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   // beginning of the conversation has been reached.
   const loadingOlderRef = useRef<Set<string>>(new Set());
   const exhaustedOrdersRef = useRef<Set<string>>(new Set());
-  const [olderLoadingOrders, setOlderLoadingOrders] = useState<Set<string>>(new Set());
+  const [olderLoadingOrders, setOlderLoadingOrders] = useState<Set<string>>(
+    new Set(),
+  );
 
   const loadOlderMessages = useCallback(
     async (orderId: string): Promise<boolean> => {
@@ -1025,33 +1207,40 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       if (loadingOlderRef.current.has(orderId)) return true;
       if (exhaustedOrdersRef.current.has(orderId)) return false;
 
-      const chatWindow = chatWindowsRef.current.find((w) => w.orderId === orderId);
+      const chatWindow = chatWindowsRef.current.find(
+        (w) => w.orderId === orderId,
+      );
       if (!chatWindow || chatWindow.messages.length === 0) return false;
 
       // Oldest message in the current window → use its timestamp as cursor
       const oldestMsg = chatWindow.messages[0];
-      const beforeCursor = oldestMsg.timestamp instanceof Date
-        ? oldestMsg.timestamp.toISOString()
-        : new Date(oldestMsg.timestamp).toISOString();
+      const beforeCursor =
+        oldestMsg.timestamp instanceof Date
+          ? oldestMsg.timestamp.toISOString()
+          : new Date(oldestMsg.timestamp).toISOString();
 
       loadingOlderRef.current.add(orderId);
       setOlderLoadingOrders(new Set(loadingOlderRef.current));
 
       try {
-        const authParam = actorId ? `&user_id=${actorId}` : '';
+        const authParam = actorId ? `&user_id=${actorId}` : "";
         const res = await fetchWithAuth(
-          `/api/orders/${orderId}/messages?before=${encodeURIComponent(beforeCursor)}&limit=50${authParam}`
+          `/api/orders/${orderId}/messages?before=${encodeURIComponent(beforeCursor)}&limit=50${authParam}`,
         );
         if (!res.ok) return false;
 
         const data = await res.json();
-        if (!data.success || !Array.isArray(data.data) || data.data.length === 0) {
+        if (
+          !data.success ||
+          !Array.isArray(data.data) ||
+          data.data.length === 0
+        ) {
           exhaustedOrdersRef.current.add(orderId);
           return false;
         }
 
         const olderMessages: ChatMessage[] = data.data.map((m: DbMessage) =>
-          mapDbMessageToUI(m, actorType)
+          mapDbMessageToUI(m, actorType),
         );
 
         // Prepend older messages, deduplicate by ID
@@ -1059,13 +1248,15 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
           prev.map((w) => {
             if (w.orderId !== orderId) return w;
             const existingIds = new Set(w.messages.map((m) => m.id));
-            const uniqueOlder = olderMessages.filter((m) => !existingIds.has(m.id));
+            const uniqueOlder = olderMessages.filter(
+              (m) => !existingIds.has(m.id),
+            );
             if (uniqueOlder.length === 0) {
               exhaustedOrdersRef.current.add(orderId);
               return w;
             }
             return { ...w, messages: [...uniqueOlder, ...w.messages] };
-          })
+          }),
         );
 
         // If fewer than 50 returned, we've reached the beginning
@@ -1074,24 +1265,27 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         }
         return data.data.length > 0;
       } catch (err) {
-        console.warn('[useRealtimeChat] loadOlderMessages failed', { orderId, err });
+        console.warn("[useRealtimeChat] loadOlderMessages failed", {
+          orderId,
+          err,
+        });
         return false;
       } finally {
         loadingOlderRef.current.delete(orderId);
         setOlderLoadingOrders(new Set(loadingOlderRef.current));
       }
     },
-    [actorType, actorId, mapDbMessageToUI]
+    [actorType, actorId, mapDbMessageToUI],
   );
 
   const hasOlderMessages = useCallback(
     (orderId: string) => !exhaustedOrdersRef.current.has(orderId),
-    []
+    [],
   );
 
   const isLoadingOlderMessages = useCallback(
     (orderId: string) => olderLoadingOrders.has(orderId),
-    [olderLoadingOrders]
+    [olderLoadingOrders],
   );
 
   return {
