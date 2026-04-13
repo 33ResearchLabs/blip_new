@@ -78,11 +78,15 @@ export function useOrderFetching({
   // ═══════════════════════════════════════════════════════════════════
 
   const fetchOrders = useCallback(async () => {
-    if (!merchantId) return;
+    if (!merchantId) {
+      setIsLoading(false); // Prevent infinite loading spinner
+      return;
+    }
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(merchantId)) {
       console.error('[Merchant] fetchOrders: Invalid merchantId format:', merchantId);
+      setIsLoading(false);
       return;
     }
 

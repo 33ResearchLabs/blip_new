@@ -356,9 +356,10 @@ export function useDashboardAuth({
               setMerchantId(freshMerchant.id);
               setMerchantInfo(freshMerchant);
               setIsLoggedIn(true);
-              // NOTE: Don't setIsLoading(false) here — let useOrderFetching
-              // set it after the initial order fetch completes. This prevents
-              // the race condition where the page renders with empty orders.
+              // Let useOrderFetching set isLoading=false after orders load.
+              // Safety net: if orders haven't loaded after 5s, force loading off
+              // to prevent infinite spinner on slow connections or edge cases.
+              setTimeout(() => setIsLoading(false), 5000);
               localStorage.setItem('blip_merchant', JSON.stringify(freshMerchant));
               if (checkData.data.token) setSessionToken(checkData.data.token);
               if (!isMockMode && !freshMerchant.wallet_address && !solanaWallet.connected) {
