@@ -158,6 +158,9 @@ export default function ComplianceDashboard() {
     openChat,
     closeChat,
     sendMessage,
+    loadOlderMessages,
+    hasOlderMessages,
+    isLoadingOlderMessages,
   } = chatHookResult;
 
   useEffect(() => {
@@ -1196,6 +1199,9 @@ export default function ComplianceDashboard() {
                       return chatDispute?.merchant.name;
                     })()}
                     complianceName={member?.name}
+                    onLoadOlder={activeChat.orderId ? () => loadOlderMessages(activeChat.orderId!) : undefined}
+                    hasOlderMessages={activeChat.orderId ? hasOlderMessages(activeChat.orderId) : false}
+                    isLoadingOlder={activeChat.orderId ? isLoadingOlderMessages(activeChat.orderId) : false}
                   />
                 </div>
               </>

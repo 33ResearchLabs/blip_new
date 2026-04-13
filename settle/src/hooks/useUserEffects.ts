@@ -105,6 +105,9 @@ export function useUserEffects({
     sendTypingIndicator,
     markAsRead,
     refetchMessagesForOrder,
+    loadOlderMessages,
+    hasOlderMessages,
+    isLoadingOlderMessages,
   } = useRealtimeChat({
     actorType: "user",
     actorId: userId || undefined,
@@ -619,6 +622,10 @@ export function useUserEffects({
     chatInputRef,
     handleOpenChat,
     handleSendMessage,
+    // Pagination
+    loadOlderMessages,
+    hasOlderMessages,
+    isLoadingOlderMessages,
     // Acceptance popup
     showAcceptancePopup, setShowAcceptancePopup,
     acceptedOrderInfo,

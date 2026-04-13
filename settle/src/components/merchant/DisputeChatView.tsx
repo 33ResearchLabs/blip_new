@@ -15,7 +15,7 @@ interface DisputeChatViewProps {
 }
 
 export function DisputeChatView({ orderId, merchantId, userName, onBack, onSendSound }: DisputeChatViewProps) {
-  const { chatWindows, openChat, sendMessage, markAsRead, sendTypingIndicator } = useRealtimeChat({
+  const { chatWindows, openChat, sendMessage, markAsRead, sendTypingIndicator, loadOlderMessages, hasOlderMessages, isLoadingOlderMessages } = useRealtimeChat({
     maxWindows: 1,
     actorType: 'merchant',
     actorId: merchantId,
@@ -103,6 +103,9 @@ export function DisputeChatView({ orderId, merchantId, userName, onBack, onSendS
             isFrozen={chatWindow.isFrozen}
             isLoading={chatWindow.messages.length === 0}
             disabled={isChatClosed}
+            onLoadOlder={() => loadOlderMessages(orderId)}
+            hasOlderMessages={hasOlderMessages(orderId)}
+            isLoadingOlder={isLoadingOlderMessages(orderId)}
           />
         ) : (
           <div className="flex items-center justify-center h-full">

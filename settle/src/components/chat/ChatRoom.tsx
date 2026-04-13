@@ -79,6 +79,10 @@ interface ChatRoomProps {
   complianceName?: string;
   // When opened from a specific order context, used to highlight that order's section.
   focusOrderId?: string;
+  // Infinite-scroll pagination: load older messages when the user scrolls to the top.
+  onLoadOlder?: () => Promise<boolean | void>;
+  hasOlderMessages?: boolean;
+  isLoadingOlder?: boolean;
 }
 
 // ============================================
@@ -381,6 +385,9 @@ export function ChatRoom({
   merchantName,
   complianceName,
   focusOrderId,
+  onLoadOlder,
+  hasOlderMessages = true,
+  isLoadingOlder = false,
 }: ChatRoomProps) {
   const [messageText, setMessageText] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -418,12 +425,36 @@ export function ChatRoom({
   }, []);
 
   // Track whether the user is sitting at the bottom of the list.
+  // Also triggers loading older messages when scrolled near the top.
+  const loadOlderTriggeredRef = useRef(false);
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
     isAtBottomRef.current = distance <= NEAR_BOTTOM_PX;
-  }, []);
+
+    // Trigger loading older messages when scrolled near the top (within 100px)
+    if (
+      el.scrollTop < 100 &&
+      onLoadOlder &&
+      hasOlderMessages &&
+      !isLoadingOlder &&
+      !loadOlderTriggeredRef.current
+    ) {
+      loadOlderTriggeredRef.current = true;
+      const prevScrollHeight = el.scrollHeight;
+      onLoadOlder().finally(() => {
+        // Preserve scroll position: after older messages are prepended,
+        // the scroll container grows upward. Adjust scrollTop by the
+        // height difference so the user stays at the same visual position.
+        requestAnimationFrame(() => {
+          const newScrollHeight = el.scrollHeight;
+          el.scrollTop += newScrollHeight - prevScrollHeight;
+          loadOlderTriggeredRef.current = false;
+        });
+      });
+    }
+  }, [onLoadOlder, hasOlderMessages, isLoadingOlder]);
 
   // Initial render: instant jump to bottom before paint (no animation, no flash).
   useLayoutEffect(() => {
@@ -733,6 +764,19 @@ export function ChatRoom({
         onScroll={handleScroll}
         className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent"
       >
+        {/* Older-messages loading spinner — shown at the TOP while fetching history */}
+        {isLoadingOlder && (
+          <div className="flex items-center justify-center py-3">
+            <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
+            <span className="ml-2 text-[11px] text-gray-500">Loading older messages…</span>
+          </div>
+        )}
+        {!hasOlderMessages && messages.length > 0 && (
+          <div className="text-center py-2">
+            <span className="text-[10px] text-gray-600">Beginning of conversation</span>
+          </div>
+        )}
+
         {isLoading && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />

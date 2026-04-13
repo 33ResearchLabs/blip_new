@@ -213,14 +213,17 @@ export async function atomicCancelWithRefund(
 
       const updatedOrder = updateResult.rows[0] as Order;
 
-      // Create order_events record
+      // Create order_events record.
+      // order_events.actor_id is UUID — when the actor is the system worker
+      // (no real UUID), pass NULL instead of the literal string 'system'.
+      const actorIdForEvent = actorType === 'system' ? null : actorId;
       await client.query(
         `INSERT INTO order_events (order_id, event_type, actor_type, actor_id, old_status, new_status, metadata)
          VALUES ($1, 'order_cancelled', $2, $3, $4, 'cancelled', $5)`,
         [
           orderId,
           actorType,
-          actorId,
+          actorIdForEvent,
           currentStatus,
           JSON.stringify({
             reason: reason || 'Cancelled by ' + actorType,

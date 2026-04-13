@@ -525,6 +525,9 @@ export default function Home() {
               setChatMessage={userEffects.setChatMessage}
               sendChatMessage={userEffects.sendChatMessage}
               chatMessagesRef={userEffects.chatMessagesRef}
+              onLoadOlder={activeOrder ? () => userEffects.loadOlderMessages(activeOrder.id) : undefined}
+              hasOlderMessages={activeOrder ? userEffects.hasOlderMessages(activeOrder.id) : false}
+              isLoadingOlder={activeOrder ? userEffects.isLoadingOlderMessages(activeOrder.id) : false}
             />
           </Panel>
         )}

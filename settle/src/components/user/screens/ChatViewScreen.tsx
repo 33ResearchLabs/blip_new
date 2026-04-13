@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   ChevronLeft,
@@ -48,6 +48,10 @@ export interface ChatViewScreenProps {
   setChatMessage: (m: string) => void;
   sendChatMessage: (chatId: string, msg: string, imageUrl?: string) => void;
   chatMessagesRef: RefObject<HTMLDivElement | null>;
+  // Infinite-scroll pagination
+  onLoadOlder?: () => Promise<boolean | void>;
+  hasOlderMessages?: boolean;
+  isLoadingOlder?: boolean;
 }
 
 export const ChatViewScreen = ({
@@ -58,10 +62,37 @@ export const ChatViewScreen = ({
   setChatMessage,
   sendChatMessage,
   chatMessagesRef,
+  onLoadOlder,
+  hasOlderMessages = true,
+  isLoadingOlder = false,
 }: ChatViewScreenProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const [pendingImage, setPendingImage] = useState<{ file: File; previewUrl: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const loadOlderTriggeredRef = useRef(false);
+
+  // Detect scroll near top → trigger loading older messages
+  const handleChatScroll = useCallback(() => {
+    const el = chatMessagesRef.current;
+    if (
+      el &&
+      el.scrollTop < 100 &&
+      onLoadOlder &&
+      hasOlderMessages &&
+      !isLoadingOlder &&
+      !loadOlderTriggeredRef.current
+    ) {
+      loadOlderTriggeredRef.current = true;
+      const prevScrollHeight = el.scrollHeight;
+      onLoadOlder().finally(() => {
+        requestAnimationFrame(() => {
+          const newScrollHeight = el.scrollHeight;
+          el.scrollTop += newScrollHeight - prevScrollHeight;
+          loadOlderTriggeredRef.current = false;
+        });
+      });
+    }
+  }, [chatMessagesRef, onLoadOlder, hasOlderMessages, isLoadingOlder]);
 
   // Live order statuses for receipt cards — Pusher with initial fetch fallback
   const [receiptStatuses, setReceiptStatuses] = useState<Record<string, string>>({});
@@ -253,8 +284,22 @@ export const ChatViewScreen = ({
           constrain inside the flex column instead of growing past it. */}
       <div
         ref={chatMessagesRef}
+        onScroll={handleChatScroll}
         className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3 bg-surface-base"
       >
+        {/* Older-messages loading spinner */}
+        {isLoadingOlder && (
+          <div className="flex items-center justify-center py-2">
+            <Loader2 className="w-4 h-4 text-text-tertiary animate-spin" />
+            <span className="ml-2 text-[10px] text-text-tertiary">Loading older messages…</span>
+          </div>
+        )}
+        {!hasOlderMessages && activeChat && activeChat.messages.length > 0 && (
+          <div className="text-center py-2">
+            <span className="text-[10px] text-text-quaternary">Beginning of conversation</span>
+          </div>
+        )}
+
         {activeChat && activeChat.messages.length > 0 ? (
           activeChat.messages.map((msg) => {
             if (msg.messageType === 'dispute') {

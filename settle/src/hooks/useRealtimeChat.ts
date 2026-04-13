@@ -920,6 +920,91 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
     []
   );
 
+  // ── Infinite-scroll pagination: load older messages ──────────────────────
+  //
+  // Uses the cursor-based `?before=<ISO timestamp>&limit=50` parameter that
+  // getOrderMessages() already supports on the backend.  Returns `true` when
+  // messages were returned (there may be more history), `false` when the
+  // beginning of the conversation has been reached.
+  const loadingOlderRef = useRef<Set<string>>(new Set());
+  const exhaustedOrdersRef = useRef<Set<string>>(new Set());
+  const [olderLoadingOrders, setOlderLoadingOrders] = useState<Set<string>>(new Set());
+
+  const loadOlderMessages = useCallback(
+    async (orderId: string): Promise<boolean> => {
+      // Prevent concurrent loads for the same order
+      if (loadingOlderRef.current.has(orderId)) return true;
+      if (exhaustedOrdersRef.current.has(orderId)) return false;
+
+      const chatWindow = chatWindowsRef.current.find((w) => w.orderId === orderId);
+      if (!chatWindow || chatWindow.messages.length === 0) return false;
+
+      // Oldest message in the current window → use its timestamp as cursor
+      const oldestMsg = chatWindow.messages[0];
+      const beforeCursor = oldestMsg.timestamp instanceof Date
+        ? oldestMsg.timestamp.toISOString()
+        : new Date(oldestMsg.timestamp).toISOString();
+
+      loadingOlderRef.current.add(orderId);
+      setOlderLoadingOrders(new Set(loadingOlderRef.current));
+
+      try {
+        const authParam = actorId ? `&user_id=${actorId}` : '';
+        const res = await fetchWithAuth(
+          `/api/orders/${orderId}/messages?before=${encodeURIComponent(beforeCursor)}&limit=50${authParam}`
+        );
+        if (!res.ok) return false;
+
+        const data = await res.json();
+        if (!data.success || !Array.isArray(data.data) || data.data.length === 0) {
+          exhaustedOrdersRef.current.add(orderId);
+          return false;
+        }
+
+        const olderMessages: ChatMessage[] = data.data.map((m: DbMessage) =>
+          mapDbMessageToUI(m, actorType)
+        );
+
+        // Prepend older messages, deduplicate by ID
+        setChatWindows((prev) =>
+          prev.map((w) => {
+            if (w.orderId !== orderId) return w;
+            const existingIds = new Set(w.messages.map((m) => m.id));
+            const uniqueOlder = olderMessages.filter((m) => !existingIds.has(m.id));
+            if (uniqueOlder.length === 0) {
+              exhaustedOrdersRef.current.add(orderId);
+              return w;
+            }
+            return { ...w, messages: [...uniqueOlder, ...w.messages] };
+          })
+        );
+
+        // If fewer than 50 returned, we've reached the beginning
+        if (data.data.length < 50) {
+          exhaustedOrdersRef.current.add(orderId);
+        }
+        return data.data.length > 0;
+      } catch (err) {
+        console.warn('[useRealtimeChat] loadOlderMessages failed', { orderId, err });
+        return false;
+      } finally {
+        loadingOlderRef.current.delete(orderId);
+        setOlderLoadingOrders(new Set(loadingOlderRef.current));
+      }
+    },
+    [actorType, actorId, mapDbMessageToUI]
+  );
+
+  const hasOlderMessages = useCallback(
+    (orderId: string) => !exhaustedOrdersRef.current.has(orderId),
+    []
+  );
+
+  const isLoadingOlderMessages = useCallback(
+    (orderId: string) => olderLoadingOrders.has(orderId),
+    [olderLoadingOrders]
+  );
+
   return {
     chatWindows,
     isConnected: pusher?.isConnected || false,
@@ -930,6 +1015,9 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
     markAsRead,
     sendTypingIndicator,
     refetchMessagesForOrder,
+    loadOlderMessages,
+    hasOlderMessages,
+    isLoadingOlderMessages,
   };
 }
 
