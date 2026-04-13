@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   ArrowUpRight,
   ArrowDownRight,
@@ -109,16 +109,24 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
     return () => clearInterval(id);
   }, []);
 
+  const nextCursorRef = useRef<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   const fetchLedger = async () => {
     try {
       setIsLoading(true);
       const res = await fetchWithAuth(
-        `/api/ledger?merchant_id=${merchantId}&limit=100`,
+        `/api/ledger?merchant_id=${merchantId}&limit=10`,
       );
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
           setEntries(data.data.entries || []);
+          if (data.data.pagination) {
+            nextCursorRef.current = data.data.pagination.next_cursor;
+            setHasMore(data.data.pagination.has_more);
+          }
         }
       }
     } catch (error) {
@@ -126,6 +134,29 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const loadMore = async () => {
+    if (!nextCursorRef.current || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const res = await fetchWithAuth(
+        `/api/ledger?merchant_id=${merchantId}&limit=10&cursor=${encodeURIComponent(nextCursorRef.current)}`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.data.entries?.length > 0) {
+          setEntries(prev => [...prev, ...data.data.entries]);
+          if (data.data.pagination) {
+            nextCursorRef.current = data.data.pagination.next_cursor;
+            setHasMore(data.data.pagination.has_more);
+          }
+        } else {
+          setHasMore(false);
+        }
+      }
+    } catch {}
+    finally { setIsLoadingMore(false); }
   };
 
   // Initial fetch + parent-triggered refetch
@@ -297,6 +328,20 @@ export function TransactionsTab({ merchantId, refreshKey = 0, onSelectOrder }: T
                 </div>
               </div>
             ))}
+            {/* Load More */}
+            {hasMore && (
+              <button
+                onClick={loadMore}
+                disabled={isLoadingMore}
+                className="w-full py-2.5 mt-1 rounded-lg text-[10px] font-bold text-foreground/40 hover:text-foreground/60 hover:bg-foreground/[0.04] transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {isLoadingMore ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  'Load More'
+                )}
+              </button>
+            )}
           </div>
         )}
       </div>

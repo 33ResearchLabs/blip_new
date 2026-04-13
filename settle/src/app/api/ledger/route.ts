@@ -29,8 +29,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const merchantId = searchParams.get('merchant_id');
     const userId = searchParams.get('user_id');
-    const limit = parseInt(searchParams.get('limit') || '100', 10);
+    const limit = Math.min(parseInt(searchParams.get('limit') || '10', 10), 100);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
+    const cursor = searchParams.get('cursor') || undefined;
     const entryType = searchParams.get('entry_type'); // Optional filter
 
     if (!merchantId && !userId) {
@@ -97,16 +98,34 @@ export async function GET(request: NextRequest) {
       sql += ` AND entry_type = $${params.length}`;
     }
 
-    // Add pagination
-    params.push(limit);
-    sql += ` ORDER BY created_at DESC LIMIT $${params.length}`;
+    // Cursor-based pagination (preferred) or offset fallback
+    if (cursor) {
+      params.push(cursor);
+      sql = `SELECT * FROM (${sql}) _sub WHERE created_at < $${params.length}::timestamptz`;
+    } else if (offset > 0) {
+      params.push(offset);
+      sql += ` OFFSET $${params.length}`;
+    }
 
-    params.push(offset);
-    sql += ` OFFSET $${params.length}`;
+    params.push(limit);
+    sql = `SELECT * FROM (${sql}) _paged ORDER BY created_at DESC LIMIT $${params.length}`;
 
     const entries = await query<LedgerEntry>(sql, params);
 
-    return successResponse({ entries });
+    const lastEntry = entries[entries.length - 1];
+    const nextCursor = entries.length >= limit && lastEntry?.created_at
+      ? lastEntry.created_at
+      : null;
+
+    return successResponse({
+      entries,
+      pagination: {
+        limit,
+        count: entries.length,
+        next_cursor: nextCursor,
+        has_more: entries.length >= limit,
+      },
+    });
   } catch (error) {
     console.error('Error fetching ledger:', error);
     return errorResponse('Internal server error');
