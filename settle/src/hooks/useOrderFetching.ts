@@ -353,12 +353,21 @@ export function useOrderFetching({
     const currentVersion = useMerchantStore.getState().orders.find((o: Order) => o.id === orderId)?.orderVersion;
 
     if (optimisticUpdate) {
-      setOrders((prev: Order[]) => prev.map((o: Order) =>
-        o.id === orderId ? { ...o, ...optimisticUpdate } : o
-      ));
+      setOrders((prev: Order[]) => prev.map((o: Order) => {
+        if (o.id !== orderId) return o;
+        const updated = { ...o, ...optimisticUpdate };
+        // Immediately disable action buttons so they don't flash the old state.
+        // The real primaryAction will arrive when the server refetch completes.
+        if (optimisticUpdate.status) {
+          (updated as any).primaryAction = null;
+          (updated as any).secondaryAction = null;
+        }
+        return updated;
+      }));
     }
 
-    // Wait 800ms then check if WS already delivered the update.
+    // Wait 300ms then check if WS already delivered the update.
+    // Reduced from 800ms — 300ms is enough for Pusher round-trip on a good connection.
     // If Pusher connected AND version advanced → skip redundant refetch.
     // Otherwise → refetch as fallback.
     await new Promise<void>(resolve => setTimeout(() => {
@@ -371,7 +380,7 @@ export function useOrderFetching({
       }
       refetchSingleOrder(orderId);
       resolve();
-    }, 800));
+    }, 300));
     // Full list refetch ensures enrichOrderResponse recomputes primaryAction
     // and refreshes chat last_message / unread_count fields.
     debouncedFetchOrders();

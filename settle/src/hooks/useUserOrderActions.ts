@@ -162,13 +162,25 @@ export function useUserOrderActions({
         return;
       }
 
-      // Success!
+      // Success! Update UI immediately — don't wait for refetch.
+      // Clear primaryAction so the old button disappears INSTANTLY.
       setTxProgress(prev => completeTx(prev));
       setTimeout(() => setTxProgress(INITIAL_TX_STATE), 3000);
 
-      setOrders(prev => prev.map(o =>
-        o.id === activeOrder.id ? { ...o, status: "waiting" as OrderStatus, step: 3 as OrderStep, dbStatus: 'payment_sent' } : o
-      ));
+      setOrders(prev => prev.map(o => {
+        if (o.id !== activeOrder.id) return o;
+        const updated = { ...o, status: "waiting" as OrderStatus, step: 3 as OrderStep, dbStatus: 'payment_sent' };
+        // Clear backend-driven action buttons so they don't flash the old state
+        if ((updated as any).dbOrder) {
+          (updated as any).dbOrder = {
+            ...(updated as any).dbOrder,
+            primaryAction: { type: 'DISABLED', label: 'Payment Sent', description: 'Waiting for merchant to confirm.' },
+            secondaryAction: null,
+            status: 'payment_sent',
+          };
+        }
+        return updated;
+      }));
     } catch (err) {
       console.error('Failed to mark payment sent:', err);
       setTxProgress(prev => failTx(prev, 'Network error. Please try again.'));
