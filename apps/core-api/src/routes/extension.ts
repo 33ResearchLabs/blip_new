@@ -157,6 +157,7 @@ export const extensionRoutes: FastifyPluginAsync = async (fastify) => {
            SET extension_count = extension_count + 1,
                extension_requested_by = NULL,
                extension_requested_at = NULL,
+               last_extended_at = NOW(),
                expires_at = COALESCE(expires_at, NOW()) + INTERVAL '1 minute' * $2,
                order_version = order_version + 1
            WHERE id = $1

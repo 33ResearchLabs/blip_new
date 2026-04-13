@@ -55,6 +55,31 @@ export function useUserOrderActions({
   } | null>(null);
   const [requestingExtension, setRequestingExtension] = useState(false);
 
+  // Hydrate extension state from backend on mount / order change.
+  // Without this, a page refresh loses the in-memory extensionRequest
+  // and the UI falls back to "Inactivity Warning" even though a request
+  // is pending or was already accepted.
+  useEffect(() => {
+    if (!activeOrder?.id) return;
+    let cancelled = false;
+    fetchWithAuth(`/api/orders/${activeOrder.id}/extension`)
+      .then(res => res.json())
+      .then(data => {
+        if (cancelled || !data.success) return;
+        if (data.data?.pendingRequest) {
+          setExtensionRequest({
+            orderId: activeOrder.id,
+            requestedBy: data.data.pendingRequest.requestedBy,
+            extensionMinutes: data.data.pendingRequest.extensionMinutes || data.data.extensionDuration,
+            extensionCount: data.data.extensionCount,
+            maxExtensions: data.data.maxExtensions,
+          });
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeOrder?.id]);
+
   // Cancel state
   const [isRequestingCancel, setIsRequestingCancel] = useState(false);
 

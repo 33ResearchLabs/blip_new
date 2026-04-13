@@ -808,6 +808,13 @@ export const OrderDetailScreen = ({
           activeOrder.status !== "cancelled" &&
           activeOrder.status !== "expired" && (
             (() => {
+              // DEBUG: check what data we have
+              console.log('[OrderDetail] Extension banner check:', {
+                extensionRequest,
+                lastExtendedAt: activeOrder.lastExtendedAt,
+                inactivityWarned: activeOrder.inactivityWarned,
+                orderId: activeOrder.id,
+              });
               // Priority 1: Extension was granted (extended after warning)
               const wasExtended = activeOrder.lastExtendedAt &&
                 (!activeOrder.lastActivityAt ||
@@ -827,10 +834,17 @@ export const OrderDetailScreen = ({
                       </div>
                       <div className="flex-1">
                         <p className="text-[15px] font-semibold text-success">
-                          Time Extended
+                          Merchant Approved Extension
                         </p>
                         <p className="text-[13px] text-text-secondary">
-                          Extension granted. You have more time to complete this order.
+                          Your time has been extended.{' '}
+                          {activeOrder.expiresAt && (
+                            <OrderExpiryTimer
+                              expiresAt={activeOrder.expiresAt}
+                              status={activeOrder.dbStatus}
+                              viewerRole={activeOrder.type === 'buy' ? 'buyer' : 'seller'}
+                            />
+                          )}
                         </p>
                       </div>
                     </div>
