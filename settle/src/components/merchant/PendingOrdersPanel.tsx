@@ -742,6 +742,9 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   // Fetch the merchant's full order history (includes completed / cancelled /
   // expired) when the My Orders tab is opened. Pending list alone is not enough
   // because cancelled/expired drop out of the active feed.
+  const myOrdersCursorRef = useRef<string | null>(null);
+  const [hasMoreMyOrders, setHasMoreMyOrders] = useState(false);
+
   useEffect(() => {
     if (!merchantId) return;
     let cancelled = false;
@@ -749,13 +752,17 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       setMyOrdersLoading(true);
       try {
         const res = await fetchWithAuth(
-          `/api/merchant/orders?merchant_id=${merchantId}&status=pending,escrowed,accepted,payment_sent,payment_pending,payment_confirmed,completed,cancelled,expired,disputed`,
+          `/api/merchant/orders?merchant_id=${merchantId}&status=pending,escrowed,accepted,payment_sent,payment_pending,payment_confirmed,completed,cancelled,expired,disputed&limit=10`,
         );
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;
         if (data?.success && Array.isArray(data.data)) {
           setMyOrders(data.data);
+          if (data.pagination) {
+            myOrdersCursorRef.current = data.pagination.next_cursor;
+            setHasMoreMyOrders(data.pagination.has_more);
+          }
         }
       } catch {
         // Best-effort

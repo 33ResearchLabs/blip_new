@@ -208,7 +208,8 @@ export async function getUserOrders(
 
 export async function getMerchantOrders(
   merchantId: string,
-  status?: OrderStatus[]
+  status?: OrderStatus[],
+  options?: { cursor?: string; limit?: number }
 ): Promise<OrderWithRelations[]> {
   // Query orders where merchant is the seller
   // Note: buyer_merchant_id for M2M trades requires migration 007
@@ -275,11 +276,17 @@ export async function getMerchantOrders(
   const params: unknown[] = [merchantId];
 
   if (status && status.length > 0) {
-    sql += ` AND o.status = ANY($2)`;
     params.push(status);
+    sql += ` AND o.status = ANY($${params.length})`;
   }
 
-  sql += ' ORDER BY o.created_at DESC';
+  if (options?.cursor) {
+    params.push(options.cursor);
+    sql += ` AND o.created_at < $${params.length}::timestamptz`;
+  }
+
+  const pageLimit = Math.min(options?.limit || 10, 100);
+  sql += ` ORDER BY o.created_at DESC LIMIT ${pageLimit}`;
 
   console.log('[DB] getMerchantOrders for merchant:', merchantId);
   const results = await query<OrderWithRelations>(sql, params);

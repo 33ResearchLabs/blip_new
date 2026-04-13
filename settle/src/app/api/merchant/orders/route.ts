@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
     if (includeAllPending) {
       orders = await getAllPendingOrdersForMerchant(merchant_id, status as any, { cursor, limit });
     } else {
-      orders = await getMerchantOrders(merchant_id, status as any);
+      orders = await getMerchantOrders(merchant_id, status as any, { cursor, limit });
     }
 
     // Enrich each order with backend-driven UI fields
