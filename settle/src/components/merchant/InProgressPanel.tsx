@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useRef, useState, useMemo } from 'react';
-import { Shield, Zap, ChevronRight, ChevronDown, Flame, ArrowRight, Clock, XCircle, Filter, AlertTriangle } from 'lucide-react';
+import { Shield, Zap, ChevronRight, ChevronDown, Flame, ArrowRight, Clock, XCircle, MessageSquare, AlertTriangle } from 'lucide-react';
 import { CountdownRing } from './CountdownRing';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextActionFromStatus, MinimalStatus } from '@/lib/orders/statusResolver';
@@ -231,6 +231,25 @@ const InProgressOrderList = memo(function InProgressOrderList({
                     <Zap className="w-3.5 h-3.5" />
                     {nextAction}
                     <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                {/* Chat button — always visible */}
+                {onOpenChat && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenChat(order);
+                    }}
+                    className="mt-1.5 w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-[10px] font-bold border border-foreground/[0.08] bg-foreground/[0.03] text-foreground/50 hover:bg-foreground/[0.06] hover:text-foreground/70 transition-colors"
+                  >
+                    <MessageSquare className="w-3 h-3" />
+                    Chat
+                    {order.unreadCount > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-white text-[8px] font-bold min-w-[16px] text-center">
+                        {order.unreadCount}
+                      </span>
+                    )}
                   </button>
                 )}
 

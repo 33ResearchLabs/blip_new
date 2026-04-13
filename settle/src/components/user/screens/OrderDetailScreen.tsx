@@ -67,6 +67,57 @@ const MUTED_BTN = "bg-surface-active text-text-secondary";
 // Shared expiry timer — used on both user and merchant order detail screens
 import { OrderExpiryTimer } from '@/components/shared/OrderExpiryTimer';
 
+/** Glossy animated expiry bar — sits at the card's bottom edge.
+ *  Shrinks with time. Shimmers to attract attention. Pulses red when urgent. */
+function ExpiryProgressBar({ expiresAt, createdAt }: { expiresAt: Date; createdAt: Date }) {
+  const [now, setNow] = useLocalState(Date.now());
+  useLocalEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const totalMs = expiresAt.getTime() - createdAt.getTime();
+  const remainingMs = Math.max(0, expiresAt.getTime() - now);
+  const pct = totalMs > 0 ? Math.min(100, (remainingMs / totalMs) * 100) : 0;
+  const isUrgent = remainingMs < 5 * 60 * 1000;
+
+  return (
+    <div className="mt-3 -mx-4 -mb-4 h-[6px] rounded-b-2xl overflow-hidden bg-surface-hover relative">
+      {/* Main bar */}
+      <div
+        className={`h-full rounded-b-2xl transition-[width] duration-1000 ease-linear relative overflow-hidden ${
+          isUrgent ? 'bg-error' : 'bg-gradient-to-r from-accent via-accent to-success'
+        } ${isUrgent ? 'animate-pulse' : ''}`}
+        style={{ width: `${pct}%` }}
+      >
+        {/* Glossy shine sweep */}
+        <div
+          className="absolute inset-0 animate-scanner"
+          style={{
+            background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)',
+          }}
+        />
+        {/* Top highlight for glass effect */}
+        <div
+          className="absolute top-0 left-0 right-0 h-[2px]"
+          style={{
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.4) 0%, transparent 100%)',
+          }}
+        />
+      </div>
+      {/* Glow at the leading edge */}
+      {pct > 2 && (
+        <div
+          className={`absolute top-0 bottom-0 w-3 rounded-full blur-sm transition-all duration-1000 ${
+            isUrgent ? 'bg-error' : 'bg-accent'
+          }`}
+          style={{ left: `calc(${pct}% - 6px)`, opacity: 0.8 }}
+        />
+      )}
+    </div>
+  );
+}
+
 export interface OrderDetailScreenProps {
   setScreen: (s: Screen) => void;
   previousScreen?: Screen;
@@ -609,7 +660,7 @@ export const OrderDetailScreen = ({
                   ? "Order Expired"
                   : `Step ${activeOrder.step} of 4`}
             </p>
-            {/* Expiry countdown — visible in all active states */}
+            {/* Expiry countdown inline — visible in all active states */}
             {activeOrder.expiresAt &&
               activeOrder.status !== "cancelled" &&
               activeOrder.status !== "expired" &&
@@ -618,9 +669,21 @@ export const OrderDetailScreen = ({
                 expiresAt={activeOrder.expiresAt}
                 status={activeOrder.dbStatus}
                 viewerRole={activeOrder.type === 'buy' ? 'buyer' : 'seller'}
+                compact
               />
             )}
           </div>
+
+          {/* Bottom expiry bar — fills proportionally to time remaining */}
+          {activeOrder.expiresAt &&
+            activeOrder.status !== "cancelled" &&
+            activeOrder.status !== "expired" &&
+            activeOrder.status !== "complete" && (
+            <ExpiryProgressBar
+              expiresAt={activeOrder.expiresAt}
+              createdAt={activeOrder.createdAt}
+            />
+          )}
         </div>
 
         {/* Escrow Status Section - Show for sell orders with escrow */}
@@ -2277,7 +2340,7 @@ export const OrderDetailScreen = ({
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 30 }}
+              transition={{ type: "spring", damping: 28, stiffness: 350, mass: 0.8 }}
               className={`fixed bottom-0  left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl p-6 ${SHEET_BG}`}
             >
               <div className="flex items-center justify-between mb-4">
@@ -2373,12 +2436,18 @@ export const OrderDetailScreen = ({
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 30 }}
+              transition={{ type: "spring", damping: 28, stiffness: 350, mass: 0.8 }}
               className={`fixed bottom-0 left-1/2 -translate-x-1/2 z-50 w-full ${maxW} rounded-t-3xl h-[70vh] flex flex-col ${SHEET_BG}`}
             >
               <div className="flex items-center justify-between p-4 border-b border-border-medium">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-accent" />
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[14px] bg-accent/20 border border-accent/30 text-accent overflow-hidden shrink-0">
+                    {activeOrder.merchant.avatarUrl ? (
+                      <img src={activeOrder.merchant.avatarUrl} alt={activeOrder.merchant.name} className="w-full h-full object-cover" />
+                    ) : (
+                      (activeOrder.merchant.name || 'M').charAt(0).toUpperCase()
+                    )}
+                  </div>
                   <div>
                     <p className="text-[15px] font-medium text-text-primary">
                       {activeOrder.merchant.name}

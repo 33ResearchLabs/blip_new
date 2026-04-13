@@ -726,25 +726,7 @@ export function ChatRoom({
 
   return (
     <div className="flex flex-col h-full bg-background text-foreground">
-      {/* Presence bar */}
-      {presence.length > 0 && (
-        <div className="px-3 py-1.5 border-b border-foreground/[0.04] bg-foreground/[0.02] flex items-center gap-3">
-          {presence.map((member) => (
-            <div
-              key={`${member.actorType}:${member.actorId}`}
-              className="flex items-center gap-1.5"
-            >
-              <div className="relative">
-                <SenderAvatar senderType={member.actorType} />
-                <OnlineBadge isOnline={member.isOnline} />
-              </div>
-              <span className="text-[10px] text-gray-500">
-                {getRoleName(member.actorType)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Presence bar removed — online/typing now shown in the chat header */}
 
       {/* Frozen banner */}
       {isFrozen && (

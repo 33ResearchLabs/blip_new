@@ -99,6 +99,7 @@ interface OrderDetails {
   cancel_requested_at?: string | null;
   cancel_request_reason?: string | null;
   last_activity_at?: string | null;
+  last_extended_at?: string | null;
   inactivity_warned_at?: string | null;
   disputed_at?: string | null;
   dispute_auto_resolve_at?: string | null;
@@ -1605,24 +1606,56 @@ export function OrderDetailsPanel({
                 );
               })()}
 
-            {/* Inactivity Warning */}
+            {/* Inactivity Warning / Extension Status */}
             {order.inactivity_warned_at &&
               order.status !== "disputed" &&
               !["completed", "cancelled", "expired"].includes(order.status) && (
-                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
-                  <div className="flex items-center gap-3">
-                    <AlertTriangle className="w-5 h-5 text-yellow-400" />
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-yellow-300">
-                        Inactivity Warning
-                      </p>
-                      <p className="text-xs text-white/50">
-                        No activity for 15+ minutes. Complete or cancel soon to
-                        avoid auto-escalation.
-                      </p>
+                (() => {
+                  // If order was recently extended, show success
+                  if (order.last_extended_at) {
+                    return (
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
+                        <div className="flex items-center gap-3">
+                          <Check className="w-5 h-5 text-emerald-400" />
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-emerald-300">
+                              Time Extended
+                            </p>
+                            <p className="text-xs text-white/50">
+                              Extension approved. Order deadline has been extended.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // If extension request is pending, show that instead
+                  if (order.extension_requested_by) {
+                    return null; // Already shown in the "Pending Extension Request Banner" above
+                  }
+
+                  // All extensions used up
+                  const allUsed = (order.extension_count || 0) >= (order.max_extensions || 3);
+
+                  return (
+                    <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
+                      <div className="flex items-center gap-3">
+                        <AlertTriangle className="w-5 h-5 text-yellow-400" />
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold text-yellow-300">
+                            Inactivity Warning
+                          </p>
+                          <p className="text-xs text-white/50">
+                            {allUsed
+                              ? 'All extensions used. Complete or cancel this order to avoid auto-escalation.'
+                              : 'No activity for 15+ minutes. Complete or cancel soon to avoid auto-escalation.'}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  );
+                })()
               )}
 
             {/* Dispute Auto-Resolve Countdown */}

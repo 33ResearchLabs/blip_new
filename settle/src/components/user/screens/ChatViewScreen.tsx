@@ -495,7 +495,7 @@ export const ChatViewScreen = ({
           <button onClick={() => setScreen("chats")} className="p-2 -ml-2">
             <ChevronLeft className="w-6 h-6 text-text-primary" />
           </button>
-          <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold bg-surface-card border border-border-subtle text-text-primary overflow-hidden shrink-0">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-[16px] bg-accent/20 border border-accent/30 text-accent overflow-hidden shrink-0">
             {activeOrder.merchant.avatarUrl ? (
               <img
                 src={activeOrder.merchant.avatarUrl}
@@ -503,7 +503,7 @@ export const ChatViewScreen = ({
                 className="w-full h-full object-cover"
               />
             ) : (
-              activeOrder.merchant.name.charAt(0)
+              (activeOrder.merchant.name || 'M').charAt(0).toUpperCase()
             )}
           </div>
           <div className="flex-1">
