@@ -5,14 +5,7 @@ import type { Order, OrderStatus, OrderStep, BankAccount } from "@/components/us
 import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
 import { fetchDisputeInfoFromApi } from '@/lib/api/disputeApi';
 import { showAlert } from '@/context/ModalContext';
-import {
-  type TransactionState,
-  INITIAL_TX_STATE,
-  createTxState,
-  advanceTxStep,
-  completeTx,
-  failTx,
-} from '@/components/shared/TransactionProgress';
+// Simple loading state — no step-by-step progress needed
 
 interface UseUserOrderActionsParams {
   userId: string | null;
@@ -82,8 +75,7 @@ export function useUserOrderActions({
   } | null>(null);
   const [requestingExtension, setRequestingExtension] = useState(false);
 
-  // Transaction progress (step-by-step feedback for blockchain + API operations)
-  const [txProgress, setTxProgress] = useState<TransactionState>(INITIAL_TX_STATE);
+  // Loading is handled by setIsLoading — no extra state needed
 
   // Hydrate extension state from backend on mount / order change.
   // Without this, a page refresh loses the in-memory extensionRequest
@@ -120,11 +112,7 @@ export function useUserOrderActions({
     }
 
     const hasOnChain = solanaWallet.connected && activeOrder.escrowTradeId && activeOrder.escrowCreatorWallet;
-    const steps = hasOnChain
-      ? ['Signing transaction...', 'Confirming on blockchain...', 'Updating order...']
-      : ['Updating order...'];
 
-    setTxProgress(createTxState('Marking Payment Sent', steps));
     setIsLoading(true);
 
     try {
@@ -141,7 +129,7 @@ export function useUserOrderActions({
         } catch (acceptErr: any) {
           console.log('[User] acceptTrade skipped (likely already done):', acceptErr.message);
         }
-        setTxProgress(prev => advanceTxStep(prev));
+        // Step complete — loading continues
 
         // Step 2: Confirm payment on chain
         try {
@@ -157,7 +145,7 @@ export function useUserOrderActions({
         } catch (chainError) {
           console.warn('[User] On-chain confirmation failed:', chainError);
         }
-        setTxProgress(prev => advanceTxStep(prev));
+        // Step complete — loading continues
       }
 
       // Final step: Update order via API
@@ -175,16 +163,12 @@ export function useUserOrderActions({
       if (!res.ok || !data.success) {
         const errorMsg = data.error || 'Failed to update order. The order may have expired.';
         console.error('Failed to mark payment sent:', errorMsg);
-        setTxProgress(prev => failTx(prev, errorMsg));
-        setTimeout(() => setTxProgress(INITIAL_TX_STATE), 5000);
+        showAlert('Error', errorMsg, 'error');
         setIsLoading(false);
         return;
       }
 
-      // Success! Update UI immediately — don't wait for refetch.
-      setTxProgress(prev => completeTx(prev));
-      setTimeout(() => setTxProgress(INITIAL_TX_STATE), 3000);
-
+      // Success! Update UI immediately.
       optimisticOrderUpdate(activeOrder.id, {
         status: "waiting" as OrderStatus,
         step: 3 as OrderStep,
@@ -192,8 +176,7 @@ export function useUserOrderActions({
       });
     } catch (err) {
       console.error('Failed to mark payment sent:', err);
-      setTxProgress(prev => failTx(prev, 'Network error. Please try again.'));
-      setTimeout(() => setTxProgress(INITIAL_TX_STATE), 5000);
+      showAlert('Network Error', 'Network error. Please try again.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -718,8 +701,5 @@ export function useUserOrderActions({
     confirmFiatReceived,
     fetchDisputeInfo,
     submitRating,
-    // Transaction progress
-    txProgress,
-    dismissTxProgress: () => setTxProgress(INITIAL_TX_STATE),
   };
 }

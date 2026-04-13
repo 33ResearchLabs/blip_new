@@ -3,7 +3,7 @@
 import "@/components/user/styles/user-theme.css";
 import { LandingPage } from "@/components/user/LandingPage";
 import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
-import { TransactionProgress } from "@/components/shared/TransactionProgress";
+// TransactionProgress removed — simple loading on buttons instead
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { motion, AnimatePresence } from "framer-motion";
@@ -254,10 +254,7 @@ export default function Home() {
       style={{ background: 'var(--user-frame)' }}
     >
       <NotificationToastContainer position="top-right" />
-      <TransactionProgress
-        state={orderActions.txProgress}
-        onDismiss={orderActions.dismissTxProgress}
-      />
+      {/* TransactionProgress removed — simple loading on buttons instead */}
       <AnimatePresence mode="wait">
         {screen === "welcome" && (
           <LandingPage
