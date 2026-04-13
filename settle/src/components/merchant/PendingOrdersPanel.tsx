@@ -4,6 +4,7 @@ import { memo, useRef, useState, useEffect, useMemo } from "react";
 import {
   Search,
   SlidersHorizontal,
+  Loader2,
   TrendingUp,
   TrendingDown,
   RotateCcw,
@@ -12,7 +13,6 @@ import {
   Clock,
   ArrowRight,
   Flame,
-  Loader2,
   ChevronDown,
   Check,
   XCircle,
@@ -40,6 +40,10 @@ interface PendingOrdersPanelProps {
   fetchOrders: () => void;
   onCancelOrder?: (order: any) => void;
   onOpenChat?: (order: any) => void;
+  // Pagination
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
 }
 
 // ─── Virtualized order list (renders only visible rows) ──────────
@@ -685,6 +689,9 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   onAcceptOrder,
   acceptingOrderId,
   fetchOrders,
+  onLoadMore,
+  hasMore = false,
+  isLoadingMore = false,
 }: PendingOrdersPanelProps) {
   // ─── Filter/sort state from Zustand (no prop drilling) ───────────
   const searchQuery = useMerchantStore((s) => s.searchQuery);
@@ -1352,6 +1359,23 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           onAcceptOrder={onAcceptOrder}
           acceptingOrderId={acceptingOrderId}
         />
+      )}
+
+      {/* Load More button */}
+      {hasMore && onLoadMore && (
+        <div className="px-3 py-2 border-t border-section-divider">
+          <button
+            onClick={onLoadMore}
+            disabled={isLoadingMore}
+            className="w-full py-2 rounded-lg text-[11px] font-bold text-foreground/40 hover:text-foreground/60 bg-foreground/[0.03] hover:bg-foreground/[0.06] border border-foreground/[0.06] transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+          >
+            {isLoadingMore ? (
+              <Loader2 className="w-3 h-3 animate-spin" />
+            ) : (
+              'Load More'
+            )}
+          </button>
+        </div>
       )}
     </div>
   );

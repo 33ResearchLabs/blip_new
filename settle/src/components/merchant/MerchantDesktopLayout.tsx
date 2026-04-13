@@ -61,6 +61,9 @@ export interface MerchantDesktopLayoutProps {
   handleOpenChat: (order: Order) => void;
   handleOrderAction: (order: any, action: string) => void;
   fetchOrders: () => Promise<void>;
+  loadMoreOrders?: () => void;
+  hasMoreOrders?: boolean;
+  isLoadingMore?: boolean;
   openDisputeModal: (orderId: string) => void;
   setRatingModalData: (data: { orderId: string; counterpartyName: string; counterpartyType: "user" | "merchant" } | null) => void;
 
@@ -107,7 +110,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     handleDirectOrderCreation, refreshBalance,
     setSelectedOrderPopup, setSelectedMempoolOrder, setSelectedOrderId,
     acceptOrder, acceptingOrderId, handleCancelOrder, handleOpenChat,
-    handleOrderAction, fetchOrders, openDisputeModal, setRatingModalData,
+    handleOrderAction, fetchOrders, loadMoreOrders, hasMoreOrders, isLoadingMore, openDisputeModal, setRatingModalData,
     inProgressCollapsed, setInProgressCollapsed,
     completedCollapsed, setCompletedCollapsed,
     activityCollapsed, setActivityCollapsed,
@@ -185,6 +188,9 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 onCancelOrder={handleCancelOrder}
                 onOpenChat={handleOpenChat}
                 fetchOrders={fetchOrders}
+                onLoadMore={loadMoreOrders}
+                hasMore={hasMoreOrders}
+                isLoadingMore={isLoadingMore}
               />
             ) : (
               <>

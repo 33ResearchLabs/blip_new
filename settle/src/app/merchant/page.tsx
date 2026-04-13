@@ -158,6 +158,9 @@ export default function MerchantDashboard() {
     setMempoolOrders,
     setResolvedDisputes,
     fetchOrders,
+    loadMoreOrders,
+    hasMoreOrders,
+    isLoadingMore,
     debouncedFetchOrders,
     fetchMempoolOrders,
     fetchActiveOffers,
@@ -804,6 +807,9 @@ export default function MerchantDashboard() {
         handleOpenChat={handleOpenChat}
         handleOrderAction={handleOrderAction}
         fetchOrders={fetchOrders}
+        loadMoreOrders={loadMoreOrders}
+        hasMoreOrders={hasMoreOrders}
+        isLoadingMore={isLoadingMore}
         openDisputeModal={openDisputeModal}
         setRatingModalData={setRatingModalData}
         inProgressCollapsed={inProgressCollapsed}
