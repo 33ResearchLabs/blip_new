@@ -90,6 +90,13 @@ export async function POST(request: NextRequest) {
         }
         break;
 
+      case 'merchant-chat':
+        // Merchant can subscribe to their own aggregated chat channel
+        if (actorType === 'merchant' && channelId === actorId) {
+          authorized = await verifyMerchant(actorId);
+        }
+        break;
+
       case 'merchants-global':
         // Any verified merchant can subscribe to the global merchants channel
         // This is used to broadcast new orders to all merchants

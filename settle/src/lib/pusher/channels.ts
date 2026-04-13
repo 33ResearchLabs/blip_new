@@ -63,7 +63,7 @@ export function getOrderPresenceChannel(orderId: string): string {
  * Parse channel name to extract type and ID
  */
 export function parseChannelName(channelName: string): {
-  type: 'user' | 'merchant' | 'merchants-global' | 'order' | 'presence-order' | 'unknown';
+  type: 'user' | 'merchant' | 'merchant-chat' | 'merchants-global' | 'order' | 'presence-order' | 'unknown';
   id: string | null;
 } {
   // Check for global merchants channel FIRST (before individual merchant channel)
@@ -72,6 +72,11 @@ export function parseChannelName(channelName: string): {
   }
   if (channelName.startsWith(CHANNEL_PREFIX.USER)) {
     return { type: 'user', id: channelName.replace(CHANNEL_PREFIX.USER, '') };
+  }
+  // MERCHANT_CHAT must be checked BEFORE MERCHANT because
+  // 'private-merchant-chat-' starts with 'private-merchant-'
+  if (channelName.startsWith(CHANNEL_PREFIX.MERCHANT_CHAT)) {
+    return { type: 'merchant-chat', id: channelName.replace(CHANNEL_PREFIX.MERCHANT_CHAT, '') };
   }
   if (channelName.startsWith(CHANNEL_PREFIX.MERCHANT)) {
     return { type: 'merchant', id: channelName.replace(CHANNEL_PREFIX.MERCHANT, '') };
