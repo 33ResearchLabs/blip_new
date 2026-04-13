@@ -10,6 +10,19 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+/**
+ * SINGLE SOURCE OF TRUTH for signed upload parameters.
+ * Both the backend (signature) and frontend (FormData) must use
+ * exactly these params — nothing more, nothing less.
+ * If you add a param here, the frontend MUST also send it in FormData.
+ */
+function buildSignedParams(folder: string): Record<string, string | number> {
+  return {
+    folder,
+    timestamp: Math.round(Date.now() / 1000),
+  };
+}
+
 export async function POST(request: NextRequest) {
   // Rate limit upload signatures
   const rl = await checkRateLimit(request, 'upload:signature', STANDARD_LIMIT);
@@ -43,29 +56,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate timestamp
-    const timestamp = Math.round(new Date().getTime() / 1000);
-
     // Build folder path with order ID if provided
     const uploadFolder = orderId ? `${folder}/${orderId}` : folder;
 
-    // Parameters to sign — must match exactly what the client sends in the upload FormData
-    const params: Record<string, string | number> = {
-      timestamp,
-      folder: uploadFolder,
-    };
+    // Build signed params from the single source of truth
+    const params = buildSignedParams(uploadFolder);
 
-    // Generate signature
+    // Generate signature — Cloudinary uses SHA1(sorted_params + API_SECRET)
     const signature = cloudinary.utils.api_sign_request(
       params,
       process.env.CLOUDINARY_API_SECRET
     );
 
+    // Diagnostic logging (dev only)
+    if (process.env.NODE_ENV !== 'production') {
+      const stringToSign = Object.keys(params)
+        .sort()
+        .map((k) => `${k}=${params[k]}`)
+        .join('&');
+      console.log('[upload/signature] string_to_sign:', stringToSign);
+    }
+
     return NextResponse.json({
       success: true,
       data: {
         signature,
-        timestamp,
+        timestamp: params.timestamp,
         cloudName,
         apiKey: process.env.CLOUDINARY_API_KEY,
         folder: uploadFolder,

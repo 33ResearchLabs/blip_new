@@ -13,7 +13,8 @@
  */
 
 import { notifyOrderStatusUpdated } from '@/lib/pusher/server';
-import { wsBroadcastOrderUpdate } from '@/lib/websocket/broadcast';
+import { wsBroadcastOrderUpdate, wsBroadcastChatStatusUpdate } from '@/lib/websocket/broadcast';
+import { getChatAvailability } from '@/lib/chat/availability';
 import { normalizeStatus } from '@/lib/orders/statusNormalizer';
 import type { OrderStatus } from '@/lib/types/database';
 import { logger } from '@/lib/logger';
@@ -79,6 +80,23 @@ export async function fireInstantNotification(params: InstantNotifyParams): Prom
       })
     );
   }
+
+  // ── Chat status broadcast ──
+  // When an order transitions to a state that changes chat availability
+  // (e.g., open→accepted = chat opens, active→completed = chat closes),
+  // emit chat:status-update so the frontend instantly shows/hides chat UI.
+  // Uses a synthetic order object with the new status to compute availability.
+  const chatStatusForUser = getChatAvailability(
+    { id: params.orderId, status: params.status, user_id: params.userId, merchant_id: params.merchantId, buyer_merchant_id: params.buyerMerchantId || null },
+    'user',
+  );
+  promises.push(
+    Promise.resolve(wsBroadcastChatStatusUpdate({
+      orderId: params.orderId,
+      enabled: chatStatusForUser.enabled,
+      reason: chatStatusForUser.reason,
+    })).catch(() => {}),
+  );
 
   // M2M buyer merchant notification
   if (params.buyerMerchantId && params.buyerMerchantId !== params.merchantId) {

@@ -54,6 +54,24 @@ export function wsBroadcastOrderCreated(data: {
 }
 
 /**
+ * Broadcast chat status change to all participants.
+ * Emitted when order status changes affect chat availability
+ * (e.g., accepted → chat opens, completed → chat closes).
+ * Frontend MUST react by showing/hiding the chat UI instantly.
+ */
+export function wsBroadcastChatStatusUpdate(data: {
+  orderId: string;
+  enabled: boolean;
+  reason: string | null;
+}) {
+  broadcast(data.orderId, {
+    type: 'chat:status-update',
+    timestamp: new Date().toISOString(),
+    data,
+  });
+}
+
+/**
  * Broadcast order cancelled event
  */
 export function wsBroadcastOrderCancelled(data: {

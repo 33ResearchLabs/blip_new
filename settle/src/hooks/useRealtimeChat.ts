@@ -169,6 +169,57 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   // orderId (the real one, not chat-window id).
   const lastSeqRef = useRef<Map<string, number>>(new Map());
 
+  // ── Delivery ACK debounce buffer ──
+  // Collects message IDs per order over a 300ms window, then sends
+  // a single batch PATCH. Reduces network calls from N-per-message to 1-per-burst.
+  const deliveryAckBufferRef = useRef<Map<string, Set<string>>>(new Map());
+  const deliveryAckTimerRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  const queueDeliveryAck = useCallback((orderId: string, messageId: string) => {
+    // Add to buffer
+    if (!deliveryAckBufferRef.current.has(orderId)) {
+      deliveryAckBufferRef.current.set(orderId, new Set());
+    }
+    deliveryAckBufferRef.current.get(orderId)!.add(messageId);
+
+    // Debounce: flush after 300ms of no new messages for this order
+    const existingTimer = deliveryAckTimerRef.current.get(orderId);
+    if (existingTimer) clearTimeout(existingTimer);
+
+    deliveryAckTimerRef.current.set(orderId, setTimeout(() => {
+      const ids = deliveryAckBufferRef.current.get(orderId);
+      if (!ids || ids.size === 0) return;
+
+      const messageIds = Array.from(ids);
+      deliveryAckBufferRef.current.delete(orderId);
+      deliveryAckTimerRef.current.delete(orderId);
+
+      // Single batch PATCH for all messages in this 300ms window
+      fetchWithAuth(`/api/orders/${orderId}/messages`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delivered',
+          message_ids: messageIds,
+          reader_type: actorType,
+        }),
+      }).catch(() => {
+        // Retry once after 2s
+        setTimeout(() => {
+          fetchWithAuth(`/api/orders/${orderId}/messages`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'delivered',
+              message_ids: messageIds,
+              reader_type: actorType,
+            }),
+          }).catch(() => {});
+        }, 2000);
+      });
+    }, 300));
+  }, [actorType]);
+
   // Convert DB message to UI message
   const mapDbMessageToUI = useCallback(
     (dbMsg: DbMessage, myActorType: string): ChatMessage => {
@@ -189,7 +240,16 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         senderName: dbMsg.sender_name,
         isRead: dbMsg.is_read,
         isHighlighted: dbMsg.is_highlighted,
-        status: from === 'me' ? (dbMsg.is_read ? 'read' : (dbMsg.status as 'sent' | 'delivered' | undefined) || 'sent') : undefined,
+        // Map DB status enum to frontend status enum.
+        // DB uses 'seen', frontend uses 'read' — must translate here.
+        // Priority: is_read flag → DB status → fallback to 'sent'.
+        status: from === 'me'
+          ? dbMsg.is_read || dbMsg.status === 'seen'
+            ? 'read'
+            : dbMsg.status === 'delivered'
+              ? 'delivered'
+              : 'sent'
+          : undefined,
         // Phase 3: carry through for ordering + dedup. Both null on legacy rows.
         clientId: dbMsg.client_id ?? undefined,
         seq: dbMsg.seq ?? undefined,
@@ -360,6 +420,11 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
               // Pass the real order id, not the synthetic chat-window id —
               // consumers use this to update orders[].lastMessage / unreadCount.
               onNewMessage?.(w.orderId, message);
+
+              // Auto-delivery ACK: queue this message ID into the 300ms
+              // debounce buffer. Multiple messages arriving in a burst
+              // (e.g., reconnect catch-up) are batched into a single PATCH.
+              queueDeliveryAck(orderId, message.id);
             }
 
             return {
@@ -410,7 +475,30 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         );
       };
 
-      // Handle messages read
+      // Handle messages delivered (sender sees ✓✓)
+      const handleMessagesDelivered = (rawData: unknown) => {
+        const data = rawData as { orderId: string; messageIds: string[]; deliveredBy: string };
+        if (data.orderId !== orderId || data.deliveredBy === actorType) return;
+
+        const deliveredSet = new Set(data.messageIds);
+        setChatWindows((prev) =>
+          prev.map((w) => {
+            if (w.orderId !== orderId) return w;
+            return {
+              ...w,
+              messages: w.messages.map((m) => {
+                // Only update MY messages that were delivered
+                if (m.from === 'me' && deliveredSet.has(m.id) && m.status !== 'read') {
+                  return { ...m, status: 'delivered' as const };
+                }
+                return m;
+              }),
+            };
+          })
+        );
+      };
+
+      // Handle messages read (sender sees ✓✓ blue)
       const handleMessagesRead = (rawData: unknown) => {
         const data = rawData as { orderId: string; readerType: string; readAt: string };
         if (data.orderId !== orderId || data.readerType === actorType) return;
@@ -431,6 +519,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       channel.bind(CHAT_EVENTS.MESSAGE_NEW, handleNewMessage);
       channel.bind(CHAT_EVENTS.TYPING_START, handleTypingStart);
       channel.bind(CHAT_EVENTS.TYPING_STOP, handleTypingStop);
+      channel.bind(CHAT_EVENTS.MESSAGES_DELIVERED, handleMessagesDelivered);
       channel.bind(CHAT_EVENTS.MESSAGES_READ, handleMessagesRead);
 
       // Fetch initial messages

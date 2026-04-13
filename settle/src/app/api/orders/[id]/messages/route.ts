@@ -17,7 +17,8 @@ import {
 } from '@/lib/middleware/auth';
 import { checkRateLimit, MESSAGE_LIMIT } from '@/lib/middleware/rateLimit';
 import { logger } from '@/lib/logger';
-import { notifyNewMessage, notifyNewDirectMessage, notifyMessagesRead } from '@/lib/pusher/server';
+import { notifyNewMessage, notifyNewDirectMessage, notifyMessagesRead, triggerEvent } from '@/lib/pusher/server';
+import { CHAT_EVENTS } from '@/lib/pusher/events';
 
 // Validate order ID parameter
 async function validateOrderId(id: string): Promise<{ valid: boolean; error?: string }> {
@@ -123,6 +124,31 @@ export async function POST(
 
     const { sender_type, sender_id, content, message_type, image_url, file_url, file_name, file_size, mime_type, client_id } = parseResult.data;
 
+    // ── URL validation: prevent malicious/spoofed image/file URLs ──
+    // Only allow Cloudinary URLs. A tampered client could pass an arbitrary
+    // URL (XSS payload, phishing page, tracking pixel) as the image_url.
+    const ALLOWED_URL_DOMAINS = ['res.cloudinary.com', 'cloudinary.com'];
+    if (image_url) {
+      try {
+        const parsed = new URL(image_url);
+        if (!ALLOWED_URL_DOMAINS.some(d => parsed.hostname.endsWith(d))) {
+          return validationErrorResponse(['image_url must be a Cloudinary URL']);
+        }
+      } catch {
+        return validationErrorResponse(['image_url is not a valid URL']);
+      }
+    }
+    if (file_url) {
+      try {
+        const parsed = new URL(file_url);
+        if (!ALLOWED_URL_DOMAINS.some(d => parsed.hostname.endsWith(d))) {
+          return validationErrorResponse(['file_url must be a Cloudinary URL']);
+        }
+      } catch {
+        return validationErrorResponse(['file_url is not a valid URL']);
+      }
+    }
+
     // Verify sender identity matches authenticated actor (prevent spoofing)
     // Allow dual-login: user token can send as user if userId matches,
     // merchant token can send as merchant if merchantId matches.
@@ -183,8 +209,16 @@ export async function POST(
       return forbiddenResponse('You do not have access to this order');
     }
 
-    // Chat remains available regardless of order status — participants can
-    // still message each other after completion/cancellation/expiry.
+    // ── Chat availability enforcement (backend is source of truth) ──
+    // The frontend shows/hides the chat UI based on getChatAvailability(),
+    // but the backend MUST enforce it here as the final gate. This prevents
+    // messages on closed/frozen/pre-accepted orders even if the client is
+    // out of date or manipulated.
+    const { getChatAvailability } = await import('@/lib/chat/availability');
+    const chatStatus = getChatAvailability(order, sender_type as 'user' | 'merchant' | 'compliance' | 'system');
+    if (!chatStatus.enabled) {
+      return forbiddenResponse(chatStatus.reason || 'Chat is not available for this order');
+    }
 
     const message = await sendMessage({
       order_id: id,
@@ -227,6 +261,59 @@ export async function POST(
       clientId: (message as { client_id?: string | null }).client_id ?? null,
       seq: (message as { seq?: number | null }).seq ?? null,
     });
+
+    // ── Merchant aggregated channel: message preview + unread (fire-and-forget) ──
+    // Merchants subscribe to ONE channel for all chat updates. This avoids
+    // the 50+ order channel subscription problem.
+    {
+      const { getMerchantChatChannel } = await import('@/lib/pusher/channels');
+      const { triggerEvent } = await import('@/lib/pusher/server');
+      const previewPayload = {
+        orderId: id,
+        preview: (content || '[attachment]').substring(0, 80),
+        senderType: sender_type,
+        senderName: (message as any).sender_name || sender_type,
+        messageType: message_type || 'text',
+        timestamp: message.created_at.toISOString(),
+      };
+      // Send preview to all merchants involved in this order (except the sender)
+      const merchantIds = [order.merchant_id, order.buyer_merchant_id].filter(
+        (mid): mid is string => !!mid && mid !== sender_id
+      );
+      for (const mid of merchantIds) {
+        triggerEvent(getMerchantChatChannel(mid), CHAT_EVENTS.MESSAGE_PREVIEW, previewPayload).catch(() => {});
+      }
+    }
+
+    // ── Redis unread counters (fire-and-forget) ──
+    // Increment unread for the RECEIVER, not the sender.
+    {
+      const { incrementMerchantUnread, incrementUserUnread } = await import('@/lib/chat/unreadCounters');
+      if (sender_type === 'user' || sender_type === 'compliance') {
+        // User/compliance sent → increment merchant's unread
+        if (order.merchant_id && order.merchant_id !== sender_id) {
+          incrementMerchantUnread(order.merchant_id, id).catch(() => {});
+        }
+        if (order.buyer_merchant_id && order.buyer_merchant_id !== sender_id) {
+          incrementMerchantUnread(order.buyer_merchant_id, id).catch(() => {});
+        }
+      }
+      if (sender_type === 'merchant' || sender_type === 'compliance') {
+        // Merchant/compliance sent → increment user's unread
+        if (order.user_id && order.user_id !== sender_id) {
+          incrementUserUnread(order.user_id, id).catch(() => {});
+        }
+        // Also increment the OTHER merchant's unread (M2M)
+        if (sender_type === 'merchant') {
+          const otherMerchant = sender_id === order.merchant_id
+            ? order.buyer_merchant_id
+            : order.merchant_id;
+          if (otherMerchant && otherMerchant !== sender_id) {
+            incrementMerchantUnread(otherMerchant, id).catch(() => {});
+          }
+        }
+      }
+    }
 
     // ── Post-send notifications (fire-and-forget, don't block response) ──
     //
@@ -414,24 +501,15 @@ export async function PATCH(
 
     const body = await request.json();
 
-    // Validate request body
-    const parseResult = markMessagesReadSchema.safeParse(body);
-    if (!parseResult.success) {
-      const errors = parseResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`);
-      return validationErrorResponse(errors);
-    }
-
-    const { reader_type } = parseResult.data;
+    // Require authentication for all PATCH actions
+    const auth = await requireAuth(request);
+    if (auth instanceof NextResponse) return auth;
 
     // Check order exists
     const order = await getOrderById(id);
     if (!order) {
       return notFoundResponse('Order');
     }
-
-    // Require authentication
-    const auth = await requireAuth(request);
-    if (auth instanceof NextResponse) return auth;
 
     // Authorization check
     const canAccess = await canAccessOrder(auth, id);
@@ -440,14 +518,93 @@ export async function PATCH(
       return forbiddenResponse('You do not have access to this order');
     }
 
+    // ── Action: "delivered" — batch delivery acknowledgment ──────────
+    // The receiver's client auto-sends this when a message arrives via Pusher.
+    // Updates chat_messages.status to 'delivered' and delivered_at timestamp.
+    // Idempotent: re-delivering an already-delivered message is a no-op.
+    if (body.action === 'delivered' && Array.isArray(body.message_ids)) {
+      const messageIds: string[] = body.message_ids.slice(0, 50); // Cap at 50
+      if (messageIds.length > 0) {
+        // Batch update: only update messages that are currently 'sent' (not already delivered/seen)
+        const result = await query(
+          `UPDATE chat_messages
+           SET status = 'delivered', delivered_at = NOW()
+           WHERE order_id = $1
+             AND id = ANY($2::uuid[])
+             AND (status IS NULL OR status = 'sent')
+           RETURNING id`,
+          [id, messageIds]
+        );
+
+        // Emit delivery event to the ORDER channel so the SENDER sees ✓✓
+        // Only emit if we actually updated something (prevents duplicate events)
+        if (result.length > 0) {
+          const { getOrderChannel } = await import('@/lib/pusher/channels');
+          triggerEvent(getOrderChannel(id), 'chat:messages-delivered', {
+            orderId: id,
+            messageIds: result.map((r: any) => r.id),
+            deliveredBy: auth.actorType,
+            deliveredAt: new Date().toISOString(),
+          }).catch(() => {});
+        }
+      }
+      return successResponse({ delivered: messageIds.length });
+    }
+
+    // ── Action: mark-read (default) ─────────────────────────────────
+    // Validate request body for mark-read
+    const parseResult = markMessagesReadSchema.safeParse(body);
+    if (!parseResult.success) {
+      const errors = parseResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`);
+      return validationErrorResponse(errors);
+    }
+
+    const { reader_type } = parseResult.data;
+
     // Phase 3: pass authenticated actorId so the dual-write to
     // chat_message_reads can attribute the read to the correct actor.
-    // Backward compatible: the readerId parameter is optional in the repo
-    // function — old callers (none currently, but defensive) keep working.
     await markMessagesAsRead(id, reader_type, auth.actorId);
 
-    // Trigger real-time notification
+    // Also update status to 'seen' for all unread messages from the other party
+    await query(
+      `UPDATE chat_messages
+       SET status = 'seen'
+       WHERE order_id = $1
+         AND sender_type != $2
+         AND (status IS NULL OR status IN ('sent', 'delivered'))`,
+      [id, reader_type]
+    ).catch(() => {});
+
+    // Clear Redis unread counter for the reader
+    {
+      const { clearMerchantUnread, clearUserUnread } = await import('@/lib/chat/unreadCounters');
+      if (auth.actorType === 'merchant') {
+        clearMerchantUnread(auth.actorId, id).catch(() => {});
+      } else if (auth.actorType === 'user') {
+        clearUserUnread(auth.actorId, id).catch(() => {});
+      }
+    }
+
+    // Trigger real-time notification (multi-device: also emit on user's private channel)
     notifyMessagesRead(id, reader_type, new Date().toISOString());
+
+    // Multi-device sync: emit on the reader's private channel so other tabs/devices
+    // update their UI without polling.
+    {
+      const { getUserChannel, getMerchantChannel } = await import('@/lib/pusher/channels');
+      const syncChannel = auth.actorType === 'merchant'
+        ? getMerchantChannel(auth.actorId)
+        : auth.actorType === 'user'
+          ? getUserChannel(auth.actorId)
+          : null;
+      if (syncChannel) {
+        triggerEvent(syncChannel, CHAT_EVENTS.MESSAGES_READ, {
+          orderId: id,
+          readerType: reader_type,
+          readAt: new Date().toISOString(),
+        }).catch(() => {});
+      }
+    }
 
     logger.chat.messagesRead(id, reader_type);
     return successResponse({ marked_read: true });

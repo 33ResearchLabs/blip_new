@@ -528,6 +528,8 @@ export default function Home() {
               onLoadOlder={activeOrder ? () => userEffects.loadOlderMessages(activeOrder.id) : undefined}
               hasOlderMessages={activeOrder ? userEffects.hasOlderMessages(activeOrder.id) : false}
               isLoadingOlder={activeOrder ? userEffects.isLoadingOlderMessages(activeOrder.id) : false}
+              onTyping={userEffects.sendTypingIndicator}
+              isCounterpartyTyping={!!(userEffects.activeChat as any)?.isTyping}
             />
           </Panel>
         )}

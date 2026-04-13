@@ -1944,15 +1944,30 @@ export async function getOrderMessages(
     ? 'ORDER BY cm.seq DESC NULLS LAST, cm.created_at DESC'
     : 'ORDER BY cm.created_at DESC';
 
+  // Migration 086: if sender_name is denormalized, skip the 3-table JOIN.
+  // Use COALESCE to fall back to the JOIN for rows that pre-date the backfill.
+  const hasSenderName = await chatHasSenderNameColumn();
+
+  const selectClause = hasSenderName
+    ? `SELECT cm.*,
+         COALESCE(cm.sender_name,
+           CASE
+             WHEN cm.sender_type = 'user' THEN u.username
+             WHEN cm.sender_type = 'merchant' THEN m.display_name
+             WHEN cm.sender_type = 'compliance' THEN ct.name
+             ELSE 'System'
+           END
+         ) as sender_name`
+    : `SELECT cm.*,
+         CASE
+           WHEN cm.sender_type = 'user' THEN u.username
+           WHEN cm.sender_type = 'merchant' THEN m.display_name
+           WHEN cm.sender_type = 'compliance' THEN ct.name
+           ELSE 'System'
+         END as sender_name`;
+
   const rows = await query<ChatMessage>(
-    `SELECT
-      cm.*,
-      CASE
-        WHEN cm.sender_type = 'user' THEN u.username
-        WHEN cm.sender_type = 'merchant' THEN m.display_name
-        WHEN cm.sender_type = 'compliance' THEN ct.name
-        ELSE 'System'
-      END as sender_name
+    `${selectClause}
     FROM chat_messages cm
     LEFT JOIN users u ON cm.sender_type = 'user' AND cm.sender_id = u.id
     LEFT JOIN merchants m ON cm.sender_type = 'merchant' AND cm.sender_id = m.id
@@ -1984,6 +1999,7 @@ export async function getOrderMessages(
 let _hasSeqColumn: boolean | null = null;
 let _hasClientIdColumn: boolean | null = null;
 let _hasReadsTable: boolean | null = null;
+let _hasSenderNameColumn: boolean | null = null;
 
 async function chatHasSeqColumn(): Promise<boolean> {
   if (_hasSeqColumn !== null) return _hasSeqColumn;
@@ -2073,10 +2089,27 @@ export async function getOrderMessagesAfterSeq(
   );
 }
 
+async function chatHasSenderNameColumn(): Promise<boolean> {
+  if (_hasSenderNameColumn !== null) return _hasSenderNameColumn;
+  try {
+    const rows = await query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.columns
+         WHERE table_name = 'chat_messages' AND column_name = 'sender_name'
+       ) AS exists`
+    );
+    _hasSenderNameColumn = !!rows[0]?.exists;
+  } catch {
+    _hasSenderNameColumn = false;
+  }
+  return _hasSenderNameColumn;
+}
+
 export async function sendMessage(data: {
   order_id: string;
   sender_type: ActorType;
   sender_id: string;
+  sender_name?: string;  // Migration 086: denormalized sender name (optional)
   content?: string;
   message_type?: 'text' | 'image' | 'file' | 'system' | 'dispute' | 'resolution' | 'resolution_proposed' | 'resolution_rejected' | 'resolution_accepted' | 'resolution_finalized';
   image_url?: string;
@@ -2146,6 +2179,20 @@ export async function sendMessage(data: {
       data.mime_type || null,
     ]
   );
+
+  // Migration 086: populate sender_name if the column exists.
+  // Fire-and-forget — doesn't block the response.
+  if (data.sender_name && result) {
+    chatHasSenderNameColumn().then((has) => {
+      if (has) {
+        query(
+          'UPDATE chat_messages SET sender_name = $1 WHERE id = $2',
+          [data.sender_name, result.id]
+        ).catch(() => {});
+      }
+    });
+  }
+
   return result!;
 }
 

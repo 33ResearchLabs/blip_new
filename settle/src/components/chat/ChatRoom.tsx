@@ -83,6 +83,10 @@ interface ChatRoomProps {
   onLoadOlder?: () => Promise<boolean | void>;
   hasOlderMessages?: boolean;
   isLoadingOlder?: boolean;
+  // Backend-controlled chat availability. When chatEnabled=false, the input
+  // is replaced with a status banner showing chatReason.
+  chatEnabled?: boolean;
+  chatReason?: string | null;
 }
 
 // ============================================
@@ -388,6 +392,8 @@ export function ChatRoom({
   onLoadOlder,
   hasOlderMessages = true,
   isLoadingOlder = false,
+  chatEnabled = true,
+  chatReason = null,
 }: ChatRoomProps) {
   const [messageText, setMessageText] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -1074,7 +1080,7 @@ export function ChatRoom({
             <Paperclip className="w-4 h-4 text-foreground/40" />
           </button>
 
-          {/* Text input */}
+          {/* Text input — disabled when chat is closed/frozen/waiting */}
           <input
             ref={inputRef}
             type="text"
@@ -1082,13 +1088,16 @@ export function ChatRoom({
             onChange={(e) => handleTypingChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={
-              isFrozen && currentUserType !== "compliance"
+              !chatEnabled && chatReason
+                ? chatReason
+                : isFrozen && currentUserType !== "compliance"
                 ? "Chat is frozen..."
                 : "Type a message..."
             }
             disabled={
               disabled ||
               isUploading ||
+              !chatEnabled ||
               (isFrozen && currentUserType !== "compliance")
             }
             className="flex-1 bg-foreground/[0.04] border border-foreground/[0.06] rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-40"

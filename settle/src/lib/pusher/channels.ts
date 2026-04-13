@@ -8,6 +8,7 @@
 const CHANNEL_PREFIX = {
   USER: 'private-user-',
   MERCHANT: 'private-merchant-',
+  MERCHANT_CHAT: 'private-merchant-chat-',
   ORDER: 'private-order-',
   PRESENCE_ORDER: 'presence-order-',
   ALL_MERCHANTS: 'private-merchants-global', // Global channel for all merchants
@@ -25,6 +26,16 @@ export function getUserChannel(userId: string): string {
  */
 export function getMerchantChannel(merchantId: string): string {
   return `${CHANNEL_PREFIX.MERCHANT}${merchantId}`;
+}
+
+/**
+ * Get the aggregated chat channel for a merchant.
+ * The merchant subscribes to this ONE channel for all chat updates
+ * (message previews, unread counts, typing indicators) instead of
+ * subscribing to 50+ individual order channels.
+ */
+export function getMerchantChatChannel(merchantId: string): string {
+  return `${CHANNEL_PREFIX.MERCHANT_CHAT}${merchantId}`;
 }
 
 /**

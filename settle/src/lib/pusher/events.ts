@@ -21,6 +21,15 @@ export const CHAT_EVENTS = {
   TYPING_START: 'chat:typing-start',
   TYPING_STOP: 'chat:typing-stop',
   DM_NEW: 'chat:dm-new',
+  STATUS_UPDATE: 'chat:status-update',
+  MESSAGES_DELIVERED: 'chat:messages-delivered',
+  MESSAGE_PREVIEW: 'chat:message-preview',
+  UNREAD_UPDATE: 'chat:unread-update',
+} as const;
+
+// Presence events
+export const PRESENCE_EVENTS = {
+  UPDATE: 'presence:update',
 } as const;
 
 // Notification events
@@ -32,10 +41,12 @@ export const NOTIFICATION_EVENTS = {
 export const PUSHER_EVENTS = {
   ...ORDER_EVENTS,
   ...CHAT_EVENTS,
+  ...PRESENCE_EVENTS,
   ...NOTIFICATION_EVENTS,
 } as const;
 
 export type OrderEvent = (typeof ORDER_EVENTS)[keyof typeof ORDER_EVENTS];
 export type ChatEvent = (typeof CHAT_EVENTS)[keyof typeof CHAT_EVENTS];
+export type PresenceEvent = (typeof PRESENCE_EVENTS)[keyof typeof PRESENCE_EVENTS];
 export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[keyof typeof NOTIFICATION_EVENTS];
-export type PusherEvent = OrderEvent | ChatEvent | NotificationEvent;
+export type PusherEvent = OrderEvent | ChatEvent | PresenceEvent | NotificationEvent;

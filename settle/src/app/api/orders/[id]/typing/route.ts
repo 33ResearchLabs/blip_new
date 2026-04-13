@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { getOrderById } from '@/lib/db/repositories/orders';
 import { uuidSchema } from '@/lib/validation/schemas';
 import {
+  requireAuth,
   canAccessOrder,
   forbiddenResponse,
   notFoundResponse,
@@ -51,20 +52,20 @@ export async function POST(
 
     const { actor_type, is_typing } = parseResult.data;
 
+    // Require proper authentication (not a manual fake auth check)
+    const auth = await requireAuth(request);
+    if (auth instanceof (await import('next/server')).NextResponse) return auth;
+
     // Check order exists
     const order = await getOrderById(id);
     if (!order) {
       return notFoundResponse('Order');
     }
 
-    // Authorization: compliance always has access, others need order participation
-    if (actor_type !== 'compliance') {
-      const actorId = actor_type === 'user' ? order.user_id : order.merchant_id;
-      const auth = { actorType: actor_type, actorId };
-      const canAccess = await canAccessOrder(auth as { actorType: 'user' | 'merchant' | 'system'; actorId: string }, id);
-      if (!canAccess) {
-        return forbiddenResponse('You do not have access to this order');
-      }
+    // Authorization: use the real authenticated actor
+    const canAccess = await canAccessOrder(auth, id);
+    if (!canAccess) {
+      return forbiddenResponse('You do not have access to this order');
     }
 
     // Don't send typing indicators on terminal orders

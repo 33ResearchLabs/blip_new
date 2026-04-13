@@ -6,9 +6,10 @@ import {
   successResponse,
   errorResponse,
 } from '@/lib/middleware/auth';
+import { getGlobalPresence } from '@/lib/chat/presence';
 
 // GET /api/presence?actorType=user|merchant&actorId=<uuid>
-// Returns { isOnline, lastSeen } for a single actor from the chat_presence table.
+// Reads from Redis first (fast), falls back to DB if Redis is unavailable.
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
@@ -25,6 +26,17 @@ export async function GET(request: NextRequest) {
       return validationErrorResponse(['Missing actorId']);
     }
 
+    // Primary: Redis (fast, TTL-based — no stale data)
+    const redisPresence = await getGlobalPresence(actorType, actorId);
+    if (redisPresence.isOnline || redisPresence.lastSeen) {
+      return successResponse({
+        actorType, actorId,
+        isOnline: redisPresence.isOnline,
+        lastSeen: redisPresence.lastSeen,
+      });
+    }
+
+    // Fallback: DB (for when Redis is down or actor has never used Redis path)
     let isOnline = false;
     let lastSeen: string | null = null;
     try {
@@ -38,7 +50,6 @@ export async function GET(request: NextRequest) {
       );
       if (rows.length > 0) {
         lastSeen = rows[0].last_seen?.toISOString() || null;
-        // Online if explicitly online AND heartbeat within 90s
         const fresh = lastSeen ? (Date.now() - new Date(lastSeen).getTime()) < 90_000 : false;
         isOnline = !!rows[0].is_online && fresh;
       }
