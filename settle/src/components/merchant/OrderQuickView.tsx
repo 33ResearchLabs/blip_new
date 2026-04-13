@@ -224,24 +224,23 @@ export function OrderQuickView({
                   </p>
                   <div className="flex items-center gap-2">
                     <p className="text-[11px] text-foreground/40">
-                      {selectedOrder.orderType === "buy" ? "Selling" : "Buying"}{" "}
-                      USDT
+                      {selectedOrder.myRole === "seller"
+                        ? "Selling USDT"
+                        : selectedOrder.myRole === "buyer"
+                          ? "Buying USDT"
+                          : "USDT Trade"}
                     </p>
-                    {selectedOrder.myRole && (
+                    {selectedOrder.myRole && selectedOrder.myRole !== "observer" && (
                       <span
                         className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-medium ${
-                          selectedOrder.myRole === "buyer"
-                            ? "bg-blue-500/20 text-blue-400"
-                            : selectedOrder.myRole === "seller"
-                              ? "bg-purple-500/20 text-purple-400"
-                              : "bg-gray-500/20 text-foreground/40"
+                          selectedOrder.myRole === "seller"
+                            ? "bg-orange-500/15 text-orange-400 border border-orange-500/20"
+                            : "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
                         }`}
                       >
-                        {selectedOrder.myRole === "buyer"
-                          ? "YOU RECEIVE"
-                          : selectedOrder.myRole === "seller"
-                            ? "YOU SEND"
-                            : "OBSERVER"}
+                        {selectedOrder.myRole === "seller"
+                          ? "YOU SEND"
+                          : "YOU PAY"}
                       </span>
                     )}
                   </div>

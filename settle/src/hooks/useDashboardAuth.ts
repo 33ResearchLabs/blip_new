@@ -348,6 +348,17 @@ export function useDashboardAuth({
         const savedMerchant = localStorage.getItem('blip_merchant');
         if (savedMerchant) {
           const merchant = JSON.parse(savedMerchant);
+
+          // Immediately set merchantId from localStorage so fetchOrders can
+          // run while session validation happens in the background. Without
+          // this, hard refresh leaves merchantId=null until the check_session
+          // API responds (300ms-1s), and all panels show empty.
+          if (merchant?.id) {
+            setMerchantId(merchant.id);
+            setMerchantInfo(merchant);
+            setIsLoggedIn(true);
+          }
+
           const checkRes = await fetchWithAuth(`/api/auth/merchant?action=check_session&merchant_id=${merchant.id}`);
           if (checkRes.ok) {
             const checkData = await checkRes.json();

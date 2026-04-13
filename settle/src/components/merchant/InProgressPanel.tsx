@@ -166,18 +166,37 @@ const InProgressOrderList = memo(function InProgressOrderList({
                   </div>
                 )}
 
-                {/* Row 2: Amount + rate */}
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-bold text-foreground tabular-nums">
-                      {Math.round(order.amount).toLocaleString()} {order.fromCurrency}
-                    </span>
-                    <ArrowRight className="w-3 h-3 text-foreground/20" />
-                    <span className="text-sm font-bold text-primary tabular-nums">
-                      {Math.round(order.amount * (order.rate || 3.67)).toLocaleString()} {order.toCurrency || 'AED'}
-                    </span>
-                  </div>
-                </div>
+                {/* Row 2: Amount — direction based on merchant's role */}
+                {(() => {
+                  const myRole = order.myRole || order.my_role || order.dbOrder?.my_role;
+                  const iAmSeller = myRole === 'seller'
+                    || order.orderMerchantId === order.dbOrder?.merchant_id && order.dbOrder?.buyer_merchant_id && order.dbOrder?.buyer_merchant_id !== order.orderMerchantId;
+                  const crypto = `${Math.round(order.amount).toLocaleString()} ${order.fromCurrency}`;
+                  const fiat = `${Math.round(order.amount * (order.rate || 3.67)).toLocaleString()} ${order.toCurrency || 'INR'}`;
+
+                  return (
+                    <div className="mb-1.5">
+                      <p className="text-[9px] font-bold text-foreground/30 uppercase tracking-wider mb-1">
+                        {iAmSeller ? 'You Send USDT → Get Fiat' : 'You Get USDT → Pay Fiat'}
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        {iAmSeller ? (
+                          <>
+                            <span className="text-sm font-bold text-foreground tabular-nums">{crypto}</span>
+                            <ArrowRight className="w-3 h-3 text-foreground/20" />
+                            <span className="text-sm font-bold text-primary tabular-nums">{fiat}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-sm font-bold text-primary tabular-nums">{crypto}</span>
+                            <ArrowRight className="w-3 h-3 text-foreground/20" />
+                            <span className="text-sm font-bold text-foreground tabular-nums">{fiat}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Row 3: Rate + premium + earnings + status badge */}
                 <div className="flex items-center gap-1.5 mb-2">
