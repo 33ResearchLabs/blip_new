@@ -209,19 +209,45 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
               transition={{ delay: 0.3, duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
               className="relative hidden lg:block"
             >
-              {/* Ambient glow behind the mockup */}
-              <div className="absolute -inset-10 bg-primary/[0.06] rounded-full blur-[100px]" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[300px] bg-primary/[0.08] rounded-full blur-[80px]" />
+              {/* Background light glow — warm orange/amber bleeding from behind */}
+              <div className="absolute -inset-16 bg-primary/[0.07] rounded-full blur-[120px]" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[400px] bg-primary/[0.10] rounded-full blur-[100px]" />
+              {/* Bottom warm light — like a light source shining up */}
+              <div className="absolute -bottom-20 left-1/2 -translate-x-1/2 w-[600px] h-[200px] bg-gradient-to-t from-primary/[0.12] via-primary/[0.06] to-transparent rounded-full blur-[80px]" />
+              {/* Side edge light */}
+              <div className="absolute top-1/4 -right-10 w-[200px] h-[300px] bg-primary/[0.05] rounded-full blur-[60px]" />
 
               {/* 3D perspective container */}
               <div className="relative" style={{ perspective: '1200px' }}>
                 <div
-                  className="relative rounded-2xl overflow-hidden border border-white/[0.06] bg-[#080810] shadow-2xl shadow-black/70"
+                  className="relative rounded-2xl overflow-hidden border border-white/[0.10] bg-[#080810]"
                   style={{
                     transform: 'rotateY(-8deg) rotateX(4deg)',
                     transformOrigin: 'center center',
+                    boxShadow: '0 25px 80px -12px rgba(0,0,0,0.8), 0 0 40px -10px var(--primary-rgb, rgba(255,140,50,0.15))',
                   }}
                 >
+                  {/* Glossy reflection overlay — diagonal glass sheen */}
+                  <div
+                    className="absolute inset-0 z-30 pointer-events-none"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 25%, transparent 50%, transparent 75%, rgba(255,255,255,0.015) 100%)',
+                    }}
+                  />
+                  {/* Top edge highlight — simulates light reflection on glass */}
+                  <div
+                    className="absolute top-0 left-0 right-0 h-[1px] z-30 pointer-events-none"
+                    style={{
+                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15) 30%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.15) 70%, transparent)',
+                    }}
+                  />
+                  {/* Left edge highlight */}
+                  <div
+                    className="absolute top-0 left-0 bottom-0 w-[1px] z-30 pointer-events-none"
+                    style={{
+                      background: 'linear-gradient(180deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05) 50%, transparent)',
+                    }}
+                  />
                   {/* ── Navbar ── */}
                   <div className="flex items-center justify-between px-3 py-1.5 bg-[#0a0a14] border-b border-white/[0.04]">
                     <div className="flex items-center gap-1.5">
@@ -238,39 +264,94 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
 
                   {/* ── Body: 3-panel layout ── */}
                   <div className="flex" style={{ height: 420 }}>
-                    {/* Panel 1: Dashboard widgets */}
-                    <div className="w-[130px] p-2.5 border-r border-white/[0.04] flex flex-col gap-2.5">
-                      {/* Balance */}
-                      <div className="rounded-lg bg-white/[0.02] border border-white/[0.03] p-2.5">
-                        <p className="text-[7px] text-white/20 uppercase tracking-wider mb-0.5">Balance</p>
-                        <p className="text-xl font-bold text-white font-mono leading-tight">5,150</p>
-                        <p className="text-[9px] text-white/25 font-mono">USDC</p>
+                    {/* Panel 1: StatusCard + ConfigPanel */}
+                    <div className="w-[145px] border-r border-white/[0.04] flex flex-col overflow-hidden">
+                      {/* Live ticker strip */}
+                      <div className="flex items-center justify-between px-2 py-1 bg-white/[0.015] border-b border-white/[0.03]">
+                        <div className="flex items-center gap-1">
+                          <div className="w-1 h-1 rounded-full bg-primary animate-pulse" />
+                          <span className="text-[6px] font-bold text-primary font-mono tracking-widest">LIVE</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <ShieldCheck className="w-2 h-2 text-primary/50" />
+                          <span className="text-[6px] text-white/30 font-mono">TRUSTED</span>
+                        </div>
+                        {/* Online toggle */}
+                        <div className="w-5 h-2.5 rounded-full bg-green-500/20 border border-green-500/30 relative">
+                          <div className="absolute right-0.5 top-0.5 w-1.5 h-1.5 rounded-full bg-green-400" />
+                        </div>
                       </div>
-                      {/* Escrow */}
-                      <div className="rounded-lg bg-white/[0.02] border border-white/[0.03] p-2.5">
-                        <p className="text-[7px] text-white/20 uppercase tracking-wider mb-0.5">In Escrow</p>
-                        <p className="text-sm font-bold text-primary/70 font-mono">1,432</p>
+
+                      {/* Balance hero */}
+                      <div className="px-2.5 py-2 border-b border-white/[0.03]">
+                        <div className="flex items-center gap-1 mb-1">
+                          <Wallet className="w-2 h-2 text-white/20" />
+                          <span className="text-[6px] text-white/20 uppercase tracking-wider font-mono">Available Balance</span>
+                        </div>
+                        <p className="text-lg font-black text-white font-mono leading-none">5,150</p>
+                        <p className="text-[8px] text-white/20 font-mono mt-0.5">USDT</p>
+                        <div className="flex items-center gap-1 mt-1">
+                          <TrendingUp className="w-2 h-2 text-primary" />
+                          <span className="text-[7px] text-primary font-mono font-bold">+295.50</span>
+                          <span className="text-[6px] text-white/15 font-mono">24h</span>
+                        </div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <Lock className="w-2 h-2 text-white/15" />
+                          <span className="text-[7px] text-white/25 font-mono">1,432 in escrow</span>
+                        </div>
                       </div>
-                      {/* Today earnings */}
-                      <div className="rounded-lg bg-white/[0.02] border border-white/[0.03] p-2.5">
-                        <p className="text-[7px] text-white/20 uppercase tracking-wider mb-0.5">Today</p>
-                        <p className="text-sm font-bold text-green-400/80 font-mono">+295.50</p>
+
+                      {/* Corridor selector */}
+                      <div className="px-2 py-1.5 border-b border-white/[0.03]">
+                        <div className="flex gap-1 mb-1">
+                          <div className="flex-1 text-center text-[6px] py-0.5 rounded bg-white/[0.02] text-white/25 font-mono">USDT/AED</div>
+                          <div className="flex-1 text-center text-[6px] py-0.5 rounded bg-primary/[0.08] border border-primary/20 text-primary font-mono font-bold">USDT/INR</div>
+                        </div>
+                        <p className="text-sm font-bold text-white font-mono text-center">92.15</p>
+                        <p className="text-[7px] text-white/20 font-mono text-center">INR / USDT</p>
                       </div>
-                      {/* Completed */}
-                      <div className="rounded-lg bg-white/[0.02] border border-white/[0.03] p-2.5">
-                        <p className="text-[7px] text-white/20 uppercase tracking-wider mb-0.5">Completed</p>
-                        <p className="text-sm font-bold text-white/50 font-mono">24</p>
+
+                      {/* Config: Amount input */}
+                      <div className="px-2 py-1.5 border-b border-white/[0.03]">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[6px] text-white/20 uppercase tracking-wider font-mono">Amount</span>
+                          <span className="text-[6px] px-1 py-0.5 rounded bg-primary/[0.06] text-primary/60 font-mono">MAX</span>
+                        </div>
+                        <div className="flex items-baseline gap-0.5">
+                          <span className="text-sm font-bold text-white font-mono">196</span>
+                          <span className="text-[8px] text-white/25 font-mono">USDT</span>
+                        </div>
+                        <p className="text-[7px] text-white/15 font-mono">= 18,061 INR</p>
                       </div>
-                      {/* Status */}
-                      <div className="flex items-center gap-1 px-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                        <span className="text-[7px] text-white/30">Online</span>
+
+                      {/* Spread tiers */}
+                      <div className="px-2 py-1.5 border-b border-white/[0.03]">
+                        <div className="grid grid-cols-3 gap-1">
+                          <div className="text-center py-1 rounded bg-primary/[0.08] border border-primary/20">
+                            <Zap className="w-2 h-2 text-primary mx-auto mb-0.5" />
+                            <p className="text-[6px] text-primary font-mono font-bold">FAST</p>
+                            <p className="text-[5px] text-primary/50 font-mono">+2.5%</p>
+                          </div>
+                          <div className="text-center py-1 rounded bg-white/[0.02]">
+                            <BarChart3 className="w-2 h-2 text-white/25 mx-auto mb-0.5" />
+                            <p className="text-[6px] text-white/30 font-mono">BEST</p>
+                            <p className="text-[5px] text-white/15 font-mono">+2.0%</p>
+                          </div>
+                          <div className="text-center py-1 rounded bg-white/[0.02]">
+                            <TrendingUp className="w-2 h-2 text-white/25 mx-auto mb-0.5" />
+                            <p className="text-[6px] text-white/30 font-mono">CHEAP</p>
+                            <p className="text-[5px] text-white/15 font-mono">+1.5%</p>
+                          </div>
+                        </div>
                       </div>
-                      {/* Mini chart */}
-                      <div className="flex items-end gap-[2px] h-6 px-1 mt-auto">
-                        {[30, 50, 35, 65, 45, 80, 55, 40, 70, 85, 60, 75].map((h, i) => (
-                          <div key={i} className="flex-1 rounded-[1px] bg-primary/25" style={{ height: `${h}%` }} />
-                        ))}
+
+                      {/* Buy / Sell buttons */}
+                      <div className="px-2 py-2 mt-auto">
+                        <div className="grid grid-cols-2 gap-1 mb-1">
+                          <div className="text-center py-1.5 rounded-lg bg-primary text-[7px] text-white font-bold font-mono shadow-sm shadow-primary/20">BUY</div>
+                          <div className="text-center py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[7px] text-white/50 font-bold font-mono">SELL</div>
+                        </div>
+                        <p className="text-[5px] text-white/10 font-mono text-center">+2.5% spread &middot; B 94.45 &middot; S 89.85</p>
                       </div>
                     </div>
 
@@ -449,8 +530,8 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.8, duration: 0.5 }}
-                  className="absolute -top-4 -right-6 w-44 rounded-xl bg-background/95 border border-foreground/[0.08] p-3 shadow-xl shadow-black/40 backdrop-blur-sm"
-                  style={{ transform: 'rotateY(-4deg)' }}
+                  className="absolute -top-4 -right-6 w-44 rounded-xl bg-background/95 border border-white/[0.10] p-3 backdrop-blur-md"
+                  style={{ boxShadow: '0 10px 40px -5px rgba(0,0,0,0.6), 0 0 20px -5px rgba(255,140,50,0.08)', transform: 'rotateY(-4deg)' }}
                 >
                   <div className="flex items-center gap-1.5 mb-2">
                     <TrendingUp className="w-3 h-3 text-primary" />
@@ -470,7 +551,8 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 1.0, duration: 0.5 }}
-                  className="absolute -bottom-3 -left-4 flex items-center gap-2 px-3 py-2 rounded-xl bg-background/95 border border-foreground/[0.08] shadow-xl shadow-black/40 backdrop-blur-sm"
+                  className="absolute -bottom-3 -left-4 flex items-center gap-2 px-3 py-2 rounded-xl bg-background/95 border border-white/[0.10] backdrop-blur-md"
+                  style={{ boxShadow: '0 10px 40px -5px rgba(0,0,0,0.6), 0 0 20px -5px rgba(255,140,50,0.08)' }}
                 >
                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                   <span className="text-[9px] text-foreground/50 font-mono">3 orders in progress</span>
