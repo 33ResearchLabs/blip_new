@@ -198,6 +198,11 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   const [chatWindows, setChatWindows] = useState<ChatWindow[]>([]);
 
   const pusher = usePusherOptional();
+
+  // ── DIAGNOSTIC: verify this hook is loaded and running ──
+  useEffect(() => {
+    console.log('[useRealtimeChat] HOOK MOUNTED', { actorType, actorId, hasPusher: !!pusher, connected: pusher?.isConnected });
+  }, [actorType, actorId, pusher]);
   const subscribedChannelsRef = useRef<Map<string, boolean>>(new Map());
   const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const chatWindowsRef = useRef(chatWindows);

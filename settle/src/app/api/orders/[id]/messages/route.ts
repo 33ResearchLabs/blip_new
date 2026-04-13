@@ -242,6 +242,13 @@ export async function POST(
     // Trigger real-time notification on order channel + participant private channels.
     // Phase 3: include clientId and seq so recipients can replace optimistic
     // temp messages by clientId and track lastSeq for reconnect catch-up.
+    console.log('[CHAT] Emitting message:new via Pusher', {
+      orderId: id,
+      messageId: message.id,
+      senderType: sender_type,
+      merchantId: order.merchant_id,
+      userId: order.user_id,
+    });
     notifyNewMessage({
       orderId: id,
       messageId: message.id,
