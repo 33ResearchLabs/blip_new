@@ -7,6 +7,7 @@ import {
   MessageCircle,
   X,
   Check,
+  CheckCheck,
   Star,
   Copy,
   MapPin,
@@ -23,6 +24,8 @@ import {
 } from "lucide-react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
 import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
+import { ImageMessageBubble, type ImageUploadStatus } from "@/components/chat/ImageMessageBubble";
+import { compressImage } from "@/lib/utils/compressImage";
 import type { Screen, Order } from "./types";
 import {
   type RefObject,
@@ -106,6 +109,8 @@ export interface OrderDetailScreenProps {
       messageType?: string;
       receiptData?: Record<string, unknown> | null;
       imageUrl?: string;
+      isRead?: boolean;
+      status?: 'sending' | 'sent' | 'delivered' | 'read';
     }>;
   } | null;
   handleSendMessage: () => void;
@@ -240,17 +245,42 @@ export const OrderDetailScreen = ({
   const fileInputRef = useLocalRef<HTMLInputElement>(null);
   const typingTimeoutRef = useLocalRef<NodeJS.Timeout | null>(null);
 
-  // Handle file select — only store locally + show preview (no upload yet)
-  const handleFileSelect = useLocalCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      if (file.size > 10 * 1024 * 1024) return; // 10MB max
-      if (!file.type.startsWith("image/")) return;
+  // ── Optimistic image uploads — WhatsApp-style ──────────────────────
+  interface PendingUpload {
+    tempId: string;
+    localUrl: string;
+    caption: string;
+    file: File;
+    status: ImageUploadStatus;
+    progress: number;
+    abortController: AbortController | null;
+    createdAt: number;
+  }
+  const [pendingUploads, setPendingUploads] = useLocalState<Map<string, PendingUpload>>(new Map());
+  const pendingUploadsRef = useLocalRef(pendingUploads);
+  pendingUploadsRef.current = pendingUploads;
 
+  // Abort all uploads on unmount
+  useLocalEffect(() => {
+    return () => {
+      for (const entry of pendingUploadsRef.current.values()) {
+        if (entry.abortController) entry.abortController.abort();
+      }
+    };
+  }, []);
+
+  // Handle file select — compress + show preview
+  const handleFileSelect = useLocalCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const rawFile = e.target.files?.[0];
+      if (!rawFile) return;
+      if (rawFile.size > 10 * 1024 * 1024) return;
+      if (!rawFile.type.startsWith("image/")) return;
+      if (fileInputRef.current) fileInputRef.current.value = "";
+
+      const file = await compressImage(rawFile, { maxDimension: 1600, quality: 0.8 });
       const previewUrl = URL.createObjectURL(file);
       setPendingImage({ file, previewUrl });
-      if (fileInputRef.current) fileInputRef.current.value = "";
     },
     [],
   );
@@ -261,70 +291,154 @@ export const OrderDetailScreen = ({
     setPendingImage(null);
   }, [pendingImage]);
 
-  // Upload image to Cloudinary and send message
-  const uploadAndSend = useLocalCallback(async () => {
-    if (!pendingImage || !activeChat || !sendChatMessage) return;
+  /**
+   * WhatsApp-style optimistic image upload:
+   *  1. Close preview, insert optimistic bubble instantly
+   *  2. Upload to Cloudinary with XHR progress
+   *  3. On success: send real message, remove pending
+   *  4. On failure: show retry
+   */
+  const startImageUpload = useLocalCallback(async (
+    file: File, localUrl: string, caption: string, tempId: string,
+  ) => {
+    if (!activeChat || !sendChatMessage) return;
 
-    setIsUploading(true);
+    const abortController = new AbortController();
+    const uploadTimeout = setTimeout(() => abortController.abort(), 30_000);
+
+    setPendingUploads(prev => {
+      const next = new Map(prev);
+      const existing = prev.get(tempId);
+      next.set(tempId, {
+        tempId, localUrl, caption, file,
+        status: 'uploading', progress: 0,
+        abortController,
+        createdAt: existing?.createdAt ?? Date.now(),
+      });
+      return next;
+    });
+
+    // Auto-scroll
+    requestAnimationFrame(() => {
+      if (chatMessagesRef.current) {
+        chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+      }
+    });
+
     try {
       const sigRes = await fetchWithAuth("/api/upload/signature", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId: activeChat.orderId || "chat" }),
+        signal: abortController.signal,
       });
-      if (!sigRes.ok) {
-        console.error("[OrderDetailScreen] Upload signature failed:", sigRes.status);
-        setIsUploading(false);
-        return;
-      }
+      if (!sigRes.ok) throw new Error("Signature failed");
       const sigData = await sigRes.json();
-      if (!sigData.success) {
-        console.error("[OrderDetailScreen] Upload signature error:", sigData.error);
-        setIsUploading(false);
-        return;
-      }
+      if (!sigData.success) throw new Error("Invalid signature");
       const sig = sigData.data;
 
+      if (!sig.signature || !sig.timestamp || !sig.apiKey || !sig.cloudName || !sig.folder) {
+        throw new Error("Incomplete upload credentials");
+      }
+
+      setPendingUploads(prev => {
+        const next = new Map(prev);
+        const entry = next.get(tempId);
+        if (entry) next.set(tempId, { ...entry, progress: 20 });
+        return next;
+      });
+
       const formData = new FormData();
-      formData.append("file", pendingImage.file);
+      formData.append("file", file);
       formData.append("signature", sig.signature);
       formData.append("timestamp", sig.timestamp.toString());
       formData.append("api_key", sig.apiKey);
       formData.append("folder", sig.folder);
 
-      const uploadRes = await fetch(
-        `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`,
-        { method: "POST", body: formData },
-      );
-      if (uploadRes.ok) {
-        const result = await uploadRes.json();
-        const text = chatMessage.trim() || "Photo";
-        sendChatMessage(activeChat.id, text, result.secure_url);
-        setChatMessage("");
-        playSound("send");
+      const imageUrl = await new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`);
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = 20 + Math.round((e.loaded / e.total) * 70);
+            setPendingUploads(prev => {
+              const next = new Map(prev);
+              const entry = next.get(tempId);
+              if (entry) next.set(tempId, { ...entry, progress: pct });
+              return next;
+            });
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText).secure_url);
+          } else {
+            reject(new Error(`Upload failed: ${xhr.status}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Network error"));
+
+        abortController.signal.addEventListener("abort", () => xhr.abort());
+        if (abortController.signal.aborted) { xhr.abort(); return; }
+        xhr.send(formData);
+      });
+
+      setPendingUploads(prev => {
+        const next = new Map(prev);
+        const entry = next.get(tempId);
+        if (entry) next.set(tempId, { ...entry, progress: 95 });
+        return next;
+      });
+
+      sendChatMessage(activeChat.id, caption || "Photo", imageUrl);
+      playSound("send");
+
+      clearTimeout(uploadTimeout);
+      setPendingUploads(prev => {
+        const next = new Map(prev);
+        next.delete(tempId);
+        return next;
+      });
+    } catch (err: any) {
+      clearTimeout(uploadTimeout);
+      if (err?.name === "AbortError" || abortController.signal.aborted) {
+        setPendingUploads(prev => { const next = new Map(prev); next.delete(tempId); return next; });
       } else {
-        console.error(
-          "[OrderDetailScreen] Cloudinary upload failed:",
-          uploadRes.status,
-          await uploadRes.text().catch(() => ""),
-        );
+        console.error("[OrderDetailScreen] Image upload error:", err);
+        setPendingUploads(prev => {
+          const next = new Map(prev);
+          const entry = next.get(tempId);
+          if (entry) next.set(tempId, { ...entry, status: 'failed', progress: 0, abortController: null });
+          return next;
+        });
       }
-    } catch (err) {
-      console.error("[OrderDetailScreen] Image upload error:", err);
-    } finally {
-      setIsUploading(false);
-      clearPendingImage();
     }
-  }, [
-    pendingImage,
-    activeChat,
-    sendChatMessage,
-    chatMessage,
-    setChatMessage,
-    playSound,
-    clearPendingImage,
-    userId,
-  ]);
+  }, [activeChat, sendChatMessage, playSound]);
+
+  const cancelUpload = useLocalCallback((tempId: string) => {
+    const entry = pendingUploadsRef.current.get(tempId);
+    if (entry?.abortController) entry.abortController.abort();
+    setPendingUploads(prev => { const next = new Map(prev); next.delete(tempId); return next; });
+  }, []);
+
+  const retryUpload = useLocalCallback((tempId: string) => {
+    const entry = pendingUploadsRef.current.get(tempId);
+    if (!entry) return;
+    startImageUpload(entry.file, entry.localUrl, entry.caption, tempId);
+  }, [startImageUpload]);
+
+  /** Called when user confirms image from preview */
+  const handleImageConfirm = useLocalCallback(() => {
+    if (!pendingImage) return;
+    const tempId = `temp-img-${Date.now()}`;
+    const { file, previewUrl } = pendingImage;
+    const caption = chatMessage.trim();
+    setPendingImage(null); // Close preview
+    setChatMessage("");
+    startImageUpload(file, previewUrl, caption, tempId);
+  }, [pendingImage, chatMessage, setChatMessage, startImageUpload]);
 
   // Cleanup preview URL on unmount
   useLocalEffect(() => {
@@ -422,7 +536,14 @@ export const OrderDetailScreen = ({
 
       <div className="px-5 py-4 flex items-center">
         <button
-          onClick={() => setScreen(previousScreen && previousScreen !== "order" ? previousScreen : "home")}
+          onClick={() => {
+            // Only go back to screens that are safe to return to.
+            // Transient trade-flow screens (escrow, matching, trade, cash-confirm)
+            // may have cleared their data by now, causing a blank screen.
+            const safeScreens = new Set(["home", "orders", "profile", "chats", "notifications"]);
+            const target = previousScreen && safeScreens.has(previousScreen) ? previousScreen : "home";
+            setScreen(target);
+          }}
           className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle"
         >
           <ChevronLeft className="w-5 h-5 text-text-secondary" />
@@ -2170,8 +2291,16 @@ export const OrderDetailScreen = ({
                       {activeOrder.merchant.name}
                     </p>
                     <div className="flex items-center gap-1.5">
-                      <ConnectionIndicator isConnected={true} />
-                      <p className="text-[11px] text-success">Online</p>
+                      {activeChat?.isTyping ? (
+                        <p className="text-[11px] text-success font-medium">typing...</p>
+                      ) : (
+                        <>
+                          <ConnectionIndicator isConnected={activeOrder.merchant.isOnline ?? true} />
+                          <p className="text-[11px] text-success">
+                            {activeOrder.merchant.isOnline !== false ? 'Online' : 'Offline'}
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2424,6 +2553,23 @@ export const OrderDetailScreen = ({
                               </a>
                             )}
                             {msg.text !== "Photo" && <span>{msg.text}</span>}
+                            {/* Timestamp + delivery status ticks */}
+                            <div className={`flex items-center gap-1 mt-1 ${msg.from === "me" ? "justify-end" : ""}`}>
+                              <span className={`text-[10px] ${msg.from === "me" ? "text-accent-text/60" : "text-text-tertiary"}`}>
+                                {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                              {msg.from === "me" && (
+                                msg.status === "sending" ? (
+                                  <Clock className="w-3 h-3 text-text-tertiary" />
+                                ) : msg.status === "read" || msg.isRead ? (
+                                  <CheckCheck className="w-3.5 h-3.5 text-info" />
+                                ) : msg.status === "delivered" ? (
+                                  <CheckCheck className="w-3.5 h-3.5 text-accent-text/60" />
+                                ) : (
+                                  <Check className="w-3 h-3 text-accent-text/60" />
+                                )
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -2435,6 +2581,27 @@ export const OrderDetailScreen = ({
                       No messages yet
                     </p>
                   </div>
+                )}
+
+                {/* Pending image upload bubbles — optimistic UI */}
+                {pendingUploads.size > 0 && (
+                  Array.from(pendingUploads.values())
+                  .sort((a, b) => a.createdAt - b.createdAt)
+                  .map((upload) => (
+                    <div key={upload.tempId} className="flex justify-end">
+                      <div className="max-w-[80%] px-4 py-2 rounded-2xl bg-accent text-accent-text">
+                        <ImageMessageBubble
+                          imageUrl={upload.localUrl}
+                          caption={upload.caption || undefined}
+                          uploadStatus={upload.status}
+                          uploadProgress={upload.progress}
+                          onCancel={() => cancelUpload(upload.tempId)}
+                          onRetry={() => retryUpload(upload.tempId)}
+                          isOwn
+                        />
+                      </div>
+                    </div>
+                  ))
                 )}
 
                 {/* Show pending resolution if dispute exists and has a proposal */}
@@ -2490,30 +2657,7 @@ export const OrderDetailScreen = ({
                     </div>
                   )}
               </div>
-              {/* Typing indicator */}
-              {activeChat?.isTyping && (
-                <div className="px-4 py-1">
-                  <div className="flex items-center gap-2">
-                    <div className="flex gap-1">
-                      <div
-                        className="w-1.5 h-1.5 rounded-full animate-bounce bg-text-tertiary"
-                        style={{ animationDelay: "0ms" }}
-                      />
-                      <div
-                        className="w-1.5 h-1.5 rounded-full animate-bounce bg-text-tertiary"
-                        style={{ animationDelay: "150ms" }}
-                      />
-                      <div
-                        className="w-1.5 h-1.5 rounded-full animate-bounce bg-text-tertiary"
-                        style={{ animationDelay: "300ms" }}
-                      />
-                    </div>
-                    <span className="text-[11px] text-text-tertiary">
-                      {activeOrder.merchant.name} is typing...
-                    </span>
-                  </div>
-                </div>
-              )}
+              {/* Typing indicator moved to header — dynamic online ↔ typing */}
 
               {/* Emoji picker */}
               {showEmojiPicker && (
@@ -2594,7 +2738,7 @@ export const OrderDetailScreen = ({
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
                         if (pendingImage) {
-                          uploadAndSend();
+                          handleImageConfirm();
                         } else {
                           handleSendMessage();
                         }
@@ -2609,13 +2753,13 @@ export const OrderDetailScreen = ({
                   <button
                     onClick={() => {
                       if (pendingImage) {
-                        uploadAndSend();
+                        handleImageConfirm();
                       } else {
                         handleSendMessage();
                       }
                       setShowEmojiPicker(false);
                     }}
-                    disabled={isUploading}
+                    disabled={!chatMessage.trim() && !pendingImage}
                     className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50 ${
                       pendingImage ? "bg-warning" : "bg-accent"
                     }`}
