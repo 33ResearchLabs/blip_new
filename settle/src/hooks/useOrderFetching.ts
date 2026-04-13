@@ -68,6 +68,11 @@ export function useOrderFetching({
   const prevPusherConnected = useRef(isPusherConnected);
   const lastSyncRef = useRef<number>(Date.now());
 
+  // ─── Pagination state ───
+  const nextCursorRef = useRef<string | null>(null);
+  const [hasMoreOrders, setHasMoreOrders] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   // ═══════════════════════════════════════════════════════════════════
   // FETCH FUNCTIONS
   // ═══════════════════════════════════════════════════════════════════
@@ -86,13 +91,18 @@ export function useOrderFetching({
     fetchAbortRef.current = controller;
 
     try {
-      const res = await fetchWithAuth(`/api/merchant/orders?merchant_id=${merchantId}&include_all_pending=true`, { cache: 'no-store', signal: controller.signal });
+      const res = await fetchWithAuth(`/api/merchant/orders?merchant_id=${merchantId}&include_all_pending=true&limit=10`, { cache: 'no-store', signal: controller.signal });
       if (!res.ok) {
         const errorBody = await res.json().catch(() => null);
         console.error('[Merchant] Failed to fetch orders:', res.status, res.statusText, errorBody);
         return;
       }
       const data = await res.json();
+      // Store pagination info for "Load More"
+      if (data.pagination) {
+        nextCursorRef.current = data.pagination.next_cursor;
+        setHasMoreOrders(data.pagination.has_more);
+      }
       if (data.success && data.data) {
         const mappedOrders = data.data.map((o: DbOrder) => mapDbOrderToUI(o, merchantId));
 
@@ -142,6 +152,38 @@ export function useOrderFetching({
       }
     }
   }, [merchantId]);
+
+  // Load more orders (next page) — appends to existing list
+  const loadMoreOrders = useCallback(async () => {
+    if (!merchantId || !nextCursorRef.current || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const res = await fetchWithAuth(
+        `/api/merchant/orders?merchant_id=${merchantId}&include_all_pending=true&limit=10&cursor=${encodeURIComponent(nextCursorRef.current)}`,
+        { cache: 'no-store' }
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.pagination) {
+        nextCursorRef.current = data.pagination.next_cursor;
+        setHasMoreOrders(data.pagination.has_more);
+      }
+      if (data.success && data.data?.length > 0) {
+        const mapped = data.data.map((o: any) => mapDbOrderToUI(o, merchantId));
+        setOrders((prev: Order[]) => {
+          const existingIds = new Set(prev.map((o: Order) => o.id));
+          const newOrders = mapped.filter((o: Order) => !existingIds.has(o.id));
+          return [...prev, ...newOrders];
+        });
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        console.error('[Merchant] loadMoreOrders error:', err);
+      }
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [merchantId, isLoadingMore]);
 
   // Debounced fetch: coalesces multiple fetchOrders() calls within 150ms
   // If a fetch is already in-flight, schedules another fetch after it completes
@@ -519,5 +561,10 @@ export function useOrderFetching({
     refetchSingleOrder,
     afterMutationReconcile,
     dismissBigOrder,
+
+    // Pagination
+    loadMoreOrders,
+    hasMoreOrders,
+    isLoadingMore,
   };
 }

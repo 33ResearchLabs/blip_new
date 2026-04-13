@@ -36,6 +36,8 @@ export async function GET(request: NextRequest) {
     const merchantId = searchParams.get('merchant_id');
     const statusParam = searchParams.get('status');
     const includeAllPending = searchParams.get('include_all_pending') === 'true';
+    const cursor = searchParams.get('cursor') || undefined;
+    const limit = Math.min(parseInt(searchParams.get('limit') || '10', 10), 100);
 
     // Validate query params
     const parseResult = merchantOrdersQuerySchema.safeParse({
@@ -88,7 +90,7 @@ export async function GET(request: NextRequest) {
     // Fetch from DB
     let orders;
     if (includeAllPending) {
-      orders = await getAllPendingOrdersForMerchant(merchant_id, status as any);
+      orders = await getAllPendingOrdersForMerchant(merchant_id, status as any, { cursor, limit });
     } else {
       orders = await getMerchantOrders(merchant_id, status as any);
     }
@@ -105,8 +107,23 @@ export async function GET(request: NextRequest) {
       await setMerchantOrdersCache(merchant_id, enrichedOrders);
     }
 
+    // Pagination: next_cursor is the created_at of the last order in this page
+    const lastOrder = enrichedOrders[enrichedOrders.length - 1];
+    const nextCursor = enrichedOrders.length >= limit && lastOrder?.created_at
+      ? lastOrder.created_at
+      : null;
+
     logger.api.request('GET', '/api/merchant/orders', merchant_id);
-    const res = NextResponse.json({ success: true, data: enrichedOrders });
+    const res = NextResponse.json({
+      success: true,
+      data: enrichedOrders,
+      pagination: {
+        limit,
+        count: enrichedOrders.length,
+        next_cursor: nextCursor,
+        has_more: enrichedOrders.length >= limit,
+      },
+    });
     res.headers.set('Cache-Control', 'private, max-age=1, stale-while-revalidate=3');
     return res;
   } catch (error) {

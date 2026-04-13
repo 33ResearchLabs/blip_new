@@ -458,7 +458,7 @@ export async function getAllPendingOrdersForMerchant(
     sql += ` AND o.created_at < $${params.length}::timestamptz`;
   }
 
-  const pageLimit = options?.limit || 200;
+  const pageLimit = Math.min(options?.limit || 10, 100);
   sql += ` ORDER BY o.created_at DESC LIMIT ${pageLimit}`;
 
   console.log('[DB] getAllPendingOrdersForMerchant for merchant:', merchantId);
