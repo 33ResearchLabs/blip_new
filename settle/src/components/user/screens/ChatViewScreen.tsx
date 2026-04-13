@@ -495,8 +495,16 @@ export const ChatViewScreen = ({
           <button onClick={() => setScreen("chats")} className="p-2 -ml-2">
             <ChevronLeft className="w-6 h-6 text-text-primary" />
           </button>
-          <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold bg-surface-card border border-border-subtle text-text-primary">
-            {activeOrder.merchant.name.charAt(0)}
+          <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold bg-surface-card border border-border-subtle text-text-primary overflow-hidden shrink-0">
+            {activeOrder.merchant.avatarUrl ? (
+              <img
+                src={activeOrder.merchant.avatarUrl}
+                alt={activeOrder.merchant.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              activeOrder.merchant.name.charAt(0)
+            )}
           </div>
           <div className="flex-1">
             <p className="text-[15px] font-semibold text-text-primary">{activeOrder.merchant.name}</p>

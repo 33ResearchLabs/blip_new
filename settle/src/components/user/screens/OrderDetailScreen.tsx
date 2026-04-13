@@ -785,32 +785,67 @@ export const OrderDetailScreen = ({
             </motion.div>
           )}
 
-        {/* Inactivity Warning Banner */}
+        {/* Inactivity Warning OR Extension Granted Banner */}
         {activeOrder.inactivityWarned &&
           activeOrder.status !== "disputed" &&
           activeOrder.status !== "complete" &&
           activeOrder.status !== "cancelled" &&
           activeOrder.status !== "expired" && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`rounded-2xl p-4 mb-4 ${AMBER_CARD_STRONG}`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-warning-dim">
-                  <AlertTriangle className="w-5 h-5 text-warning" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[15px] font-semibold text-warning">
-                    Inactivity Warning
-                  </p>
-                  <p className="text-[13px] text-warning">
-                    No activity for 15+ minutes. Complete this order soon or it
-                    will be auto-cancelled/disputed.
-                  </p>
-                </div>
-              </div>
-            </motion.div>
+            (() => {
+              // If the order was extended AFTER the inactivity warning,
+              // show "Extension Granted" instead of the scary warning.
+              const wasExtended = activeOrder.lastExtendedAt &&
+                (!activeOrder.lastActivityAt ||
+                  new Date(activeOrder.lastExtendedAt).getTime() >
+                  new Date(activeOrder.lastActivityAt).getTime() - 60_000);
+
+              if (wasExtended) {
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`rounded-2xl p-4 mb-4 ${CARD}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-success-dim">
+                        <Check className="w-5 h-5 text-success" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-[15px] font-semibold text-success">
+                          Time Extended
+                        </p>
+                        <p className="text-[13px] text-text-secondary">
+                          Extension granted. You have more time to complete this order.
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              }
+
+              return (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`rounded-2xl p-4 mb-4 ${AMBER_CARD_STRONG}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-warning-dim">
+                      <AlertTriangle className="w-5 h-5 text-warning" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[15px] font-semibold text-warning">
+                        Inactivity Warning
+                      </p>
+                      <p className="text-[13px] text-warning">
+                        No activity for 15+ minutes. Complete this order soon or it
+                        will be auto-cancelled/disputed.
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })()
           )}
 
         {/* Dispute Auto-Resolve Countdown */}

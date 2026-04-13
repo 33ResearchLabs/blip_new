@@ -6,6 +6,7 @@ import {
   X,
   Shield,
   Lock,
+  Clock,
   MessageCircle,
   Smartphone,
   Building2,
@@ -16,6 +17,7 @@ import {
   Copy,
 } from "lucide-react";
 import { useState as useLocalState } from "react";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
 // Backend-driven: action buttons read from dbOrder.primaryAction/secondaryAction
 import type { Order } from "@/types/merchant";
@@ -573,6 +575,90 @@ export function OrderQuickView({
                     <p className="text-xs text-foreground/40">
                       Waiting for counterparty to approve
                     </p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Extension Request Banner — shown when counterparty requested time extension */}
+            {(() => {
+              const dbOrder = selectedOrder.dbOrder as any;
+              const extBy = dbOrder?.extension_requested_by as string | null | undefined;
+              const extMin = dbOrder?.extension_minutes as number | null | undefined;
+              if (!extBy) return null;
+
+              // Did I request it, or did the counterparty?
+              const iAmMerchant = !!merchantId;
+              const iRequested = (extBy === 'merchant' && iAmMerchant) || (extBy === 'user' && !iAmMerchant);
+
+              if (!iRequested) {
+                // Counterparty requested — I need to respond
+                const durationLabel = extMin && extMin >= 60
+                  ? `${Math.round(extMin / 60)} hour${Math.round(extMin / 60) !== 1 ? 's' : ''}`
+                  : `${extMin || 15} minutes`;
+                return (
+                  <div className="mx-5 mb-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock className="w-4 h-4 text-amber-400" />
+                      <span className="text-sm font-semibold text-amber-400">
+                        {extBy === 'user' ? 'Buyer' : 'Merchant'} requested +{durationLabel} extension
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <motion.button
+                        whileTap={{ scale: 0.98 }}
+                        onClick={async () => {
+                          try {
+                            const res = await fetchWithAuth(`/api/orders/${selectedOrder.id}/extension`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                actor_type: iAmMerchant ? 'merchant' : 'user',
+                                actor_id: merchantId || selectedOrder.dbOrder?.user_id,
+                                accept: true,
+                              }),
+                            });
+                            if (res.ok) onClose();
+                          } catch {}
+                        }}
+                        className="flex-1 py-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        Accept Extension
+                      </motion.button>
+                      <motion.button
+                        whileTap={{ scale: 0.98 }}
+                        onClick={async () => {
+                          try {
+                            const res = await fetchWithAuth(`/api/orders/${selectedOrder.id}/extension`, {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                actor_type: iAmMerchant ? 'merchant' : 'user',
+                                actor_id: merchantId || selectedOrder.dbOrder?.user_id,
+                                accept: false,
+                              }),
+                            });
+                            if (res.ok) onClose();
+                          } catch {}
+                        }}
+                        className="flex-1 py-2.5 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.08] text-foreground/60 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        Decline
+                      </motion.button>
+                    </div>
+                  </div>
+                );
+              }
+
+              // I requested — show waiting
+              return (
+                <div className="mx-5 mb-2 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-3 flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-400">Extension Request Sent</p>
+                    <p className="text-xs text-foreground/40">Waiting for counterparty to respond</p>
                   </div>
                 </div>
               );

@@ -16,6 +16,7 @@ export interface Merchant {
   is_online: boolean;
   avg_response_time_mins: number;
   wallet_address?: string;
+  avatar_url?: string | null;
   last_seen_at?: string | null;
 }
 
@@ -79,6 +80,7 @@ export interface DbOrder {
   cancel_requested_at?: string | null;
   cancel_request_reason?: string | null;
   last_activity_at?: string | null;
+  last_extended_at?: string | null;
   inactivity_warned_at?: string | null;
   disputed_at?: string | null;
   dispute_auto_resolve_at?: string | null;
@@ -118,6 +120,7 @@ export interface Order {
     walletAddress?: string;
     isOnline?: boolean;
     lastSeenAt?: Date | null;
+    avatarUrl?: string | null;
   };
   status: OrderStatus;
   step: OrderStep;
@@ -145,6 +148,7 @@ export interface Order {
     reason: string;
   } | null;
   inactivityWarned?: boolean;
+  lastExtendedAt?: Date | null;
   lastActivityAt?: Date | null;
   disputedAt?: Date | null;
   disputeAutoResolveAt?: Date | null;
