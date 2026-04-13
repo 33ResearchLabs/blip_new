@@ -4,6 +4,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Zap, Loader2, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
+import { MerchantWelcomePage } from "./MerchantWelcomePage";
 
 interface LoginScreenProps {
   authTab: 'signin' | 'create';
@@ -36,64 +37,13 @@ export function LoginScreen({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
 
-  // Welcome splash screen
+  // Welcome page — full merchant landing
   if (showWelcome) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4 relative overflow-hidden">
-        <div className="fixed inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-primary/[0.04] rounded-full blur-[150px]" />
-          <div className="absolute bottom-1/4 right-1/3 w-[400px] h-[400px] bg-primary/[0.02] rounded-full blur-[120px]" />
-        </div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="w-full max-w-sm relative z-10 flex flex-col items-center text-center"
-        >
-          {/* Logo */}
-          <div className="w-20 h-20 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-6">
-            <Zap className="w-10 h-10 text-primary fill-primary" />
-          </div>
-
-          {/* Title */}
-          <span className="text-[28px] leading-none mb-2">
-            <span className="font-bold text-foreground">Blip</span>{' '}
-            <span className="italic text-foreground/90">money</span>
-          </span>
-          <h1 className="text-2xl font-bold mt-4 mb-2 text-foreground">Merchant Portal</h1>
-          <p className="text-sm text-foreground/40 max-w-[280px]">
-            Accept payments, manage orders, and grow your P2P trading business
-          </p>
-
-          {/* Feature highlights */}
-          <div className="mt-8 w-full space-y-3">
-            {[
-              { icon: '💰', label: 'Accept crypto payments instantly' },
-              { icon: '📊', label: 'Real-time order management' },
-              { icon: '🔒', label: 'Secure escrow protection' },
-            ].map((item) => (
-              <div key={item.label} className="flex items-center gap-3 px-4 py-3 bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl">
-                <span className="text-lg">{item.icon}</span>
-                <span className="text-sm text-foreground/60">{item.label}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* CTA */}
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setShowWelcome(false)}
-            className="mt-8 w-full py-3.5 rounded-xl text-sm font-bold bg-primary text-white hover:bg-primary/90 transition-colors"
-          >
-            Get Started
-          </motion.button>
-
-          <p className="mt-4 text-[10px] text-foreground/20">
-            Already have an account? <button onClick={() => setShowWelcome(false)} className="text-primary/60 hover:text-primary transition-colors">Sign In</button>
-          </p>
-        </motion.div>
-      </div>
+      <MerchantWelcomePage
+        onGetStarted={() => { setAuthTab('create'); setShowWelcome(false); }}
+        onSignIn={() => { setAuthTab('signin'); setShowWelcome(false); }}
+      />
     );
   }
 
