@@ -41,6 +41,8 @@ import {
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
+import { ImageMessageBubble, type ImageUploadStatus } from "@/components/chat/ImageMessageBubble";
+import { compressImage } from "@/lib/utils/compressImage";
 import type { ChatMessage, PresenceMember } from "@/hooks/useRealtimeChat";
 
 // ============================================
@@ -410,6 +412,30 @@ export function ChatRoom({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // ── Optimistic image uploads — WhatsApp-style ──────────────────────
+  interface PendingUpload {
+    tempId: string;
+    localUrl: string;
+    caption: string;
+    file: File;
+    status: ImageUploadStatus;
+    progress: number;
+    abortController: AbortController | null;
+    createdAt: number;
+  }
+  const [pendingUploads, setPendingUploads] = useState<Map<string, PendingUpload>>(new Map());
+  const pendingUploadsRef = useRef(pendingUploads);
+  pendingUploadsRef.current = pendingUploads;
+
+  // Abort all uploads on unmount
+  useEffect(() => {
+    return () => {
+      for (const entry of pendingUploadsRef.current.values()) {
+        if (entry.abortController) entry.abortController.abort();
+      }
+    };
+  }, []);
+
   // ─────────────────────────────────────────────────────────
   // Scroll behavior (WhatsApp-style)
   //  - Initial open: jump to bottom INSTANTLY before paint
@@ -583,35 +609,165 @@ export function ChatRoom({
     setPendingFile(null);
   }, [pendingFile]);
 
-  // Upload and send
+  /**
+   * WhatsApp-style optimistic image upload:
+   *  1. Close preview, insert optimistic bubble instantly
+   *  2. Upload to Cloudinary with XHR progress
+   *  3. On success: send real message, remove pending
+   *  4. On failure: show retry
+   */
+  const startImageUpload = useCallback(async (
+    file: File, localUrl: string, caption: string, tempId: string,
+  ) => {
+    const abortController = new AbortController();
+    const uploadTimeout = setTimeout(() => abortController.abort(), 30_000);
+
+    setPendingUploads(prev => {
+      const next = new Map(prev);
+      const existing = prev.get(tempId);
+      next.set(tempId, {
+        tempId, localUrl, caption, file,
+        status: 'uploading', progress: 0,
+        abortController,
+        createdAt: existing?.createdAt ?? Date.now(),
+      });
+      return next;
+    });
+
+    // Auto-scroll
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    });
+
+    try {
+      const sigRes = await fetchWithAuth("/api/upload/signature", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
+        signal: abortController.signal,
+      });
+      if (!sigRes.ok) throw new Error("Signature failed");
+      const sigData = await sigRes.json();
+      if (!sigData.success) throw new Error("Invalid signature");
+      const sig = sigData.data;
+
+      if (!sig.signature || !sig.timestamp || !sig.apiKey || !sig.cloudName || !sig.folder) {
+        throw new Error("Incomplete upload credentials");
+      }
+
+      setPendingUploads(prev => {
+        const next = new Map(prev);
+        const entry = next.get(tempId);
+        if (entry) next.set(tempId, { ...entry, progress: 20 });
+        return next;
+      });
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("signature", sig.signature);
+      formData.append("timestamp", sig.timestamp.toString());
+      formData.append("api_key", sig.apiKey);
+      formData.append("folder", sig.folder);
+
+      const imageUrl = await new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`);
+
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = 20 + Math.round((e.loaded / e.total) * 70);
+            setPendingUploads(prev => {
+              const next = new Map(prev);
+              const entry = next.get(tempId);
+              if (entry) next.set(tempId, { ...entry, progress: pct });
+              return next;
+            });
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText).secure_url);
+          } else {
+            reject(new Error(`Upload failed: ${xhr.status}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Network error"));
+
+        abortController.signal.addEventListener("abort", () => xhr.abort());
+        if (abortController.signal.aborted) { xhr.abort(); return; }
+        xhr.send(formData);
+      });
+
+      setPendingUploads(prev => {
+        const next = new Map(prev);
+        const entry = next.get(tempId);
+        if (entry) next.set(tempId, { ...entry, progress: 95 });
+        return next;
+      });
+
+      onSendMessage(caption || "Photo", imageUrl);
+
+      clearTimeout(uploadTimeout);
+      setPendingUploads(prev => { const next = new Map(prev); next.delete(tempId); return next; });
+    } catch (err: any) {
+      clearTimeout(uploadTimeout);
+      if (err?.name === "AbortError" || abortController.signal.aborted) {
+        setPendingUploads(prev => { const next = new Map(prev); next.delete(tempId); return next; });
+      } else {
+        console.error("[ChatRoom] Image upload error:", err);
+        setPendingUploads(prev => {
+          const next = new Map(prev);
+          const entry = next.get(tempId);
+          if (entry) next.set(tempId, { ...entry, status: 'failed', progress: 0, abortController: null });
+          return next;
+        });
+      }
+    }
+  }, [orderId, onSendMessage]);
+
+  const cancelUpload = useCallback((tempId: string) => {
+    const entry = pendingUploadsRef.current.get(tempId);
+    if (entry?.abortController) entry.abortController.abort();
+    setPendingUploads(prev => { const next = new Map(prev); next.delete(tempId); return next; });
+  }, []);
+
+  const retryUpload = useCallback((tempId: string) => {
+    const entry = pendingUploadsRef.current.get(tempId);
+    if (!entry) return;
+    startImageUpload(entry.file, entry.localUrl, entry.caption, tempId);
+  }, [startImageUpload]);
+
+  // Legacy upload for non-image files (documents) — still blocking
   const uploadAndSend = useCallback(async () => {
     if (!pendingFile) return;
 
+    // Images use optimistic path
+    if (pendingFile.category === 'image') {
+      const tempId = `temp-img-${Date.now()}`;
+      const file = await compressImage(pendingFile.file, { maxDimension: 1600, quality: 0.8 });
+      const localUrl = pendingFile.previewUrl || URL.createObjectURL(file);
+      const caption = messageText.trim();
+      setPendingFile(null);
+      setMessageText("");
+      startImageUpload(file, localUrl, caption, tempId);
+      return;
+    }
+
+    // Documents: blocking upload (no optimistic UI needed for files)
     setIsUploading(true);
     setUploadProgress(0);
-
     try {
-      // Get signature
       const sigRes = await fetchWithAuth("/api/upload/signature", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId }),
       });
-
-      if (!sigRes.ok) {
-        alert("Upload service unavailable");
-        setIsUploading(false);
-        return;
-      }
-
+      if (!sigRes.ok) { setIsUploading(false); return; }
       const sigData = await sigRes.json();
-      if (!sigData.success) {
-        setIsUploading(false);
-        return;
-      }
+      if (!sigData.success) { setIsUploading(false); return; }
       const sig = sigData.data;
 
-      // Upload to Cloudinary
       const formData = new FormData();
       formData.append("file", pendingFile.file);
       formData.append("signature", sig.signature);
@@ -619,57 +775,35 @@ export function ChatRoom({
       formData.append("api_key", sig.apiKey);
       formData.append("folder", sig.folder);
 
-      const isImage = pendingFile.file.type.startsWith("image/");
-      const resourceType = isImage ? "image" : "raw";
-
       const fileUrl: string | null = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.upload.addEventListener("progress", (e) => {
-          if (e.lengthComputable) {
-            setUploadProgress(Math.round((e.loaded / e.total) * 100));
-          }
+          if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
         });
         xhr.addEventListener("load", () => {
-          if (xhr.status === 200) {
-            const response = JSON.parse(xhr.responseText);
-            resolve(response.secure_url);
-          } else {
-            reject(new Error("Upload failed"));
-          }
+          if (xhr.status === 200) resolve(JSON.parse(xhr.responseText).secure_url);
+          else reject(new Error("Upload failed"));
         });
         xhr.addEventListener("error", () => reject(new Error("Network error")));
-        xhr.open(
-          "POST",
-          `https://api.cloudinary.com/v1_1/${sig.cloudName}/${resourceType}/upload`,
-        );
+        xhr.open("POST", `https://api.cloudinary.com/v1_1/${sig.cloudName}/raw/upload`);
         xhr.send(formData);
       });
 
       if (fileUrl) {
-        const text =
-          messageText.trim() || (isImage ? "Photo" : pendingFile.file.name);
-
-        if (isImage) {
-          onSendMessage(text, fileUrl);
-        } else {
-          onSendMessage(text, undefined, {
-            fileUrl,
-            fileName: pendingFile.file.name,
-            fileSize: pendingFile.file.size,
-            mimeType: pendingFile.file.type,
-          });
-        }
+        onSendMessage(messageText.trim() || pendingFile.file.name, undefined, {
+          fileUrl, fileName: pendingFile.file.name,
+          fileSize: pendingFile.file.size, mimeType: pendingFile.file.type,
+        });
         setMessageText("");
       }
     } catch (err) {
       console.error("Upload error:", err);
-      alert("Upload failed. Please try again.");
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
       clearPendingFile();
     }
-  }, [pendingFile, orderId, messageText, onSendMessage, clearPendingFile]);
+  }, [pendingFile, orderId, messageText, onSendMessage, clearPendingFile, startImageUpload]);
 
   // Cleanup preview URL on unmount
   useEffect(() => {
@@ -975,6 +1109,27 @@ export function ChatRoom({
               </div>
             </div>
           </div>
+        )}
+
+        {/* Pending image upload bubbles — optimistic UI */}
+        {pendingUploads.size > 0 && (
+          Array.from(pendingUploads.values())
+          .sort((a, b) => a.createdAt - b.createdAt)
+          .map((upload) => (
+            <div key={upload.tempId} className="flex justify-end px-3 mb-1">
+              <div className="max-w-[75%] rounded-lg rounded-br-sm bg-primary/10 border border-primary/15 p-1.5">
+                <ImageMessageBubble
+                  imageUrl={upload.localUrl}
+                  caption={upload.caption || undefined}
+                  uploadStatus={upload.status}
+                  uploadProgress={upload.progress}
+                  onCancel={() => cancelUpload(upload.tempId)}
+                  onRetry={() => retryUpload(upload.tempId)}
+                  isOwn
+                />
+              </div>
+            </div>
+          ))
         )}
 
         <div ref={messagesEndRef} />
