@@ -40,6 +40,7 @@ import {
   Unlock,
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
 import type { ChatMessage, PresenceMember } from "@/hooks/useRealtimeChat";
 
 // ============================================
@@ -876,9 +877,24 @@ export function ChatRoom({
                       />
                     )}
 
-                    {/* Text content (skip if it's a pure image/file) */}
+                    {/* Receipt card */}
+                    {msg.messageType === "receipt" && (() => {
+                      let payload: Record<string, unknown> | null = msg.receiptData ?? null;
+                      if (!payload && msg.text) {
+                        try {
+                          const parsed = JSON.parse(msg.text);
+                          if (parsed.type === 'order_receipt' && parsed.data) payload = parsed.data;
+                          else payload = parsed;
+                        } catch {}
+                      }
+                      if (payload) return <ReceiptCard data={payload as any} />;
+                      return null;
+                    })()}
+
+                    {/* Text content (skip if it's a pure image/file/receipt) */}
                     {msg.messageType !== "image" &&
                       msg.messageType !== "file" &&
+                      msg.messageType !== "receipt" &&
                       msg.text && (
                         <p className="text-sm text-white/90 whitespace-pre-wrap break-words">
                           {msg.text}
