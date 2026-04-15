@@ -69,8 +69,10 @@ function ResetPasswordForm() {
 
       setSuccess(true);
 
-      // Redirect to login after 3 seconds
-      setTimeout(() => router.push("/merchant"), 3000);
+      // Redirect to the login page after 3 seconds so the merchant can
+      // sign in with the new password (NOT the dashboard — they're not
+      // authenticated yet).
+      setTimeout(() => router.push("/merchant/login"), 3000);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -93,7 +95,7 @@ function ResetPasswordForm() {
           </p>
         </div>
         <Link
-          href="/merchant"
+          href="/merchant/login"
           className="inline-block text-xs text-white/50 hover:text-foreground transition-colors"
         >
           Go to sign in

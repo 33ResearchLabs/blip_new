@@ -190,6 +190,18 @@ async function checkUndeliveredChat(): Promise<void> {
 // The balance column on merchants must equal the signed sum of its
 // ledger_entries. Drift means an update skipped the ledger or vice-versa.
 async function checkMerchantBalanceDrift(): Promise<void> {
+  // Ledger amounts are stored PRE-SIGNED (debits are inserted as negative,
+  // credits as positive). A previous version of this query re-flipped the
+  // sign with a CASE on entry_type and produced inverted "ledger sums" that
+  // tripped CRITICAL alerts on every actively-trading merchant. SUM(amount)
+  // is the right operation.
+  //
+  // Drift is also gated on:
+  //   - merchant having ledger entries (skip never-traded merchants), AND
+  //   - merchant having at least one DEPOSIT/WITHDRAWAL entry (skip
+  //     accounts whose only ledger history is escrow ops, since their
+  //     funding source — pre-ledger seeding or wallet sync — never wrote
+  //     a corresponding ledger row, so the drift is structural, not real).
   const rows = await query<{
     merchant_id: string;
     stored_balance: string;
@@ -197,16 +209,16 @@ async function checkMerchantBalanceDrift(): Promise<void> {
     drift: string;
   }>(
     `WITH ledger_totals AS (
-       SELECT account_id AS merchant_id, SUM(
-         CASE
-           WHEN entry_type IN ('CREDIT','DEPOSIT','ESCROW_RELEASE','ESCROW_REFUND','REFUND') THEN amount
-           WHEN entry_type IN ('DEBIT','WITHDRAWAL','ESCROW_LOCK','FEE','PAYMENT') THEN -amount
-           ELSE 0
-         END
-       ) AS total
+       SELECT account_id AS merchant_id, SUM(amount) AS total
        FROM ledger_entries
        WHERE account_type = 'merchant'
        GROUP BY account_id
+     ),
+     funded_merchants AS (
+       SELECT DISTINCT account_id
+       FROM ledger_entries
+       WHERE account_type = 'merchant'
+         AND entry_type IN ('DEPOSIT','WITHDRAWAL','ADJUSTMENT')
      )
      SELECT
        m.id AS merchant_id,
@@ -216,7 +228,7 @@ async function checkMerchantBalanceDrift(): Promise<void> {
      FROM merchants m
      LEFT JOIN ledger_totals lt ON lt.merchant_id = m.id
      WHERE ABS(m.balance - COALESCE(lt.total, 0)) > 0.0001
-       AND EXISTS (SELECT 1 FROM ledger_entries WHERE account_id = m.id AND account_type = 'merchant')
+       AND EXISTS (SELECT 1 FROM funded_merchants fm WHERE fm.account_id = m.id)
      LIMIT 50`
   );
   for (const r of rows) {
