@@ -9,6 +9,7 @@ import { useRealtimeOrder } from "@/hooks/useRealtimeOrder";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { getUserChannel } from "@/lib/pusher/channels";
 import { CHAT_EVENTS } from "@/lib/pusher/events";
+import { emitChatToast } from "@/lib/chat/chatToastBus";
 
 interface UseUserEffectsParams {
   userId: string | null;
@@ -138,6 +139,15 @@ export function useUserEffects({
           message.text.substring(0, 100),
           orderId
         );
+        // Emit to in-app chat toast stack (ChatToastHost subscribes).
+        // No-op when no listener is mounted → zero regression.
+        emitChatToast({
+          orderId,
+          senderName: merchantName,
+          preview: (message.text || '').slice(0, 120),
+          avatarUrl: order?.merchant?.avatarUrl ?? null,
+          timestamp: Date.now(),
+        });
       }
     },
   });

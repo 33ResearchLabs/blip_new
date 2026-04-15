@@ -53,6 +53,18 @@ const SHEET_BG = "bg-surface-base";
 const PRIMARY_BTN = "bg-accent text-accent-text";
 
 /** Map fiat currency code to display symbol */
+// Inline unread-count pill shown next to the MessageCircle icon on every
+// "Message Merchant" / "Chat" button. Returns null when count is 0/undef so
+// the button renders identically to before in the common case.
+function ChatBadge({ count }: { count?: number }) {
+  if (!count || count <= 0) return null;
+  return (
+    <span className="ml-0.5 inline-flex items-center justify-center px-1.5 rounded-full bg-primary text-background text-[10px] font-bold min-w-[18px] h-[16px] leading-none">
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
+
 function fiatSym(code: string | undefined | null): string {
   switch ((code || "").toUpperCase()) {
     case "INR": return "₹";
@@ -1216,7 +1228,7 @@ export const OrderDetailScreen = ({
                             onClick={handleOpenChat}
                             className={`w-full py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
-                            <MessageCircle className="w-4 h-4" />
+                            <MessageCircle className="w-4 h-4" /><ChatBadge count={activeOrder?.unreadCount} />
                             Message Merchant
                           </button>
                         </div>
@@ -1321,7 +1333,7 @@ export const OrderDetailScreen = ({
                                   onClick={handleOpenChat}
                                   className={`flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                                 >
-                                  <MessageCircle className="w-4 h-4" />
+                                  <MessageCircle className="w-4 h-4" /><ChatBadge count={activeOrder?.unreadCount} />
                                   Chat
                                 </button>
                                 <motion.button
@@ -1687,7 +1699,7 @@ export const OrderDetailScreen = ({
                                   onClick={handleOpenChat}
                                   className={`flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                                 >
-                                  <MessageCircle className="w-4 h-4" />
+                                  <MessageCircle className="w-4 h-4" /><ChatBadge count={activeOrder?.unreadCount} />
                                   Chat
                                 </button>
                                 <motion.button
@@ -1863,7 +1875,7 @@ export const OrderDetailScreen = ({
                             onClick={handleOpenChat}
                             className={`w-full py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
-                            <MessageCircle className="w-4 h-4" />
+                            <MessageCircle className="w-4 h-4" /><ChatBadge count={activeOrder?.unreadCount} />
                             Message Merchant
                           </button>
                         </div>
@@ -1965,7 +1977,7 @@ export const OrderDetailScreen = ({
                             onClick={handleOpenChat}
                             className={`mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
-                            <MessageCircle className="w-4 h-4" />
+                            <MessageCircle className="w-4 h-4" /><ChatBadge count={activeOrder?.unreadCount} />
                             Message Merchant
                           </button>
                         </div>
@@ -2013,7 +2025,7 @@ export const OrderDetailScreen = ({
                             onClick={handleOpenChat}
                             className={`mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
-                            <MessageCircle className="w-4 h-4" />
+                            <MessageCircle className="w-4 h-4" /><ChatBadge count={activeOrder?.unreadCount} />
                             Message Seller
                           </button>
                         </div>
@@ -2042,7 +2054,7 @@ export const OrderDetailScreen = ({
                             onClick={handleOpenChat}
                             className={`mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
-                            <MessageCircle className="w-4 h-4" />
+                            <MessageCircle className="w-4 h-4" /><ChatBadge count={activeOrder?.unreadCount} />
                             Message Seller
                           </button>
                         </div>
@@ -2060,7 +2072,7 @@ export const OrderDetailScreen = ({
                             onClick={handleOpenChat}
                             className={`mt-3 w-full py-2.5 rounded-xl text-[14px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                           >
-                            <MessageCircle className="w-4 h-4" />
+                            <MessageCircle className="w-4 h-4" /><ChatBadge count={activeOrder?.unreadCount} />
                             Message Merchant
                           </button>
                         </div>
@@ -2087,7 +2099,7 @@ export const OrderDetailScreen = ({
                               onClick={handleOpenChat}
                               className={`flex-1 py-3 rounded-xl text-[15px] font-medium flex items-center justify-center gap-2 ${SECONDARY_BTN}`}
                             >
-                              <MessageCircle className="w-4 h-4" />
+                              <MessageCircle className="w-4 h-4" /><ChatBadge count={activeOrder?.unreadCount} />
                               Chat
                             </button>
                             <motion.button
@@ -2260,7 +2272,7 @@ export const OrderDetailScreen = ({
               onClick={handleOpenChat}
               className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-active"
             >
-              <MessageCircle className="w-5 h-5 text-text-secondary" />
+              <MessageCircle className="w-5 h-5 text-text-secondary" /><ChatBadge count={activeOrder?.unreadCount} />
             </button>
           </div>
         </div>

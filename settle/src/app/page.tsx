@@ -14,6 +14,7 @@ import {
 import { useUserTheme } from "@/hooks/useUserTheme";
 import { useSounds } from "@/hooks/useSounds";
 import { NotificationToastContainer, useToast } from "@/components/NotificationToast";
+import { ChatToastHost } from "@/components/user/ChatToastHost";
 import { useUserAuth } from "@/hooks/useUserAuth";
 import { UserModals } from "@/components/user/UserModals";
 import { useUserDataFetching } from "@/hooks/useUserDataFetching";
@@ -254,6 +255,18 @@ export default function Home() {
       style={{ background: 'var(--user-frame)' }}
     >
       <NotificationToastContainer position="top-right" />
+      {/* Global chat-toast overlay — shows per-order popups for inbound
+          merchant messages on any screen. Tap jumps into that order's
+          chat. Suppressed automatically when the chat is already open
+          (publisher gates the event in useUserEffects). */}
+      {auth.userId && (
+        <ChatToastHost
+          onOpenChat={(orderId) => {
+            setActiveOrderId(orderId);
+            setScreen("chat-view");
+          }}
+        />
+      )}
       {/* TransactionProgress removed — simple loading on buttons instead */}
       <AnimatePresence mode="wait">
         {screen === "welcome" && (() => {
