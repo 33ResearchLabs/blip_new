@@ -923,7 +923,7 @@ export default function WalletPage() {
 
               {/* Action buttons */}
               <div
-                className={`grid ${MOCK_MODE ? "grid-cols-2" : "grid-cols-4"} gap-2`}
+                className={`grid ${MOCK_MODE ? "grid-cols-2" : "grid-cols-3"} gap-2`}
               >
                 <button
                   onClick={() => {
