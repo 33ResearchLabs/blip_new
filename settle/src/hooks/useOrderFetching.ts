@@ -538,6 +538,34 @@ export function useOrderFetching({
     fetchInAppBalance,
   ]);
 
+  // Safety-net retry: on prod (strict mode off) the initial fetchOrders can
+  // silently get aborted in the session-restore race window — orders state
+  // stays empty until a route-level remount triggers a fresh fetch. On dev
+  // (strict mode on) the useEffect double-fires and implicitly retries,
+  // which is why this bug only reproduces in production.
+  //
+  // If merchantId is set AND orders is still empty 2s after mount, fire
+  // another fetchOrders(). Up to 2 retries then stop (accounts with zero
+  // orders legitimately settle at [] — don't hammer the API).
+  const ordersEmpty = useMerchantStore((s) => s.orders.length === 0);
+  const ordersRetryRef = useRef(0);
+  useEffect(() => {
+    if (!merchantId) {
+      ordersRetryRef.current = 0;
+      return;
+    }
+    if (!ordersEmpty) {
+      ordersRetryRef.current = 0;
+      return;
+    }
+    if (ordersRetryRef.current >= 2) return;
+    const timer = setTimeout(() => {
+      ordersRetryRef.current += 1;
+      fetchOrders();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [merchantId, ordersEmpty, fetchOrders]);
+
   // Initial fetch — SECONDARY: leaderboard, disputes, big orders, mempool (deferred 2s)
   useEffect(() => {
     if (!merchantId) return;
