@@ -110,7 +110,8 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
                 'is_default', mpm.is_default
               )
               ELSE NULL
-            END as merchant_payment_method
+            END as merchant_payment_method,
+            COALESCE(chat_agg.unread_count, 0) as unread_count
      FROM orders o
      LEFT JOIN users u ON o.user_id = u.id
      LEFT JOIN merchants m ON o.merchant_id = m.id
@@ -118,6 +119,14 @@ export async function getOrderWithRelations(id: string): Promise<OrderWithRelati
      LEFT JOIN merchants bm ON o.buyer_merchant_id = bm.id
      LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
      LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
+     LEFT JOIN LATERAL (
+       SELECT COUNT(*) FILTER (
+         WHERE cm.sender_type IN ('merchant', 'compliance')
+           AND cm.message_type != 'system'
+           AND cm.is_read = false
+       )::int as unread_count
+       FROM chat_messages cm WHERE cm.order_id = o.id
+     ) chat_agg ON true
      WHERE o.id = $1`,
     [_id]
   ));

@@ -421,6 +421,8 @@ export function useUserEffects({
         cancelRequest: mappedRealtimeOrder.cancelRequest ?? orderFromList?.cancelRequest ?? null,
         // Preserve userRating from list (set by optimistic update after submitRating)
         userRating: orderFromList?.userRating ?? mappedRealtimeOrder.userRating ?? null,
+        // Preserve unreadCount — single-order fetch may omit it; list / realtime increments are authoritative
+        unreadCount: Math.max(orderFromList?.unreadCount ?? 0, mappedRealtimeOrder.unreadCount ?? 0),
       }
     : orderFromList;
 

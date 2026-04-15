@@ -492,7 +492,12 @@ const OrderList = memo(function OrderList({
                       const { seller, buyer } = getPartyNames(order.dbOrder);
                       const sellerDisp = seller || order.user || null;
                       const buyerDisp = buyer || null;
-                      const avatarChar = (sellerDisp || buyerDisp || "U")
+                      const bothKnown = !!sellerDisp && !!buyerDisp;
+                      // Placer = whichever side is filled when only one is
+                      // known (unclaimed market broadcast shows just their
+                      // name with no arrow or "—" on the empty side).
+                      const soloName = sellerDisp || buyerDisp || null;
+                      const avatarChar = (soloName || "U")
                         .charAt(0)
                         .toUpperCase();
                       return (
@@ -501,19 +506,30 @@ const OrderList = memo(function OrderList({
                             {avatarChar}
                           </div>
                           <span className="flex items-center gap-1 text-[12px] font-semibold text-white min-w-0">
-                            <span
-                              className={`whitespace-nowrap ${sellerDisp ? "" : "text-foreground/40"}`}
-                              title={`Seller: ${sellerDisp || "—"}`}
-                            >
-                              {sellerDisp || "—"}
-                            </span>
-                            <ArrowRight className="w-3 h-3 text-foreground/40 shrink-0" />
-                            <span
-                              className={`whitespace-nowrap ${buyerDisp ? "" : "text-foreground/40"}`}
-                              title={`Buyer: ${buyerDisp || "—"}`}
-                            >
-                              {buyerDisp || "—"}
-                            </span>
+                            {bothKnown ? (
+                              <>
+                                <span
+                                  className="whitespace-nowrap"
+                                  title={`Seller: ${sellerDisp}`}
+                                >
+                                  {sellerDisp}
+                                </span>
+                                <ArrowRight className="w-3 h-3 text-foreground/40 shrink-0" />
+                                <span
+                                  className="whitespace-nowrap"
+                                  title={`Buyer: ${buyerDisp}`}
+                                >
+                                  {buyerDisp}
+                                </span>
+                              </>
+                            ) : (
+                              <span
+                                className={`whitespace-nowrap ${soloName ? "" : "text-foreground/40"}`}
+                                title={soloName ? `Placed by ${soloName}` : "No counterparty yet"}
+                              >
+                                {soloName || "—"}
+                              </span>
+                            )}
                           </span>
                         </>
                       );
@@ -1810,19 +1826,24 @@ const MyOrdersList = memo(function MyOrdersList({
                   {avatarChar}
                 </div>
                 <span className="flex items-center gap-1 text-[12px] font-semibold text-white min-w-0">
-                  <span
-                    className={`whitespace-nowrap ${leftName ? "" : "text-foreground/40"}`}
-                    title={`Seller: ${leftName || "—"}`}
-                  >
-                    {leftName || "—"}
-                  </span>
-                  <ArrowRight className="w-3 h-3 text-foreground/40 shrink-0" />
-                  <span
-                    className={`whitespace-nowrap ${rightName ? "" : "text-foreground/40"}`}
-                    title={`Buyer: ${rightName || "—"}`}
-                  >
-                    {rightName || "—"}
-                  </span>
+                  {leftName && rightName ? (
+                    <>
+                      <span className="whitespace-nowrap" title={`Seller: ${leftName}`}>
+                        {leftName}
+                      </span>
+                      <ArrowRight className="w-3 h-3 text-foreground/40 shrink-0" />
+                      <span className="whitespace-nowrap" title={`Buyer: ${rightName}`}>
+                        {rightName}
+                      </span>
+                    </>
+                  ) : (
+                    <span
+                      className={`whitespace-nowrap ${(leftName || rightName) ? "" : "text-foreground/40"}`}
+                      title={leftName || rightName ? `Placed by ${leftName || rightName}` : "No counterparty yet"}
+                    >
+                      {leftName || rightName || "—"}
+                    </span>
+                  )}
                 </span>
                 <span
                   className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider border ${badge.cls}`}
