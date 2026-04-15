@@ -532,42 +532,6 @@ export default function MerchantDashboard() {
     }
   }, [ratingModalData, merchantId, toast, fetchOrders]);
 
-  // Reference-stability helper: returns the same array instance when the
-  // passed slice is structurally identical to the previous call. Prevents
-  // downstream `useMemo`s in CompletedOrdersPanel / InProgressPanel from
-  // re-running on every parent fetch cycle when only other slices changed
-  // (the ongoing / completed sets often don't move between refreshes, but
-  // the containing `orders` state always gets a new array reference).
-  const stabilizerRefs = useRef<
-    Record<"pending" | "ongoing" | "completed" | "cancelled", Order[]>
-  >({ pending: [], ongoing: [], completed: [], cancelled: [] });
-  const stabilize = useCallback(
-    (key: "pending" | "ongoing" | "completed" | "cancelled", next: Order[]) => {
-      const prev = stabilizerRefs.current[key];
-      if (prev.length === next.length) {
-        let same = true;
-        for (let i = 0; i < next.length; i++) {
-          const p = prev[i];
-          const n = next[i];
-          if (
-            p.id !== n.id ||
-            p.minimalStatus !== n.minimalStatus ||
-            p.status !== n.status ||
-            p.orderVersion !== n.orderVersion ||
-            p.expiresIn !== n.expiresIn
-          ) {
-            same = false;
-            break;
-          }
-        }
-        if (same) return prev;
-      }
-      stabilizerRefs.current[key] = next;
-      return next;
-    },
-    [],
-  );
-
   // Order filtering — ONE single pass over the orders list producing all
   // four slices (pending / ongoing / completed / cancelled). Semantics are
   // byte-identical to the four separate filters that lived here before; the
@@ -671,17 +635,13 @@ export default function MerchantDashboard() {
         ongoingSorted = sorted;
       }
 
-      // Pass each slice through the referential-stability check so that
-      // slices which didn't actually change between fetches keep the same
-      // array reference — downstream `useMemo`s in the panels therefore
-      // stay memoized.
       return {
-        pendingOrders: stabilize("pending", pending),
-        ongoingOrders: stabilize("ongoing", ongoingSorted),
-        completedOrders: stabilize("completed", completed),
-        cancelledOrders: stabilize("cancelled", cancelled),
+        pendingOrders: pending,
+        ongoingOrders: ongoingSorted,
+        completedOrders: completed,
+        cancelledOrders: cancelled,
       };
-    }, [orders, merchantId, stabilize]);
+    }, [orders, merchantId]);
 
   const todayEarnings = useMemo(
     () =>
