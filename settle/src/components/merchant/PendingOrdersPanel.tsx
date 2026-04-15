@@ -88,7 +88,12 @@ function getPartyNames(db: any): {
   const merchantName = db.merchant?.display_name || null;
   const buyerMerchantName = db.buyer_merchant?.display_name || null;
 
-  const isM2M = !!db.buyer_merchant_id;
+  // M2M detection follows the CLAUDE.md rule: placeholder user = M2M, even
+  // before a counterparty merchant has claimed. Relying only on
+  // `buyer_merchant_id !== null` misses M2M SELL broadcasts (which have
+  // `merchant_id = placer` + `buyer_merchant_id = null`) and routes them
+  // through the U2M branch, which mislabels the placer's role.
+  const isM2M = userIsPlaceholder || !!db.buyer_merchant_id;
   if (isM2M) return { seller: merchantName, buyer: buyerMerchantName };
 
   const orderType = String(db.type || "").toLowerCase();
