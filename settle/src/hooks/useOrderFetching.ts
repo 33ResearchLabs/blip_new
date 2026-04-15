@@ -538,16 +538,20 @@ export function useOrderFetching({
     fetchInAppBalance,
   ]);
 
-  // Safety-net retry: on prod (strict mode off) the initial fetchOrders can
-  // silently get aborted in the session-restore race window — orders state
-  // stays empty until a route-level remount triggers a fresh fetch. On dev
-  // (strict mode on) the useEffect double-fires and implicitly retries,
-  // which is why this bug only reproduces in production.
+  // Safety-net retry: on prod the initial fetchOrders() fires before the
+  // session token has been restored (check_session is still in-flight), so
+  // the request goes without an Authorization header and the server returns
+  // an empty / 401 response. Orders state then stays [] until a route-level
+  // remount refires the fetch (by which time the token is set). On dev,
+  // React strict mode's double-invoke of effects masks this race.
   //
-  // If merchantId is set AND orders is still empty 2s after mount, fire
-  // another fetchOrders(). Up to 2 retries then stop (accounts with zero
-  // orders legitimately settle at [] — don't hammer the API).
+  // Fix: re-fire fetchOrders when (a) merchantId is set, AND (b) orders is
+  // empty, AND (c) a sessionToken now exists. This deterministically
+  // catches the moment the token arrives. A small 2s backstop also
+  // re-fires for edge cases where the token path doesn't resolve cleanly.
+  // Capped at 2 retries so legitimately empty accounts don't loop.
   const ordersEmpty = useMerchantStore((s) => s.orders.length === 0);
+  const sessionTokenPresent = useMerchantStore((s) => !!s.sessionToken);
   const ordersRetryRef = useRef(0);
   useEffect(() => {
     if (!merchantId) {
@@ -559,12 +563,17 @@ export function useOrderFetching({
       return;
     }
     if (ordersRetryRef.current >= 2) return;
+
+    // Fire immediately when the session token arrives (token-gated path).
+    // Otherwise fall back to a 2s timer so the retry still runs even if the
+    // token flow doesn't produce a observable change (e.g. already set).
+    const delay = sessionTokenPresent ? 50 : 2000;
     const timer = setTimeout(() => {
       ordersRetryRef.current += 1;
       fetchOrders();
-    }, 2000);
+    }, delay);
     return () => clearTimeout(timer);
-  }, [merchantId, ordersEmpty, fetchOrders]);
+  }, [merchantId, ordersEmpty, sessionTokenPresent, fetchOrders]);
 
   // Initial fetch — SECONDARY: leaderboard, disputes, big orders, mempool (deferred 2s)
   useEffect(() => {

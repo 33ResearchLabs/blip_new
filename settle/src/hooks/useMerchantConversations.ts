@@ -87,12 +87,16 @@ export function useMerchantConversations() {
     fetchOrderConversations();
   }, [merchantId, fetchOrderConversations]);
 
-  // Safety-net retry: after the initial mount fetches, if we're still showing
-  // zero conversations AND have a merchantId, the initial fetch likely got
-  // aborted (session race) or silently failed (fetch cancelled by the
-  // browser). Fire ONE additional fetch after 2s to recover. Bailout: once we
-  // get any data, or after 2 retries, stop — avoids hammering the API on
-  // accounts that genuinely have no chats.
+  // Safety-net retry: the initial mount fetch commonly fires BEFORE the
+  // session token has been restored on prod, so the request goes without an
+  // Authorization header and the server returns empty. The inbox then stays
+  // at [] until a route change remounts the hook (by which time the token
+  // has arrived). On dev, React strict mode's double-invoke masks the race.
+  //
+  // Re-fire the fetch the moment the session token becomes present AND the
+  // inbox is still empty. Falls back to a 2s timer for edge cases where
+  // sessionToken doesn't observably transition. Capped at 2 retries.
+  const sessionTokenPresent = useMerchantStore((s) => !!s.sessionToken);
   const retryCountRef = useRef(0);
   useEffect(() => {
     if (!merchantId) {
@@ -104,12 +108,13 @@ export function useMerchantConversations() {
       return;
     }
     if (retryCountRef.current >= 2) return;
+    const delay = sessionTokenPresent ? 50 : 2000;
     const timer = setTimeout(() => {
       retryCountRef.current += 1;
       fetchOrderConversations();
-    }, 2000);
+    }, delay);
     return () => clearTimeout(timer);
-  }, [merchantId, orderConversations.length, fetchOrderConversations]);
+  }, [merchantId, orderConversations.length, sessionTokenPresent, fetchOrderConversations]);
 
   // Polling fallback when Pusher is not connected (15s interval)
   const isPusherConnected = !!(pusher as any)?.isConnected;
