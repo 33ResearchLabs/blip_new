@@ -527,9 +527,16 @@ export function useUserEffects({
         "\uD83C\uDFEA",
         activeOrder.id
       );
+      // Clear the inbox-level unread count locally — markAsRead (fired by the
+      // auto-subscribe effect below) persists is_read=true on the server, but
+      // orders[].unreadCount is a client-side counter that must be cleared here
+      // or the Chat button badge stays pinned after the user reads the thread.
+      setOrders(prev => prev.map(o =>
+        o.id === activeOrder.id ? { ...o, unreadCount: 0 } : o
+      ));
     }
     setShowChat(true);
-  }, [activeOrder, openChat]);
+  }, [activeOrder, openChat, setOrders]);
 
   // Auto-open chat when entering chat-view screen
   // Use refs to avoid re-firing when callback references change
@@ -562,6 +569,11 @@ export function useUserEffects({
         const chat = chatWindowsRef2.current.find(w => w.orderId === order.id);
         if (chat) markAsReadRef.current(chat.id);
       }, 500);
+      // Also clear the inbox unread counter for this order so the Chat-button
+      // badge disappears as soon as the user is looking at the thread.
+      setOrders(prev => prev.map(o =>
+        o.id === order.id ? { ...o, unreadCount: 0 } : o
+      ));
     }
     if (!shouldSubscribe) {
       prevChatViewOrderRef.current = null;

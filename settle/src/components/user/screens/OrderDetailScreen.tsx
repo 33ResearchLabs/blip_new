@@ -59,7 +59,7 @@ const PRIMARY_BTN = "bg-accent text-accent-text";
 function ChatBadge({ count }: { count?: number }) {
   if (!count || count <= 0) return null;
   return (
-    <span className="ml-0.5 inline-flex items-center justify-center px-1.5 rounded-full bg-primary text-background text-[10px] font-bold min-w-[18px] h-[16px] leading-none">
+    <span className="ml-1 text-[11px] font-semibold leading-none tabular-nums">
       {count > 99 ? "99+" : count}
     </span>
   );
