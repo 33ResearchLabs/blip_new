@@ -114,7 +114,7 @@ export function useOrderFetching({
 
     try {
       const res = await fetchWithAuth(
-        `/api/merchant/orders?merchant_id=${merchantId}&include_all_pending=true&limit=100`,
+        `/api/merchant/orders?merchant_id=${merchantId}&include_all_pending=true&limit=20`,
         { cache: "no-store", signal: controller.signal },
       );
       if (!res.ok) {

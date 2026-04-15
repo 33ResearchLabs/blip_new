@@ -197,6 +197,27 @@ export default function Home() {
     prevScreenRef.current = screen;
   }, [screen, auth.userId, fetchOrders]);
 
+  // Once the user is authenticated, strip login-flow query params (?welcome=skip,
+  // ?tab=signin, ?reason=…) from the URL. They're only meaningful on the landing
+  // screen — leaving them in place keeps the URL looking like "/?welcome=skip"
+  // for the entire session, which is confusing when sharing or bookmarking.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !auth.userId) return;
+    const url = new URL(window.location.href);
+    const junk = ['welcome', 'tab', 'reason'];
+    let mutated = false;
+    for (const key of junk) {
+      if (url.searchParams.has(key)) {
+        url.searchParams.delete(key);
+        mutated = true;
+      }
+    }
+    if (mutated) {
+      const clean = url.pathname + (url.searchParams.toString() ? `?${url.searchParams}` : '') + url.hash;
+      window.history.replaceState(null, '', clean);
+    }
+  }, [auth.userId]);
+
   const pendingOrders = orders.filter(o => !["complete", "cancelled", "expired", "disputed"].includes(o.status));
   const completedOrders = orders.filter(o => o.status === "complete");
   const cancelledOrders = orders.filter(o => o.status === "cancelled" || o.status === "expired");

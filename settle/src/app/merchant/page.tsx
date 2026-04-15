@@ -532,116 +532,87 @@ export default function MerchantDashboard() {
     }
   }, [ratingModalData, merchantId, toast, fetchOrders]);
 
-  // Order filtering — ONE single pass over the orders list producing all
-  // four slices (pending / ongoing / completed / cancelled). Semantics are
-  // byte-identical to the four separate filters that lived here before; the
-  // consolidation avoids 3× list traversal + repeated helper evaluation and
-  // also caches the parsed created_at millisecond once (used by the ongoing
-  // sort) instead of re-parsing a Date string per sort comparison.
-  const { pendingOrders, ongoingOrders, completedOrders, cancelledOrders } =
-    useMemo(() => {
-      const pending: Order[] = [];
-      const ongoing: Order[] = [];
-      const ongoingMs: number[] = [];
-      const completed: Order[] = [];
-      const cancelled: Order[] = [];
+  // Order filtering — helpers are defined inside each useMemo so that
+  // merchantId is a proper dependency and filters update on user switch.
+  const pendingOrders = useMemo(() => {
+    const isSelfUnaccepted = (o: Order) => {
+      const isSelf = o.isMyOrder || o.orderMerchantId === merchantId;
+      if (!isSelf) return false;
+      const dbUsername = o.dbOrder?.user?.username || "";
+      const isPlaceholderUser =
+        dbUsername.startsWith("open_order_") || dbUsername.startsWith("m2m_");
+      if (!isPlaceholderUser) return false;
+      const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
+      return !o.dbOrder?.accepted_at && !(buyerMid && buyerMid !== merchantId);
+    };
+    // Unclaimed escrowed orders (no accepted_at, no buyer_merchant_id) are still "pending" for claimers
+    const isUnclaimedEscrow = (o: Order) => {
+      const status = getEffectiveStatus(o);
+      if (status !== "escrow") return false;
+      const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
+      return !o.dbOrder?.accepted_at && !buyerMid;
+    };
+    return orders.filter((o) => {
+      if (isOrderExpired(o)) return false;
+      const status = getEffectiveStatus(o);
+      if (status === "pending") return true;
+      if (status === "escrow" && isSelfUnaccepted(o)) return true;
+      if (isUnclaimedEscrow(o)) return true;
+      return false;
+    });
+  }, [orders, merchantId]);
 
-      const hasMyEscrow = (o: Order) =>
-        o.isMyOrder || o.myRole === "seller" || o.orderMerchantId === merchantId;
+  const ongoingOrders = useMemo(() => {
+    const hasMyEscrow = (o: Order) =>
+      o.isMyOrder || o.myRole === "seller" || o.orderMerchantId === merchantId;
+    const isSelfUnaccepted = (o: Order) => {
+      const isSelf = o.isMyOrder || o.orderMerchantId === merchantId;
+      if (!isSelf) return false;
+      const dbUsername = o.dbOrder?.user?.username || "";
+      const isPlaceholderUser =
+        dbUsername.startsWith("open_order_") || dbUsername.startsWith("m2m_");
+      if (!isPlaceholderUser) return false;
+      const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
+      return !o.dbOrder?.accepted_at && !(buyerMid && buyerMid !== merchantId);
+    };
+    // Unclaimed escrowed orders go to Pending, not In Progress
+    const isUnclaimedEscrow = (o: Order) => {
+      const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
+      return !o.dbOrder?.accepted_at && !buyerMid;
+    };
+    return orders.filter((o) => {
+      const status = getEffectiveStatus(o);
+      if (status !== "escrow") return false;
+      if (isSelfUnaccepted(o)) return false;
+      if (isUnclaimedEscrow(o)) return false;
+      if (hasMyEscrow(o)) return true;
+      return !isOrderExpired(o);
+    }).sort((a, b) => {
+      // Newest first
+      const aTime = new Date(a.dbOrder?.created_at || a.createdAt || 0).getTime();
+      const bTime = new Date(b.dbOrder?.created_at || b.createdAt || 0).getTime();
+      return bTime - aTime;
+    });
+  }, [orders, merchantId]);
 
-      const isSelfUnaccepted = (o: Order) => {
-        const isSelf = o.isMyOrder || o.orderMerchantId === merchantId;
-        if (!isSelf) return false;
-        const dbUsername = o.dbOrder?.user?.username || "";
-        const isPlaceholderUser =
-          dbUsername.startsWith("open_order_") ||
-          dbUsername.startsWith("m2m_");
-        if (!isPlaceholderUser) return false;
-        const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
-        return (
-          !o.dbOrder?.accepted_at && !(buyerMid && buyerMid !== merchantId)
-        );
-      };
-
-      for (const o of orders) {
-        const status = getEffectiveStatus(o);
-        const expired = isOrderExpired(o);
-        const selfUnaccepted =
-          status === "escrow" ? isSelfUnaccepted(o) : false;
-        const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
-        const unclaimedEscrow =
-          status === "escrow" &&
-          !o.dbOrder?.accepted_at &&
-          !buyerMid;
-
-        // ── Pending ────────────────────────────────────────────────
-        // Same predicate as the previous standalone filter:
-        //   !expired && (status === "pending" || (escrow && selfUnaccepted) || unclaimedEscrow)
-        if (!expired) {
-          if (
-            status === "pending" ||
-            (status === "escrow" && selfUnaccepted) ||
-            unclaimedEscrow
-          ) {
-            pending.push(o);
-          }
-        }
-
-        // ── Ongoing (In Progress) ──────────────────────────────────
-        // Previous predicate:
-        //   status === "escrow" && !selfUnaccepted && !unclaimedEscrow &&
-        //     (hasMyEscrow(o) || !expired)
-        if (
-          status === "escrow" &&
-          !selfUnaccepted &&
-          !unclaimedEscrow &&
-          (hasMyEscrow(o) || !expired)
-        ) {
-          ongoing.push(o);
-          // Cache created_at parse so the sort below doesn't reparse per compare.
-          const raw = o.dbOrder?.created_at || o.createdAt || 0;
-          ongoingMs.push(
-            typeof raw === "number" ? raw : new Date(raw).getTime(),
-          );
-        }
-
-        // ── Completed ──────────────────────────────────────────────
-        if (status === "completed") {
-          completed.push(o);
-        }
-
-        // ── Cancelled / Disputed / Expired-without-escrow ─────────
-        // Previous predicate:
-        //   status === "cancelled" || status === "disputed" ||
-        //   ((status === "active" || status === "pending") && expired) ||
-        //   (status === "escrow" && expired && !hasMyEscrow(o))
-        if (
-          status === "cancelled" ||
-          status === "disputed" ||
-          ((status === "active" || status === "pending") && expired) ||
-          (status === "escrow" && expired && !hasMyEscrow(o))
-        ) {
-          cancelled.push(o);
-        }
-      }
-
-      // Newest-first sort for ongoing — stable ordering by cached ms.
-      let ongoingSorted: Order[] = ongoing;
-      if (ongoing.length > 1) {
-        const indices = ongoing.map((_, i) => i);
-        indices.sort((a, b) => ongoingMs[b] - ongoingMs[a]);
-        const sorted: Order[] = [];
-        for (const i of indices) sorted.push(ongoing[i]);
-        ongoingSorted = sorted;
-      }
-
-      return {
-        pendingOrders: pending,
-        ongoingOrders: ongoingSorted,
-        completedOrders: completed,
-        cancelledOrders: cancelled,
-      };
-    }, [orders, merchantId]);
+  const completedOrders = useMemo(
+    () => orders.filter((o) => getEffectiveStatus(o) === "completed"),
+    [orders],
+  );
+  const cancelledOrders = useMemo(() => {
+    const hasMyEscrow = (o: Order) =>
+      o.isMyOrder || o.myRole === "seller" || o.orderMerchantId === merchantId;
+    return orders.filter((o) => {
+      const status = getEffectiveStatus(o);
+      return (
+        status === "cancelled" ||
+        status === "disputed" ||
+        ((status === "active" || status === "pending") &&
+          isOrderExpired(o)) ||
+        (status === "escrow" && isOrderExpired(o) && !hasMyEscrow(o))
+      );
+    });
+  }, [orders, merchantId]);
 
   const todayEarnings = useMemo(
     () =>
