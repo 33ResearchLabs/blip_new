@@ -532,87 +532,156 @@ export default function MerchantDashboard() {
     }
   }, [ratingModalData, merchantId, toast, fetchOrders]);
 
-  // Order filtering — helpers are defined inside each useMemo so that
-  // merchantId is a proper dependency and filters update on user switch.
-  const pendingOrders = useMemo(() => {
-    const isSelfUnaccepted = (o: Order) => {
-      const isSelf = o.isMyOrder || o.orderMerchantId === merchantId;
-      if (!isSelf) return false;
-      const dbUsername = o.dbOrder?.user?.username || "";
-      const isPlaceholderUser =
-        dbUsername.startsWith("open_order_") || dbUsername.startsWith("m2m_");
-      if (!isPlaceholderUser) return false;
-      const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
-      return !o.dbOrder?.accepted_at && !(buyerMid && buyerMid !== merchantId);
-    };
-    // Unclaimed escrowed orders (no accepted_at, no buyer_merchant_id) are still "pending" for claimers
-    const isUnclaimedEscrow = (o: Order) => {
-      const status = getEffectiveStatus(o);
-      if (status !== "escrow") return false;
-      const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
-      return !o.dbOrder?.accepted_at && !buyerMid;
-    };
-    return orders.filter((o) => {
-      if (isOrderExpired(o)) return false;
-      const status = getEffectiveStatus(o);
-      if (status === "pending") return true;
-      if (status === "escrow" && isSelfUnaccepted(o)) return true;
-      if (isUnclaimedEscrow(o)) return true;
-      return false;
-    });
-  }, [orders, merchantId]);
-
-  const ongoingOrders = useMemo(() => {
-    const hasMyEscrow = (o: Order) =>
-      o.isMyOrder || o.myRole === "seller" || o.orderMerchantId === merchantId;
-    const isSelfUnaccepted = (o: Order) => {
-      const isSelf = o.isMyOrder || o.orderMerchantId === merchantId;
-      if (!isSelf) return false;
-      const dbUsername = o.dbOrder?.user?.username || "";
-      const isPlaceholderUser =
-        dbUsername.startsWith("open_order_") || dbUsername.startsWith("m2m_");
-      if (!isPlaceholderUser) return false;
-      const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
-      return !o.dbOrder?.accepted_at && !(buyerMid && buyerMid !== merchantId);
-    };
-    // Unclaimed escrowed orders go to Pending, not In Progress
-    const isUnclaimedEscrow = (o: Order) => {
-      const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
-      return !o.dbOrder?.accepted_at && !buyerMid;
-    };
-    return orders.filter((o) => {
-      const status = getEffectiveStatus(o);
-      if (status !== "escrow") return false;
-      if (isSelfUnaccepted(o)) return false;
-      if (isUnclaimedEscrow(o)) return false;
-      if (hasMyEscrow(o)) return true;
-      return !isOrderExpired(o);
-    }).sort((a, b) => {
-      // Newest first
-      const aTime = new Date(a.dbOrder?.created_at || a.createdAt || 0).getTime();
-      const bTime = new Date(b.dbOrder?.created_at || b.createdAt || 0).getTime();
-      return bTime - aTime;
-    });
-  }, [orders, merchantId]);
-
-  const completedOrders = useMemo(
-    () => orders.filter((o) => getEffectiveStatus(o) === "completed"),
-    [orders],
+  // Reference-stability helper: returns the same array instance when the
+  // passed slice is structurally identical to the previous call. Prevents
+  // downstream `useMemo`s in CompletedOrdersPanel / InProgressPanel from
+  // re-running on every parent fetch cycle when only other slices changed
+  // (the ongoing / completed sets often don't move between refreshes, but
+  // the containing `orders` state always gets a new array reference).
+  const stabilizerRefs = useRef<
+    Record<"pending" | "ongoing" | "completed" | "cancelled", Order[]>
+  >({ pending: [], ongoing: [], completed: [], cancelled: [] });
+  const stabilize = useCallback(
+    (key: "pending" | "ongoing" | "completed" | "cancelled", next: Order[]) => {
+      const prev = stabilizerRefs.current[key];
+      if (prev.length === next.length) {
+        let same = true;
+        for (let i = 0; i < next.length; i++) {
+          const p = prev[i];
+          const n = next[i];
+          if (
+            p.id !== n.id ||
+            p.minimalStatus !== n.minimalStatus ||
+            p.status !== n.status ||
+            p.orderVersion !== n.orderVersion ||
+            p.expiresIn !== n.expiresIn
+          ) {
+            same = false;
+            break;
+          }
+        }
+        if (same) return prev;
+      }
+      stabilizerRefs.current[key] = next;
+      return next;
+    },
+    [],
   );
-  const cancelledOrders = useMemo(() => {
-    const hasMyEscrow = (o: Order) =>
-      o.isMyOrder || o.myRole === "seller" || o.orderMerchantId === merchantId;
-    return orders.filter((o) => {
-      const status = getEffectiveStatus(o);
-      return (
-        status === "cancelled" ||
-        status === "disputed" ||
-        ((status === "active" || status === "pending") &&
-          isOrderExpired(o)) ||
-        (status === "escrow" && isOrderExpired(o) && !hasMyEscrow(o))
-      );
-    });
-  }, [orders, merchantId]);
+
+  // Order filtering — ONE single pass over the orders list producing all
+  // four slices (pending / ongoing / completed / cancelled). Semantics are
+  // byte-identical to the four separate filters that lived here before; the
+  // consolidation avoids 3× list traversal + repeated helper evaluation and
+  // also caches the parsed created_at millisecond once (used by the ongoing
+  // sort) instead of re-parsing a Date string per sort comparison.
+  const { pendingOrders, ongoingOrders, completedOrders, cancelledOrders } =
+    useMemo(() => {
+      const pending: Order[] = [];
+      const ongoing: Order[] = [];
+      const ongoingMs: number[] = [];
+      const completed: Order[] = [];
+      const cancelled: Order[] = [];
+
+      const hasMyEscrow = (o: Order) =>
+        o.isMyOrder || o.myRole === "seller" || o.orderMerchantId === merchantId;
+
+      const isSelfUnaccepted = (o: Order) => {
+        const isSelf = o.isMyOrder || o.orderMerchantId === merchantId;
+        if (!isSelf) return false;
+        const dbUsername = o.dbOrder?.user?.username || "";
+        const isPlaceholderUser =
+          dbUsername.startsWith("open_order_") ||
+          dbUsername.startsWith("m2m_");
+        if (!isPlaceholderUser) return false;
+        const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
+        return (
+          !o.dbOrder?.accepted_at && !(buyerMid && buyerMid !== merchantId)
+        );
+      };
+
+      for (const o of orders) {
+        const status = getEffectiveStatus(o);
+        const expired = isOrderExpired(o);
+        const selfUnaccepted =
+          status === "escrow" ? isSelfUnaccepted(o) : false;
+        const buyerMid = o.buyerMerchantId || o.dbOrder?.buyer_merchant_id;
+        const unclaimedEscrow =
+          status === "escrow" &&
+          !o.dbOrder?.accepted_at &&
+          !buyerMid;
+
+        // ── Pending ────────────────────────────────────────────────
+        // Same predicate as the previous standalone filter:
+        //   !expired && (status === "pending" || (escrow && selfUnaccepted) || unclaimedEscrow)
+        if (!expired) {
+          if (
+            status === "pending" ||
+            (status === "escrow" && selfUnaccepted) ||
+            unclaimedEscrow
+          ) {
+            pending.push(o);
+          }
+        }
+
+        // ── Ongoing (In Progress) ──────────────────────────────────
+        // Previous predicate:
+        //   status === "escrow" && !selfUnaccepted && !unclaimedEscrow &&
+        //     (hasMyEscrow(o) || !expired)
+        if (
+          status === "escrow" &&
+          !selfUnaccepted &&
+          !unclaimedEscrow &&
+          (hasMyEscrow(o) || !expired)
+        ) {
+          ongoing.push(o);
+          // Cache created_at parse so the sort below doesn't reparse per compare.
+          const raw = o.dbOrder?.created_at || o.createdAt || 0;
+          ongoingMs.push(
+            typeof raw === "number" ? raw : new Date(raw).getTime(),
+          );
+        }
+
+        // ── Completed ──────────────────────────────────────────────
+        if (status === "completed") {
+          completed.push(o);
+        }
+
+        // ── Cancelled / Disputed / Expired-without-escrow ─────────
+        // Previous predicate:
+        //   status === "cancelled" || status === "disputed" ||
+        //   ((status === "active" || status === "pending") && expired) ||
+        //   (status === "escrow" && expired && !hasMyEscrow(o))
+        if (
+          status === "cancelled" ||
+          status === "disputed" ||
+          ((status === "active" || status === "pending") && expired) ||
+          (status === "escrow" && expired && !hasMyEscrow(o))
+        ) {
+          cancelled.push(o);
+        }
+      }
+
+      // Newest-first sort for ongoing — stable ordering by cached ms.
+      let ongoingSorted: Order[] = ongoing;
+      if (ongoing.length > 1) {
+        const indices = ongoing.map((_, i) => i);
+        indices.sort((a, b) => ongoingMs[b] - ongoingMs[a]);
+        const sorted: Order[] = [];
+        for (const i of indices) sorted.push(ongoing[i]);
+        ongoingSorted = sorted;
+      }
+
+      // Pass each slice through the referential-stability check so that
+      // slices which didn't actually change between fetches keep the same
+      // array reference — downstream `useMemo`s in the panels therefore
+      // stay memoized.
+      return {
+        pendingOrders: stabilize("pending", pending),
+        ongoingOrders: stabilize("ongoing", ongoingSorted),
+        completedOrders: stabilize("completed", completed),
+        cancelledOrders: stabilize("cancelled", cancelled),
+      };
+    }, [orders, merchantId, stabilize]);
 
   const todayEarnings = useMemo(
     () =>
