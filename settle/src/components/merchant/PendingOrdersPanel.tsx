@@ -490,13 +490,20 @@ const OrderList = memo(function OrderList({
                   <div className="flex items-center gap-2 flex-wrap min-w-0">
                     {(() => {
                       const { seller, buyer } = getPartyNames(order.dbOrder);
-                      const sellerDisp = seller || order.user || null;
-                      const buyerDisp = buyer || null;
+                      // Use the canonical roles from getPartyNames — do NOT
+                      // fallback to `order.user` on the seller slot. For a
+                      // U2M BUY order the user IS the buyer; filling that
+                      // name into the seller slot produced "name → name"
+                      // duplicates on unclaimed broadcasts.
+                      const sellerDisp = seller;
+                      const buyerDisp = buyer;
                       const bothKnown = !!sellerDisp && !!buyerDisp;
                       // Placer = whichever side is filled when only one is
                       // known (unclaimed market broadcast shows just their
-                      // name with no arrow or "—" on the empty side).
-                      const soloName = sellerDisp || buyerDisp || null;
+                      // name with no arrow or "—" on the empty side). Last
+                      // resort: the list-row `order.user` if neither party
+                      // resolved (very rare — observer view of a broken row).
+                      const soloName = sellerDisp || buyerDisp || order.user || null;
                       const avatarChar = (soloName || "U")
                         .charAt(0)
                         .toUpperCase();
