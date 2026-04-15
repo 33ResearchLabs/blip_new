@@ -128,6 +128,13 @@ export interface Order {
   id: string;
   order_number: string;
   user_id: string;
+  // NOTE: at runtime `merchant_id` can be NULL for unclaimed M2M BUY
+  // broadcasts (creator is buyer, awaiting a seller to claim and take this
+  // slot). Kept typed as `string` to avoid a cascading refactor; critical
+  // paths (resolveTradeRole, determineEscrowPayer, the SQL role resolution
+  // in orders.ts, and getViewerSide) explicitly guard against null. When
+  // adding new consumers of `order.merchant_id`, do not assume non-null —
+  // check against the placeholder user / buyer_merchant_id shape.
   merchant_id: string;
   offer_id: string;
   buyer_merchant_id: string | null; // For M2M trading: the merchant acting as buyer

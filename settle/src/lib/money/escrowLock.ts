@@ -26,7 +26,7 @@ export interface EscrowLockResult {
  */
 export function determineEscrowPayer(order: {
   type: 'buy' | 'sell';
-  merchant_id: string;
+  merchant_id: string | null;
   user_id: string;
   buyer_merchant_id: string | null;
 }): { entityType: 'merchant' | 'user'; entityId: string; table: 'merchants' | 'users' } {
@@ -34,10 +34,19 @@ export function determineEscrowPayer(order: {
   if (isM2M) {
     // M2M: merchant_id is ALWAYS the seller (locks escrow). buyer_merchant_id is ALWAYS the buyer.
     // Matches SQL role resolution — type does NOT affect M2M role assignment.
+    if (!order.merchant_id) {
+      // M2M BUY broadcast awaiting a seller to claim — escrow cannot be locked
+      // before the seller slot is filled. Fail loudly rather than silently
+      // inserting a NULL account_id into the ledger.
+      throw new Error('ESCROW_SELLER_UNRESOLVED: M2M BUY broadcast has no merchant_id yet — seller must claim before escrow can lock');
+    }
     return { entityType: 'merchant', entityId: order.merchant_id, table: 'merchants' };
   }
   if (order.type === 'buy') {
     // User buying crypto: merchant (seller) locks escrow
+    if (!order.merchant_id) {
+      throw new Error('ESCROW_SELLER_UNRESOLVED: BUY order has no merchant_id');
+    }
     return { entityType: 'merchant', entityId: order.merchant_id, table: 'merchants' };
   }
   // User selling crypto: user locks escrow

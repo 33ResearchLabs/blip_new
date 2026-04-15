@@ -49,7 +49,9 @@ export interface OrderEventPayload {
   actorType: string;
   actorId: string;
   userId: string;
-  merchantId: string;
+  // NULL for unclaimed M2M BUY broadcasts (seller slot not yet filled).
+  // Downstream listeners (pusher, ws/broadcast, notifications) must guard null.
+  merchantId: string | null;
   buyerMerchantId?: string;
 
   // ── Order snapshot (the full row after the transition) ──

@@ -190,15 +190,23 @@ export async function PATCH(
         [id]
       );
       if (!targetOrder) return notFoundResponse("Order");
-      // Anti-hijack: only block if M2M buyer slot is already taken by someone else.
+      // Anti-hijack: only block when there's no claimable slot left for the actor.
       //
-      // For non-M2M orders, merchant_id may be pre-assigned (the seller on SELL orders,
-      // or the matched merchant on BUY orders). The accept handler in updateOrderStatus
-      // reassigns merchant_id when isMerchantClaiming is true — so we must NOT block here.
+      // Shapes:
+      //   M2M SELL broadcast: merchant_id=creator(seller), bmerch=null  → open slot = buyer
+      //   M2M BUY  broadcast: merchant_id=null,           bmerch=creator → open slot = seller
+      //   Fully claimed M2M:  both set with different merchants → no slot for a third party
+      //   U2M / pre-assigned: merchant_id set, bmerch=null (handled by updateOrderStatus
+      //                       which reassigns merchant_id on isMerchantClaiming=true)
       //
-      // For M2M orders (buyer_merchant_id is set), block if a different buyer already claimed.
-      // This prevents a second merchant from hijacking an already-claimed M2M order.
-      if (targetOrder.buyer_merchant_id && targetOrder.buyer_merchant_id !== auth.actorId) {
+      // Block only when BOTH slots are taken by other merchants. A filled buyer
+      // slot by itself must not block a seller-slot claim (the M2M BUY broadcast
+      // case — otherwise no seller can ever claim it).
+      const buyerFilledByOther =
+        !!targetOrder.buyer_merchant_id && targetOrder.buyer_merchant_id !== auth.actorId;
+      const sellerFilledByOther =
+        !!targetOrder.merchant_id && targetOrder.merchant_id !== auth.actorId;
+      if (buyerFilledByOther && sellerFilledByOther) {
         return forbiddenResponse("Order already assigned to another merchant");
       }
     } else {

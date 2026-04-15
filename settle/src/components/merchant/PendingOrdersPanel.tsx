@@ -82,9 +82,14 @@ function getViewerSide(
     if (myId && db.merchant_id === myId) return "seller";
     if (myId && db.buyer_merchant_id === myId) return "buyer";
     // Observer on M2M — which role would they claim?
+    //   • merchant_id set + bmerch null  → seller slot filled, observer would claim buyer
+    //   • merchant_id null + bmerch set  → buyer slot filled,  observer would claim seller
+    //   • both null (legacy broadcast pre-shape-fix) → fall back to user-perspective type:
+    //     type='buy'  (placeholder=buyer → creator=seller) → observer would claim buyer
+    //     type='sell' (placeholder=seller → creator=buyer) → observer would claim seller
     if (db.merchant_id && !db.buyer_merchant_id) return "buyer";
     if (!db.merchant_id && db.buyer_merchant_id) return "seller";
-    return "seller";
+    return orderType === "buy" ? "buyer" : "seller";
   }
 
   // U2M: role by type. For the merchant slot, BUY → seller, SELL → buyer.

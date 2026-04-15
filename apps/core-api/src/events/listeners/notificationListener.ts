@@ -63,16 +63,28 @@ export function registerNotificationListener(): void {
     const repReason = `Order ${p.orderNumber || p.orderId} ${p.newStatus}`;
     const repMeta = JSON.stringify({ order_id: p.orderId });
 
-    bufferReputation({ entity_id: p.merchantId, entity_type: 'merchant', event_type: repType, score_change: repScore, reason: repReason, metadata: repMeta });
+    // Skip merchant scoring when merchantId is null — unclaimed M2M BUY
+    // broadcasts that expire/cancel before a seller claims have no merchant
+    // counterparty to score. Score the buyer_merchant_id (creator) instead
+    // if this was their broadcast.
+    if (p.merchantId) {
+      bufferReputation({ entity_id: p.merchantId, entity_type: 'merchant', event_type: repType, score_change: repScore, reason: repReason, metadata: repMeta });
+    } else if (p.buyerMerchantId) {
+      bufferReputation({ entity_id: p.buyerMerchantId, entity_type: 'merchant', event_type: repType, score_change: repScore, reason: repReason, metadata: repMeta });
+    }
     bufferReputation({ entity_id: p.userId, entity_type: 'user', event_type: repType, score_change: repScore, reason: repReason, metadata: repMeta });
 
     // Fire reputation recalculation (circuit-breaker-protected)
     const settleUrl = process.env.SETTLE_URL || 'http://localhost:3000';
+    const reputationMerchantId = p.merchantId || p.buyerMerchantId;
     withCircuitBreaker('reputation_api', async () => {
-      await Promise.allSettled([
-        fetch(`${settleUrl}/api/reputation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entityId: p.merchantId, entityType: 'merchant' }) }),
+      const calls: Promise<unknown>[] = [
         fetch(`${settleUrl}/api/reputation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entityId: p.userId, entityType: 'user' }) }),
-      ]);
+      ];
+      if (reputationMerchantId) {
+        calls.push(fetch(`${settleUrl}/api/reputation`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entityId: reputationMerchantId, entityType: 'merchant' }) }));
+      }
+      await Promise.allSettled(calls);
     }).catch((err) => {
       if (err instanceof CircuitBreakerError) {
         logger.warn('[NotificationListener] Reputation API circuit open — skipping', { orderId: p.orderId });
@@ -81,8 +93,14 @@ export function registerNotificationListener(): void {
     });
   });
 
-  // Stats update on completion
+  // Stats update on completion. A completed order always has merchant_id set
+  // (a seller claimed — the M2M BUY broadcast shape with merchant_id=NULL can
+  // only exist in pending/expired/cancelled states), but guard just in case.
   orderBus.safeOn(ORDER_EVENT.COMPLETED, (p: OrderEventPayload) => {
+    if (!p.merchantId) {
+      logger.warn('[NotificationListener] COMPLETED event with null merchantId — skipping stats update', { orderId: p.orderId });
+      return;
+    }
     dbQuery(
       `WITH u AS (UPDATE users SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $2 RETURNING 1)
        UPDATE merchants SET total_trades = total_trades + 1, total_volume = total_volume + $1 WHERE id = $3`,

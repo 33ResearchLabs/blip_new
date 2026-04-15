@@ -9,7 +9,9 @@ import { pusherNotifyOrderStatus, pusherNotifyOrderCancelled, pusherNotifyOrderC
 import { logger } from 'settlement-core';
 
 export function registerBroadcastListener(): void {
-  // WebSocket broadcast on every status change
+  // WebSocket broadcast on every status change.
+  // merchantId may be null for unclaimed M2M BUY broadcasts — coerce to
+  // undefined so the downstream BroadcastPayload type (optional string) is happy.
   orderBus.safeOn(ORDER_EVENT.STATUS_CHANGED, (p: OrderEventPayload) => {
     broadcastOrderEvent({
       event_type: `ORDER_${p.newStatus.toUpperCase()}`,
@@ -18,7 +20,7 @@ export function registerBroadcastListener(): void {
       minimal_status: p.minimalStatus,
       order_version: p.orderVersion,
       userId: p.userId,
-      merchantId: p.merchantId,
+      merchantId: p.merchantId ?? undefined,
       buyerMerchantId: p.buyerMerchantId,
       previousStatus: p.previousStatus,
     });

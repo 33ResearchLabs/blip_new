@@ -64,6 +64,10 @@ interface OrderRow {
 
 interface CreateOrderPayload {
   user_id: string;
+  // Nullable at runtime for M2M BUY self-broadcasts where a seller has not yet
+  // claimed the order — the seller is filled in via the M2M acceptance path.
+  // Typed as string (not string|null) to avoid a wide TS refactor; the INSERT
+  // path tolerates null explicitly (see escrow_debited guard below).
   merchant_id: string;
   offer_id: string;
   type: 'buy' | 'sell';
@@ -169,7 +173,12 @@ function buildOrderInsertParams(data: CreateOrderPayload & { corridor_id?: strin
     //   sell order → user funded escrow, buy order → merchant funded escrow
     const isM2M = !!data.buyer_merchant_id;
     if (isM2M) {
-      // M2M: merchant_id is always the seller (escrow funder)
+      // M2M: merchant_id is always the seller (escrow funder). An M2M BUY
+      // broadcast where the seller hasn't claimed yet has merchant_id=NULL —
+      // it should never arrive here with a pre-locked escrow_tx_hash.
+      if (!data.merchant_id) {
+        throw new Error('INVALID_ESCROW_STATE: M2M order has escrow_tx_hash but no seller (merchant_id) assigned');
+      }
       fields.push('escrow_debited_entity_type', 'escrow_debited_entity_id', 'escrow_debited_amount', 'escrow_debited_at');
       values.push('merchant', data.merchant_id, data.crypto_amount, new Date());
     } else if (data.type === 'sell') {
@@ -283,7 +292,7 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
           event: ORDER_EVENT.CREATED,
           orderId: order.id, previousStatus: '', newStatus: String(order.status),
           actorType: 'system', actorId: data.merchant_id || data.user_id,
-          userId: data.user_id, merchantId: data.merchant_id || undefined, buyerMerchantId: data.buyer_merchant_id,
+          userId: data.user_id, merchantId: data.merchant_id || null, buyerMerchantId: data.buyer_merchant_id,
           order: order as unknown as Record<string, unknown>,
           orderVersion: order.order_version || 1, minimalStatus: normalizeStatus(order.status as any),
         });
@@ -321,12 +330,18 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
     '/merchant/orders',
     async (request, reply) => {
       const data = request.body;
-      const actorId = data.merchant_id;
+      // Creating merchant = merchant_id OR buyer_merchant_id depending on the
+      // M2M shape. For an M2M BUY self-broadcast the creator is the buyer, so
+      // merchant_id is null until a seller claims — fall through to
+      // buyer_merchant_id to identify the actor for idempotency / logging.
+      const actorId = data.merchant_id || data.buyer_merchant_id || '';
 
-      if (!data.user_id || !data.merchant_id || !data.offer_id) {
+      // At least one merchant slot must be populated so we know who initiated
+      // the order. user_id and offer_id remain mandatory.
+      if (!data.user_id || !data.offer_id || (!data.merchant_id && !data.buyer_merchant_id)) {
         return reply.status(400).send({
           success: false,
-          error: 'user_id, merchant_id, and offer_id are required',
+          error: 'user_id, offer_id, and one of merchant_id / buyer_merchant_id are required',
         });
       }
 

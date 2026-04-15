@@ -368,16 +368,39 @@ export async function POST(request: NextRequest) {
     // - 'buy' = merchant buys USDC → order type is 'sell' (user perspective)
     const orderType = type === 'sell' ? 'buy' : 'sell';
 
-    const orderMerchantId = isM2MTrade ? target_merchant_id : merchant_id;
-    const buyerMerchantId = isM2MTrade ? merchant_id : undefined;
+    // Slot assignment per CLAUDE.md M2M invariant (merchant_id=ALWAYS seller,
+    // buyer_merchant_id=ALWAYS buyer):
+    //   targeted M2M:      creator is buyer → merchant_id=target, bmerch=creator
+    //   self-broadcast SELL (merchant sells): creator is seller → merchant_id=creator, bmerch=null
+    //   self-broadcast BUY  (merchant buys):  creator is buyer  → merchant_id=null,    bmerch=creator
+    // The `merchant_id IS NULL` shape is picked up by getAllPendingOrdersForMerchant
+    // (orders.ts:457) and the M2M acceptance path (orders.ts:910-931 / 955-972),
+    // which sets merchant_id=acceptor on claim.
+    const creatorIsSeller = type === 'sell';
+
+    // Defensive: only sellers lock escrow. A BUY-intent self-broadcast has the
+    // creator as buyer, so escrow_tx_hash must not be present at creation —
+    // the seller will claim and lock later. Reject rather than silently
+    // writing a NULL funder to the ledger.
+    if (!isM2MTrade && !creatorIsSeller && escrow_tx_hash) {
+      return validationErrorResponse([
+        'escrow_tx_hash is not allowed on buy-intent broadcasts — the seller locks escrow on claim',
+      ]);
+    }
+
+    const orderMerchantId: string | null = isM2MTrade
+      ? target_merchant_id
+      : (creatorIsSeller ? merchant_id : null);
+    const buyerMerchantId: string | undefined = isM2MTrade
+      ? merchant_id
+      : (creatorIsSeller ? undefined : merchant_id);
 
     // Resolve the seller's payment method so the buyer knows where to send fiat.
-    // Seller (merchant_id at DB level) = the creating merchant for non-M2M sell
-    // orders (orderType='buy'). Without this, the merchant_payment_method_id
-    // column stays NULL and the buyer merchant sees no bank details.
-    // Prefer the explicit id picked in the config panel; fall back to default.
+    // Only meaningful when a seller is already assigned (orderMerchantId set).
+    // For self-broadcast BUY (orderMerchantId=null), the seller claims later and
+    // brings their own payment method at claim time.
     let sellerPaymentMethodId: string | undefined;
-    if (!isM2MTrade && orderType === 'buy') {
+    if (!isM2MTrade && creatorIsSeller) {
       if (requestedPmId) {
         const owned = await getMerchantPaymentMethods(merchant_id);
         if (owned.some((pm) => pm.id === requestedPmId)) {
@@ -390,10 +413,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get merchant's first active offer ID (required by DB schema, but not used for matching)
+    // Get an active offer ID for metadata (payment_method, rate). For self-broadcast
+    // BUY, no seller exists yet — fall back to the creator's offers so the order card
+    // still renders rate/method metadata. The offer's ownership isn't used downstream
+    // for role resolution.
+    const offerLookupMerchantId = orderMerchantId ?? merchant_id;
     let fallbackOfferId: string | null = null;
     try {
-      const merchantOffers = await getMerchantOffers(orderMerchantId);
+      const merchantOffers = await getMerchantOffers(offerLookupMerchantId);
       const activeOffer = merchantOffers.find(o => o.is_active);
       fallbackOfferId = activeOffer?.id || merchantOffers[0]?.id || null;
     } catch {
@@ -440,10 +467,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Invalidate creating merchant's order list cache
+    // Invalidate creating merchant's order list cache.
+    // For self-broadcast BUY (orderMerchantId=null), invalidate the buyer merchant's cache
+    // instead — that's the creator whose list just got a new order.
     if (response.status < 400) {
       const { invalidateMerchantOrderListCache } = await import('@/lib/cache/cacheService');
-      await invalidateMerchantOrderListCache(orderMerchantId);
+      const cacheInvalidationId = orderMerchantId ?? buyerMerchantId ?? merchant_id;
+      if (cacheInvalidationId) {
+        await invalidateMerchantOrderListCache(cacheInvalidationId);
+      }
     }
 
     // Pusher notifications are now triggered by Core API directly

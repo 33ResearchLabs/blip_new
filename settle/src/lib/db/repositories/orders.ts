@@ -1126,6 +1126,29 @@ export async function updateOrderStatus(
         });
       }
 
+      // ── Inline receipt creation on ACCEPT claim transitions ─────────────
+      // core-api's ORDER_EVENT.ACCEPTED listener is supposed to enqueue a
+      // CREATE_RECEIPT BullMQ job, but in practice the async path can drop
+      // the enqueue (observed: outbox event processed, WS broadcast sent, but
+      // no receipt job picked up by the worker — Redis/BullMQ black hole).
+      // Mirror the pattern claimOrder() already uses: insert the receipt
+      // atomically with the accept so the claim and its receipt commit
+      // together. ON CONFLICT (order_id) DO NOTHING handles the race where
+      // the async listener succeeds and also tries to insert.
+      const isAcceptClaim =
+        (newStatus === 'accepted' || newStatus === 'payment_pending') &&
+        (isMerchantClaiming || isM2MAcceptance);
+      if (isAcceptClaim) {
+        try {
+          await insertReceiptForClaim(client, updatedOrder, actorId);
+        } catch (receiptErr) {
+          logger.warn('[updateOrderStatus] Inline receipt insert failed — accept still succeeds', {
+            orderId,
+            error: receiptErr instanceof Error ? receiptErr.message : String(receiptErr),
+          });
+        }
+      }
+
       // Handle side effects: stats update on completion
       if (newStatus === 'completed') {
         await client.query(

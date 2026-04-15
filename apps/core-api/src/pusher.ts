@@ -80,7 +80,10 @@ async function triggerEvent(channels: string | string[], event: string, data: un
 export interface OrderStatusPayload {
   orderId: string;
   userId: string;
-  merchantId: string;
+  // NULL for unclaimed M2M BUY broadcasts (seller slot not yet filled).
+  // Per-merchant channel push is skipped when this is null/empty so we don't
+  // emit to a ghost channel like `private-merchant-null`.
+  merchantId: string | null;
   buyerMerchantId?: string;
   status: string;
   minimal_status: string;
@@ -98,8 +101,10 @@ export function pusherNotifyOrderStatus(payload: OrderStatusPayload): void {
   const channels = [
     getOrderChannel(payload.orderId),
     getUserChannel(payload.userId),
-    getMerchantChannel(payload.merchantId),
   ];
+  if (payload.merchantId) {
+    channels.push(getMerchantChannel(payload.merchantId));
+  }
   if (payload.buyerMerchantId) {
     channels.push(getMerchantChannel(payload.buyerMerchantId));
   }
@@ -127,8 +132,10 @@ export function pusherNotifyOrderCancelled(payload: OrderStatusPayload): void {
   const channels = [
     getOrderChannel(payload.orderId),
     getUserChannel(payload.userId),
-    getMerchantChannel(payload.merchantId),
   ];
+  if (payload.merchantId) {
+    channels.push(getMerchantChannel(payload.merchantId));
+  }
   if (payload.buyerMerchantId) {
     channels.push(getMerchantChannel(payload.buyerMerchantId));
   }

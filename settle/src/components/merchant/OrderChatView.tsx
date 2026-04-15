@@ -45,6 +45,26 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
     markAsRead(chatWindowForRead.id);
   }, [chatWindowForRead, chatWindowForRead?.messages.length, markAsRead]);
 
+  // Initial-load gate: flip false once the first fetchMessages round-trip
+  // has had a chance to complete. Without this, `messages.length === 0`
+  // was used as the loading flag — which never turned false for chats
+  // that legitimately have no messages yet, producing an infinite spinner.
+  const [initialLoadPending, setInitialLoadPending] = useState(true);
+  useEffect(() => {
+    setInitialLoadPending(true);
+    const t = setTimeout(() => setInitialLoadPending(false), 800);
+    return () => clearTimeout(t);
+  }, [orderId]);
+  // As soon as any message lands, stop showing the spinner — this covers
+  // the common case of chats that do have history and shouldn't wait
+  // the full 800ms to render.
+  useEffect(() => {
+    const win = chatWindows.find(w => w.orderId === orderId);
+    if (win && win.messages.length > 0 && initialLoadPending) {
+      setInitialLoadPending(false);
+    }
+  }, [chatWindows, orderId, initialLoadPending]);
+
   // Track order status to gate chat input on terminal statuses
   const [orderStatus, setOrderStatus] = useState<string | null>(null);
   useEffect(() => {
@@ -141,7 +161,7 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
             typingActorType={chatWindow.typingActorType}
             presence={chatWindow.presence}
             isFrozen={chatWindow.isFrozen}
-            isLoading={chatWindow.messages.length === 0}
+            isLoading={initialLoadPending && chatWindow.messages.length === 0}
             disabled={isChatClosed}
             chatEnabled={!isChatClosed}
             chatReason={closedReason}
