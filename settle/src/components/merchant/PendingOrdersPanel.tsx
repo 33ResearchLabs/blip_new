@@ -54,20 +54,44 @@ interface PendingOrdersPanelProps {
 // Compute which side ('seller' | 'buyer') the viewing merchant is on for
 // this order — either their current role, or the role they'd take if they
 // claimed the broadcast. Used to flip YOU PAY / YOU RECEIVE labels.
+//
+// CLAUDE.md role table (authoritative):
+//   U2M BUY    user_id=buyer,  merchant_id=seller, buyer_merchant_id=—
+//   U2M SELL   user_id=seller, merchant_id=buyer,  buyer_merchant_id=—
+//   M2M any    user_id=placeholder, merchant_id=seller, buyer_merchant_id=buyer
+//
+// The old implementation treated `merchant_id === myId` as ALWAYS seller,
+// which inverted U2M SELL (merchant is buyer there) — producing swapped
+// YOU PAY / YOU RECEIVE labels on those cards.
 function getViewerSide(
   db: any,
   myId: string | null | undefined,
 ): "seller" | "buyer" {
   if (!db) return "seller";
-  if (myId && db.merchant_id === myId) return "seller";
-  if (myId && db.buyer_merchant_id === myId) return "buyer";
 
-  // Observer — which side would they take on accept?
-  if (db.merchant_id && !db.buyer_merchant_id) return "buyer";
-  if (!db.merchant_id && db.buyer_merchant_id) return "seller";
-
-  // Fallback for U2M (both slots set/unset): merchant is seller on BUY, buyer on SELL.
+  const userIsPlaceholder =
+    typeof db.user?.username === "string" &&
+    (db.user.username.startsWith("open_order_") ||
+      db.user.username.startsWith("m2m_"));
+  const isM2M = userIsPlaceholder || !!db.buyer_merchant_id;
   const orderType = String(db.type || "").toLowerCase();
+
+  if (isM2M) {
+    // M2M: role by slot. merchant_id is always seller, buyer_merchant_id
+    // is always buyer, regardless of the `type` column.
+    if (myId && db.merchant_id === myId) return "seller";
+    if (myId && db.buyer_merchant_id === myId) return "buyer";
+    // Observer on M2M — which role would they claim?
+    if (db.merchant_id && !db.buyer_merchant_id) return "buyer";
+    if (!db.merchant_id && db.buyer_merchant_id) return "seller";
+    return "seller";
+  }
+
+  // U2M: role by type. For the merchant slot, BUY → seller, SELL → buyer.
+  if (myId && db.merchant_id === myId) {
+    return orderType === "buy" ? "seller" : "buyer";
+  }
+  // Observer on U2M — they would take the merchant slot's role on accept.
   return orderType === "buy" ? "seller" : "buyer";
 }
 
@@ -508,7 +532,8 @@ const OrderList = memo(function OrderList({
                       // name with no arrow or "—" on the empty side). Last
                       // resort: the list-row `order.user` if neither party
                       // resolved (very rare — observer view of a broken row).
-                      const soloName = sellerDisp || buyerDisp || order.user || null;
+                      const soloName =
+                        sellerDisp || buyerDisp || order.user || null;
                       const avatarChar = (soloName || "U")
                         .charAt(0)
                         .toUpperCase();
@@ -537,7 +562,11 @@ const OrderList = memo(function OrderList({
                             ) : (
                               <span
                                 className={`whitespace-nowrap ${soloName ? "" : "text-foreground/40"}`}
-                                title={soloName ? `Placed by ${soloName}` : "No counterparty yet"}
+                                title={
+                                  soloName
+                                    ? `Placed by ${soloName}`
+                                    : "No counterparty yet"
+                                }
                               >
                                 {soloName || "—"}
                               </span>
@@ -1840,18 +1869,28 @@ const MyOrdersList = memo(function MyOrdersList({
                 <span className="flex items-center gap-1 text-[12px] font-semibold text-white min-w-0">
                   {leftName && rightName ? (
                     <>
-                      <span className="whitespace-nowrap" title={`Seller: ${leftName}`}>
+                      <span
+                        className="whitespace-nowrap"
+                        title={`Seller: ${leftName}`}
+                      >
                         {leftName}
                       </span>
                       <ArrowRight className="w-3 h-3 text-foreground/40 shrink-0" />
-                      <span className="whitespace-nowrap" title={`Buyer: ${rightName}`}>
+                      <span
+                        className="whitespace-nowrap"
+                        title={`Buyer: ${rightName}`}
+                      >
                         {rightName}
                       </span>
                     </>
                   ) : (
                     <span
-                      className={`whitespace-nowrap ${(leftName || rightName) ? "" : "text-foreground/40"}`}
-                      title={leftName || rightName ? `Placed by ${leftName || rightName}` : "No counterparty yet"}
+                      className={`whitespace-nowrap ${leftName || rightName ? "" : "text-foreground/40"}`}
+                      title={
+                        leftName || rightName
+                          ? `Placed by ${leftName || rightName}`
+                          : "No counterparty yet"
+                      }
                     >
                       {leftName || rightName || "—"}
                     </span>
