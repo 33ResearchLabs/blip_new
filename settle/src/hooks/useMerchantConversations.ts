@@ -87,6 +87,30 @@ export function useMerchantConversations() {
     fetchOrderConversations();
   }, [merchantId, fetchOrderConversations]);
 
+  // Safety-net retry: after the initial mount fetches, if we're still showing
+  // zero conversations AND have a merchantId, the initial fetch likely got
+  // aborted (session race) or silently failed (fetch cancelled by the
+  // browser). Fire ONE additional fetch after 2s to recover. Bailout: once we
+  // get any data, or after 2 retries, stop — avoids hammering the API on
+  // accounts that genuinely have no chats.
+  const retryCountRef = useRef(0);
+  useEffect(() => {
+    if (!merchantId) {
+      retryCountRef.current = 0;
+      return;
+    }
+    if (orderConversations.length > 0) {
+      retryCountRef.current = 0;
+      return;
+    }
+    if (retryCountRef.current >= 2) return;
+    const timer = setTimeout(() => {
+      retryCountRef.current += 1;
+      fetchOrderConversations();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [merchantId, orderConversations.length, fetchOrderConversations]);
+
   // Polling fallback when Pusher is not connected (15s interval)
   const isPusherConnected = !!(pusher as any)?.isConnected;
   useEffect(() => {

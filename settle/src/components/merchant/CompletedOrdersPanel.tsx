@@ -108,24 +108,29 @@ function TransactionCard({
   const orderNumber: string = order.dbOrder?.order_number || "";
 
   // Fee calculation — net amount after platform fee
-  const feePercent = order.protocolFeePercent
-    ?? parseFloat(String(order.dbOrder?.protocol_fee_percentage ?? 0));
+  const feePercent =
+    order.protocolFeePercent ??
+    parseFloat(String(order.dbOrder?.protocol_fee_percentage ?? 0));
   const feeAmount = cryptoAmount * (feePercent / 100);
   const netCryptoAmount = cryptoAmount - feeAmount;
-  const netFiatAmount = fiatAmount - (fiatAmount * (feePercent / 100));
+  const netFiatAmount = fiatAmount - fiatAmount * (feePercent / 100);
 
   // Merchant perspective: order type is from user's view.
   // buy order = user buys, merchant SELLS (crypto goes out, fiat comes in)
   // sell order = user sells, merchant BUYS (crypto comes in, fiat goes out)
   const isBuy = orderType === "buy";
   const isSell = orderType === "sell";
-  const merchantSold = isBuy;   // merchant sold crypto, got fiat
+  const merchantSold = isBuy; // merchant sold crypto, got fiat
   const merchantBought = isSell; // merchant bought crypto, paid fiat
 
   // Show what the merchant GOT (net after fee)
   // Sold: merchant got fiat (net) → show fiat in green
   // Bought: merchant got crypto (net) → show crypto in green
-  const Icon = merchantBought ? ArrowDownLeft : merchantSold ? ArrowUpRight : Repeat;
+  const Icon = merchantBought
+    ? ArrowDownLeft
+    : merchantSold
+      ? ArrowUpRight
+      : Repeat;
   const tagLabel = merchantSold ? "SELL" : merchantBought ? "BUY" : "TRADE";
   const tagCls = merchantSold
     ? "bg-[var(--color-error)]/10 text-[var(--color-error)]"
@@ -140,8 +145,12 @@ function TransactionCard({
       className="group w-full text-left flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-foreground/[0.04] transition-colors active:scale-[0.99]"
     >
       {/* Icon */}
-      <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${isBuy ? 'bg-emerald-500/10' : isSell ? 'bg-red-500/10' : 'bg-foreground/[0.05]'}`}>
-        <Icon className={`w-3.5 h-3.5 ${isBuy ? 'text-emerald-400' : isSell ? 'text-red-400' : 'text-foreground/50'}`} />
+      <div
+        className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${isBuy ? "bg-emerald-500/10" : isSell ? "bg-red-500/10" : "bg-foreground/[0.05]"}`}
+      >
+        <Icon
+          className={`w-3.5 h-3.5 ${isBuy ? "text-emerald-400" : isSell ? "text-red-400" : "text-foreground/50"}`}
+        />
       </div>
 
       {/* Middle: name + order + time */}
@@ -150,7 +159,9 @@ function TransactionCard({
           <span className="text-[11px] font-semibold text-foreground truncate">
             {order.user || "Unknown"}
           </span>
-          <span className={`text-[8px] font-bold px-1 py-[1px] rounded ${tagCls}`}>
+          <span
+            className={`text-[8px] font-bold px-1 py-[1px] rounded ${tagCls}`}
+          >
             {tagLabel}
           </span>
         </div>
@@ -194,7 +205,8 @@ function TransactionCard({
             </span>
             {feeAmount > 0.0001 ? (
               <span className="text-[9px] text-foreground/30 font-mono tabular-nums">
-                {Math.round(cryptoAmount).toLocaleString()} − {feeAmount.toFixed(2)} fee
+                {Math.round(cryptoAmount).toLocaleString()} −{" "}
+                {feeAmount.toFixed(2)} fee
               </span>
             ) : null}
             <span className="text-[9px] text-foreground/30 font-mono tabular-nums">
@@ -239,7 +251,9 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({
     for (const o of orders) {
       const orderType = o.orderType || o.dbOrder?.type;
       const amount = o.amount || 0;
-      const feePercent = o.protocolFeePercent ?? parseFloat(String(o.dbOrder?.protocol_fee_percentage ?? 0));
+      const feePercent =
+        o.protocolFeePercent ??
+        parseFloat(String(o.dbOrder?.protocol_fee_percentage ?? 0));
       const fee = amount * (feePercent / 100);
       map.set(o.id, running);
       // Work backwards: reverse the effect of this trade
@@ -248,7 +262,7 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({
         running += amount;
       } else {
         // Merchant bought crypto: balance went up by (amount - fee)
-        running -= (amount - fee);
+        running -= amount - fee;
       }
     }
     return map;
@@ -272,7 +286,7 @@ export const CompletedOrdersPanel = memo(function CompletedOrdersPanel({
       items,
     }));
   }, [orders]);
-
+  console.log(orders);
   return (
     <div className={`flex flex-col ${collapsed ? "" : "h-full"}`}>
       {/* Header */}
