@@ -37,6 +37,8 @@ import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { MerchantModals } from "@/components/merchant/MerchantModals";
 import { MerchantDesktopLayout } from "@/components/merchant/MerchantDesktopLayout";
+import { MerchantTour } from "@/components/merchant/MerchantTour";
+import { useMerchantTour } from "@/hooks/useMerchantTour";
 import { MerchantMobileContent } from "@/components/merchant/MerchantMobileContent";
 
 export default function MerchantDashboard() {
@@ -47,6 +49,9 @@ export default function MerchantDashboard() {
   const merchantInfo = useMerchantStore((s) => s.merchantInfo);
   const isLoggedIn = useMerchantStore((s) => s.isLoggedIn);
   const isLoading = useMerchantStore((s) => s.isLoading);
+
+  // Onboarding tour — env-controlled, shows once per merchant on first login
+  const tour = useMerchantTour(merchantId);
 
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showWalletPrompt, setShowWalletPrompt] = useState(false);
@@ -107,6 +112,7 @@ export default function MerchantDashboard() {
     tradeType: "sell" as "buy" | "sell",
     cryptoAmount: "",
     paymentMethod: "bank" as "bank" | "cash",
+    paymentMethodId: undefined as string | undefined,
     spreadPreference: "fastest" as "best" | "fastest" | "cheap",
     expiryMinutes: 15 as 15 | 90,
   });
@@ -726,6 +732,9 @@ export default function MerchantDashboard() {
       className="h-screen bg-background text-white flex flex-col overflow-hidden"
     >
       <NotificationToastContainer position="top-right" />
+      {tour.enabled && (
+        <MerchantTour run={tour.isRunning} onComplete={tour.completeTour} />
+      )}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-1/3 w-[600px] h-[400px] bg-white/[0.02] rounded-full blur-[150px]" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-white/[0.01] rounded-full blur-[200px]" />

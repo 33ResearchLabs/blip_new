@@ -24,3 +24,6 @@ export * from './config/mockMode';
 
 // Utils
 export * from './utils/logger';
+
+// Error tracking (additive — feature-flagged via ENABLE_ERROR_TRACKING)
+export * from './errorTracking/logger';

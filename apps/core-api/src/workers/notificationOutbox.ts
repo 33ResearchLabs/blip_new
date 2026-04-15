@@ -332,7 +332,23 @@ export function startOutboxWorker(): void {
   const poll = async () => {
     if (!isRunning) return;
 
-    await processBatch();
+    try {
+      await processBatch();
+    } catch (err) {
+      // Observability only — log but keep polling so a transient failure
+      // doesn't take the worker offline.
+      try {
+        const { safeLog } = await import('settlement-core');
+        const e = err as { message?: string; stack?: string };
+        safeLog({
+          type: 'worker.tick_failed.notification_outbox',
+          severity: 'ERROR',
+          message: `Outbox processBatch failed: ${e?.message || String(err)}`,
+          source: 'worker',
+          metadata: { stack: e?.stack?.slice(0, 4000) },
+        });
+      } catch { /* swallow */ }
+    }
     tickCount++;
 
     // Summary log every 30s

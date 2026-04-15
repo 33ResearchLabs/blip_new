@@ -12,6 +12,7 @@ import {
   Target,
   Clock,
   ArrowRight,
+  ArrowRightLeft,
   Flame,
   ChevronDown,
   Check,
@@ -28,6 +29,10 @@ import { CountdownRing } from "./CountdownRing";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { useSounds } from "@/hooks/useSounds";
+import {
+  InfoTooltip,
+  type InfoTooltipItem,
+} from "@/components/shared/InfoTooltip";
 
 interface PendingOrdersPanelProps {
   orders: any[];
@@ -44,6 +49,51 @@ interface PendingOrdersPanelProps {
   onLoadMore?: () => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
+}
+
+// Compute which side ('seller' | 'buyer') the viewing merchant is on for
+// this order — either their current role, or the role they'd take if they
+// claimed the broadcast. Used to flip YOU PAY / YOU RECEIVE labels.
+function getViewerSide(
+  db: any,
+  myId: string | null | undefined,
+): "seller" | "buyer" {
+  if (!db) return "seller";
+  if (myId && db.merchant_id === myId) return "seller";
+  if (myId && db.buyer_merchant_id === myId) return "buyer";
+
+  // Observer — which side would they take on accept?
+  if (db.merchant_id && !db.buyer_merchant_id) return "buyer";
+  if (!db.merchant_id && db.buyer_merchant_id) return "seller";
+
+  // Fallback for U2M (both slots set/unset): merchant is seller on BUY, buyer on SELL.
+  const orderType = String(db.type || "").toLowerCase();
+  return orderType === "buy" ? "seller" : "buyer";
+}
+
+// Resolve seller/buyer display names from the raw DB order. Falls back to
+// null on each side when the party hasn't claimed / is a placeholder.
+function getPartyNames(db: any): {
+  seller: string | null;
+  buyer: string | null;
+} {
+  if (!db) return { seller: null, buyer: null };
+  const userIsPlaceholder =
+    typeof db.user?.username === "string" &&
+    (db.user.username.startsWith("open_order_") ||
+      db.user.username.startsWith("m2m_"));
+  const userName = userIsPlaceholder
+    ? null
+    : db.user?.name || db.user?.username || null;
+  const merchantName = db.merchant?.display_name || null;
+  const buyerMerchantName = db.buyer_merchant?.display_name || null;
+
+  const isM2M = !!db.buyer_merchant_id;
+  if (isM2M) return { seller: merchantName, buyer: buyerMerchantName };
+
+  const orderType = String(db.type || "").toLowerCase();
+  if (orderType === "buy") return { seller: merchantName, buyer: userName };
+  return { seller: userName, buyer: merchantName };
 }
 
 // ─── Virtualized order list (renders only visible rows) ──────────
@@ -372,6 +422,11 @@ const OrderList = memo(function OrderList({
             : !!order.isMyOrder ||
               (isPlaceholderUser && order.orderMerchantId === merchantInfo?.id);
 
+          const effStatusForDot: string =
+            order.status || order.dbOrder?.status || "pending";
+          const isActivelyPendingForDot =
+            effStatusForDot === "pending" && order.expiresIn > 0;
+
           return (
             <div
               key={order.id}
@@ -386,24 +441,32 @@ const OrderList = memo(function OrderList({
               }}
               className="pb-1"
             >
+              {/* Live pulse dot — sits exactly on the card's top-left corner.
+                  Rendered OUTSIDE the overflow-hidden inner wrapper so the
+                  pinging halo isn't clipped. */}
+              {isActivelyPendingForDot && (
+                <span className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 flex h-2.5 w-2.5 z-20 pointer-events-none">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-60 animate-ping" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
+                </span>
+              )}
               <div
                 data-testid={`order-card-${order.id}`}
                 onClick={() => onSelectOrder(order)}
-                className={`relative p-2.5 rounded-lg border transition-colors cursor-pointer ${
+                className={`group relative p-3 rounded-xl border transition-all cursor-pointer overflow-hidden ${
                   isMyOwnOrder
-                    ? "bg-white/[0.01] border-foreground/[0.04] opacity-50"
+                    ? "bg-foreground/[0.01] border-foreground/[0.04] opacity-50"
                     : isMineable
-                      ? "glass-card border-white/[0.10] hover:border-primary/30 ring-1 ring-white/[0.04]"
+                      ? "bg-gradient-to-br from-foreground/[0.04] via-foreground/[0.02] to-transparent border-foreground/[0.08] hover:border-primary/40 hover:shadow-lg hover:shadow-primary/[0.05] ring-1 ring-white/[0.03]"
                       : isHighPremium
-                        ? "glass-card border-foreground/[0.08] hover:border-border-strong"
-                        : "glass-card hover:border-foreground/[0.08]"
+                        ? "bg-gradient-to-br from-foreground/[0.03] to-transparent border-foreground/[0.08] hover:border-foreground/[0.15] hover:shadow-lg hover:shadow-black/20"
+                        : "bg-gradient-to-br from-foreground/[0.02] to-transparent border-foreground/[0.06] hover:border-foreground/[0.12] hover:shadow-md hover:shadow-black/20"
                 }`}
               >
-                {/* Live pulse dot */}
-                <span className="absolute -top-1 -left-1 flex h-2.5 w-2.5 z-20">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-75 animate-ping" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
-                </span>
+                {/* Subtle shimmer accent on hover for mineable orders */}
+                {isMineable && !isMyOwnOrder && (
+                  <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                )}
                 {/* Processing banner */}
                 {acceptingOrderId === order.id && (
                   <div className="flex items-center gap-1.5 px-2 py-1 mb-1.5 rounded bg-primary/10 border border-primary/20">
@@ -424,22 +487,71 @@ const OrderList = memo(function OrderList({
                 )}
                 {/* Row 1: User + tags on left, timer on right */}
                 <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <div className="w-7 h-7 rounded-lg bg-foreground/[0.02] flex items-center justify-center shrink-0 text-sm border border-foreground/[0.04]">
-                      {order.emoji}
-                    </div>
-                    <span className="text-xs font-medium text-white truncate">
-                      {order.user}
-                    </span>
-                    <span
-                      className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
-                        order.orderType === "buy"
-                          ? "bg-[var(--color-error)]/10 border-[var(--color-error)]/20 text-[var(--color-error)]"
-                          : "bg-[var(--color-success)]/10 border-[var(--color-success)]/20 text-[var(--color-success)]"
-                      }`}
-                    >
-                      {order.orderType === "buy" ? "You Pay" : "You Get"}
-                    </span>
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    {(() => {
+                      const { seller, buyer } = getPartyNames(order.dbOrder);
+                      const sellerDisp = seller || order.user || null;
+                      const buyerDisp = buyer || null;
+                      const avatarChar = (sellerDisp || buyerDisp || "U")
+                        .charAt(0)
+                        .toUpperCase();
+                      return (
+                        <>
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-foreground/[0.03] flex items-center justify-center shrink-0 text-sm border border-foreground/[0.08] shadow-sm">
+                            {avatarChar}
+                          </div>
+                          <span className="flex items-center gap-1 text-[12px] font-semibold text-white min-w-0">
+                            <span
+                              className={`whitespace-nowrap ${sellerDisp ? "" : "text-foreground/40"}`}
+                              title={`Seller: ${sellerDisp || "—"}`}
+                            >
+                              {sellerDisp || "—"}
+                            </span>
+                            <ArrowRight className="w-3 h-3 text-foreground/40 shrink-0" />
+                            <span
+                              className={`whitespace-nowrap ${buyerDisp ? "" : "text-foreground/40"}`}
+                              title={`Buyer: ${buyerDisp || "—"}`}
+                            >
+                              {buyerDisp || "—"}
+                            </span>
+                          </span>
+                        </>
+                      );
+                    })()}
+                    {/* Trader info tooltip */}
+                    {(() => {
+                      const rating = order.dbOrder?.user?.rating;
+                      const trades = order.dbOrder?.user?.total_trades ?? 0;
+                      const username =
+                        order.dbOrder?.user?.username || order.user;
+                      const items: InfoTooltipItem[] = [
+                        {
+                          label: "Rating",
+                          value:
+                            rating != null
+                              ? `★ ${Number(rating).toFixed(1)} / 5.0`
+                              : "No rating yet",
+                        },
+                        { label: "Trades", value: `${trades} completed` },
+                        {
+                          label: "Trust",
+                          value:
+                            trades >= 50
+                              ? "Verified trader"
+                              : trades >= 10
+                                ? "Regular trader"
+                                : "New trader",
+                        },
+                      ];
+                      return (
+                        <InfoTooltip
+                          side="bottom"
+                          title={username}
+                          description="Counterparty stats — check before accepting."
+                          items={items}
+                        />
+                      );
+                    })()}
                     {order.spreadPreference && (
                       <span
                         className={`flex items-center gap-0.5 text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border ${
@@ -485,32 +597,75 @@ const OrderList = memo(function OrderList({
                         YOURS
                       </span>
                     )}
-                    {order.hasMessages && order.unreadCount > 0 && (
+                    {/* {order.hasMessages && order.unreadCount > 0 && (
                       <span className="px-1 py-0.5 bg-primary text-background text-[9px] font-bold rounded">
                         {order.unreadCount}
                       </span>
-                    )}
+                    )} */}
                   </div>
-                  {/* Timer */}
-                  <div
-                    className={`flex items-center gap-1 text-sm font-bold font-mono tabular-nums shrink-0 ml-auto ${
-                      order.expiresIn <= 120 ? "text-red-400" : "text-primary"
-                    }`}
-                  >
-                    {order.expiresIn <= 0
-                      ? "Expired"
-                      : order.expiresIn >= 3600
-                        ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
-                        : order.expiresIn >= 60
-                          ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s`
-                          : `${order.expiresIn}s`}
-                    <CountdownRing
-                      remaining={order.expiresIn}
-                      total={900}
-                      size={18}
-                      strokeWidth={2.5}
-                    />
-                  </div>
+                  {/* Timer (pending) OR status badge + date (non-pending) */}
+                  {(() => {
+                    const effStatus: string =
+                      order.status || order.dbOrder?.status || "pending";
+                    const isActivelyPending =
+                      effStatus === "pending" && order.expiresIn > 0;
+
+                    if (isActivelyPending) {
+                      return (
+                        <div
+                          className={`flex items-center gap-1 text-sm font-bold font-mono tabular-nums shrink-0 ml-auto ${
+                            order.expiresIn <= 120
+                              ? "text-red-400"
+                              : "text-primary"
+                          }`}
+                        >
+                          {order.expiresIn >= 3600
+                            ? `${Math.floor(order.expiresIn / 3600)}h ${Math.floor((order.expiresIn % 3600) / 60)}m`
+                            : order.expiresIn >= 60
+                              ? `${Math.floor(order.expiresIn / 60)}m ${order.expiresIn % 60}s`
+                              : `${order.expiresIn}s`}
+                          <CountdownRing
+                            remaining={order.expiresIn}
+                            total={900}
+                            size={18}
+                            strokeWidth={2.5}
+                          />
+                        </div>
+                      );
+                    }
+
+                    const badge =
+                      MY_STATUS_BADGE[effStatus] || MY_STATUS_BADGE.pending;
+                    const StatusIcon = badge.Icon;
+                    const ts =
+                      order.dbOrder?.completed_at ||
+                      order.dbOrder?.cancelled_at ||
+                      order.dbOrder?.created_at ||
+                      order.timestamp;
+                    const tsDate =
+                      ts instanceof Date ? ts : ts ? new Date(ts) : null;
+
+                    return (
+                      <div className="flex flex-col items-end gap-1 shrink-0 ml-auto">
+                        <span
+                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider border ${badge.cls}`}
+                        >
+                          <StatusIcon className="w-2.5 h-2.5" />
+                          {badge.label}
+                        </span>
+                        {tsDate && (
+                          <span className="text-[9px] text-foreground/40 font-mono tabular-nums">
+                            {tsDate.toLocaleString([], {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Payment method badge with icon */}
@@ -542,53 +697,107 @@ const OrderList = memo(function OrderList({
                   );
                 })()}
 
-                {/* Row 2: You Pay / You Get */}
-                <div className="flex items-center gap-2 mb-1">
-                  {order.orderType === "buy" ? (
-                    <>
-                      <span className="text-sm tabular-nums">
-                        <span className="text-[10px] text-[var(--color-error)] font-mono mr-1">
-                          Pay
-                        </span>
-                        <span className="font-bold text-foreground">
-                          {Math.round(order.amount).toLocaleString()}{" "}
-                          {order.fromCurrency}
-                        </span>
-                      </span>
-                      <ArrowRight className="w-3 h-3 text-foreground/20" />
-                      <span className="text-sm tabular-nums">
-                        <span className="text-[10px] text-[var(--color-success)] font-mono mr-1">
-                          Get
-                        </span>
-                        <span className="font-bold text-[var(--color-success)]">
-                          {Math.round(order.total).toLocaleString()}{" "}
-                          {order.toCurrency}
-                        </span>
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-sm tabular-nums">
-                        <span className="text-[10px] text-[var(--color-success)] font-mono mr-1">
-                          Get
-                        </span>
-                        <span className="font-bold text-[var(--color-success)]">
-                          {Math.round(order.amount).toLocaleString()}{" "}
-                          {order.fromCurrency}
-                        </span>
-                      </span>
-                      <ArrowRight className="w-3 h-3 text-foreground/20" />
-                      <span className="text-sm tabular-nums">
-                        <span className="text-[10px] text-[var(--color-error)] font-mono mr-1">
-                          Pay
-                        </span>
-                        <span className="font-bold text-foreground">
-                          {Math.round(order.total).toLocaleString()}{" "}
-                          {order.toCurrency}
-                        </span>
-                      </span>
-                    </>
-                  )}
+                {/* Row 2: You Pay ⇄ You Receive — premium trading card */}
+                {(() => {
+                  const crypto = {
+                    amount: Math.round(order.amount).toLocaleString(),
+                    currency: order.fromCurrency,
+                  };
+                  const fiat = {
+                    amount: Math.round(order.total).toLocaleString(),
+                    currency: order.toCurrency,
+                  };
+                  // Viewer-perspective labels: seller pays crypto, buyer receives
+                  // crypto. Falls back to merchant-as-seller for U2M BUY when we
+                  // can't determine the viewer's side.
+                  const viewerSide = getViewerSide(
+                    order.dbOrder,
+                    merchantInfo?.id,
+                  );
+                  const left =
+                    viewerSide === "seller"
+                      ? { label: "YOU PAY", ...crypto, isReceive: false }
+                      : { label: "YOU RECEIVE", ...crypto, isReceive: true };
+                  const right =
+                    viewerSide === "seller"
+                      ? { label: "YOU RECEIVE", ...fiat, isReceive: true }
+                      : { label: "YOU PAY", ...fiat, isReceive: false };
+                  return (
+                    <div className="relative mb-2 rounded-xl overflow-hidden backdrop-blur-sm">
+                      {/* Layered gradient backgrounds */}
+                      <div className="absolute inset-0 bg-gradient-to-br from-foreground/[0.05] via-foreground/[0.02] to-transparent" />
+                      <div
+                        className={`absolute inset-y-0 ${right.isReceive ? "right-0" : "left-0"} w-1/2 bg-gradient-to-${right.isReceive ? "l" : "r"} from-emerald-500/[0.08] via-emerald-500/[0.03] to-transparent`}
+                      />
+                      {/* Border with subtle glow */}
+                      <div className="absolute inset-0 rounded-xl border border-foreground/[0.08]" />
+
+                      <div className="relative flex items-stretch">
+                        {/* LEFT panel */}
+                        <div className="flex-1 px-3.5 py-2.5">
+                          <div className="flex items-center gap-1.5 mb-1.5">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${left.isReceive ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-foreground/30"}`}
+                            />
+                            <span
+                              className={`text-[9px] font-bold font-mono tracking-[0.15em] ${left.isReceive ? "text-emerald-400" : "text-foreground/50"}`}
+                            >
+                              {left.label}
+                            </span>
+                          </div>
+                          <div className="flex items-baseline gap-1.5">
+                            <span
+                              className={`text-[17px] font-extrabold tabular-nums leading-none tracking-tight ${left.isReceive ? "text-emerald-400" : "text-white"}`}
+                            >
+                              {left.amount}
+                            </span>
+                            <span className="text-[10px] font-bold text-foreground/50 tracking-wide">
+                              {left.currency}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* MIDDLE — floating swap badge with glow */}
+                        <div className="flex items-center shrink-0">
+                          <div className="w-px h-10 bg-gradient-to-b from-transparent via-foreground/[0.12] to-transparent" />
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-foreground/[0.08] to-background border border-foreground/[0.12] flex items-center justify-center -mx-4 shadow-[0_4px_12px_-2px_rgba(0,0,0,0.5)] z-10 backdrop-blur-sm">
+                            <ArrowRightLeft
+                              className="w-3 h-3 text-foreground/60"
+                              strokeWidth={2.5}
+                            />
+                          </div>
+                          <div className="w-px h-10 bg-gradient-to-b from-transparent via-foreground/[0.12] to-transparent" />
+                        </div>
+
+                        {/* RIGHT panel */}
+                        <div className="flex-1 px-3.5 py-2.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5 mb-1.5">
+                            <span
+                              className={`text-[9px] font-bold font-mono tracking-[0.15em] ${right.isReceive ? "text-emerald-400" : "text-foreground/50"}`}
+                            >
+                              {right.label}
+                            </span>
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${right.isReceive ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-foreground/30"}`}
+                            />
+                          </div>
+                          <div className="flex items-baseline justify-end gap-1.5">
+                            <span
+                              className={`text-[17px] font-extrabold tabular-nums leading-none tracking-tight ${right.isReceive ? "text-emerald-400" : "text-white"}`}
+                            >
+                              {right.amount}
+                            </span>
+                            <span className="text-[10px] font-bold text-foreground/50 tracking-wide">
+                              {right.currency}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+                <div className="hidden">
+                  {null}
                   {order.protocolFeePercent != null &&
                     order.protocolFeePercent > 0 && (
                       <span className="text-[11px] font-bold font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
@@ -627,36 +836,47 @@ const OrderList = memo(function OrderList({
                       </span>
                     )}
                   <div className="flex-1" />
-                  {!isMyOwnOrder && (
-                    <button
-                      data-testid="order-primary-action"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onAcceptOrder(order);
-                      }}
-                      disabled={acceptingOrderId === order.id}
-                      className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 flex items-center gap-1 ${
-                        acceptingOrderId === order.id
-                          ? "bg-primary/50 text-black/60 cursor-wait"
-                          : isMineable
-                            ? "bg-primary text-background hover:bg-primary"
-                            : "bg-primary/80 text-background hover:bg-primary"
-                      }`}
-                    >
-                      {acceptingOrderId === order.id ? (
-                        <>
-                          <Loader2 className="w-3 h-3 animate-spin" />{" "}
-                          Accepting...
-                        </>
-                      ) : (
-                        order.dbOrder?.primaryAction?.label ||
-                        (isMineable ? "MINE" : "ACCEPT")
-                      )}
-                    </button>
-                  )}
+                  {(() => {
+                    const effStatus: string =
+                      order.status || order.dbOrder?.status || "pending";
+                    const isActivelyPending =
+                      effStatus === "pending" && order.expiresIn > 0;
+                    if (!isActivelyPending || isMyOwnOrder) return null;
+                    return (
+                      <button
+                        data-testid="order-primary-action"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAcceptOrder(order);
+                        }}
+                        disabled={acceptingOrderId === order.id}
+                        className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all press-effect shrink-0 flex items-center gap-1 ${
+                          acceptingOrderId === order.id
+                            ? "bg-primary/50 text-black/60 cursor-wait"
+                            : isMineable
+                              ? "bg-primary text-background hover:bg-primary"
+                              : "bg-primary/80 text-background hover:bg-primary"
+                        }`}
+                      >
+                        {acceptingOrderId === order.id ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />{" "}
+                            Accepting...
+                          </>
+                        ) : (
+                          order.dbOrder?.primaryAction?.label ||
+                          (isMineable ? "MINE" : "ACCEPT")
+                        )}
+                      </button>
+                    );
+                  })()}
                 </div>
-                {/* Countdown timer bar (bottom) */}
+                {/* Countdown timer bar (bottom) — only for actively-pending orders */}
                 {(() => {
+                  const effStatus: string =
+                    order.status || order.dbOrder?.status || "pending";
+                  if (effStatus !== "pending" || order.expiresIn <= 0)
+                    return null;
                   const total = 900;
                   const pct = Math.max(
                     0,
@@ -809,6 +1029,27 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       dbRow.user?.username ||
       dbRow.merchant?.display_name ||
       "Trader";
+
+    // Compute live expiresIn from expires_at (or fallback to created_at + 15min
+    // for rows missing expires_at). Matches mapDbOrderToUI so the timer and
+    // pulse dot render correctly for my own pending orders.
+    const nowMs = Date.now();
+    let expiresIn = 0;
+    if (dbRow.expires_at) {
+      expiresIn = Math.max(
+        0,
+        Math.floor((new Date(dbRow.expires_at).getTime() - nowMs) / 1000),
+      );
+    } else if (dbRow.created_at) {
+      expiresIn = Math.max(
+        0,
+        Math.floor(
+          (new Date(dbRow.created_at).getTime() + 15 * 60 * 1000 - nowMs) /
+            1000,
+        ),
+      );
+    }
+
     return {
       id: dbRow.id,
       dbOrder: dbRow,
@@ -825,7 +1066,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       status: dbRow.status,
       orderType: dbRow.type,
       timestamp: new Date(dbRow.created_at),
-      expiresIn: 0,
+      expiresIn,
       fromCurrency: dbRow.crypto_currency || "USDT",
       toCurrency: dbRow.fiat_currency || "AED",
       user: userName,
@@ -893,10 +1134,10 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       displayOrders = [...mempoolAsOrders, ...displayOrders];
     }
   } else {
-    // ─── ALL: everything (market orders + my orders combined) ──────
+    // ─── ALL: every order, regardless of status. Market feed +
+    // merchant's own orders (including terminal: completed/cancelled/expired).
     const marketOrders = [...orders];
 
-    // Add mempool orders
     let allOrders = [...marketOrders];
     if (mempoolOrders.length > 0) {
       const regularIds = new Set(allOrders.map((o: any) => o.id));
@@ -911,7 +1152,6 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       allOrders = [...mempoolAsOrders, ...allOrders];
     }
 
-    // Merge my orders (for completed/cancelled that aren't in the active feed)
     const allIds = new Set(allOrders.map((o: any) => o.id));
     const uniqueMyOrders = wrappedMyOrders.filter(
       (o: any) => !allIds.has(o.id) && isCreatedByMe(o),
@@ -945,8 +1185,12 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
     // Default sort: newest first (by created_at descending)
     displayOrders = [...displayOrders].sort((a, b) => {
       if ((a as any).isMempoolOrder || (b as any).isMempoolOrder) return 0;
-      const aTime = new Date(a.dbOrder?.created_at || a.createdAt || 0).getTime();
-      const bTime = new Date(b.dbOrder?.created_at || b.createdAt || 0).getTime();
+      const aTime = new Date(
+        a.dbOrder?.created_at || a.createdAt || 0,
+      ).getTime();
+      const bTime = new Date(
+        b.dbOrder?.created_at || b.createdAt || 0,
+      ).getTime();
       return bTime - aTime;
     });
   }
@@ -1010,23 +1254,32 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
         {/* ─── Row 1: Tabs + controls ─── */}
         <div className="flex items-center justify-between mb-2">
           <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06]">
-            {(["all", "pending", "mine"] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setView(tab)}
-                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
-                  view === tab
-                    ? "bg-foreground text-background shadow"
-                    : "text-foreground/40 hover:text-foreground/60"
-                }`}
-              >
-                {tab === "all"
-                  ? "All"
+            {(["all", "pending", "mine"] as const).map((tab) => {
+              const tooltip =
+                tab === "all"
+                  ? "All market orders + your own orders — the combined feed"
                   : tab === "pending"
-                    ? "Pending"
-                    : "My Orders"}
-              </button>
-            ))}
+                    ? "Only orders with pending status — available for you to accept"
+                    : "Only orders you created (includes all statuses: active, completed, cancelled)";
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setView(tab)}
+                  title={tooltip}
+                  className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+                    view === tab
+                      ? "bg-foreground text-background shadow"
+                      : "text-foreground/40 hover:text-foreground/60"
+                  }`}
+                >
+                  {tab === "all"
+                    ? "All"
+                    : tab === "pending"
+                      ? "Pending"
+                      : "My Orders"}
+                </button>
+              );
+            })}
           </div>
           <div className="flex items-center gap-1">
             <div className="flex items-center gap-1 px-1.5 py-0.5 bg-foreground/[0.02] rounded border border-foreground/[0.06]">
@@ -1040,7 +1293,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                 // Play confirmation ping when enabling. This click also acts as
                 // the required user gesture to unlock the browser's AudioContext.
                 if (next) {
-                  setTimeout(() => playSound?.('notification'), 0);
+                  setTimeout(() => playSound?.("notification"), 0);
                 }
               }}
               className={`p-1 rounded border transition-all ${
@@ -1048,9 +1301,17 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                   ? "bg-primary/15 border-primary/30 text-primary ring-1 ring-primary/20"
                   : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/30 hover:bg-foreground/[0.05]"
               }`}
-              title={soundEnabled ? "Sound on — click to mute" : "Sound off — click to enable"}
+              title={
+                soundEnabled
+                  ? "Sound on — click to mute"
+                  : "Sound off — click to enable"
+              }
             >
-              {soundEnabled ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
+              {soundEnabled ? (
+                <Volume2 className="w-3 h-3" />
+              ) : (
+                <VolumeX className="w-3 h-3" />
+              )}
             </button>
             <button
               onClick={fetchOrders}
@@ -1352,6 +1613,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
           orders={filteredOrders}
           isLoading={myOrdersLoading}
           onSelectOrder={onSelectOrder}
+          merchantInfo={merchantInfo}
         />
       ) : (
         <OrderList
@@ -1375,7 +1637,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
             {isLoadingMore ? (
               <Loader2 className="w-3 h-3 animate-spin" />
             ) : (
-              'Load More'
+              "Load More"
             )}
           </button>
         </div>
@@ -1445,10 +1707,12 @@ const MyOrdersList = memo(function MyOrdersList({
   orders,
   isLoading,
   onSelectOrder,
+  merchantInfo,
 }: {
   orders: any[];
   isLoading: boolean;
   onSelectOrder: (order: any) => void;
+  merchantInfo?: any;
 }) {
   if (isLoading && orders.length === 0) {
     return (
@@ -1482,42 +1746,92 @@ const MyOrdersList = memo(function MyOrdersList({
         const amount = order.amount ?? 0;
         const total = order.total ?? 0;
         const rate = order.rate ?? 0;
-        const fiatCurrency = db.fiat_currency || "AED";
+        const fromCurrency = order.fromCurrency || "USDT";
+        const toCurrency = order.toCurrency || db.fiat_currency || "AED";
         const createdAt = order.timestamp ?? new Date(db.created_at);
         const isCancelled = status === "cancelled";
         const isAccepted = !!db.accepted_at;
 
-        // Counterparty name when accepted/claimed
-        const acceptedByName: string | null = (() => {
-          if (!isAccepted) return null;
-          // M2M: counterparty is whichever side is NOT the creator. For
-          // a merchant-created order with placeholder user, the acceptor
-          // is whichever side filled in (buyer_merchant_id usually).
-          if (db.buyer_merchant?.display_name)
-            return db.buyer_merchant.display_name;
-          if (db.merchant?.display_name) return db.merchant.display_name;
-          return db.user?.name || db.user?.username || null;
-        })();
+        const { seller, buyer } = getPartyNames(db);
+
+        // Me-centric: one side is always me, the other is the counterparty.
+        const myId = merchantInfo?.id;
+        const myName =
+          merchantInfo?.display_name || merchantInfo?.username || "You";
+        const iAmSeller = !!myId && db.merchant_id === myId;
+        const iAmBuyer = !!myId && db.buyer_merchant_id === myId;
+        const mySide: "seller" | "buyer" = iAmSeller
+          ? "seller"
+          : iAmBuyer
+            ? "buyer"
+            : seller === myName
+              ? "seller"
+              : buyer === myName
+                ? "buyer"
+                : "seller";
+        const counterpartyName: string | null =
+          mySide === "seller" ? buyer : seller;
+        const leftName = mySide === "seller" ? myName : counterpartyName;
+        const rightName = mySide === "seller" ? counterpartyName : myName;
+        const avatarChar = myName.charAt(0).toUpperCase();
 
         const cancelReason: string | null = isCancelled
           ? db.cancellation_reason || db.cancel_request_reason || null
           : null;
 
+        const crypto = {
+          amount: Math.round(amount).toLocaleString(),
+          currency: fromCurrency,
+        };
+        const fiat = {
+          amount: Math.round(total).toLocaleString(),
+          currency: toCurrency,
+        };
+        const viewerSide = getViewerSide(db, merchantInfo?.id);
+        const left =
+          viewerSide === "seller"
+            ? { label: "YOU PAY", ...crypto, isReceive: false }
+            : { label: "YOU RECEIVE", ...crypto, isReceive: true };
+        const right =
+          viewerSide === "seller"
+            ? { label: "YOU RECEIVE", ...fiat, isReceive: true }
+            : { label: "YOU PAY", ...fiat, isReceive: false };
+
         return (
           <button
             key={order.id}
             onClick={() => onSelectOrder(order)}
-            className="w-full text-left p-2.5 rounded-lg glass-card border border-foreground/[0.06] hover:border-foreground/[0.12] transition-colors"
+            className="group relative w-full text-left p-3 rounded-xl border transition-all cursor-pointer overflow-hidden bg-gradient-to-br from-foreground/[0.02] to-transparent border-foreground/[0.06] hover:border-foreground/[0.12] hover:shadow-md hover:shadow-black/20"
           >
-            {/* Header row: status badge + timestamp */}
+            {/* Row 1: emoji + name + status badge | timestamp */}
             <div className="flex items-center justify-between mb-1.5">
-              <span
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider border ${badge.cls}`}
-              >
-                <StatusIcon className="w-2.5 h-2.5" />
-                {badge.label}
-              </span>
-              <span className="text-[9px] text-foreground/30 font-mono">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-foreground/[0.03] flex items-center justify-center shrink-0 text-sm border border-foreground/[0.08] shadow-sm">
+                  {avatarChar}
+                </div>
+                <span className="flex items-center gap-1 text-[12px] font-semibold text-white min-w-0">
+                  <span
+                    className={`whitespace-nowrap ${leftName ? "" : "text-foreground/40"}`}
+                    title={`Seller: ${leftName || "—"}`}
+                  >
+                    {leftName || "—"}
+                  </span>
+                  <ArrowRight className="w-3 h-3 text-foreground/40 shrink-0" />
+                  <span
+                    className={`whitespace-nowrap ${rightName ? "" : "text-foreground/40"}`}
+                    title={`Buyer: ${rightName || "—"}`}
+                  >
+                    {rightName || "—"}
+                  </span>
+                </span>
+                <span
+                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold font-mono uppercase tracking-wider border ${badge.cls}`}
+                >
+                  <StatusIcon className="w-2.5 h-2.5" />
+                  {badge.label}
+                </span>
+              </div>
+              <span className="text-[9px] text-foreground/30 font-mono shrink-0 ml-auto">
                 {createdAt instanceof Date
                   ? createdAt.toLocaleString([], {
                       month: "short",
@@ -1529,69 +1843,85 @@ const MyOrdersList = memo(function MyOrdersList({
               </span>
             </div>
 
-            {/* Amount: You Pay / You Get */}
-            <div className="flex items-center gap-2 mb-1">
-              {order.orderType === "buy" ? (
-                <>
-                  <span className="text-sm tabular-nums">
-                    <span className="text-[10px] text-[var(--color-error)] font-mono mr-1">
-                      Pay
-                    </span>
-                    <span className="font-bold text-foreground">
-                      {Math.round(amount).toLocaleString()} USDT
-                    </span>
-                  </span>
-                  <ArrowRight className="w-3 h-3 text-foreground/20" />
-                  <span className="text-sm tabular-nums">
-                    <span className="text-[10px] text-[var(--color-success)] font-mono mr-1">
-                      Get
-                    </span>
-                    <span className="font-bold text-[var(--color-success)]">
-                      {Math.round(total).toLocaleString()} {fiatCurrency}
-                    </span>
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="text-sm tabular-nums">
-                    <span className="text-[10px] text-[var(--color-success)] font-mono mr-1">
-                      Get
-                    </span>
-                    <span className="font-bold text-[var(--color-success)]">
-                      {Math.round(amount).toLocaleString()} USDT
-                    </span>
-                  </span>
-                  <ArrowRight className="w-3 h-3 text-foreground/20" />
-                  <span className="text-sm tabular-nums">
-                    <span className="text-[10px] text-[var(--color-error)] font-mono mr-1">
-                      Pay
-                    </span>
-                    <span className="font-bold text-foreground">
-                      {Math.round(total).toLocaleString()} {fiatCurrency}
-                    </span>
-                  </span>
-                </>
-              )}
-            </div>
+            {/* Row 2: You Pay ⇄ You Receive — premium trading card */}
+            <div className="relative mb-2 rounded-xl overflow-hidden backdrop-blur-sm">
+              <div className="absolute inset-0 bg-gradient-to-br from-foreground/[0.05] via-foreground/[0.02] to-transparent" />
+              <div
+                className={`absolute inset-y-0 ${right.isReceive ? "right-0" : "left-0"} w-1/2 bg-gradient-to-${right.isReceive ? "l" : "r"} from-emerald-500/[0.08] via-emerald-500/[0.03] to-transparent`}
+              />
+              <div className="absolute inset-0 rounded-xl border border-foreground/[0.08]" />
 
-            {/* Rate + type */}
-            <div className="flex items-center gap-2 text-[10px] text-foreground/40 font-mono">
-              <span>@ {rate?.toFixed?.(2) ?? rate}</span>
-              <span className="text-foreground/15">·</span>
-              <span className="uppercase">{db.type}</span>
-            </div>
+              <div className="relative flex items-stretch">
+                <div className="flex-1 px-3.5 py-2.5">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${left.isReceive ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-foreground/30"}`}
+                    />
+                    <span
+                      className={`text-[9px] font-bold font-mono tracking-[0.15em] ${left.isReceive ? "text-emerald-400" : "text-foreground/50"}`}
+                    >
+                      {left.label}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span
+                      className={`text-[17px] font-extrabold tabular-nums leading-none tracking-tight ${left.isReceive ? "text-emerald-400" : "text-white"}`}
+                    >
+                      {left.amount}
+                    </span>
+                    <span className="text-[10px] font-bold text-foreground/50 tracking-wide">
+                      {left.currency}
+                    </span>
+                  </div>
+                </div>
 
-            {/* Accepted by */}
-            {acceptedByName && !isCancelled && status !== "expired" && (
-              <div className="mt-1 text-[10px] text-foreground/50 font-mono">
-                Accepted by{" "}
-                <span className="text-foreground/80 font-bold">
-                  {acceptedByName}
-                </span>
+                <div className="flex items-center shrink-0">
+                  <div className="w-px h-10 bg-gradient-to-b from-transparent via-foreground/[0.12] to-transparent" />
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-foreground/[0.08] to-background border border-foreground/[0.12] flex items-center justify-center -mx-4 shadow-[0_4px_12px_-2px_rgba(0,0,0,0.5)] z-10 backdrop-blur-sm">
+                    <ArrowRightLeft
+                      className="w-3 h-3 text-foreground/60"
+                      strokeWidth={2.5}
+                    />
+                  </div>
+                  <div className="w-px h-10 bg-gradient-to-b from-transparent via-foreground/[0.12] to-transparent" />
+                </div>
+
+                <div className="flex-1 px-3.5 py-2.5 text-right">
+                  <div className="flex items-center justify-end gap-1.5 mb-1.5">
+                    <span
+                      className={`text-[9px] font-bold font-mono tracking-[0.15em] ${right.isReceive ? "text-emerald-400" : "text-foreground/50"}`}
+                    >
+                      {right.label}
+                    </span>
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${right.isReceive ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]" : "bg-foreground/30"}`}
+                    />
+                  </div>
+                  <div className="flex items-baseline justify-end gap-1.5">
+                    <span
+                      className={`text-[17px] font-extrabold tabular-nums leading-none tracking-tight ${right.isReceive ? "text-emerald-400" : "text-white"}`}
+                    >
+                      {right.amount}
+                    </span>
+                    <span className="text-[10px] font-bold text-foreground/50 tracking-wide">
+                      {right.currency}
+                    </span>
+                  </div>
+                </div>
               </div>
-            )}
+            </div>
 
-            {/* Cancel reason */}
+            {/* Row 3: Rate + type */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-foreground/40 font-mono">
+                @ {rate?.toFixed?.(2) ?? rate}
+              </span>
+              <span className="text-foreground/15 text-[10px]">·</span>
+              <span className="text-[10px] text-foreground/40 font-mono uppercase">
+                {db.type}
+              </span>
+            </div>
+
             {cancelReason && (
               <div className="mt-1.5 px-2 py-1 rounded bg-red-500/[0.06] border border-red-500/15 text-[10px] text-red-300/80 font-mono">
                 Reason: {cancelReason}

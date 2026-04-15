@@ -13,6 +13,7 @@ interface UseTradeCreationParams {
     tradeType: "buy" | "sell";
     cryptoAmount: string;
     paymentMethod: "bank" | "cash";
+    paymentMethodId?: string;
     spreadPreference: "best" | "fastest" | "cheap";
     expiryMinutes: 15 | 90;
   };
@@ -29,6 +30,7 @@ const DEFAULT_FORM = {
   tradeType: "sell" as const,
   cryptoAmount: "",
   paymentMethod: "bank" as const,
+  paymentMethodId: undefined as string | undefined,
   spreadPreference: "fastest" as const,
   expiryMinutes: 15 as const,
 };
@@ -84,6 +86,7 @@ export function useTradeCreation({
             merchant_id: merchantId, type: openTradeForm.tradeType,
             crypto_amount: parseFloat(openTradeForm.cryptoAmount),
             payment_method: openTradeForm.paymentMethod, spread_preference: openTradeForm.spreadPreference,
+            merchant_payment_method_id: openTradeForm.paymentMethodId,
             matched_offer_id: matchedOffer?.id,
           }),
         });
@@ -102,6 +105,7 @@ export function useTradeCreation({
             merchant_id: merchantId, type: openTradeForm.tradeType,
             crypto_amount: parseFloat(openTradeForm.cryptoAmount),
             payment_method: openTradeForm.paymentMethod, spread_preference: openTradeForm.spreadPreference,
+            merchant_payment_method_id: openTradeForm.paymentMethodId,
             matched_offer_id: matchedOffer?.id, escrow_tx_hash: escrowResult.txHash,
             escrow_trade_id: escrowResult.tradeId, escrow_trade_pda: escrowResult.tradePda,
             escrow_pda: escrowResult.escrowPda, escrow_creator_wallet: solanaWallet.walletAddress,
@@ -139,6 +143,7 @@ export function useTradeCreation({
           merchant_id: merchantId, type: openTradeForm.tradeType,
           crypto_amount: parseFloat(openTradeForm.cryptoAmount),
           payment_method: openTradeForm.paymentMethod, spread_preference: openTradeForm.spreadPreference,
+          merchant_payment_method_id: openTradeForm.paymentMethodId,
         }),
       });
       const data = await res.json();

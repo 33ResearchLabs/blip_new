@@ -176,16 +176,20 @@ export async function logIp(
     [entityId, entityType, ip, action, userAgent || null]
   );
 
-  // Upsert IP stats — compute unique users inline
+  // Upsert IP stats — compute unique users inline.
+  // Explicit $1::varchar cast on EVERY usage — PG can't infer a single type
+  // for $1 when the same param appears in both a VALUES position (varchar
+  // column) and a WHERE subquery position (text inference). Without the
+  // cast, PG throws 42P08: "inconsistent types deduced for parameter $1".
   const result = await queryOne<{ unique_users: number }>(
     `INSERT INTO ip_stats (ip, usage_count, unique_users, last_seen)
-     VALUES ($1, 1,
-       (SELECT COUNT(DISTINCT entity_id) FROM ip_logs WHERE ip = $1),
+     VALUES ($1::varchar, 1,
+       (SELECT COUNT(DISTINCT entity_id) FROM ip_logs WHERE ip = $1::varchar),
        NOW()
      )
      ON CONFLICT (ip) DO UPDATE
        SET usage_count = ip_stats.usage_count + 1,
-           unique_users = (SELECT COUNT(DISTINCT entity_id) FROM ip_logs WHERE ip = $1),
+           unique_users = (SELECT COUNT(DISTINCT entity_id) FROM ip_logs WHERE ip = $1::varchar),
            last_seen = NOW()
      RETURNING unique_users`,
     [ip]

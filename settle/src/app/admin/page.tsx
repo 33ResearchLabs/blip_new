@@ -516,6 +516,7 @@ export default function AdminConsolePage() {
               <Link href="/admin/accounts" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors">Accounts</Link>
               <Link href="/admin/disputes" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors">Disputes</Link>
               <Link href="/admin/monitor" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors">Monitor</Link>
+              <Link href="/admin/error-logs" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors">Error Logs</Link>
               <Link href="/admin/usdt-inr-price" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-card transition-colors">Price</Link>
             </nav>
           </div>

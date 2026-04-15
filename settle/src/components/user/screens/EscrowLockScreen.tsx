@@ -71,10 +71,16 @@ export const EscrowLockScreen = ({
   const fiatSymbol = fiatCurrency === 'INR' ? '₹' : fiatCurrency === 'USD' ? '$' : 'د.إ';
   const handleConnectWallet = onConnectWallet || (() => setShowWalletModal(true));
   return (
-    <div className="bg-surface-base min-h-full">
-      <div className="h-12" />
-
-      <div className="px-5 py-4 flex items-center">
+    <div
+      className="bg-surface-base min-h-full flex flex-col"
+      // iOS safe-area-aware padding so the screen respects the notch + home
+      // indicator on real devices and the URL bar in Safari simulator views.
+      style={{
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
+      }}
+    >
+      <div className="px-5 pt-3 pb-2 flex items-center">
         <button onClick={() => { setScreen("home"); setEscrowTxStatus('idle'); setEscrowError(null); }}
           className="w-9 h-9 rounded-xl flex items-center justify-center -ml-1 bg-surface-raised border border-border-subtle">
           <ChevronLeft className="w-5 h-5 text-text-primary" />
@@ -82,15 +88,17 @@ export const EscrowLockScreen = ({
         <h1 className="flex-1 text-center text-[17px] font-semibold pr-8 text-text-primary">Confirm Escrow</h1>
       </div>
 
-      <div className="px-5 flex flex-col gap-4 pb-10">
+      <div className="px-5 flex flex-col gap-3 pb-4 flex-1">
         {/* Header */}
-        <div className="flex items-center gap-4 py-4">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-surface-raised">
-            <Shield className="w-7 h-7 text-text-primary" />
+        <div className="flex items-center gap-4 py-2">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-surface-raised shrink-0">
+            <Shield className="w-6 h-6 text-text-primary" />
           </div>
-          <div>
-            <h2 className="text-[22px] font-bold text-text-primary">Lock {parseFloat(amount).toFixed(2)} USDT</h2>
-            <p className="text-[13px] text-text-secondary">
+          <div className="min-w-0">
+            <h2 className="text-[20px] font-bold text-text-primary leading-tight">
+              Lock {parseFloat(amount).toFixed(2)} USDT
+            </h2>
+            <p className="text-[12px] text-text-secondary leading-snug mt-0.5">
               Held securely on Solana until you confirm payment
             </p>
           </div>
@@ -295,36 +303,45 @@ export const EscrowLockScreen = ({
             </button>
           </div>
         ) : (
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            onClick={solanaWallet.connected ? confirmEscrow : handleConnectWallet}
-            disabled={isLoading || (solanaWallet.connected && !solanaWallet.programReady)}
-            className="w-full py-4 rounded-2xl text-[17px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50 bg-accent text-accent-text"
+          // Sticky CTA — always visible at the bottom of the viewport so
+          // users never have to scroll to find "Confirm & Lock". Wraps in a
+          // backdrop-blurred footer with safe-area padding so it doesn't get
+          // clipped by the iOS home indicator or browser chrome.
+          <div
+            className="sticky bottom-0 -mx-5 px-5 pt-3 mt-auto bg-surface-base/90 backdrop-blur-md border-t border-border-subtle"
+            style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
           >
-            {escrowTxStatus === 'signing' && (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Sign in Wallet...
-              </>
-            )}
-            {escrowTxStatus === 'confirming' && (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Confirming...
-              </>
-            )}
-            {escrowTxStatus === 'recording' && (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Recording...
-              </>
-            )}
-            {(escrowTxStatus === 'idle' || escrowTxStatus === 'error' || escrowTxStatus === 'connecting') && (
-              solanaWallet.connected
-                ? (solanaWallet.programReady ? "Confirm & Lock" : "Wallet Not Ready")
-                : "Connect Wallet to Lock"
-            )}
-          </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              onClick={solanaWallet.connected ? confirmEscrow : handleConnectWallet}
+              disabled={isLoading || (solanaWallet.connected && !solanaWallet.programReady)}
+              className="w-full py-4 rounded-2xl text-[17px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50 bg-accent text-accent-text"
+            >
+              {escrowTxStatus === 'signing' && (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Sign in Wallet...
+                </>
+              )}
+              {escrowTxStatus === 'confirming' && (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Confirming...
+                </>
+              )}
+              {escrowTxStatus === 'recording' && (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Recording...
+                </>
+              )}
+              {(escrowTxStatus === 'idle' || escrowTxStatus === 'error' || escrowTxStatus === 'connecting') && (
+                solanaWallet.connected
+                  ? (solanaWallet.programReady ? "Confirm & Lock" : "Wallet Not Ready")
+                  : "Connect Wallet to Lock"
+              )}
+            </motion.button>
+          </div>
         )}
       </div>
     </div>

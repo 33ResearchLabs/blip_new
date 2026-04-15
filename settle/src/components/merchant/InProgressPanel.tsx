@@ -14,6 +14,28 @@ interface InProgressPanelProps {
   onOpenDispute?: (order: any) => void;
   collapsed?: boolean;
   onCollapseChange?: (collapsed: boolean) => void;
+  merchantId?: string | null;
+}
+
+// Viewer-perspective side resolver: matches the helper in
+// PendingOrdersPanel.tsx. Seller locks crypto, buyer sends fiat.
+function getViewerSide(
+  db: any,
+  order: any,
+  myId: string | null | undefined,
+): "seller" | "buyer" {
+  // Enriched API response may already include my_role
+  const myRole = order?.myRole || order?.my_role || db?.my_role;
+  if (myRole === "seller") return "seller";
+  if (myRole === "buyer") return "buyer";
+
+  if (!db) return "seller";
+  if (myId && db.merchant_id === myId) return "seller";
+  if (myId && db.buyer_merchant_id === myId) return "buyer";
+  if (db.merchant_id && !db.buyer_merchant_id) return "buyer";
+  if (!db.merchant_id && db.buyer_merchant_id) return "seller";
+  const orderType = String(db.type || "").toLowerCase();
+  return orderType === "buy" ? "seller" : "buyer";
 }
 
 const WAITING_ACTIONS = ['Wait for Acceptance', 'Wait for Payment', 'Wait for Escrow', 'Wait for Confirmation', 'Waiting for Acceptor', 'Waiting for Confirmation', 'Waiting for Payment', 'Already Claimed'];
@@ -28,6 +50,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
   formatTimeRemaining,
   getStatusBadge,
   getNextAction,
+  merchantId,
 }: {
   orders: any[];
   onSelectOrder: (order: any) => void;
@@ -36,6 +59,7 @@ const InProgressOrderList = memo(function InProgressOrderList({
   formatTimeRemaining: (seconds: number) => string;
   getStatusBadge: (order: any) => React.ReactNode;
   getNextAction: (order: any) => string;
+  merchantId?: string | null;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -168,9 +192,8 @@ const InProgressOrderList = memo(function InProgressOrderList({
 
                 {/* Row 2: Amount — direction based on merchant's role */}
                 {(() => {
-                  const myRole = order.myRole || order.my_role || order.dbOrder?.my_role;
-                  const iAmSeller = myRole === 'seller'
-                    || order.orderMerchantId === order.dbOrder?.merchant_id && order.dbOrder?.buyer_merchant_id && order.dbOrder?.buyer_merchant_id !== order.orderMerchantId;
+                  const iAmSeller =
+                    getViewerSide(order.dbOrder, order, merchantId) === "seller";
                   const crypto = `${Math.round(order.amount).toLocaleString()} ${order.fromCurrency}`;
                   const fiat = `${Math.round(order.amount * (order.rate || 3.67)).toLocaleString()} ${order.toCurrency || 'INR'}`;
 
@@ -315,7 +338,7 @@ const STATUS_FILTERS: { value: FilterValue; label: string }[] = [
   { value: 'cancel_requested', label: 'Cancel Req' },
 ];
 
-export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction, onOpenChat, collapsed = false, onCollapseChange }: InProgressPanelProps) {
+export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction, onOpenChat, collapsed = false, onCollapseChange, merchantId }: InProgressPanelProps) {
   const [statusFilter, setStatusFilter] = useState<FilterValue>('all');
 
   const filteredOrders = useMemo(() => {
@@ -410,6 +433,7 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
           formatTimeRemaining={formatTimeRemaining}
           getStatusBadge={getStatusBadge}
           getNextAction={getNextAction}
+          merchantId={merchantId}
         />
       )}
     </div>

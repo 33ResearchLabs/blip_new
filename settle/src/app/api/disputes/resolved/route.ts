@@ -68,6 +68,31 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Failed to fetch resolved disputes:', error);
+
+    // Distinguish connection-pool timeouts from real errors so the frontend
+    // can show a retry hint instead of a scary "failed" message. The pg
+    // pool throws "timeout exceeded when trying to connect" when exhausted.
+    const errMsg = (error as Error)?.message || '';
+    const isPoolTimeout =
+      errMsg.includes('timeout exceeded when trying to connect') ||
+      errMsg.includes('Connection terminated') ||
+      errMsg.includes('ECONNRESET');
+
+    if (isPoolTimeout) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Service busy — please retry in a moment',
+          code: 'DB_POOL_TIMEOUT',
+          retryable: true,
+        },
+        {
+          status: 503,
+          headers: { 'Retry-After': '2' },
+        }
+      );
+    }
+
     return NextResponse.json(
       { success: false, error: 'Failed to fetch resolved disputes' },
       { status: 500 }

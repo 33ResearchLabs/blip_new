@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import {
   requireAuth,
-  verifyMerchant,
   forbiddenResponse,
   validationErrorResponse,
   successResponse,
@@ -36,21 +35,32 @@ export async function GET(request: NextRequest) {
       return forbiddenResponse('You can only access your own messages');
     }
 
-    // Verify merchant exists and check compliance access
-    const merchantExists = await verifyMerchant(merchantId);
-    if (!merchantExists) {
+    // Combined merchant lookup — was 2 separate round-trips (verifyMerchant +
+    // compliance check). One query halves the auth latency on every chat-list
+    // refresh (this endpoint polls every ~15s when Pusher is offline).
+    const merchantRow = await query<{ id: string; has_compliance_access: boolean | null; status: string }>(
+      'SELECT id, COALESCE(has_compliance_access, false) as has_compliance_access, COALESCE(status, $2) as status FROM merchants WHERE id = $1',
+      [merchantId, 'active']
+    );
+    if (merchantRow.length === 0 || merchantRow[0].status !== 'active') {
       return validationErrorResponse(['Merchant not found']);
     }
+    const hasComplianceAccess = merchantRow[0].has_compliance_access === true;
 
-    const merchantRow = await query<{ has_compliance_access: boolean }>(
-      'SELECT has_compliance_access FROM merchants WHERE id = $1',
-      [merchantId]
-    );
-    const hasComplianceAccess = merchantRow[0]?.has_compliance_access === true;
-
-    // Build the query for conversations (grouped by order)
-    // Access: seller (merchant_id) OR buyer (buyer_merchant_id)
-    // For dispute tab: also include all disputed orders if merchant has compliance access
+    // Build the query for conversations (grouped by order).
+    // Access: seller (merchant_id) OR buyer (buyer_merchant_id).
+    // For dispute tab: also include all disputed orders if merchant has compliance access.
+    //
+    // Performance notes:
+    //  - Was 4 correlated subqueries per row (count, unread, last_message,
+    //    last_activity). With limit=50 → 200 sub-selects per request.
+    //  - Now uses denormalized order columns (last_message_at,
+    //    last_message_preview, last_message_sender_type) for the latest-msg
+    //    info, and a single LATERAL for unread count which has the index
+    //    (order_id, sender_type, is_read).
+    //  - last_message.id is no longer returned because it wasn't being read
+    //    by the frontend (verified: MerchantChatTabs uses sender_type +
+    //    content + created_at + is_read only).
     let conversationsQuery = `
       SELECT
         o.id as order_id,
@@ -68,38 +78,29 @@ export async function GET(request: NextRequest) {
           'rating', u.rating,
           'total_trades', u.total_trades
         ) as user,
-        (
-          SELECT COUNT(*)::int
-          FROM chat_messages cm
-          WHERE cm.order_id = o.id
-        ) as message_count,
-        (
-          SELECT COUNT(*)::int
-          FROM chat_messages cm
-          WHERE cm.order_id = o.id AND cm.sender_type != 'merchant' AND cm.is_read = false
-        ) as unread_count,
-        (
-          SELECT json_build_object(
-            'id', cm.id,
-            'content', cm.content,
-            'sender_type', cm.sender_type,
-            'message_type', cm.message_type,
-            'image_url', cm.image_url,
-            'created_at', cm.created_at,
-            'is_read', cm.is_read
+        COALESCE(unread.cnt, 0) as message_count,
+        COALESCE(unread.unread, 0) as unread_count,
+        CASE WHEN o.last_message_preview IS NOT NULL THEN
+          json_build_object(
+            'id', NULL,
+            'content', o.last_message_preview,
+            'sender_type', o.last_message_sender_type,
+            'message_type', 'text',
+            'image_url', NULL,
+            'created_at', o.last_message_at,
+            'is_read', COALESCE(unread.unread, 0) = 0
           )
-          FROM chat_messages cm
-          WHERE cm.order_id = o.id
-          ORDER BY cm.created_at DESC
-          LIMIT 1
-        ) as last_message,
-        (
-          SELECT MAX(cm.created_at)
-          FROM chat_messages cm
-          WHERE cm.order_id = o.id
-        ) as last_activity
+        ELSE NULL END as last_message,
+        o.last_message_at as last_activity
       FROM orders o
       JOIN users u ON o.user_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(*)::int as cnt,
+          COUNT(*) FILTER (WHERE cm.sender_type != 'merchant' AND cm.is_read = false)::int as unread
+        FROM chat_messages cm
+        WHERE cm.order_id = o.id
+      ) unread ON true
       WHERE (
         o.merchant_id = $1
         OR o.buyer_merchant_id = $1
@@ -127,8 +128,10 @@ export async function GET(request: NextRequest) {
       conversationsQuery += ` AND o.status = 'disputed'`;
     }
 
-    // Only include orders with messages
-    conversationsQuery += ` AND EXISTS (SELECT 1 FROM chat_messages cm WHERE cm.order_id = o.id)`;
+    // Only include orders that have at least one message. Uses the
+    // denormalized last_message_at column (set on every chat insert) so we
+    // avoid a per-row EXISTS sub-select on chat_messages.
+    conversationsQuery += ` AND o.last_message_at IS NOT NULL`;
 
     // Search in messages
     if (search) {
@@ -151,10 +154,10 @@ export async function GET(request: NextRequest) {
 
     // Get total count for pagination
     let countQuery = `
-      SELECT COUNT(DISTINCT o.id)::int as total
+      SELECT COUNT(*)::int as total
       FROM orders o
       WHERE (o.merchant_id = $1 OR o.buyer_merchant_id = $1 OR ($2::boolean = true AND o.status = 'disputed'))
-      AND EXISTS (SELECT 1 FROM chat_messages cm WHERE cm.order_id = o.id)
+      AND o.last_message_at IS NOT NULL
     `;
     const countParams: (string | number | boolean)[] = [merchantId, hasComplianceAccess];
 

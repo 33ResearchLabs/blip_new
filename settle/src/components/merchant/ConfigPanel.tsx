@@ -16,6 +16,7 @@ import {
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { MyOffers } from "@/components/merchant/MyOffers";
 import { ChevronRight, Package } from "lucide-react";
+import { InfoTooltip } from "@/components/shared/InfoTooltip";
 
 interface MerchantPaymentMethod {
   id: string;
@@ -34,6 +35,7 @@ interface ConfigPanelProps {
     tradeType: "buy" | "sell";
     cryptoAmount: string;
     paymentMethod: "bank" | "cash";
+    paymentMethodId?: string;
     spreadPreference: "best" | "fastest" | "cheap";
   };
   setOpenTradeForm: (form: any) => void;
@@ -352,47 +354,73 @@ export const ConfigPanel = memo(function ConfigPanel({
           {(() => {
             const pmIcon = (type: string) =>
               type === 'bank' ? '🏦' : type === 'cash' ? '💵' : type === 'card' ? '💳' : type === 'mobile' ? '📱' : '💰';
-            const selectedPm = paymentMethods.find((pm) => pm.type === openTradeForm.paymentMethod);
+            const selectedPm =
+              paymentMethods.find((pm) => pm.id === openTradeForm.paymentMethodId) ||
+              paymentMethods.find((pm) => pm.type === openTradeForm.paymentMethod);
             return (
               <>
                 <button
                   onClick={() => setShowPmDropdown(!showPmDropdown)}
-                  className="w-full flex items-center justify-between py-2 px-3 rounded-xl bg-foreground/[0.03] border border-foreground/[0.08] hover:border-foreground/[0.15] transition-all"
+                  className="w-full flex items-center justify-between gap-2 py-2 px-3 rounded-xl bg-foreground/[0.03] border border-foreground/[0.08] hover:border-foreground/[0.15] transition-all"
                 >
                   {selectedPm ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px]">{pmIcon(selectedPm.type)}</span>
-                      <span className="text-[11px] font-bold text-foreground/80">{selectedPm.name}</span>
-                      <span className="text-[9px] text-foreground/30 font-mono uppercase">{selectedPm.type}</span>
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="text-[11px] shrink-0">{pmIcon(selectedPm.type)}</span>
+                      <div className="min-w-0 flex-1 text-left">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-bold text-foreground/80 truncate">{selectedPm.name}</span>
+                          <span className="text-[9px] text-foreground/30 font-mono uppercase shrink-0">{selectedPm.type}</span>
+                        </div>
+                        {selectedPm.details && (
+                          <div className="text-[10px] text-foreground/45 font-mono truncate">
+                            {selectedPm.details}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ) : paymentMethods.length === 0 ? (
                     <span className="text-[11px] text-foreground/30">No payment methods</span>
                   ) : (
                     <span className="text-[11px] text-foreground/40">Select payment method</span>
                   )}
-                  <ChevronDown className={`w-3.5 h-3.5 text-foreground/30 transition-transform ${showPmDropdown ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`w-3.5 h-3.5 text-foreground/30 transition-transform shrink-0 ${showPmDropdown ? 'rotate-180' : ''}`} />
                 </button>
 
                 {showPmDropdown && (
                   <div className="absolute z-30 top-full left-0 right-0 mt-1 rounded-xl border border-foreground/[0.08] bg-card-solid shadow-lg overflow-hidden">
                     {paymentMethods.map((pm) => {
-                      const isSelected = openTradeForm.paymentMethod === pm.type;
+                      const isSelected = openTradeForm.paymentMethodId
+                        ? openTradeForm.paymentMethodId === pm.id
+                        : openTradeForm.paymentMethod === pm.type;
                       return (
                         <button
                           key={pm.id}
                           onClick={() => {
-                            setOpenTradeForm({ ...openTradeForm, paymentMethod: pm.type as 'bank' | 'cash' });
+                            setOpenTradeForm({
+                              ...openTradeForm,
+                              paymentMethod: pm.type as 'bank' | 'cash',
+                              paymentMethodId: pm.id,
+                            });
                             setShowPmDropdown(false);
                           }}
-                          className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
+                          className={`w-full flex items-start gap-2 px-3 py-2 text-left transition-colors ${
                             isSelected
                               ? "bg-primary/[0.06] text-foreground/90"
                               : "hover:bg-foreground/[0.04] text-foreground/60"
                           }`}
                         >
-                          <span className="text-[11px]">{pmIcon(pm.type)}</span>
-                          <span className="text-[11px] font-bold flex-1 truncate">{pm.name}</span>
-                          <span className="text-[9px] text-foreground/25 font-mono uppercase">{pm.type}</span>
+                          <span className="text-[11px] mt-0.5 shrink-0">{pmIcon(pm.type)}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] font-bold truncate">{pm.name}</span>
+                              <span className="text-[9px] text-foreground/25 font-mono uppercase shrink-0 ml-auto">{pm.type}</span>
+                            </div>
+                            {pm.details && (
+                              <div className="text-[10px] text-foreground/40 font-mono truncate mt-0.5">
+                                {pm.details}
+                              </div>
+                            )}
+                          </div>
                         </button>
                       );
                     })}
@@ -465,9 +493,19 @@ export const ConfigPanel = memo(function ConfigPanel({
         </div>
 
         {/* Spread Tier */}
-        <div>
-          <label className="text-[10px] text-foreground/30 mb-1.5 block font-mono uppercase tracking-wider font-bold">
+        <div data-tour="spread">
+          <label className="text-[10px] text-foreground/30 mb-1.5 flex items-center gap-1 font-mono uppercase tracking-wider font-bold">
             Spread
+            <InfoTooltip
+              side="bottom"
+              title="Spread"
+              description="Your profit margin per trade. Pick the balance between speed and profit."
+              items={[
+                { label: 'Fast', value: '+2.5% — matches quickly, lower profit' },
+                { label: 'Best', value: '+2% — balanced speed and profit' },
+                { label: 'Cheap', value: '+1.5% — highest profit, slower match' },
+              ]}
+            />
           </label>
           <div className="flex gap-1.5">
             {(
@@ -515,11 +553,22 @@ export const ConfigPanel = memo(function ConfigPanel({
         </div>
 
         {/* Priority Fee / Boost */}
-        <div>
+        <div data-tour="boost">
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-[10px] text-foreground/30 font-mono uppercase tracking-wider font-bold flex items-center gap-1">
               <Flame className="w-3 h-3 text-primary/40" />
               Boost
+              <InfoTooltip
+                side="bottom"
+                title="Boost"
+                description="Priority fee that pushes your order ahead of other merchants in the queue."
+                items={[
+                  { label: '0%', value: 'No boost — standard queue priority' },
+                  { label: '5%', value: 'Low boost — slightly faster match' },
+                  { label: '10%', value: 'Medium boost — preferred in busy markets' },
+                  { label: '15%', value: 'High boost — top of the queue' },
+                ]}
+              />
             </label>
             <button
               onClick={() => setShowPriorityInput(!showPriorityInput)}

@@ -15,8 +15,10 @@ interface EventRow {
   event_type: string;
   actor_type: string;
   actor_id: string;
-  old_status: string;
-  new_status: string;
+  // Nullable enum columns — pass null (not "") for unknown/initial states
+  // to avoid PG enum cast errors (22P02).
+  old_status: string | null;
+  new_status: string | null;
   metadata: string;
 }
 

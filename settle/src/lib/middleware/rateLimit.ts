@@ -138,8 +138,31 @@ function checkMemoryRateLimit(
 function createRateLimitResponse(
   resetAt: number,
   maxRequests: number,
+  identifier?: string,
+  route?: string,
 ): NextResponse {
   const retryAfter = Math.ceil((resetAt - Date.now()) / 1000);
+
+  // Fire-and-forget: record who got rate-limited and on which route so
+  // admins can see abuse patterns or tune presets from the dashboard.
+  void (async () => {
+    try {
+      const { safeLog } = await import('@/lib/errorTracking/logger');
+      safeLog({
+        type: 'ratelimit.triggered',
+        severity: 'WARN',
+        message: `Rate limit hit${route ? ` on ${route}` : ''} (${maxRequests} req window exceeded, retry in ${retryAfter}s)`,
+        source: 'backend',
+        metadata: {
+          identifier,
+          route,
+          maxRequests,
+          retryAfterSec: retryAfter,
+        },
+      });
+    } catch { /* swallow */ }
+  })();
+
   return NextResponse.json(
     {
       success: false,
@@ -193,18 +216,18 @@ export async function checkRateLimit(
   const method = request.method?.toUpperCase();
   if (method === 'GET') {
     const memResult = checkMemoryRateLimit(key, maxRequests, windowSeconds);
-    return memResult.allowed ? null : createRateLimitResponse(memResult.resetAt, maxRequests);
+    return memResult.allowed ? null : createRateLimitResponse(memResult.resetAt, maxRequests, identifier, endpoint);
   }
 
   // POST/PATCH/DELETE: use Redis for distributed rate limiting
   const redisResult = await checkRedisRateLimit(key, maxRequests, windowSeconds);
   if (redisResult) {
-    return redisResult!.allowed ? null : createRateLimitResponse(redisResult!.resetAt, maxRequests);
+    return redisResult!.allowed ? null : createRateLimitResponse(redisResult!.resetAt, maxRequests, identifier, endpoint);
   }
 
   // Fallback to in-memory
   const memResult = checkMemoryRateLimit(key, maxRequests, windowSeconds);
-  return memResult.allowed ? null : createRateLimitResponse(memResult.resetAt, maxRequests);
+  return memResult.allowed ? null : createRateLimitResponse(memResult.resetAt, maxRequests, identifier, endpoint);
 }
 
 /**

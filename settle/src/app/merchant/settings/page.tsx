@@ -38,8 +38,29 @@ import { useRouter } from 'next/navigation';
 import { useMerchantStore } from '@/stores/merchantStore';
 import { CorridorProviderSettings } from '@/components/merchant/CorridorProviderSettings';
 import { WalletLedger } from '@/components/merchant/WalletLedger';
+import { PaymentMethodModal } from '@/components/merchant/PaymentMethodModal';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useTheme, THEMES, type Theme } from '@/context/ThemeContext';
+import { Building2, Wallet as WalletIconLucide, DollarSign, Star } from 'lucide-react';
+
+type MerchantPaymentMethod = {
+  id: string;
+  type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile';
+  name: string;
+  details: string;
+  is_default: boolean;
+};
+
+const PM_TYPE_META: Record<
+  MerchantPaymentMethod['type'],
+  { label: string; Icon: any; gradient: string; border: string; text: string }
+> = {
+  bank:   { label: 'Bank Account',  Icon: Building2,        gradient: 'from-blue-500/20 to-blue-600/5',       border: 'border-blue-500/30',    text: 'text-blue-400' },
+  cash:   { label: 'Cash Meeting',  Icon: DollarSign,       gradient: 'from-emerald-500/20 to-emerald-600/5', border: 'border-emerald-500/30', text: 'text-emerald-400' },
+  crypto: { label: 'Crypto Wallet', Icon: WalletIconLucide, gradient: 'from-primary/20 to-primary/5',         border: 'border-primary/30',     text: 'text-primary' },
+  card:   { label: 'Card',          Icon: CreditCard,       gradient: 'from-purple-500/20 to-purple-600/5',   border: 'border-purple-500/30',  text: 'text-purple-400' },
+  mobile: { label: 'Mobile Money',  Icon: Smartphone,       gradient: 'from-pink-500/20 to-pink-600/5',       border: 'border-pink-500/30',    text: 'text-pink-400' },
+};
 
 // Avatar presets (same as profile modal)
 const PRESET_AVATARS = [
@@ -112,6 +133,11 @@ export default function MerchantSettingsPage() {
   const [showAddBank, setShowAddBank] = useState(false);
   const [newBank, setNewBank] = useState({ bank_name: '', account_name: '', iban: '' });
   const [isAddingBank, setIsAddingBank] = useState(false);
+
+  // Merchant payment methods (multi-type: bank / cash / crypto / card / mobile)
+  const [paymentMethods, setPaymentMethods] = useState<MerchantPaymentMethod[]>([]);
+  const [isLoadingMethods, setIsLoadingMethods] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
   // Notifications
   const [notifSettings, setNotifSettings] = useState({
@@ -298,6 +324,73 @@ export default function MerchantSettingsPage() {
       setIsChangingPassword(false);
     }
   };
+
+  const fetchPaymentMethods = useCallback(async () => {
+    const id = merchantId || merchant?.id;
+    if (!id) return;
+    setIsLoadingMethods(true);
+    try {
+      const res = await fetchWithAuth(`/api/merchant/${id}/payment-methods`);
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        setPaymentMethods(
+          json.data.map((m: any) => ({
+            id: m.id,
+            type: m.type,
+            name: m.name,
+            details: m.details,
+            is_default: !!m.is_default,
+          })),
+        );
+      }
+    } catch {
+      // Silent fail — user sees empty list
+    } finally {
+      setIsLoadingMethods(false);
+    }
+  }, [merchantId, merchant?.id]);
+
+  const handleSetDefaultMethod = async (methodId: string) => {
+    const id = merchantId || merchant?.id;
+    if (!id) return;
+    try {
+      const res = await fetchWithAuth(`/api/merchant/${id}/payment-methods`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method_id: methodId }),
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setPaymentMethods(prev => prev.map(m => ({ ...m, is_default: m.id === methodId })));
+      }
+    } catch {
+      // Silent fail
+    }
+  };
+
+  const handleDeleteMethod = async (methodId: string) => {
+    const id = merchantId || merchant?.id;
+    if (!id) return;
+    try {
+      const res = await fetchWithAuth(
+        `/api/merchant/${id}/payment-methods?method_id=${methodId}`,
+        { method: 'DELETE' },
+      );
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setPaymentMethods(prev => prev.filter(m => m.id !== methodId));
+      }
+    } catch {
+      // Silent fail
+    }
+  };
+
+  // Fetch merchant payment methods when Payments tab opens
+  useEffect(() => {
+    if (activeTab === 'payments') {
+      fetchPaymentMethods();
+    }
+  }, [activeTab, fetchPaymentMethods]);
 
   const handleAddBank = async () => {
     if (!newBank.bank_name || !newBank.account_name || !newBank.iban) return;
@@ -828,110 +921,97 @@ export default function MerchantSettingsPage() {
             <div className="space-y-6">
               <div>
                 <h2 className="text-lg font-bold mb-1">Payment Methods</h2>
-                <p className="text-sm text-white/40">Manage your bank accounts for fiat transfers</p>
+                <p className="text-sm text-white/40">
+                  Bank, card, crypto, cash and mobile methods used to send or receive funds
+                </p>
               </div>
 
-              {/* Existing Bank Accounts */}
               <div className="space-y-3">
-                {bankAccounts.length === 0 && !showAddBank && (
+                {isLoadingMethods && paymentMethods.length === 0 ? (
+                  <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-8 text-center">
+                    <Loader2 className="w-5 h-5 text-white/20 mx-auto animate-spin" />
+                    <p className="text-xs text-white/30 mt-3">Loading payment methods…</p>
+                  </div>
+                ) : paymentMethods.length === 0 ? (
                   <div className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-8 text-center">
                     <CreditCard className="w-10 h-10 text-white/10 mx-auto mb-3" />
-                    <p className="text-sm text-white/40 mb-4">No bank accounts added yet</p>
+                    <p className="text-sm text-white/40 mb-4">No payment methods added yet</p>
                     <button
-                      onClick={() => setShowAddBank(true)}
+                      onClick={() => setIsPaymentModalOpen(true)}
                       className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 border border-primary/20 text-sm text-primary font-medium hover:bg-primary/20 transition-colors"
                     >
                       <Plus className="w-4 h-4" />
-                      Add Bank Account
+                      Add Payment Method
                     </button>
                   </div>
-                )}
-
-                {bankAccounts.map((bank) => (
-                  <div key={bank.id} className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center">
-                          <CreditCard className="w-5 h-5 text-white/40" />
+                ) : (
+                  <>
+                    {paymentMethods.map((method) => {
+                      const meta = PM_TYPE_META[method.type] || PM_TYPE_META.bank;
+                      const Icon = meta.Icon;
+                      return (
+                        <div
+                          key={method.id}
+                          className={`rounded-2xl border p-4 transition-colors ${
+                            method.is_default
+                              ? 'bg-gradient-to-r from-primary/[0.06] to-transparent border-primary/20'
+                              : 'bg-white/[0.02] border-white/[0.06]'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${meta.gradient} border ${meta.border} flex items-center justify-center shrink-0`}>
+                                <Icon className={`w-5 h-5 ${meta.text}`} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-medium text-white/80 truncate">{method.name}</p>
+                                  <span className="text-[9px] font-bold font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.06] text-white/40">
+                                    {meta.label}
+                                  </span>
+                                  {method.is_default && (
+                                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 border border-primary/20 rounded-md">
+                                      <Star className="w-2.5 h-2.5 text-primary fill-primary" />
+                                      <span className="text-[9px] text-primary font-bold uppercase tracking-wider">Default</span>
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-white/30 font-mono mt-0.5 truncate">{method.details}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {!method.is_default && (
+                                <button
+                                  onClick={() => handleSetDefaultMethod(method.id)}
+                                  className="p-2 text-white/20 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                                  title="Set as default"
+                                >
+                                  <Star className="w-4 h-4" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteMethod(method.id)}
+                                className="p-2 text-white/20 hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 rounded-lg transition-colors"
+                                title="Remove"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-white/80">{bank.bank_name}</p>
-                          <p className="text-xs text-white/40">{bank.account_name}</p>
-                          <p className="text-xs text-white/30 font-mono mt-0.5">{bank.iban}</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteBank(bank.id)}
-                        className="p-2 text-white/20 hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                      );
+                    })}
 
-                {bankAccounts.length > 0 && !showAddBank && (
-                  <button
-                    onClick={() => setShowAddBank(true)}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-white/[0.08] text-sm text-white/30 hover:text-foreground/50 hover:border-border-strong transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Another Account
-                  </button>
+                    <button
+                      onClick={() => setIsPaymentModalOpen(true)}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed border-white/[0.08] text-sm text-white/30 hover:text-foreground/50 hover:border-border-strong transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Payment Method
+                    </button>
+                  </>
                 )}
               </div>
-
-              {/* Add Bank Form */}
-              {showAddBank && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-white/[0.02] rounded-2xl border border-white/[0.06] p-5 space-y-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs text-white/40 font-mono uppercase tracking-wider">Add Bank Account</label>
-                    <button
-                      onClick={() => setShowAddBank(false)}
-                      className="text-xs text-white/30 hover:text-foreground/50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-
-                  <input
-                    type="text"
-                    value={newBank.bank_name}
-                    onChange={(e) => setNewBank(prev => ({ ...prev, bank_name: e.target.value }))}
-                    placeholder="Bank name (e.g. Emirates NBD)"
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
-                  />
-
-                  <input
-                    type="text"
-                    value={newBank.account_name}
-                    onChange={(e) => setNewBank(prev => ({ ...prev, account_name: e.target.value }))}
-                    placeholder="Account holder name"
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
-                  />
-
-                  <input
-                    type="text"
-                    value={newBank.iban}
-                    onChange={(e) => setNewBank(prev => ({ ...prev, iban: e.target.value.toUpperCase() }))}
-                    placeholder="IBAN (e.g. AE07033...)"
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white font-mono placeholder:text-white/20 outline-none focus:border-primary/30 transition-colors"
-                  />
-
-                  <button
-                    onClick={handleAddBank}
-                    disabled={isAddingBank || !newBank.bank_name || !newBank.account_name || !newBank.iban}
-                    className="w-full py-3 rounded-xl bg-primary text-background font-bold text-sm hover:bg-primary transition-colors disabled:opacity-30 flex items-center justify-center gap-2"
-                  >
-                    {isAddingBank && <Loader2 className="w-4 h-4 animate-spin" />}
-                    {isAddingBank ? 'Adding...' : 'Add Bank Account'}
-                  </button>
-                </motion.div>
-              )}
             </div>
           )}
 
@@ -1022,6 +1102,15 @@ export default function MerchantSettingsPage() {
           </div>
         </main>
       </div>
+
+      <PaymentMethodModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          fetchPaymentMethods();
+        }}
+        merchantId={merchantId || merchant?.id || ''}
+      />
     </div>
   );
 }

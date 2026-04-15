@@ -205,4 +205,31 @@ app.prepare().then(async () => {
   } catch (deadlineErr) {
     console.warn('> Payment-deadline worker not available:', deadlineErr.message);
   }
+
+  // Start anomaly-sweeper — observability-only background process that scans
+  // for silent business-invariant violations (stuck orders, balance drift,
+  // undelivered chats, escrow mismatches) and writes them to error_logs.
+  // Purely read-only; never modifies any row. Gated by ENABLE_ERROR_TRACKING.
+  if ((process.env.ENABLE_ERROR_TRACKING || '').toLowerCase() === 'true'
+      && (process.env.ENABLE_ANOMALY_SWEEPER || '').toLowerCase() !== 'false') {
+    try {
+      const { spawn } = require('child_process');
+      const path = require('path');
+      const npxBin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+      const sweeperScript = path.join(__dirname, 'src/workers/anomaly-sweeper.ts');
+      const sweeper = spawn(npxBin, ['tsx', sweeperScript], {
+        stdio: 'inherit',
+        env: { ...process.env },
+        cwd: __dirname,
+      });
+      sweeper.on('exit', (code) => {
+        if (code !== 0) console.error(`> Anomaly sweeper exited with code ${code}`);
+      });
+      console.log('> Anomaly sweeper started (pid:', sweeper.pid + ')');
+    } catch (sweeperErr) {
+      console.warn('> Anomaly sweeper not available:', sweeperErr.message);
+    }
+  } else {
+    console.log('> Anomaly sweeper skipped (ENABLE_ERROR_TRACKING not true)');
+  }
 });

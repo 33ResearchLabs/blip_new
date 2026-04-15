@@ -28,9 +28,20 @@ try {
   const { withSentryConfig } = require("@sentry/nextjs");
   exportedConfig = withSentryConfig(nextConfig, {
     // Suppresses source map upload logs during build
-    silent: true,
+    silent: !process.env.CI,
     // Automatically tree-shake Sentry logger statements to reduce bundle size
     disableLogger: true,
+    // Source map upload: set SENTRY_AUTH_TOKEN (and optionally SENTRY_ORG /
+    // SENTRY_PROJECT) to get readable stack traces in production. Safe to
+    // leave unset in dev — source maps still work locally via the bundler.
+    authToken: process.env.SENTRY_AUTH_TOKEN,
+    // Upload a wider set of client files so production stack traces resolve
+    // to real filenames more often.
+    widenClientFileUpload: true,
+    // Create a proxy route at /monitoring so ad-blockers can't drop the
+    // Sentry beacon. Remember to exclude '/monitoring' from any middleware
+    // that requires auth.
+    tunnelRoute: "/monitoring",
   });
 } catch {
   // @sentry/nextjs not installed — skip Sentry wrapper

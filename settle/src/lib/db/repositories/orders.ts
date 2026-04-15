@@ -187,11 +187,15 @@ export async function getUserOrders(
       ORDER BY cm.created_at DESC LIMIT 1
     ) chat_latest ON true
     WHERE o.user_id = $1
-      AND o.status NOT IN ('expired', 'cancelled')
   `;
 
   const params: unknown[] = [userId];
 
+  // The user OWNS their orders — if no explicit filter is passed, return
+  // every order including terminal ones (completed / cancelled / expired /
+  // disputed) so the activity tab can show full history. The frontend
+  // partitions them into Active / Completed / Cancelled lists locally.
+  // Callers that want only active orders should pass an explicit `status`.
   if (status && status.length > 0) {
     sql += ` AND o.status = ANY($${params.length + 1})`;
     params.push(status);
@@ -270,14 +274,18 @@ export async function getMerchantOrders(
     LEFT JOIN user_payment_methods upm ON o.payment_method_id = upm.id
     LEFT JOIN merchant_payment_methods mpm ON o.merchant_payment_method_id = mpm.id
     WHERE (o.merchant_id = $1 OR o.buyer_merchant_id = $1)
-      AND o.status NOT IN ('expired', 'cancelled')
   `;
 
   const params: unknown[] = [merchantId];
 
+  // Honor an explicit status filter (incl. 'expired' / 'cancelled') from the
+  // caller. Otherwise default to "active-ish" orders — hide noisy terminal
+  // expired/cancelled rows.
   if (status && status.length > 0) {
     params.push(status);
     sql += ` AND o.status = ANY($${params.length})`;
+  } else {
+    sql += ` AND o.status NOT IN ('expired', 'cancelled')`;
   }
 
   if (options?.cursor) {

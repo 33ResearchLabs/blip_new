@@ -928,6 +928,30 @@ export function ChatRoom({
             );
           }
 
+          // Receipt messages: render centered & wider, bypassing the narrow
+          // chat bubble so the card doesn't get squeezed by max-w-[75%] +
+          // bubble padding + double background chrome.
+          if (msg.messageType === "receipt") {
+            let payload: Record<string, unknown> | null = msg.receiptData ?? null;
+            if (!payload && msg.text) {
+              try {
+                const parsed = JSON.parse(msg.text);
+                if (parsed.type === 'order_receipt' && parsed.data) payload = parsed.data;
+                else payload = parsed;
+              } catch {}
+            }
+            if (payload) {
+              return (
+                <div key={msg.id} className="max-w-[90%] mx-auto my-2">
+                  <ReceiptCard data={payload as never} />
+                  <p className="text-[10px] mt-1 text-center text-gray-500">
+                    {formatTime(msg.timestamp)}
+                  </p>
+                </div>
+              );
+            }
+          }
+
           const isMe = msg.from === "me";
           const displayName = getDisplayName(msg);
           const roleColor =
@@ -1011,24 +1035,9 @@ export function ChatRoom({
                       />
                     )}
 
-                    {/* Receipt card */}
-                    {msg.messageType === "receipt" && (() => {
-                      let payload: Record<string, unknown> | null = msg.receiptData ?? null;
-                      if (!payload && msg.text) {
-                        try {
-                          const parsed = JSON.parse(msg.text);
-                          if (parsed.type === 'order_receipt' && parsed.data) payload = parsed.data;
-                          else payload = parsed;
-                        } catch {}
-                      }
-                      if (payload) return <ReceiptCard data={payload as any} />;
-                      return null;
-                    })()}
-
-                    {/* Text content (skip if it's a pure image/file/receipt) */}
+                    {/* Text content (skip if it's a pure image/file) */}
                     {msg.messageType !== "image" &&
                       msg.messageType !== "file" &&
-                      msg.messageType !== "receipt" &&
                       msg.text && (
                         <p className="text-sm text-white/90 whitespace-pre-wrap break-words">
                           {msg.text}

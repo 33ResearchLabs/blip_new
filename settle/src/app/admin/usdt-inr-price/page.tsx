@@ -417,6 +417,12 @@ export default function UsdtPricePage() {
                 Monitor
               </Link>
               <Link
+                href="/admin/error-logs"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Error Logs
+              </Link>
+              <Link
                 href="/admin/usdt-inr-price"
                 className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-accent-subtle text-foreground transition-colors"
               >

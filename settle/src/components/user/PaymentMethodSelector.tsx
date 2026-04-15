@@ -94,11 +94,15 @@ export const PaymentMethodSelector = ({
     }
     // Validate details per type
     if (addType === "bank") {
-      if (!addDetails.bank_name || !addDetails.account_name || !addDetails.iban) {
-        setFormError("Bank name, account name, and IBAN are required");
+      if (!addDetails.bank_name || !addDetails.account_name) {
+        setFormError("Bank name and account name are required");
         return;
       }
-      if (addDetails.iban.length < 15 || addDetails.iban.length > 34) {
+      if (!addDetails.account_number && !addDetails.iban) {
+        setFormError("Account number or IBAN is required");
+        return;
+      }
+      if (addDetails.iban && (addDetails.iban.length < 15 || addDetails.iban.length > 34)) {
         setFormError("IBAN must be 15-34 characters");
         return;
       }
@@ -150,8 +154,10 @@ export const PaymentMethodSelector = ({
 
   const getSubtext = (m: PaymentMethodItem) => {
     if (m.type === "bank") {
-      const iban = m.details.iban || "";
-      return `${m.details.account_name || ""} \u00B7 ${iban.slice(0, 4)}...${iban.slice(-4)}`;
+      const accountNum =
+        m.details.account_number || m.details.iban || "";
+      const name = m.details.account_name || "";
+      return [name, accountNum].filter(Boolean).join(" \u00B7 ");
     }
     if (m.type === "upi") return m.details.upi_id || "";
     if (m.type === "cash") return m.details.location_name || "";
@@ -372,9 +378,25 @@ export const PaymentMethodSelector = ({
                   />
                   <input
                     type="text"
+                    value={addDetails.account_number || ""}
+                    onChange={(e) => setAddDetails({ ...addDetails, account_number: e.target.value })}
+                    placeholder="Account Number"
+                    className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary font-mono placeholder:text-text-primary/25 placeholder:font-sans outline-none focus:ring-1 focus:ring-border-strong"
+                    style={{ background: colors.surface.card }}
+                  />
+                  <input
+                    type="text"
+                    value={addDetails.ifsc || ""}
+                    onChange={(e) => setAddDetails({ ...addDetails, ifsc: e.target.value.toUpperCase() })}
+                    placeholder="IFSC / SWIFT code — optional"
+                    className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary font-mono placeholder:text-text-primary/25 placeholder:font-sans outline-none focus:ring-1 focus:ring-border-strong"
+                    style={{ background: colors.surface.card }}
+                  />
+                  <input
+                    type="text"
                     value={addDetails.iban || ""}
                     onChange={(e) => setAddDetails({ ...addDetails, iban: e.target.value.toUpperCase() })}
-                    placeholder="IBAN (e.g. AE070331234567890123456)"
+                    placeholder="IBAN — optional (for international transfers)"
                     className="w-full rounded-lg px-3 py-2.5 text-[13px] text-text-primary font-mono placeholder:text-text-primary/25 placeholder:font-sans outline-none focus:ring-1 focus:ring-border-strong"
                     style={{ background: colors.surface.card }}
                   />

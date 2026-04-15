@@ -291,6 +291,24 @@ export async function getVerifiedAuthContext(
           sessionId: auth.sessionId,
           actorId: auth.actorId,
         });
+        // Fire-and-forget: surface session-rejection patterns to admin
+        void (async () => {
+          try {
+            const { safeLog } = await import('@/lib/errorTracking/logger');
+            safeLog({
+              type: 'auth.session_revoked_or_expired',
+              severity: 'WARN',
+              message: `Request rejected — session ${auth.sessionId?.slice(0, 8)}… is no longer valid`,
+              source: 'backend',
+              [auth.actorType === 'merchant' ? 'merchantId' : 'userId']: auth.actorId,
+              metadata: {
+                sessionId: auth.sessionId,
+                actorType: auth.actorType,
+                route: request.nextUrl.pathname,
+              },
+            });
+          } catch { /* swallow */ }
+        })();
         return null;
       }
     } else {
@@ -301,6 +319,22 @@ export async function getVerifiedAuthContext(
           actorId: auth.actorId,
           actorType: auth.actorType,
         });
+        void (async () => {
+          try {
+            const { safeLog } = await import('@/lib/errorTracking/logger');
+            safeLog({
+              type: 'auth.no_active_sessions',
+              severity: 'WARN',
+              message: `Request rejected — actor has no active sessions (likely logged out elsewhere)`,
+              source: 'backend',
+              [auth.actorType === 'merchant' ? 'merchantId' : 'userId']: auth.actorId,
+              metadata: {
+                actorType: auth.actorType,
+                route: request.nextUrl.pathname,
+              },
+            });
+          } catch { /* swallow */ }
+        })();
         return null;
       }
 
@@ -729,8 +763,25 @@ export function successResponse<T>(data: T, status = 200): NextResponse {
 
 /**
  * Create error response
+ *
+ * 5xx responses are fire-and-forget logged to error_logs so admins can
+ * see every server-side failure without instrumenting each route by hand.
  */
 export function errorResponse(message: string, status = 500): NextResponse {
+  if (status >= 500) {
+    void (async () => {
+      try {
+        const { safeLog } = await import('@/lib/errorTracking/logger');
+        safeLog({
+          type: `api.error_response.${status}`,
+          severity: status >= 500 ? 'ERROR' : 'WARN',
+          message: `errorResponse(${status}): ${message}`,
+          source: 'backend',
+          metadata: { status, errorMessage: message },
+        });
+      } catch { /* swallow — logging must never cascade */ }
+    })();
+  }
   return NextResponse.json(
     { success: false, error: message },
     { status }

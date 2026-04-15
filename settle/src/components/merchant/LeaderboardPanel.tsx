@@ -1,9 +1,35 @@
 'use client';
 
 import { useState, useEffect, memo } from 'react';
-import { Star, Trophy, ChevronUp, ChevronDown, Shield } from 'lucide-react';
+import { Star, Trophy, ChevronDown, Shield, Crown, Medal, Award } from 'lucide-react';
 import { FilterDropdown, type FilterOption } from '@/components/user/screens/ui/FilterDropdown';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+
+/** Get a deterministic emoji for an entity name. Same util used elsewhere. */
+function getEntityEmoji(name: string): string {
+  const emojis = ['🦊', '🐻', '🐼', '🐨', '🦁', '🐯', '🐸', '🐙', '🦋', '🐳', '🦄', '🐲', '🐺', '🦅', '🐢'];
+  const hash = name.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+  return emojis[hash % emojis.length];
+}
+
+/** Visual treatment — plain neutral badges. Top 3 still get rank icons
+ *  (Crown / Medal / Award) so the hierarchy reads at a glance, but no
+ *  colored gradients — keeps the panel calm and on-theme. */
+function rankStyle(rank: number) {
+  const baseBadge = 'bg-foreground/[0.06] text-foreground/60 ring-foreground/[0.08]';
+  const baseRow = 'border-foreground/[0.05]';
+  if (rank === 1) return { badge: baseBadge, row: baseRow, Icon: Crown };
+  if (rank === 2) return { badge: baseBadge, row: baseRow, Icon: Medal };
+  if (rank === 3) return { badge: baseBadge, row: baseRow, Icon: Award };
+  return { badge: baseBadge, row: baseRow, Icon: null as React.ComponentType<{ className?: string }> | null };
+}
+
+/** Compact volume formatter — $279.1k, $1.2M */
+function formatVolume(v: number): string {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}k`;
+  return `$${Math.round(v)}`;
+}
 
 const LEADERBOARD_OPTIONS: ReadonlyArray<FilterOption<'traders' | 'rated' | 'reputation'>> = [
   { key: 'traders',    label: 'Volume' },
@@ -132,20 +158,43 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
           ) : (
             <div className="space-y-1">
               {repData.slice(0, 10).map((entry, i) => {
+                const rank = i + 1;
                 const tierInfo = TIER_SHORT[entry.tier] || TIER_SHORT.newcomer;
+                const style = rankStyle(rank);
+                const RankIcon = style.Icon;
                 return (
                   <div
                     key={entry.entity_id}
-                    className="flex items-center px-2 py-2.5 rounded-lg hover:bg-foreground/[0.03] transition-colors text-[11px] font-mono"
+                    className={`group flex items-center gap-2 px-2 py-2 rounded-xl border transition-all hover:border-foreground/[0.10] hover:shadow-sm hover:shadow-black/20 ${style.row}`}
                   >
-                    <span className="w-5 text-right font-bold shrink-0 tabular-nums text-foreground/25">
-                      {i + 1}
-                    </span>
-                    <div className="flex items-center flex-1 min-w-0 pl-2">
-                      <span className="text-xs font-medium text-foreground/70 truncate font-sans">{entry.name}</span>
+                    {/* Rank badge */}
+                    <div className={`relative w-7 h-7 rounded-full flex items-center justify-center shrink-0 ring-1 ${style.badge}`}>
+                      {RankIcon ? (
+                        <RankIcon className="w-3.5 h-3.5" />
+                      ) : (
+                        <span className="text-[10px] font-extrabold tabular-nums">{rank}</span>
+                      )}
                     </div>
-                    <span className={`w-9 text-right font-bold shrink-0 ${tierInfo.cls}`}>{tierInfo.label}</span>
-                    <span className="w-11 text-right text-foreground/40 font-bold tabular-nums shrink-0">{entry.total_score}</span>
+
+                    {/* Avatar + name */}
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div className="w-6 h-6 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] flex items-center justify-center text-xs shrink-0">
+                        {getEntityEmoji(entry.name)}
+                      </div>
+                      <span className="text-[12px] font-semibold text-foreground/85 truncate">
+                        {entry.name}
+                      </span>
+                    </div>
+
+                    {/* Tier badge */}
+                    <span className={`text-[9px] font-extrabold font-mono tracking-wider px-1.5 py-0.5 rounded shrink-0 bg-foreground/[0.04] border border-foreground/[0.06] ${tierInfo.cls}`}>
+                      {tierInfo.label}
+                    </span>
+
+                    {/* Score */}
+                    <span className="text-[12px] font-extrabold tabular-nums text-foreground shrink-0 min-w-[40px] text-right">
+                      {entry.total_score}
+                    </span>
                   </div>
                 );
               })}
@@ -163,31 +212,51 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
           </div>
         ) : (
           <div className="space-y-1">
-            {filteredData.slice(0, 10).map((entry) => (
-              <div
-                key={entry.id}
-                className="flex items-center px-2 py-2.5 rounded-lg hover:bg-foreground/[0.03] transition-colors text-[11px] font-mono"
-              >
-                <span className="w-5 text-right font-bold shrink-0 tabular-nums text-foreground/25">
-                  {entry.rank}
-                </span>
-                <div className="flex items-center flex-1 min-w-0 pl-2">
-                  <span className="text-xs font-medium text-foreground/70 truncate font-sans">
-                    {entry.displayName}
+            {filteredData.slice(0, 10).map((entry) => {
+              const style = rankStyle(entry.rank);
+              const RankIcon = style.Icon;
+              return (
+                <div
+                  key={entry.id}
+                  className={`group flex items-center gap-2 px-2 py-2 rounded-xl border transition-all hover:border-foreground/[0.10] hover:shadow-sm hover:shadow-black/20 ${style.row}`}
+                >
+                  {/* Rank badge — gold/silver/bronze for top 3 */}
+                  <div className={`relative w-7 h-7 rounded-full flex items-center justify-center shrink-0 ring-1 ${style.badge}`}>
+                    {RankIcon ? (
+                      <RankIcon className="w-3.5 h-3.5" />
+                    ) : (
+                      <span className="text-[10px] font-extrabold tabular-nums">{entry.rank}</span>
+                    )}
+                  </div>
+
+                  {/* Avatar + name */}
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <div className="w-6 h-6 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] flex items-center justify-center text-xs shrink-0">
+                      {getEntityEmoji(entry.displayName)}
+                    </div>
+                    <span className="text-[12px] font-semibold text-foreground/85 truncate">
+                      {entry.displayName}
+                    </span>
+                  </div>
+
+                  {/* Trades count */}
+                  <span className="text-[10px] font-mono tabular-nums text-foreground/30 shrink-0">
+                    {entry.completedCount || entry.totalTrades}T
+                  </span>
+
+                  {/* Volume — primary metric */}
+                  <span className="text-[12px] font-extrabold tabular-nums text-foreground shrink-0 min-w-[52px] text-right">
+                    {formatVolume(entry.totalVolume)}
+                  </span>
+
+                  {/* Rating */}
+                  <span className="flex items-center gap-0.5 text-[11px] font-bold text-primary tabular-nums shrink-0 min-w-[34px] justify-end">
+                    <Star className="w-3 h-3 fill-primary text-primary" />
+                    {entry.rating.toFixed(1)}
                   </span>
                 </div>
-                <span className="w-7 text-right text-foreground/25 shrink-0 tabular-nums">{entry.completedCount || entry.totalTrades}T</span>
-                <span className="w-14 text-right text-foreground/40 font-bold shrink-0 tabular-nums">
-                  {entry.totalVolume >= 1000
-                    ? `$${(entry.totalVolume / 1000).toFixed(1)}k`
-                    : `$${Math.round(entry.totalVolume)}`}
-                </span>
-                <span className="w-11 text-right flex items-center justify-end gap-0.5 text-primary/70 shrink-0">
-                  <Star className="w-3 h-3 fill-primary/60 text-primary/60" />
-                  {entry.rating.toFixed(1)}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>}

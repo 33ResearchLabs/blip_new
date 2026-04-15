@@ -7,6 +7,7 @@ import { PusherProvider } from "@/context/PusherContext";
 import { WebSocketChatProvider } from "@/context/WebSocketChatContext";
 import { ModalProvider } from "@/context/ModalContext";
 import ClientWalletProvider from "@/components/ClientWalletProvider";
+import ErrorTrackingBoot from "@/components/ErrorTrackingBoot";
 
 const inter = Inter({
   variable: "--font-geist-sans",
@@ -91,6 +92,7 @@ export default function RootLayout({
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className={`${inter.variable} ${jetbrainsMono.variable} antialiased`} suppressHydrationWarning>
+        <ErrorTrackingBoot />
         <ThemeProvider>
           <ClientWalletProvider>
             <PusherProvider>

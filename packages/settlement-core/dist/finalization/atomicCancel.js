@@ -67,7 +67,7 @@ export async function atomicCancelWithRefund(orderId, currentStatus, actorType, 
                 let refundId;
                 let refundTable;
                 if (isM2M) {
-                    // M2M: merchant_id is always the seller who locked escrow
+                    // M2M: merchant_id is ALWAYS the seller (who locked escrow). Type-agnostic.
                     refundId = lockedOrder.merchant_id;
                     refundTable = 'merchants';
                 }

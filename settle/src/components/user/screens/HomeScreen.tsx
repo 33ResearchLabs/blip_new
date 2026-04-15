@@ -11,12 +11,10 @@ import {
   ChevronRight,
   Copy,
   Check,
-  TrendingUp,
 } from "lucide-react";
 import { useState as useStateHook, useEffect } from "react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
 import { showAlert } from "@/context/ModalContext";
-import { HomeSparkline } from "./HomeDecorations";
 import { BottomNav } from "./BottomNav";
 import type { Screen, Order } from "./types";
 
@@ -141,8 +139,12 @@ function WalletBalanceSection({
   // Currency label tracks the active corridor (defaults to INR — see useUserTradeCreation).
   const fiatLabel = selectedPair === 'usdt_aed' ? 'AED' : 'INR';
 
-   const d = new Date();
-  d.setDate(d.getDate() - 7);
+  // TODO(balance-history): build /api/users/[id]/balance-history that reads
+  // from ledger_entries grouped by day for the last 7 days, then render a
+  // real sparkline here with real daily P&L. Removed the static placeholders
+  // (hardcoded +$557 / +3.6% / fake ascending chart) because showing fake
+  // financial data to real users is misleading and not acceptable for a
+  // fintech product.
 
   return (
     <>
@@ -164,7 +166,7 @@ function WalletBalanceSection({
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
 
             {/* Balance number */}
-            <div className="flex items-baseline gap-1 mb-1.5">
+            <div className="flex items-baseline gap-1 mb-3">
               <span className="text-[58px] font-extrabold tracking-[-0.045em] leading-none text-text-primary font-mono">
                 {balWhole}
               </span>
@@ -174,29 +176,6 @@ function WalletBalanceSection({
               <span className="text-[13px] font-semibold text-text-quaternary ml-1 tracking-[0.04em]">
                 USDT
               </span>
-            </div>
-
-            {/* Profit */}
-            <div className="flex items-center gap-1.5 mb-3">
-              <TrendingUp size={11} className="text-success" />
-              <span className="text-[12px] font-bold text-success tracking-[0.01em] font-mono">+$557.00 today</span>
-            </div>
-
-            {/* Sparkline */}
-            <div className="-mx-1">
-              <div className="flex justify-between mb-1 px-1">
-                <span className="text-[8px] font-semibold text-text-quaternary tracking-[0.1em] uppercase">
-                  7D
-                </span>
-                <span className="text-[8px] font-bold text-success tracking-[0.06em] font-mono">
-                  ↑ 3.6%
-                </span>
-              </div>
-              <HomeSparkline height={72} />
-              <div className="flex justify-between mt-1 px-1">
-                <span className="text-[8px] text-text-quaternary font-medium">{d.toLocaleDateString('en-IN')}</span>
-                <span className="text-[8px] text-text-quaternary font-medium">Today</span>
-              </div>
             </div>
 
           </motion.div>

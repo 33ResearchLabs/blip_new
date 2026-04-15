@@ -23,6 +23,9 @@ interface LoginScreenProps {
   onRegister: () => void;
   onResendVerification?: () => void;
   isResendingVerification?: boolean;
+  /** When true, skips the welcome page and goes straight to the login form.
+   *  Used by the /merchant/login route. */
+  skipWelcome?: boolean;
 }
 
 export function LoginScreen({
@@ -32,17 +35,29 @@ export function LoginScreen({
   loginError, setLoginError,
   isLoggingIn, isRegistering, isAuthenticating,
   onLogin, onRegister, onResendVerification, isResendingVerification,
+  skipWelcome = false,
 }: LoginScreenProps) {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [showWelcome, setShowWelcome] = useState(true);
+  // When skipWelcome is true, the welcome page is bypassed (used by /merchant/login route).
+  // Setter unused — navigation to the form happens via /merchant/login URL, not state toggle.
+  const [showWelcome] = useState(!skipWelcome);
 
   if (showWelcome) {
     return (
       <MerchantWelcomePage
-        onGetStarted={() => { setAuthTab('create'); setShowWelcome(false); }}
-        onSignIn={() => { setAuthTab('signin'); setShowWelcome(false); }}
+        onGetStarted={() => {
+          // Navigate to /merchant/login?tab=register for a clean URL
+          if (typeof window !== 'undefined') {
+            window.location.href = '/merchant/login?tab=register';
+          }
+        }}
+        onSignIn={() => {
+          if (typeof window !== 'undefined') {
+            window.location.href = '/merchant/login?tab=signin';
+          }
+        }}
       />
     );
   }

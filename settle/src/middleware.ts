@@ -108,6 +108,13 @@ const PUBLIC_EXACT = new Set([
   '/api/dev-unlock',
   // 2FA login challenge — caller has a one-time pendingToken in body, NOT a session yet
   '/api/2fa/verify-login',
+  // Error-tracking ingest — often called from anonymous/pre-auth pages
+  // (login crashes, public pages). Route itself is feature-gated, rate-limited
+  // and body-capped; safe to accept without a session.
+  '/api/client-errors',
+  // Sentry tunnel route — created automatically by withSentryConfig to
+  // bypass ad-blockers. Must be reachable anonymously or Sentry beacons fail.
+  '/monitoring',
 ]);
 
 function isPublicRoute(pathname: string, method: string): boolean {
@@ -257,7 +264,15 @@ export function middleware(request: NextRequest) {
   if (devLockEnabled) {
     const isDevExempt =
       pathname === '/dev-lock' ||
-      pathname === '/api/dev-unlock';
+      pathname === '/api/dev-unlock' ||
+      // Error-tracking ingest must be reachable without the dev cookie so
+      // client-side errors (often happening on pages that never hit dev-lock,
+      // like login pages or pre-auth screens) can still be captured. The
+      // endpoint itself is feature-flagged, rate-limited, and body-capped.
+      pathname === '/api/client-errors' ||
+      // Sentry tunnel route — used to bypass ad-blockers; must be anonymous.
+      pathname === '/monitoring' ||
+      pathname.startsWith('/monitoring/');
 
     if (!isDevExempt) {
       const devCookie = request.cookies.get('dev_access_granted');
@@ -294,6 +309,13 @@ export function middleware(request: NextRequest) {
       (pathname === '/api/orders' || pathname === '/api/merchant/orders')
     ) {
       rateLimitResult = checkRate(ip, 'order-mutation', 30, 60);
+    } else if (pathname.startsWith('/api/admin/')) {
+      // Admin routes are HMAC-authenticated (requireAdminAuth) and used by
+      // real human operators hitting dashboards that poll every ~10s. The
+      // 100/min standard bucket is easy to exhaust with 3–4 admin tabs open.
+      // Give them a much higher ceiling per IP — abuse is already blocked
+      // by the HMAC auth requirement.
+      rateLimitResult = checkRate(ip, 'admin', 1000, 60);
     } else {
       rateLimitResult = checkRate(ip, 'standard', 100, 60);
     }

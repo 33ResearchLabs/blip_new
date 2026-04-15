@@ -240,7 +240,7 @@ export const TradeCreationScreen = ({
               {
                 type: "buy" as const,
                 label: "Buy USDT",
-                sub: `Pay ${ratePair === "usdt_inr" ? "INR" : "AED"}, get USDT`,
+                sub: `Pay ${ratePair === "usdt_inr" ? "INR" : "AED"}, Get USDT`,
                 Icon: ArrowDownLeft,
                 activeClass: "border-[1.5px] border-success",
                 dotClass: "bg-success",
@@ -250,7 +250,7 @@ export const TradeCreationScreen = ({
               {
                 type: "sell" as const,
                 label: "Sell USDT",
-                sub: `Send USDT, get ${ratePair === "usdt_inr" ? "INR" : "AED"}`,
+                sub: `Send USDT, Get ${ratePair === "usdt_inr" ? "INR" : "AED"}`,
                 Icon: ArrowUpRight,
                 activeClass: "border-[1.5px] border-error",
                 dotClass: "bg-error",

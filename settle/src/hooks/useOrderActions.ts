@@ -714,8 +714,8 @@ export function useOrderActions({
   // DIRECT ORDER CREATION (from ConfigPanel)
   // ═══════════════════════════════════════════════════════════════════
   const handleDirectOrderCreation = async (
-    openTradeForm: { tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: 'bank' | 'cash'; spreadPreference: 'best' | 'fastest' | 'cheap'; expiryMinutes: 15 | 90 },
-    setOpenTradeForm: (form: { tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: 'bank' | 'cash'; spreadPreference: 'best' | 'fastest' | 'cheap'; expiryMinutes: 15 | 90 }) => void,
+    openTradeForm: { tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: 'bank' | 'cash'; paymentMethodId?: string; spreadPreference: 'best' | 'fastest' | 'cheap'; expiryMinutes: 15 | 90 },
+    setOpenTradeForm: React.Dispatch<React.SetStateAction<{ tradeType: 'buy' | 'sell'; cryptoAmount: string; paymentMethod: 'bank' | 'cash'; paymentMethodId: string | undefined; spreadPreference: 'best' | 'fastest' | 'cheap'; expiryMinutes: 15 | 90 }>>,
     tradeType?: 'buy' | 'sell',
     priorityFee?: number,
     pair: 'usdt_aed' | 'usdt_inr' = 'usdt_aed',
@@ -784,6 +784,7 @@ export function useOrderActions({
           tradeType: "sell",
           cryptoAmount: "",
           paymentMethod: "bank",
+          paymentMethodId: undefined,
           spreadPreference: "fastest",
           expiryMinutes: 15,
         });
@@ -820,6 +821,7 @@ export function useOrderActions({
           tradeType: "sell",
           cryptoAmount: "",
           paymentMethod: "bank",
+          paymentMethodId: undefined,
           spreadPreference: "fastest",
           expiryMinutes: 15,
         });

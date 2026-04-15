@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMerchantOrders, getAllPendingOrdersForMerchant } from '@/lib/db/repositories/orders';
 import { getMerchantOffers, getOfferWithMerchant } from '@/lib/db/repositories/merchants';
 import { createUser } from '@/lib/db/repositories/users';
+import { getMerchantDefaultPaymentMethod, getMerchantPaymentMethods } from '@/lib/db/repositories/merchantPaymentMethods';
 import {
   OfferType,
   PaymentMethod,
@@ -216,6 +217,7 @@ export async function POST(request: NextRequest) {
       priority_fee,
       offer_id,
       target_merchant_id,
+      merchant_payment_method_id: requestedPmId,
       escrow_tx_hash,
       escrow_trade_id,
       escrow_trade_pda,
@@ -369,6 +371,25 @@ export async function POST(request: NextRequest) {
     const orderMerchantId = isM2MTrade ? target_merchant_id : merchant_id;
     const buyerMerchantId = isM2MTrade ? merchant_id : undefined;
 
+    // Resolve the seller's payment method so the buyer knows where to send fiat.
+    // Seller (merchant_id at DB level) = the creating merchant for non-M2M sell
+    // orders (orderType='buy'). Without this, the merchant_payment_method_id
+    // column stays NULL and the buyer merchant sees no bank details.
+    // Prefer the explicit id picked in the config panel; fall back to default.
+    let sellerPaymentMethodId: string | undefined;
+    if (!isM2MTrade && orderType === 'buy') {
+      if (requestedPmId) {
+        const owned = await getMerchantPaymentMethods(merchant_id);
+        if (owned.some((pm) => pm.id === requestedPmId)) {
+          sellerPaymentMethodId = requestedPmId;
+        }
+      }
+      if (!sellerPaymentMethodId) {
+        const defaultPm = await getMerchantDefaultPaymentMethod(merchant_id);
+        if (defaultPm?.id) sellerPaymentMethodId = defaultPm.id;
+      }
+    }
+
     // Get merchant's first active offer ID (required by DB schema, but not used for matching)
     let fallbackOfferId: string | null = null;
     try {
@@ -388,6 +409,7 @@ export async function POST(request: NextRequest) {
         offer_id: fallbackOfferId,
         type: orderType,
         payment_method,
+        merchant_payment_method_id: sellerPaymentMethodId,
         crypto_amount,
         fiat_amount: fiatAmount,
         rate: effectiveRate,

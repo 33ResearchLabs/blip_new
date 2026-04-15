@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.29.0",
-    "@sentry/nextjs": "^9.47.1",
+    "@sentry/nextjs": "^10.48.0",
     "@solana/spl-token": "^0.4.14",
     "@solana/wallet-adapter-base": "^0.9.20",
     "@solana/wallet-adapter-react": "^0.15.20",
@@ -52,6 +52,7 @@
     "qrcode": "^1.5.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-joyride": "^3.0.2",
     "react-resizable-panels": "^4.6.4",
     "recharts": "^2.15.4",
     "resend": "^6.9.4",

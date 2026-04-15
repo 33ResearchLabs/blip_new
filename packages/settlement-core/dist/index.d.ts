@@ -12,4 +12,5 @@ export * from './finalization/guards';
 export * from './types/index';
 export * from './config/mockMode';
 export * from './utils/logger';
+export * from './errorTracking/logger';
 //# sourceMappingURL=index.d.ts.map

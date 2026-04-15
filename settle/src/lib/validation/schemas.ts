@@ -288,6 +288,7 @@ export const merchantCreateOrderSchema = z.object({
   priority_fee: z.number().min(0).max(50).default(0), // Additional priority fee percentage on top of base tier
   offer_id: uuidSchema.optional(), // If not provided, use merchant's active offer
   target_merchant_id: uuidSchema.optional(), // For M2M trading: trade with another merchant
+  merchant_payment_method_id: uuidSchema.optional(), // Seller's specific payment method (where buyer sends fiat)
   // Optional escrow details (for escrow-first sell orders) — nullish to accept null from mock mode
   escrow_tx_hash: z.string().nullish(),
   escrow_trade_id: z.number().nullish(),

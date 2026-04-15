@@ -19,6 +19,7 @@ import {
   Clock,
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { InfoTooltip } from "@/components/shared/InfoTooltip";
 
 const CORRIDORS = [
   { id: "USDT_AED", label: "USDT / AED", flag: "🇦🇪", fiat: "AED" },
@@ -334,7 +335,7 @@ export const StatusCard = memo(function StatusCard({
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col" data-tour="status-card">
       {/* Live ticker strip — sticky at top while sidebar scrolls */}
       <div
         className="sticky top-0 z-20 flex items-center justify-between px-3 py-2.5 bg-background border-b border-foreground/[0.04] text-[9px] font-mono overflow-hidden"
@@ -443,9 +444,18 @@ export const StatusCard = memo(function StatusCard({
       {/* Bottom section — corridor + secondary balances + rate */}
       <div className="px-3 pb-2.5 space-y-1.5">
         {/* Active Corridor Selector */}
-        <div className="glass-card rounded-lg p-2">
-          <span className="text-[9px] text-foreground/25 font-mono uppercase tracking-wider block mb-1.5">
+        <div className="glass-card rounded-lg p-2" data-tour="corridor-pair">
+          <span className="text-[9px] text-foreground/25 font-mono uppercase tracking-wider mb-1.5 flex items-center gap-1">
             Corridor Pair
+            <InfoTooltip
+              side="bottom"
+              title="Corridor Pair"
+              description="The crypto ↔ fiat trading route you want to operate in. Pick the corridor that matches your bank and preferred currency."
+              items={[
+                { label: 'USDT/AED', value: 'USDT ↔ UAE Dirham' },
+                { label: 'USDT/INR', value: 'USDT ↔ Indian Rupee' },
+              ]}
+            />
           </span>
           <div className="flex gap-1.5">
             {CORRIDORS.map((c) => {

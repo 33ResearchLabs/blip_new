@@ -29,7 +29,7 @@ import { startOutboxEventWorker, stopOutboxEventWorker } from './workers/outboxE
 import { closeReceiptQueue } from './queues/receiptQueue';
 import { startReputationWorker, stopReputationWorker } from './workers/reputationWorker';
 import { registerAllListeners } from './events';
-import { closePool } from 'settlement-core';
+import { closePool, safeLog } from 'settlement-core';
 import { runPendingMigrations } from './migrationRunner';
 import { validateSchema } from './schemaValidator';
 
@@ -42,6 +42,71 @@ const fastify = Fastify({
     level: process.env.LOG_LEVEL || 'warn',
   },
 });
+
+// ── Centralized error tracking hooks ─────────────────────────────────
+// Every unhandled exception from any route is captured via setErrorHandler.
+// We then re-call reply.send(err) so Fastify's default response shape is
+// preserved — we only observe, we do not alter responses.
+fastify.setErrorHandler((err, request, reply) => {
+  try {
+    safeLog({
+      type: `api.unhandled_exception${request.routerPath ? '.' + request.routerPath.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80) : ''}`,
+      severity: (reply.statusCode && reply.statusCode >= 500) || !reply.statusCode ? 'ERROR' : 'WARN',
+      message: `Unhandled exception in ${request.method} ${request.url}: ${err.message}`,
+      source: 'backend',
+      metadata: {
+        route: request.routerPath,
+        method: request.method,
+        url: request.url,
+        statusCode: reply.statusCode,
+        errorName: err.name,
+        stack: err.stack?.slice(0, 4000),
+      },
+    });
+  } catch { /* swallow */ }
+  // Fall through to Fastify's default handling
+  reply.send(err);
+});
+
+// Process-level safety net: catches anything that escapes route/worker
+// try/catch blocks (unhandled promise rejections, uncaught exceptions).
+// Installed once per process.
+if (!(globalThis as any).__coreApiGlobalsInstalled) {
+  (globalThis as any).__coreApiGlobalsInstalled = true;
+  process.on('unhandledRejection', (reason) => {
+    try {
+      const e = reason as { message?: string; stack?: string; name?: string };
+      safeLog({
+        type: 'process.unhandled_rejection',
+        severity: 'ERROR',
+        message: `[core-api] Unhandled promise rejection: ${e?.message || String(reason)}`,
+        source: 'backend',
+        metadata: { errorName: e?.name, stack: e?.stack?.slice(0, 4000) },
+      });
+    } catch { /* swallow */ }
+  });
+  process.on('uncaughtException', (err) => {
+    // Skip client-aborted HTTP requests (normal browser behavior on
+    // tab close / navigation). Node fires `aborted` from the socket
+    // layer — not actionable.
+    const stack = err.stack || '';
+    const isClientAbort =
+      err.message === 'aborted' &&
+      (stack.includes('abortIncoming') || stack.includes('socketOnClose'));
+    if (isClientAbort) return;
+
+    try {
+      safeLog({
+        type: 'process.uncaught_exception',
+        severity: 'CRITICAL',
+        message: `[core-api] Uncaught exception: ${err.message}`,
+        source: 'backend',
+        metadata: { errorName: err.name, stack: err.stack?.slice(0, 4000) },
+      });
+    } catch { /* swallow */ }
+    // Do NOT exit — let existing process handlers decide
+  });
+}
 
 // Register CORS
 await fastify.register(cors, {

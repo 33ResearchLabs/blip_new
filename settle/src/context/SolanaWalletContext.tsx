@@ -29,6 +29,8 @@ import {
   ParticleAdapter,
 } from '@solana/wallet-adapter-wallets';
 import { getPrimaryEndpoint, getHealthyEndpoint } from '@/lib/solana/rpc';
+import { logger } from '@/lib/logger';
+import { sendAndConfirmSafe } from '@/lib/solana/safeTransaction';
 import { PublicKey, Transaction, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import {
   getAssociatedTokenAddress,
@@ -525,16 +527,67 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         setUsdtBalance(0);
       }
     } catch (error) {
-      console.error('Failed to fetch balances:', error);
+      logger.warn('[SolanaWallet] Failed to fetch balances (RPC may be temporarily unavailable)', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Report to centralized error tracking so admin can see devnet outages
+      // without any change to the caller's behavior.
+      try {
+        const { logClientError } = await import('@/lib/errorTracking/clientLogger');
+        logClientError({
+          type: 'solana.balance_fetch_failed',
+          severity: 'WARN',
+          message: `Solana balance fetch failed: ${error instanceof Error ? error.message : String(error)}`,
+          metadata: {
+            walletAddress: publicKey?.toBase58?.(),
+            rpcEndpoint: (connection as unknown as { _rpcEndpoint?: string } | null)?._rpcEndpoint,
+            errorName: error instanceof Error ? error.name : undefined,
+            stack: error instanceof Error ? error.stack : undefined,
+          },
+        });
+      } catch {
+        /* logging must never break balance flow */
+      }
     }
   }, [publicKey, connection]);
 
   // Refresh balances when connected
   React.useEffect(() => {
     if (connected && publicKey) {
-      refreshBalances();
+      // Explicitly catch — refreshBalances has try/catch but some Solana errors
+      // (503, network) bubble up as unhandled promise rejections which Next.js
+      // dev mode shows as a full-screen error overlay.
+      refreshBalances().catch((err) => {
+        logger.warn('[SolanaWallet] refreshBalances rejected (non-fatal)', {
+          error: err?.message || String(err),
+        });
+      });
     }
   }, [connected, publicKey, refreshBalances]);
+
+  // Global safety net: swallow Solana RPC errors from unhandled promise rejections.
+  // Solana web3.js throws errors like "failed to get balance..." from deep inside
+  // the library that can crash the Next.js dev overlay. We log them but suppress.
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = (event: PromiseRejectionEvent) => {
+      const msg = String(event.reason?.message || event.reason || '');
+      const isSolanaRpcError =
+        msg.includes('failed to get balance') ||
+        msg.includes('Service unavailable') ||
+        msg.includes('Too many requests') ||
+        msg.includes('RateLimitExceeded') ||
+        msg.includes('429') ||
+        msg.includes('-32603') ||
+        msg.includes('failed to get recent blockhash');
+      if (isSolanaRpcError) {
+        logger.warn('[SolanaWallet] Swallowed RPC error (non-fatal)', { error: msg });
+        event.preventDefault();
+      }
+    };
+    window.addEventListener('unhandledrejection', handler);
+    return () => window.removeEventListener('unhandledrejection', handler);
+  }, []);
 
   // ============ PROTOCOL INITIALIZATION ============
 
@@ -619,7 +672,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     }
 
     try {
-      const transaction = await buildFundLaneTx(
+      const builtTx = await buildFundLaneTx(
         program,
         publicKey,
         USDT_MINT,
@@ -629,23 +682,15 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         }
       );
 
-      // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // Sign transaction
-      const signedTx = await signTransaction(transaction);
-
-      // Send transaction
-      const txHash = await connection.sendRawTransaction(signedTx.serialize());
-
-      // Confirm transaction
-      await connection.confirmTransaction({
-        signature: txHash,
-        blockhash,
-        lastValidBlockHeight,
+      const safeResult = await sendAndConfirmSafe({
+        connection,
+        feePayer: publicKey,
+        signTransaction,
+        instructions: builtTx.instructions,
+        name: 'fundCorridor',
+        maxRetries: 2,
       });
+      const txHash = safeResult.signature;
 
       const [lanePda] = findLanePda(publicKey, laneId);
 
@@ -670,7 +715,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
     }
 
     try {
-      const transaction = await buildWithdrawLaneTx(
+      const builtTx = await buildWithdrawLaneTx(
         program,
         publicKey,
         USDT_MINT,
@@ -680,23 +725,15 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         }
       );
 
-      // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // Sign transaction
-      const signedTx = await signTransaction(transaction);
-
-      // Send transaction
-      const txHash = await connection.sendRawTransaction(signedTx.serialize());
-
-      // Confirm transaction
-      await connection.confirmTransaction({
-        signature: txHash,
-        blockhash,
-        lastValidBlockHeight,
+      const safeResult = await sendAndConfirmSafe({
+        connection,
+        feePayer: publicKey,
+        signTransaction,
+        instructions: builtTx.instructions,
+        name: 'withdrawCorridor',
+        maxRetries: 2,
       });
+      const txHash = safeResult.signature;
 
       const [lanePda] = findLanePda(publicKey, laneId);
 
@@ -744,7 +781,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       // Ensure protocol config is initialized
       await ensureProtocolConfigInitialized();
 
-      const transaction = await buildCreateTradeTx(
+      const builtTx = await buildCreateTradeTx(
         program,
         publicKey,
         USDT_MINT,
@@ -755,23 +792,16 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         }
       );
 
-      // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // Sign transaction
-      const signedTx = await signTransaction(transaction);
-
-      // Send transaction
-      const txHash = await connection.sendRawTransaction(signedTx.serialize());
-
-      // Confirm transaction
-      await connection.confirmTransaction({
-        signature: txHash,
-        blockhash,
-        lastValidBlockHeight,
+      // Safe send+confirm with fresh blockhash + retry + reconciliation
+      const safeResult = await sendAndConfirmSafe({
+        connection,
+        feePayer: publicKey,
+        signTransaction,
+        instructions: builtTx.instructions,
+        name: 'createTrade',
+        maxRetries: 2,
       });
+      const txHash = safeResult.signature;
 
       const [tradePda] = findTradePda(publicKey, params.tradeId);
       const [escrowPda] = findEscrowPda(tradePda);
@@ -806,7 +836,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const counterpartyPk = new PublicKey(params.counterparty);
       const [tradePda] = findTradePda(creatorPk, params.tradeId);
 
-      const transaction = await buildLockEscrowTx(
+      const builtTx = await buildLockEscrowTx(
         program,
         publicKey,
         tradePda,
@@ -814,26 +844,20 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         USDT_MINT
       );
 
-      // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // Sign transaction
-      const signedTx = await signTransaction(transaction);
-
-      // Send transaction
-      const txHash = await connection.sendRawTransaction(signedTx.serialize());
-
-      // Confirm transaction
-      await connection.confirmTransaction({
-        signature: txHash,
-        blockhash,
-        lastValidBlockHeight,
+      // Safe send+confirm with fresh blockhash + retry + reconciliation.
+      const safeResult = await sendAndConfirmSafe({
+        connection,
+        feePayer: publicKey,
+        signTransaction,
+        instructions: builtTx.instructions,
+        name: 'lockEscrow',
+        maxRetries: 2,
       });
+      const txHash = safeResult.signature;
 
       const [escrowPda] = findEscrowPda(tradePda);
 
+      // Balance refresh ONLY after on-chain confirmation
       await refreshBalances();
 
       return {
@@ -878,7 +902,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         console.log('[releaseEscrow] Using passed counterparty (trade not found):', counterpartyPk.toString());
       }
 
-      const transaction = await buildReleaseEscrowTx(
+      const builtTx = await buildReleaseEscrowTx(
         program,
         publicKey,
         {
@@ -888,26 +912,23 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         }
       );
 
-      // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // Sign transaction
-      const signedTx = await signTransaction(transaction);
-
-      // Send transaction
-      const txHash = await connection.sendRawTransaction(signedTx.serialize());
-
-      // Confirm transaction
-      await connection.confirmTransaction({
-        signature: txHash,
-        blockhash,
-        lastValidBlockHeight,
+      // Safe send+confirm with fresh blockhash + retry + reconciliation.
+      // priority='high' — release is time-critical (user just paid fiat, wants
+      // their USDC now). Pays ~0.0005 SOL per CU for faster inclusion.
+      const safeResult = await sendAndConfirmSafe({
+        connection,
+        feePayer: publicKey,
+        signTransaction,
+        instructions: builtTx.instructions,
+        name: 'releaseEscrow',
+        maxRetries: 2,
+        priority: 'high',
       });
+      const txHash = safeResult.signature;
 
       const [escrowPda] = findEscrowPda(tradePda);
 
+      // Balance refresh ONLY after on-chain confirmation
       await refreshBalances();
 
       return {
@@ -936,7 +957,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const creatorPk = new PublicKey(params.creatorPubkey);
       const [tradePda] = findTradePda(creatorPk, params.tradeId);
 
-      const transaction = await buildRefundEscrowTx(
+      const builtTx = await buildRefundEscrowTx(
         program,
         publicKey,
         {
@@ -945,23 +966,18 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         }
       );
 
-      // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // Sign transaction
-      const signedTx = await signTransaction(transaction);
-
-      // Send transaction
-      const txHash = await connection.sendRawTransaction(signedTx.serialize());
-
-      // Confirm transaction
-      await connection.confirmTransaction({
-        signature: txHash,
-        blockhash,
-        lastValidBlockHeight,
+      // Safe send+confirm with fresh blockhash + retry + reconciliation.
+      // priority='high' — refund returns funds, users expect fast settlement.
+      const safeResult = await sendAndConfirmSafe({
+        connection,
+        feePayer: publicKey,
+        signTransaction,
+        instructions: builtTx.instructions,
+        name: 'refundEscrow',
+        maxRetries: 2,
+        priority: 'high',
       });
+      const txHash = safeResult.signature;
 
       const [escrowPda] = findEscrowPda(tradePda);
 
@@ -994,7 +1010,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       const creatorPk = new PublicKey(params.creatorPubkey);
       const [tradePda] = findTradePda(creatorPk, params.tradeId);
 
-      const transaction = await buildExtendEscrowTx(
+      const builtTx = await buildExtendEscrowTx(
         program,
         publicKey,
         {
@@ -1003,23 +1019,15 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         }
       );
 
-      // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // Sign transaction
-      const signedTx = await signTransaction(transaction);
-
-      // Send transaction
-      const txHash = await connection.sendRawTransaction(signedTx.serialize());
-
-      // Confirm transaction
-      await connection.confirmTransaction({
-        signature: txHash,
-        blockhash,
-        lastValidBlockHeight,
+      const safeResult = await sendAndConfirmSafe({
+        connection,
+        feePayer: publicKey,
+        signTransaction,
+        instructions: builtTx.instructions,
+        name: 'extendEscrow',
+        maxRetries: 2,
       });
+      const txHash = safeResult.signature;
 
       const [escrowPda] = findEscrowPda(tradePda);
 
@@ -1085,38 +1093,30 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         USDT_MINT
       );
 
-      // Combine both transactions
-      const transaction = new Transaction();
-      for (const ix of createTradeTx.instructions) {
-        transaction.add(ix);
-      }
-      for (const ix of fundEscrowTx.instructions) {
-        transaction.add(ix);
-      }
+      // Combine instructions for a single atomic submission
+      const instructions = [
+        ...createTradeTx.instructions,
+        ...fundEscrowTx.instructions,
+      ];
 
-      // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // Sign transaction
-      const signedTx = await signTransaction(transaction);
-
-      // Send transaction
-      const txHash = await connection.sendRawTransaction(signedTx.serialize(), {
-        skipPreflight: true,
-        maxRetries: 5,
+      // Safe send+confirm — fresh blockhash on sign, retries on expiry,
+      // reconciles via getTransaction if confirmation times out.
+      const safeResult = await sendAndConfirmSafe({
+        connection,
+        feePayer: publicKey,
+        signTransaction,
+        instructions,
+        name: 'fundEscrow',
+        maxRetries: 2,
       });
-
-      // Confirm transaction
-      await connection.confirmTransaction({
+      const txHash = safeResult.signature;
+      console.log('[fundEscrowOnly] Success! Trade funded, waiting for counterparty to accept', {
         signature: txHash,
-        blockhash,
-        lastValidBlockHeight,
+        attempts: safeResult.attempts,
+        reconciled: safeResult.reconciled,
       });
 
-      console.log('[fundEscrowOnly] Success! Trade funded, waiting for counterparty to accept');
-
+      // Balance refresh ONLY after on-chain confirmation
       await refreshBalances();
 
       return {
@@ -1171,32 +1171,28 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         tradePda: tradePda.toString(),
       });
 
-      // Build accept trade transaction
-      const transaction = await buildAcceptTradeTx(
+      // Build accept trade transaction (instructions only — signing handled below)
+      const builtTx = await buildAcceptTradeTx(
         program,
         publicKey,
         tradePda
       );
 
-      // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // Sign transaction
-      const signedTx = await signTransaction(transaction);
-
-      // Send transaction
-      const txHash = await connection.sendRawTransaction(signedTx.serialize());
-
-      // Confirm transaction
-      await connection.confirmTransaction({
-        signature: txHash,
-        blockhash,
-        lastValidBlockHeight,
+      // Safe send+confirm with blockhash refresh + retry + reconciliation
+      const safeResult = await sendAndConfirmSafe({
+        connection,
+        feePayer: publicKey,
+        signTransaction,
+        instructions: builtTx.instructions,
+        name: 'acceptTrade',
+        maxRetries: 2,
       });
+      const txHash = safeResult.signature;
 
-      console.log('[acceptTrade] Success! You are now the counterparty');
+      console.log('[acceptTrade] Success! You are now the counterparty', {
+        signature: txHash,
+        attempts: safeResult.attempts,
+      });
 
       await refreshBalances();
 
@@ -1351,65 +1347,34 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
       );
       console.log('[depositToEscrow] Lock escrow tx built, instructions:', lockEscrowTx.instructions.length);
 
-      // Combine both transactions
-      const transaction = new Transaction();
+      // Combine instructions for a single atomic transaction
+      const instructions = [
+        ...createTradeTx.instructions,
+        ...lockEscrowTx.instructions,
+      ];
 
-      // Add all instructions from create trade
-      for (const ix of createTradeTx.instructions) {
-        transaction.add(ix);
-      }
+      // Safe send+confirm flow: fetches fresh blockhash JUST BEFORE signing
+      // (so the user's 60s popup window starts from the popup opening),
+      // retries automatically on blockhash expiry, and reconciles via
+      // getTransaction if confirmation times out.
+      console.log('[depositToEscrow] Submitting via sendAndConfirmSafe...');
+      const safeResult = await sendAndConfirmSafe({
+        connection,
+        feePayer: publicKey,
+        signTransaction,
+        instructions,
+        name: 'depositToEscrow',
+        maxRetries: 2,
+        confirmTimeoutMs: 60_000,
+      });
+      const txHash = safeResult.signature;
+      console.log('[depositToEscrow] Transaction confirmed!', {
+        signature: txHash,
+        attempts: safeResult.attempts,
+        reconciled: safeResult.reconciled,
+      });
 
-      // Add all instructions from lock escrow
-      for (const ix of lockEscrowTx.instructions) {
-        transaction.add(ix);
-      }
-
-      // Get recent blockhash
-      console.log('[depositToEscrow] Getting blockhash...');
-      const { blockhash, lastValidBlockHeight } = await withTimeout(
-        connection.getLatestBlockhash('finalized'),
-        10000,
-        'getLatestBlockhash'
-      );
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-      console.log('[depositToEscrow] Blockhash:', blockhash);
-
-      console.log('[depositToEscrow] Requesting wallet signature...');
-
-      // Sign transaction - this opens the wallet popup
-      const signedTx = await signTransaction(transaction);
-
-      console.log('[depositToEscrow] Transaction signed, sending...');
-
-      // Send transaction - skip preflight simulation to avoid stale blockhash errors
-      // The blockhash may become stale while user is approving in wallet
-      const txHash = await withTimeout(
-        connection.sendRawTransaction(signedTx.serialize(), {
-          skipPreflight: true, // Skip simulation to avoid blockhash expiry issues
-          maxRetries: 5,
-        }),
-        30000,
-        'sendRawTransaction'
-      );
-
-      console.log('[depositToEscrow] Transaction sent:', txHash);
-
-      // Confirm transaction with longer timeout
-      console.log('[depositToEscrow] Waiting for confirmation...');
-      await withTimeout(
-        connection.confirmTransaction({
-          signature: txHash,
-          blockhash,
-          lastValidBlockHeight,
-        }),
-        90000, // 90 seconds for confirmation
-        'confirmTransaction'
-      );
-
-      console.log('[depositToEscrow] Transaction confirmed!');
-
-      // Refresh balances
+      // Refresh balances ONLY after on-chain confirmation
       await refreshBalances();
 
       depositInProgressRef.current = false;
@@ -1491,31 +1456,30 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         tradePda: tradePda.toString(),
       });
 
-      const transaction = await buildConfirmPaymentTx(
+      const builtTx = await buildConfirmPaymentTx(
         program,
         publicKey,
         { tradePda }
       );
 
-      // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // Sign transaction
-      const signedTx = await signTransaction(transaction);
-
-      // Send transaction
-      const txHash = await connection.sendRawTransaction(signedTx.serialize());
-
-      // Confirm transaction
-      await connection.confirmTransaction({
-        signature: txHash,
-        blockhash,
-        lastValidBlockHeight,
+      // Safe send+confirm with fresh blockhash + retry + reconciliation.
+      // priority='high' — confirmPayment is time-critical (buyer wants to
+      // signal payment sent so the seller can release funds quickly).
+      const safeResult = await sendAndConfirmSafe({
+        connection,
+        feePayer: publicKey,
+        signTransaction,
+        instructions: builtTx.instructions,
+        name: 'confirmPayment',
+        maxRetries: 2,
+        priority: 'high',
       });
+      const txHash = safeResult.signature;
 
-      console.log('[confirmPayment] Payment confirmed! Auto-refund now disabled');
+      console.log('[confirmPayment] Payment confirmed! Auto-refund now disabled', {
+        signature: txHash,
+        attempts: safeResult.attempts,
+      });
 
       return {
         txHash,
@@ -1564,31 +1528,27 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         tradePda: tradePda.toString(),
       });
 
-      const transaction = await buildOpenDisputeTx(
+      const builtTx = await buildOpenDisputeTx(
         program,
         publicKey,
         { tradePda }
       );
 
-      // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // Sign transaction
-      const signedTx = await signTransaction(transaction);
-
-      // Send transaction
-      const txHash = await connection.sendRawTransaction(signedTx.serialize());
-
-      // Confirm transaction
-      await connection.confirmTransaction({
-        signature: txHash,
-        blockhash,
-        lastValidBlockHeight,
+      // Safe send+confirm with fresh blockhash + retry + reconciliation
+      const safeResult = await sendAndConfirmSafe({
+        connection,
+        feePayer: publicKey,
+        signTransaction,
+        instructions: builtTx.instructions,
+        name: 'openDispute',
+        maxRetries: 2,
       });
+      const txHash = safeResult.signature;
 
-      console.log('[openDispute] Dispute opened! Funds frozen until arbiter resolves');
+      console.log('[openDispute] Dispute opened! Funds frozen until arbiter resolves', {
+        signature: txHash,
+        attempts: safeResult.attempts,
+      });
 
       return {
         txHash,
@@ -1643,31 +1603,30 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         tradePda: tradePda.toString(),
       });
 
-      const transaction = await buildResolveDisputeTx(
+      const builtTx = await buildResolveDisputeTx(
         program,
         publicKey,
         { tradePda, resolution, mint: USDT_MINT }
       );
 
-      // Get recent blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-      transaction.recentBlockhash = blockhash;
-      transaction.feePayer = publicKey;
-
-      // Sign transaction
-      const signedTx = await signTransaction(transaction);
-
-      // Send transaction
-      const txHash = await connection.sendRawTransaction(signedTx.serialize());
-
-      // Confirm transaction
-      await connection.confirmTransaction({
-        signature: txHash,
-        blockhash,
-        lastValidBlockHeight,
+      // Safe send+confirm with fresh blockhash + retry + reconciliation.
+      // priority='high' — dispute resolution moves funds, time-critical.
+      const safeResult = await sendAndConfirmSafe({
+        connection,
+        feePayer: publicKey,
+        signTransaction,
+        instructions: builtTx.instructions,
+        name: 'resolveDispute',
+        maxRetries: 2,
+        priority: 'high',
       });
+      const txHash = safeResult.signature;
 
-      console.log('[resolveDispute] Dispute resolved!', params.resolution);
+      console.log('[resolveDispute] Dispute resolved!', {
+        resolution: params.resolution,
+        signature: txHash,
+        attempts: safeResult.attempts,
+      });
 
       await refreshBalances();
 

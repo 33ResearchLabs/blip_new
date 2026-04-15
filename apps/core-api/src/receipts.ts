@@ -142,6 +142,20 @@ async function resolveParties(order: OrderForReceipt, actorId: string): Promise<
  */
 export async function createOrderReceipt(orderId: string, order: OrderForReceipt, actorId: string): Promise<void> {
   try {
+    // Pre-check: verify the order still exists before we do expensive lookups
+    // and an INSERT that would fail the FK constraint. Orders can be deleted
+    // or rolled back between the time the job was enqueued and now, leaving
+    // the receipt worker trying to create a receipt for a non-existent order.
+    // Without this check, BullMQ retries 3× and fills logs with 23503 errors.
+    const orderExists = await queryOne<{ id: string }>(
+      'SELECT id FROM orders WHERE id = $1',
+      [orderId],
+    );
+    if (!orderExists) {
+      logger.warn('[Receipt] Skipping receipt creation — order no longer exists', { orderId });
+      return;
+    }
+
     const parties = await resolveParties(order, actorId);
 
     const result = await dbQuery<{ order_id: string }>(

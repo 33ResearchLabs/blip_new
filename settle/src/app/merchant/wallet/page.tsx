@@ -224,6 +224,18 @@ export default function WalletPage() {
       await solanaWallet.refreshBalances();
     } catch (err: any) {
       setAirdropMsg(err.message?.includes('429') ? 'Rate limited — try again later' : 'Airdrop failed');
+      try {
+        const { logClientError } = await import('@/lib/errorTracking/clientLogger');
+        logClientError({
+          type: 'solana.airdrop_failed',
+          severity: 'WARN',
+          message: `Devnet airdrop failed: ${err?.message || String(err)}`,
+          metadata: {
+            walletAddress: solanaWallet.publicKey?.toBase58?.(),
+            rateLimited: !!err?.message?.includes('429'),
+          },
+        });
+      } catch { /* swallow */ }
     } finally {
       setIsAirdropping(false);
       setTimeout(() => setAirdropMsg(''), 5000);

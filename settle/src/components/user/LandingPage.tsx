@@ -16,14 +16,19 @@ interface LandingPageProps {
   isLoggingIn: boolean;
   loginError: string;
   setLoginError: (e: string) => void;
+  /** When true, skips the welcome page and goes straight to the login form.
+   *  Used by the /login route. */
+  skipWelcome?: boolean;
 }
 
 export function LandingPage({
   loginForm, setLoginForm, authMode, setAuthMode,
   handleUserLogin, handleUserRegister, isLoggingIn, loginError, setLoginError,
+  skipWelcome = false,
 }: LandingPageProps) {
   const [showPassword, setShowPassword] = useState(false);
-  const [showWelcome, setShowWelcome] = useState(true);
+  // Setter unused — navigation to the form happens via /login URL, not state toggle.
+  const [showWelcome] = useState(!skipWelcome);
   const submit = () => authMode === 'login' ? handleUserLogin() : handleUserRegister();
 
   const isDisabled = isLoggingIn || !loginForm.username || !loginForm.password;
@@ -32,8 +37,16 @@ export function LandingPage({
   if (showWelcome) {
     return (
       <UserWelcomePage
-        onGetStarted={() => { setAuthMode('register'); setShowWelcome(false); }}
-        onSignIn={() => { setAuthMode('login'); setShowWelcome(false); }}
+        onGetStarted={() => {
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login?tab=register';
+          }
+        }}
+        onSignIn={() => {
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login?tab=signin';
+          }
+        }}
       />
     );
   }

@@ -8,6 +8,7 @@ import { BorshAccountsCoder } from '@coral-xyz/anchor';
 import { Pool } from 'pg';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
+import { initErrorTracking, safeLog } from './errorTracking';
 
 dotenv.config();
 
@@ -114,6 +115,42 @@ class BlipScanIndexer {
     console.log(`📡 RPC: ${RPC_URL}`);
     console.log(`🔗 V1 Program: ${V1_PROGRAM_ID.toString()}`);
     console.log(`🔗 V2 Program: ${V2_PROGRAM_ID.toString()}`);
+
+    // Wire up error tracking — reuses the indexer's existing pg pool so we
+    // don't open a second connection. When ENABLE_ERROR_TRACKING is off,
+    // every logging call is a no-op with zero cost.
+    initErrorTracking(pool);
+
+    // Process-level safety nets — catch anything that escapes all the
+    // per-tick try/catch blocks.
+    if (!(globalThis as any).__blipscanIndexerGlobalsInstalled) {
+      (globalThis as any).__blipscanIndexerGlobalsInstalled = true;
+      process.on('unhandledRejection', (reason) => {
+        const e = reason as { message?: string; stack?: string; name?: string };
+        safeLog({
+          type: 'process.unhandled_rejection',
+          severity: 'ERROR',
+          message: `[blipscan-indexer] Unhandled rejection: ${e?.message || String(reason)}`,
+          metadata: {
+            service: 'blipscan-indexer',
+            errorName: e?.name,
+            stack: e?.stack?.slice(0, 4000),
+          },
+        });
+      });
+      process.on('uncaughtException', (err) => {
+        safeLog({
+          type: 'process.uncaught_exception',
+          severity: 'CRITICAL',
+          message: `[blipscan-indexer] Uncaught exception: ${err.message}`,
+          metadata: {
+            service: 'blipscan-indexer',
+            errorName: err.name,
+            stack: err.stack?.slice(0, 4000),
+          },
+        });
+      });
+    }
 
     // Load cursors
     await this.loadCursors();
@@ -242,6 +279,13 @@ class BlipScanIndexer {
       ]);
     } catch (error) {
       console.error('❌ Error forward polling:', error);
+      const e = error as { message?: string; stack?: string; name?: string };
+      safeLog({
+        type: 'blipscan.forward_poll_failed',
+        severity: 'ERROR',
+        message: `Blipscan forward poll failed: ${e?.message || String(error)}`,
+        metadata: { service: 'blipscan-indexer', stack: e?.stack?.slice(0, 4000) },
+      });
     }
 
     setTimeout(() => this.poll(), POLL_INTERVAL);
@@ -254,6 +298,13 @@ class BlipScanIndexer {
       if (!this.v2BackfillDone) await this.fetchOlderTransactions(V2_PROGRAM_ID, 'v2.2');
     } catch (error) {
       console.error('❌ Error backfilling:', error);
+      const e = error as { message?: string; stack?: string; name?: string };
+      safeLog({
+        type: 'blipscan.backfill_failed',
+        severity: 'ERROR',
+        message: `Blipscan backfill failed: ${e?.message || String(error)}`,
+        metadata: { service: 'blipscan-indexer', stack: e?.stack?.slice(0, 4000) },
+      });
     }
 
     if (!this.v1BackfillDone || !this.v2BackfillDone) {

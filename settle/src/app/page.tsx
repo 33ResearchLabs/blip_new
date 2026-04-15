@@ -256,19 +256,30 @@ export default function Home() {
       <NotificationToastContainer position="top-right" />
       {/* TransactionProgress removed — simple loading on buttons instead */}
       <AnimatePresence mode="wait">
-        {screen === "welcome" && (
-          <LandingPage
-            loginForm={auth.loginForm}
-            setLoginForm={auth.setLoginForm}
-            authMode={auth.authMode}
-            setAuthMode={auth.setAuthMode}
-            handleUserLogin={auth.handleUserLogin}
-            handleUserRegister={auth.handleUserRegister}
-            isLoggingIn={auth.isLoggingIn}
-            loginError={auth.loginError}
-            setLoginError={auth.setLoginError}
-          />
-        )}
+        {screen === "welcome" && (() => {
+          // Parse query params for login route redirects
+          const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+          const skipWelcome = params?.get('welcome') === 'skip';
+          const reason = params?.get('reason');
+          // Show "session expired" banner by pre-filling loginError once on mount
+          if (skipWelcome && reason === 'session_expired' && !auth.loginError) {
+            setTimeout(() => auth.setLoginError('Your session expired. Please sign in again.'), 0);
+          }
+          return (
+            <LandingPage
+              loginForm={auth.loginForm}
+              setLoginForm={auth.setLoginForm}
+              authMode={auth.authMode}
+              setAuthMode={auth.setAuthMode}
+              handleUserLogin={auth.handleUserLogin}
+              handleUserRegister={auth.handleUserRegister}
+              isLoggingIn={auth.isLoggingIn}
+              loginError={auth.loginError}
+              setLoginError={auth.setLoginError}
+              skipWelcome={skipWelcome}
+            />
+          );
+        })()}
 
         {screen === "home" && (
           <Panel k="home" className="relative" style={theme === 'light' ? lightPanelBg : darkBg}>

@@ -10,15 +10,23 @@ import { getTransitionEventType, normalizeStatus, logger, query as dbQuery } fro
 import { withCircuitBreaker, CircuitBreakerError } from '../../circuitBreaker';
 
 export function registerNotificationListener(): void {
-  // Buffer event + notification on every status change
+  // Buffer event + notification on every status change.
+  // `old_status` / `new_status` are nullable enum columns — empty strings
+  // would fail the enum cast (PG error 22P02). Coerce empty/undefined to null.
+  const safeStatus = (s: unknown): string | null => {
+    if (typeof s !== 'string') return null;
+    const trimmed = s.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  };
+
   orderBus.safeOn(ORDER_EVENT.STATUS_CHANGED, (p: OrderEventPayload) => {
     bufferEvent({
       order_id: p.orderId,
       event_type: getTransitionEventType(p.previousStatus as any, p.newStatus as any),
       actor_type: p.actorType,
       actor_id: p.actorId,
-      old_status: p.previousStatus,
-      new_status: p.newStatus,
+      old_status: safeStatus(p.previousStatus),
+      new_status: safeStatus(p.newStatus),
       metadata: JSON.stringify(p.metadata || {}),
     });
 

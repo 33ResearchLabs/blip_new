@@ -175,7 +175,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
           maxSize={isWideScreen ? "35%" : "40%"}
           id="center-left"
         >
-          <div className="flex flex-col h-full bg-background border-r border-border">
+          <div className="flex flex-col h-full bg-background border-r border-border" data-tour="pending-panel">
             {isWideScreen ? (
               <PendingOrdersPanel
                 orders={pendingOrders}
@@ -231,6 +231,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
         >
           <div className="flex flex-col h-full bg-background border-r border-border">
             <div
+              data-tour="inprogress-panel"
               className={`flex flex-col border-b border-foreground/[0.08] transition-all duration-200 ${inProgressCollapsed ? "" : "flex-1 min-h-0"}`}
             >
               <InProgressPanel
@@ -241,6 +242,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 onOpenDispute={(order) => openDisputeModal(order.id)}
                 collapsed={inProgressCollapsed}
                 onCollapseChange={setInProgressCollapsed}
+                merchantId={merchantId}
               />
             </div>
             <div
@@ -290,6 +292,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
             >
               <div className="flex flex-col h-full bg-background border-r border-border">
                 <div
+                  data-tour="leaderboard"
                   className={`flex flex-col border-b border-section-divider transition-all duration-200 ${leaderboardCollapsed ? "" : "flex-1 min-h-0"}`}
                 >
                   <LeaderboardPanel

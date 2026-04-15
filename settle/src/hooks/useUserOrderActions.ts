@@ -1,19 +1,39 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import type { Order, OrderStatus, OrderStep, BankAccount } from "@/components/user/screens/types";
-import { fetchWithAuth, generateIdempotencyKey } from '@/lib/api/fetchWithAuth';
-import { fetchDisputeInfoFromApi } from '@/lib/api/disputeApi';
-import { showAlert } from '@/context/ModalContext';
+import type {
+  Order,
+  OrderStatus,
+  OrderStep,
+  BankAccount,
+} from "@/components/user/screens/types";
+import { fetchWithAuth, generateIdempotencyKey } from "@/lib/api/fetchWithAuth";
+import { fetchDisputeInfoFromApi } from "@/lib/api/disputeApi";
+import { showAlert } from "@/context/ModalContext";
 // Simple loading state — no step-by-step progress needed
 
 interface UseUserOrderActionsParams {
   userId: string | null;
   activeOrder: Order | undefined;
   solanaWallet: any;
-  playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
+  playSound: (
+    sound:
+      | "message"
+      | "send"
+      | "trade_start"
+      | "trade_complete"
+      | "notification"
+      | "error"
+      | "click"
+      | "new_order"
+      | "order_complete",
+  ) => void;
   toast: any;
-  showBrowserNotification: (title: string, body: string, orderId?: string) => void;
+  showBrowserNotification: (
+    title: string,
+    body: string,
+    orderId?: string,
+  ) => void;
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
   setIsLoading: (loading: boolean) => void;
   fetchOrders: (uid: string) => Promise<void>;
@@ -32,22 +52,27 @@ export function useUserOrderActions({
 }: UseUserOrderActionsParams) {
   // Helper: optimistically update an order AND clear action buttons instantly.
   // This prevents the "toast fires but old button still visible" problem.
-  const optimisticOrderUpdate = useCallback((orderId: string, updates: Record<string, unknown>) => {
-    setOrders(prev => prev.map(o => {
-      if (o.id !== orderId) return o;
-      const updated = { ...o, ...updates };
-      // Clear backend-driven action buttons so they don't flash stale state
-      if ((updated as any).dbOrder) {
-        (updated as any).dbOrder = {
-          ...(updated as any).dbOrder,
-          primaryAction: null,
-          secondaryAction: null,
-          ...(updates.dbStatus ? { status: updates.dbStatus } : {}),
-        };
-      }
-      return updated;
-    }));
-  }, [setOrders]);
+  const optimisticOrderUpdate = useCallback(
+    (orderId: string, updates: Record<string, unknown>) => {
+      setOrders((prev) =>
+        prev.map((o) => {
+          if (o.id !== orderId) return o;
+          const updated = { ...o, ...updates };
+          // Clear backend-driven action buttons so they don't flash stale state
+          if ((updated as any).dbOrder) {
+            (updated as any).dbOrder = {
+              ...(updated as any).dbOrder,
+              primaryAction: null,
+              secondaryAction: null,
+              ...(updates.dbStatus ? { status: updates.dbStatus } : {}),
+            };
+          }
+          return updated;
+        }),
+      );
+    },
+    [setOrders],
+  );
 
   // Dispute state
   const [showDisputeModal, setShowDisputeModal] = useState(false);
@@ -63,12 +88,13 @@ export function useUserOrderActions({
     user_confirmed?: boolean;
     merchant_confirmed?: boolean;
   } | null>(null);
-  const [isRespondingToResolution, setIsRespondingToResolution] = useState(false);
+  const [isRespondingToResolution, setIsRespondingToResolution] =
+    useState(false);
 
   // Extension state
   const [extensionRequest, setExtensionRequest] = useState<{
     orderId: string;
-    requestedBy: 'user' | 'merchant';
+    requestedBy: "user" | "merchant";
     extensionMinutes: number;
     extensionCount: number;
     maxExtensions: number;
@@ -85,21 +111,25 @@ export function useUserOrderActions({
     if (!activeOrder?.id) return;
     let cancelled = false;
     fetchWithAuth(`/api/orders/${activeOrder.id}/extension`)
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (cancelled || !data.success) return;
         if (data.data?.pendingRequest) {
           setExtensionRequest({
             orderId: activeOrder.id,
             requestedBy: data.data.pendingRequest.requestedBy,
-            extensionMinutes: data.data.pendingRequest.extensionMinutes || data.data.extensionDuration,
+            extensionMinutes:
+              data.data.pendingRequest.extensionMinutes ||
+              data.data.extensionDuration,
             extensionCount: data.data.extensionCount,
             maxExtensions: data.data.maxExtensions,
           });
         }
       })
       .catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [activeOrder?.id]);
 
   // Cancel state
@@ -107,11 +137,17 @@ export function useUserOrderActions({
 
   const markPaymentSent = async () => {
     if (!activeOrder || !userId) {
-      console.log('markPaymentSent: missing activeOrder or userId', { activeOrder: !!activeOrder, userId });
+      console.log("markPaymentSent: missing activeOrder or userId", {
+        activeOrder: !!activeOrder,
+        userId,
+      });
       return;
     }
 
-    const hasOnChain = solanaWallet.connected && activeOrder.escrowTradeId && activeOrder.escrowCreatorWallet;
+    const hasOnChain =
+      solanaWallet.connected &&
+      activeOrder.escrowTradeId &&
+      activeOrder.escrowCreatorWallet;
 
     setIsLoading(true);
 
@@ -124,10 +160,13 @@ export function useUserOrderActions({
             tradeId: activeOrder.escrowTradeId,
           });
           if (acceptResult.success) {
-            console.log('[User] acceptTrade success:', acceptResult.txHash);
+            console.log("[User] acceptTrade success:", acceptResult.txHash);
           }
         } catch (acceptErr: any) {
-          console.log('[User] acceptTrade skipped (likely already done):', acceptErr.message);
+          console.log(
+            "[User] acceptTrade skipped (likely already done):",
+            acceptErr.message,
+          );
         }
         // Step complete — loading continues
 
@@ -138,32 +177,41 @@ export function useUserOrderActions({
             tradeId: activeOrder.escrowTradeId,
           });
           if (confirmResult.success) {
-            console.log('[User] On-chain payment confirmed:', confirmResult.txHash);
+            console.log(
+              "[User] On-chain payment confirmed:",
+              confirmResult.txHash,
+            );
           } else {
-            console.warn('[User] On-chain confirmation failed, continuing with API');
+            console.warn(
+              "[User] On-chain confirmation failed, continuing with API",
+            );
           }
         } catch (chainError) {
-          console.warn('[User] On-chain confirmation failed:', chainError);
+          console.warn("[User] On-chain confirmation failed:", chainError);
         }
         // Step complete — loading continues
       }
 
       // Final step: Update order via API
       const res = await fetchWithAuth(`/api/orders/${activeOrder.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': generateIdempotencyKey() },
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": generateIdempotencyKey(),
+        },
         body: JSON.stringify({
-          status: 'payment_sent',
-          actor_type: 'user',
+          status: "payment_sent",
+          actor_type: "user",
           actor_id: userId,
         }),
       });
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        const errorMsg = data.error || 'Failed to update order. The order may have expired.';
-        console.error('Failed to mark payment sent:', errorMsg);
-        showAlert('Error', errorMsg, 'error');
+        const errorMsg =
+          data.error || "Failed to update order. The order may have expired.";
+        console.error("Failed to mark payment sent:", errorMsg);
+        showAlert("Error", errorMsg, "error");
         setIsLoading(false);
         return;
       }
@@ -172,11 +220,11 @@ export function useUserOrderActions({
       optimisticOrderUpdate(activeOrder.id, {
         status: "waiting" as OrderStatus,
         step: 3 as OrderStep,
-        dbStatus: 'payment_sent',
+        dbStatus: "payment_sent",
       });
     } catch (err) {
-      console.error('Failed to mark payment sent:', err);
-      showAlert('Network Error', 'Network error. Please try again.', 'error');
+      console.error("Failed to mark payment sent:", err);
+      showAlert("Network Error", "Network error. Please try again.", "error");
     } finally {
       setIsLoading(false);
     }
@@ -188,27 +236,43 @@ export function useUserOrderActions({
     setIsLoading(true);
 
     try {
-      if (activeOrder.type === 'sell' && activeOrder.escrowTradeId && activeOrder.escrowCreatorWallet) {
-        const merchantWallet = activeOrder.acceptorWalletAddress || activeOrder.merchant.walletAddress;
-        const isValidSolanaAddress = merchantWallet && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
+      if (
+        activeOrder.type === "sell" &&
+        activeOrder.escrowTradeId &&
+        activeOrder.escrowCreatorWallet
+      ) {
+        const merchantWallet =
+          activeOrder.acceptorWalletAddress ||
+          activeOrder.merchant.walletAddress;
+        const isValidSolanaAddress =
+          merchantWallet &&
+          /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(merchantWallet);
 
         if (!solanaWallet.connected) {
-          showAlert('Wallet Required', 'Please connect your wallet to release the escrow.', 'warning');
+          showAlert(
+            "Wallet Required",
+            "Please connect your wallet to release the escrow.",
+            "warning",
+          );
           setIsLoading(false);
           return;
         }
 
         if (!isValidSolanaAddress) {
-          console.error('[Release] Invalid/missing merchant wallet:', {
+          console.error("[Release] Invalid/missing merchant wallet:", {
             acceptorWallet: activeOrder.acceptorWalletAddress,
             merchantProfileWallet: activeOrder.merchant.walletAddress,
           });
-          showAlert('Invalid Wallet', 'Merchant wallet address is invalid or missing. Please contact support.', 'error');
+          showAlert(
+            "Invalid Wallet",
+            "Merchant wallet address is invalid or missing. Please contact support.",
+            "error",
+          );
           setIsLoading(false);
           return;
         }
 
-        console.log('[Release] Releasing escrow to merchant:', {
+        console.log("[Release] Releasing escrow to merchant:", {
           creatorPubkey: activeOrder.escrowCreatorWallet,
           tradeId: activeOrder.escrowTradeId,
           counterparty: merchantWallet,
@@ -218,14 +282,19 @@ export function useUserOrderActions({
         let releaseResult: { success: boolean; txHash: string; error?: string };
         try {
           try {
-            console.log('[Release] Ensuring acceptTrade before release...');
+            console.log("[Release] Ensuring acceptTrade before release...");
             await solanaWallet.acceptTrade({
               creatorPubkey: activeOrder.escrowCreatorWallet,
               tradeId: activeOrder.escrowTradeId,
             });
-            console.log('[Release] acceptTrade succeeded (or was already done)');
+            console.log(
+              "[Release] acceptTrade succeeded (or was already done)",
+            );
           } catch (acceptErr: any) {
-            console.log('[Release] acceptTrade skipped (likely already done):', acceptErr?.message);
+            console.log(
+              "[Release] acceptTrade skipped (likely already done):",
+              acceptErr?.message,
+            );
           }
 
           releaseResult = await solanaWallet.releaseEscrow({
@@ -234,54 +303,71 @@ export function useUserOrderActions({
             counterparty: merchantWallet,
           });
         } catch (releaseErr: any) {
-          const msg = releaseErr?.message || '';
-          console.error('[Release] releaseEscrow failed:', msg);
+          const msg = releaseErr?.message || "";
+          console.error("[Release] releaseEscrow failed:", msg);
 
-          if (msg.includes('AccountNotInitialized')) {
-            console.log('[Release] Escrow account missing — already released on-chain, completing order...');
+          if (msg.includes("AccountNotInitialized")) {
+            console.log(
+              "[Release] Escrow account missing — already released on-chain, completing order...",
+            );
             let backendOk = false;
             try {
-              const escrowRes = await fetchWithAuth(`/api/orders/${activeOrder.id}/escrow`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  tx_hash: activeOrder.escrowTxHash || 'already-released',
-                  actor_type: 'user',
-                  actor_id: userId,
-                }),
-              });
+              const escrowRes = await fetchWithAuth(
+                `/api/orders/${activeOrder.id}/escrow`,
+                {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    tx_hash: activeOrder.escrowTxHash || "already-released",
+                    actor_type: "user",
+                    actor_id: userId,
+                  }),
+                },
+              );
               backendOk = escrowRes.ok;
-              console.log('[Release] Core-api release result:', backendOk);
+              console.log("[Release] Core-api release result:", backendOk);
             } catch (backendErr) {
-              console.error('[Release] Core-api release failed:', backendErr);
+              console.error("[Release] Core-api release failed:", backendErr);
             }
             if (!backendOk) {
               try {
-                const patchRes = await fetchWithAuth(`/api/orders/${activeOrder.id}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json', 'Idempotency-Key': generateIdempotencyKey() },
-                  body: JSON.stringify({
-                    status: 'completed',
-                    actor_type: 'user',
-                    actor_id: userId,
-                  }),
-                });
-                console.log('[Release] Direct completion result:', patchRes.ok);
+                const patchRes = await fetchWithAuth(
+                  `/api/orders/${activeOrder.id}`,
+                  {
+                    method: "PATCH",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Idempotency-Key": generateIdempotencyKey(),
+                    },
+                    body: JSON.stringify({
+                      status: "completed",
+                      actor_type: "user",
+                      actor_id: userId,
+                    }),
+                  },
+                );
+                console.log("[Release] Direct completion result:", patchRes.ok);
               } catch (patchErr) {
-                console.error('[Release] Direct completion failed:', patchErr);
+                console.error("[Release] Direct completion failed:", patchErr);
               }
             }
             optimisticOrderUpdate(activeOrder.id, {
-              status: "complete" as OrderStatus, step: 4 as OrderStep, dbStatus: 'completed',
+              status: "complete" as OrderStatus,
+              step: 4 as OrderStep,
+              dbStatus: "completed",
             });
-            playSound('trade_complete');
+            playSound("trade_complete");
             if (solanaWallet.connected) solanaWallet.refreshBalances();
             setIsLoading(false);
             return;
           }
 
-          if (msg.includes('ConstraintRaw') || msg.includes('CannotRelease')) {
-            showAlert('Escrow Error', `Unable to release escrow: ${msg.slice(0, 200)}`, 'error');
+          if (msg.includes("ConstraintRaw") || msg.includes("CannotRelease")) {
+            showAlert(
+              "Escrow Error",
+              `Unable to release escrow: ${msg.slice(0, 200)}`,
+              "error",
+            );
             setIsLoading(false);
             return;
           }
@@ -289,39 +375,67 @@ export function useUserOrderActions({
         }
 
         if (!releaseResult.success) {
-          console.error('[Release] Escrow release failed:', releaseResult.error);
-          showAlert('Escrow Failed', `Failed to release escrow: ${releaseResult.error || 'Unknown error'}`, 'error');
+          console.error(
+            "[Release] Escrow release failed:",
+            releaseResult.error,
+          );
+          showAlert(
+            "Escrow Failed",
+            `Failed to release escrow: ${releaseResult.error || "Unknown error"}`,
+            "error",
+          );
           setIsLoading(false);
           return;
         }
 
-        console.log('[Release] Escrow released:', releaseResult.txHash);
+        console.log("[Release] Escrow released:", releaseResult.txHash);
 
-        const escrowRes = await fetchWithAuth(`/api/orders/${activeOrder.id}/escrow`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tx_hash: releaseResult.txHash,
-            actor_type: 'user',
-            actor_id: userId,
-          }),
-        });
+        const escrowRes = await fetchWithAuth(
+          `/api/orders/${activeOrder.id}/escrow`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tx_hash: releaseResult.txHash,
+              actor_type: "user",
+              actor_id: userId,
+            }),
+          },
+        );
 
         if (escrowRes.ok) {
-          setOrders(prev => prev.map(o =>
-            o.id === activeOrder.id ? { ...o, status: "complete" as OrderStatus, step: 4 as OrderStep, dbStatus: 'completed' } : o
-          ));
-          playSound('trade_complete');
+          setOrders((prev) =>
+            prev.map((o) =>
+              o.id === activeOrder.id
+                ? {
+                    ...o,
+                    status: "complete" as OrderStatus,
+                    step: 4 as OrderStep,
+                    dbStatus: "completed",
+                  }
+                : o,
+            ),
+          );
+          playSound("trade_complete");
           if (solanaWallet.connected) {
             solanaWallet.refreshBalances();
           }
           setIsLoading(false);
           return;
         } else {
-          setOrders(prev => prev.map(o =>
-            o.id === activeOrder.id ? { ...o, status: "complete" as OrderStatus, step: 4 as OrderStep, dbStatus: 'completed' } : o
-          ));
-          playSound('trade_complete');
+          setOrders((prev) =>
+            prev.map((o) =>
+              o.id === activeOrder.id
+                ? {
+                    ...o,
+                    status: "complete" as OrderStatus,
+                    step: 4 as OrderStep,
+                    dbStatus: "completed",
+                  }
+                : o,
+            ),
+          );
+          playSound("trade_complete");
           if (solanaWallet.connected) {
             solanaWallet.refreshBalances();
           }
@@ -331,41 +445,66 @@ export function useUserOrderActions({
       }
 
       const res = await fetchWithAuth(`/api/orders/${activeOrder.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': generateIdempotencyKey() },
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": generateIdempotencyKey(),
+        },
         body: JSON.stringify({
-          status: 'completed',
-          actor_type: 'user',
+          status: "completed",
+          actor_type: "user",
           actor_id: userId,
         }),
       });
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        const errorMsg = data.error || 'Failed to confirm payment';
-        if (errorMsg.includes('already') && errorMsg.includes('completed')) {
-          setOrders(prev => prev.map(o =>
-            o.id === activeOrder.id ? { ...o, status: "complete" as OrderStatus, step: 4 as OrderStep, dbStatus: 'completed' } : o
-          ));
+        const errorMsg = data.error || "Failed to confirm payment";
+        if (errorMsg.includes("already") && errorMsg.includes("completed")) {
+          setOrders((prev) =>
+            prev.map((o) =>
+              o.id === activeOrder.id
+                ? {
+                    ...o,
+                    status: "complete" as OrderStatus,
+                    step: 4 as OrderStep,
+                    dbStatus: "completed",
+                  }
+                : o,
+            ),
+          );
           setIsLoading(false);
           return;
         }
-        console.error('Failed to confirm payment:', errorMsg);
-        showAlert('Error', errorMsg, 'error');
+        console.error("Failed to confirm payment:", errorMsg);
+        showAlert("Error", errorMsg, "error");
         setIsLoading(false);
         return;
       }
 
-      setOrders(prev => prev.map(o =>
-        o.id === activeOrder.id ? { ...o, status: "complete" as OrderStatus, step: 4 as OrderStep, dbStatus: 'completed' } : o
-      ));
-      playSound('trade_complete');
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === activeOrder.id
+            ? {
+                ...o,
+                status: "complete" as OrderStatus,
+                step: 4 as OrderStep,
+                dbStatus: "completed",
+              }
+            : o,
+        ),
+      );
+      playSound("trade_complete");
       if (solanaWallet.connected) {
         solanaWallet.refreshBalances();
       }
     } catch (err) {
-      console.error('Failed to confirm payment:', err);
-      showAlert('Error', 'Failed to release escrow. Please try again.', 'error');
+      console.error("Failed to confirm payment:", err);
+      showAlert(
+        "Error",
+        "Failed to release escrow. Please try again.",
+        "error",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -376,8 +515,12 @@ export function useUserOrderActions({
 
     setIsSubmittingDispute(true);
     try {
-      if (solanaWallet.connected && activeOrder.escrowTradeId && activeOrder.escrowCreatorWallet) {
-        console.log('[User] Opening on-chain dispute:', {
+      if (
+        solanaWallet.connected &&
+        activeOrder.escrowTradeId &&
+        activeOrder.escrowCreatorWallet
+      ) {
+        console.log("[User] Opening on-chain dispute:", {
           tradeId: activeOrder.escrowTradeId,
           creatorWallet: activeOrder.escrowCreatorWallet,
         });
@@ -389,22 +532,25 @@ export function useUserOrderActions({
           });
 
           if (disputeResult.success) {
-            console.log('[User] On-chain dispute opened:', disputeResult.txHash);
+            console.log(
+              "[User] On-chain dispute opened:",
+              disputeResult.txHash,
+            );
           } else {
-            console.warn('[User] On-chain dispute failed, continuing with API');
+            console.warn("[User] On-chain dispute failed, continuing with API");
           }
         } catch (chainError) {
-          console.warn('[User] On-chain dispute failed:', chainError);
+          console.warn("[User] On-chain dispute failed:", chainError);
         }
       }
 
       const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/dispute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reason: disputeReason,
           description: disputeDescription,
-          initiated_by: 'user',
+          initiated_by: "user",
           user_id: userId,
         }),
       });
@@ -412,21 +558,32 @@ export function useUserOrderActions({
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
-          setOrders(prev => prev.map(o =>
-            o.id === activeOrder.id ? { ...o, status: "disputed" as OrderStatus, dbStatus: 'disputed' } : o
-          ));
+          setOrders((prev) =>
+            prev.map((o) =>
+              o.id === activeOrder.id
+                ? {
+                    ...o,
+                    status: "disputed" as OrderStatus,
+                    dbStatus: "disputed",
+                  }
+                : o,
+            ),
+          );
           setShowDisputeModal(false);
           setDisputeReason("");
           setDisputeDescription("");
           toast.showDisputeOpened(activeOrder.id);
-          showBrowserNotification('Dispute Submitted', 'Your dispute has been submitted. Our team will review it.');
+          showBrowserNotification(
+            "Dispute Submitted",
+            "Your dispute has been submitted. Our team will review it.",
+          );
         }
       } else {
-        toast.showWarning('Failed to submit dispute. Please try again.');
+        toast.showWarning("Failed to submit dispute. Please try again.");
       }
     } catch (err) {
-      console.error('Failed to submit dispute:', err);
-      toast.showWarning('Failed to submit dispute');
+      console.error("Failed to submit dispute:", err);
+      toast.showWarning("Failed to submit dispute");
     } finally {
       setIsSubmittingDispute(false);
     }
@@ -437,20 +594,23 @@ export function useUserOrderActions({
     if (data) setDisputeInfo(data);
   }, []);
 
-  const respondToResolution = async (action: 'accept' | 'reject') => {
+  const respondToResolution = async (action: "accept" | "reject") => {
     if (!activeOrder || !userId || !disputeInfo) return;
 
     setIsRespondingToResolution(true);
     try {
-      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/dispute/confirm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          party: 'user',
-          action,
-          partyId: userId,
-        }),
-      });
+      const res = await fetchWithAuth(
+        `/api/orders/${activeOrder.id}/dispute/confirm`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            party: "user",
+            action,
+            partyId: userId,
+          }),
+        },
+      );
 
       if (res.ok) {
         const data = await res.json();
@@ -461,12 +621,12 @@ export function useUserOrderActions({
               fetchOrders(userId);
             }
           }
-          playSound('click');
+          playSound("click");
         }
       }
     } catch (err) {
-      console.error('Failed to respond to resolution:', err);
-      playSound('error');
+      console.error("Failed to respond to resolution:", err);
+      playSound("error");
     } finally {
       setIsRespondingToResolution(false);
     }
@@ -474,45 +634,56 @@ export function useUserOrderActions({
 
   // Fetch dispute info when viewing a disputed order
   useEffect(() => {
-    if (activeOrder?.status === 'disputed' || activeOrder?.dbStatus === 'disputed') {
+    if (
+      activeOrder?.status === "disputed" ||
+      activeOrder?.dbStatus === "disputed"
+    ) {
       fetchDisputeInfo(activeOrder.id);
     } else {
       setDisputeInfo(null);
     }
-  }, [activeOrder?.id, activeOrder?.status, activeOrder?.dbStatus, fetchDisputeInfo]);
+  }, [
+    activeOrder?.id,
+    activeOrder?.status,
+    activeOrder?.dbStatus,
+    fetchDisputeInfo,
+  ]);
 
   const requestExtension = async (durationMinutes?: number) => {
     if (!activeOrder || !userId) return;
 
     setRequestingExtension(true);
     try {
-      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/extension`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          actor_type: 'user',
-          actor_id: userId,
-          ...(durationMinutes ? { duration_minutes: durationMinutes } : {}),
-        }),
-      });
+      const res = await fetchWithAuth(
+        `/api/orders/${activeOrder.id}/extension`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            actor_type: "user",
+            actor_id: userId,
+            ...(durationMinutes ? { duration_minutes: durationMinutes } : {}),
+          }),
+        },
+      );
 
       const data = await res.json();
       if (data.success) {
         setExtensionRequest({
           orderId: activeOrder.id,
-          requestedBy: 'user',
+          requestedBy: "user",
           extensionMinutes: data.data?.extension_minutes || 30,
           extensionCount: data.data?.extension_count || 0,
           maxExtensions: data.data?.max_extensions || 3,
         });
-        playSound('click');
+        playSound("click");
       } else {
-        playSound('error');
-        console.error('Extension request failed:', data.error);
+        playSound("error");
+        console.error("Extension request failed:", data.error);
       }
     } catch (err) {
-      console.error('Failed to request extension:', err);
-      playSound('error');
+      console.error("Failed to request extension:", err);
+      playSound("error");
     } finally {
       setRequestingExtension(false);
     }
@@ -523,36 +694,39 @@ export function useUserOrderActions({
 
     setRequestingExtension(true);
     try {
-      const res = await fetchWithAuth(`/api/orders/${extensionRequest.orderId}/extension`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          actor_type: 'user',
-          actor_id: userId,
-          accept,
-        }),
-      });
+      const res = await fetchWithAuth(
+        `/api/orders/${extensionRequest.orderId}/extension`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            actor_type: "user",
+            actor_id: userId,
+            accept,
+          }),
+        },
+      );
 
       const data = await res.json();
       if (data.success) {
         setExtensionRequest(null);
         if (accept) {
-          playSound('click');
+          playSound("click");
           if (userId) {
             fetchOrders(userId);
           }
         } else {
-          playSound('error');
+          playSound("error");
           if (userId) {
             fetchOrders(userId);
           }
         }
       } else {
-        playSound('error');
+        playSound("error");
       }
     } catch (err) {
-      console.error('Failed to respond to extension:', err);
-      playSound('error');
+      console.error("Failed to respond to extension:", err);
+      playSound("error");
     } finally {
       setRequestingExtension(false);
     }
@@ -562,37 +736,44 @@ export function useUserOrderActions({
     if (!activeOrder || !userId) return;
     setIsRequestingCancel(true);
     try {
-      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/cancel-request`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          actor_type: 'user',
-          actor_id: userId,
-          reason: reason || 'User requested cancellation',
-        }),
-      });
+      const res = await fetchWithAuth(
+        `/api/orders/${activeOrder.id}/cancel-request`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            actor_type: "user",
+            actor_id: userId,
+            reason: reason || "User requested cancellation",
+          }),
+        },
+      );
       const data = await res.json();
       if (data.success) {
-        playSound('click');
+        playSound("click");
         // Optimistic update: immediately show cancel request in UI
-        setOrders(prev => prev.map(o =>
-          o.id === activeOrder.id ? {
-            ...o,
-            cancelRequest: {
-              requestedBy: 'user',
-              requestedAt: new Date(),
-              reason: reason || 'User requested cancellation',
-            },
-          } : o
-        ));
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === activeOrder.id
+              ? {
+                  ...o,
+                  cancelRequest: {
+                    requestedBy: "user",
+                    requestedAt: new Date(),
+                    reason: reason || "User requested cancellation",
+                  },
+                }
+              : o,
+          ),
+        );
         fetchOrders(userId);
       } else {
-        playSound('error');
-        showAlert('Error', data.error || 'Failed to request cancel', 'error');
+        playSound("error");
+        showAlert("Error", data.error || "Failed to request cancel", "error");
       }
     } catch (err) {
-      console.error('Failed to request cancel:', err);
-      playSound('error');
+      console.error("Failed to request cancel:", err);
+      playSound("error");
     } finally {
       setIsRequestingCancel(false);
     }
@@ -602,93 +783,147 @@ export function useUserOrderActions({
     if (!activeOrder || !userId) return;
     setIsRequestingCancel(true);
     try {
-      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/cancel-request`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          actor_type: 'user',
-          actor_id: userId,
-          accept,
-        }),
-      });
+      const res = await fetchWithAuth(
+        `/api/orders/${activeOrder.id}/cancel-request`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            actor_type: "user",
+            actor_id: userId,
+            accept,
+          }),
+        },
+      );
       const data = await res.json();
       if (data.success) {
-        playSound(accept ? 'click' : 'notification');
+        playSound(accept ? "click" : "notification");
         // Optimistic update: immediately clear cancel request or cancel order
         if (accept) {
-          setOrders(prev => prev.map(o =>
-            o.id === activeOrder.id ? {
-              ...o,
-              status: 'cancelled' as OrderStatus,
-              step: 1 as OrderStep,
-              dbStatus: 'cancelled',
-              cancelRequest: null,
-            } : o
-          ));
+          setOrders((prev) =>
+            prev.map((o) =>
+              o.id === activeOrder.id
+                ? {
+                    ...o,
+                    status: "cancelled" as OrderStatus,
+                    step: 1 as OrderStep,
+                    dbStatus: "cancelled",
+                    cancelRequest: null,
+                  }
+                : o,
+            ),
+          );
         } else {
-          setOrders(prev => prev.map(o =>
-            o.id === activeOrder.id ? {
-              ...o,
-              cancelRequest: null,
-            } : o
-          ));
+          setOrders((prev) =>
+            prev.map((o) =>
+              o.id === activeOrder.id
+                ? {
+                    ...o,
+                    cancelRequest: null,
+                  }
+                : o,
+            ),
+          );
         }
         fetchOrders(userId);
       } else {
-        playSound('error');
-        showAlert('Error', data.error || 'Failed to respond to cancel', 'error');
+        playSound("error");
+        showAlert(
+          "Error",
+          data.error || "Failed to respond to cancel",
+          "error",
+        );
       }
     } catch (err) {
-      console.error('Failed to respond to cancel request:', err);
-      playSound('error');
+      console.error("Failed to respond to cancel request:", err);
+      playSound("error");
     } finally {
       setIsRequestingCancel(false);
     }
   };
 
-  const submitRating = useCallback(async (orderId: string, ratingValue: number, reviewText?: string) => {
-    if (!userId) return;
-    try {
-      const res = await fetchWithAuth('/api/ratings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          order_id: orderId,
-          rater_type: 'user',
-          rater_id: userId,
-          rating: ratingValue,
-          review_text: reviewText || undefined,
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast.showWarning(data.error || 'Failed to submit review');
+  // In-flight guard: a Set of orderIds currently being rated.
+  // Prevents duplicate POST when the user double-clicks OR when React 19
+  // StrictMode/transitions cause the handler to fire twice — without this,
+  // the first submit succeeds and the second returns 400 "already rated".
+  const submittingRatingsRef = useState<Set<string>>(() => new Set())[0];
+
+  const submitRating = useCallback(
+    async (orderId: string, ratingValue: number, reviewText?: string) => {
+      if (!userId) return;
+      if (submittingRatingsRef.has(orderId)) {
+        // Already submitting — silently ignore the duplicate
         return;
       }
-      // Update local order state with the rating
-      setOrders(prev => prev.map(o =>
-        o.id === orderId ? { ...o, userRating: ratingValue } : o
-      ));
-      playSound('click');
-      toast.show({ type: 'complete', title: 'Review Submitted', message: `You rated this trade ${ratingValue} star${ratingValue !== 1 ? 's' : ''}`, duration: 4000 });
-    } catch (err) {
-      console.error('Failed to submit rating:', err);
-      toast.showWarning('Failed to submit review. Please try again.');
-    }
-  }, [userId, setOrders, playSound, toast]);
+      submittingRatingsRef.add(orderId);
+      try {
+        const res = await fetchWithAuth("/api/ratings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_id: orderId,
+            rater_type: "user",
+            rater_id: userId,
+            rating: ratingValue,
+            review_text: reviewText || undefined,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          // Treat "already rated" as success — the user did submit, the
+          // first POST just got there first.
+          if (typeof data.error === 'string' && /already rated/i.test(data.error)) {
+            setOrders((prev) =>
+              prev.map((o) =>
+                o.id === orderId ? { ...o, userRating: ratingValue } : o,
+              ),
+            );
+            return;
+          }
+          toast.showWarning(data.error || "Failed to submit review");
+          return;
+        }
+        // Update local order state with the rating
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId ? { ...o, userRating: ratingValue } : o,
+          ),
+        );
+        playSound("click");
+        toast.show({
+          type: "complete",
+          title: "Review Submitted",
+          message: `You rated this trade ${ratingValue} star${ratingValue !== 1 ? "s" : ""}`,
+          duration: 4000,
+        });
+      } catch (err) {
+        console.error("Failed to submit rating:", err);
+        toast.showWarning("Failed to submit review. Please try again.");
+      } finally {
+        // Release the in-flight guard so the user can re-rate if they
+        // change their mind (or retry after a real network error).
+        submittingRatingsRef.delete(orderId);
+      }
+    },
+    [userId, setOrders, playSound, toast, submittingRatingsRef],
+  );
 
   return {
     // Dispute
-    showDisputeModal, setShowDisputeModal,
-    disputeReason, setDisputeReason,
-    disputeDescription, setDisputeDescription,
+    showDisputeModal,
+    setShowDisputeModal,
+    disputeReason,
+    setDisputeReason,
+    disputeDescription,
+    setDisputeDescription,
     isSubmittingDispute,
     disputeInfo,
     isRespondingToResolution,
     submitDispute,
     respondToResolution,
     // Extension
-    extensionRequest, setExtensionRequest,
+    extensionRequest,
+    setExtensionRequest,
     requestingExtension,
     requestExtension,
     respondToExtension,
