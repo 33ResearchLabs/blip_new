@@ -166,7 +166,11 @@ function TransactionCard({
         </div>
       </div>
 
-      {/* Right: amount + balance after */}
+      {/* Right: amount + balance after.
+          When there's a platform fee, show gross − fee below the net amount
+          so the merchant can tell at a glance that (e.g. 105) in other
+          panels and (e.g. +102) here are the same order minus the fee.
+          feeAmount rounded to 2 decimals — matches the running balance. */}
       <div className="flex flex-col items-end shrink-0">
         {merchantSold ? (
           <>
@@ -175,6 +179,12 @@ function TransactionCard({
             </span>
             <span className="text-[9px] text-foreground/30 font-mono tabular-nums">
               {formatConverted(fiatAmount, fiatCode)}
+              {feeAmount > 0.0001 && (
+                <>
+                  {" · fee "}
+                  {feeAmount.toFixed(2)} {cryptoCode}
+                </>
+              )}
             </span>
           </>
         ) : merchantBought ? (
@@ -182,6 +192,11 @@ function TransactionCard({
             <span className="text-[12px] font-bold font-mono tabular-nums text-[var(--color-success)]">
               +{Math.round(netCryptoAmount).toLocaleString()} {cryptoCode}
             </span>
+            {feeAmount > 0.0001 ? (
+              <span className="text-[9px] text-foreground/30 font-mono tabular-nums">
+                {Math.round(cryptoAmount).toLocaleString()} − {feeAmount.toFixed(2)} fee
+              </span>
+            ) : null}
             <span className="text-[9px] text-foreground/30 font-mono tabular-nums">
               {formatConverted(fiatAmount, fiatCode)}
             </span>
