@@ -63,6 +63,13 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
   }, [orderId]);
 
   const isChatClosed = ['completed', 'cancelled', 'expired'].includes(orderStatus || '');
+  const closedReason: string | null = isChatClosed
+    ? orderStatus === 'completed'
+      ? 'Trade completed — chat is closed. You can no longer send messages.'
+      : orderStatus === 'cancelled'
+        ? 'Trade cancelled — chat is closed. You can no longer send messages.'
+        : 'Trade expired — chat is closed. You can no longer send messages.'
+    : null;
   const chatWindow = chatWindows.find(w => w.orderId === orderId);
 
   const TypeIcon = orderType === 'buy' ? ArrowDownLeft : ArrowUpRight;
@@ -136,6 +143,8 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
             isFrozen={chatWindow.isFrozen}
             isLoading={chatWindow.messages.length === 0}
             disabled={isChatClosed}
+            chatEnabled={!isChatClosed}
+            chatReason={closedReason}
             onLoadOlder={() => loadOlderMessages(orderId)}
             hasOlderMessages={hasOlderMessages(orderId)}
             isLoadingOlder={isLoadingOlderMessages(orderId)}

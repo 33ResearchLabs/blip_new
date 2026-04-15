@@ -992,7 +992,10 @@ export function ChatRoom({
                 <div
                   className={`max-w-[75%] ${isMe ? "items-end" : "items-start"}`}
                 >
-                  {/* Sender name + role */}
+                  {/* Sender name + role.
+                      Only the compliance badge is shown — the Buyer/Seller
+                      role is already obvious from the chat context, so the
+                      tag is noise for trader-to-trader messages. */}
                   {!isMe && (
                     <div className="flex items-center gap-1.5 mb-0.5 px-1">
                       <span
@@ -1000,11 +1003,13 @@ export function ChatRoom({
                       >
                         {displayName}
                       </span>
-                      <span
-                        className={`text-[9px] px-1 py-0.5 rounded ${roleColor.bg} ${roleColor.text}`}
-                      >
-                        {getRoleName(msg.senderType)}
-                      </span>
+                      {msg.senderType === "compliance" && (
+                        <span
+                          className={`text-[9px] px-1 py-0.5 rounded ${roleColor.bg} ${roleColor.text}`}
+                        >
+                          {getRoleName(msg.senderType)}
+                        </span>
+                      )}
                     </div>
                   )}
 
@@ -1192,6 +1197,19 @@ export function ChatRoom({
 
       {/* Input area */}
       <div className="px-3 py-2 border-t border-foreground/[0.04] bg-foreground/[0.02]">
+        {/* Chat-closed banner — replaces the input row entirely when the
+            backend (or the order's terminal status) has disabled chat.
+            Compliance reviewers can still see the input via the freeze
+            controls below; everyone else sees only this banner. */}
+        {!chatEnabled && currentUserType !== "compliance" ? (
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] text-[12px] text-foreground/50">
+            <Lock className="w-3.5 h-3.5 text-foreground/40 shrink-0" />
+            <span className="truncate">
+              {chatReason || "This chat is closed. You can no longer send messages."}
+            </span>
+          </div>
+        ) : null}
+
         {/* Compliance controls */}
         {currentUserType === "compliance" && (
           <div className="flex items-center gap-2 mb-2">
@@ -1215,6 +1233,7 @@ export function ChatRoom({
           </div>
         )}
 
+        {(chatEnabled || currentUserType === "compliance") && (
         <div className="flex items-center gap-2">
           {/* File upload button */}
           <input
@@ -1283,6 +1302,7 @@ export function ChatRoom({
             )}
           </button>
         </div>
+        )}
       </div>
     </div>
   );
