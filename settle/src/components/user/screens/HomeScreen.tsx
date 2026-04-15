@@ -267,7 +267,14 @@ export const HomeScreen = ({
   const displayBalance = IS_MOCK_MODE ? (userBalance ?? 0) : solanaWallet.usdtBalance;
   const isWalletReady = IS_MOCK_MODE ? (userBalance !== undefined && userBalance !== null) : solanaWallet.connected;
 
-  const unreadCount = orders.reduce((s, o) => s + (o.unreadCount || 0), 0);
+  // Only count unread on non-terminal orders. Terminal orders (completed /
+  // cancelled / expired) can retain is_read=false rows if the user never
+  // reopened the chat, which would otherwise inflate the nav badge forever.
+  const TERMINAL_STATUSES = ['completed', 'cancelled', 'expired'];
+  const unreadCount = orders.reduce(
+    (s, o) => s + (TERMINAL_STATUSES.includes(String(o.dbStatus)) ? 0 : (o.unreadCount || 0)),
+    0,
+  );
   const [navCopied, setNavCopied] = useStateHook(false);
   const [cardH, setCardH] = useStateHook<number | null>(null);
   useEffect(() => {

@@ -56,9 +56,17 @@ export const ChatListScreen = ({
     });
   };
 
+  // Terminal orders (completed / cancelled / expired) can retain is_read=false
+  // chat rows indefinitely if the user never reopened the chat. Zero out their
+  // unread contribution so merchant-grouped rows and the disputes pill don't
+  // inflate — but keep the orders themselves in the list so history renders.
+  const TERMINAL_STATUSES = ['completed', 'cancelled', 'expired'];
+  const effectiveUnread = (o: Order) =>
+    TERMINAL_STATUSES.includes(String(o.dbStatus)) ? 0 : (o.unreadCount || 0);
+
   const chatOrders = filterByTime(orders.filter(o => o.dbStatus !== 'disputed'));
   const disputeOrders = filterByTime(orders.filter(o => o.dbStatus === 'disputed'));
-  const disputeUnread = disputeOrders.reduce((sum, o) => sum + (o.unreadCount || 0), 0);
+  const disputeUnread = disputeOrders.reduce((sum, o) => sum + effectiveUnread(o), 0);
 
   // Group orders by merchant — one inbox row per contact, showing the most
   // recent order/message and summing unread counts across all orders with them.
@@ -75,10 +83,10 @@ export const ChatListScreen = ({
       const ts = (o.lastMessage?.createdAt?.getTime() || o.createdAt?.getTime() || 0);
       const existing = map.get(key);
       if (!existing) {
-        map.set(key, { key, representative: o, orderCount: 1, totalUnread: o.unreadCount || 0 });
+        map.set(key, { key, representative: o, orderCount: 1, totalUnread: effectiveUnread(o) });
       } else {
         existing.orderCount += 1;
-        existing.totalUnread += o.unreadCount || 0;
+        existing.totalUnread += effectiveUnread(o);
         const existingTs = (existing.representative.lastMessage?.createdAt?.getTime() || existing.representative.createdAt?.getTime() || 0);
         if (ts > existingTs) existing.representative = o;
       }
