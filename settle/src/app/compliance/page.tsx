@@ -1166,43 +1166,51 @@ export default function ComplianceDashboard() {
                     </div>
                   </div>
 
-                  <ChatRoom
-                    orderId={activeChat.orderId || ''}
-                    messages={activeChat.messages}
-                    currentUserType="compliance"
-                    currentUserId={member?.id}
-                    onSendMessage={(text, imageUrl, fileData) => {
-                      sendMessage(activeChat.id, text, imageUrl, fileData);
-                    }}
-                    onTyping={(typing) => {
-                      if ('sendTypingIndicator' in chatHookResult) {
-                        (chatHookResult as { sendTypingIndicator: (id: string, typing: boolean) => void }).sendTypingIndicator(activeChat.id, typing);
-                      }
-                    }}
-                    onMarkRead={() => {
-                      if ('markAsRead' in chatHookResult) {
-                        (chatHookResult as { markAsRead: (id: string) => void }).markAsRead(activeChat.id);
-                      }
-                    }}
-                    isTyping={activeChat.isTyping}
-                    typingActorType={(activeChat as { typingActorType?: string }).typingActorType}
-                    typingActorName={(activeChat as { typingActorName?: string }).typingActorName}
-                    presence={(activeChat as { presence?: { actorType: 'user' | 'merchant' | 'compliance' | 'system'; actorId: string; isOnline: boolean; lastSeen?: string }[] }).presence}
-                    isFrozen={(activeChat as { isFrozen?: boolean }).isFrozen}
-                    compact
-                    userName={(() => {
-                      const chatDispute = disputes.find(d => d.id === activeChat.orderId);
-                      return chatDispute?.user.name;
-                    })()}
-                    merchantName={(() => {
-                      const chatDispute = disputes.find(d => d.id === activeChat.orderId);
-                      return chatDispute?.merchant.name;
-                    })()}
-                    complianceName={member?.name}
-                    onLoadOlder={activeChat.orderId ? () => loadOlderMessages(activeChat.orderId!) : undefined}
-                    hasOlderMessages={activeChat.orderId ? hasOlderMessages(activeChat.orderId) : false}
-                    isLoadingOlder={activeChat.orderId ? isLoadingOlderMessages(activeChat.orderId) : false}
-                  />
+                  {/* Wrap ChatRoom in a constrained flex cell so its internal
+                      flex-col (messages scrollarea + sticky input bar) resolves
+                      against a bounded parent. Without `flex-1 min-h-0`, ChatRoom
+                      uses h-full which overflows past the aside's 50% slot and
+                      pushes the input/send row below the viewport — matches the
+                      pattern used by DisputeChatView/OrderChatView in merchant. */}
+                  <div className="flex-1 min-h-0">
+                    <ChatRoom
+                      orderId={activeChat.orderId || ''}
+                      messages={activeChat.messages}
+                      currentUserType="compliance"
+                      currentUserId={member?.id}
+                      onSendMessage={(text, imageUrl, fileData) => {
+                        sendMessage(activeChat.id, text, imageUrl, fileData);
+                      }}
+                      onTyping={(typing) => {
+                        if ('sendTypingIndicator' in chatHookResult) {
+                          (chatHookResult as { sendTypingIndicator: (id: string, typing: boolean) => void }).sendTypingIndicator(activeChat.id, typing);
+                        }
+                      }}
+                      onMarkRead={() => {
+                        if ('markAsRead' in chatHookResult) {
+                          (chatHookResult as { markAsRead: (id: string) => void }).markAsRead(activeChat.id);
+                        }
+                      }}
+                      isTyping={activeChat.isTyping}
+                      typingActorType={(activeChat as { typingActorType?: string }).typingActorType}
+                      typingActorName={(activeChat as { typingActorName?: string }).typingActorName}
+                      presence={(activeChat as { presence?: { actorType: 'user' | 'merchant' | 'compliance' | 'system'; actorId: string; isOnline: boolean; lastSeen?: string }[] }).presence}
+                      isFrozen={(activeChat as { isFrozen?: boolean }).isFrozen}
+                      compact
+                      userName={(() => {
+                        const chatDispute = disputes.find(d => d.id === activeChat.orderId);
+                        return chatDispute?.user.name;
+                      })()}
+                      merchantName={(() => {
+                        const chatDispute = disputes.find(d => d.id === activeChat.orderId);
+                        return chatDispute?.merchant.name;
+                      })()}
+                      complianceName={member?.name}
+                      onLoadOlder={activeChat.orderId ? () => loadOlderMessages(activeChat.orderId!) : undefined}
+                      hasOlderMessages={activeChat.orderId ? hasOlderMessages(activeChat.orderId) : false}
+                      isLoadingOlder={activeChat.orderId ? isLoadingOlderMessages(activeChat.orderId) : false}
+                    />
+                  </div>
                 </div>
               </>
             ) : (
