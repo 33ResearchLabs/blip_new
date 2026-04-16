@@ -17,6 +17,11 @@ import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { MyOffers } from "@/components/merchant/MyOffers";
 import { ChevronRight, Package } from "lucide-react";
 import { InfoTooltip } from "@/components/shared/InfoTooltip";
+import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
+
+// Matches server-side validation in /api/merchant/[id]/payment-methods.
+// Kept in sync with PaymentMethodModal.tsx NAME_RE.
+const PM_NAME_RE = /^[A-Za-z0-9 &.,'\-()/]{2,60}$/;
 
 interface MerchantPaymentMethod {
   id: string;
@@ -199,8 +204,22 @@ export const ConfigPanel = memo(function ConfigPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [merchantId]);
 
+  const [pmError, setPmError] = useState<string | null>(null);
   const handleAddPaymentMethod = async () => {
-    if (!merchantId || !newPm.name.trim()) return;
+    if (!merchantId) return;
+    const name = newPm.name.trim();
+    const details = newPm.details.trim();
+    // Mirror server rules so a bad input fails here with a visible message
+    // instead of a silent 400 from the API.
+    if (!PM_NAME_RE.test(name)) {
+      setPmError("Name must be 2–60 chars (letters, digits, basic punctuation).");
+      return;
+    }
+    if (details.length > 200) {
+      setPmError("Details must be at most 200 characters.");
+      return;
+    }
+    setPmError(null);
     setSavingPm(true);
     try {
       const res = await fetchWithAuth(`/api/merchant/${merchantId}/payment-methods`, {
@@ -208,8 +227,8 @@ export const ConfigPanel = memo(function ConfigPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: newPm.type,
-          name: newPm.name.trim(),
-          details: newPm.details.trim(),
+          name,
+          details,
           is_default: paymentMethods.length === 0,
         }),
       });
@@ -217,9 +236,13 @@ export const ConfigPanel = memo(function ConfigPanel({
         await fetchPaymentMethods();
         setShowAddPm(false);
         setNewPm({ type: 'bank', name: '', details: '' });
+      } else {
+        const json = await res.json().catch(() => null);
+        setPmError(json?.error || json?.errors?.[0] || "Failed to save. Check the fields and try again.");
       }
     } catch (err) {
       console.error("Failed to add payment method:", err);
+      setPmError("Network error — try again.");
     } finally {
       setSavingPm(false);
     }
@@ -310,20 +333,16 @@ export const ConfigPanel = memo(function ConfigPanel({
           </div>
           <div className="relative">
             <input
-              type="number"
-              min={0}
-              step="any"
+              type="text"
+              inputMode="decimal"
+              maxLength={14}
               value={openTradeForm.cryptoAmount}
               onChange={(e) => {
-                const raw = e.target.value;
-                // Block negatives and stray "-" characters; allow empty string
-                // so the user can clear the field while typing.
-                if (raw === "" || (parseFloat(raw) >= 0 && !raw.includes("-"))) {
-                  setOpenTradeForm({ ...openTradeForm, cryptoAmount: raw });
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "-" || e.key === "e" || e.key === "E") e.preventDefault();
+                // Clamp to 10 int + 2 decimal — same rule as the other
+                // amount fields (offer / corridor / trade form) so a single
+                // source of truth governs what a USDT amount looks like.
+                const clamped = clampDecimal(e.target.value, DECIMAL_PRESETS.amount);
+                setOpenTradeForm({ ...openTradeForm, cryptoAmount: clamped });
               }}
               placeholder="0"
               className="w-full bg-foreground/[0.03] border border-foreground/[0.08] rounded-xl px-4 py-3 text-xl font-bold text-foreground placeholder:text-foreground/10 outline-none focus:border-primary/30 focus:bg-foreground/[0.04] transition-all font-mono tabular-nums"
@@ -469,17 +488,22 @@ export const ConfigPanel = memo(function ConfigPanel({
               <input
                 type="text"
                 value={newPm.name}
-                onChange={(e) => setNewPm({ ...newPm, name: e.target.value })}
+                maxLength={60}
+                onChange={(e) => { setPmError(null); setNewPm({ ...newPm, name: e.target.value }); }}
                 placeholder="Name (e.g. Emirates NBD)"
                 className="w-full px-2 py-1.5 text-[11px] bg-foreground/[0.03] border border-foreground/[0.08] rounded text-foreground placeholder:text-foreground/20 outline-none focus:border-primary/30"
               />
               <input
                 type="text"
                 value={newPm.details}
-                onChange={(e) => setNewPm({ ...newPm, details: e.target.value })}
+                maxLength={200}
+                onChange={(e) => { setPmError(null); setNewPm({ ...newPm, details: e.target.value.slice(0, 200) }); }}
                 placeholder="Details (account/IBAN/UPI — optional)"
                 className="w-full px-2 py-1.5 text-[11px] bg-foreground/[0.03] border border-foreground/[0.08] rounded text-foreground placeholder:text-foreground/20 outline-none focus:border-primary/30"
               />
+              {pmError && (
+                <p className="text-[10px] text-[var(--color-error)] leading-snug">{pmError}</p>
+              )}
               <button
                 onClick={handleAddPaymentMethod}
                 disabled={!newPm.name.trim() || savingPm}
