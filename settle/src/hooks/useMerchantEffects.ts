@@ -19,6 +19,7 @@ interface UseMerchantEffectsParams {
   refreshBalance: () => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
   addNotification: (type: any, message: string, orderId?: string) => void;
+  toast: any;
   chatWindows: any[];
   activeChatId: string | null;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
@@ -38,6 +39,7 @@ export function useMerchantEffects({
   refreshBalance,
   playSound,
   addNotification,
+  toast,
   chatWindows,
   activeChatId,
   messagesEndRef,
@@ -323,6 +325,72 @@ export function useMerchantEffects({
       }
     }
   }, [orders, solanaWallet.walletAddress, solanaWallet.connected, addNotification]);
+
+  // Proactive expiry warnings for active in-progress orders. The 120-min
+  // accept window (CLAUDE.md rule 2) + the escrowed expires_at (rule 4) can
+  // both silently time out if the merchant isn't watching — no sound, no
+  // toast, just a passive banner on the card under 5 min. This fires a
+  // toast + bell + audio cue at 30, 10, and 2 minutes out so the merchant
+  // actually gets warned *before* the order cancels/disputes.
+  //
+  // Dedup: each (order_id, threshold) fires at most once for the lifetime
+  // of the hook. Pruned automatically when the order leaves active statuses.
+  //
+  // payment_sent is intentionally excluded — it's a 24h compliance window,
+  // not an inactivity timer, and a "30 min left" toast on a 24h clock is
+  // just noise.
+  const WARNING_THRESHOLDS_SEC = [30 * 60, 10 * 60, 2 * 60];
+  const warnedRef = useRef<Map<string, Set<number>>>(new Map());
+  useEffect(() => {
+    if (!orders.length) return;
+    const ACTIVE = new Set(['accepted', 'escrowed', 'payment_pending']);
+
+    const checkNow = () => {
+      const now = Date.now();
+      const liveOrderIds = new Set<string>();
+      for (const order of orders) {
+        const dbStatus = (order.dbOrder?.status || order.status) as string;
+        if (!ACTIVE.has(dbStatus)) continue;
+        liveOrderIds.add(order.id);
+        const expiresAt = order.dbOrder?.expires_at;
+        if (!expiresAt) continue;
+        const remainingSec = Math.floor(
+          (new Date(expiresAt).getTime() - now) / 1000,
+        );
+        if (remainingSec <= 0) continue;
+
+        let warned = warnedRef.current.get(order.id);
+        for (const thresholdSec of WARNING_THRESHOLDS_SEC) {
+          if (remainingSec > thresholdSec) continue;
+          if (warned?.has(thresholdSec)) continue;
+          if (!warned) {
+            warned = new Set();
+            warnedRef.current.set(order.id, warned);
+          }
+          warned.add(thresholdSec);
+          const mins = Math.max(1, Math.round(remainingSec / 60));
+          const amt = order.amount ? `${order.amount} USDT` : 'Order';
+          const urgent = thresholdSec <= 2 * 60;
+          const msg = urgent
+            ? `${amt} expires in ~${mins} min — act now to avoid auto-cancel.`
+            : `${amt} expires in ~${mins} min. Take action soon.`;
+          try { toast?.showWarning?.(msg); } catch {}
+          try { playSound(urgent ? 'error' : 'notification'); } catch {}
+          addNotification('system', msg, order.id);
+        }
+      }
+
+      // Prune dedup entries for orders that are no longer active
+      // (completed/cancelled/expired/disputed) so the Map stays bounded.
+      for (const id of warnedRef.current.keys()) {
+        if (!liveOrderIds.has(id)) warnedRef.current.delete(id);
+      }
+    };
+
+    checkNow();
+    const id = setInterval(checkNow, 30_000);
+    return () => clearInterval(id);
+  }, [orders, toast, playSound, addNotification]);
 
   // Scroll to bottom when messages change
   useEffect(() => {

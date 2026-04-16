@@ -171,14 +171,38 @@ const InProgressOrderList = memo(function InProgressOrderList({
                   </div>
                 </div>
 
-                {/* Warning banner when under 5 minutes */}
-                {order.expiresIn > 0 && order.expiresIn <= 300 && order.minimalStatus !== 'payment_sent' && order.dbOrder?.status !== 'payment_sent' && order.dbOrder?.status !== 'payment_confirmed' && (
+                {/* Expiry warning banner — tiered so the merchant sees this
+                    on the card long before auto-cancellation fires. Matches
+                    the toast thresholds in useMerchantEffects (30 / 10 / 2
+                    min) so the banner appears at the first toast and
+                    escalates in tone as the timer drops.
+                    Skipped for payment_sent / payment_confirmed — those have
+                    a 24h compliance window, not an inactivity timer. */}
+                {order.expiresIn > 0 && order.expiresIn <= 1800 && order.minimalStatus !== 'payment_sent' && order.dbOrder?.status !== 'payment_sent' && order.dbOrder?.status !== 'payment_confirmed' && (
                   <div className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md mb-2 ${
-                    order.expiresIn <= 120 ? 'bg-[var(--color-error)]/10 border border-[var(--color-error)]/20' : 'bg-primary/10 border border-primary/20'
+                    order.expiresIn <= 120
+                      ? 'bg-[var(--color-error)]/10 border border-[var(--color-error)]/20'
+                      : order.expiresIn <= 600
+                        ? 'bg-primary/10 border border-primary/20'
+                        : 'bg-foreground/[0.04] border border-foreground/[0.08]'
                   }`}>
-                    <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${order.expiresIn <= 120 ? 'text-[var(--color-error)]' : 'text-primary'}`} />
-                    <span className={`text-[10px] font-bold ${order.expiresIn <= 120 ? 'text-[var(--color-error)]' : 'text-primary'}`}>
-                      {order.expiresIn <= 120 ? 'Order expiring soon! Complete action now' : `Order expires in ${formatTimeRemaining(order.expiresIn)}`}
+                    <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${
+                      order.expiresIn <= 120
+                        ? 'text-[var(--color-error)]'
+                        : order.expiresIn <= 600
+                          ? 'text-primary'
+                          : 'text-foreground/50'
+                    }`} />
+                    <span className={`text-[10px] font-bold ${
+                      order.expiresIn <= 120
+                        ? 'text-[var(--color-error)]'
+                        : order.expiresIn <= 600
+                          ? 'text-primary'
+                          : 'text-foreground/60'
+                    }`}>
+                      {order.expiresIn <= 120
+                        ? 'Order expiring soon! Complete action now'
+                        : `Order expires in ${formatTimeRemaining(order.expiresIn)} — take action`}
                     </span>
                   </div>
                 )}
