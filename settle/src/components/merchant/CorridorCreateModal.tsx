@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { showAlert } from '@/context/ModalContext';
+import { clampDecimal, DECIMAL_PRESETS } from '@/lib/input/sanitize';
 
 export interface CorridorFormState {
   fromCurrency: string;
@@ -143,10 +144,11 @@ export function CorridorCreateModal({
                     <input
                       type="text"
                       inputMode="decimal"
+                      maxLength={14}
                       placeholder="1,000"
                       value={corridorForm.availableAmount}
                       onChange={(e) => {
-                        const value = e.target.value.replace(/[^0-9.]/g, '');
+                        const value = clampDecimal(e.target.value, DECIMAL_PRESETS.amount);
                         setCorridorForm(prev => ({ ...prev, availableAmount: value }));
                       }}
                       className={`w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 ${
@@ -183,9 +185,10 @@ export function CorridorCreateModal({
                       <input
                         type="text"
                         inputMode="decimal"
+                        maxLength={14}
                         placeholder="100"
                         value={corridorForm.minAmount}
-                        onChange={(e) => setCorridorForm(prev => ({ ...prev, minAmount: e.target.value.replace(/[^0-9.]/g, '') }))}
+                        onChange={(e) => setCorridorForm(prev => ({ ...prev, minAmount: clampDecimal(e.target.value, DECIMAL_PRESETS.amount) }))}
                         className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
                       />
                       <p className="text-[10px] text-foreground/35 mt-1 ml-1">Min per order</p>
@@ -195,9 +198,10 @@ export function CorridorCreateModal({
                       <input
                         type="text"
                         inputMode="decimal"
+                        maxLength={14}
                         placeholder="10,000"
                         value={corridorForm.maxAmount}
-                        onChange={(e) => setCorridorForm(prev => ({ ...prev, maxAmount: e.target.value.replace(/[^0-9.]/g, '') }))}
+                        onChange={(e) => setCorridorForm(prev => ({ ...prev, maxAmount: clampDecimal(e.target.value, DECIMAL_PRESETS.amount) }))}
                         className={`w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 ${
                           parseFloat(corridorForm.maxAmount || '0') > parseFloat(corridorForm.availableAmount || '0') && corridorForm.availableAmount
                             ? 'focus:ring-white/20 border border-white/6'
@@ -223,9 +227,10 @@ export function CorridorCreateModal({
                       <input
                         type="text"
                         inputMode="decimal"
+                        maxLength={12}
                         placeholder="3.67"
                         value={corridorForm.rate}
-                        onChange={(e) => setCorridorForm(prev => ({ ...prev, rate: e.target.value.replace(/[^0-9.]/g, '') }))}
+                        onChange={(e) => setCorridorForm(prev => ({ ...prev, rate: clampDecimal(e.target.value, DECIMAL_PRESETS.rate) }))}
                         className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-foreground/35">AED</span>
@@ -237,9 +242,10 @@ export function CorridorCreateModal({
                       <input
                         type="text"
                         inputMode="decimal"
+                        maxLength={6}
                         placeholder="0.25"
                         value={corridorForm.premium}
-                        onChange={(e) => setCorridorForm(prev => ({ ...prev, premium: e.target.value.replace(/[^0-9.]/g, '') }))}
+                        onChange={(e) => setCorridorForm(prev => ({ ...prev, premium: clampDecimal(e.target.value, DECIMAL_PRESETS.percent) }))}
                         className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
                       />
                       <Percent className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-foreground/35" />

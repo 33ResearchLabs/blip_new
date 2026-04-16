@@ -91,11 +91,13 @@ export function DisputeModal({
                   <label className="text-xs text-foreground/35 uppercase tracking-wide mb-2 block">Description</label>
                   <textarea
                     value={disputeDescription}
-                    onChange={(e) => setDisputeDescription(e.target.value)}
+                    onChange={(e) => setDisputeDescription(e.target.value.slice(0, 1000))}
                     placeholder="Describe the issue in detail..."
                     rows={3}
+                    maxLength={1000}
                     className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm text-white outline-none placeholder:text-gray-600 border border-white/[0.04] resize-none"
                   />
+                  <p className="text-[10px] text-foreground/30 mt-1 text-right">{disputeDescription.length}/1000</p>
                 </div>
               </div>
 

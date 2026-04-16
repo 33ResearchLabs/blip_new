@@ -65,6 +65,7 @@ export const CreateOfferScreen = ({
               <input
                 type="text"
                 inputMode="decimal"
+                maxLength={14}
                 placeholder="0"
                 className="w-full pr-[52px] text-[28px] font-extrabold tracking-[-0.03em] text-text-primary bg-transparent border-0 outline-none"
               />
@@ -83,6 +84,7 @@ export const CreateOfferScreen = ({
               <input
                 type="text"
                 inputMode="decimal"
+                maxLength={12}
                 placeholder="3.67"
                 className="flex-1 text-[28px] font-extrabold tracking-[-0.03em] text-text-primary bg-transparent border-0 outline-none"
               />
@@ -102,6 +104,7 @@ export const CreateOfferScreen = ({
                 <input
                   type="text"
                   inputMode="decimal"
+                  maxLength={14}
                   placeholder={f.placeholder}
                   className="w-full text-[17px] font-bold text-text-primary bg-transparent border-0 outline-none"
                 />

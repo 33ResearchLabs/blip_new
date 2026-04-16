@@ -9,6 +9,7 @@ import {
   Zap,
 } from "lucide-react";
 import type { Order } from "@/types/merchant";
+import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 
 export interface OpenTradeFormState {
   tradeType: "buy" | "sell";
@@ -125,10 +126,11 @@ export function TradeFormModal({
                     <input
                       type="text"
                       inputMode="decimal"
+                      maxLength={14}
                       placeholder="0.00"
                       value={openTradeForm.cryptoAmount}
                       onChange={(e) => {
-                        const value = e.target.value.replace(/[^0-9.]/g, '');
+                        const value = clampDecimal(e.target.value, DECIMAL_PRESETS.amount);
                         setOpenTradeForm(prev => ({ ...prev, cryptoAmount: value }));
                       }}
                       className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pr-16 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"

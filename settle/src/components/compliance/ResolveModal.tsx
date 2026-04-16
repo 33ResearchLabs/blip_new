@@ -180,11 +180,13 @@ export default function ResolveModal({
                   <label className="text-xs text-muted uppercase tracking-wide mb-2 block">Notes (Optional)</label>
                   <textarea
                     value={resolveForm.notes}
-                    onChange={(e) => setResolveForm((prev) => ({ ...prev, notes: e.target.value }))}
+                    onChange={(e) => setResolveForm((prev) => ({ ...prev, notes: e.target.value.slice(0, 1000) }))}
                     placeholder="Add resolution notes..."
                     rows={3}
+                    maxLength={1000}
                     className="w-full bg-[var(--color-bg-tertiary)] rounded-xl px-4 py-3 text-sm outline-none placeholder:text-[var(--color-text-quaternary)] resize-none focus:ring-1 focus:ring-primary/30"
                   />
+                  <p className="text-[10px] text-foreground/30 mt-1 text-right">{resolveForm.notes.length}/1000</p>
                 </div>
               </div>
 

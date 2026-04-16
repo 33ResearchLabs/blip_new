@@ -23,6 +23,7 @@ import {
   Info,
 } from "lucide-react";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { clampDecimal, DECIMAL_PRESETS } from '@/lib/input/sanitize';
 
 interface MerchantOffer {
   id: string;
@@ -481,11 +482,12 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                     <input
                       type="text"
                       inputMode="decimal"
+                      maxLength={12}
                       value={editForm.rate}
                       onChange={(e) =>
                         setEditForm((prev) => ({
                           ...prev,
-                          rate: e.target.value.replace(/[^0-9.]/g, ""),
+                          rate: clampDecimal(e.target.value, DECIMAL_PRESETS.rate),
                         }))
                       }
                       className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
@@ -502,11 +504,12 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                       <input
                         type="text"
                         inputMode="decimal"
+                        maxLength={14}
                         value={editForm.min_amount}
                         onChange={(e) =>
                           setEditForm((prev) => ({
                             ...prev,
-                            min_amount: e.target.value.replace(/[^0-9.]/g, ""),
+                            min_amount: clampDecimal(e.target.value, DECIMAL_PRESETS.amount),
                           }))
                         }
                         className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
@@ -520,11 +523,12 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                       <input
                         type="text"
                         inputMode="decimal"
+                        maxLength={14}
                         value={editForm.max_amount}
                         onChange={(e) =>
                           setEditForm((prev) => ({
                             ...prev,
-                            max_amount: e.target.value.replace(/[^0-9.]/g, ""),
+                            max_amount: clampDecimal(e.target.value, DECIMAL_PRESETS.amount),
                           }))
                         }
                         className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
@@ -541,11 +545,12 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                     <input
                       type="text"
                       inputMode="decimal"
+                      maxLength={14}
                       value={editForm.available_amount}
                       onChange={(e) =>
                         setEditForm((prev) => ({
                           ...prev,
-                          available_amount: e.target.value.replace(/[^0-9.]/g, ""),
+                          available_amount: clampDecimal(e.target.value, DECIMAL_PRESETS.amount),
                         }))
                       }
                       className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
@@ -707,8 +712,9 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                     <input
                       type="text"
                       inputMode="decimal"
+                      maxLength={12}
                       value={createForm.rate}
-                      onChange={(e) => setCreateForm(f => ({ ...f, rate: e.target.value.replace(/[^0-9.]/g, '') }))}
+                      onChange={(e) => setCreateForm(f => ({ ...f, rate: clampDecimal(e.target.value, DECIMAL_PRESETS.rate) }))}
                       className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
                       placeholder="3.67"
                     />
@@ -721,8 +727,9 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                       <input
                         type="text"
                         inputMode="decimal"
+                        maxLength={14}
                         value={createForm.min_amount}
-                        onChange={(e) => setCreateForm(f => ({ ...f, min_amount: e.target.value.replace(/[^0-9.]/g, '') }))}
+                        onChange={(e) => setCreateForm(f => ({ ...f, min_amount: clampDecimal(e.target.value, DECIMAL_PRESETS.amount) }))}
                         className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
                       />
                     </div>
@@ -731,8 +738,9 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                       <input
                         type="text"
                         inputMode="decimal"
+                        maxLength={14}
                         value={createForm.max_amount}
-                        onChange={(e) => setCreateForm(f => ({ ...f, max_amount: e.target.value.replace(/[^0-9.]/g, '') }))}
+                        onChange={(e) => setCreateForm(f => ({ ...f, max_amount: clampDecimal(e.target.value, DECIMAL_PRESETS.amount) }))}
                         className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
                       />
                     </div>
@@ -744,8 +752,9 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                     <input
                       type="text"
                       inputMode="decimal"
+                      maxLength={14}
                       value={createForm.available_amount}
-                      onChange={(e) => setCreateForm(f => ({ ...f, available_amount: e.target.value.replace(/[^0-9.]/g, '') }))}
+                      onChange={(e) => setCreateForm(f => ({ ...f, available_amount: clampDecimal(e.target.value, DECIMAL_PRESETS.amount) }))}
                       className="w-full bg-white/[0.04] rounded-xl px-4 py-3 text-sm outline-none border border-white/[0.04] focus:border-primary/50 transition-colors"
                     />
                   </div>

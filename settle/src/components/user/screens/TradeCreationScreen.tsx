@@ -25,6 +25,7 @@ import {
 import { BottomNav } from "./BottomNav";
 import { FilterDropdown } from "./ui/FilterDropdown";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
 
 type RatePair = "usdt_aed" | "usdt_inr";
 
@@ -385,9 +386,10 @@ export const TradeCreationScreen = ({
             <input
               type="text"
               inputMode="decimal"
+              maxLength={14}
               value={amount}
               onChange={(e) =>
-                setAmount(e.target.value.replace(/[^0-9.]/g, ""))
+                setAmount(clampDecimal(e.target.value, DECIMAL_PRESETS.amount))
               }
               placeholder="0"
               className={`text-[52px] font-extrabold tracking-[-0.06em] leading-none bg-transparent border-0 outline-none text-right max-w-64 ${

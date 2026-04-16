@@ -1265,8 +1265,9 @@ export function ChatRoom({
           <input
             ref={inputRef}
             type="text"
+            maxLength={1000}
             value={messageText}
-            onChange={(e) => handleTypingChange(e.target.value)}
+            onChange={(e) => handleTypingChange(e.target.value.slice(0, 1000))}
             onKeyDown={handleKeyDown}
             placeholder={
               !chatEnabled && chatReason
