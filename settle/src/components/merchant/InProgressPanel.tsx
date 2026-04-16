@@ -225,10 +225,28 @@ const InProgressOrderList = memo(function InProgressOrderList({
                 <div className="flex items-center gap-1.5 mb-2">
                   <span className="text-[10px] text-foreground/40 font-mono">@ {(order.rate || 3.67).toFixed(2)}</span>
                   {(() => {
-                    const premium = ((order.rate - 3.67) / 3.67) * 100;
+                    // Premium = order rate vs the reference price captured when
+                    // this order was created. Falls back to a corridor-aware
+                    // default only when ref_price_at_create is missing (very
+                    // old rows). Skipping the badge entirely is better than
+                    // showing a fabricated number for unknown corridors.
+                    const storedRef = Number(order.dbOrder?.ref_price_at_create);
+                    const fiat = order.toCurrency || order.dbOrder?.fiat_currency;
+                    const refPrice =
+                      Number.isFinite(storedRef) && storedRef > 0
+                        ? storedRef
+                        : fiat === 'INR'
+                          ? 83
+                          : fiat === 'AED'
+                            ? 3.67
+                            : null;
+                    const premium =
+                      refPrice && order.rate
+                        ? ((order.rate - refPrice) / refPrice) * 100
+                        : null;
                     return (
                       <>
-                        {premium !== 0 && (
+                        {premium !== null && premium !== 0 && (
                           <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${
                             premium > 0
                               ? 'bg-primary/10 text-primary'

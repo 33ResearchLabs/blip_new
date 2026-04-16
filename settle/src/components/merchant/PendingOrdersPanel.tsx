@@ -439,7 +439,23 @@ const OrderList = memo(function OrderList({
             );
           }
 
-          const premium = ((order.rate - 3.67) / 3.67) * 100;
+          // Premium = order rate vs the reference price captured when this
+          // order was created. Falls back to a corridor-aware default only
+          // when ref_price_at_create is missing (very old rows).
+          const storedRef = Number(order.dbOrder?.ref_price_at_create);
+          const fiat = order.toCurrency || order.dbOrder?.fiat_currency;
+          const refPrice =
+            Number.isFinite(storedRef) && storedRef > 0
+              ? storedRef
+              : fiat === 'INR'
+                ? 83
+                : fiat === 'AED'
+                  ? 3.67
+                  : null;
+          const premium =
+            refPrice && order.rate
+              ? ((order.rate - refPrice) / refPrice) * 100
+              : 0;
           const isHighPremium = premium > 0.5;
           // Mine = escrow already locked (just send fiat)
           // Accept = no escrow yet (you'll lock escrow next)
@@ -1229,7 +1245,18 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       if ((order as any).isMempoolOrder) return true;
       if (pendingFilter === "mineable") return !!order.escrowTxHash;
       else if (pendingFilter === "premium") {
-        const premium = ((order.rate - 3.67) / 3.67) * 100;
+        const storedRef = Number(order.dbOrder?.ref_price_at_create);
+        const fiat = order.toCurrency || order.dbOrder?.fiat_currency;
+        const refPrice =
+          Number.isFinite(storedRef) && storedRef > 0
+            ? storedRef
+            : fiat === 'INR'
+              ? 83
+              : fiat === 'AED'
+                ? 3.67
+                : null;
+        if (!refPrice || !order.rate) return false;
+        const premium = ((order.rate - refPrice) / refPrice) * 100;
         return premium > 0.5;
       } else if (pendingFilter === "large") return order.amount >= 2000;
       else if (pendingFilter === "expiring") return order.expiresIn < 300;
