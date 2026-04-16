@@ -184,7 +184,7 @@ export function BackendOrderList({
 
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold">
-                        {formatAmount(order.crypto_amount)} USDC
+                        {formatAmount(order.crypto_amount)} USDT
                       </span>
                       <span className="text-xs text-zinc-500">for</span>
                       <span className="text-sm font-semibold text-green-400">

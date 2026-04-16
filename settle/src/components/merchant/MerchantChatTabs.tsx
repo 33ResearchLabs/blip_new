@@ -348,7 +348,7 @@ export function MerchantChatTabs({
                           </span>
                           <span className="text-[12px] font-bold text-white tabular-nums">
                             {Number(conv.crypto_amount).toFixed(2)}
-                            <span className="text-[9px] font-semibold text-white/40 ml-0.5">USDC</span>
+                            <span className="text-[9px] font-semibold text-white/40 ml-0.5">USDT</span>
                           </span>
                           <ChevronRight className="w-3 h-3 text-white/20 shrink-0" strokeWidth={2.5} />
                           <span className="text-[12px] font-bold text-white/80 tabular-nums truncate">

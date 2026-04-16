@@ -1,7 +1,7 @@
 /**
  * M2M BUY - Happy Path
  *
- * Scenario: Merchant1 buys USDC from Merchant2 (M2M trading)
+ * Scenario: Merchant1 buys USDT from Merchant2 (M2M trading)
  *
  * Flow (8 Minimal Statuses):
  * 1. Merchant1 creates buy order from Merchant2's offer → status: open
@@ -14,8 +14,8 @@
  * The flow goes directly from payment_sent to completed when escrow is released.
  *
  * Verification:
- * - Merchant1 balance increases by 500 USDC
- * - Merchant2 balance decreases by 500 USDC
+ * - Merchant1 balance increases by 500 USDT
+ * - Merchant2 balance decreases by 500 USDT
  * - buyer_merchant_id is set correctly
  */
 
@@ -29,7 +29,7 @@ import {
 
 export const m2mBuyHappy: TestScenario = {
   name: 'M2M BUY - Happy Path',
-  description: 'Merchant1 buys USDC from Merchant2',
+  description: 'Merchant1 buys USDT from Merchant2',
 
   async run(api: ApiClient, testData: TestData): Promise<void> {
     const buyerMerchant = testData.merchants[0]; // test_merchant_m1

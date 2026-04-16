@@ -35,7 +35,7 @@ export function useAutoRefund({
 
       if (refundResult.success) {
         console.log(`[AutoRefund] Success: ${refundResult.txHash}`);
-        addNotification('system', `Escrow auto-refunded! ${order.amount} USDC returned to your wallet.`, order.id);
+        addNotification('system', `Escrow auto-refunded! ${order.amount} USDT returned to your wallet.`, order.id);
         playSound('click');
 
         await fetchWithAuth(`/api/orders/${order.id}`, {
@@ -53,7 +53,7 @@ export function useAutoRefund({
         debouncedFetchOrders();
       } else {
         console.warn(`[AutoRefund] Failed for ${order.id}:`, refundResult.error);
-        addNotification('system', `Auto-refund failed for ${order.amount} USDC. Use "Cancel & Withdraw" manually.`, order.id);
+        addNotification('system', `Auto-refund failed for ${order.amount} USDT. Use "Cancel & Withdraw" manually.`, order.id);
       }
     } catch (e: any) {
       const errMsg = e?.message || String(e);

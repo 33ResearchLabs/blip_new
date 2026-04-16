@@ -60,7 +60,7 @@ describe('Atomic Escrow Refund (Cancellation)', () => {
          crypto_amount, fiat_amount, crypto_currency, fiat_currency, rate,
          status, escrow_tx_hash, escrow_trade_id, escrowed_at,
          expires_at, buyer_wallet_address, order_version
-       ) VALUES ($1, $2, $3, 'buy', 'bank', 100, 367, 'USDC', 'AED', 3.67,
+       ) VALUES ($1, $2, $3, 'buy', 'bank', 100, 367, 'USDT', 'AED', 3.67,
                  'escrowed', 'demo-escrow-refund-test', 123456, NOW(),
                  NOW() + INTERVAL '2 hours', 'MOCK_BUYER_WALLET', 1)
        RETURNING id`,
@@ -127,7 +127,7 @@ describe('Atomic Escrow Refund (Cancellation)', () => {
       [testMerchantId]
     );
 
-    expect(parseFloat(finalBalance!.balance)).toBe(parseFloat(initialBalance!.balance) + 100); // 100 USDC refunded
+    expect(parseFloat(finalBalance!.balance)).toBe(parseFloat(initialBalance!.balance) + 100); // 100 USDT refunded
 
     // Verify order_events record was created
     const events = await query<OrderEvent>(
@@ -206,7 +206,7 @@ describe('Atomic Escrow Refund via DELETE', () => {
          crypto_amount, fiat_amount, crypto_currency, fiat_currency, rate,
          status, escrow_tx_hash, escrow_trade_id, escrowed_at,
          expires_at, buyer_wallet_address, order_version
-       ) VALUES ($1, $2, $3, 'buy', 'bank', 50, 183.5, 'USDC', 'AED', 3.67,
+       ) VALUES ($1, $2, $3, 'buy', 'bank', 50, 183.5, 'USDT', 'AED', 3.67,
                  'escrowed', 'demo-escrow-delete-test', 999999, NOW(),
                  NOW() + INTERVAL '2 hours', 'MOCK_BUYER_WALLET', 1)
        RETURNING id`,
@@ -319,7 +319,7 @@ describe('Regression: Double-Refund Protection', () => {
          crypto_amount, fiat_amount, crypto_currency, fiat_currency, rate,
          status, escrow_tx_hash, escrow_trade_id, escrowed_at,
          expires_at, buyer_wallet_address, order_version
-       ) VALUES ($1, $2, $3, 'buy', 'bank', 75, 275.25, 'USDC', 'AED', 3.67,
+       ) VALUES ($1, $2, $3, 'buy', 'bank', 75, 275.25, 'USDT', 'AED', 3.67,
                  'escrowed', 'demo-escrow-double-refund', 888888, NOW(),
                  NOW() + INTERVAL '2 hours', 'MOCK_BUYER', 1)
        RETURNING id`,

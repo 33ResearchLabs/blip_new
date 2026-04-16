@@ -518,7 +518,7 @@ BEGIN
     escrow_trade_id, escrow_trade_pda, escrow_pda, escrow_creator_wallet
   ) VALUES (
     p_user_id, p_merchant_id, p_offer_id, p_type::offer_type, p_payment_method::payment_method,
-    p_crypto_amount, p_fiat_amount, 'USDC', 'AED', p_rate,
+    p_crypto_amount, p_fiat_amount, 'USDT', 'AED', p_rate,
     p_payment_details, v_status, NOW() + INTERVAL '15 minutes',
     p_buyer_wallet_address, p_buyer_merchant_id,
     p_spread_preference, p_protocol_fee_percentage, p_protocol_fee_amount,
@@ -1469,7 +1469,7 @@ CREATE TABLE public.orders (
     type public.offer_type NOT NULL,
     payment_method public.payment_method NOT NULL,
     crypto_amount numeric(20,6) NOT NULL,
-    crypto_currency character varying(10) DEFAULT 'USDC'::character varying,
+    crypto_currency character varying(10) DEFAULT 'USDT'::character varying,
     fiat_amount numeric(20,2) NOT NULL,
     fiat_currency character varying(10) DEFAULT 'AED'::character varying,
     rate numeric(10,4) NOT NULL,

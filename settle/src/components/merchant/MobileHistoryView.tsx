@@ -138,7 +138,7 @@ export function MobileHistoryView({
                     </div>
                     <div className="text-right">
                       <p className={`text-sm font-semibold ${didReceive ? 'text-primary' : 'text-white/50'}`}>
-                        {didReceive ? '+' : '-'}{order.amount.toLocaleString()} USDC
+                        {didReceive ? '+' : '-'}{order.amount.toLocaleString()} USDT
                       </p>
                       <p className="text-xs text-foreground/35">+${(order.amount * 0.005).toFixed(2)}</p>
                     </div>

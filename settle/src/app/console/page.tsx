@@ -361,7 +361,7 @@ export default function ConsolePage() {
                         </div>
                         <div>
                           <p className="text-[13px] font-medium">
-                            {order.type === "buy" ? "Buy" : "Sell"} {order.cryptoAmount} USDC
+                            {order.type === "buy" ? "Buy" : "Sell"} {order.cryptoAmount} USDT
                           </p>
                           <p className="text-[11px] text-neutral-500">{order.orderNumber}</p>
                         </div>

@@ -462,7 +462,7 @@ function SearchPanel({
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm font-mono">
                     <Field label="type" value={order.type} />
-                    <Field label="crypto" value={`${order.crypto_amount} USDC`} />
+                    <Field label="crypto" value={`${order.crypto_amount} USDT`} />
                     <Field label="fiat" value={`${order.fiat_amount} AED`} />
                     <Field label="version" value={order.order_version} />
                     <Field label="user_id" value={order.user_id?.slice(0, 8)} />

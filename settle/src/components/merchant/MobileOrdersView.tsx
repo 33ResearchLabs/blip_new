@@ -170,7 +170,7 @@ export function MobileOrdersView({
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-xs font-mono text-foreground/40">
-                      {order.amount.toLocaleString()} <span className="text-gray-600">USDC</span>
+                      {order.amount.toLocaleString()} <span className="text-gray-600">USDT</span>
                     </span>
                     <ArrowRight className="w-3 h-3 text-gray-600" />
                     <span className="text-xs font-mono text-foreground/40">

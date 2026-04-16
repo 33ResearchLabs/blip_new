@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
       max_amount: Number(offer.max_amount),
       available_amount: Number(offer.available_amount),
       blipScore: scores.get(offer.id),
-      corridor: `USDC-AED-${offer.type}-${offer.payment_method}`,
+      corridor: `USDT-AED-${offer.type}-${offer.payment_method}`,
       // Also add merchantStats for sorting functions
       merchantStats: {
         rating: Number(offer.merchant.rating) || 5.0,

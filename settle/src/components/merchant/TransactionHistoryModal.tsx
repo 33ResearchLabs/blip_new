@@ -51,27 +51,27 @@ function deriveTransactionsFromOrders(orders: Order[], merchantId: string): Tran
 
     if (isCompleted) {
       if (isSeller) {
-        // Seller sent USDC → money out
+        // Seller sent USDT → money out
         txs.push({
           id: `${order.id}-out`,
           type: 'escrow_release',
           amount: -order.amount,
           balance_before: 0,
           balance_after: 0,
-          description: `Sold ${order.amount} USDC to ${order.user} for ${Math.round(order.total)} AED`,
+          description: `Sold ${order.amount} USDT to ${order.user} for ${Math.round(order.total)} AED`,
           created_at: typeof completedAt === 'string' ? completedAt : new Date(completedAt || Date.now()).toISOString(),
           order_id: order.id,
         });
       }
       if (isBuyer) {
-        // Buyer received USDC → money in
+        // Buyer received USDT → money in
         txs.push({
           id: `${order.id}-in`,
           type: 'order_completed',
           amount: order.amount,
           balance_before: 0,
           balance_after: 0,
-          description: `Bought ${order.amount} USDC from ${order.user} for ${Math.round(order.total)} AED`,
+          description: `Bought ${order.amount} USDT from ${order.user} for ${Math.round(order.total)} AED`,
           created_at: typeof completedAt === 'string' ? completedAt : new Date(completedAt || Date.now()).toISOString(),
           order_id: order.id,
         });
@@ -85,7 +85,7 @@ function deriveTransactionsFromOrders(orders: Order[], merchantId: string): Tran
           amount: order.amount,
           balance_before: 0,
           balance_after: 0,
-          description: `Escrow refunded ${order.amount} USDC (order cancelled)`,
+          description: `Escrow refunded ${order.amount} USDT (order cancelled)`,
           created_at: typeof cancelledAt === 'string' ? cancelledAt : new Date(cancelledAt || Date.now()).toISOString(),
           order_id: order.id,
         });

@@ -1,10 +1,10 @@
 /**
  * User SELL - Happy Path
  *
- * Scenario: User sells USDC to merchant with full completion
+ * Scenario: User sells USDT to merchant with full completion
  *
  * Flow (8 Minimal Statuses):
- * 1. User creates sell order (500 USDC) → status: open
+ * 1. User creates sell order (500 USDT) → status: open
  * 2. Merchant accepts → status: accepted
  * 3. User locks escrow → status: escrowed
  * 4. Merchant marks payment sent → status: payment_sent
@@ -14,8 +14,8 @@
  * The flow goes directly from payment_sent to completed when escrow is released.
  *
  * Verification:
- * - User balance decreases by 500 USDC
- * - Merchant balance increases by 500 USDC
+ * - User balance decreases by 500 USDT
+ * - Merchant balance increases by 500 USDT
  * - Order events with correct transitions and actors
  */
 
@@ -29,7 +29,7 @@ import {
 
 export const userSellHappy: TestScenario = {
   name: 'User SELL - Happy Path',
-  description: 'User sells USDC to merchant with full completion',
+  description: 'User sells USDT to merchant with full completion',
 
   async run(api: ApiClient, testData: TestData): Promise<void> {
     const seller = testData.users[1]; // test_seller_002
@@ -40,7 +40,7 @@ export const userSellHappy: TestScenario = {
 
     assertDefined(buyOffer, 'Merchant buy offer');
 
-    // Step 1: User creates sell order for 500 USDC
+    // Step 1: User creates sell order for 500 USDT
     const createRes = await api.post<{ success: boolean; data: Order }>(
       '/api/orders',
       {

@@ -203,7 +203,7 @@ export function useOrderActions({
       const nextStepMsg = hasOnChainEscrow
         ? 'Order claimed! Send the fiat payment and click "I\'ve Paid".'
         : acceptRole === 'seller'
-          ? 'Now lock your USDC in escrow to proceed.'
+          ? 'Now lock your USDT in escrow to proceed.'
           : 'Waiting for the seller to lock escrow.';
 
       const uiStatus = hasOnChainEscrow ? "escrow" : "active";
@@ -587,7 +587,7 @@ export function useOrderActions({
     // Safety: show confirmation dialog before proceeding
     showConfirm(
       'Confirm Payment Received',
-      `I confirm I have received the fiat payment of ${order.total ? `AED ${Math.round(order.total).toLocaleString()}` : `${order.amount} USDC worth`}. This will release escrow to the buyer and cannot be reversed.`,
+      `I confirm I have received the fiat payment of ${order.total ? `AED ${Math.round(order.total).toLocaleString()}` : `${order.amount} USDT worth`}. This will release escrow to the buyer and cannot be reversed.`,
       async () => {
         setConfirmingOrderId(orderId);
         try {
@@ -746,7 +746,7 @@ export function useOrderActions({
       if (effectiveTradeType === "sell") {
         // SELL order flow: Lock escrow first, then broadcast order for ANY merchant to accept
         if (effectiveBalance !== null && effectiveBalance < parseFloat(openTradeForm.cryptoAmount)) {
-          addNotification('system', `Insufficient balance. You have ${effectiveBalance.toFixed(2)} USDC.`);
+          addNotification('system', `Insufficient balance. You have ${effectiveBalance.toFixed(2)} USDT.`);
           setIsCreatingTrade(false);
           return;
         }
@@ -768,7 +768,7 @@ export function useOrderActions({
           user: 'Open Order',
           emoji: '📢',
           amount: parseFloat(openTradeForm.cryptoAmount),
-          fromCurrency: 'USDC',
+          fromCurrency: 'USDT',
           toCurrency: 'AED',
           rate: 3.67,
           total: parseFloat(openTradeForm.cryptoAmount) * 3.67,

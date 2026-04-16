@@ -363,10 +363,10 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
                       </div>
                       <div className="flex-1 overflow-hidden p-1.5 space-y-1">
                         {[
-                          { user: 'crypto_trader01', pay: '196 USDC', get: '18,032 INR', time: '14:23', pref: 'FAST' },
-                          { user: 'shubh_trade', pay: '112 USDC', get: '10,640 INR', time: '11:45', pref: 'BEST' },
-                          { user: 'deep_finance', pay: '500 USDC', get: '46,100 INR', time: '08:12', pref: 'FAST' },
-                          { user: 'alpha_pay', pay: '250 USDC', get: '23,050 INR', time: '05:30', pref: 'BEST' },
+                          { user: 'crypto_trader01', pay: '196 USDT', get: '18,032 INR', time: '14:23', pref: 'FAST' },
+                          { user: 'shubh_trade', pay: '112 USDT', get: '10,640 INR', time: '11:45', pref: 'BEST' },
+                          { user: 'deep_finance', pay: '500 USDT', get: '46,100 INR', time: '08:12', pref: 'FAST' },
+                          { user: 'alpha_pay', pay: '250 USDT', get: '23,050 INR', time: '05:30', pref: 'BEST' },
                         ].map((o, i) => (
                           <div key={i} className="rounded-lg bg-white/[0.015] border border-white/[0.03] p-2 relative">
                             {/* Pulse dot */}
@@ -407,9 +407,9 @@ export function MerchantWelcomePage({ onGetStarted, onSignIn }: MerchantWelcomeP
                       </div>
                       <div className="flex-1 overflow-hidden p-1.5 space-y-1">
                         {[
-                          { user: 'gorav_research1', usdc: '350 USDC', fiat: '32,200 INR', status: 'Escrowed', sColor: 'text-purple-400 bg-purple-500/10', action: 'CONFIRM PAYMENT' },
-                          { user: 'proto_network0', usdc: '196 USDC', fiat: '18,032 INR', status: 'Payment Sent', sColor: 'text-yellow-400 bg-yellow-500/10', action: 'RELEASE ESCROW' },
-                          { user: 'alpha_trade', usdc: '88 USDC', fiat: '8,100 INR', status: 'Accepted', sColor: 'text-blue-400 bg-blue-500/10', action: 'LOCK ESCROW' },
+                          { user: 'gorav_research1', usdc: '350 USDT', fiat: '32,200 INR', status: 'Escrowed', sColor: 'text-purple-400 bg-purple-500/10', action: 'CONFIRM PAYMENT' },
+                          { user: 'proto_network0', usdc: '196 USDT', fiat: '18,032 INR', status: 'Payment Sent', sColor: 'text-yellow-400 bg-yellow-500/10', action: 'RELEASE ESCROW' },
+                          { user: 'alpha_trade', usdc: '88 USDT', fiat: '8,100 INR', status: 'Accepted', sColor: 'text-blue-400 bg-blue-500/10', action: 'LOCK ESCROW' },
                         ].map((o, i) => (
                           <div key={i} className="rounded-lg bg-white/[0.015] border border-white/[0.03] p-2 relative">
                             <div className="absolute top-1.5 left-1.5 w-1 h-1 rounded-full bg-primary" />

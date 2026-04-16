@@ -1,7 +1,7 @@
 /**
  * Backend Escrow Refund — Automated on-chain refund for expired orders
  *
- * When an order expires with USDC locked on-chain (v2 escrow-first flow),
+ * When an order expires with USDT locked on-chain (v2 escrow-first flow),
  * this module builds, signs, and submits the refundEscrow transaction
  * using the backend signer keypair.
  *

@@ -123,7 +123,7 @@ function buildOrderInsertParams(data: CreateOrderPayload & { corridor_id?: strin
   ];
   const values: unknown[] = [
     data.user_id, data.merchant_id, data.offer_id, data.type, data.payment_method,
-    data.crypto_amount, data.fiat_amount, 'USDC', fiatCurrency, data.rate,
+    data.crypto_amount, data.fiat_amount, 'USDT', fiatCurrency, data.rate,
     data.payment_details ? JSON.stringify(data.payment_details) : null,
     data.escrow_tx_hash ? 'escrowed' : 'pending', corridorId,
   ];

@@ -50,7 +50,7 @@ export const CreateOfferScreen = ({
                   className={`flex-1 py-3 rounded-xl bg-surface-card text-[14px] font-bold ${
                     on ? `border-[1.5px] ${accentClass}` : 'border border-border-subtle text-text-tertiary'
                   }`}>
-                  {type === "buy" ? "Buy USDC" : "Sell USDC"}
+                  {type === "buy" ? "Buy USDT" : "Sell USDT"}
                 </button>
               );
             })}
@@ -69,7 +69,7 @@ export const CreateOfferScreen = ({
                 className="w-full pr-[52px] text-[28px] font-extrabold tracking-[-0.03em] text-text-primary bg-transparent border-0 outline-none"
               />
               <span className="absolute right-0 top-1/2 -translate-y-1/2 text-[14px] font-semibold text-text-tertiary">
-                USDC
+                USDT
               </span>
             </div>
           </div>
@@ -77,7 +77,7 @@ export const CreateOfferScreen = ({
 
         {/* Rate */}
         <div className="mb-4">
-          <p className={`${FIELD_LABEL} block mb-2`}>Your rate (AED per USDC)</p>
+          <p className={`${FIELD_LABEL} block mb-2`}>Your rate (AED per USDT)</p>
           <div className={`rounded-[18px] p-4 ${CARD}`}>
             <div className="flex items-center gap-3">
               <input

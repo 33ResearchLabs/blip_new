@@ -58,7 +58,7 @@ export function useTradeCreation({
       setCreateTradeError(null);
       try {
         if (effectiveBalance !== null && effectiveBalance < parseFloat(openTradeForm.cryptoAmount)) {
-          setCreateTradeError(`Insufficient USDC balance. You need ${openTradeForm.cryptoAmount} USDC but have ${effectiveBalance.toFixed(2)} USDC.`);
+          setCreateTradeError(`Insufficient USDT balance. You need ${openTradeForm.cryptoAmount} USDT but have ${effectiveBalance.toFixed(2)} USDT.`);
           setIsCreatingTrade(false);
           return;
         }
@@ -121,7 +121,7 @@ export function useTradeCreation({
           const newOrder = mapDbOrderToUI(data.data, merchantId);
           setOrders((prev: Order[]) => [newOrder, ...prev.filter((o: Order) => o.id !== newOrder.id)]);
           playSound('trade_complete');
-          addNotification('escrow', `Sell order created! ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC locked in escrow`, data.data?.id);
+          addNotification('escrow', `Sell order created! ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDT locked in escrow`, data.data?.id);
         }
         refreshBalance();
         setShowOpenTradeModal(false);

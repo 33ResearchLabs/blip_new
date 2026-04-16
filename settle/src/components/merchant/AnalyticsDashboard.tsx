@@ -419,7 +419,7 @@ export function AnalyticsDashboard({ merchantId }: AnalyticsDashboardProps) {
           <p className="text-2xl font-bold text-white">
             {formatCompact(data.summary.totalCryptoVolume)}
           </p>
-          <p className="text-xs text-white/50">USDC Traded</p>
+          <p className="text-xs text-white/50">USDT Traded</p>
         </div>
         <div className="bg-white/5 rounded-xl p-4 border border-white/10 text-center">
           <Users className="w-6 h-6 text-amber-400 mx-auto mb-2" />

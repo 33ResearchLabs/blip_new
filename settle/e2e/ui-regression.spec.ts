@@ -75,7 +75,7 @@ test.describe('UI Regression: Post-Migration Fixes', () => {
 
     // Look for balance display on the dashboard
     // The balance should be visible somewhere on the page
-    const balanceElements = page.locator('text=/\\d+\\.\\d{2}.*USDC/');
+    const balanceElements = page.locator('text=/\\d+\\.\\d{2}.*USDT/');
 
     // Verify at least one balance element exists
     const count = await balanceElements.count();

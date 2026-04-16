@@ -914,7 +914,7 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
 
       // Safe send+confirm with fresh blockhash + retry + reconciliation.
       // priority='high' — release is time-critical (user just paid fiat, wants
-      // their USDC now). Pays ~0.0005 SOL per CU for faster inclusion.
+      // their USDT now). Pays ~0.0005 SOL per CU for faster inclusion.
       const safeResult = await sendAndConfirmSafe({
         connection,
         feePayer: publicKey,
@@ -1136,13 +1136,13 @@ const SolanaWalletContextProvider: FC<{ children: ReactNode }> = ({ children }) 
         throw new Error('Trade cannot be funded - it may already be funded or in wrong state');
       }
       if (errorMessage.includes('InsufficientFunds') || errorMessage.includes('insufficient funds')) {
-        throw new Error('Insufficient USDC balance to fund escrow');
+        throw new Error('Insufficient USDT balance to fund escrow');
       }
       if (errorMessage.includes('User rejected')) {
         throw new Error('Transaction cancelled by user');
       }
       if (errorMessage.includes('TokenAccountNotFound') || errorMessage.includes('could not find account')) {
-        throw new Error('USDC token account not found - ensure you have USDC in your wallet');
+        throw new Error('USDT token account not found - ensure you have USDT in your wallet');
       }
 
       throw error;

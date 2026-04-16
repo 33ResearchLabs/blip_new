@@ -26,7 +26,7 @@ export const SCORE_CONSTANTS = {
   GOOD_RESPONSE_MINS: 5,
   ACCEPTABLE_RESPONSE_MINS: 15,
 
-  // Volume tiers (in USDC traded)
+  // Volume tiers (in USDT traded)
   VOLUME_TIER_WHALE: 100000,
   VOLUME_TIER_HIGH: 50000,
   VOLUME_TIER_MEDIUM: 10000,

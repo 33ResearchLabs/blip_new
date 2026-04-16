@@ -523,7 +523,7 @@ export function TradeChat({
             </div>
             {tradeInfo && (
               <p className="text-xs text-foreground/35 truncate">
-                {tradeInfo.orderType === 'buy' ? 'Selling' : 'Buying'} {tradeInfo.cryptoAmount} USDC • {tradeInfo.fiatAmount.toLocaleString()} {tradeInfo.fiatCurrency}
+                {tradeInfo.orderType === 'buy' ? 'Selling' : 'Buying'} {tradeInfo.cryptoAmount} USDT • {tradeInfo.fiatAmount.toLocaleString()} {tradeInfo.fiatCurrency}
               </p>
             )}
           </div>
@@ -696,7 +696,7 @@ export function TradeChat({
                   if (eventType === 'escrowed' || (msg.text.toLowerCase().includes('escrow') && msg.text.toLowerCase().includes('lock'))) {
                     const escrowData = structuredData?.data || {
                       amount: orderContext?.crypto_amount || tradeInfo?.cryptoAmount,
-                      currency: orderContext?.crypto_currency || 'USDC',
+                      currency: orderContext?.crypto_currency || 'USDT',
                       txHash: orderContext?.escrow_tx_hash,
                       escrowPda: orderContext?.escrow_pda || orderContext?.escrow_trade_pda,
                     };
@@ -718,7 +718,7 @@ export function TradeChat({
                   if (eventType === 'completed' && (msg.text.toLowerCase().includes('released') || orderContext?.release_tx_hash)) {
                     const escrowData = {
                       amount: orderContext?.crypto_amount || tradeInfo?.cryptoAmount,
-                      currency: orderContext?.crypto_currency || 'USDC',
+                      currency: orderContext?.crypto_currency || 'USDT',
                       txHash: orderContext?.release_tx_hash || orderContext?.escrow_tx_hash,
                       escrowPda: orderContext?.escrow_pda || orderContext?.escrow_trade_pda,
                     };

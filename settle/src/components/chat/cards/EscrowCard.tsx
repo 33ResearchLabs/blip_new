@@ -83,7 +83,7 @@ export function EscrowCard({ data, status = 'locked' }: EscrowCardProps) {
           <h4 className="text-sm font-medium text-white">{config.label}</h4>
           {data.amount && (
             <p className="text-xs text-white/50">
-              {data.amount} {data.currency || 'USDC'} secured
+              {data.amount} {data.currency || 'USDT'} secured
             </p>
           )}
         </div>

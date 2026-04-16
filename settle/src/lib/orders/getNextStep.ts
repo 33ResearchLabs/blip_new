@@ -152,7 +152,7 @@ export function getNextStep(
     if (iAmSeller) {
       if (!hasEscrow) {
         return {
-          actor: 'me', label: 'Lock Escrow', sublabel: 'Lock your USDC to proceed with this trade',
+          actor: 'me', label: 'Lock Escrow', sublabel: 'Lock your USDT to proceed with this trade',
           badgeText: 'LOCK', badgeVariant: 'action', actionRequired: true, actionType: 'lock_escrow',
         };
       }

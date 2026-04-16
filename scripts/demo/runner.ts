@@ -7,8 +7,8 @@
  * Prerequisites: scripts/dev-local.sh running + seed data (pnpm seed:local)
  *
  * Usage:
- *   tsx scripts/demo/runner.ts u2m:buy    # User buys USDC from merchant
- *   tsx scripts/demo/runner.ts u2m:sell   # User sells USDC to merchant
+ *   tsx scripts/demo/runner.ts u2m:buy    # User buys USDT from merchant
+ *   tsx scripts/demo/runner.ts u2m:sell   # User sells USDT to merchant
  *   tsx scripts/demo/runner.ts m2m:buy    # Merchant-to-merchant buy
  *   tsx scripts/demo/runner.ts m2m:sell   # Merchant-to-merchant sell
  */
@@ -57,9 +57,9 @@ interface DemoData {
   userId: string;
   merchantId: string;
   merchant2Id: string;
-  sellOfferId: string;  // merchant sells USDC (user buys)
-  buyOfferId: string;   // merchant buys USDC (user sells)
-  m2SellOfferId: string; // merchant2 sells USDC
+  sellOfferId: string;  // merchant sells USDT (user buys)
+  buyOfferId: string;   // merchant buys USDT (user sells)
+  m2SellOfferId: string; // merchant2 sells USDT
 }
 
 async function seedDemo(): Promise<DemoData> {
@@ -104,7 +104,7 @@ function step(action: string, detail: string) {
 // ── Demo Flows ──
 
 async function u2mBuy(d: DemoData) {
-  console.log('\n--- Demo: u2m:buy (User buys USDC from merchant) ---\n');
+  console.log('\n--- Demo: u2m:buy (User buys USDT from merchant) ---\n');
 
   // Create order
   const create = await post(`${CORE_API_URL}/v1/orders`, {
@@ -135,7 +135,7 @@ async function u2mBuy(d: DemoData) {
     actor_type: 'merchant',
     actor_id: d.merchantId,
   });
-  step('ESCROW_LOCKED', 'status=escrowed  (merchant locks USDC)');
+  step('ESCROW_LOCKED', 'status=escrowed  (merchant locks USDT)');
 
   // User marks payment sent
   await patch(`${CORE_API_URL}/v1/orders/${orderId}`, {
@@ -161,13 +161,13 @@ async function u2mBuy(d: DemoData) {
     'x-actor-type': 'merchant',
     'x-actor-id': d.merchantId,
   });
-  step('ESCROW_RELEASED', 'status=completed  (USDC released to user)');
+  step('ESCROW_RELEASED', 'status=completed  (USDT released to user)');
 
   return orderId;
 }
 
 async function u2mSell(d: DemoData) {
-  console.log('\n--- Demo: u2m:sell (User sells USDC to merchant) ---\n');
+  console.log('\n--- Demo: u2m:sell (User sells USDT to merchant) ---\n');
 
   const create = await post(`${CORE_API_URL}/v1/orders`, {
     user_id: d.userId,
@@ -181,7 +181,7 @@ async function u2mSell(d: DemoData) {
     payment_details: { bank_name: 'Demo Bank' },
   });
   const orderId = create.data.id;
-  step('ORDER_CREATED', `id=${orderId}  status=pending  (user sells USDC)`);
+  step('ORDER_CREATED', `id=${orderId}  status=pending  (user sells USDT)`);
 
   await patch(`${CORE_API_URL}/v1/orders/${orderId}`, {
     status: 'accepted',
@@ -196,7 +196,7 @@ async function u2mSell(d: DemoData) {
     actor_type: 'user',
     actor_id: d.userId,
   });
-  step('ESCROW_LOCKED', 'status=escrowed  (user locks USDC)');
+  step('ESCROW_LOCKED', 'status=escrowed  (user locks USDT)');
 
   // Merchant sends fiat
   await patch(`${CORE_API_URL}/v1/orders/${orderId}`, {
@@ -222,13 +222,13 @@ async function u2mSell(d: DemoData) {
     'x-actor-type': 'user',
     'x-actor-id': d.userId,
   });
-  step('ESCROW_RELEASED', 'status=completed  (USDC released to merchant)');
+  step('ESCROW_RELEASED', 'status=completed  (USDT released to merchant)');
 
   return orderId;
 }
 
 async function m2mBuy(d: DemoData) {
-  console.log('\n--- Demo: m2m:buy (Merchant1 buys USDC from Merchant2) ---\n');
+  console.log('\n--- Demo: m2m:buy (Merchant1 buys USDT from Merchant2) ---\n');
 
   // Merchant1 creates order to buy from Merchant2's sell offer
   const create = await post(`${CORE_API_URL}/v1/orders`, {
@@ -254,13 +254,13 @@ async function m2mBuy(d: DemoData) {
   });
   step('ORDER_ACCEPTED', 'status=accepted  (seller merchant accepts)');
 
-  // Merchant2 locks escrow (seller locks USDC)
+  // Merchant2 locks escrow (seller locks USDT)
   await post(`${CORE_API_URL}/v1/orders/${orderId}/escrow`, {
     tx_hash: `mock_m2m_escrow_${orderId.slice(0, 8)}`,
     actor_type: 'merchant',
     actor_id: d.merchant2Id,
   });
-  step('ESCROW_LOCKED', 'status=escrowed  (seller merchant locks USDC)');
+  step('ESCROW_LOCKED', 'status=escrowed  (seller merchant locks USDT)');
 
   // Merchant1 sends fiat
   await patch(`${CORE_API_URL}/v1/orders/${orderId}`, {
@@ -286,13 +286,13 @@ async function m2mBuy(d: DemoData) {
     'x-actor-type': 'merchant',
     'x-actor-id': d.merchant2Id,
   });
-  step('ESCROW_RELEASED', 'status=completed  (USDC released to buyer merchant)');
+  step('ESCROW_RELEASED', 'status=completed  (USDT released to buyer merchant)');
 
   return orderId;
 }
 
 async function m2mSell(d: DemoData) {
-  console.log('\n--- Demo: m2m:sell (Merchant1 sells USDC to Merchant2) ---\n');
+  console.log('\n--- Demo: m2m:sell (Merchant1 sells USDT to Merchant2) ---\n');
 
   // Merchant1 creates sell order, Merchant2 will buy
   const create = await post(`${CORE_API_URL}/v1/orders`, {
@@ -318,13 +318,13 @@ async function m2mSell(d: DemoData) {
   });
   step('ORDER_ACCEPTED', 'status=accepted  (buyer merchant accepts)');
 
-  // Merchant1 locks escrow (seller locks USDC)
+  // Merchant1 locks escrow (seller locks USDT)
   await post(`${CORE_API_URL}/v1/orders/${orderId}/escrow`, {
     tx_hash: `mock_m2m_sell_escrow_${orderId.slice(0, 8)}`,
     actor_type: 'merchant',
     actor_id: d.merchantId,
   });
-  step('ESCROW_LOCKED', 'status=escrowed  (seller merchant locks USDC)');
+  step('ESCROW_LOCKED', 'status=escrowed  (seller merchant locks USDT)');
 
   // Merchant2 sends fiat
   await patch(`${CORE_API_URL}/v1/orders/${orderId}`, {
@@ -350,7 +350,7 @@ async function m2mSell(d: DemoData) {
     'x-actor-type': 'merchant',
     'x-actor-id': d.merchantId,
   });
-  step('ESCROW_RELEASED', 'status=completed  (USDC released to buyer merchant)');
+  step('ESCROW_RELEASED', 'status=completed  (USDT released to buyer merchant)');
 
   return orderId;
 }

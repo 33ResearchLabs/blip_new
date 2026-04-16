@@ -356,12 +356,12 @@ export function MobileHomeView({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{order.user}</p>
                     <p className="text-[11px] text-foreground/40">
-                      {order.dbOrder?.order_number || `${order.amount} USDC`}
+                      {order.dbOrder?.order_number || `${order.amount} USDT`}
                     </p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-bold text-foreground">
-                      {order.amount} USDC
+                      {order.amount} USDT
                       <span className="text-foreground/30 mx-1">→</span>
                       <span className="text-primary">{Math.round(order.total)} AED</span>
                     </p>

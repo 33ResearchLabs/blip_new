@@ -177,7 +177,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
 
   // Group offers by corridor
   const groupedOffers = offers.reduce((acc, offer) => {
-    const corridor = offer.corridor || `USDC-AED-${offer.type}-${offer.payment_method}`;
+    const corridor = offer.corridor || `USDT-AED-${offer.type}-${offer.payment_method}`;
     if (!acc[corridor]) {
       acc[corridor] = [];
     }
@@ -395,7 +395,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                         ? "bg-green-500/10 text-green-400"
                         : "bg-primary/10 text-primary"
                     }`}>
-                      {offer.type === "buy" ? "BUYING USDC" : "SELLING USDC"}
+                      {offer.type === "buy" ? "BUYING USDT" : "SELLING USDT"}
                     </span>
                     <span className="px-2 py-0.5 bg-white/[0.04] rounded text-[10px] text-foreground/40">
                       {offer.payment_method === "bank" ? "Bank" : "Cash"}
@@ -411,7 +411,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                     {offer.rate.toFixed(4)}
                   </p>
                   <p className="text-[10px] text-foreground/35 mb-2">
-                    AED/USDC
+                    AED/USDT
                     {refPrice && (() => {
                       const dev = Math.abs(offer.rate - refPrice.price) / refPrice.price;
                       const devPct = (dev * 100).toFixed(1);
@@ -421,7 +421,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
                     })()}
                   </p>
                   <p className="text-[10px] text-foreground/35">
-                    {offer.min_amount.toLocaleString()} - {offer.max_amount.toLocaleString()} USDC
+                    {offer.min_amount.toLocaleString()} - {offer.max_amount.toLocaleString()} USDT
                   </p>
                 </div>
               </div>
@@ -429,7 +429,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
               {/* Take Action */}
               <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center justify-between">
                 <div className="text-[10px] text-foreground/35">
-                  Available: <span className="text-white font-medium">{offer.available_amount.toLocaleString()} USDC</span>
+                  Available: <span className="text-white font-medium">{offer.available_amount.toLocaleString()} USDT</span>
                 </div>
                 <button
                   onClick={() => onTakeOffer(offer)}

@@ -49,8 +49,8 @@ const TEST_PASSWORD_HASH = '$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vj
 
 /**
  * Test Users
- * - test_buyer_001: Used for buy orders (user buys USDC from merchant)
- * - test_seller_002: Used for sell orders (user sells USDC to merchant)
+ * - test_buyer_001: Used for buy orders (user buys USDT from merchant)
+ * - test_seller_002: Used for sell orders (user sells USDT to merchant)
  */
 export const TEST_USERS: TestUser[] = [
   {
@@ -105,14 +105,14 @@ export const TEST_MERCHANTS: TestMerchant[] = [
  * Test Offers
  *
  * Merchant1 offers (for user-merchant trades):
- * - Offer 0: Merchant1 sells USDC at 3.67 AED (users can buy)
- * - Offer 1: Merchant1 buys USDC at 3.65 AED (users can sell)
+ * - Offer 0: Merchant1 sells USDT at 3.67 AED (users can buy)
+ * - Offer 1: Merchant1 buys USDT at 3.65 AED (users can sell)
  *
  * Merchant2 offers (for M2M trades):
- * - Offer 2: Merchant2 sells USDC at 3.68 AED (merchants can buy)
+ * - Offer 2: Merchant2 sells USDT at 3.68 AED (merchants can buy)
  */
 export const TEST_OFFERS: Omit<TestOffer, 'merchant_id'>[] = [
-  // Merchant1 sells USDC (users can buy)
+  // Merchant1 sells USDT (users can buy)
   {
     type: 'sell' as OfferType,
     payment_method: 'bank' as PaymentMethod,
@@ -125,7 +125,7 @@ export const TEST_OFFERS: Omit<TestOffer, 'merchant_id'>[] = [
     bank_iban: 'AE070331234567890000001',
     is_active: true,
   },
-  // Merchant1 buys USDC (users can sell)
+  // Merchant1 buys USDT (users can sell)
   {
     type: 'buy' as OfferType,
     payment_method: 'bank' as PaymentMethod,
@@ -138,7 +138,7 @@ export const TEST_OFFERS: Omit<TestOffer, 'merchant_id'>[] = [
     bank_iban: 'AE070331234567890000001',
     is_active: true,
   },
-  // Merchant2 sells USDC (for M2M tests)
+  // Merchant2 sells USDT (for M2M tests)
   {
     type: 'sell' as OfferType,
     payment_method: 'bank' as PaymentMethod,

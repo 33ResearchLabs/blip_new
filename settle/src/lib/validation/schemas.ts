@@ -281,7 +281,7 @@ const solanaWalletRegex = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 // Merchant-initiated order schema
 export const merchantCreateOrderSchema = z.object({
   merchant_id: uuidSchema, // The merchant creating this order
-  type: offerTypeSchema, // From merchant perspective: 'sell' = merchant sells USDC to user
+  type: offerTypeSchema, // From merchant perspective: 'sell' = merchant sells USDT to user
   crypto_amount: positiveAmountSchema,
   payment_method: paymentMethodSchema,
   spread_preference: z.enum(['best', 'fastest', 'cheap']).default('fastest'), // Match speed and protocol fee tier

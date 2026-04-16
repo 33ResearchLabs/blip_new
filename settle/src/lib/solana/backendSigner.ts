@@ -6,7 +6,7 @@
  * when orders expire without merchant acceptance.
  *
  * SECURITY: This keypair only needs SOL for tx fees. It does NOT hold user funds.
- * The on-chain program returns escrowed USDC to the original depositor's wallet.
+ * The on-chain program returns escrowed USDT to the original depositor's wallet.
  */
 
 import { Keypair, Connection, PublicKey } from '@solana/web3.js';

@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     for (const user of users) {
       await query(`UPDATE users SET balance = $1 WHERE email = $2`, [user.balance, user.email]);
     }
-    results.push('✓ Set user balances to 100,000 USDC each');
+    results.push('✓ Set user balances to 100,000 USDT each');
 
     // 3. Fix merchant email conflicts
     // The problem: schema.sql creates merchants with emails like merchant1@blip.money
@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
             business_name = $2, display_name = $3, email = $4, balance = $5, status = 'active', is_online = true
           RETURNING id
         `, [merchant.wallet, merchant.business, merchant.display, merchant.email, merchant.balance]);
-        results.push(`✓ Merchant ${merchant.display} created/updated with 500,000 USDC`);
+        results.push(`✓ Merchant ${merchant.display} created/updated with 500,000 USDT`);
       } catch (e) {
         results.push(`Note: Merchant ${merchant.display} - ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -173,13 +173,13 @@ export async function GET(request: NextRequest) {
       results,
       accounts: {
         users: [
-          { email: 'alice@test.com', name: 'Alice', balance: '100,000 USDC' },
-          { email: 'bob@test.com', name: 'Bob', balance: '100,000 USDC' },
-          { email: 'charlie@test.com', name: 'Charlie', balance: '100,000 USDC' },
+          { email: 'alice@test.com', name: 'Alice', balance: '100,000 USDT' },
+          { email: 'bob@test.com', name: 'Bob', balance: '100,000 USDT' },
+          { email: 'charlie@test.com', name: 'Charlie', balance: '100,000 USDT' },
         ],
         merchants: [
-          { email: 'quickswap@merchant.com', name: 'QuickSwap', balance: '500,000 USDC' },
-          { email: 'desertgold@merchant.com', name: 'DesertGold', balance: '500,000 USDC' },
+          { email: 'quickswap@merchant.com', name: 'QuickSwap', balance: '500,000 USDT' },
+          { email: 'desertgold@merchant.com', name: 'DesertGold', balance: '500,000 USDT' },
         ],
         compliance: [
           { email: 'support@blip.money', name: 'Support Agent', role: 'support' },

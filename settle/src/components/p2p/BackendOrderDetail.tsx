@@ -183,7 +183,7 @@ export function BackendOrderDetail({
               {order.type === 'buy' ? 'Buying' : 'Selling'}
             </span>
             <span className="text-lg font-bold">
-              {formatAmount(order.crypto_amount)} USDC
+              {formatAmount(order.crypto_amount)} USDT
             </span>
           </div>
 
@@ -200,7 +200,7 @@ export function BackendOrderDetail({
 
           <div className="flex items-center justify-between text-sm text-zinc-400">
             <span>Rate</span>
-            <span>{formatAmount(order.rate)} AED/USDC</span>
+            <span>{formatAmount(order.rate)} AED/USDT</span>
           </div>
 
           <div className="flex items-center justify-between text-sm text-zinc-400">

@@ -364,8 +364,8 @@ export async function POST(request: NextRequest) {
     });
 
     // For merchant-initiated orders, the type from merchant's perspective:
-    // - 'sell' = merchant sells USDC → order type is 'buy' (user perspective)
-    // - 'buy' = merchant buys USDC → order type is 'sell' (user perspective)
+    // - 'sell' = merchant sells USDT → order type is 'buy' (user perspective)
+    // - 'buy' = merchant buys USDT → order type is 'sell' (user perspective)
     const orderType = type === 'sell' ? 'buy' : 'sell';
 
     // Slot assignment per CLAUDE.md M2M invariant (merchant_id=ALWAYS seller,

@@ -1088,7 +1088,7 @@ class BlipScanIndexer {
       // Get mint from transaction if available
       for (const account of accounts) {
         const pubkey = (typeof account === 'string') ? account : (account?.pubkey || account?.toBase58?.() || account?.toString?.() || '');
-        // USDC mint on devnet or mainnet
+        // USDT mint on devnet or mainnet
         if (pubkey === 'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr' ||
             pubkey === 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' ||
             pubkey === 'FT8zRmLcsbNvqjCMSiwQC5GdkZfGtsoj8r5k19H65X9Z') {

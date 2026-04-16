@@ -97,7 +97,7 @@ export default function AuthCardStack({
             <div className="flex justify-between text-[9px] font-medium text-foreground">
               <span>USDT 45%</span>
               <span>BTC 30%</span>
-              <span>USDC 25%</span>
+              <span>USDT 25%</span>
             </div>
           </div>
 
@@ -106,7 +106,7 @@ export default function AuthCardStack({
             {[
               { flag: "🇦🇪", pair: "USDT → AED", amount: "$2,500", status: "Settled" },
               { flag: "🇳🇬", pair: "BTC → NGN", amount: "₦2.8M", status: "Pending" },
-              { flag: "🇮🇳", pair: "USDC → INR", amount: "₹42,000", status: "Settled" },
+              { flag: "🇮🇳", pair: "USDT → INR", amount: "₹42,000", status: "Settled" },
             ].map((tx, i) => (
               <div
                 key={i}

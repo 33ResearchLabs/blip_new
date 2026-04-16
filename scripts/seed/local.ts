@@ -118,8 +118,8 @@ async function seedOrders(data: SeedData): Promise<CreatedOrder[]> {
   const m1 = data.merchants[0].id;
   const m2 = data.merchants[1].id;
   // offers: [0]=m1 sell, [1]=m1 buy, [2]=m2 sell
-  const sellOffer = data.offers[0].id; // merchant sells USDC → user buys
-  const buyOffer = data.offers[1].id;  // merchant buys USDC → user sells
+  const sellOffer = data.offers[0].id; // merchant sells USDT → user buys
+  const buyOffer = data.offers[1].id;  // merchant buys USDT → user sells
   const m2SellOffer = data.offers[2].id;
 
   const rate = 3.67;

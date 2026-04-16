@@ -669,7 +669,7 @@ function getStatusChangeMessage(
   actorType: ActorType,
   metadata?: Record<string, unknown>
 ): string | null {
-  const amount = `${order.crypto_amount} USDC`;
+  const amount = `${order.crypto_amount} USDT`;
   const fiat = `${order.fiat_amount.toLocaleString()} ${order.fiat_currency}`;
 
   switch (newStatus) {
@@ -707,7 +707,7 @@ function getStatusGuidanceMessages(
 ): string[] {
   const isBuyOrder = order.type === 'buy'; // user is buying crypto from merchant
   const fiat = `${order.fiat_amount.toLocaleString()} ${order.fiat_currency}`;
-  const crypto = `${order.crypto_amount} USDC`;
+  const crypto = `${order.crypto_amount} USDT`;
   const paymentMethod = order.payment_method === 'cash' ? 'cash' : 'bank transfer';
 
   switch (newStatus) {
@@ -1853,6 +1853,7 @@ export async function claimAndPayOrder(
                status = 'payment_sent',
                accepted_at = NOW(),
                payment_sent_at = NOW(),
+               payment_deadline = COALESCE(payment_deadline, NOW() + INTERVAL '24 hours'),
                acceptor_wallet_address = COALESCE($3, acceptor_wallet_address),
                escrow_debited_entity_id = COALESCE(escrow_debited_entity_id, merchant_id),
                escrow_debited_entity_type = COALESCE(escrow_debited_entity_type, 'merchant'),
@@ -1874,6 +1875,7 @@ export async function claimAndPayOrder(
                status = 'payment_sent',
                accepted_at = NOW(),
                payment_sent_at = NOW(),
+               payment_deadline = COALESCE(payment_deadline, NOW() + INTERVAL '24 hours'),
                acceptor_wallet_address = COALESCE($3, acceptor_wallet_address),
                escrow_debited_entity_id = COALESCE(escrow_debited_entity_id, user_id),
                escrow_debited_entity_type = COALESCE(escrow_debited_entity_type, 'user'),

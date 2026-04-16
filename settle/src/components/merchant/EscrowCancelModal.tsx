@@ -86,7 +86,7 @@ export function EscrowCancelModal({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <p className="text-[10px] text-foreground/35 uppercase mb-1">Withdraw Amount</p>
-                      <p className="text-lg font-bold text-white/70">{cancelOrder.amount} USDC</p>
+                      <p className="text-lg font-bold text-white/70">{cancelOrder.amount} USDT</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-foreground/35 uppercase mb-1">Order Total</p>
@@ -125,7 +125,7 @@ export function EscrowCancelModal({
                       </div>
                       <div>
                         <p className="text-sm font-medium text-white">Escrow Refunded!</p>
-                        <p className="text-xs text-white/70">{cancelOrder.amount} USDC returned to your wallet</p>
+                        <p className="text-xs text-white/70">{cancelOrder.amount} USDT returned to your wallet</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -172,7 +172,7 @@ export function EscrowCancelModal({
                     {cancelOrder.escrowTradeId && cancelOrder.escrowCreatorWallet ? (
                       <div className="bg-white/5 rounded-xl p-3 border border-white/6">
                         <p className="text-xs text-white/70">
-                          This will cancel the order and return <strong>{cancelOrder.amount} USDC</strong> to your wallet. The buyer will be notified.
+                          This will cancel the order and return <strong>{cancelOrder.amount} USDT</strong> to your wallet. The buyer will be notified.
                         </p>
                       </div>
                     ) : (

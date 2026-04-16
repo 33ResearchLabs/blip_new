@@ -166,7 +166,7 @@ function generateScenarioConfig(id: number): ScenarioConfig {
 }
 
 function createOrder(config: ScenarioConfig): SimOrder {
-  const amount = 100 + Math.floor(rng() * 900); // 100-999 USDC
+  const amount = 100 + Math.floor(rng() * 900); // 100-999 USDT
   return {
     id: `order-${config.id.toString().padStart(3, '0')}`,
     status: 'pending',

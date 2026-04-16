@@ -538,7 +538,7 @@ export const ChatViewScreen = ({
               activeOrder.status === 'disputed' ? 'bg-error' : 'bg-surface-active'
             }`} />
             <span className="text-[12px] text-text-secondary">
-              {activeOrder.type === "buy" ? "Buying" : "Selling"} {parseFloat(activeOrder.cryptoAmount).toFixed(2)} USDC
+              {activeOrder.type === "buy" ? "Buying" : "Selling"} {parseFloat(activeOrder.cryptoAmount).toFixed(2)} USDT
             </span>
           </div>
           <span className="text-[12px] text-text-tertiary">

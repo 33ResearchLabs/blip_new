@@ -61,7 +61,7 @@ export function EscrowLockModal({
                   </div>
                   <div>
                     <h2 className="text-sm font-semibold">Lock Escrow</h2>
-                    <p className="text-[11px] text-foreground/35">Secure USDC for this trade</p>
+                    <p className="text-[11px] text-foreground/35">Secure USDT for this trade</p>
                   </div>
                 </div>
                 {!isLockingEscrow && (
@@ -94,7 +94,7 @@ export function EscrowLockModal({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <p className="text-[10px] text-foreground/35 uppercase mb-1">Amount</p>
-                      <p className="text-lg font-bold text-white">{escrowOrder.amount} USDC</p>
+                      <p className="text-lg font-bold text-white">{escrowOrder.amount} USDT</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-foreground/35 uppercase mb-1">Fiat Value</p>
@@ -105,9 +105,9 @@ export function EscrowLockModal({
 
                 {/* Wallet Balance */}
                 <div className="flex items-center justify-between bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-                  <span className="text-xs text-foreground/35">Your USDC Balance</span>
+                  <span className="text-xs text-foreground/35">Your USDT Balance</span>
                   <span className={`text-sm font-bold ${(effectiveBalance || 0) >= escrowOrder.amount ? 'text-white' : 'text-red-400'}`}>
-                    {effectiveBalance != null ? effectiveBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'} USDC
+                    {effectiveBalance != null ? effectiveBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'} USDT
                   </span>
                 </div>
 
@@ -154,7 +154,7 @@ export function EscrowLockModal({
                       </div>
                       <div>
                         <p className="text-sm font-medium text-white">Escrow Locked Successfully!</p>
-                        <p className="text-xs text-white/70">USDC is now secured on-chain</p>
+                        <p className="text-xs text-white/70">USDT is now secured on-chain</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -212,14 +212,14 @@ export function EscrowLockModal({
                     return isMerchantTrade ? (
                       <div className="bg-white/5 rounded-xl p-3 border border-white/6">
                         <p className="text-xs text-white/70">
-                          🤝 <strong>Merchant Trade:</strong> You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow.
+                          🤝 <strong>Merchant Trade:</strong> You are about to lock <strong>{escrowOrder.amount} USDT</strong> in escrow.
                           This will be released to the other merchant after they pay the fiat amount.
                         </p>
                       </div>
                     ) : (
                       <div className="bg-white/5 rounded-xl p-3 border border-white/6">
                         <p className="text-xs text-white/70">
-                          ⚠️ You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow on-chain.
+                          ⚠️ You are about to lock <strong>{escrowOrder.amount} USDT</strong> in escrow on-chain.
                           This will be released to the buyer after they pay you the fiat amount.
                         </p>
                       </div>
@@ -228,7 +228,7 @@ export function EscrowLockModal({
                     return (
                       <div className="bg-white/5 rounded-xl p-3 border border-white/6">
                         <p className="text-xs text-white/70">
-                          🔒 You are about to lock <strong>{escrowOrder.amount} USDC</strong> in escrow.
+                          🔒 You are about to lock <strong>{escrowOrder.amount} USDT</strong> in escrow.
                           Once locked, your order will be visible to other merchants who can accept it.
                         </p>
                       </div>
@@ -274,7 +274,7 @@ export function EscrowLockModal({
                       ) : (
                         <>
                           <Lock className="w-4 h-4" />
-                          Lock {escrowOrder.amount} USDC
+                          Lock {escrowOrder.amount} USDT
                         </>
                       )}
                     </motion.button>

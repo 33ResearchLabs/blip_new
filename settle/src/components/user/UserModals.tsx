@@ -129,7 +129,7 @@ export function UserModals({
                     <span className="font-semibold text-text-primary">{acceptedOrderInfo.merchantName}</span> accepted your {acceptedOrderInfo.orderType === 'sell' ? 'sell' : 'buy'} order
                   </p>
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="font-semibold text-text-primary">{acceptedOrderInfo.cryptoAmount} USDC</span>
+                    <span className="font-semibold text-text-primary">{acceptedOrderInfo.cryptoAmount} USDT</span>
                     <span className="text-text-quaternary">{'\u2022'}</span>
                     <span className="text-text-secondary">{acceptedOrderInfo.fiatAmount.toLocaleString()} AED</span>
                   </div>

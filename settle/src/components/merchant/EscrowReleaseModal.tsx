@@ -57,7 +57,7 @@ export function EscrowReleaseModal({
                   </div>
                   <div>
                     <h2 className="text-sm font-semibold">Release Escrow</h2>
-                    <p className="text-[11px] text-foreground/35">Confirm payment & release USDC</p>
+                    <p className="text-[11px] text-foreground/35">Confirm payment & release USDT</p>
                   </div>
                 </div>
                 {!isReleasingEscrow && (
@@ -86,7 +86,7 @@ export function EscrowReleaseModal({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <p className="text-[10px] text-foreground/35 uppercase mb-1">Release Amount</p>
-                      <p className="text-lg font-bold text-white">{releaseOrder.amount} USDC</p>
+                      <p className="text-lg font-bold text-white">{releaseOrder.amount} USDT</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-foreground/35 uppercase mb-1">Fiat Received</p>
@@ -125,7 +125,7 @@ export function EscrowReleaseModal({
                       </div>
                       <div>
                         <p className="text-sm font-medium text-white">Escrow Released!</p>
-                        <p className="text-xs text-white/70">{releaseOrder.amount} USDC sent to buyer</p>
+                        <p className="text-xs text-white/70">{releaseOrder.amount} USDT sent to buyer</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -178,7 +178,7 @@ export function EscrowReleaseModal({
                           <div>
                             <p className="text-sm font-semibold text-white/70 mb-1">Ready to Release</p>
                             <p className="text-xs text-white/70">
-                              Confirm you received <strong className="text-white">{releaseOrder.amount} USDC worth of AED</strong>.
+                              Confirm you received <strong className="text-white">{releaseOrder.amount} USDT worth of AED</strong>.
                               Once released, the crypto will be sent to the buyer and <strong className="text-white">cannot be reversed</strong>.
                             </p>
                           </div>

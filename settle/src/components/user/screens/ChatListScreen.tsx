@@ -276,15 +276,15 @@ export const ChatListScreen = ({
                     {/* Order count — shown when this contact has multiple trades */}
                     <p className="text-[11px] font-medium text-text-tertiary mb-0.5">
                       {group.orderCount > 1
-                        ? `${group.orderCount} orders · latest ${order.type === 'buy' ? 'buying' : 'selling'} ${parseFloat(order.cryptoAmount).toFixed(2)} USDC`
-                        : `${order.type === 'buy' ? 'Buying' : 'Selling'} ${parseFloat(order.cryptoAmount).toFixed(2)} USDC · ${order.createdAt.toLocaleDateString()}`}
+                        ? `${group.orderCount} orders · latest ${order.type === 'buy' ? 'buying' : 'selling'} ${parseFloat(order.cryptoAmount).toFixed(2)} USDT`
+                        : `${order.type === 'buy' ? 'Buying' : 'Selling'} ${parseFloat(order.cryptoAmount).toFixed(2)} USDT · ${order.createdAt.toLocaleDateString()}`}
                     </p>
                     <p className={`text-[12px] overflow-hidden text-ellipsis whitespace-nowrap ${
                       hasUnread ? 'font-semibold text-text-secondary' : 'font-normal text-text-tertiary'
                     }`}>
                       {order.lastMessage
                         ? getSenderPrefix(order) + order.lastMessage.content
-                        : `${order.type === 'buy' ? 'Buying' : 'Selling'} ${parseFloat(order.cryptoAmount).toFixed(2)} USDC`}
+                        : `${order.type === 'buy' ? 'Buying' : 'Selling'} ${parseFloat(order.cryptoAmount).toFixed(2)} USDT`}
                     </p>
                   </div>
                   {/* Active indicator */}

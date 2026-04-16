@@ -510,14 +510,14 @@ export function deriveOrderUI(order: any, myMerchantId: string): OrderUIState {
       // SELL orders skip this entirely (escrowed at creation, claimed without status change).
       if (!hasEscrow) {
         if (myRole === "seller") {
-          // I'm the seller — I lock USDC in escrow
+          // I'm the seller — I lock USDT in escrow
           result.primaryAction = {
             label: "Lock Escrow",
             handler: "lockEscrow",
             variant: "blue",
             disabled: false,
           };
-          result.nextStepText = "Lock USDC in escrow to proceed.";
+          result.nextStepText = "Lock USDT in escrow to proceed.";
         } else {
           // I'm the buyer — wait for seller to lock escrow
           result.primaryAction = {
@@ -525,10 +525,10 @@ export function deriveOrderUI(order: any, myMerchantId: string): OrderUIState {
             handler: "none",
             variant: "blue",
             disabled: true,
-            disabledReason: "Waiting for the seller to lock USDC in escrow.",
+            disabledReason: "Waiting for the seller to lock USDT in escrow.",
           };
           result.nextStepText =
-            "Waiting for the seller to lock USDC in escrow.";
+            "Waiting for the seller to lock USDT in escrow.";
         }
       } else {
         // Escrow already locked
@@ -579,7 +579,7 @@ export function deriveOrderUI(order: any, myMerchantId: string): OrderUIState {
             disabledReason: "Waiting for the buyer to send fiat payment.",
           };
           result.nextStepText =
-            "Your USDC is locked. Waiting for fiat payment.";
+            "Your USDT is locked. Waiting for fiat payment.";
         } else {
           // No buyer yet, waiting for someone to accept
           result.primaryAction = {
@@ -591,7 +591,7 @@ export function deriveOrderUI(order: any, myMerchantId: string): OrderUIState {
               "Waiting for another merchant or user to accept this order.",
           };
           result.nextStepText =
-            "Your USDC is locked. Waiting for a counterparty.";
+            "Your USDT is locked. Waiting for a counterparty.";
         }
         result.secondaryAction = {
           label: "Cancel & Refund",
@@ -697,7 +697,7 @@ export function deriveOrderUI(order: any, myMerchantId: string): OrderUIState {
           disabled: false,
         };
         result.nextStepText =
-          "Order cancelled. Withdraw your USDC from escrow.";
+          "Order cancelled. Withdraw your USDT from escrow.";
       }
       break;
     }
@@ -712,7 +712,7 @@ export function deriveOrderUI(order: any, myMerchantId: string): OrderUIState {
           variant: "gold",
           disabled: false,
         };
-        result.nextStepText = "Order expired. Withdraw your USDC from escrow.";
+        result.nextStepText = "Order expired. Withdraw your USDT from escrow.";
       }
       break;
     }

@@ -209,7 +209,7 @@ export interface CreateOrderRequest {
   type: 'buy' | 'sell';
   /** Offer to trade against (optional — backend finds best if omitted) */
   offer_id?: string;
-  /** Amount of crypto (USDC) to trade */
+  /** Amount of crypto (USDT) to trade */
   crypto_amount: number;
   /** Payment method */
   payment_method: 'bank' | 'cash';

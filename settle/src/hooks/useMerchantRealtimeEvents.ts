@@ -48,7 +48,7 @@ export function useMerchantRealtimeEvents({
       debouncedFetchConversations();
       const matchedOrder = orders.find(o => o.id === orderId);
       const isRelevantOrder = () => matchedOrder && (matchedOrder.orderMerchantId === merchantId || matchedOrder.buyerMerchantId === merchantId);
-      const amt = matchedOrder ? `${matchedOrder.amount.toLocaleString()} USDC` : '';
+      const amt = matchedOrder ? `${matchedOrder.amount.toLocaleString()} USDT` : '';
       const usr = matchedOrder?.user || '';
       const desc = amt ? (usr ? `${amt} · ${usr}` : amt) : '';
 

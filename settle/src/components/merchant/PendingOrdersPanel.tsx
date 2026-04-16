@@ -1166,17 +1166,20 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       });
     }
   } else if (view === "pending") {
-    // ─── PENDING: orders waiting to be accepted (NOT escrowed/active) ──
-    // Escrowed orders belong in "In Progress", not here. Including them
-    // caused a bug where the order showed "Expired" (stale local countdown
-    // from the original 15-min pending window) even though the order was
-    // actively escrowed with an extended 120-min deadline.
-    const pendingStatuses = new Set(["pending"]);
-    const marketOrders = [...orders].filter((o: any) =>
-      pendingStatuses.has(o.status || o.dbOrder?.status),
-    );
+    // Parent (merchant/page.tsx pendingOrders) already routes self-unaccepted
+    // and unclaimed-escrow rows here; only accept escrowed when accepted_at
+    // is null so claimed orders never double up in In Progress.
+    const isPendingLike = (o: any): boolean => {
+      const s = o.status || o.dbOrder?.status;
+      if (s === "pending") return true;
+      if ((s === "escrowed" || s === "escrow") && !o.dbOrder?.accepted_at) {
+        return true;
+      }
+      return false;
+    };
+    const marketOrders = [...orders].filter(isPendingLike);
     const myPending = wrappedMyOrders.filter(
-      (o: any) => isCreatedByMe(o) && pendingStatuses.has(o.status),
+      (o: any) => isCreatedByMe(o) && isPendingLike(o),
     );
 
     // Merge and deduplicate

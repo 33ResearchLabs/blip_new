@@ -261,7 +261,7 @@ export const EscrowLockScreen = ({
                 </div>
                 <div>
                   <p className="text-[15px] font-semibold text-success">Escrow Locked</p>
-                  <p className="text-[13px] text-text-secondary">Your USDC is secured on-chain</p>
+                  <p className="text-[13px] text-text-secondary">Your USDT is secured on-chain</p>
                 </div>
               </div>
               {escrowTxHash && (

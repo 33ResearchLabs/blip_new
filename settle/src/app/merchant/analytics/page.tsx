@@ -369,7 +369,7 @@ export default function AnalyticsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{trade.user}</p>
-                    <p className="text-[10px] text-foreground/35">${trade.amount.toLocaleString()} USDC</p>
+                    <p className="text-[10px] text-foreground/35">${trade.amount.toLocaleString()} USDT</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-semibold text-emerald-400">+${trade.profit}</p>

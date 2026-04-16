@@ -639,7 +639,7 @@ export const OrderDetailScreen = ({
             <div>
               <p className="text-[17px] font-semibold text-text-primary">
                 {activeOrder.type === "buy" ? "Buying" : "Selling"}{" "}
-                {parseFloat(activeOrder.cryptoAmount).toFixed(2)} USDC
+                {parseFloat(activeOrder.cryptoAmount).toFixed(2)} USDT
               </p>
               <p className="text-[13px] text-text-secondary">
                 {fiatSym(activeOrder.fiatCode)}{" "}
@@ -710,7 +710,7 @@ export const OrderDetailScreen = ({
                   Escrow Locked
                 </p>
                 <p className="text-[13px] text-text-secondary">
-                  Your USDC is secured on-chain
+                  Your USDT is secured on-chain
                 </p>
               </div>
               <div className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-active">

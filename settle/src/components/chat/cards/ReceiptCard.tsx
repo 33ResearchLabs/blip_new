@@ -153,7 +153,7 @@ export function ReceiptCard({ data, currentStatus, theme = 'dark' }: ReceiptCard
         <div className="flex justify-between items-center">
           <span className={`text-xs ${t.label}`}>Crypto</span>
           <span className={`text-[15px] ${t.value} font-bold font-mono tabular-nums`}>
-            {formatAmount(data.crypto_amount, 6)} {data.crypto_currency || 'USDC'}
+            {formatAmount(data.crypto_amount, 6)} {data.crypto_currency || 'USDT'}
           </span>
         </div>
 
@@ -175,7 +175,7 @@ export function ReceiptCard({ data, currentStatus, theme = 'dark' }: ReceiptCard
           <div className="flex justify-between items-center">
             <span className={`text-xs ${t.label}`}>Fee</span>
             <span className={`text-sm ${t.valueDim}`}>
-              {formatAmount(data.platform_fee, 6)} {data.crypto_currency || 'USDC'}
+              {formatAmount(data.platform_fee, 6)} {data.crypto_currency || 'USDT'}
             </span>
           </div>
         )}

@@ -55,7 +55,7 @@ export const CashConfirmScreen = ({
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[13px] text-text-tertiary">You {tradeType === "buy" ? "receive" : "sell"}</span>
-            <span className="text-[17px] font-medium text-text-secondary">{amount} USDC</span>
+            <span className="text-[17px] font-medium text-text-secondary">{amount} USDT</span>
           </div>
         </div>
 

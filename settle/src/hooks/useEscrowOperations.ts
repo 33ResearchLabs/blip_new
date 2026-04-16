@@ -160,7 +160,7 @@ export function useEscrowOperations({
     if (!merchantId || !escrowOrder) return;
 
     if (effectiveBalance !== null && effectiveBalance < escrowOrder.amount) {
-      dispatch({ type: 'SET_ERROR', op: 'lock', error: `Insufficient USDC balance. You need ${escrowOrder.amount} USDC but have ${effectiveBalance.toFixed(2)} USDC.` });
+      dispatch({ type: 'SET_ERROR', op: 'lock', error: `Insufficient USDT balance. You need ${escrowOrder.amount} USDT but have ${effectiveBalance.toFixed(2)} USDT.` });
       return;
     }
 
@@ -169,7 +169,7 @@ export function useEscrowOperations({
       await new Promise(r => setTimeout(r, 500));
       const newBalance = solanaWallet.usdtBalance;
       if (newBalance !== null && newBalance < escrowOrder.amount) {
-        dispatch({ type: 'SET_ERROR', op: 'lock', error: `Insufficient USDC balance. You need ${escrowOrder.amount} USDC but have ${newBalance.toFixed(2)} USDC.` });
+        dispatch({ type: 'SET_ERROR', op: 'lock', error: `Insufficient USDT balance. You need ${escrowOrder.amount} USDT but have ${newBalance.toFixed(2)} USDT.` });
         return;
       }
     }
@@ -264,7 +264,7 @@ export function useEscrowOperations({
           if (res.ok && data.success && data.data) {
             const newOrder = mapDbOrderToUI(data.data, merchantId);
             setOrders((prev: Order[]) => [newOrder, ...prev]);
-            addNotification('escrow', `Sell order created! ${escrowOrder.amount} USDC locked in escrow`, data.data.id);
+            addNotification('escrow', `Sell order created! ${escrowOrder.amount} USDT locked in escrow`, data.data.id);
             delete (window as any).__pendingSellOrder;
             dispatch({ type: 'CLOSE', op: 'lock' });
           } else {
@@ -316,7 +316,7 @@ export function useEscrowOperations({
 
         if (recorded) {
           playSound('trade_complete');
-          addNotification('escrow', `${escrowOrder.amount} USDC locked in escrow - waiting for payment`, escrowOrder.id);
+          addNotification('escrow', `${escrowOrder.amount} USDT locked in escrow - waiting for payment`, escrowOrder.id);
           dispatch({ type: 'CLOSE', op: 'lock' });
           try { localStorage.removeItem(`blip_unrecorded_escrow_${escrowOrder.id}`); } catch {}
           await afterMutationReconcile(escrowOrder.id);
@@ -502,7 +502,7 @@ export function useEscrowOperations({
         }
 
         playSound('trade_complete');
-        addNotification('escrow', `Escrow released! ${releaseOrder.amount} USDC sent to buyer.`, releaseOrder.id);
+        addNotification('escrow', `Escrow released! ${releaseOrder.amount} USDT sent to buyer.`, releaseOrder.id);
         await afterMutationReconcile(releaseOrder.id, { status: "completed" as const });
 
         setTimeout(() => {
@@ -598,7 +598,7 @@ export function useEscrowOperations({
         });
 
         playSound('click');
-        addNotification('system', `Escrow cancelled. ${cancelOrder.amount} USDC returned to your balance.`, cancelOrder.id);
+        addNotification('system', `Escrow cancelled. ${cancelOrder.amount} USDT returned to your balance.`, cancelOrder.id);
         await afterMutationReconcile(cancelOrder.id, { status: "cancelled" as const });
       } else {
         dispatch({ type: 'SET_ERROR', op: 'cancel', error: refundResult.error || 'Failed to refund escrow' });

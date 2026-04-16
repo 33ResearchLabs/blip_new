@@ -61,7 +61,7 @@ describe('Atomic Escrow Release', () => {
          crypto_amount, fiat_amount, crypto_currency, fiat_currency, rate,
          status, escrow_tx_hash, escrow_trade_id, escrowed_at, payment_sent_at,
          expires_at, buyer_wallet_address, order_version
-       ) VALUES ($1, $2, $3, 'buy', 'bank', 100, 367, 'USDC', 'AED', 3.67,
+       ) VALUES ($1, $2, $3, 'buy', 'bank', 100, 367, 'USDT', 'AED', 3.67,
                  'payment_sent', 'demo-escrow-123', 123456, NOW(), NOW(),
                  NOW() + INTERVAL '2 hours', 'MOCK_BUYER_WALLET', 1)
        RETURNING id`,
@@ -213,7 +213,7 @@ describe('Regression: Double-Release Protection', () => {
          crypto_amount, fiat_amount, crypto_currency, fiat_currency, rate,
          status, escrow_tx_hash, escrow_trade_id, escrowed_at, payment_sent_at,
          expires_at, buyer_wallet_address, order_version
-       ) VALUES ($1, $2, $3, 'buy', 'bank', 100, 367, 'USDC', 'AED', 3.67,
+       ) VALUES ($1, $2, $3, 'buy', 'bank', 100, 367, 'USDT', 'AED', 3.67,
                  'payment_sent', 'demo-escrow-double-test', 123456, NOW(), NOW(),
                  NOW() + INTERVAL '2 hours', 'MOCK_BUYER_WALLET', 1)
        RETURNING id`,
@@ -344,7 +344,7 @@ describe('Regression: Outbox Retry Reliability', () => {
          user_id, merchant_id, offer_id, type, payment_method,
          crypto_amount, fiat_amount, crypto_currency, fiat_currency, rate,
          status, order_version
-       ) VALUES ($1, $2, $3, 'buy', 'bank', 100, 367, 'USDC', 'AED', 3.67,
+       ) VALUES ($1, $2, $3, 'buy', 'bank', 100, 367, 'USDT', 'AED', 3.67,
                  'completed', 1)
        RETURNING id`,
       [testUserId, testMerchantId, testOfferId]

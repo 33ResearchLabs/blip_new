@@ -73,6 +73,18 @@ export interface EnrichedOrderResponse {
   isTerminal: boolean;
   /** Whether chat UI should be shown */
   showChat: boolean;
+  /**
+   * Timer block — backend-driven deadlines so the frontend never computes
+   * its own. All timestamps are ISO 8601 strings in UTC. server_time is the
+   * backend's current time at response build, used for client clock-skew
+   * correction. Null when the underlying field is unset.
+   */
+  timers: {
+    expires_at: string | null;
+    payment_deadline: string | null;
+    dispute_auto_resolve_at: string | null;
+    server_time: string;
+  };
 }
 
 // ── Order shape required by enricher ──────────────────────────────────
@@ -88,6 +100,12 @@ interface OrderForEnrichment {
   escrow_tx_hash?: string | null;
   refund_tx_hash?: string | null;
   order_version?: number;
+  // Timer fields — surfaced to the frontend for backend-driven countdowns.
+  // Optional because legacy callers may not include them; enricher safely
+  // omits timers when undefined.
+  expires_at?: string | Date | null;
+  payment_deadline?: string | Date | null;
+  dispute_auto_resolve_at?: string | Date | null;
 }
 
 // ── Enricher ──────────────────────────────────────────────────────────
@@ -124,6 +142,7 @@ export function enrichOrderResponse(
     nextStepText: 'No further actions required.',
     isTerminal,
     showChat: !isTerminal && minimalStatus !== 'open',
+    timers: buildTimers(order),
   };
 
   // ── Terminal states: lock everything ────────────────────────────────
@@ -146,8 +165,8 @@ export function enrichOrderResponse(
   if (['cancelled', 'expired'].includes(minimalStatus) && hasUnreturnedEscrow) {
     result.primaryAction = guardedAction(order, actorId, 'CANCEL', 'Withdraw Escrow');
     result.nextStepText = minimalStatus === 'cancelled'
-      ? 'Order cancelled. Withdraw your USDC from escrow.'
-      : 'Order expired. Withdraw your USDC from escrow.';
+      ? 'Order cancelled. Withdraw your USDT from escrow.'
+      : 'Order expired. Withdraw your USDT from escrow.';
     return result;
   }
 
@@ -208,13 +227,13 @@ function deriveAccepted(
   if (!hasEscrow) {
     if (role === 'seller') {
       result.primaryAction = guardedAction(order, actorId, 'LOCK_ESCROW', 'Lock Escrow');
-      result.nextStepText = 'Lock USDC in escrow to proceed.';
+      result.nextStepText = 'Lock USDT in escrow to proceed.';
     } else if (role === 'buyer') {
       result.primaryAction = DISABLED_PRIMARY(
         'Waiting for Escrow',
-        'Waiting for the seller to lock USDC in escrow.',
+        'Waiting for the seller to lock USDT in escrow.',
       );
-      result.nextStepText = 'Waiting for the seller to lock USDC in escrow.';
+      result.nextStepText = 'Waiting for the seller to lock USDT in escrow.';
     } else {
       // Observer in accepted state — no valid actions
       result.primaryAction = DISABLED_PRIMARY(
@@ -261,13 +280,13 @@ function deriveEscrowed(
         'Waiting for Payment',
         'Waiting for the buyer to send fiat payment.',
       );
-      result.nextStepText = 'Your USDC is locked. Waiting for fiat payment.';
+      result.nextStepText = 'Your USDT is locked. Waiting for fiat payment.';
     } else {
       result.primaryAction = DISABLED_PRIMARY(
         'Waiting for Acceptor',
         'Waiting for another merchant or user to accept this order.',
       );
-      result.nextStepText = 'Your USDC is locked. Waiting for a counterparty.';
+      result.nextStepText = 'Your USDT is locked. Waiting for a counterparty.';
     }
     result.secondaryAction = guardedSecondary(order, actorId, 'CANCEL', 'Cancel & Refund');
   } else if (role === 'buyer') {
@@ -416,6 +435,26 @@ function guardedSecondary(
 /** Create a disabled informational primary action (no actionable type) */
 function DISABLED_PRIMARY(label: string, disabledReason: string): PrimaryAction {
   return { type: null, label, enabled: false, disabledReason };
+}
+
+/**
+ * Build the timer block from raw order fields. Coerces Date/string to ISO
+ * string (UTC). Missing fields surface as null. server_time is always set so
+ * the client can correct for clock skew when computing countdowns.
+ */
+function buildTimers(order: OrderForEnrichment): EnrichedOrderResponse['timers'] {
+  const toIso = (v: string | Date | null | undefined): string | null => {
+    if (v == null) return null;
+    if (v instanceof Date) return v.toISOString();
+    // Trust string form — DB driver returns ISO 8601 already
+    return String(v);
+  };
+  return {
+    expires_at: toIso(order.expires_at),
+    payment_deadline: toIso(order.payment_deadline),
+    dispute_auto_resolve_at: toIso(order.dispute_auto_resolve_at),
+    server_time: new Date().toISOString(),
+  };
 }
 
 const STATUS_LABELS: Record<MinimalOrderStatus, string> = {

@@ -201,10 +201,10 @@ export function useToast() {
       show({ type: 'payment', title: 'Payment Sent', message: 'Payment has been marked as sent. Please verify.', orderId, duration: 8000 });
     }, [show]),
     showTradeComplete: useCallback((amount?: string) => {
-      show({ type: 'complete', title: 'Trade Complete', message: amount ? `${amount} USDC trade completed` : 'Trade completed successfully', duration: 6000 });
+      show({ type: 'complete', title: 'Trade Complete', message: amount ? `${amount} USDT trade completed` : 'Trade completed successfully', duration: 6000 });
     }, [show]),
     showEscrowLocked: useCallback((amount?: string) => {
-      show({ type: 'escrow', title: 'Escrow Locked', message: amount ? `${amount} USDC locked in escrow` : 'Funds locked in escrow' });
+      show({ type: 'escrow', title: 'Escrow Locked', message: amount ? `${amount} USDT locked in escrow` : 'Funds locked in escrow' });
     }, [show]),
     showDisputeOpened: useCallback((orderId?: string) => {
       show({ type: 'dispute', title: 'Dispute Opened', message: 'A dispute has been raised on this order', orderId, duration: 10000 });
@@ -231,7 +231,7 @@ export function useToast() {
       show({ type: 'order', title: 'Order Accepted!', message: merchantName ? `${merchantName} accepted your order` : 'A merchant has accepted your order', duration: 6000 });
     }, [show]),
     showEscrowReleased: useCallback((amount?: string) => {
-      show({ type: 'complete', title: 'Escrow Released', message: amount ? `${amount} USDC released from escrow` : 'Escrow has been released', duration: 6000 });
+      show({ type: 'complete', title: 'Escrow Released', message: amount ? `${amount} USDT released from escrow` : 'Escrow has been released', duration: 6000 });
     }, [show]),
   };
 }

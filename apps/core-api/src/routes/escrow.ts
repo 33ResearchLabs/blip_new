@@ -6,8 +6,8 @@
  * Receives pre-validated payload from settle (on-chain verification done by settle).
  *
  * Seller enforcement:
- *   buy  order → merchant_id must lock (they have the USDC)
- *   sell order → user_id must lock (they have the USDC)
+ *   buy  order → merchant_id must lock (they have the USDT)
+ *   sell order → user_id must lock (they have the USDT)
  */
 import type { FastifyPluginAsync } from 'fastify';
 import {

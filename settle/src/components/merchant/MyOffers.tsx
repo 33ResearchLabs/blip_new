@@ -476,7 +476,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                   {/* Rate */}
                   <div>
                     <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">
-                      Rate (AED per USDC)
+                      Rate (AED per USDT)
                     </label>
                     <input
                       type="text"
@@ -497,7 +497,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">
-                        Min Amount (USDC)
+                        Min Amount (USDT)
                       </label>
                       <input
                         type="text"
@@ -515,7 +515,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                     </div>
                     <div>
                       <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">
-                        Max Amount (USDC)
+                        Max Amount (USDT)
                       </label>
                       <input
                         type="text"
@@ -536,7 +536,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                   {/* Available Amount */}
                   <div>
                     <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">
-                      Available Amount (USDC)
+                      Available Amount (USDT)
                     </label>
                     <input
                       type="text"
@@ -703,7 +703,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
 
                   {/* Rate */}
                   <div>
-                    <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">Rate (AED per USDC)</label>
+                    <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">Rate (AED per USDT)</label>
                     <input
                       type="text"
                       inputMode="decimal"
@@ -717,7 +717,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                   {/* Min / Max */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">Min (USDC)</label>
+                      <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">Min (USDT)</label>
                       <input
                         type="text"
                         inputMode="decimal"
@@ -727,7 +727,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">Max (USDC)</label>
+                      <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">Max (USDT)</label>
                       <input
                         type="text"
                         inputMode="decimal"
@@ -740,7 +740,7 @@ export function MyOffers({ merchantId }: Omit<MyOffersProps, 'onCreateOffer'> & 
 
                   {/* Available Amount */}
                   <div>
-                    <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">Available Amount (USDC)</label>
+                    <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">Available Amount (USDT)</label>
                     <input
                       type="text"
                       inputMode="decimal"
@@ -867,20 +867,20 @@ function OfferCard({
         <div>
           <p className="text-[10px] text-foreground/35 mb-1">Rate</p>
           <p className="text-lg font-bold text-white">{offer.rate.toFixed(4)}</p>
-          <p className="text-[10px] text-foreground/35">AED/USDC</p>
+          <p className="text-[10px] text-foreground/35">AED/USDT</p>
         </div>
         <div>
           <p className="text-[10px] text-foreground/35 mb-1">Available</p>
           <p className="text-lg font-bold text-white">
             {offer.available_amount.toLocaleString()}
           </p>
-          <p className="text-[10px] text-foreground/35">USDC</p>
+          <p className="text-[10px] text-foreground/35">USDT</p>
         </div>
       </div>
 
       <div className="mt-3 pt-3 border-t border-white/[0.04] flex items-center justify-between text-[10px] text-foreground/35">
         <span>
-          Limits: {offer.min_amount.toLocaleString()} - {offer.max_amount.toLocaleString()} USDC
+          Limits: {offer.min_amount.toLocaleString()} - {offer.max_amount.toLocaleString()} USDT
         </span>
         <span>
           Updated {new Date(offer.updated_at).toLocaleDateString()}

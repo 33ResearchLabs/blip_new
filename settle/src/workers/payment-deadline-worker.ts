@@ -14,7 +14,7 @@
  *    Auto-cancels + refunds orders in 'disputed' past their dispute_auto_resolve_at.
  *
  * 4. Stuck On-Chain Escrow Refund (FUND SAFETY):
- *    For orders that expired/cancelled with USDC still locked on-chain,
+ *    For orders that expired/cancelled with USDT still locked on-chain,
  *    auto-submits a refundEscrow transaction using the backend signer.
  *    Requires BACKEND_SIGNER_KEYPAIR env var.
  *

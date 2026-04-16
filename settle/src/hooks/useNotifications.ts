@@ -75,7 +75,7 @@ export function useNotifications(merchantId: string | null, isLoggedIn: boolean)
               ORDER_DISPUTED: 'dispute',
             };
             const buildHistoryMsg = (n: any): string => {
-              const amt = n.crypto_amount ? `${parseFloat(n.crypto_amount).toLocaleString()} USDC` : '';
+              const amt = n.crypto_amount ? `${parseFloat(n.crypto_amount).toLocaleString()} USDT` : '';
               const fiat = n.fiat_amount ? `${parseFloat(n.fiat_amount).toLocaleString()} AED` : '';
               const user = n.user_name || '';
               const typeLabel = n.order_type === 'buy' ? 'Sell' : 'Buy';

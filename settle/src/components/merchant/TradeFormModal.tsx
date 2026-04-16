@@ -98,8 +98,8 @@ export function TradeFormModal({
                       }`}
                     >
                       <div className="flex flex-col items-center gap-1">
-                        <span>Sell USDC</span>
-                        <span className="text-[9px] text-foreground/35">You send USDC, get AED</span>
+                        <span>Sell USDT</span>
+                        <span className="text-[9px] text-foreground/35">You send USDT, get AED</span>
                       </div>
                     </button>
                     <button
@@ -111,16 +111,16 @@ export function TradeFormModal({
                       }`}
                     >
                       <div className="flex flex-col items-center gap-1">
-                        <span>Buy USDC</span>
-                        <span className="text-[9px] text-foreground/35">You send AED, get USDC</span>
+                        <span>Buy USDT</span>
+                        <span className="text-[9px] text-foreground/35">You send AED, get USDT</span>
                       </div>
                     </button>
                   </div>
                 </div>
 
-                {/* USDC Amount */}
+                {/* USDT Amount */}
                 <div>
-                  <label className="text-[11px] text-foreground/40 mb-1.5 block">USDC Amount</label>
+                  <label className="text-[11px] text-foreground/40 mb-1.5 block">USDT Amount</label>
                   <div className="relative">
                     <input
                       type="text"
@@ -133,12 +133,12 @@ export function TradeFormModal({
                       }}
                       className="w-full bg-white/[0.04] rounded-xl px-4 py-3 pr-16 text-sm font-medium outline-none placeholder:text-gray-600 focus:ring-1 focus:ring-white/20"
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-foreground/35">USDC</span>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-foreground/35">USDT</span>
                   </div>
                   {openTradeForm.tradeType === "sell" && effectiveBalance !== null && parseFloat(openTradeForm.cryptoAmount || "0") > effectiveBalance && (
                     <p className="text-[10px] text-red-400 mt-1 ml-1 flex items-center gap-1">
                       <AlertTriangle className="w-3 h-3" />
-                      Exceeds your wallet balance ({effectiveBalance.toLocaleString()} USDC)
+                      Exceeds your wallet balance ({effectiveBalance.toLocaleString()} USDT)
                     </p>
                   )}
                 </div>
@@ -255,12 +255,12 @@ export function TradeFormModal({
                     </div>
                     <div className="space-y-2 text-xs">
                       <div className="flex justify-between">
-                        <span className="text-foreground/35">USDC Amount</span>
-                        <span className="text-white">{parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDC</span>
+                        <span className="text-foreground/35">USDT Amount</span>
+                        <span className="text-white">{parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDT</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-foreground/35">Rate (est.)</span>
-                        <span className="text-white">3.67 AED/USDC</span>
+                        <span className="text-white">3.67 AED/USDT</span>
                       </div>
                       <div className="flex justify-between pt-2 border-t border-white/[0.04]">
                         <span className="text-foreground/40">AED Amount</span>
