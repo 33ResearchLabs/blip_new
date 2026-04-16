@@ -643,7 +643,8 @@ export default function MerchantSettingsPage() {
                   <label className="text-xs text-white/40 font-mono uppercase tracking-wider mb-2 block">Bio</label>
                   <textarea
                     value={bio}
-                    onChange={(e) => setBio(e.target.value.slice(0, 200))}
+                    onChange={(e) => setBio(e.target.value)}
+                    maxLength={200}
                     placeholder="Tell traders about yourself..."
                     rows={3}
                     className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 outline-none focus:border-primary/30 resize-none transition-colors"

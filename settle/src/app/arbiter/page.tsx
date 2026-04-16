@@ -594,6 +594,7 @@ export default function ArbiterDashboard() {
                     value={voteForm.reasoning}
                     onChange={(e) => setVoteForm(prev => ({ ...prev, reasoning: e.target.value }))}
                     placeholder="Explain your decision based on the evidence..."
+                    maxLength={2000}
                     className="w-full h-32 bg-white/[0.02] border border-white/[0.04] rounded-xl p-3 text-sm resize-none outline-none focus:border-purple-500/30"
                   />
                   <p className="text-xs text-gray-500 mt-1">

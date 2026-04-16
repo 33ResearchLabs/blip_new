@@ -473,6 +473,7 @@ export default function MonitorPage() {
                     placeholder="Search ID, user, merchant…"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    maxLength={100}
                     className="w-40 bg-transparent border-none text-xs text-foreground placeholder:text-foreground/20 focus:outline-none"
                   />
                 </div>

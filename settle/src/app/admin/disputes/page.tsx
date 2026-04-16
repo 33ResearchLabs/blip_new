@@ -229,6 +229,7 @@ export default function DisputesPage() {
                 <label className="text-[10px] text-foreground/30 font-mono uppercase tracking-wider mb-1.5 block">Username</label>
                 <input type="text" placeholder="admin" value={adminLoginForm.username}
                   onChange={(e) => setAdminLoginForm({ ...adminLoginForm, username: e.target.value })}
+                  maxLength={100}
                   className="w-full bg-card border border-border rounded-xl px-4 py-3 text-sm text-foreground font-mono placeholder:text-foreground/15 focus:border-primary/30 focus:outline-none transition-all" />
               </div>
               <div>
@@ -236,6 +237,7 @@ export default function DisputesPage() {
                 <input type="password" placeholder="••••••••" value={adminLoginForm.password}
                   onChange={(e) => setAdminLoginForm({ ...adminLoginForm, password: e.target.value })}
                   onKeyDown={(e) => e.key === "Enter" && handleAdminLogin()}
+                  maxLength={100}
                   className="w-full bg-card border border-border rounded-xl px-4 py-3 text-sm text-foreground font-mono placeholder:text-foreground/15 focus:border-primary/30 focus:outline-none transition-all" />
               </div>
               <button onClick={handleAdminLogin}

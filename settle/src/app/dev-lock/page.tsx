@@ -71,6 +71,7 @@ export default function DevLockPage() {
           placeholder="Password"
           autoFocus
           required
+          maxLength={100}
           style={{
             padding: '12px 16px',
             borderRadius: '8px',

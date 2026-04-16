@@ -216,6 +216,81 @@ Dual-mode: Redis-backed (distributed) with in-memory fallback.
 
 ---
 
+## Number & Currency Formatting
+
+ALL numeric values displayed to users MUST go through formatters from `@/lib/format`:
+
+```ts
+import { formatCrypto, formatFiat, formatRate, formatPercentage, formatCount } from '@/lib/format';
+
+formatCrypto(4960.325)          // "4,960.33"
+formatFiat(98000, 'INR')        // "₹98,000.00"
+formatFiat(1234.5, 'AED')       // "AED 1,234.50"
+formatRate(98.0)                // "98.0000"
+formatPercentage(2.5)           // "2.50%"
+formatCount(60)                 // "60"
+formatCount(1234)               // "1,234"
+formatCrypto(null)              // "—"
+formatCrypto(undefined)         // "—"
+```
+
+**Locale:** `en-US` is the only allowed locale. No `en-IN`, no browser default (`undefined`). This is enforced by the formatters — callers never specify a locale.
+
+**Precision table:**
+
+| Value type                              | Decimals | Formatter          |
+|-----------------------------------------|----------|--------------------|
+| Crypto amount / fiat / balance / fee    | 2        | `formatCrypto`, `formatFiat` |
+| Exchange rate                           | 4        | `formatRate`       |
+| Percentage (fee %, spread %)            | 2        | `formatPercentage` |
+| Count (trades, orders, users)           | 0        | `formatCount`      |
+
+**DO NOT:**
+- Use inline `.toLocaleString()` or `.toFixed()` in new code. Route through `@/lib/format`.
+- Use browser-default locale. Locale must be `en-US` explicitly.
+- Render raw `Number` values in JSX without a formatter (`{balance}` is wrong; `{formatCrypto(balance)}` is correct).
+- Invent new per-component `formatAmount` helpers. Extend `src/lib/format.ts` if a new shape is needed.
+
+**Migration note:** ~371 existing inline `.toLocaleString()` / `.toFixed()` call sites exist from before this rule. They are tech debt — when you touch a file, migrate that file's calls to `@/lib/format` as part of the same PR. Do NOT do a global migration in one commit.
+
+---
+
+## Input Field Max Limits
+
+EVERY `<input>` and `<textarea>` MUST have an upper bound on user input:
+- `<input type="text">` / `<input type="password">` / `<input type="email">` → `maxLength` attribute (characters)
+- `<input type="number">` → `max` attribute (value ceiling) AND `maxLength` (digit cap)
+- `<textarea>` → `maxLength` as an HTML attribute. NOT via `.slice()` in `onChange` (breaks paste & autofill).
+
+**Established limits — reuse these, don't invent new values:**
+
+| Field class                  | Limit               | Example                          |
+|------------------------------|---------------------|----------------------------------|
+| Amount (crypto/fiat)         | `maxLength={14}`    | TradeCreationScreen amount input |
+| OTP / PIN                    | `maxLength={6}`     | Merchant 2FA fields              |
+| Password                     | `maxLength={100}` (admin) / `{24}` (user) | Admin login / Merchant settings |
+| Short name                   | `maxLength={50}`    | display_name                     |
+| Long name                    | `maxLength={100}`   | business_name                    |
+| Bio                          | `maxLength={200}`   | Merchant settings bio            |
+| Phone                        | `maxLength={20}`    | International format             |
+| IBAN                         | `maxLength={34}`    | Bank account                     |
+| Wallet address               | `maxLength={44}`    | Solana base58                    |
+| Email                        | `maxLength={254}`   | RFC 5321 upper bound             |
+| Chat message                 | `maxLength={1000}`  | Trade chat                       |
+| Dispute / review / resolution| `maxLength={2000}`  | Long-form forms                  |
+| Search / filter              | `maxLength={100}`   | Admin list pages                 |
+
+**Server-side enforcement is in `src/lib/validation/schemas.ts` (Zod `.max()`).** The frontend `maxLength` MUST equal or be stricter than the matching Zod `.max()` — it's a belt-and-braces pair.
+
+**Global perimeter:** the middleware rejects any request body >100KB (`src/middleware.ts`). Individual field limits are the inner defense.
+
+**DO NOT:**
+- Use `.slice()` in `onChange` to enforce a cap. Use `maxLength` on the element itself.
+- Ship a new `<input>` / `<textarea>` without a limit. Reviewers must reject the PR.
+- Make the frontend `maxLength` looser than the Zod schema's `.max()`.
+
+---
+
 ## Security Guards (`src/lib/guards.ts`)
 
 In-memory sliding window trackers + DB persistence (`security_alerts` table):

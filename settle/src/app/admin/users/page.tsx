@@ -215,12 +215,14 @@ export default function AdminUsersPage() {
               <div>
                 <label className="text-[10px] text-foreground/30 font-mono uppercase tracking-wider mb-1.5 block">Username</label>
                 <input type="text" placeholder="admin" value={adminLoginForm.username} onChange={(e) => setAdminLoginForm({ ...adminLoginForm, username: e.target.value })}
+                  maxLength={100}
                   className="w-full bg-card border border-border rounded-xl px-4 py-3 text-sm text-foreground font-mono placeholder:text-foreground/25 focus:border-primary/30 focus:outline-none transition-all" />
               </div>
               <div>
                 <label className="text-[10px] text-foreground/30 font-mono uppercase tracking-wider mb-1.5 block">Password</label>
                 <input type="password" placeholder="••••••••" value={adminLoginForm.password} onChange={(e) => setAdminLoginForm({ ...adminLoginForm, password: e.target.value })}
                   onKeyDown={(e) => e.key === "Enter" && handleAdminLogin()}
+                  maxLength={100}
                   className="w-full bg-card border border-border rounded-xl px-4 py-3 text-sm text-foreground font-mono placeholder:text-foreground/25 focus:border-primary/30 focus:outline-none transition-all" />
               </div>
               <button onClick={handleAdminLogin} disabled={isAdminLoggingIn || !adminLoginForm.username || !adminLoginForm.password}
@@ -302,6 +304,7 @@ export default function AdminUsersPage() {
           <div className="relative flex-1 min-w-[140px] max-w-[220px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-foreground/25" />
             <input type="text" placeholder="Search name, email, wallet..." value={search} onChange={(e) => setSearch(e.target.value)}
+              maxLength={100}
               className="w-full bg-card border border-border rounded-md pl-7 pr-2 py-1.5 text-[10px] text-foreground/70 font-mono placeholder:text-foreground/25 focus:border-border-strong focus:outline-none" />
           </div>
 

@@ -331,6 +331,7 @@ export default function AccessControlPage() {
             placeholder="Search by name or ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            maxLength={100}
             className="w-full bg-card border border-border rounded-xl pl-10 pr-4 py-3 text-sm text-foreground font-mono placeholder:text-foreground/15 focus:border-primary/30 focus:outline-none focus:bg-card transition-all"
           />
         </div>
