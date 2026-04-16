@@ -33,6 +33,10 @@ import {
   InfoTooltip,
   type InfoTooltipItem,
 } from "@/components/shared/InfoTooltip";
+import {
+  useCorridorPrices,
+  resolveCorridorRef,
+} from "@/hooks/useCorridorPrices";
 
 interface PendingOrdersPanelProps {
   orders: any[];
@@ -149,6 +153,7 @@ const OrderList = memo(function OrderList({
   acceptingOrderId?: string | null;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const corridorPrices = useCorridorPrices();
 
   // Live tick — updates every second for countdown + fee decay
   const [now, setNow] = useState(Date.now());
@@ -439,19 +444,24 @@ const OrderList = memo(function OrderList({
             );
           }
 
-          // Premium = order rate vs the reference price captured when this
-          // order was created. Falls back to a corridor-aware default only
-          // when ref_price_at_create is missing (very old rows).
+          // Premium vs the LIVE per-corridor reference price (AED and INR
+          // have different price levels — AED ≈ 3.67, INR ≈ 83 — so we
+          // can't share a single fallback). Live price comes from the
+          // shared useCorridorPrices hook backed by /api/corridor/dynamic-rate.
+          // Falls through to the order's stored ref_price_at_create if live
+          // is unavailable.
+          const liveRef = resolveCorridorRef(
+            corridorPrices,
+            order.dbOrder?.corridor_id,
+            order.toCurrency || order.dbOrder?.fiat_currency,
+          );
           const storedRef = Number(order.dbOrder?.ref_price_at_create);
-          const fiat = order.toCurrency || order.dbOrder?.fiat_currency;
           const refPrice =
-            Number.isFinite(storedRef) && storedRef > 0
-              ? storedRef
-              : fiat === 'INR'
-                ? 83
-                : fiat === 'AED'
-                  ? 3.67
-                  : null;
+            liveRef && liveRef > 0
+              ? liveRef
+              : Number.isFinite(storedRef) && storedRef > 0
+                ? storedRef
+                : null;
           const premium =
             refPrice && order.rate
               ? ((order.rate - refPrice) / refPrice) * 100
@@ -991,6 +1001,11 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   hasMore = false,
   isLoadingMore = false,
 }: PendingOrdersPanelProps) {
+  // Live per-corridor reference prices for the "Premium" filter predicate.
+  // Shares the same module-level singleton as OrderList's hook call —
+  // only one polling loop runs.
+  const corridorPrices = useCorridorPrices();
+
   // ─── Filter/sort state from Zustand (no prop drilling) ───────────
   const searchQuery = useMerchantStore((s) => s.searchQuery);
   const setSearchQuery = useMerchantStore((s) => s.setSearchQuery);
@@ -1245,16 +1260,18 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       if ((order as any).isMempoolOrder) return true;
       if (pendingFilter === "mineable") return !!order.escrowTxHash;
       else if (pendingFilter === "premium") {
+        const liveRef = resolveCorridorRef(
+          corridorPrices,
+          order.dbOrder?.corridor_id,
+          order.toCurrency || order.dbOrder?.fiat_currency,
+        );
         const storedRef = Number(order.dbOrder?.ref_price_at_create);
-        const fiat = order.toCurrency || order.dbOrder?.fiat_currency;
         const refPrice =
-          Number.isFinite(storedRef) && storedRef > 0
-            ? storedRef
-            : fiat === 'INR'
-              ? 83
-              : fiat === 'AED'
-                ? 3.67
-                : null;
+          liveRef && liveRef > 0
+            ? liveRef
+            : Number.isFinite(storedRef) && storedRef > 0
+              ? storedRef
+              : null;
         if (!refPrice || !order.rate) return false;
         const premium = ((order.rate - refPrice) / refPrice) * 100;
         return premium > 0.5;

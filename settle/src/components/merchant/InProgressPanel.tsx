@@ -5,6 +5,7 @@ import { Shield, Zap, ChevronRight, ChevronDown, Flame, ArrowRight, Clock, XCirc
 import { CountdownRing } from './CountdownRing';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextActionFromStatus, MinimalStatus } from '@/lib/orders/statusResolver';
+import { useCorridorPrices, resolveCorridorRef } from '@/hooks/useCorridorPrices';
 
 interface InProgressPanelProps {
   orders: any[];
@@ -62,6 +63,8 @@ const InProgressOrderList = memo(function InProgressOrderList({
   merchantId?: string | null;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
+
+  const corridorPrices = useCorridorPrices();
 
   const virtualizer = useVirtualizer({
     count: orders.length,
@@ -225,21 +228,26 @@ const InProgressOrderList = memo(function InProgressOrderList({
                 <div className="flex items-center gap-1.5 mb-2">
                   <span className="text-[10px] text-foreground/40 font-mono">@ {(order.rate || 3.67).toFixed(2)}</span>
                   {(() => {
-                    // Premium = order rate vs the reference price captured when
-                    // this order was created. Falls back to a corridor-aware
-                    // default only when ref_price_at_create is missing (very
-                    // old rows). Skipping the badge entirely is better than
-                    // showing a fabricated number for unknown corridors.
+                    // Premium = how much this order's rate is above/below the
+                    // CURRENT per-corridor reference price. Live prices come
+                    // from /api/corridor/dynamic-rate (admin manual price, or
+                    // VWAP from corridor_prices) via the shared hook. Falls
+                    // back to the order's stored ref_price_at_create when live
+                    // is unavailable. No hardcoded constants — different fiat
+                    // corridors have different price levels (AED ≈ 3.67,
+                    // INR ≈ 83) and a single fallback breaks for the other.
+                    const liveRef = resolveCorridorRef(
+                      corridorPrices,
+                      order.dbOrder?.corridor_id,
+                      order.toCurrency || order.dbOrder?.fiat_currency,
+                    );
                     const storedRef = Number(order.dbOrder?.ref_price_at_create);
-                    const fiat = order.toCurrency || order.dbOrder?.fiat_currency;
                     const refPrice =
-                      Number.isFinite(storedRef) && storedRef > 0
-                        ? storedRef
-                        : fiat === 'INR'
-                          ? 83
-                          : fiat === 'AED'
-                            ? 3.67
-                            : null;
+                      liveRef && liveRef > 0
+                        ? liveRef
+                        : Number.isFinite(storedRef) && storedRef > 0
+                          ? storedRef
+                          : null;
                     const premium =
                       refPrice && order.rate
                         ? ((order.rate - refPrice) / refPrice) * 100
