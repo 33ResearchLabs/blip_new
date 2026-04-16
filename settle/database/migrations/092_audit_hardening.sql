@@ -55,10 +55,24 @@ ALTER TABLE order_events ADD COLUMN IF NOT EXISTS session_id TEXT NULL;
 -- by auditLog.ts. These indexes support the most common audit queries:
 --   - "show all events for order X"
 --   - "show all events by actor Y"
+--
+-- DEFENSIVE: wrapped in a DO block that checks the table exists first.
+-- Some environments skipped migration 049 (e.g. Railway where 049 never
+-- ran due to tracking drift), so we must not fail hard here — otherwise
+-- core-api startup pre-flight aborts the whole deploy. If the table is
+-- missing, auditLog.ts still works (it try/catch-swallows DB write
+-- failures), we just can't have the indexes until 049 is reconciled.
 
-CREATE INDEX IF NOT EXISTS idx_financial_audit_log_order
-  ON financial_audit_log (order_id, created_at DESC);
-
-CREATE INDEX IF NOT EXISTS idx_financial_audit_log_actor
-  ON financial_audit_log (actor_id, created_at DESC)
-  WHERE actor_id IS NOT NULL;
+DO $$
+BEGIN
+  IF to_regclass('public.financial_audit_log') IS NOT NULL THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_financial_audit_log_order
+             ON financial_audit_log (order_id, created_at DESC)';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_financial_audit_log_actor
+             ON financial_audit_log (actor_id, created_at DESC)
+             WHERE actor_id IS NOT NULL';
+  ELSE
+    RAISE NOTICE '[092] financial_audit_log table missing — skipping index creation (migration 049 did not run here)';
+  END IF;
+END
+$$;
