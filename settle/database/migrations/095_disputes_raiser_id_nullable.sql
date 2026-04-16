@@ -1,0 +1,47 @@
+-- Migration 095: Unblock UnhappyPath inactivity-escalation inserts
+--
+-- BACKGROUND:
+-- The UnhappyPath worker (apps/core-api/src/workers/unhappyPathWorker.ts)
+-- auto-escalates inactive orders to the `disputed` state and inserts a row
+-- into `disputes` with:
+--   raised_by = 'system'
+--   raiser_id = NULL
+--   reason    = 'non_responsive'::dispute_reason
+--
+-- Two problems show up in the field:
+--   1. `raiser_id` has a NOT NULL constraint → production error:
+--        [ERRO] null value in column "raiser_id" ... violates not-null constraint
+--   2. The `dispute_reason` enum may be missing the `non_responsive` value
+--      on some environments (local dev at minimum — enum has only
+--      payment_not_received / crypto_not_received / wrong_amount / fraud /
+--      other). Production appears to already have it (the NOT NULL error
+--      fires AFTER the enum cast), but we add it defensively so every
+--      environment agrees.
+--
+-- The column was historically NOT NULL because every dispute had a human
+-- raiser. With system-raised disputes (inactivity escalations, payment
+-- deadline auto-disputes, etc.), `raised_by='system'` already encodes the
+-- "no human raised this" semantic. Forcing a placeholder UUID would
+-- pollute the data; making the column nullable aligns the schema with
+-- the application's actual intent.
+--
+-- SAFETY:
+-- - Additive: loosening NOT NULL never breaks existing rows or INSERTs
+--   that already supply a value. Every non-system call site in the
+--   codebase continues to pass a real UUID and is unaffected.
+-- - No code currently dereferences a read `raiser_id` assuming non-null
+--   (verified via grep of all .raiser_id / dispute.raiser_id usages). The
+--   only consumer is a WHERE clause that naturally skips NULLs.
+-- - No foreign key on this column, so no cascade concerns.
+-- - ADD VALUE IF NOT EXISTS is idempotent (Postgres 9.6+).
+-- - ALTER COLUMN ... DROP NOT NULL is idempotent (silently succeeds if
+--   already nullable).
+
+-- 1. Relax NOT NULL on disputes.raiser_id so 'system'-raised disputes can insert.
+ALTER TABLE disputes ALTER COLUMN raiser_id DROP NOT NULL;
+
+-- 2. Ensure the enum has the value the worker uses.
+--    ADD VALUE must run OUTSIDE a transaction in some Postgres versions,
+--    but IF NOT EXISTS makes it safe: if it's already there, no-op; if
+--    not, it's added.
+ALTER TYPE dispute_reason ADD VALUE IF NOT EXISTS 'non_responsive';
