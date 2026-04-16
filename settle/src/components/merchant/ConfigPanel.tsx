@@ -215,8 +215,8 @@ export const ConfigPanel = memo(function ConfigPanel({
       setPmError("Name must be 2–60 chars (letters, digits, basic punctuation).");
       return;
     }
-    if (details.length > 200) {
-      setPmError("Details must be at most 200 characters.");
+    if (details.length > 100) {
+      setPmError("Details must be at most 100 characters.");
       return;
     }
     setPmError(null);
@@ -496,8 +496,8 @@ export const ConfigPanel = memo(function ConfigPanel({
               <input
                 type="text"
                 value={newPm.details}
-                maxLength={200}
-                onChange={(e) => { setPmError(null); setNewPm({ ...newPm, details: e.target.value.slice(0, 200) }); }}
+                maxLength={100}
+                onChange={(e) => { setPmError(null); setNewPm({ ...newPm, details: e.target.value.slice(0, 100) }); }}
                 placeholder="Details (account/IBAN/UPI — optional)"
                 className="w-full px-2 py-1.5 text-[11px] bg-foreground/[0.03] border border-foreground/[0.08] rounded text-foreground placeholder:text-foreground/20 outline-none focus:border-primary/30"
               />
