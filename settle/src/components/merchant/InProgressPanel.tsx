@@ -6,6 +6,21 @@ import { CountdownRing } from './CountdownRing';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextActionFromStatus, MinimalStatus } from '@/lib/orders/statusResolver';
 import { useCorridorPrices, resolveCorridorRef } from '@/hooks/useCorridorPrices';
+import { InfoTooltip, type InfoTooltipItem } from '@/components/shared/InfoTooltip';
+
+// Rule badge content for the "In Progress" header. Items labels are kept
+// short so they fit the 52px min-width label column in InfoTooltip, with
+// the expanded explanation in the value column. Source: CLAUDE.md order
+// lifecycle + expiration rules — kept in sync there, so don't change
+// timings here without updating the state machine notes.
+const IN_PROGRESS_RULES: InfoTooltipItem[] = [
+  { label: 'BUY', value: 'You send fiat → receive USDT. Seller locks escrow first; you then mark payment sent and wait for seller to release.' },
+  { label: 'SELL', value: 'You lock USDT in escrow first. Wait for fiat in your account, then confirm payment to release USDT.' },
+  { label: 'PENDING', value: 'Auto-expires 15 min after creation if no one accepts. No funds at risk.' },
+  { label: 'ACCEPTED', value: 'You have 2 hours from accept to lock escrow (if seller) or send payment (if buyer). Auto-cancels otherwise.' },
+  { label: 'PAID', value: 'After "payment sent", seller has 24 h to confirm. Auto-moves to dispute for compliance review if not confirmed.' },
+  { label: 'DISPUTED', value: 'Auto-resolves and refunds escrow to the funder after 24 h if no compliance action.' },
+];
 
 interface InProgressPanelProps {
   orders: any[];
@@ -440,6 +455,18 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
             <h2 className="text-[10px] font-bold text-foreground/60 font-mono tracking-wider uppercase">
               In Progress
             </h2>
+            {/* Info badge — click/hover for buy/sell flow + expiry rules.
+                stopPropagation so the tooltip button doesn't collapse the
+                panel. */}
+            <span onClick={(e) => e.stopPropagation()}>
+              <InfoTooltip
+                title="In Progress — rules"
+                description="Your role (buyer vs seller) and the auto-timeout at each stage."
+                items={IN_PROGRESS_RULES}
+                side="bottom"
+                size="xs"
+              />
+            </span>
           </div>
           <span className="text-[10px] border border-foreground/[0.08] text-foreground/50 px-1.5 py-0.5 rounded-full font-mono tabular-nums">
             {filteredOrders.length}{statusFilter !== 'all' ? `/${orders.length}` : ''}
