@@ -36,7 +36,7 @@ import {
   ORDER_ACTIONS,
   type OrderAction,
 } from '@/lib/orders/handleOrderAction';
-import { denormalizeStatus } from '@/lib/orders/statusNormalizer';
+import { denormalizeStatus, normalizeStatus } from '@/lib/orders/statusNormalizer';
 import { guardOrderClaim, guardPaymentRetry } from '@/lib/guards';
 import { fireInstantNotification } from '@/lib/notifications/instantNotify';
 import { invalidateOrderCache, updateOrderCache, invalidateMerchantOrderListCache } from '@/lib/cache';
@@ -150,8 +150,25 @@ export async function POST(
         currentStatus: order.status,
       });
 
+      // Include current_state (minimal 8-state) + allowed_actions so the
+      // frontend can recover gracefully (show the right buttons instead of
+      // guessing). Wrapped in try/catch — enrichment failure must never mask
+      // the original error.
+      let currentState: string = order.status;
+      let allowedActions: string[] = [];
+      try {
+        currentState = normalizeStatus(order.status as any);
+        allowedActions = getAllowedActions(order, actor_id);
+      } catch { /* swallow — don't break primary error response */ }
+
       return NextResponse.json(
-        { success: false, error: result.error, code: result.code },
+        {
+          success: false,
+          error: result.error,
+          code: result.code,
+          current_state: currentState,
+          allowed_actions: allowedActions,
+        },
         { status: 400 }
       );
     }
@@ -267,7 +284,12 @@ export async function POST(
 
     // ── CONFIRM_PAYMENT: confirm + release escrow (two-step atomic via core-api) ──
     if (action === 'CONFIRM_PAYMENT') {
-      const idempotencyKey = getIdempotencyKey(request) || `${id}:confirm:${actor_id}:${Date.now()}`;
+      // Auto-key uses a 30-second time window so genuine double-clicks (within seconds)
+      // collapse to ONE execution and return the cached result, while genuine retries
+      // after the window naturally generate a fresh key. Explicit Idempotency-Key
+      // header from client always takes precedence.
+      const window30s = Math.floor(Date.now() / 30000);
+      const idempotencyKey = getIdempotencyKey(request) || `${id}:confirm:${actor_id}:${window30s}`;
 
       const idempotencyResult = await withIdempotency(
         idempotencyKey,
@@ -293,6 +315,7 @@ export async function POST(
       }
 
       // Instant notification — fire immediately so UI sees completion without waiting for outbox poll
+      let enrichedConfirm: Record<string, unknown> | undefined;
       if (idempotencyResult.statusCode >= 200 && idempotencyResult.statusCode < 300) {
         const respOrder = idempotencyResult.data?.order || idempotencyResult.data;
         fireInstantNotification({
@@ -309,10 +332,26 @@ export async function POST(
         // Write-through cache update
         if (respOrder) { updateOrderCache(id, respOrder); invalidateMerchantOrderListCache(order.merchant_id); }
         else { invalidateOrderCache(id); invalidateMerchantOrderListCache(order.merchant_id); }
+
+        // Safe enrichment — never throws. If respOrder is incomplete or
+        // enrichment errors, response falls back to original shape (zero
+        // regression). Spread BEFORE idempotencyResult.data so core-api
+        // fields always take precedence on any field collision.
+        try {
+          if (respOrder?.id && respOrder?.status && respOrder?.type) {
+            enrichedConfirm = enrichOrderResponse(respOrder, actor_id) as unknown as Record<string, unknown>;
+          }
+        } catch (enrichErr) {
+          logger.warn('[Action] Enrichment failed for CONFIRM_PAYMENT (non-fatal)', {
+            orderId: id,
+            error: enrichErr instanceof Error ? enrichErr.message : String(enrichErr),
+          });
+        }
       }
 
       return NextResponse.json(
         {
+          ...(enrichedConfirm ?? {}),
           ...idempotencyResult.data,
           action,
           previousStatus: order.status,
@@ -491,7 +530,11 @@ export async function POST(
     };
 
     if (isFinancial) {
-      const key = idempotencyKey || `${id}:${action}:${actor_id}:${Date.now()}`;
+      // 30-second time window — collapses double-clicks to one execution but
+      // allows genuine retries after the window. Client-provided Idempotency-Key
+      // (if present) overrides this.
+      const window30s = Math.floor(Date.now() / 30000);
+      const key = idempotencyKey || `${id}:${action}:${actor_id}:${window30s}`;
       const idempotencyResult = await withIdempotency(key, 'payment_sent', id, executeTransition);
 
       if (idempotencyResult.cached) {
@@ -499,6 +542,7 @@ export async function POST(
       }
 
       // Instant notification for SEND_PAYMENT
+      let enrichedSendPayment: Record<string, unknown> | undefined;
       if (idempotencyResult.statusCode >= 200 && idempotencyResult.statusCode < 300) {
         const respOrder = idempotencyResult.data?.order || idempotencyResult.data;
         fireInstantNotification({
@@ -514,10 +558,24 @@ export async function POST(
         });
         if (respOrder) { updateOrderCache(id, respOrder); invalidateMerchantOrderListCache(order.merchant_id); }
         else { invalidateOrderCache(id); invalidateMerchantOrderListCache(order.merchant_id); }
+
+        // Safe enrichment — see CONFIRM_PAYMENT for rationale. Falls back
+        // to original shape if respOrder is incomplete or enrichment throws.
+        try {
+          if (respOrder?.id && respOrder?.status && respOrder?.type) {
+            enrichedSendPayment = enrichOrderResponse(respOrder, actor_id) as unknown as Record<string, unknown>;
+          }
+        } catch (enrichErr) {
+          logger.warn('[Action] Enrichment failed for SEND_PAYMENT (non-fatal)', {
+            orderId: id,
+            error: enrichErr instanceof Error ? enrichErr.message : String(enrichErr),
+          });
+        }
       }
 
       return NextResponse.json(
         {
+          ...(enrichedSendPayment ?? {}),
           ...idempotencyResult.data,
           action,
           previousStatus: order.status,
@@ -530,6 +588,7 @@ export async function POST(
     const transitionResult = await executeTransition();
 
     // Instant notification for non-financial transitions
+    let enrichedTransition: Record<string, unknown> | undefined;
     if (transitionResult.statusCode >= 200 && transitionResult.statusCode < 300) {
       const respOrder = transitionResult.data?.order || transitionResult.data;
       fireInstantNotification({
@@ -545,6 +604,20 @@ export async function POST(
       });
       if (respOrder) { updateOrderCache(id, respOrder); invalidateMerchantOrderListCache(order.merchant_id); }
       else { invalidateOrderCache(id); invalidateMerchantOrderListCache(order.merchant_id); }
+
+      // Safe enrichment — see CONFIRM_PAYMENT for rationale. Falls back
+      // to original shape if respOrder is incomplete or enrichment throws.
+      try {
+        if (respOrder?.id && respOrder?.status && respOrder?.type) {
+          enrichedTransition = enrichOrderResponse(respOrder, actor_id) as unknown as Record<string, unknown>;
+        }
+      } catch (enrichErr) {
+        logger.warn('[Action] Enrichment failed for ACCEPT/DISPUTE (non-fatal)', {
+          orderId: id,
+          action,
+          error: enrichErr instanceof Error ? enrichErr.message : String(enrichErr),
+        });
+      }
     }
 
     // Invalidate caches for ALL involved merchants (order creator + actor + buyer)
@@ -557,6 +630,7 @@ export async function POST(
 
     return NextResponse.json(
       {
+        ...(enrichedTransition ?? {}),
         ...transitionResult.data,
         action,
         previousStatus: order.status,

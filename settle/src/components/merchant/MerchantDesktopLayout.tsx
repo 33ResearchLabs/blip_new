@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Group as PanelGroup,
   Panel,
@@ -122,6 +122,23 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     playSound,
   } = props;
 
+  // Real-time "locked in escrow" total — sums crypto amounts for ongoing
+  // orders where THIS merchant is the escrow funder (seller role, own
+  // merchant id, or explicitly is-my-order). Previously hardcoded to 245.5
+  // which showed the same fake value to every merchant.
+  // Defensive: silently ignores orders with non-finite amounts.
+  const lockedInEscrow = useMemo(() => {
+    return ongoingOrders.reduce((sum, o) => {
+      const isEscrowFunder =
+        o.isMyOrder === true ||
+        o.myRole === 'seller' ||
+        (merchantId != null && o.orderMerchantId === merchantId);
+      if (!isEscrowFunder) return sum;
+      const amt = typeof o.amount === 'number' ? o.amount : 0;
+      return Number.isFinite(amt) ? sum + amt : sum;
+    }, 0);
+  }, [ongoingOrders, merchantId]);
+
   return (
     <div className="hidden md:flex md:flex-col h-screen overflow-hidden">
       <PanelGroup
@@ -144,7 +161,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 completedOrders={completedOrders.length}
                 cancelledOrders={cancelledOrders.length}
                 balance={effectiveBalance || 0}
-                lockedInEscrow={245.5}
+                lockedInEscrow={lockedInEscrow}
                 isOnline={isMerchantOnline}
                 merchantId={merchantId || undefined}
                 activeCorridor={activeCorridor}

@@ -614,12 +614,24 @@ export default function MerchantDashboard() {
     });
   }, [orders, merchantId]);
 
+  // Earnings displayed under the "24h" badge on the dashboard. Only counts
+  // orders that actually completed within the last 24 hours (the prior
+  // implementation summed every completed order the merchant had ever done,
+  // which contradicted the "24h" label). Falls back to the order's top-level
+  // timestamp when dbOrder is unavailable. Defensive: any parsing failure
+  // silently excludes that order rather than crashing the dashboard.
   const todayEarnings = useMemo(
-    () =>
-      completedOrders.reduce(
-        (sum, o) => sum + o.amount * TRADER_CUT_CONFIG.best,
-        0,
-      ),
+    () => {
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      return completedOrders.reduce((sum, o) => {
+        const completedAt = o.dbOrder?.completed_at
+          || (o.timestamp instanceof Date ? o.timestamp.toISOString() : undefined);
+        if (!completedAt) return sum;
+        const t = new Date(completedAt).getTime();
+        if (!Number.isFinite(t) || t < cutoff) return sum;
+        return sum + o.amount * TRADER_CUT_CONFIG.best;
+      }, 0);
+    },
     [completedOrders],
   );
   const totalTradedVolume = useMemo(
