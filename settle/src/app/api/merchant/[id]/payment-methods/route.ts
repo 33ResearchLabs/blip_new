@@ -73,18 +73,37 @@ export async function POST(
     const body = await request.json();
     const { type, name, details, is_default } = body;
 
-    // Validate
+    // Validate. Matches the client-side rules in PaymentMethodModal.tsx so
+    // a crafted request can't smuggle junk past the UI.
     const errors: string[] = [];
-    if (!type || !VALID_TYPES.includes(type)) errors.push(`type must be one of: ${VALID_TYPES.join(', ')}`);
-    if (!name || typeof name !== 'string' || name.length > 200) errors.push('name is required (max 200 chars)');
-    if (details !== undefined && typeof details !== 'string') errors.push('details must be a string');
+    if (!type || !VALID_TYPES.includes(type)) {
+      errors.push(`type must be one of: ${VALID_TYPES.join(', ')}`);
+    }
+    const nameStr = typeof name === 'string' ? name.trim() : '';
+    const detailsStr = typeof details === 'string' ? details.trim() : '';
+    if (!nameStr || nameStr.length < 2 || nameStr.length > 60) {
+      errors.push('name must be 2–60 characters');
+    } else if (!/^[A-Za-z0-9 &.,'\-()/]+$/.test(nameStr)) {
+      errors.push('name contains unsupported characters');
+    }
+    if (details !== undefined && typeof details !== 'string') {
+      errors.push('details must be a string');
+    } else if (detailsStr.length > 200) {
+      errors.push('details must be at most 200 characters');
+    }
+    // Per-type content sanity on details. Details is a composed string
+    // (e.g. "Name - 1234567890 (IBAN)") so we check it contains at least
+    // something meaningful and isn't a wall of one repeated character.
+    if (detailsStr && /^(.)\1{19,}$/.test(detailsStr)) {
+      errors.push('details looks like filler (one character repeated)');
+    }
     if (errors.length > 0) return validationErrorResponse(errors);
 
     const method = await addMerchantPaymentMethod({
       merchant_id: id,
       type,
-      name,
-      details: details || '',
+      name: nameStr,
+      details: detailsStr,
       is_default: !!is_default,
     });
 

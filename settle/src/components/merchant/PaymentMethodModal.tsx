@@ -29,6 +29,54 @@ const PAYMENT_METHOD_TYPES = [
 
 const inputClass = "w-full px-4 py-2.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-[13px] text-white placeholder:text-white/20 focus:outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all";
 
+// Per-field validation. Rejects junk like "kdnfsnjakmokpdijjnewoekfwpolm..."
+// or a 40-digit "account number". Length caps match the server (route.ts)
+// so the same rules apply whether the input comes from this modal or anywhere
+// else. Keep patterns permissive enough for real-world inputs (Arabic/Hindi
+// names transliterated, bank names with & . - ' ( ) / etc.).
+const NAME_RE = /^[A-Za-z0-9 &.,'\-()/]{2,60}$/;
+const PERSON_RE = /^[A-Za-z .'\-]{2,60}$/;
+const DIGITS_RE = /^\d+$/;
+const IBAN_RE = /^[A-Z0-9]{15,34}$/;
+const SWIFT_RE = /^[A-Z0-9]{8}([A-Z0-9]{3})?$/;
+const WALLET_RE = /^[A-Za-z0-9]{20,100}$/;
+const PHONE_RE = /^\+?\d{7,15}$/;
+
+function trimAll<T extends Record<string, string>>(obj: T): T {
+  const out: Record<string, string> = {};
+  for (const k of Object.keys(obj)) out[k] = String(obj[k] ?? '').trim();
+  return out as T;
+}
+
+function validateBank(f: { bankName: string; accountName: string; accountNumber: string; iban: string; swiftCode: string }): string | null {
+  if (!NAME_RE.test(f.bankName)) return 'Bank name must be 2–60 chars (letters, numbers, basic punctuation).';
+  if (!PERSON_RE.test(f.accountName)) return 'Account holder name must be 2–60 letters.';
+  if (!DIGITS_RE.test(f.accountNumber) || f.accountNumber.length < 4 || f.accountNumber.length > 24) {
+    return 'Account number must be 4–24 digits.';
+  }
+  if (f.iban && !IBAN_RE.test(f.iban.toUpperCase())) return 'IBAN must be 15–34 uppercase letters/digits.';
+  if (f.swiftCode && !SWIFT_RE.test(f.swiftCode.toUpperCase())) return 'SWIFT code must be 8 or 11 letters/digits.';
+  return null;
+}
+function validateCrypto(addr: string): string | null {
+  if (!WALLET_RE.test(addr)) return 'Wallet address must be 20–100 alphanumeric characters.';
+  return null;
+}
+function validateCard(f: { cardholderName: string; cardNumber: string }): string | null {
+  if (!PERSON_RE.test(f.cardholderName)) return 'Cardholder name must be 2–60 letters.';
+  if (!DIGITS_RE.test(f.cardNumber) || f.cardNumber.length !== 4) return 'Enter the last 4 digits of the card.';
+  return null;
+}
+function validateMobile(f: { mobileProvider: string; mobileNumber: string }): string | null {
+  if (f.mobileProvider.length < 2 || f.mobileProvider.length > 30) return 'Provider name must be 2–30 chars.';
+  if (!PHONE_RE.test(f.mobileNumber)) return 'Mobile number must be 7–15 digits (optional leading +).';
+  return null;
+}
+function validateCash(location: string): string | null {
+  if (location.length < 5 || location.length > 120) return 'Location must be 5–120 characters.';
+  return null;
+}
+
 export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMethodModalProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedType, setSelectedType] = useState<'bank' | 'cash' | 'crypto' | 'card' | 'mobile'>('bank');
@@ -95,38 +143,61 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
     setError(null);
 
     try {
+      // Trim before validating so trailing spaces don't squeak past length caps.
+      const f = trimAll(formData);
       let name = '';
       let details = '';
 
       switch (selectedType) {
-        case 'bank':
-          if (!formData.bankName || !formData.accountName || !formData.accountNumber) {
+        case 'bank': {
+          if (!f.bankName || !f.accountName || !f.accountNumber) {
             throw new Error('Please fill in all bank details');
           }
-          name = formData.bankName;
-          details = `${formData.accountName} - ${formData.accountNumber}`;
-          if (formData.iban) details += ` (${formData.iban})`;
+          const err = validateBank({
+            bankName: f.bankName,
+            accountName: f.accountName,
+            accountNumber: f.accountNumber,
+            iban: f.iban,
+            swiftCode: f.swiftCode,
+          });
+          if (err) throw new Error(err);
+          name = f.bankName;
+          details = `${f.accountName} - ${f.accountNumber}`;
+          if (f.iban) details += ` (${f.iban.toUpperCase()})`;
           break;
-        case 'cash':
-          if (!formData.location) throw new Error('Please specify meeting location');
+        }
+        case 'cash': {
+          if (!f.location) throw new Error('Please specify meeting location');
+          const err = validateCash(f.location);
+          if (err) throw new Error(err);
           name = 'Cash Meeting';
-          details = formData.location;
+          details = f.location;
           break;
-        case 'crypto':
-          if (!formData.walletAddress) throw new Error('Please provide wallet address');
+        }
+        case 'crypto': {
+          if (!f.walletAddress) throw new Error('Please provide wallet address');
+          const err = validateCrypto(f.walletAddress);
+          if (err) throw new Error(err);
           name = 'Crypto Wallet';
-          details = formData.walletAddress;
+          details = f.walletAddress;
           break;
-        case 'card':
-          if (!formData.cardNumber || !formData.cardholderName) throw new Error('Please provide card details');
+        }
+        case 'card': {
+          if (!f.cardNumber || !f.cardholderName) throw new Error('Please provide card details');
+          const err = validateCard({ cardholderName: f.cardholderName, cardNumber: f.cardNumber });
+          if (err) throw new Error(err);
           name = 'Card Payment';
-          details = `${formData.cardholderName} - **** ${formData.cardNumber.slice(-4)}`;
+          details = `${f.cardholderName} - **** ${f.cardNumber.slice(-4)}`;
           break;
-        case 'mobile':
-          if (!formData.mobileNumber || !formData.mobileProvider) throw new Error('Please provide mobile payment details');
-          name = formData.mobileProvider;
-          details = formData.mobileNumber;
+        }
+        case 'mobile': {
+          if (!f.mobileNumber || !f.mobileProvider) throw new Error('Please provide mobile payment details');
+          const err = validateMobile({ mobileProvider: f.mobileProvider, mobileNumber: f.mobileNumber });
+          if (err) throw new Error(err);
+          name = f.mobileProvider;
+          details = f.mobileNumber;
           break;
+        }
       }
 
       // Persist to API
@@ -200,47 +271,47 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
       case 'bank':
         return (
           <div className="space-y-2.5">
-            <input type="text" placeholder="Bank Name (e.g., Emirates NBD)" value={formData.bankName}
+            <input type="text" placeholder="Bank Name (e.g., Emirates NBD)" value={formData.bankName} maxLength={60}
               onChange={(e) => setFormData({ ...formData, bankName: e.target.value })} className={inputClass} />
-            <input type="text" placeholder="Account Holder Name" value={formData.accountName}
+            <input type="text" placeholder="Account Holder Name" value={formData.accountName} maxLength={60}
               onChange={(e) => setFormData({ ...formData, accountName: e.target.value })} className={inputClass} />
-            <input type="text" placeholder="Account Number" value={formData.accountNumber}
-              onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })} className={inputClass} />
+            <input type="text" inputMode="numeric" pattern="\d*" placeholder="Account Number (4–24 digits)" value={formData.accountNumber} maxLength={24}
+              onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value.replace(/\D/g, '') })} className={inputClass} />
             <div className="grid grid-cols-2 gap-2.5">
-              <input type="text" placeholder="IBAN (Optional)" value={formData.iban}
-                onChange={(e) => setFormData({ ...formData, iban: e.target.value })} className={inputClass} />
-              <input type="text" placeholder="SWIFT Code (Optional)" value={formData.swiftCode}
-                onChange={(e) => setFormData({ ...formData, swiftCode: e.target.value })} className={inputClass} />
+              <input type="text" placeholder="IBAN (Optional)" value={formData.iban} maxLength={34}
+                onChange={(e) => setFormData({ ...formData, iban: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} className={inputClass} />
+              <input type="text" placeholder="SWIFT Code (Optional)" value={formData.swiftCode} maxLength={11}
+                onChange={(e) => setFormData({ ...formData, swiftCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} className={inputClass} />
             </div>
           </div>
         );
       case 'cash':
         return (
-          <textarea placeholder="Meeting Location (e.g., Dubai Mall, Burj Khalifa entrance)" value={formData.location}
+          <textarea placeholder="Meeting Location (e.g., Dubai Mall, Burj Khalifa entrance)" value={formData.location} maxLength={120}
             onChange={(e) => setFormData({ ...formData, location: e.target.value })} rows={3}
             className={`${inputClass} resize-none`} />
         );
       case 'crypto':
         return (
-          <input type="text" placeholder="Wallet Address (e.g., 0x...)" value={formData.walletAddress}
-            onChange={(e) => setFormData({ ...formData, walletAddress: e.target.value })} className={`${inputClass} font-mono text-[12px]`} />
+          <input type="text" placeholder="Wallet Address (e.g., 0x...)" value={formData.walletAddress} maxLength={100}
+            onChange={(e) => setFormData({ ...formData, walletAddress: e.target.value.replace(/[^A-Za-z0-9]/g, '') })} className={`${inputClass} font-mono text-[12px]`} />
         );
       case 'card':
         return (
           <div className="space-y-2.5">
-            <input type="text" placeholder="Cardholder Name" value={formData.cardholderName}
+            <input type="text" placeholder="Cardholder Name" value={formData.cardholderName} maxLength={60}
               onChange={(e) => setFormData({ ...formData, cardholderName: e.target.value })} className={inputClass} />
-            <input type="text" placeholder="Last 4 digits" value={formData.cardNumber}
-              onChange={(e) => setFormData({ ...formData, cardNumber: e.target.value })} maxLength={4} className={inputClass} />
+            <input type="text" inputMode="numeric" pattern="\d*" placeholder="Last 4 digits" value={formData.cardNumber}
+              onChange={(e) => setFormData({ ...formData, cardNumber: e.target.value.replace(/\D/g, '') })} maxLength={4} className={inputClass} />
           </div>
         );
       case 'mobile':
         return (
           <div className="space-y-2.5">
-            <input type="text" placeholder="Provider (e.g., PayTM, Google Pay)" value={formData.mobileProvider}
+            <input type="text" placeholder="Provider (e.g., PayTM, Google Pay)" value={formData.mobileProvider} maxLength={30}
               onChange={(e) => setFormData({ ...formData, mobileProvider: e.target.value })} className={inputClass} />
-            <input type="text" placeholder="Mobile Number" value={formData.mobileNumber}
-              onChange={(e) => setFormData({ ...formData, mobileNumber: e.target.value })} className={inputClass} />
+            <input type="tel" inputMode="tel" placeholder="Mobile Number (e.g., +971501234567)" value={formData.mobileNumber} maxLength={16}
+              onChange={(e) => setFormData({ ...formData, mobileNumber: e.target.value.replace(/[^\d+]/g, '') })} className={inputClass} />
           </div>
         );
     }
