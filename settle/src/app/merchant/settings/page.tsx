@@ -952,20 +952,20 @@ export default function MerchantSettingsPage() {
                       return (
                         <div
                           key={method.id}
-                          className={`rounded-2xl border p-4 transition-colors ${
+                          className={`rounded-2xl border p-4 transition-colors overflow-hidden ${
                             method.is_default
                               ? 'bg-gradient-to-r from-primary/[0.06] to-transparent border-primary/20'
                               : 'bg-white/[0.02] border-white/[0.06]'
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
                               <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${meta.gradient} border ${meta.border} flex items-center justify-center shrink-0`}>
                                 <Icon className={`w-5 h-5 ${meta.text}`} />
                               </div>
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="text-sm font-medium text-white/80 truncate">{method.name}</p>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <p className="text-sm font-medium text-white/80 truncate min-w-0">{method.name}</p>
                                   <span className="text-[9px] font-bold font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.06] text-white/40">
                                     {meta.label}
                                   </span>

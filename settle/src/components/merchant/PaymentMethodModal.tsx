@@ -393,7 +393,7 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: i * 0.05 }}
-                          className={`group relative p-3.5 rounded-xl border transition-all ${
+                          className={`group relative p-3.5 rounded-xl border transition-all overflow-hidden ${
                             method.is_default
                               ? 'bg-gradient-to-r from-primary/[0.06] to-transparent border-primary/20'
                               : 'bg-white/[0.02] border-white/[0.06] hover:border-border-strong'
@@ -404,8 +404,8 @@ export function PaymentMethodModal({ isOpen, onClose, merchantId }: PaymentMetho
                               <Icon className={`w-5 h-5 ${methodType?.text || 'text-white/60'}`} />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="text-[13px] font-semibold text-white">{method.name}</p>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <p className="text-[13px] font-semibold text-white truncate min-w-0">{method.name}</p>
                                 {method.is_default && (
                                   <span className="flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 border border-primary/20 rounded-md">
                                     <Star className="w-2.5 h-2.5 text-primary fill-primary" />
