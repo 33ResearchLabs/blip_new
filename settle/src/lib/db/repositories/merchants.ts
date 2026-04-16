@@ -118,6 +118,7 @@ export function serializeMerchant(merchant: {
   balance?: number;
   has_ops_access?: boolean;
   has_compliance_access?: boolean;
+  tour_completed_at?: string | Date | null;
 }): Record<string, unknown> {
   const dto: Record<string, unknown> = {
     id: merchant.id,
@@ -135,6 +136,13 @@ export function serializeMerchant(merchant: {
   if (merchant.balance !== undefined) dto.balance = parseFloat(String(merchant.balance)) || 0;
   if (merchant.has_ops_access !== undefined) dto.has_ops_access = merchant.has_ops_access || false;
   if (merchant.has_compliance_access !== undefined) dto.has_compliance_access = merchant.has_compliance_access || false;
+  // Tour completion — null means "never completed" so the frontend shows the tour.
+  // Present in every response so the client can invalidate its localStorage flag
+  // if it goes out of sync with the DB (e.g. admin reset, account migration).
+  if (merchant.tour_completed_at !== undefined) {
+    const v = merchant.tour_completed_at;
+    dto.tour_completed_at = v == null ? null : (v instanceof Date ? v.toISOString() : String(v));
+  }
   return dto;
 }
 

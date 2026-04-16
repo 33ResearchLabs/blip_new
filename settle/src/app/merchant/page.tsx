@@ -50,8 +50,14 @@ export default function MerchantDashboard() {
   const isLoggedIn = useMerchantStore((s) => s.isLoggedIn);
   const isLoading = useMerchantStore((s) => s.isLoading);
 
-  // Onboarding tour — env-controlled, shows once per merchant on first login
-  const tour = useMerchantTour(merchantId);
+  // Onboarding tour — env-controlled, shows once per merchant on first login.
+  // Pass DB completion timestamp so the hook can suppress the tour across
+  // browsers / incognito / cleared localStorage. Falls back to localStorage
+  // for legacy users who completed before DB persistence shipped.
+  const tour = useMerchantTour(
+    merchantId,
+    (merchantInfo as { tour_completed_at?: string | null } | null)?.tour_completed_at,
+  );
 
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showWalletPrompt, setShowWalletPrompt] = useState(false);
@@ -332,6 +338,7 @@ export default function MerchantDashboard() {
       refreshBalance,
       playSound,
       addNotification,
+      toast,
       chatWindows: [],
       activeChatId,
       messagesEndRef,

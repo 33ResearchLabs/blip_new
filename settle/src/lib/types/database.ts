@@ -95,6 +95,10 @@ export interface Merchant {
   cancelled_orders: number;
   dispute_count: number;
   avg_completion_time_ms: number | null;
+  /** Null while onboarding tour has not been completed; set to the ISO
+   *  timestamp when the merchant dismisses / finishes the tour.
+   *  Null-safe by design — see migration 096. */
+  tour_completed_at: string | null;
   created_at: Date;
   updated_at: Date;
 }
