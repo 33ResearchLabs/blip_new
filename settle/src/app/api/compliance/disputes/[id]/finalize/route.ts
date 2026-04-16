@@ -73,20 +73,49 @@ export async function POST(
       );
     }
 
-    // Verify compliance member exists
-    const complianceResult = await query(
+    // Resolve the actor for audit-log attribution.
+    //
+    // The hasComplianceAccess() gate above already proved the caller has
+    // compliance authority — they are EITHER a compliance_team member OR
+    // a merchant with has_compliance_access=true. The complianceId in the
+    // body identifies which one and is what gets recorded in the audit
+    // trail (resolved_by / "FINALIZED by …").
+    //
+    // The original implementation only looked up compliance_team and 403'd
+    // when the id wasn't there, so merchants with compliance access (e.g.
+    // gorav_researchl) couldn't finalize disputes even though they passed
+    // the auth gate. Fall back to the merchants table for those callers.
+    let complianceMember: { id: string; name: string; role: string } | null = null;
+
+    const teamResult = await query(
       `SELECT id, name, role FROM compliance_team WHERE id = $1 AND is_active = true`,
       [complianceId]
     );
+    if (teamResult.length > 0) {
+      complianceMember = teamResult[0] as { id: string; name: string; role: string };
+    } else {
+      // Fallback: merchant acting in a compliance capacity.
+      const merchantResult = await query(
+        `SELECT id, display_name FROM merchants
+         WHERE id = $1 AND status = 'active' AND has_compliance_access = true`,
+        [complianceId]
+      );
+      if (merchantResult.length > 0) {
+        const m = merchantResult[0] as { id: string; display_name: string };
+        complianceMember = {
+          id: m.id,
+          name: m.display_name,
+          role: 'merchant_compliance', // Distinguishes them from compliance_team in the audit log
+        };
+      }
+    }
 
-    if (complianceResult.length === 0) {
+    if (!complianceMember) {
       return NextResponse.json(
         { success: false, error: 'Invalid compliance member' },
         { status: 403 }
       );
     }
-
-    const complianceMember = complianceResult[0] as { id: string; name: string; role: string };
 
     // Get the dispute and order details
     const disputeResult = await query(
