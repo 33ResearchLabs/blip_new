@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import AuthCardStack from "./AuthCardStack";
+import { RewardCards } from "./RewardCards";
 
 interface AuthPageLayoutProps {
   children: React.ReactNode;
@@ -31,6 +32,7 @@ export default function AuthPageLayout({
         {/* LEFT: Card visual + tagline (hidden below lg) */}
         <div className="hidden lg:flex flex-1 flex-col items-start justify-center overflow-hidden pl-4">
           <AuthCardStack variant={variant} className="self-center" />
+          <RewardCards />
         </div>
 
         {/* Divider line between card and form (hidden below lg).

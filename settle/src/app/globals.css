@@ -1011,3 +1011,193 @@ input[type="number"] { -moz-appearance: textfield; }
 .animate-glow-pulse {
   animation: glow-pulse 2s ease-in-out infinite;
 }
+
+/* ==========================================
+   WELCOME PAGE — fully isolated from merchant themes.
+   All values hardcoded to dark monochrome.
+   ========================================== */
+
+.welcome-scope {
+  /* Override ALL inherited theme colors */
+  --background: #060606 !important;
+  --foreground: #ffffff !important;
+  --color-bg-secondary: #0c0c0c !important;
+  --color-bg-tertiary: #131313 !important;
+  --card: rgba(255,255,255,0.03) !important;
+  --border: rgba(255,255,255,0.06) !important;
+  --border-strong: rgba(255,255,255,0.12) !important;
+  --section-divider: rgba(255,255,255,0.06) !important;
+  --accent: #ffffff !important;
+  --accent-subtle: rgba(255,255,255,0.06) !important;
+  --primary: #ffffff !important;
+  --primary-dim: rgba(255,255,255,0.08) !important;
+  --color-text-primary: rgba(255,255,255,0.92) !important;
+  --color-text-secondary: rgba(255,255,255,0.50) !important;
+  --color-text-tertiary: rgba(255,255,255,0.30) !important;
+  --color-text-quaternary: rgba(255,255,255,0.15) !important;
+  --color-success: #10b981 !important;
+  --color-warning: #f59e0b !important;
+
+  /* Mockup scale */
+  --mockup-scale: 0.72;
+}
+
+/* Force all text/bg/border inside .welcome-scope to ignore theme overrides */
+.welcome-scope,
+.welcome-scope * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Mockup grows on wider screens */
+@media (min-width: 1280px) {
+  .welcome-scope { --mockup-scale: 0.82; }
+}
+@media (min-width: 1536px) {
+  .welcome-scope { --mockup-scale: 0.92; }
+}
+@media (min-width: 1800px) {
+  .welcome-scope { --mockup-scale: 1; }
+}
+
+/* ==========================================
+   MERCHANT WELCOME PAGE — scoped theme
+   Exact reference: #060606 / #0c0c0c / #131313
+   Pure white opacities. No orange. No blue tint.
+   ========================================== */
+
+.merchant-welcome {
+  /* Force dark rendering — override global theme variables so that
+     light-theme CSS rules (text-white/ → foreground, bg-white/ → foreground,
+     border-white/ → foreground) still produce white-based colors. */
+  color-scheme: dark !important;
+  --background: #060606 !important;
+  --foreground: #ffffff !important;
+  --color-bg-secondary: #0c0c0c !important;
+  --color-bg-tertiary: #131313 !important;
+  --card: rgba(255,255,255,0.03) !important;
+  --card-solid: #0c0c0c !important;
+  --border: rgba(255,255,255,0.06) !important;
+  --border-strong: rgba(255,255,255,0.12) !important;
+  --section-divider: rgba(255,255,255,0.06) !important;
+  --accent: #ffffff !important;
+  --accent-bright: #f5f5f5 !important;
+  --accent-subtle: rgba(255,255,255,0.06) !important;
+  --accent-glow: rgba(255,255,255,0.04) !important;
+  --primary: #ffffff !important;
+  --primary-dim: rgba(255,255,255,0.08) !important;
+  --color-text-primary: rgba(255,255,255,0.92) !important;
+  --color-text-secondary: rgba(255,255,255,0.50) !important;
+  --color-text-tertiary: rgba(255,255,255,0.30) !important;
+  --color-text-quaternary: rgba(255,255,255,0.15) !important;
+  --color-success: #10b981 !important;
+  --color-warning: #f59e0b !important;
+  --color-error: #ef4444 !important;
+  --color-info: #60a5fa !important;
+  --muted: #525252 !important;
+  --muted-bg: #131313 !important;
+
+  /* Backgrounds — exact reference */
+  --mw-bg-primary: #060606;
+  --mw-bg-secondary: #0c0c0c;
+  --mw-bg-tertiary: #131313;
+
+  /* Text — pure white at opacity layers */
+  --mw-text-primary: rgba(255, 255, 255, 0.92);
+  --mw-text-secondary: rgba(255, 255, 255, 0.50);
+  --mw-text-tertiary: rgba(255, 255, 255, 0.30);
+  --mw-text-muted: rgba(255, 255, 255, 0.15);
+
+  /* Surfaces & borders — ultra subtle */
+  --mw-surface: rgba(255, 255, 255, 0.03);
+  --mw-surface-hover: rgba(255, 255, 255, 0.06);
+  --mw-border: rgba(255, 255, 255, 0.06);
+  --mw-border-strong: rgba(255, 255, 255, 0.12);
+  --mw-divider: rgba(255, 255, 255, 0.06);
+
+  /* Accent — pure white, no color */
+  --mw-accent: #ffffff;
+  --mw-accent-dim: rgba(255, 255, 255, 0.06);
+
+  /* Semantic */
+  --mw-success: #10b981;
+  --mw-success-dim: rgba(16, 185, 129, 0.12);
+  --mw-info: #60a5fa;
+  --mw-info-dim: rgba(96, 165, 250, 0.10);
+  --mw-warning: #f59e0b;
+  --mw-warning-dim: rgba(245, 158, 11, 0.10);
+  --mw-purple: #a78bfa;
+  --mw-purple-dim: rgba(167, 139, 250, 0.10);
+
+  /* Glow — subtle white only, no blue */
+  --mw-glow: rgba(255, 255, 255, 0.015);
+  --mw-glow-hero: rgba(255, 255, 255, 0.04);
+
+  /* Buttons — solid white primary */
+  --mw-btn-primary-bg: #ffffff;
+  --mw-btn-primary-text: #060606;
+  --mw-btn-secondary-bg: rgba(255, 255, 255, 0.03);
+
+  /* Mockup scale */
+  --mw-mockup-scale: 0.72;
+}
+
+/* Hero background — neutral white glow only */
+.merchant-welcome .mw-hero-bg {
+  background:
+    radial-gradient(ellipse at 70% 30%, var(--mw-glow-hero), transparent 50%),
+    radial-gradient(ellipse at 30% 80%, var(--mw-glow), transparent 50%),
+    var(--mw-bg-primary);
+}
+
+/* Glass card */
+.merchant-welcome .mw-glass {
+  background: var(--mw-surface);
+  border: 1px solid var(--mw-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Primary button — solid white */
+.merchant-welcome .mw-btn-primary {
+  background: var(--mw-btn-primary-bg);
+  color: var(--mw-btn-primary-text);
+  border: none;
+}
+.merchant-welcome .mw-btn-primary:hover {
+  opacity: 0.9;
+}
+
+/* Secondary button — outlined */
+.merchant-welcome .mw-btn-secondary {
+  background: var(--mw-btn-secondary-bg);
+  border: 1px solid var(--mw-border-strong);
+  color: var(--mw-text-primary);
+}
+.merchant-welcome .mw-btn-secondary:hover {
+  background: var(--mw-surface-hover);
+}
+
+/* Kill ALL glow/shadow bleeding from global theme */
+.merchant-welcome,
+.merchant-welcome * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Force fill-white SVGs to stay white in light themes */
+.merchant-welcome [class*="fill-white"] {
+  fill: #ffffff !important;
+}
+
+
+/* Responsive mockup scale */
+@media (min-width: 1280px) {
+  .merchant-welcome { --mw-mockup-scale: 0.82; }
+}
+@media (min-width: 1536px) {
+  .merchant-welcome { --mw-mockup-scale: 0.92; }
+}
+@media (min-width: 1800px) {
+  .merchant-welcome { --mw-mockup-scale: 1; }
+}
