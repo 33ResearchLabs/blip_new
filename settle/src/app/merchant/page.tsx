@@ -491,6 +491,7 @@ export default function MerchantDashboard() {
   const { handleCreateTrade } = useTradeCreation({
     solanaWallet,
     effectiveBalance,
+    activeCorridor,
     openTradeForm,
     setOpenTradeForm,
     setShowOpenTradeModal,

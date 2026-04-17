@@ -337,11 +337,12 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
       const actorId = data.merchant_id || data.buyer_merchant_id || '';
 
       // At least one merchant slot must be populated so we know who initiated
-      // the order. user_id and offer_id remain mandatory.
-      if (!data.user_id || !data.offer_id || (!data.merchant_id && !data.buyer_merchant_id)) {
+      // the order. offer_id is optional for self-broadcast orders (rate comes
+      // from the admin price engine, not an offer).
+      if (!data.user_id || (!data.merchant_id && !data.buyer_merchant_id)) {
         return reply.status(400).send({
           success: false,
-          error: 'user_id, offer_id, and one of merchant_id / buyer_merchant_id are required',
+          error: 'user_id and one of merchant_id / buyer_merchant_id are required',
         });
       }
 
@@ -364,15 +365,22 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
 
       try {
         const { order, remainingLiquidity } = await transactionWithRetry(async (client) => {
-          const { rows: deducted } = await client.query(
-            `UPDATE merchant_offers
-             SET available_amount = available_amount - $1, updated_at = NOW()
-             WHERE id = $2 AND available_amount >= $1
-             RETURNING id, available_amount`,
-            [data.crypto_amount, data.offer_id]
-          );
-          if (deducted.length === 0) {
-            throw Object.assign(new Error('Insufficient offer liquidity'), { statusCode: 409 });
+          // Only deduct offer liquidity when an offer_id is provided.
+          // Self-broadcast orders (no offer) get their rate from the admin
+          // price engine and escrow is locked on-chain — no pool to deduct from.
+          let deductedAmount: number | null = null;
+          if (data.offer_id) {
+            const { rows: deducted } = await client.query(
+              `UPDATE merchant_offers
+               SET available_amount = available_amount - $1, updated_at = NOW()
+               WHERE id = $2 AND available_amount >= $1
+               RETURNING id, available_amount`,
+              [data.crypto_amount, data.offer_id]
+            );
+            if (deducted.length === 0) {
+              throw Object.assign(new Error('Insufficient offer liquidity'), { statusCode: 409 });
+            }
+            deductedAmount = deducted[0].available_amount;
           }
 
           const { rows } = await client.query(
@@ -402,7 +410,7 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
             orderVersion: order.order_version || 1, minimalStatus: normalizeStatus(order.status as any),
           });
 
-          return { order, remainingLiquidity: deducted[0].available_amount };
+          return { order, remainingLiquidity: deductedAmount };
         }, { label: 'merchant-order-create' });
 
         logger.info('[merchant-order-create] Success', {

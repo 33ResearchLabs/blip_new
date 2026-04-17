@@ -194,12 +194,9 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(errors);
     }
 
-    // Dry run: validate only, don't create order.
+    // Dry run: validate schema + business logic, don't create order.
     // Used by frontend to pre-validate BEFORE locking escrow on-chain.
     const isDryRun = request.nextUrl.searchParams.get('dry_run') === 'true';
-    if (isDryRun) {
-      return successResponse({ valid: true });
-    }
 
     // Pair (currency corridor) — defaults to usdt_aed for backward compat.
     // Drives the rate source AND the order's fiat_currency / corridor_id.
@@ -246,52 +243,57 @@ export async function POST(request: NextRequest) {
       return validationErrorResponse(['Target merchant not found or not active']);
     }
 
-    // Create a placeholder user for merchant-initiated orders
-    // This allows merchants to create orders that any customer can accept later
-    let user;
-    const randomSuffix = Math.random().toString(36).substring(2, 8);
-    const placeholderUsername = isM2MTrade
-      ? `m2m_${merchant_id.slice(0, 8)}_${Date.now()}_${randomSuffix}`
-      : `open_order_${Date.now()}_${randomSuffix}`;
-    // Retry up to 3 times if username conflicts occur
-    let createAttempts = 0;
-    const maxAttempts = 3;
-    while (createAttempts < maxAttempts) {
-      try {
-        const attemptSuffix = createAttempts > 0 ? `_r${createAttempts}` : '';
-        user = await createUser({
-          username: placeholderUsername + attemptSuffix,
-          name: isM2MTrade ? 'M2M Trade' : 'Open Order',
-        });
-        logger.info('Created placeholder user for merchant order', {
-          userId: user.id,
-          isM2MTrade,
-          attempts: createAttempts + 1,
-        });
-        break;
-      } catch (createError: any) {
-        createAttempts++;
-        const isUniqueViolation = createError?.message?.includes('duplicate') ||
-                                 createError?.message?.includes('unique') ||
-                                 createError?.code === '23505';
-
-        if (isUniqueViolation && createAttempts < maxAttempts) {
-          logger.warn('Username conflict, retrying...', { attempt: createAttempts });
-          continue;
-        }
-
-        logger.error('Failed to create placeholder user', {
-          error: createError,
-          message: createError?.message,
-          code: createError?.code,
-          attempts: createAttempts,
-        });
-        return errorResponse(`Failed to create order: ${createError?.message || 'Unknown error'}`);
-      }
+    // Create a placeholder user for merchant-initiated orders.
+    // Skip during dry_run — we only need to validate, not create DB records.
+    let user: { id: string } | undefined;
+    if (isDryRun) {
+      user = { id: 'dry-run-placeholder' };
     }
+    if (!isDryRun) {
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const placeholderUsername = isM2MTrade
+        ? `m2m_${merchant_id.slice(0, 8)}_${Date.now()}_${randomSuffix}`
+        : `open_order_${Date.now()}_${randomSuffix}`;
+      // Retry up to 3 times if username conflicts occur
+      let createAttempts = 0;
+      const maxAttempts = 3;
+      while (createAttempts < maxAttempts) {
+        try {
+          const attemptSuffix = createAttempts > 0 ? `_r${createAttempts}` : '';
+          user = await createUser({
+            username: placeholderUsername + attemptSuffix,
+            name: isM2MTrade ? 'M2M Trade' : 'Open Order',
+          });
+          logger.info('Created placeholder user for merchant order', {
+            userId: user.id,
+            isM2MTrade,
+            attempts: createAttempts + 1,
+          });
+          break;
+        } catch (createError: any) {
+          createAttempts++;
+          const isUniqueViolation = createError?.message?.includes('duplicate') ||
+                                   createError?.message?.includes('unique') ||
+                                   createError?.code === '23505';
 
-    if (!user) {
-      return errorResponse('Failed to create order after multiple attempts');
+          if (isUniqueViolation && createAttempts < maxAttempts) {
+            logger.warn('Username conflict, retrying...', { attempt: createAttempts });
+            continue;
+          }
+
+          logger.error('Failed to create placeholder user', {
+            error: createError,
+            message: createError?.message,
+            code: createError?.code,
+            attempts: createAttempts,
+          });
+          return errorResponse(`Failed to create order: ${createError?.message || 'Unknown error'}`);
+        }
+      }
+
+      if (!user) {
+        return errorResponse('Failed to create order after multiple attempts');
+      }
     }
 
     // ── DIRECT ORDER CREATION (no offer matching) ───────────────────────
@@ -413,18 +415,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get an active offer ID for metadata (payment_method, rate). For self-broadcast
-    // BUY, no seller exists yet — fall back to the creator's offers so the order card
-    // still renders rate/method metadata. The offer's ownership isn't used downstream
-    // for role resolution.
-    const offerLookupMerchantId = orderMerchantId ?? merchant_id;
+    // Offer lookup: only for targeted M2M orders where a specific seller
+    // is assigned. Self-broadcast orders (both BUY and SELL) don't need an
+    // offer — rate comes from the admin price engine and payment method
+    // from the merchant's selection. Looking up the creator's own offer
+    // for a BUY broadcast incorrectly shows the buyer's bank details as
+    // the seller's payment method and deducts from the wrong liquidity pool.
     let fallbackOfferId: string | null = null;
-    try {
-      const merchantOffers = await getMerchantOffers(offerLookupMerchantId);
-      const activeOffer = merchantOffers.find(o => o.is_active);
-      fallbackOfferId = activeOffer?.id || merchantOffers[0]?.id || null;
-    } catch {
-      // No offers — will use null
+    if (isM2MTrade && orderMerchantId) {
+      try {
+        const merchantOffers = await getMerchantOffers(orderMerchantId);
+        const activeOffer = merchantOffers.find(o => o.is_active);
+        fallbackOfferId = activeOffer?.id || merchantOffers[0]?.id || null;
+      } catch {
+        // No offers — will use null
+      }
+    }
+
+    // Dry run: all business validations passed (merchant exists, rate resolved,
+    // payment method resolved, placeholder user ready). Return early BEFORE
+    // the core-api proxy call so frontend can safely proceed to lock escrow.
+    if (isDryRun) {
+      return successResponse({ valid: true, rate: effectiveRate, corridor_id: corridorId });
     }
 
     // Forward to core-api

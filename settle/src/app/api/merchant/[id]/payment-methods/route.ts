@@ -73,6 +73,9 @@ export async function POST(
     const body = await request.json();
     const { type, name, details, is_default } = body;
 
+    // Debug logging — helps diagnose payment method save failures
+    console.log('[PM-ADD] Received:', { merchantId: id, type, name, details: details?.slice?.(0, 50), is_default });
+
     // Validate. Matches the client-side rules in PaymentMethodModal.tsx so
     // a crafted request can't smuggle junk past the UI.
     const errors: string[] = [];
@@ -109,9 +112,13 @@ export async function POST(
 
     logger.info('Merchant payment method added', { merchantId: id, methodId: method.id, type });
     return successResponse(method, 201);
-  } catch (error) {
+  } catch (error: any) {
+    // Catch unique constraint violation on default payment method
+    if (error?.code === '23505' || error?.message?.includes('unique') || error?.message?.includes('duplicate')) {
+      return validationErrorResponse(['A default payment method already exists. Remove or change the existing default first.']);
+    }
     logger.api.error('POST', '/api/merchant/[id]/payment-methods', error as Error);
-    return errorResponse('Internal server error');
+    return errorResponse('Failed to save payment method. Please try again.');
   }
 }
 

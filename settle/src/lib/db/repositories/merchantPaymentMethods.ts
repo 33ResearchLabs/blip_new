@@ -1,4 +1,4 @@
-import { query, queryOne } from '../index';
+import { query, queryOne, transaction } from '../index';
 
 export interface MerchantPaymentMethodRow {
   id: string;
@@ -20,7 +20,9 @@ export async function getMerchantPaymentMethods(merchantId: string): Promise<Mer
   );
 }
 
-// Add a new payment method
+// Add a new payment method.
+// Wraps clear-default + insert in a single transaction so the unique
+// constraint on (merchant_id) WHERE is_default = true is never violated.
 export async function addMerchantPaymentMethod(data: {
   merchant_id: string;
   type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile';
@@ -28,21 +30,22 @@ export async function addMerchantPaymentMethod(data: {
   details: string;
   is_default?: boolean;
 }): Promise<MerchantPaymentMethodRow> {
-  // If this is the first method or marked default, clear existing defaults
-  if (data.is_default) {
-    await query(
-      'UPDATE merchant_payment_methods SET is_default = false, updated_at = now() WHERE merchant_id = $1 AND is_default = true',
-      [data.merchant_id]
-    );
-  }
+  return transaction(async (client) => {
+    if (data.is_default) {
+      await client.query(
+        'UPDATE merchant_payment_methods SET is_default = false, updated_at = now() WHERE merchant_id = $1 AND is_default = true',
+        [data.merchant_id]
+      );
+    }
 
-  const row = await queryOne<MerchantPaymentMethodRow>(
-    `INSERT INTO merchant_payment_methods (merchant_id, type, name, details, is_default)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING *`,
-    [data.merchant_id, data.type, data.name, data.details, data.is_default ?? false]
-  );
-  return row!;
+    const { rows } = await client.query(
+      `INSERT INTO merchant_payment_methods (merchant_id, type, name, details, is_default)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [data.merchant_id, data.type, data.name, data.details, data.is_default ?? false]
+    );
+    return rows[0] as MerchantPaymentMethodRow;
+  });
 }
 
 // Set a method as default

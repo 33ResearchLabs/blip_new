@@ -9,6 +9,7 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 interface UseTradeCreationParams {
   solanaWallet: any;
   effectiveBalance: number | null;
+  activeCorridor: string;
   openTradeForm: {
     tradeType: "buy" | "sell";
     cryptoAmount: string;
@@ -38,6 +39,7 @@ const DEFAULT_FORM = {
 export function useTradeCreation({
   solanaWallet,
   effectiveBalance,
+  activeCorridor,
   openTradeForm,
   setOpenTradeForm,
   setShowOpenTradeModal,
@@ -88,6 +90,7 @@ export function useTradeCreation({
             payment_method: openTradeForm.paymentMethod, spread_preference: openTradeForm.spreadPreference,
             merchant_payment_method_id: openTradeForm.paymentMethodId,
             matched_offer_id: matchedOffer?.id,
+            pair: activeCorridor.toLowerCase(),
           }),
         });
         if (!preValidateRes.ok) {
@@ -109,11 +112,37 @@ export function useTradeCreation({
             matched_offer_id: matchedOffer?.id, escrow_tx_hash: escrowResult.txHash,
             escrow_trade_id: escrowResult.tradeId, escrow_trade_pda: escrowResult.tradePda,
             escrow_pda: escrowResult.escrowPda, escrow_creator_wallet: solanaWallet.walletAddress,
+            pair: activeCorridor.toLowerCase(),
           }),
         });
         const data = await res.json();
         if (!res.ok || !data.success) {
-          setCreateTradeError(data.error || "Failed to create order");
+          // CRITICAL: Escrow is already locked on-chain but order creation failed.
+          // Log the escrow TX hash so admin can recover the stuck funds.
+          const txHash = escrowResult.txHash;
+          console.error('[ESCROW-ORPHAN] Order creation failed after escrow lock', {
+            escrow_tx_hash: txHash, merchant_id: merchantId,
+            amount: openTradeForm.cryptoAmount, error: data.error,
+          });
+          // Attempt to persist the orphaned escrow for admin recovery
+          try {
+            await fetchWithAuth('/api/merchant/orphaned-escrow', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                escrow_tx_hash: txHash, merchant_id: merchantId,
+                amount: parseFloat(openTradeForm.cryptoAmount),
+                error_message: data.error || 'Order creation failed',
+                escrow_trade_id: escrowResult.tradeId,
+                escrow_trade_pda: escrowResult.tradePda,
+                escrow_pda: escrowResult.escrowPda,
+                escrow_creator_wallet: solanaWallet.walletAddress,
+              }),
+            });
+          } catch { /* best-effort — admin can still find via console logs */ }
+          setCreateTradeError(
+            `Order failed but escrow is locked on-chain. ` +
+            `Contact support with TX: ${txHash.slice(0, 8)}...${txHash.slice(-8)}`
+          );
           setIsCreatingTrade(false);
           return;
         }
@@ -144,6 +173,7 @@ export function useTradeCreation({
           crypto_amount: parseFloat(openTradeForm.cryptoAmount),
           payment_method: openTradeForm.paymentMethod, spread_preference: openTradeForm.spreadPreference,
           merchant_payment_method_id: openTradeForm.paymentMethodId,
+          pair: activeCorridor.toLowerCase(),
         }),
       });
       const data = await res.json();
@@ -162,7 +192,7 @@ export function useTradeCreation({
     } finally {
       setIsCreatingTrade(false);
     }
-  }, [merchantId, openTradeForm, solanaWallet, effectiveBalance, playSound, addNotification, refreshBalance]);
+  }, [merchantId, openTradeForm, solanaWallet, effectiveBalance, activeCorridor, playSound, addNotification, refreshBalance]);
 
   return { handleCreateTrade };
 }

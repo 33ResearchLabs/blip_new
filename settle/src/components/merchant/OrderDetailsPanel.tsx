@@ -827,7 +827,14 @@ export function OrderDetailsPanel({
                               )}
                             </div>
                           ))
-                        : [
+                        : !order.merchant_id
+                          ? [{ label: "Status", value: "Awaiting seller", key: "no_seller" }].map(({ label, value, key }) => (
+                            <div key={key} className="flex justify-between items-center">
+                              <span className="text-[11px] text-white/50">{label}</span>
+                              <span className="text-[11px] text-white/30 italic">{value}</span>
+                            </div>
+                          ))
+                          : [
                             {
                               label: "Bank",
                               value:

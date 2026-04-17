@@ -238,7 +238,7 @@ export const ConfigPanel = memo(function ConfigPanel({
         setNewPm({ type: 'bank', name: '', details: '' });
       } else {
         const json = await res.json().catch(() => null);
-        setPmError(json?.error || json?.errors?.[0] || "Failed to save. Check the fields and try again.");
+        setPmError(json?.details?.[0] || json?.error || json?.errors?.[0] || "Failed to save. Check the fields and try again.");
       }
     } catch (err) {
       console.error("Failed to add payment method:", err);
