@@ -54,6 +54,29 @@ function getViewerSide(
   return orderType === "buy" ? "seller" : "buyer";
 }
 
+// Resolve seller/buyer display names from the raw DB order. Falls back to
+// null on each side when the party hasn't claimed / is a placeholder.
+// Mirrors PendingOrdersPanel.getPartyNames exactly.
+function getPartyNames(db: any): { seller: string | null; buyer: string | null } {
+  if (!db) return { seller: null, buyer: null };
+  const userIsPlaceholder =
+    typeof db.user?.username === "string" &&
+    (db.user.username.startsWith("open_order_") ||
+      db.user.username.startsWith("m2m_"));
+  const userName = userIsPlaceholder
+    ? null
+    : db.user?.name || db.user?.username || null;
+  const merchantName = db.merchant?.display_name || null;
+  const buyerMerchantName = db.buyer_merchant?.display_name || null;
+
+  const isM2M = userIsPlaceholder || !!db.buyer_merchant_id;
+  if (isM2M) return { seller: merchantName, buyer: buyerMerchantName };
+
+  const orderType = String(db.type || "").toLowerCase();
+  if (orderType === "buy") return { seller: merchantName, buyer: userName };
+  return { seller: userName, buyer: merchantName };
+}
+
 const WAITING_ACTIONS = ['Wait for Acceptance', 'Wait for Payment', 'Wait for Escrow', 'Wait for Confirmation', 'Waiting for Acceptor', 'Waiting for Confirmation', 'Waiting for Payment', 'Already Claimed'];
 
 const IP_ITEM_HEIGHT = 210; // Estimated row height for in-progress orders (includes hero timer + pricing strip)
@@ -140,11 +163,26 @@ const InProgressOrderList = memo(function InProgressOrderList({
                   <span className="absolute inline-flex h-full w-full rounded-full bg-primary opacity-75 animate-ping" />
                   <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
                 </span>
-                {/* Row 1: User + type on left, timer on right */}
+                {/* Row 1: Counterparty + type on left, timer on right */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <div className="text-base">{order.emoji}</div>
-                    <span className="text-xs font-medium text-foreground/80">{order.user}</span>
+                    {(() => {
+                      const { seller, buyer } = getPartyNames(order.dbOrder);
+                      const bothKnown = !!seller && !!buyer;
+                      const soloName = seller || buyer || order.user || null;
+                      return bothKnown ? (
+                        <span className="flex items-center gap-1 text-xs font-medium text-foreground/80 min-w-0">
+                          <span className="truncate max-w-[80px]" title={`Seller: ${seller}`}>{seller}</span>
+                          <ArrowRight className="w-3 h-3 text-foreground/40 shrink-0" />
+                          <span className="truncate max-w-[80px]" title={`Buyer: ${buyer}`}>{buyer}</span>
+                        </span>
+                      ) : (
+                        <span className={`text-xs font-medium truncate max-w-[140px] ${soloName ? 'text-foreground/80' : 'text-foreground/40'}`}>
+                          {soloName || "—"}
+                        </span>
+                      );
+                    })()}
                     {order.spreadPreference && (
                       <span className={`text-[9px] font-bold font-mono px-1.5 py-0.5 rounded border flex items-center gap-0.5 ${
                         order.spreadPreference === 'fastest'

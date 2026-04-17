@@ -144,7 +144,7 @@ export function useDashboardAuth({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: loginForm.email,
+          email: loginForm.email.trim().toLowerCase(),
           password: loginForm.password,
           action: 'login',
         }),
@@ -282,9 +282,9 @@ export function useDashboardAuth({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'register',
-          email: registerForm.email,
+          email: registerForm.email.trim().toLowerCase(),
           password: registerForm.password,
-          business_name: registerForm.businessName || undefined,
+          business_name: registerForm.businessName?.trim() || undefined,
         }),
       });
 

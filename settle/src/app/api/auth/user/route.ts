@@ -26,7 +26,8 @@ export async function POST(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
   try {
     const body = await request.json();
-    const { action, username, wallet_address, signature, message, password } = body;
+    const { action, username: rawUsername, wallet_address, signature, message, password } = body;
+    const username = rawUsername?.trim();
 
     // Check username availability
     if (action === 'check_username') {

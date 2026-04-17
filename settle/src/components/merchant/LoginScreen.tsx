@@ -111,6 +111,7 @@ export function LoginScreen({
                 type="email"
                 value={loginForm.email}
                 onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
+                onBlur={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value.trim() }))}
                 placeholder="merchant@email.com"
                 className="w-full bg-foreground/[0.04] rounded-xl px-4 py-3.5 text-sm text-foreground outline-none placeholder:text-foreground/25 border border-foreground/[0.06] focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all"
               />
@@ -177,6 +178,7 @@ export function LoginScreen({
                 type="email"
                 value={registerForm.email}
                 onChange={(e) => setRegisterForm(prev => ({ ...prev, email: e.target.value }))}
+                onBlur={(e) => setRegisterForm(prev => ({ ...prev, email: e.target.value.trim() }))}
                 placeholder="your@email.com"
                 className="w-full bg-foreground/[0.04] rounded-xl px-4 py-3.5 text-sm text-foreground outline-none placeholder:text-foreground/25 border border-foreground/[0.06] focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all"
               />
@@ -188,6 +190,7 @@ export function LoginScreen({
                 type="text"
                 value={registerForm.businessName}
                 onChange={(e) => setRegisterForm(prev => ({ ...prev, businessName: e.target.value }))}
+                onBlur={(e) => setRegisterForm(prev => ({ ...prev, businessName: e.target.value.trim() }))}
                 placeholder="Your Business"
                 className="w-full bg-foreground/[0.04] rounded-xl px-4 py-3.5 text-sm text-foreground outline-none placeholder:text-foreground/25 border border-foreground/[0.06] focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all"
               />

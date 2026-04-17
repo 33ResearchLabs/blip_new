@@ -189,7 +189,7 @@ export function useUserAuth({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: loginForm.username,
+          username: loginForm.username.trim(),
           password: loginForm.password,
           action: 'login',
         }),
@@ -242,7 +242,7 @@ export function useUserAuth({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: loginForm.username,
+          username: loginForm.username.trim(),
           password: loginForm.password,
           action: 'register',
         }),

@@ -98,10 +98,10 @@ export async function createUser(
       RETURNING *
       `,
       [
-        data.username ?? null,
+        data.username?.trim() ?? null,
         passwordHash,
         walletAddress,
-        data.name ?? null,
+        data.name?.trim() ?? null,
         initialBalance,
       ]
     );
@@ -121,7 +121,7 @@ export async function authenticateUser(
   username: string,
   password: string
 ): Promise<Omit<User, 'password_hash'> | null> {
-  const user = await getUserByUsername(username);
+  const user = await getUserByUsername(username.trim());
   if (!user || !user.password_hash) return null;
 
   const { valid, needsRehash } = verifyPassword(password, user.password_hash);

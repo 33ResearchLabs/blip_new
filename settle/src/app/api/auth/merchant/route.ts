@@ -649,12 +649,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const normalizedEmail = email.trim().toLowerCase();
+
       // Find merchant by email
       const rows = await query(
         `SELECT id, username, display_name, business_name, wallet_address, avatar_url, bio, email, password_hash, rating, total_trades, is_online, balance, has_ops_access, COALESCE(has_compliance_access, false) as has_compliance_access, COALESCE(totp_enabled, false) as totp_enabled, COALESCE(email_verified, true) as email_verified
          FROM merchants
          WHERE email = $1 AND status = 'active'`,
-        [email.toLowerCase()]
+        [normalizedEmail]
       );
 
       if (rows.length === 0) {
@@ -852,9 +854,12 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const normalizedEmail = email.trim().toLowerCase();
+      const normalizedBusinessName = business_name.trim();
+
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
+      if (!emailRegex.test(normalizedEmail)) {
         return NextResponse.json(
           { success: false, error: 'Invalid email format' },
           { status: 400 }
@@ -878,7 +883,7 @@ export async function POST(request: NextRequest) {
       // Check if email already exists
       const existingMerchant = await query(
         `SELECT id FROM merchants WHERE email = $1`,
-        [email.toLowerCase()]
+        [normalizedEmail]
       );
 
       if (existingMerchant.length > 0) {
@@ -891,7 +896,7 @@ export async function POST(request: NextRequest) {
       // Check if business name already taken
       const existingBusiness = await query(
         `SELECT id FROM merchants WHERE LOWER(business_name) = $1`,
-        [business_name.trim().toLowerCase()]
+        [normalizedBusinessName.toLowerCase()]
       );
 
       if (existingBusiness.length > 0) {
@@ -902,7 +907,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Use business_name as username
-      const baseUsername = business_name.trim().toLowerCase().replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 20);
+      const baseUsername = normalizedBusinessName.toLowerCase().replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 20);
       let username = baseUsername;
       let counter = 1;
 
@@ -935,7 +940,7 @@ export async function POST(request: NextRequest) {
           email_verified
         ) VALUES ($1, $2, $3, $4, $5, 'active', true, $6, false)
         RETURNING id, username, display_name, business_name, wallet_address, email, rating, total_trades`,
-        [email.toLowerCase(), passwordHash, username, business_name.trim(), business_name.trim(), regBalance]
+        [normalizedEmail, passwordHash, username, normalizedBusinessName, normalizedBusinessName, regBalance]
       );
 
       const merchant = result[0] as {

@@ -105,6 +105,7 @@ export function LandingPage({
                 type="text"
                 value={loginForm.username}
                 onChange={e => setLoginForm({ ...loginForm, username: e.target.value })}
+                onBlur={e => setLoginForm({ ...loginForm, username: e.target.value.trim() })}
                 placeholder={authMode === 'register' ? 'Choose a username' : 'Your username'}
                 autoCapitalize="none"
                 autoCorrect="off"
