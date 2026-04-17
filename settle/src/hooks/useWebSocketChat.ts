@@ -984,12 +984,14 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
       const window = chatWindowsRef.current.find((w) => w.id === chatId);
       if (!window?.orderId) return;
 
-      setChatWindows((prev) =>
-        prev.map((w) => (w.id === chatId ? { ...w, unread: 0 } : w))
-      );
-
+      // Notify server first — only clear local badge after the server
+      // acknowledges. This prevents the badge from disappearing locally
+      // while the server still considers the messages unread (which causes
+      // the badge to reappear on page reload / next poll).
+      let serverAcked = false;
       if (wsContext?.isConnected) {
         wsContext.markRead(window.orderId);
+        serverAcked = true; // WS is fire-and-forget but reliable when connected
       } else {
         try {
           await fetchWithAuth(`/api/orders/${window.orderId}/messages`, {
@@ -997,7 +999,21 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ reader_type: actorType }),
           });
-        } catch {}
+          serverAcked = true;
+        } catch (err) {
+          console.warn('[Chat] Failed to mark messages read on server (badge will persist until next open)', {
+            orderId: window.orderId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      // Clear local badge — unconditionally if server acked, optimistically
+      // if WS was used (WS is reliable when isConnected is true).
+      if (serverAcked) {
+        setChatWindows((prev) =>
+          prev.map((w) => (w.id === chatId ? { ...w, unread: 0 } : w))
+        );
       }
     },
     [actorType, wsContext]

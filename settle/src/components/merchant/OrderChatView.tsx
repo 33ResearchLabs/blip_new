@@ -35,7 +35,24 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
     openChat(userName, getUserEmoji(userName), orderId);
   }, [orderId, userName, openChat]);
 
-  // Auto mark-read when messages arrive
+  // Mark all messages read when this chat panel opens (mount / orderId change).
+  // Calls the backend PATCH directly so the server persists the read state to DB
+  // + clears the Redis unread counter. This is the primary "I've seen these
+  // messages" signal — the chat-window-level markAsRead below is a secondary
+  // path for messages that arrive while the panel is already open.
+  const mountReadFiredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!orderId || mountReadFiredRef.current === orderId) return;
+    mountReadFiredRef.current = orderId;
+    fetchWithAuth(`/api/orders/${orderId}/messages`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reader_type: 'merchant' }),
+    }).catch(() => { /* best-effort — markAsRead below retries on new messages */ });
+  }, [orderId]);
+
+  // Also mark read at the chat-window level when new messages arrive while
+  // this panel is open (covers messages that land after mount).
   const chatWindowForRead = chatWindows.find(w => w.orderId === orderId);
   const lastMessageCountRef = useRef(0);
   useEffect(() => {

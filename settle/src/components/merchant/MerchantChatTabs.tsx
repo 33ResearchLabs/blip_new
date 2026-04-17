@@ -290,6 +290,14 @@ export function MerchantChatTabs({
                     onClick={() => {
                       onClearUnread?.(conv.order_id);
                       onOpenOrderChat(conv.order_id, conv.user.username, conv.order_number, conv.order_type);
+                      // Persist read status to server so the badge doesn't
+                      // reappear on refresh. Best-effort — OrderChatView's
+                      // mount effect will retry if this fails.
+                      fetchWithAuth(`/api/orders/${conv.order_id}/messages`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ reader_type: 'merchant' }),
+                      }).catch(() => {});
                     }}
                     className={`group relative w-full p-3 rounded-xl text-left overflow-hidden transition-all border ${
                       hasUnread
