@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -7,20 +8,32 @@ import {
   AlertTriangle,
   Loader2,
   Zap,
+  ChevronDown,
 } from "lucide-react";
 import type { Order } from "@/types/merchant";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+
+interface MerchantPaymentMethod {
+  id: string;
+  type: 'bank' | 'cash' | 'crypto' | 'card' | 'mobile';
+  name: string;
+  details?: string;
+  is_default?: boolean;
+}
 
 export interface OpenTradeFormState {
   tradeType: "buy" | "sell";
   cryptoAmount: string;
   paymentMethod: "bank" | "cash";
+  paymentMethodId?: string;
   spreadPreference: "best" | "fastest" | "cheap";
   expiryMinutes: 15 | 90;
 }
 
 export interface TradeFormModalProps {
   isOpen: boolean;
+  merchantId: string | null;
   openTradeForm: OpenTradeFormState;
   setOpenTradeForm: React.Dispatch<React.SetStateAction<OpenTradeFormState>>;
   effectiveBalance: number | null;
@@ -33,6 +46,7 @@ export interface TradeFormModalProps {
 
 export function TradeFormModal({
   isOpen,
+  merchantId,
   openTradeForm,
   setOpenTradeForm,
   effectiveBalance,
@@ -42,10 +56,50 @@ export function TradeFormModal({
   onClose,
   onSubmit,
 }: TradeFormModalProps) {
+  const [paymentMethods, setPaymentMethods] = useState<MerchantPaymentMethod[]>([]);
+  const [showPmDropdown, setShowPmDropdown] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !merchantId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchWithAuth(`/api/merchant/${merchantId}/payment-methods`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (!cancelled && data.success && Array.isArray(data.data)) {
+          setPaymentMethods(data.data);
+          // Auto-select default method if nothing is selected yet
+          if (!openTradeForm.paymentMethodId) {
+            const defaultPm = data.data.find((pm: MerchantPaymentMethod) => pm.is_default) || data.data[0];
+            if (defaultPm) {
+              setOpenTradeForm(prev => ({
+                ...prev,
+                paymentMethod: (defaultPm.type === 'cash' ? 'cash' : 'bank') as 'bank' | 'cash',
+                paymentMethodId: defaultPm.id,
+              }));
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch payment methods:", err);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, merchantId]);
+
   const handleClose = () => {
     onClose();
     setCreateTradeError(null);
+    setShowPmDropdown(false);
   };
+
+  const pmIcon = (type: string) =>
+    type === 'bank' ? '🏦' : type === 'cash' ? '💵' : type === 'card' ? '💳' : type === 'mobile' ? '📱' : '💰';
+  const selectedPm =
+    paymentMethods.find((pm) => pm.id === openTradeForm.paymentMethodId) ||
+    paymentMethods.find((pm) => pm.type === openTradeForm.paymentMethod);
 
   return (
     <AnimatePresence>
@@ -148,27 +202,77 @@ export function TradeFormModal({
                 {/* Payment Method */}
                 <div>
                   <label className="text-[11px] text-foreground/40 mb-1.5 block">Payment Method</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="relative">
                     <button
-                      onClick={() => setOpenTradeForm(prev => ({ ...prev, paymentMethod: "bank" }))}
-                      className={`py-2.5 rounded-xl text-xs font-medium transition-all ${
-                        openTradeForm.paymentMethod === "bank"
-                          ? "bg-white/10 text-white border border-white/20"
-                          : "bg-white/[0.04] text-foreground/40 border border-transparent hover:bg-card"
-                      }`}
+                      type="button"
+                      onClick={() => setShowPmDropdown(!showPmDropdown)}
+                      disabled={paymentMethods.length === 0}
+                      className="w-full flex items-center justify-between gap-2 py-2.5 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:border-white/[0.15] transition-all disabled:opacity-60"
                     >
-                      Bank Transfer
+                      {selectedPm ? (
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="text-[12px] shrink-0">{pmIcon(selectedPm.type)}</span>
+                          <div className="min-w-0 flex-1 text-left">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[12px] font-medium text-white/80 truncate">{selectedPm.name}</span>
+                              <span className="text-[9px] text-foreground/35 font-mono uppercase shrink-0">{selectedPm.type}</span>
+                            </div>
+                            {selectedPm.details && (
+                              <div className="text-[10px] text-foreground/40 font-mono truncate">
+                                {selectedPm.details}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : paymentMethods.length === 0 ? (
+                        <span className="text-[11px] text-foreground/40">
+                          No payment methods — add one in Settings → Payments
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-foreground/40">Select payment method</span>
+                      )}
+                      <ChevronDown className={`w-3.5 h-3.5 text-foreground/30 transition-transform shrink-0 ${showPmDropdown ? 'rotate-180' : ''}`} />
                     </button>
-                    <button
-                      onClick={() => setOpenTradeForm(prev => ({ ...prev, paymentMethod: "cash" }))}
-                      className={`py-2.5 rounded-xl text-xs font-medium transition-all ${
-                        openTradeForm.paymentMethod === "cash"
-                          ? "bg-white/10 text-white border border-white/20"
-                          : "bg-white/[0.04] text-foreground/40 border border-transparent hover:bg-card"
-                      }`}
-                    >
-                      Cash
-                    </button>
+
+                    {showPmDropdown && paymentMethods.length > 0 && (
+                      <div className="absolute z-30 top-full left-0 right-0 mt-1 rounded-xl border border-white/[0.08] bg-card-solid shadow-lg overflow-hidden max-h-64 overflow-y-auto">
+                        {paymentMethods.map((pm) => {
+                          const isSelected = openTradeForm.paymentMethodId === pm.id;
+                          return (
+                            <button
+                              key={pm.id}
+                              type="button"
+                              onClick={() => {
+                                setOpenTradeForm(prev => ({
+                                  ...prev,
+                                  paymentMethod: (pm.type === 'cash' ? 'cash' : 'bank') as 'bank' | 'cash',
+                                  paymentMethodId: pm.id,
+                                }));
+                                setShowPmDropdown(false);
+                              }}
+                              className={`w-full flex items-start gap-2 px-3 py-2 text-left transition-colors ${
+                                isSelected
+                                  ? "bg-white/[0.08] text-white"
+                                  : "hover:bg-white/[0.04] text-foreground/60"
+                              }`}
+                            >
+                              <span className="text-[12px] mt-0.5 shrink-0">{pmIcon(pm.type)}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[12px] font-medium truncate">{pm.name}</span>
+                                  <span className="text-[9px] text-foreground/30 font-mono uppercase shrink-0 ml-auto">{pm.type}</span>
+                                </div>
+                                {pm.details && (
+                                  <div className="text-[10px] text-foreground/40 font-mono truncate mt-0.5">
+                                    {pm.details}
+                                  </div>
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
 

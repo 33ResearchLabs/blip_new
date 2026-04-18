@@ -757,6 +757,7 @@ export function useOrderActions({
           tradeType: effectiveTradeType,
           cryptoAmount: parseFloat(openTradeForm.cryptoAmount),
           paymentMethod: openTradeForm.paymentMethod,
+          paymentMethodId: openTradeForm.paymentMethodId,
           spreadPreference: openTradeForm.spreadPreference,
           priorityFee: priorityFee || 0,
           pair,

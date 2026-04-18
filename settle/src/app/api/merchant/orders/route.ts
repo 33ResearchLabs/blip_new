@@ -411,16 +411,24 @@ export async function POST(request: NextRequest) {
     // brings their own payment method at claim time.
     let sellerPaymentMethodId: string | undefined;
     if (!isM2MTrade && creatorIsSeller) {
+      // For self-broadcast SELL: creator (merchant_id) is the seller
       if (requestedPmId) {
         const owned = await getMerchantPaymentMethods(merchant_id);
         if (owned.some((pm) => pm.id === requestedPmId)) {
           sellerPaymentMethodId = requestedPmId;
         }
       }
+      // Fallback to merchant's default payment method
       if (!sellerPaymentMethodId) {
         const defaultPm = await getMerchantDefaultPaymentMethod(merchant_id);
         if (defaultPm?.id) sellerPaymentMethodId = defaultPm.id;
       }
+      logger.info('[Merchant Order] Payment method resolved', {
+        merchant_id,
+        requested: requestedPmId,
+        resolved: sellerPaymentMethodId,
+        creatorIsSeller,
+      });
     }
 
     // Offer lookup: only for targeted M2M orders where a specific seller
