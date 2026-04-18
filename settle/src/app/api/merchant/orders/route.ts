@@ -229,6 +229,14 @@ export async function POST(request: NextRequest) {
       return forbiddenResponse('You can only create orders for yourself');
     }
 
+    // L1: Reject self-trade attempts at the API boundary.
+    // A merchant cannot trade with themselves — no price discovery, no
+    // counterparty, and historically these orders were created as cancelled
+    // noise in the DB. Previously silently treated as non-M2M.
+    if (target_merchant_id && target_merchant_id === merchant_id) {
+      return validationErrorResponse(['Cannot create a trade with yourself']);
+    }
+
     // Verify merchant(s) exist — parallelize if M2M
     const isM2MTrade = !!target_merchant_id && target_merchant_id !== merchant_id;
     const [merchantExists, targetMerchantExists] = await Promise.all([
