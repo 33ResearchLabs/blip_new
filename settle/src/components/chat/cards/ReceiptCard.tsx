@@ -1,6 +1,7 @@
 'use client';
 
 import { Receipt, ArrowRightLeft, User, Store, Clock } from 'lucide-react';
+import { formatCrypto, formatRate } from '@/lib/format';
 
 interface ReceiptData {
   order_number?: string;
@@ -27,10 +28,11 @@ interface ReceiptCardProps {
   theme?: 'dark' | 'light';
 }
 
-function formatAmount(value: string | number | undefined, decimals = 2): string {
-  if (value === undefined || value === null) return '0';
-  const num = typeof value === 'string' ? parseFloat(value) : value;
-  return num.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+// Delegates to the canonical 2-decimal formatter. Kept as a thin alias so
+// the rest of the file doesn't need a sweeping rename.
+function formatAmount(value: string | number | undefined): string {
+  if (value === undefined || value === null) return formatCrypto(0);
+  return formatCrypto(value);
 }
 
 function formatDateTime(dateStr: string | undefined): string {
@@ -167,7 +169,7 @@ export function ReceiptCard({ data, currentStatus, theme = 'dark' }: ReceiptCard
         <div className="flex justify-between items-center">
           <span className={`text-xs ${t.label}`}>Rate</span>
           <span className={`text-sm ${t.valueDim} font-mono`}>
-            {formatAmount(data.rate, 4)}
+            {formatRate(data.rate)}
           </span>
         </div>
 

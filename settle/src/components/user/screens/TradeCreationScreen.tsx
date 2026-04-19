@@ -26,6 +26,7 @@ import { BottomNav } from "./BottomNav";
 import { FilterDropdown } from "./ui/FilterDropdown";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { clampDecimal, DECIMAL_PRESETS } from "@/lib/input/sanitize";
+import { formatCrypto, formatFiat, formatRate, formatPercentage } from "@/lib/format";
 
 type RatePair = "usdt_aed" | "usdt_inr";
 
@@ -333,7 +334,7 @@ export const TradeCreationScreen = ({
                   <>
                     <span className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-[1.1]">
                       {rateSymbol}
-                      {displayRate.toFixed(rateDecimals)}
+                      {formatRate(displayRate)}
                     </span>
                     <span className="text-[13px] font-semibold text-text-tertiary">
                       {rateCurrency}
@@ -417,10 +418,7 @@ export const TradeCreationScreen = ({
                 >
                   {rateSymbol}{" "}
                   {hasAmount && displayRate !== null
-                    ? (parseFloat(amount) * displayRate).toLocaleString(
-                        undefined,
-                        { minimumFractionDigits: 2, maximumFractionDigits: 2 },
-                      )
+                    ? formatCrypto(parseFloat(amount) * displayRate)
                     : "0.00"}
                 </span>
                 <span className="text-[13px] font-semibold text-text-tertiary">
@@ -435,7 +433,7 @@ export const TradeCreationScreen = ({
               <span className="text-[11px] font-bold text-text-tertiary tracking-[0.08em]">
                 BAL{" "}
                 {solanaWallet.usdtBalance !== null
-                  ? solanaWallet.usdtBalance.toFixed(2)
+                  ? formatCrypto(solanaWallet.usdtBalance)
                   : "\u2014"}{" "}
                 USDT
               </span>
@@ -454,7 +452,7 @@ export const TradeCreationScreen = ({
                   Fee
                 </p>
                 <p className="text-[15px] font-extrabold text-text-secondary">
-                  {(currentFees.totalFee * 100).toFixed(1)}%
+                  {formatPercentage(currentFees.totalFee * 100)}
                 </p>
               </div>
               <div className="w-px h-7 bg-border-medium" />
@@ -463,7 +461,7 @@ export const TradeCreationScreen = ({
                   Trader Earns
                 </p>
                 <p className="text-[15px] font-extrabold text-text-secondary">
-                  {(currentFees.traderCut * 100).toFixed(2)}%
+                  {formatPercentage(currentFees.traderCut * 100)}
                 </p>
               </div>
               <div className="w-px h-7 bg-border-medium" />
@@ -473,8 +471,8 @@ export const TradeCreationScreen = ({
                 </p>
                 <p className="text-[15px] font-extrabold text-text-primary">
                   {tradeType === "buy"
-                    ? `${parseFloat(amount || "0").toFixed(2)} USDT`
-                    : `${"\u062F.\u0625"}${parseFloat(fiatAmount || "0").toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                    ? `${formatCrypto(parseFloat(amount || "0"))} USDT`
+                    : formatFiat(parseFloat(fiatAmount || "0"), rateCurrency)}
                 </p>
               </div>
             </motion.div>

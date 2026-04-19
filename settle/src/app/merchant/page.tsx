@@ -34,6 +34,7 @@ import { useMerchantConversations } from "@/hooks/useMerchantConversations";
 import { useTradeCreation } from "@/hooks/useTradeCreation";
 import { useMerchantRealtimeEvents } from "@/hooks/useMerchantRealtimeEvents";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { formatCrypto } from "@/lib/format";
 import { useSolanaWallet } from "@/context/SolanaWalletContext";
 import { MerchantModals } from "@/components/merchant/MerchantModals";
 import { MerchantDesktopLayout } from "@/components/merchant/MerchantDesktopLayout";
@@ -799,13 +800,13 @@ export default function MerchantDashboard() {
         >
           <span className="text-[11px] font-mono text-foreground/70">
             {effectiveBalance !== null
-              ? `${effectiveBalance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+              ? formatCrypto(effectiveBalance)
               : "—"}
           </span>
         </button>
         <div className="flex items-center gap-1 px-2 py-1 bg-foreground/[0.03] rounded-md shrink-0">
           <span className="text-[10px] font-mono text-foreground/40">
-            ${totalTradedVolume.toLocaleString()}
+            ${formatCrypto(totalTradedVolume)}
           </span>
         </div>
         <div className="flex-1" />

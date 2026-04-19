@@ -20,9 +20,12 @@ const FIAT_FORMATTER = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
+// NOTE: exchange rates are displayed with 2 decimals app-wide per product
+// direction ("100.00, not 100.0000"). If you need a high-precision readout
+// for debug or reconciliation, call `formatRate(v, { decimals: 4 })`.
 const RATE_FORMATTER = new Intl.NumberFormat('en-US', {
-  minimumFractionDigits: 4,
-  maximumFractionDigits: 4,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 });
 
 const PCT_FORMATTER = new Intl.NumberFormat('en-US', {
@@ -87,11 +90,22 @@ export function formatFiat(value: unknown, currency?: string): string {
 }
 
 /**
- * Exchange rates (e.g. USDT/INR 98.0000). 4 decimals.
+ * Exchange rates (e.g. USDT/INR 98.00). 2 decimals by default.
+ * Pass `{ decimals: 4 }` when you explicitly need high precision (e.g. a
+ * reconciliation report). UI should stick to the default.
  */
-export function formatRate(value: unknown): string {
+export function formatRate(
+  value: unknown,
+  opts?: { decimals?: number },
+): string {
   const n = safeNumber(value);
   if (n == null) return PLACEHOLDER;
+  if (opts?.decimals != null) {
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: opts.decimals,
+      maximumFractionDigits: opts.decimals,
+    }).format(n);
+  }
   return RATE_FORMATTER.format(n);
 }
 

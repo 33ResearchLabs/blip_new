@@ -37,6 +37,7 @@ import {
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/context/ModalContext";
+import { formatCrypto, formatFiat } from "@/lib/format";
 
 const EmojiPicker = dynamic(() => import("emoji-picker-react"), { ssr: false });
 
@@ -639,11 +640,11 @@ export const OrderDetailScreen = ({
             <div>
               <p className="text-[17px] font-semibold text-text-primary">
                 {activeOrder.type === "buy" ? "Buying" : "Selling"}{" "}
-                {parseFloat(activeOrder.cryptoAmount).toFixed(2)} USDT
+                {formatCrypto(parseFloat(activeOrder.cryptoAmount))} USDT
               </p>
               <p className="text-[13px] text-text-secondary">
                 {fiatSym(activeOrder.fiatCode)}{" "}
-                {parseFloat(activeOrder.fiatAmount).toLocaleString()}
+                {formatCrypto(parseFloat(activeOrder.fiatAmount))}
               </p>
             </div>
           </div>
@@ -1319,9 +1320,7 @@ export const OrderDetailScreen = ({
                                     </span>
                                     <span className="text-[17px] font-semibold text-text-primary">
                                       {fiatSym(activeOrder.fiatCode)}{" "}
-                                      {parseFloat(
-                                        activeOrder.fiatAmount,
-                                      ).toLocaleString()}
+                                      {formatCrypto(parseFloat(activeOrder.fiatAmount))}
                                     </span>
                                   </div>
                                 </div>
@@ -1669,9 +1668,7 @@ export const OrderDetailScreen = ({
                                     <div className="flex items-center gap-1.5">
                                       <span className="text-[17px] font-semibold text-text-primary">
                                         {fiatSym(activeOrder.fiatCode)}{" "}
-                                        {parseFloat(
-                                          activeOrder.fiatAmount,
-                                        ).toLocaleString()}
+                                        {formatCrypto(parseFloat(activeOrder.fiatAmount))}
                                       </span>
                                       <button
                                         onClick={() =>
@@ -1744,9 +1741,7 @@ export const OrderDetailScreen = ({
                               {activeOrder.acceptorWalletAddress?.slice(0, 4)}
                               ...{activeOrder.acceptorWalletAddress?.slice(-4)}
                               ). Lock your{" "}
-                              {parseFloat(activeOrder.cryptoAmount).toFixed(
-                                2,
-                              )}{" "}
+                              {formatCrypto(parseFloat(activeOrder.cryptoAmount))}{" "}
                               USDT to the escrow. Funds will be released to this
                               wallet when you confirm payment received.
                             </p>
@@ -1863,9 +1858,7 @@ export const OrderDetailScreen = ({
                                 <>
                                   <Lock className="w-5 h-5" />
                                   Lock{" "}
-                                  {parseFloat(activeOrder.cryptoAmount).toFixed(
-                                    2,
-                                  )}{" "}
+                                  {formatCrypto(parseFloat(activeOrder.cryptoAmount))}{" "}
                                   USDT to Escrow
                                 </>
                               )}
@@ -1899,9 +1892,7 @@ export const OrderDetailScreen = ({
                               </span>
                               <span className="text-[15px] font-semibold text-text-primary">
                                 {fiatSym(activeOrder.fiatCode)}{" "}
-                                {parseFloat(
-                                  activeOrder.fiatAmount,
-                                ).toLocaleString()}
+                                {formatCrypto(parseFloat(activeOrder.fiatAmount))}
                               </span>
                             </div>
                             {activeOrder.lockedPaymentMethod ? (
@@ -2085,9 +2076,7 @@ export const OrderDetailScreen = ({
                           <div className={`rounded-xl p-3 mb-3 ${CARD_STRONG}`}>
                             <p className="text-[13px] text-text-primary">
                               Merchant has sent {fiatSym(activeOrder.fiatCode)}{" "}
-                              {parseFloat(
-                                activeOrder.fiatAmount,
-                              ).toLocaleString()}{" "}
+                              {formatCrypto(parseFloat(activeOrder.fiatAmount))}{" "}
                               to your bank.
                             </p>
                             <p className="text-[12px] mt-1 text-text-secondary">

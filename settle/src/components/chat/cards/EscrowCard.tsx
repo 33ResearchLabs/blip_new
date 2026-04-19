@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Lock, Unlock, Copy, Check, ExternalLink, Shield } from 'lucide-react';
+import { formatCrypto } from '@/lib/format';
 
 interface EscrowData {
   amount?: number;
@@ -81,9 +82,9 @@ export function EscrowCard({ data, status = 'locked' }: EscrowCardProps) {
         </div>
         <div>
           <h4 className="text-sm font-medium text-white">{config.label}</h4>
-          {data.amount && (
+          {data.amount != null && (
             <p className="text-xs text-white/50">
-              {data.amount} {data.currency || 'USDT'} secured
+              {formatCrypto(data.amount)} {data.currency || 'USDT'} secured
             </p>
           )}
         </div>
