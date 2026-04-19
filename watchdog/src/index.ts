@@ -9,6 +9,7 @@ import bs58 from "bs58";
 import fs from "node:fs";
 import { CONFIG, loadKeypair } from "./config.js";
 import { log } from "./logger.js";
+import { convertIdlToAnchor29 } from "./idlConverter.js";
 
 // ─── Trade account layout (Anchor discriminator + fields) ──────────────────
 //  8 disc + 32 creator + 32 counterparty + 8 trade_id + 32 mint + 8 amount
@@ -260,7 +261,11 @@ async function main(): Promise<void> {
   const provider = new AnchorProvider(connection, new Wallet(kp), {
     commitment: CONFIG.commitment,
   });
-  const idl = JSON.parse(fs.readFileSync(CONFIG.idlPath, "utf8")) as Idl;
+  const rawIdl = JSON.parse(fs.readFileSync(CONFIG.idlPath, "utf8"));
+  // Anchor 0.30+ IDL → 0.29 client shape. The regenerated V2.3 IDL uses
+  // the new nested `{defined: {name: "X"}}` reference style which the 0.29
+  // client rejects without this conversion step.
+  const idl = convertIdlToAnchor29(rawIdl) as Idl;
   const program = new Program(idl, CONFIG.programId, provider);
 
   const balance = await connection.getBalance(kp.publicKey).catch(() => 0);
