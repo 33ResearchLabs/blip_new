@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+keys/*.json
+!keys/.gitkeep
+idl/*.json
+!idl/.gitkeep
