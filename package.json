@@ -1,6 +1,7 @@
 {
   "name": "bm-workspace",
   "private": true,
+  "packageManager": "pnpm@9.15.3",
   "scripts": {
     "dev:local": "bash scripts/dev-local.sh",
     "dev:core": "pnpm -C apps/core-api dev",

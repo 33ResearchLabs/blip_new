@@ -23,12 +23,17 @@ function truncateHash(hash: string, startChars = 6, endChars = 4): string {
   return `${hash.slice(0, startChars)}...${hash.slice(-endChars)}`;
 }
 
-// Get Blipscan URL for transaction or account
+// Explorer URL helper. Falls back to Solscan (cluster-aware) when
+// NEXT_PUBLIC_BLIPSCAN_URL isn't set, because the previously-hardcoded
+// `blipscan.xyz` isn't live yet. Both Solscan and a future Blipscan
+// share the /tx/ + /account/ path scheme — swap hosts via env var.
 function getBlipscanUrl(value: string, type: 'tx' | 'account' = 'account'): string {
-  const baseUrl = process.env.NEXT_PUBLIC_BLIPSCAN_URL || 'https://blipscan.xyz';
-  return type === 'tx'
-    ? `${baseUrl}/tx/${value}`
-    : `${baseUrl}/account/${value}`;
+  const explicit = process.env.NEXT_PUBLIC_BLIPSCAN_URL;
+  const network = process.env.NEXT_PUBLIC_SOLANA_NETWORK || 'devnet';
+  const baseUrl = explicit ?? 'https://solscan.io';
+  const cluster = network === 'mainnet-beta' ? '' : `?cluster=${network}`;
+  const path = type === 'tx' ? 'tx' : 'account';
+  return `${baseUrl}/${path}/${value}${cluster}`;
 }
 
 export function EscrowCard({ data, status = 'locked' }: EscrowCardProps) {

@@ -299,12 +299,14 @@ function truncateHash(hash: string, startChars = 6, endChars = 4): string {
   return `${hash.slice(0, startChars)}...${hash.slice(-endChars)}`;
 }
 
-// Blipscan URL (local explorer)
-const BLIPSCAN_URL =
-  process.env.NEXT_PUBLIC_BLIPSCAN_URL || "http://localhost:3003";
-
+// Blipscan URL. Falls back to Solscan account page so the link never
+// dead-ends when no NEXT_PUBLIC_BLIPSCAN_URL is configured.
 function getBlipscanTradeUrl(escrowPda: string): string {
-  return `${BLIPSCAN_URL}/trade/${escrowPda}`;
+  const explicit = process.env.NEXT_PUBLIC_BLIPSCAN_URL;
+  const network = process.env.NEXT_PUBLIC_SOLANA_NETWORK || "devnet";
+  if (explicit) return `${explicit}/trade/${escrowPda}`;
+  const cluster = network === "mainnet-beta" ? "" : `?cluster=${network}`;
+  return `https://solscan.io/account/${escrowPda}${cluster}`;
 }
 
 // Solscan fallback for tx hashes
