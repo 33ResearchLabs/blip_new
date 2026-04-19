@@ -20,6 +20,8 @@ import { checkRateLimit, STANDARD_LIMIT, ORDER_LIMIT } from '@/lib/middleware/ra
 import { proxyCoreApi } from '@/lib/proxy/coreApi';
 import { transaction, query as dbQuery } from '@/lib/db';
 import { getFinalPrice } from '@/lib/price/usdtInrPrice';
+import { getCurrentFeeBps } from '@/lib/money/feeBps';
+import { checkDrift } from '@/lib/money/driftGuard';
 import { enrichOrderResponse } from '@/lib/orders/enrichOrderResponse';
 import { auditLog } from '@/lib/auditLog';
 import { getIdempotencyKey, withIdempotency } from '@/lib/idempotency';
@@ -110,6 +112,8 @@ export async function POST(request: NextRequest) {
       escrow_pda,
       escrow_creator_wallet,
       escrow_tx_hash,
+      expected_rate,
+      expected_fee_bps,
     } = parseResult.data;
 
     // Authorization: require authenticated user creating order for themselves
@@ -169,16 +173,31 @@ export async function POST(request: NextRequest) {
         ]);
       }
 
-      // Get rate from canonical price engine — same source as /api/prices/current.
-      // Reads latest price_tick (refreshed every 25s by the price worker) and respects
-      // admin MANUAL overrides. Reject if unavailable (no hardcoded fallbacks per CLAUDE.md).
+      // Fetch authoritative rate AND fee_bps in parallel. Both are snapshotted
+      // into the order so the UI can render deterministic payouts at every phase.
       let sellRate: number | null = null;
+      let feeBps: number = 0;
       try {
-        const finalPrice = await getFinalPrice(pairFromBody);
+        const [finalPrice, currentFeeBps] = await Promise.all([
+          getFinalPrice(pairFromBody),
+          getCurrentFeeBps(),
+        ]);
         if (finalPrice.price > 0) sellRate = finalPrice.price;
+        feeBps = currentFeeBps;
       } catch { /* sellRate stays null */ }
       if (!sellRate || sellRate <= 0) {
         return errorResponse('Exchange rate temporarily unavailable. Please try again in a moment.');
+      }
+
+      // Reject silently-drifted quotes. Client can refresh and re-submit.
+      const drift = checkDrift({
+        actualRate: sellRate,
+        actualFeeBps: feeBps,
+        expectedRate: expected_rate,
+        expectedFeeBps: expected_fee_bps,
+      });
+      if (!drift.ok) {
+        return NextResponse.json({ success: false, ...drift.conflict }, { status: 409 });
       }
 
       const fiatAmount = crypto_amount * sellRate;
@@ -208,6 +227,7 @@ export async function POST(request: NextRequest) {
               crypto_amount,
               fiat_amount: fiatAmount,
               rate: sellRate,
+              fee_bps: feeBps,
               payment_details: { user_bank_account: parsedUserBank },
               accepted_at: null,
               ref_price_at_create: sellRate,
@@ -236,16 +256,28 @@ export async function POST(request: NextRequest) {
     // Same as sell orders — broadcast to all merchants, first to claim wins.
     // Offer-based flow commented out below for easy revert.
 
-    // Get rate from canonical price engine — same source as /api/prices/current.
-    // Reads latest price_tick (refreshed every 25s by the price worker) and respects
-    // admin MANUAL overrides. Reject if unavailable (no hardcoded fallbacks per CLAUDE.md).
     let buyRate: number | null = null;
+    let buyFeeBps: number = 0;
     try {
-      const finalPrice = await getFinalPrice(pairFromBody);
+      const [finalPrice, currentFeeBps] = await Promise.all([
+        getFinalPrice(pairFromBody),
+        getCurrentFeeBps(),
+      ]);
       if (finalPrice.price > 0) buyRate = finalPrice.price;
+      buyFeeBps = currentFeeBps;
     } catch { /* buyRate stays null */ }
     if (!buyRate || buyRate <= 0) {
       return errorResponse('Exchange rate temporarily unavailable. Please try again in a moment.');
+    }
+
+    const buyDrift = checkDrift({
+      actualRate: buyRate,
+      actualFeeBps: buyFeeBps,
+      expectedRate: expected_rate,
+      expectedFeeBps: expected_fee_bps,
+    });
+    if (!buyDrift.ok) {
+      return NextResponse.json({ success: false, ...buyDrift.conflict }, { status: 409 });
     }
 
     const fiatAmount = crypto_amount * buyRate;
@@ -266,6 +298,7 @@ export async function POST(request: NextRequest) {
             crypto_amount,
             fiat_amount: fiatAmount,
             rate: buyRate,
+            fee_bps: buyFeeBps,
             payment_details: {},
             buyer_wallet_address: buyer_wallet_address,
             accepted_at: null,

@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/middleware/auth';
 import { getFinalPrice, getPairConfig, SUPPORTED_PAIRS } from '@/lib/price/usdtInrPrice';
+import { getCurrentFeeBps } from '@/lib/money/feeBps';
 
 // GET /api/prices/current?pair=usdt_inr
-// Single source of truth — returns the final price based on admin mode (LIVE or MANUAL).
-// Used by merchants and users. No price calculations on the frontend.
+//
+// Single source of truth. Returns the final price based on admin mode
+// (LIVE or MANUAL) AND the current protocol fee in basis points. The UI
+// snapshots `{ price, feeBps }` into the order at creation time so the
+// fiat + payout numbers it displays are deterministic end-to-end.
 export async function GET(request: NextRequest) {
   const auth = await requireAuth(request);
   if (auth instanceof NextResponse) return auth;
@@ -20,7 +24,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const data = await getFinalPrice(pairId);
+    const [data, feeBps] = await Promise.all([
+      getFinalPrice(pairId),
+      getCurrentFeeBps(),
+    ]);
 
     return NextResponse.json({
       success: true,
@@ -32,6 +39,7 @@ export async function GET(request: NextRequest) {
         livePrice: data.livePrice,
         adminPrice: data.adminPrice,
         currency: pairId === 'usdt_inr' ? 'INR' : 'AED',
+        feeBps,
       },
     });
   } catch (error) {

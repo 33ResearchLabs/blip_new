@@ -182,6 +182,12 @@ export const createOrderSchema = z.object({
   escrow_pda: z.string().max(64).optional(),
   escrow_creator_wallet: z.string().max(64).optional(),
   escrow_tx_hash: z.string().max(128).optional(),
+  // Deterministic-pricing guard. Client sends the rate + fee it displayed
+  // to the user; server rejects with 409 if either drifted before the POST
+  // lands. See /api/orders/route.ts for the drift threshold.
+  pair: z.enum(['usdt_aed', 'usdt_inr', 'USDT_AED', 'USDT_INR']).optional(),
+  expected_rate: z.number().positive().optional(),
+  expected_fee_bps: z.number().int().min(0).max(10_000).optional(),
 });
 
 export const updateOrderStatusSchema = z.object({
@@ -196,6 +202,19 @@ export const updateOrderStatusSchema = z.object({
 
 export const orderIdParamSchema = z.object({
   id: uuidSchema,
+});
+
+// ── Auction / Hybrid marketplace ──────────────────────────────────────────
+export const submitBidSchema = z.object({
+  merchant_id: uuidSchema,
+  rate: z.number().positive().max(1_000_000),
+  max_amount: z.number().positive().max(10_000_000),
+  eta_seconds: z.number().int().min(1).max(3600),
+});
+
+export const createAuctionSchema = z.object({
+  mode: z.enum(['fastest', 'recommended', 'best_value']).default('recommended'),
+  window_ms: z.number().int().min(1000).max(15_000).optional(),
 });
 
 // Chat schemas
