@@ -4,16 +4,16 @@
  * Global error boundary — catches errors thrown from the root layout and
  * any React render error that escaped a more specific error.tsx boundary.
  *
- * Forwards the error to both our own error_logs (via logClientError's
- * Sentry bridge) AND directly to Sentry for the rich stack+replay view.
- *
- * Must be a client component ('use client') per Next.js docs — the error
- * boundary has to rehydrate on the client.
+ * IMPORTANT: Keep ALL imports lazy (require inside useEffect). Top-level
+ * imports of @sentry/nextjs or our own clientLogger trip Next.js 16's
+ * prerender pass of /_global-error with
+ * "Cannot read properties of null (reading 'useContext')", because those
+ * modules touch React context at module-load time. Pattern mirrors
+ * `src/app/error.tsx`, which is the canonical minimal App-Router error
+ * boundary that works with Next 16's static prerender.
  */
 
-import * as Sentry from '@sentry/nextjs';
 import { useEffect } from 'react';
-import { logClientError } from '@/lib/errorTracking/clientLogger';
 
 export default function GlobalError({
   error,
@@ -23,10 +23,16 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Capture to Sentry with a full stack trace
-    Sentry.captureException(error);
-    // Also record in our own error_logs so the admin dashboard has the row
+    console.error('Unhandled global error:', error);
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const Sentry = require('@sentry/nextjs');
+      Sentry.captureException(error);
+    } catch { /* Sentry not available — skip */ }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { logClientError } = require('@/lib/errorTracking/clientLogger');
       logClientError({
         type: 'ui.global_error_boundary',
         severity: 'CRITICAL',
@@ -37,7 +43,7 @@ export default function GlobalError({
           stack: error.stack?.slice(0, 4000),
         },
       });
-    } catch { /* swallow */ }
+    } catch { /* swallow — logging must never cascade */ }
   }, [error]);
 
   // NOTE: plain HTML (no `next/error`) — Next.js 16 can't prerender
