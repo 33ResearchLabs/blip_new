@@ -296,6 +296,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // After both the dry-run branch (line ~250) and the non-dry-run retry
+    // block above, `user` is always defined. This assert tells TypeScript
+    // so, and fails loudly if any refactor accidentally breaks the
+    // invariant.
+    if (!user) {
+      return errorResponse('Internal error: user was not initialised');
+    }
+
     // ── DIRECT ORDER CREATION (no offer matching) ───────────────────────
     // Offer matching is disabled. Orders are created with corridor ref_price
     // and broadcast to all merchants for manual acceptance.

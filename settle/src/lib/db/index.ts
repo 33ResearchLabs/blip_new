@@ -116,7 +116,7 @@ function firstParams(params: unknown[] | undefined, max = 4): unknown[] | undefi
 
 async function logDbError(sql: string, params: unknown[] | undefined, err: unknown, duration: number): Promise<void> {
   try {
-    const { safeLog } = await import('../errorTracking/logger');
+    const { safeLog } = await import('@/lib/errorTracking/logger');
     // Don't recursively log errors that came from error_logs itself —
     // would turn a failed insert into an infinite loop.
     if (sql.toLowerCase().includes('error_logs')) return;
@@ -142,7 +142,7 @@ async function logDbError(sql: string, params: unknown[] | undefined, err: unkno
 
 async function logSlowQuery(sql: string, params: unknown[] | undefined, duration: number, rows: number): Promise<void> {
   try {
-    const { safeLog } = await import('../errorTracking/logger');
+    const { safeLog } = await import('@/lib/errorTracking/logger');
     // Don't log slow queries ON the error_logs table — creates noise when the
     // admin dashboard is paginating through many entries.
     if (sql.toLowerCase().includes('error_logs')) return;
@@ -220,7 +220,7 @@ export async function transaction<T>(
       // threshold to avoid flooding the dashboard with every multi-step op.
       void (async () => {
         try {
-          const { safeLog } = await import('../errorTracking/logger');
+          const { safeLog } = await import('@/lib/errorTracking/logger');
           safeLog({
             type: 'db.slow_transaction',
             severity: duration > 5000 ? 'WARN' : 'INFO',
@@ -239,7 +239,7 @@ export async function transaction<T>(
     // logged by query() above, so we only add context that ties them together.
     void (async () => {
       try {
-        const { safeLog } = await import('../errorTracking/logger');
+        const { safeLog } = await import('@/lib/errorTracking/logger');
         const err = e as { code?: string; message?: string };
         safeLog({
           type: `db.transaction_failed${err?.code ? '.' + err.code : ''}`,

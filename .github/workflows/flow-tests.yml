@@ -68,6 +68,10 @@ jobs:
           psql $DATABASE_URL -f database/schema.sql
           echo "Schema setup complete"
 
+      - name: Build settlement-core (shared package)
+        working-directory: ./packages/settlement-core
+        run: pnpm build
+
       - name: Build Next.js app
         working-directory: ./settle
         run: pnpm build

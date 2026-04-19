@@ -36,7 +36,9 @@ pool.on('error', (err) => {
 // Log DB errors and slow queries to the error_logs table. Fire-and-forget
 // so callers are never blocked. Skips logging when the SQL itself touches
 // error_logs — prevents infinite recursion if the logger's own insert fails.
-const SLOW_QUERY_THRESHOLD_MS = 500;
+// 2000ms default: Railway's PG proxy alone adds 200-1000ms per query, so
+// the old 500ms threshold mostly caught network noise, not real issues.
+const SLOW_QUERY_THRESHOLD_MS = parseInt(process.env.DB_SLOW_QUERY_THRESHOLD_MS || '2000', 10);
 function _truncateSql(sql) {
     const clean = sql.replace(/\s+/g, ' ').trim();
     return clean.length > 500 ? clean.slice(0, 500) + '…' : clean;

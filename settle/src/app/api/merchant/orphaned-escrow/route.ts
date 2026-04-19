@@ -1,8 +1,6 @@
-import { NextRequest } from 'next/server';
-import { requireAuth } from '@/lib/middleware/auth';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireAuth, successResponse, errorResponse, validationErrorResponse } from '@/lib/middleware/auth';
 import { query } from '@/lib/db';
-import { successResponse, errorResponse, validationErrorResponse } from '@/lib/api/responses';
 import { logger } from 'settlement-core';
 
 /**
