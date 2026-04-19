@@ -81,8 +81,14 @@ import { convertIdlToAnchor29 } from '@/lib/solana/idlConverter';
 // Convert IDL to Anchor 0.29 format
 const idl = convertIdlToAnchor29(idlRaw);
 
-// Program ID from IDL
-const PROGRAM_ID = new PublicKey(idlRaw.address || idlRaw.metadata?.address || BLIP_V2_PROGRAM_ID);
+// Program ID from IDL. Anchor 0.30+ emits `address` at the top level;
+// older IDLs put it under `metadata.address`. Fall back to the pinned
+// constant if neither is present.
+const PROGRAM_ID = new PublicKey(
+  (idlRaw as { address?: string; metadata?: { address?: string } }).address
+    ?? (idlRaw as { metadata?: { address?: string } }).metadata?.address
+    ?? BLIP_V2_PROGRAM_ID,
+);
 
 // Debug: Log IDL and program ID at module load
 if (typeof window !== 'undefined') {

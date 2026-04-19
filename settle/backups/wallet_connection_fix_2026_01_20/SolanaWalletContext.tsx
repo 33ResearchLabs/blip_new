@@ -206,8 +206,12 @@ function convertIdlToAnchor29(idl: any): Idl {
 // Convert IDL to Anchor 0.29 format
 const idl = convertIdlToAnchor29(idlRaw);
 
-// Program ID from IDL
-const PROGRAM_ID = new PublicKey(idlRaw.address || idlRaw.metadata?.address || BLIP_V2_PROGRAM_ID);
+// Program ID from IDL (Anchor 0.30+ puts it at the top level).
+const PROGRAM_ID = new PublicKey(
+  (idlRaw as { address?: string; metadata?: { address?: string } }).address
+    ?? (idlRaw as { metadata?: { address?: string } }).metadata?.address
+    ?? BLIP_V2_PROGRAM_ID,
+);
 
 // Debug: Log IDL and program ID at module load
 if (typeof window !== 'undefined') {
