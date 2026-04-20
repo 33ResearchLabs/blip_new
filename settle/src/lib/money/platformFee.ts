@@ -61,18 +61,30 @@ export async function deductPlatformFee(
     [feeAmount, payerId]
   );
 
-  // Credit platform_balance
+  // Credit platform_balance — atomic upsert so a missing 'main' row
+  // (fresh install, dropped row) doesn't silently swallow the fee, and
+  // concurrent increments from two parallel order completions both
+  // serialize via the row lock inside the UPDATE expression. The
+  // `RETURNING balance` comes back as the post-increment value regardless
+  // of whether this was an INSERT or an UPDATE.
   const platformResult = await client.query(
-    `UPDATE platform_balance
-     SET balance = balance + $1,
-         total_fees_collected = total_fees_collected + $1,
-         updated_at = NOW()
-     WHERE key = 'main'
+    `INSERT INTO platform_balance (key, balance, total_fees_collected, updated_at)
+     VALUES ('main', $1, $1, NOW())
+     ON CONFLICT (key) DO UPDATE
+       SET balance = platform_balance.balance + EXCLUDED.balance,
+           total_fees_collected = platform_balance.total_fees_collected + EXCLUDED.total_fees_collected,
+           updated_at = NOW()
      RETURNING balance`,
     [feeAmount]
   );
 
-  const platformBalanceAfter = parseFloat(String(platformResult.rows[0]?.balance || 0));
+  if (platformResult.rows.length === 0) {
+    // This branch is unreachable in normal operation — ON CONFLICT DO
+    // UPDATE always returns the row. Guard keeps the invariant loud if
+    // someone later changes the conflict target to ON CONFLICT DO NOTHING.
+    throw new Error('[PlatformFee] platform_balance upsert returned no row — invariant broken');
+  }
+  const platformBalanceAfter = parseFloat(String(platformResult.rows[0]?.balance));
 
   // Insert platform_fee_transactions record
   await client.query(
