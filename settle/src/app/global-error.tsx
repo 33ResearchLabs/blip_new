@@ -59,3 +59,5 @@ export default function GlobalError({
     </html>
   );
 }
+
+// CI trigger — PR metadata was stale after rebase; touching this file to force a synchronize event.
