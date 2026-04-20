@@ -258,23 +258,30 @@ export async function mockEscrowRelease(
               description: `Platform fee (${feePercentage}%) for order #${lockedOrder.order_number}`,
             });
 
-            // Credit platform balance
-            await client.query(
-              `UPDATE platform_balance
-               SET balance = balance + $1,
-                   total_fees_collected = total_fees_collected + $1,
-                   updated_at = NOW()
-               WHERE key = 'main'`,
+            // Credit platform balance — atomic upsert (handles missing
+            // 'main' row + races). Capture post-increment balance from
+            // RETURNING so the audit row below has the right snapshot
+            // instead of re-reading via a second SELECT (which was racy
+            // vs. concurrent releases).
+            const platformResult = await client.query(
+              `INSERT INTO platform_balance (key, balance, total_fees_collected, updated_at)
+               VALUES ('main', $1, $1, NOW())
+               ON CONFLICT (key) DO UPDATE
+                 SET balance = platform_balance.balance + EXCLUDED.balance,
+                     total_fees_collected = platform_balance.total_fees_collected + EXCLUDED.total_fees_collected,
+                     updated_at = NOW()
+               RETURNING balance`,
               [actualFeeAmount]
             );
+            const platformBalanceAfter = parseFloat(String(platformResult.rows[0]?.balance ?? 0));
 
-            // Platform fee audit log
+            // Platform fee audit log — use the captured balance, not a
+            // second SELECT, to avoid a race with a concurrent release.
             await client.query(
               `INSERT INTO platform_fee_transactions
                (order_id, fee_amount, fee_percentage, spread_preference, platform_balance_after)
-               VALUES ($1, $2, $3, $4,
-                 (SELECT balance FROM platform_balance WHERE key = 'main'))`,
-              [orderId, actualFeeAmount, feePercentage, lockedOrder.spread_preference || 'fastest']
+               VALUES ($1, $2, $3, $4, $5)`,
+              [orderId, actualFeeAmount, feePercentage, lockedOrder.spread_preference || 'fastest', platformBalanceAfter]
             );
           }
         }

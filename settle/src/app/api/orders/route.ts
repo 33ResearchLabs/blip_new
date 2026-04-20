@@ -10,6 +10,7 @@ import {
 } from '@/lib/validation/schemas';
 import {
   requireAuth,
+  requireTokenAuth,
   verifyUser,
   forbiddenResponse,
   validationErrorResponse,
@@ -116,8 +117,12 @@ export async function POST(request: NextRequest) {
       expected_fee_bps,
     } = parseResult.data;
 
-    // Authorization: require authenticated user creating order for themselves
-    const auth = await requireAuth(request);
+    // Authorization: stricter token auth for order creation (financial
+    // route). In production with AUTH_TOKEN_REQUIRED=true this rejects
+    // legacy x-user-id header auth with 401; in dev it still works but
+    // logs a loud warning on header-only usage. Tracks separate metrics
+    // so we can see the migration curve.
+    const auth = await requireTokenAuth(request);
     if (auth instanceof NextResponse) return auth;
     const isOwner = auth.actorType === 'user' && auth.actorId === user_id;
     if (!isOwner && auth.actorType !== 'system') {
