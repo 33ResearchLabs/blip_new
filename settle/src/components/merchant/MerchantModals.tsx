@@ -387,6 +387,7 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
 
       <TradeFormModal
         isOpen={showOpenTradeModal}
+        merchantId={merchantId}
         openTradeForm={openTradeForm}
         setOpenTradeForm={setOpenTradeForm}
         effectiveBalance={effectiveBalance}

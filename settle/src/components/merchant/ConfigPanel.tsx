@@ -283,8 +283,10 @@ export const ConfigPanel = memo(function ConfigPanel({
 
   const pricing = useMemo(() => {
     const totalSpread = tier.base + priorityFee;
-    const buyRate = currentRate * (1 - totalSpread / 100);
-    const sellRate = currentRate * (1 + totalSpread / 100);
+    // Round base rate to 2 decimals so display matches calculation
+    const baseRate = Math.round(currentRate * 100) / 100;
+    const buyRate = baseRate * (1 - totalSpread / 100);
+    const sellRate = baseRate * (1 + totalSpread / 100);
     const buyAed = cryptoAmount * buyRate;
     const sellAed = cryptoAmount * sellRate;
 

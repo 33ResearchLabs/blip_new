@@ -248,6 +248,7 @@ export function useEscrowOperations({
               type: pendingSellOrder.tradeType,
               crypto_amount: pendingSellOrder.cryptoAmount,
               payment_method: pendingSellOrder.paymentMethod,
+              merchant_payment_method_id: pendingSellOrder.paymentMethodId,
               spread_preference: pendingSellOrder.spreadPreference,
               priority_fee: pendingSellOrder.priorityFee || 0,
               matched_offer_id: pendingSellOrder.matchedOfferId,

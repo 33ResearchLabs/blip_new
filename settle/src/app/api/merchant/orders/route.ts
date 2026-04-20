@@ -229,6 +229,14 @@ export async function POST(request: NextRequest) {
       return forbiddenResponse('You can only create orders for yourself');
     }
 
+    // L1: Reject self-trade attempts at the API boundary.
+    // A merchant cannot trade with themselves — no price discovery, no
+    // counterparty, and historically these orders were created as cancelled
+    // noise in the DB. Previously silently treated as non-M2M.
+    if (target_merchant_id && target_merchant_id === merchant_id) {
+      return validationErrorResponse(['Cannot create a trade with yourself']);
+    }
+
     // Verify merchant(s) exist — parallelize if M2M
     const isM2MTrade = !!target_merchant_id && target_merchant_id !== merchant_id;
     const [merchantExists, targetMerchantExists] = await Promise.all([
@@ -411,16 +419,24 @@ export async function POST(request: NextRequest) {
     // brings their own payment method at claim time.
     let sellerPaymentMethodId: string | undefined;
     if (!isM2MTrade && creatorIsSeller) {
+      // For self-broadcast SELL: creator (merchant_id) is the seller
       if (requestedPmId) {
         const owned = await getMerchantPaymentMethods(merchant_id);
         if (owned.some((pm) => pm.id === requestedPmId)) {
           sellerPaymentMethodId = requestedPmId;
         }
       }
+      // Fallback to merchant's default payment method
       if (!sellerPaymentMethodId) {
         const defaultPm = await getMerchantDefaultPaymentMethod(merchant_id);
         if (defaultPm?.id) sellerPaymentMethodId = defaultPm.id;
       }
+      logger.info('[Merchant Order] Payment method resolved', {
+        merchant_id,
+        requested: requestedPmId,
+        resolved: sellerPaymentMethodId,
+        creatorIsSeller,
+      });
     }
 
     // Offer lookup: only for targeted M2M orders where a specific seller
