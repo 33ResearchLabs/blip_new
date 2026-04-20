@@ -74,7 +74,13 @@ jobs:
 
       - name: Build Next.js app
         working-directory: ./settle
-        run: pnpm build
+        # Use webpack (not Turbopack) for the CI build.
+        # Turbopack 16.1.5 has a bug prerendering /_global-error on
+        # Linux runners (React 19 + useContext(null)). Webpack handles
+        # the same source cleanly. Railway's Docker build already uses
+        # `pnpm build` which stays on Turbopack by default; this flag
+        # only affects CI.
+        run: pnpm next build --webpack
 
       - name: Run all tests
         working-directory: ./settle
