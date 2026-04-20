@@ -1,7 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, successResponse, errorResponse, validationErrorResponse } from '@/lib/middleware/auth';
-import { query } from '@/lib/db';
-import { logger } from 'settlement-core';
+import { NextRequest, NextResponse } from "next/server";
+import {
+  requireAuth,
+  successResponse,
+  errorResponse,
+  validationErrorResponse,
+} from "@/lib/middleware/auth";
+import { query } from "@/lib/db";
+import { logger } from "settlement-core";
 
 /**
  * POST /api/merchant/orphaned-escrow
@@ -27,12 +32,14 @@ export async function POST(request: NextRequest) {
     } = body;
 
     if (!escrow_tx_hash || !merchant_id || !amount) {
-      return validationErrorResponse(['escrow_tx_hash, merchant_id, and amount are required']);
+      return validationErrorResponse([
+        "escrow_tx_hash, merchant_id, and amount are required",
+      ]);
     }
 
     // Verify the authenticated merchant matches
-    if (auth.actorType === 'merchant' && auth.actorId !== merchant_id) {
-      return errorResponse('Unauthorized');
+    if (auth.actorType === "merchant" && auth.actorId !== merchant_id) {
+      return errorResponse("Unauthorized");
     }
 
     await query(
@@ -40,14 +47,29 @@ export async function POST(request: NextRequest) {
         (escrow_tx_hash, merchant_id, amount, error_message, escrow_trade_id, escrow_trade_pda, escrow_pda, escrow_creator_wallet)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT DO NOTHING`,
-      [escrow_tx_hash, merchant_id, amount, error_message || null, escrow_trade_id || null, escrow_trade_pda || null, escrow_pda || null, escrow_creator_wallet || null]
+      [
+        escrow_tx_hash,
+        merchant_id,
+        amount,
+        error_message || null,
+        escrow_trade_id || null,
+        escrow_trade_pda || null,
+        escrow_pda || null,
+        escrow_creator_wallet || null,
+      ],
     );
 
-    logger.api.error('POST', '/api/merchant/orphaned-escrow', new Error(`Orphaned escrow recorded: ${escrow_tx_hash} for merchant ${merchant_id}, amount ${amount}`));
+    logger.api.error(
+      "POST",
+      "/api/merchant/orphaned-escrow",
+      new Error(
+        `Orphaned escrow recorded: ${escrow_tx_hash} for merchant ${merchant_id}, amount ${amount}`,
+      ),
+    );
 
     return successResponse({ recorded: true });
   } catch (error) {
-    logger.api.error('POST', '/api/merchant/orphaned-escrow', error as Error);
-    return errorResponse('Failed to record orphaned escrow');
+    logger.api.error("POST", "/api/merchant/orphaned-escrow", error as Error);
+    return errorResponse("Failed to record orphaned escrow");
   }
 }
