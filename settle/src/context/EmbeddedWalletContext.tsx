@@ -61,8 +61,16 @@ import {
 } from '@/lib/wallet/embeddedWallet';
 import { createKeypairWalletAdapter } from '@/lib/wallet/keypairWalletAdapter';
 import idlRaw from '@/lib/solana/v2/idl.json';
+import { convertIdlToAnchor29 } from '@/lib/solana/idlConverter';
+import bs58 from 'bs58';
+import nacl from 'tweetnacl';
+import { generateLoginMessage } from '@/lib/solana/verifySignature';
 
-// IDL conversion (same as SolanaWalletContext)
+// IDL conversion (same as SolanaWalletContext) — kept for reference but
+// the inline copy was buggy: it did not materialise event `fields` from
+// the types table, which anchor@0.29's Program constructor needs. The
+// shared `convertIdlToAnchor29` below handles this. The inline helpers
+// below remain only because other code in this file references them.
 function convertType(type: any): any {
   if (type === 'pubkey') return 'publicKey';
   if (typeof type === 'string') return type;
@@ -83,54 +91,9 @@ function convertFields(fields: any[]): any[] {
   return fields.map((f: any) => ({ name: f.name, type: convertType(f.type) }));
 }
 
-function convertIdlToAnchor29(idl: any): Idl {
-  const hasProperAccounts = (idl.accounts || []).length === 0 ||
-    (idl.accounts || []).every((acc: any) => acc.type && acc.type.kind);
-  if (hasProperAccounts && idl.accounts?.length > 0) return idl as Idl;
-  if (idl.version && idl.name && hasProperAccounts) return idl as Idl;
-
-  const isNewFormat = !!(idl.address || (idl.metadata && !idl.name) || (idl.accounts?.length && !idl.accounts[0].type));
-  if (!isNewFormat) return idl as Idl;
-
-  const typeMap = new Map<string, any>();
-  for (const td of (idl.types || [])) {
-    const c: any = { name: td.name, type: { kind: td.type?.kind || 'struct' } };
-    if (td.type?.kind === 'struct') c.type.fields = convertFields(td.type.fields || []);
-    else if (td.type?.kind === 'enum') c.type.variants = (td.type.variants || []).map((v: any) => ({
-      name: v.name, ...(v.fields ? { fields: convertFields(v.fields) } : {}),
-    }));
-    typeMap.set(td.name, c);
-  }
-
-  return {
-    address: idl.address || idl.metadata?.address || '',
-    metadata: {
-      name: idl.metadata?.name || idl.name || 'unknown',
-      version: idl.metadata?.version || idl.version || '0.1.0',
-      spec: idl.metadata?.spec || '0.1.0',
-    },
-    version: idl.metadata?.version || idl.version || '0.1.0',
-    name: idl.metadata?.name || idl.name || 'unknown',
-    instructions: (idl.instructions || []).map((ix: any) => ({
-      name: ix.name,
-      accounts: (ix.accounts || []).map((acc: any) => ({
-        name: acc.name,
-        isMut: acc.writable ?? acc.isMut ?? false,
-        isSigner: acc.signer ?? acc.isSigner ?? false,
-        ...(acc.optional || acc.isOptional ? { isOptional: true } : {}),
-      })),
-      args: (ix.args || []).map((arg: any) => ({
-        name: arg.name,
-        type: convertType(arg.type),
-      })),
-    })),
-    accounts: [],
-    types: Array.from(typeMap.values()),
-    errors: idl.errors || [],
-    events: idl.events || [],
-  } as unknown as Idl;
-}
-
+// Use the shared converter — the inline variant above was missing the
+// event-fields materialisation, which breaks `new Program(idl)` under
+// anchor@0.29 with the V2.3 IDL.
 const idl = convertIdlToAnchor29(idlRaw);
 const PROGRAM_ID = new PublicKey((idlRaw as any).address || (idlRaw as any).metadata?.address || getV2ProgramId().toBase58());
 const USDT_MINT = getUsdtMint('devnet');
@@ -253,6 +216,43 @@ const EmbeddedWalletInnerProvider: FC<{ children: ReactNode }> = ({ children }) 
         // Update local cache too
         merchant.wallet_address = walletAddress;
         localStorage.setItem('blip_merchant', JSON.stringify(merchant));
+      }).catch(() => {});
+    } catch {}
+  }, [walletState, keypair]);
+
+  // Mirror the above for a signed-in user. The embedded keypair is
+  // authoritative for ownership, so we sign a fresh challenge with the
+  // secret key we already hold and submit it to /api/auth/user:link_wallet
+  // (which verifies the signature server-side before writing to
+  // users.wallet_address).
+  useEffect(() => {
+    if (walletState !== 'unlocked' || !keypair) return;
+    const walletAddress = keypair.publicKey.toBase58();
+    try {
+      const saved = localStorage.getItem('blip_user');
+      if (!saved) return;
+      const user = JSON.parse(saved);
+      if (!user.id) return;
+      if (user.wallet_address === walletAddress) return;
+
+      const message = generateLoginMessage(walletAddress);
+      const sigBytes = nacl.sign.detached(new TextEncoder().encode(message), keypair.secretKey);
+      const signature = bs58.encode(sigBytes);
+
+      fetch('/api/auth/user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'link_wallet',
+          user_id: user.id,
+          wallet_address: walletAddress,
+          signature,
+          message,
+        }),
+      }).then((res) => {
+        if (!res.ok) return;
+        user.wallet_address = walletAddress;
+        localStorage.setItem('blip_user', JSON.stringify(user));
       }).catch(() => {});
     } catch {}
   }, [walletState, keypair]);

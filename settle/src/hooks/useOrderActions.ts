@@ -591,7 +591,11 @@ export function useOrderActions({
       async () => {
         setConfirmingOrderId(orderId);
         try {
-          let releaseTxHash: string = `server-release-fallback-${Date.now()}`;
+          // Release tx hash gets populated by the real on-chain release call
+          // OR by the legitimate mock-escrow branch below. No "fallback" value
+          // is initialized here — an empty string propagating past the switch
+          // would be caught by backend validation.
+          let releaseTxHash: string = '';
 
           if (order.orderType === 'buy' || order.orderType === 'sell') {
             const hasOnChainEscrow = order.escrowTradeId && order.escrowCreatorWallet && order.userWallet;
@@ -645,17 +649,30 @@ export function useOrderActions({
                 });
               } catch (releaseErr: unknown) {
                 const errMsg = releaseErr instanceof Error ? releaseErr.message : String(releaseErr);
-                // On-chain release failed — fall back to server-side completion
-                // CannotRelease (6016/0x1780): trade not in Locked state (buyer never joined on-chain)
-                if (errMsg.includes('AccountNotInitialized') || errMsg.includes('0xbc4') || errMsg.includes('3012')
-                    || errMsg.includes('CannotRelease') || errMsg.includes('0x1780') || errMsg.includes('6016')
-                    || (errMsg.includes('ConstraintRaw') && errMsg.includes('counterparty_ata'))) {
-                  console.warn('[Merchant] On-chain release failed, falling back to server-side completion:', errMsg);
-                  addNotification('system', 'On-chain release skipped (buyer not joined). Completing via server.', orderId);
-                  releaseTxHash = `server-release-fallback-${Date.now()}`;
-                } else {
-                  throw releaseErr;
-                }
+                // On-chain release failed. DO NOT fabricate a "server-release-fallback"
+                // tx hash — that used to mark the order `completed` in the DB while
+                // real funds stayed locked in the on-chain vault (ghost release).
+                //
+                // Known non-fatal pattern: CannotRelease (6016/0x1780) means the
+                // buyer never called `acceptTrade` on-chain, so the trade's status
+                // is still `Created`/`PaymentSent` rather than `Locked`. The right
+                // resolution is an admin-signed release via the protocol authority
+                // (BACKEND_SIGNER_KEYPAIR), not a fake DB flip. Surface a clear
+                // error and stop.
+                console.error('[Merchant] On-chain release failed, NOT completing DB:', errMsg);
+                const isKnownCannotRelease =
+                  errMsg.includes('AccountNotInitialized') || errMsg.includes('0xbc4') || errMsg.includes('3012')
+                  || errMsg.includes('CannotRelease') || errMsg.includes('0x1780') || errMsg.includes('6016')
+                  || (errMsg.includes('ConstraintRaw') && errMsg.includes('counterparty_ata'));
+                addNotification(
+                  'system',
+                  isKnownCannotRelease
+                    ? 'Release blocked: buyer has not joined the trade on-chain yet. Contact support to finalize — funds are safe and still escrowed.'
+                    : `On-chain release failed: ${errMsg.slice(0, 200)}. Order stays in payment_sent until this is resolved.`,
+                  orderId,
+                );
+                playSound('error');
+                return; // abort; DB stays in payment_sent, admin can take over
               }
 
               if (releaseResult) {

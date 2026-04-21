@@ -114,7 +114,7 @@ export async function createLane(
 
   // Pass individual args (flattened) for IDL compatibility
   const tx = await (program.methods as any)
-    .createLane(new BN(params.laneId), params.minAmount, params.maxAmount)
+    .createLane({ laneId: new BN(params.laneId), minAmount: params.minAmount, maxAmount: params.maxAmount })
     .accounts({
       merchant,
       lane: lanePda,
@@ -150,7 +150,7 @@ export async function buildFundLaneTx(
 
   // Pass individual args (flattened) for IDL compatibility
   const instruction = await (program.methods as any)
-    .fundLane(params.amount)
+    .fundLane({ amount: params.amount })
     .accounts({
       merchant,
       lane: lanePda,
@@ -185,7 +185,7 @@ export async function fundLane(
 
   // Pass individual args (flattened) for IDL compatibility
   const tx = await (program.methods as any)
-    .fundLane(params.amount)
+    .fundLane({ amount: params.amount })
     .accounts({
       merchant,
       lane: lanePda,
@@ -219,7 +219,7 @@ export async function buildWithdrawLaneTx(
 
   // Pass individual args (flattened) for IDL compatibility
   const instruction = await (program.methods as any)
-    .withdrawLane(params.amount)
+    .withdrawLane({ amount: params.amount })
     .accounts({
       merchant,
       lane: lanePda,
@@ -255,7 +255,7 @@ export async function withdrawLane(
 
   // Pass individual args (flattened) for IDL compatibility
   const tx = await (program.methods as any)
-    .withdrawLane(params.amount)
+    .withdrawLane({ amount: params.amount })
     .accounts({
       merchant,
       lane: lanePda,
@@ -290,16 +290,31 @@ export async function fetchLane(
 // ============ PROTOCOL INITIALIZATION ============
 
 /**
- * Check if protocol config exists
+ * Check if protocol config exists.
+ *
+ * Uses raw `getAccountInfo` instead of `program.account.protocolConfig.fetch()`
+ * because our IDL converter (`convertIdlToAnchor29`) intentionally ships an
+ * empty `accounts` array in the converted IDL — otherwise anchor@0.29 crashes
+ * at `new Program()` trying to build account coders for the 0.30+ IDL's new
+ * account definition shape. With `accounts: []`, `program.account.protocolConfig`
+ * is `undefined` and the old `fetch` path always threw → this function always
+ * returned `false`, which made every `initializeConfig` call try to re-create
+ * an already-existing PDA and fail with `already in use (0x0)`.
+ *
+ * Existence is what we actually need, not a decoded struct — `getAccountInfo`
+ * is both sufficient and independent of the Anchor account coder.
  */
 export async function checkProtocolConfigExists(
   program: Program
 ): Promise<boolean> {
   try {
     const [protocolConfigPda] = findProtocolConfigPda();
-    await (program.account as any).protocolConfig.fetch(protocolConfigPda);
-    return true;
-  } catch (error) {
+    const info = await program.provider.connection.getAccountInfo(
+      protocolConfigPda,
+      'confirmed'
+    );
+    return info !== null;
+  } catch {
     return false;
   }
 }
@@ -337,13 +352,29 @@ export async function initializeProtocolConfig(
 
   console.log('[initializeProtocolConfig] Calling initializeConfig...');
 
+  // Belt-and-braces: if the PDA already exists on-chain, don't try to
+  // allocate it again (the system program rejects with 0x0 "account
+  // already in use"). This makes the function idempotent under any
+  // caller that doesn't pre-check via `checkProtocolConfigExists`.
+  const existing = await program.provider.connection.getAccountInfo(
+    protocolConfigPda,
+    'confirmed'
+  );
+  if (existing) {
+    console.log('[initializeProtocolConfig] Already initialized at', protocolConfigPda.toBase58());
+    return 'already-initialized';
+  }
+
   // Build the instruction step by step to catch errors
   try {
     const methods = (program.methods as any);
     console.log('[initializeProtocolConfig] Got methods object:', !!methods);
     console.log('[initializeProtocolConfig] Has initializeConfig:', !!methods.initializeConfig);
 
-    const methodBuilder = methods.initializeConfig(feeBps, maxFeeBps, minFeeBps);
+    // 0.30+ IDL: `initialize_config` takes a single `params: InitializeConfigParams`
+    // struct ({ fee_bps, max_fee_bps, min_fee_bps }). Anchor TS client
+    // camelCase-maps snake_case field names automatically.
+    const methodBuilder = methods.initializeConfig({ feeBps, maxFeeBps, minFeeBps });
     console.log('[initializeProtocolConfig] Method builder created:', !!methodBuilder);
 
     const accountsBuilder = methodBuilder.accounts({
@@ -397,7 +428,7 @@ export async function buildCreateTradeTx(
 
   // Pass individual args (flattened) for IDL compatibility
   const instruction = await (program.methods as any)
-    .createTrade(new BN(params.tradeId), params.amount, sideEnum)
+    .createTrade({ tradeId: new BN(params.tradeId), amount: params.amount, side: sideEnum })
     .accounts({
       creator,
       protocolConfig: protocolConfigPda,
@@ -494,7 +525,7 @@ export async function buildLockEscrowTx(
 
   // Pass individual args (flattened) for IDL compatibility
   const instruction = await (program.methods as any)
-    .lockEscrow(counterparty)
+    .lockEscrow({ counterparty })
     .accounts({
       depositor,
       trade: tradePda,
@@ -532,12 +563,13 @@ export async function buildReleaseEscrowTx(
   const treasury = getFeeTreasury();
   const treasuryAta = await getAssociatedTokenAddress(mint, treasury);
 
-  // Fetch trade to get creator
+  // Fetch trade to get creator. Use a raw getAccountInfo — the Anchor
+  // `.fetch()` path is broken under our converted IDL (accounts: []).
   let creator = releaser;
   try {
-    const tradeAccount = await (program.account as any).trade.fetch(tradePda);
-    if (tradeAccount.creator) {
-      creator = tradeAccount.creator as PublicKey;
+    const info = await connection.getAccountInfo(tradePda, 'confirmed');
+    if (info && info.data.length >= 40) {
+      creator = new PublicKey(info.data.subarray(8, 40));
     }
   } catch (e) {
     console.error('Failed to fetch trade account:', e);
@@ -607,21 +639,25 @@ export async function buildRefundEscrowTx(
   const [vaultAuthority] = findVaultAuthorityPda(escrowPda);
   const vaultAta = await getAssociatedTokenAddress(mint, vaultAuthority, true);
 
-  // Fetch escrow to get depositor — may not exist if already refunded or never funded
-  let escrow;
-  try {
-    escrow = await (program.account as any).escrow.fetch(escrowPda);
-  } catch (e) {
-    throw new Error(`Escrow account does not exist or has no data (${escrowPda.toString()}). It may have already been refunded or was never funded on-chain.`);
-  }
-  const depositorAta = await getAssociatedTokenAddress(mint, escrow.depositor);
+  const connection = program.provider.connection;
 
-  // Fetch trade to get creator
+  // Fetch escrow via raw getAccountInfo (Anchor .fetch() broken under
+  // converted IDL). Escrow.depositor is at offset 8+32+32+32 = 104.
+  const escrowInfo = await connection.getAccountInfo(escrowPda, 'confirmed');
+  if (!escrowInfo || escrowInfo.data.length < 136) {
+    throw new Error(
+      `Escrow account does not exist or has no data (${escrowPda.toString()}). It may have already been refunded or was never funded on-chain.`,
+    );
+  }
+  const escrowDepositor = new PublicKey(escrowInfo.data.subarray(104, 136));
+  const depositorAta = await getAssociatedTokenAddress(mint, escrowDepositor);
+
+  // Fetch trade to get creator (offset 8..40).
   let creator = refunder;
   try {
-    const tradeAccount = await (program.account as any).trade.fetch(tradePda);
-    if (tradeAccount.creator) {
-      creator = tradeAccount.creator as PublicKey;
+    const info = await connection.getAccountInfo(tradePda, 'confirmed');
+    if (info && info.data.length >= 40) {
+      creator = new PublicKey(info.data.subarray(8, 40));
     }
   } catch (e) {
     console.error('Failed to fetch trade account:', e);
@@ -664,7 +700,7 @@ export async function buildExtendEscrowTx(
   const [escrowPda] = findEscrowPda(tradePda);
 
   const instruction = await (program.methods as any)
-    .extendEscrow(extensionSeconds)
+    .extendEscrow({ extensionSeconds })
     .accounts({
       depositor,
       trade: tradePda,
@@ -755,12 +791,18 @@ export async function buildResolveDisputeTx(
   const treasury = getFeeTreasury();
   const treasuryAta = await getAssociatedTokenAddress(mint, treasury);
 
-  // Fetch trade and escrow to get parties
-  const trade = await (program.account as any).trade.fetch(tradePda);
-  const escrow = await (program.account as any).escrow.fetch(escrowPda);
+  // Fetch trade + escrow via raw getAccountInfo (Anchor .fetch() broken
+  // under converted IDL). Offsets per state/*.rs:
+  //   Trade.counterparty   = 8(disc) + 32(creator)                      = 40
+  //   Escrow.depositor     = 8(disc) + 32(trade) + 32(vault_auth) + 32(vault_ata) = 104
+  const tradeInfo = await connection.getAccountInfo(tradePda, 'confirmed');
+  const escrowInfo = await connection.getAccountInfo(escrowPda, 'confirmed');
+  if (!tradeInfo || !escrowInfo) throw new Error('Trade or escrow account not on-chain');
+  const tradeCounterparty = new PublicKey(tradeInfo.data.subarray(40, 72));
+  const escrowDepositor = new PublicKey(escrowInfo.data.subarray(104, 136));
 
-  const buyerAta = await getAssociatedTokenAddress(mint, trade.counterparty);
-  const sellerAta = await getAssociatedTokenAddress(mint, escrow.depositor);
+  const buyerAta = await getAssociatedTokenAddress(mint, tradeCounterparty);
+  const sellerAta = await getAssociatedTokenAddress(mint, escrowDepositor);
 
   const transaction = new Transaction();
 
@@ -771,7 +813,7 @@ export async function buildResolveDisputeTx(
     const createAtaIx = createAssociatedTokenAccountInstruction(
       arbiter,
       buyerAta,
-      trade.counterparty,
+      tradeCounterparty,
       mint
     );
     transaction.add(createAtaIx);
@@ -796,7 +838,7 @@ export async function buildResolveDisputeTx(
     : { refundToSeller: {} };
 
   const instruction = await (program.methods as any)
-    .resolveDispute(resolutionEnum)
+    .resolveDispute({ resolution: resolutionEnum })
     .accounts({
       arbiter,
       protocolConfig: protocolConfigPda,
@@ -824,11 +866,45 @@ export async function fetchTrade(
   creator: PublicKey,
   tradeId: number
 ): Promise<Trade | null> {
+  // `program.account.trade.fetch()` doesn't work under our converted IDL
+  // (`convertIdlToAnchor29` sets accounts:[] to prevent `new Program()`
+  // from crashing on 0.30+ account defs; the trade-off is `program.account.X`
+  // is undefined). Use raw getAccountInfo + stable byte-offset decoding
+  // instead. Layout mirrors state/trade.rs:
+  //   0..8    discriminator
+  //   8..40   creator (Pubkey)
+  //   40..72  counterparty (Pubkey)
+  //   72..80  trade_id (u64 LE)
+  //   80..112 mint (Pubkey)
+  //   112..120 amount (u64 LE)
+  //   120     status (u8)
+  // Only `counterparty` is read by downstream release/refund code paths;
+  // other fields are filled in best-effort so the Trade shape is honored.
   try {
     const [tradePda] = findTradePda(creator, tradeId);
-    const trade = await (program.account as any).trade.fetch(tradePda);
-    return trade as unknown as Trade;
-  } catch (err) {
+    const info = await program.provider.connection.getAccountInfo(tradePda, 'confirmed');
+    if (!info || info.data.length < 121) return null;
+    const data = info.data;
+    return {
+      creator: new PublicKey(data.subarray(8, 40)),
+      counterparty: new PublicKey(data.subarray(40, 72)),
+      tradeId: new BN(data.subarray(72, 80), 'le'),
+      mint: new PublicKey(data.subarray(80, 112)),
+      amount: new BN(data.subarray(112, 120), 'le'),
+      status: data[120] as unknown as Trade['status'],
+      feeBps: 0,
+      escrowBump: 0,
+      bump: 0,
+      createdAt: new BN(0),
+      lockedAt: new BN(0),
+      settledAt: new BN(0),
+      side: 0 as unknown as Trade['side'],
+      expiresAt: new BN(0),
+      paymentConfirmedAt: new BN(0),
+      disputedAt: new BN(0),
+      disputeInitiator: PublicKey.default,
+    } as Trade;
+  } catch {
     return null;
   }
 }

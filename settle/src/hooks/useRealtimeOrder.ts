@@ -140,8 +140,15 @@ export function useRealtimeOrder(
 
   // Reset previous-status tracking whenever the watched order changes,
   // so a stale ref from a prior order can't trigger a phantom status-change callback.
+  // Also clear the order payload itself — otherwise a freshly-created order briefly
+  // renders the previous order's terminal status (e.g. "completed") until the fetch resolves.
+  // Depend only on orderId: initialData is captured by the useState initializer on first mount,
+  // and new initialData arriving alongside a new orderId is handled by the fetch effect below.
   useEffect(() => {
     previousStatusRef.current = null;
+    setOrder(null);
+    setIsLoading(Boolean(orderId));
+    setError(null);
   }, [orderId]);
 
   // Fetch on mount if no initial data
