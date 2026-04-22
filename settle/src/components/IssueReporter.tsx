@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * <IssueReporter /> — state-driven floating button + modal for
@@ -34,24 +34,24 @@ import {
   Send,
   Sparkles,
   X,
-} from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AttachmentInput,
   ISSUE_CATEGORIES,
   IssueCategory,
   useIssueReporter,
-} from '@/hooks/useIssueReporter';
-import { useMerchantStore } from '@/stores/merchantStore';
-import { IssueAnnotator } from './IssueAnnotator';
+} from "@/hooks/useIssueReporter";
+import { useMerchantStore } from "@/stores/merchantStore";
+import { IssueAnnotator } from "./IssueAnnotator";
 
 const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25MB
 const ACCEPTED_MIMES =
-  'image/*,video/mp4,video/webm,video/quicktime,text/plain,application/json,application/pdf';
+  "image/*,video/mp4,video/webm,video/quicktime,text/plain,application/json,application/pdf";
 
 interface Toast {
-  variant: 'success' | 'error';
+  variant: "success" | "error";
   message: string;
 }
 
@@ -61,17 +61,19 @@ interface Toast {
 let openIssueReporterGlobal: (() => Promise<void>) | null = null;
 
 export function openIssueReporter(): Promise<void> {
-  return openIssueReporterGlobal ? openIssueReporterGlobal() : Promise.resolve();
+  return openIssueReporterGlobal
+    ? openIssueReporterGlobal()
+    : Promise.resolve();
 }
 
 export function IssueReporter({
-  triggerLabel = 'Report Issue',
-  position = 'bottom-right',
+  triggerLabel = "Report Issue",
+  position = "bottom-right",
   authed: authedProp,
   hideTrigger = false,
 }: {
   triggerLabel?: string;
-  position?: 'bottom-right' | 'bottom-left';
+  position?: "bottom-right" | "bottom-left";
   /**
    * Caller-supplied login state. When provided, this is the source of
    * truth for gating the button. When omitted, the component falls back
@@ -92,9 +94,9 @@ export function IssueReporter({
     authedProp !== undefined ? authedProp : isLoggedIn || !!merchantId;
   const reporter = useIssueReporter({ enabled: authed });
 
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<IssueCategory>('ui_bug');
-  const [description, setDescription] = useState('');
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState<IssueCategory>("ui_bug");
+  const [description, setDescription] = useState("");
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [annotatedScreenshot, setAnnotatedScreenshot] = useState<string | null>(
     null,
@@ -119,9 +121,9 @@ export function IssueReporter({
   }, [authed, reporter.open]);
 
   const resetForm = useCallback(() => {
-    setTitle('');
-    setCategory('ui_bug');
-    setDescription('');
+    setTitle("");
+    setCategory("ui_bug");
+    setDescription("");
     setScreenshot(null);
     setAnnotatedScreenshot(null);
     setAttachments([]);
@@ -153,7 +155,7 @@ export function IssueReporter({
         if (attachments.length >= MAX_ATTACHMENTS) break;
         if (file.size > MAX_ATTACHMENT_BYTES) {
           setToast({
-            variant: 'error',
+            variant: "error",
             message: `"${file.name}" exceeds 25MB limit`,
           });
           continue;
@@ -173,7 +175,7 @@ export function IssueReporter({
                 {
                   name: file.name,
                   dataUrl,
-                  mime: file.type || 'application/octet-stream',
+                  mime: file.type || "application/octet-stream",
                   size: file.size,
                 },
               ],
@@ -186,7 +188,7 @@ export function IssueReporter({
   const handleFilePick = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files || []);
-      e.target.value = '';
+      e.target.value = "";
       await ingestFiles(files);
     },
     [ingestFiles],
@@ -194,11 +196,11 @@ export function IssueReporter({
 
   const handleSubmit = useCallback(async () => {
     if (!title.trim()) {
-      setToast({ variant: 'error', message: 'Title is required' });
+      setToast({ variant: "error", message: "Title is required" });
       return;
     }
     if (!description.trim()) {
-      setToast({ variant: 'error', message: 'Description is required' });
+      setToast({ variant: "error", message: "Description is required" });
       return;
     }
     const result = await reporter.submit({
@@ -210,8 +212,8 @@ export function IssueReporter({
     });
     if (result.ok) {
       setToast({
-        variant: 'success',
-        message: `Issue submitted${result.issueId ? ` (#${result.issueId.slice(0, 8)})` : ''}`,
+        variant: "success",
+        message: `Issue submitted${result.issueId ? ` (#${result.issueId.slice(0, 8)})` : ""}`,
       });
       resetForm();
       setTimeout(() => {
@@ -220,8 +222,8 @@ export function IssueReporter({
       }, 1200);
     } else {
       setToast({
-        variant: 'error',
-        message: result.error || 'Failed to submit',
+        variant: "error",
+        message: result.error || "Failed to submit",
       });
     }
   }, [
@@ -236,7 +238,7 @@ export function IssueReporter({
   ]);
 
   const positionClasses =
-    position === 'bottom-left' ? 'left-4 bottom-4' : 'right-4 bottom-4';
+    position === "bottom-left" ? "left-4 bottom-4" : "right-4 bottom-4";
 
   // Gate behind login — the Report Issue button (and modal) only render
   // once a merchant session is active.
@@ -314,9 +316,7 @@ export function IssueReporter({
                     {screenshot ? (
                       <IssueAnnotator
                         source={screenshot}
-                        onExport={(dataUrl) =>
-                          setAnnotatedScreenshot(dataUrl)
-                        }
+                        onExport={(dataUrl) => setAnnotatedScreenshot(dataUrl)}
                       />
                     ) : reporter.capturingShot ? (
                       <div className="h-full flex items-center justify-center text-[12px] text-foreground/50">
@@ -325,7 +325,9 @@ export function IssueReporter({
                       </div>
                     ) : (
                       <div className="h-full flex flex-col items-center justify-center gap-2 text-[12px] text-foreground/50 p-6 text-center">
-                        <div className="font-medium">No screenshot attached</div>
+                        <div className="font-medium">
+                          No screenshot attached
+                        </div>
                         {reporter.captureError ? (
                           <div className="text-amber-300/80 max-w-md">
                             {reporter.captureError}
@@ -354,7 +356,9 @@ export function IssueReporter({
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium bg-foreground/[0.06] border border-border hover:bg-foreground/[0.1] disabled:opacity-40"
                   >
                     <Camera size={12} />
-                    {reporter.capturingShot ? 'Capturing…' : 'Retake Screenshot'}
+                    {reporter.capturingShot
+                      ? "Capturing…"
+                      : "Retake Screenshot"}
                   </button>
                 </div>
               </div>
@@ -373,7 +377,7 @@ export function IssueReporter({
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       maxLength={200}
-                      placeholder="Orders are not showing in pending section"
+                      placeholder="e.g. Order not appearing after payment"
                       className="w-full px-3 py-2 rounded-md bg-foreground/[0.04] border border-border text-[13px] focus:outline-none focus:border-amber-400/60"
                     />
                   </div>
@@ -407,7 +411,12 @@ export function IssueReporter({
                         onChange={(e) => setDescription(e.target.value)}
                         maxLength={500}
                         rows={5}
-                        placeholder="I have placed an order but it is not showing in the pending orders section. Please fix this issue."
+                        placeholder={`Describe the issue clearly:
+                          • What happened?
+                          • When did it happen?
+                          • What did you expect?
+                          
+                          Example: I placed an order at ₹500, but it is not showing in pending orders after payment.`}
                         className="w-full px-3 py-2 pb-5 rounded-md bg-foreground/[0.04] border border-border text-[13px] focus:outline-none focus:border-amber-400/60 resize-none"
                       />
                       <div className="absolute bottom-1.5 right-2 text-[10px] text-foreground/40 font-mono">
@@ -418,7 +427,7 @@ export function IssueReporter({
 
                   <div>
                     <label className="block text-[11px] font-medium text-foreground/60 mb-1">
-                      Attachments{' '}
+                      Attachments{" "}
                       <span className="text-foreground/30 font-normal">
                         (Optional)
                       </span>
@@ -438,15 +447,17 @@ export function IssueReporter({
                       onClick={() => fileInputRef.current?.click()}
                       className={`rounded-lg border-2 border-dashed px-4 py-6 text-center cursor-pointer transition ${
                         dragActive
-                          ? 'border-amber-400 bg-amber-400/5'
-                          : 'border-border bg-foreground/[0.02] hover:border-foreground/30 hover:bg-foreground/[0.04]'
+                          ? "border-amber-400 bg-amber-400/5"
+                          : "border-border bg-foreground/[0.02] hover:border-foreground/30 hover:bg-foreground/[0.04]"
                       }`}
                     >
                       <CloudUpload
                         size={22}
                         className="mx-auto text-foreground/50 mb-1.5"
                       />
-                      <div className="text-[13px] font-medium">Upload files</div>
+                      <div className="text-[13px] font-medium">
+                        Upload files
+                      </div>
                       <div className="text-[11px] text-foreground/40 mt-0.5">
                         Images, Videos or Logs (Max 25MB)
                       </div>
@@ -466,7 +477,10 @@ export function IssueReporter({
                             key={`${a.name}-${i}`}
                             className="flex items-center gap-2 px-2 py-1 rounded bg-foreground/[0.04] text-[11px]"
                           >
-                            <Paperclip size={11} className="text-foreground/40" />
+                            <Paperclip
+                              size={11}
+                              className="text-foreground/40"
+                            />
                             <span className="flex-1 truncate">{a.name}</span>
                             <span className="text-foreground/40">
                               {(a.size / 1024).toFixed(0)}KB
@@ -493,9 +507,9 @@ export function IssueReporter({
                   {toast && (
                     <div
                       className={`px-3 py-2 rounded-md text-[12px] border ${
-                        toast.variant === 'success'
-                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-                          : 'bg-rose-500/10 border-rose-500/20 text-rose-300'
+                        toast.variant === "success"
+                          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                          : "bg-rose-500/10 border-rose-500/20 text-rose-300"
                       }`}
                     >
                       {toast.message}
@@ -529,7 +543,7 @@ export function IssueReporter({
                       ) : (
                         <Send size={12} />
                       )}
-                      {reporter.submitting ? 'Submitting…' : 'Submit Issue'}
+                      {reporter.submitting ? "Submitting…" : "Submit Issue"}
                     </button>
                   </div>
                   <div className="flex items-center justify-center gap-1 px-5 pb-3 text-[10px] text-foreground/40">
