@@ -55,10 +55,20 @@ interface Toast {
   message: string;
 }
 
+// Global opener — lets any component (e.g. a header icon) open the
+// reporter without needing to be a child of IssueReporter. Mirrors the
+// pattern used by ModalContext in this codebase.
+let openIssueReporterGlobal: (() => Promise<void>) | null = null;
+
+export function openIssueReporter(): Promise<void> {
+  return openIssueReporterGlobal ? openIssueReporterGlobal() : Promise.resolve();
+}
+
 export function IssueReporter({
   triggerLabel = 'Report Issue',
   position = 'bottom-right',
   authed: authedProp,
+  hideTrigger = false,
 }: {
   triggerLabel?: string;
   position?: 'bottom-right' | 'bottom-left';
@@ -69,6 +79,12 @@ export function IssueReporter({
    * unchanged, and the user page can pass its own auth signal.
    */
   authed?: boolean;
+  /**
+   * Hide the floating trigger button — use when an external component
+   * (e.g. a header icon) owns the trigger and opens the reporter via
+   * the exported `openIssueReporter()` function.
+   */
+  hideTrigger?: boolean;
 }) {
   const isLoggedIn = useMerchantStore((s) => s.isLoggedIn);
   const merchantId = useMerchantStore((s) => s.merchantId);
@@ -88,6 +104,19 @@ export function IssueReporter({
   const [dragActive, setDragActive] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Expose this instance's open() globally so external triggers (e.g.
+  // a header icon) can open the reporter. Gated by `authed` so logged-
+  // out sessions can't programmatically open it.
+  useEffect(() => {
+    if (!authed) return;
+    openIssueReporterGlobal = reporter.open;
+    return () => {
+      if (openIssueReporterGlobal === reporter.open) {
+        openIssueReporterGlobal = null;
+      }
+    };
+  }, [authed, reporter.open]);
 
   const resetForm = useCallback(() => {
     setTitle('');
@@ -219,7 +248,7 @@ export function IssueReporter({
           pre-open screenshot is being taken — important, since that
           can take 500ms+ on heavy pages and the user would otherwise
           wonder if the click registered. */}
-      {!reporter.isOpen && (
+      {!reporter.isOpen && !hideTrigger && (
         <button
           type="button"
           onClick={() => void reporter.open()}

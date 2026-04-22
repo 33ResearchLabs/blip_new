@@ -7,13 +7,13 @@ import { usePresenceHeartbeat } from "@/hooks/usePresenceHeartbeat";
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { copyToClipboard } from "@/lib/clipboard";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  ChevronLeft,
-  Loader2,
-} from "lucide-react";
+import { ChevronLeft, Loader2 } from "lucide-react";
 import { useUserTheme } from "@/hooks/useUserTheme";
 import { useSounds } from "@/hooks/useSounds";
-import { NotificationToastContainer, useToast } from "@/components/NotificationToast";
+import {
+  NotificationToastContainer,
+  useToast,
+} from "@/components/NotificationToast";
 import { ChatToastHost } from "@/components/user/ChatToastHost";
 import { useUserAuth } from "@/hooks/useUserAuth";
 import { UserModals } from "@/components/user/UserModals";
@@ -27,12 +27,41 @@ import { IssueReporter } from "@/components/IssueReporter";
 import type { Screen } from "@/components/user/screens/types";
 import { FEE_CONFIG } from "@/components/user/screens/helpers";
 
-const fade = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } };
-const slide = { initial: { opacity: 0, x: 20 }, animate: { opacity: 1, x: 0 }, exit: { opacity: 0, x: -20 } };
-const darkBg = { background: '#080810' } as const;
-const lightPanelBg = { background: '#ffffff' } as const;
-function Panel({ k, anim = fade, className = "", style, children }: { k: string; anim?: typeof fade; className?: string; style?: React.CSSProperties; children: React.ReactNode }) {
-  return <motion.div key={k} {...anim} className={`flex-1 w-full max-w-[440px] mx-auto flex flex-col ${className}`} style={style}>{children}</motion.div>;
+const fade = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
+};
+const slide = {
+  initial: { opacity: 0, x: 20 },
+  animate: { opacity: 1, x: 0 },
+  exit: { opacity: 0, x: -20 },
+};
+const darkBg = { background: "#080810" } as const;
+const lightPanelBg = { background: "#ffffff" } as const;
+function Panel({
+  k,
+  anim = fade,
+  className = "",
+  style,
+  children,
+}: {
+  k: string;
+  anim?: typeof fade;
+  className?: string;
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+}) {
+  return (
+    <motion.div
+      key={k}
+      {...anim}
+      className={`flex-1 w-full max-w-[440px] mx-auto flex flex-col ${className}`}
+      style={style}
+    >
+      {children}
+    </motion.div>
+  );
 }
 import {
   HomeScreen,
@@ -59,47 +88,139 @@ export default function Home() {
   const rawToast = useToast();
   const solanaWallet = useSolanaWalletSafe();
 
-  const embeddedWallet = (solanaWallet as any)?.embeddedWallet as {
-    state: 'none' | 'locked' | 'unlocked';
-    unlockWallet: (password: string) => Promise<boolean>;
-    lockWallet: () => void;
-    deleteWallet: () => void;
-    setKeypairAndUnlock: (kp: any) => void;
-  } | undefined;
+  const embeddedWallet = (solanaWallet as any)?.embeddedWallet as
+    | {
+        state: "none" | "locked" | "unlocked";
+        unlockWallet: (password: string) => Promise<boolean>;
+        lockWallet: () => void;
+        deleteWallet: () => void;
+        setKeypairAndUnlock: (kp: any) => void;
+      }
+    | undefined;
 
   // Persistent notification history (captured from toasts)
-  const [notifications, setNotifications] = useState<Array<{
-    id: string; type: string; title: string; message: string; timestamp: number; read: boolean;
-  }>>([]);
-  const addNotification = useCallback((type: string, title: string, message: string) => {
-    setNotifications(prev => [{
-      id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      type, title, message, timestamp: Date.now(), read: false,
-    }, ...prev].slice(0, 50)); // Keep max 50
-  }, []);
+  const [notifications, setNotifications] = useState<
+    Array<{
+      id: string;
+      type: string;
+      title: string;
+      message: string;
+      timestamp: number;
+      read: boolean;
+    }>
+  >([]);
+  const addNotification = useCallback(
+    (type: string, title: string, message: string) => {
+      setNotifications((prev) =>
+        [
+          {
+            id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            type,
+            title,
+            message,
+            timestamp: Date.now(),
+            read: false,
+          },
+          ...prev,
+        ].slice(0, 50),
+      ); // Keep max 50
+    },
+    [],
+  );
 
   // Wrapped toast that also persists notification history
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const toast = useMemo(() => {
-    const wrap = (method: (...args: any[]) => void, type: string, titleFn: (...args: any[]) => string, msgFn: (...args: any[]) => string) =>
-      (...args: any[]) => { method(...args); addNotification(type, titleFn(...args), msgFn(...args)); };
+    const wrap =
+      (
+        method: (...args: any[]) => void,
+        type: string,
+        titleFn: (...args: any[]) => string,
+        msgFn: (...args: any[]) => string,
+      ) =>
+      (...args: any[]) => {
+        method(...args);
+        addNotification(type, titleFn(...args), msgFn(...args));
+      };
     return {
       ...rawToast,
       show: (t: Parameters<typeof rawToast.show>[0]) => {
-        rawToast.show(t); addNotification(t.type, t.title, t.message);
+        rawToast.show(t);
+        addNotification(t.type, t.title, t.message);
       },
-      showOrderCreated: wrap(rawToast.showOrderCreated, 'order', () => 'New Order', (i?: string) => i || 'A new order has been placed'),
-      showPaymentSent: wrap(rawToast.showPaymentSent, 'payment', () => 'Payment Sent', () => 'Payment has been marked as sent'),
-      showTradeComplete: wrap(rawToast.showTradeComplete, 'complete', () => 'Trade Complete', (a?: string) => a ? `${a} USDT completed` : 'Trade completed'),
-      showEscrowLocked: wrap(rawToast.showEscrowLocked, 'escrow', () => 'Escrow Locked', (a?: string) => a ? `${a} USDT locked` : 'Funds locked in escrow'),
-      showDisputeOpened: wrap(rawToast.showDisputeOpened, 'dispute', () => 'Dispute Opened', () => 'A dispute has been raised'),
-      showNewMessage: wrap(rawToast.showNewMessage, 'message', (f: string) => `Message from ${f}`, (_f: string, p?: string) => p || 'New message'),
-      showWarning: wrap(rawToast.showWarning, 'warning', () => 'Warning', (m: string) => m),
-      showOrderCancelled: wrap(rawToast.showOrderCancelled, 'warning', () => 'Order Cancelled', () => 'Order has been cancelled'),
-      showOrderExpired: wrap(rawToast.showOrderExpired, 'warning', () => 'Order Expired', () => 'Order has expired'),
-      showEscrowReleased: wrap(rawToast.showEscrowReleased, 'complete', () => 'Escrow Released', () => 'Funds have been released'),
-      showMerchantAccepted: wrap(rawToast.showMerchantAccepted, 'order', () => 'Merchant Accepted', (n?: string) => n ? `${n} accepted your order` : 'Order accepted'),
-      showExtensionRequest: wrap(rawToast.showExtensionRequest, 'system', () => 'Extension Request', (_w: string, m?: number) => m ? `${m} minutes requested` : 'Time extension requested'),
+      showOrderCreated: wrap(
+        rawToast.showOrderCreated,
+        "order",
+        () => "New Order",
+        (i?: string) => i || "A new order has been placed",
+      ),
+      showPaymentSent: wrap(
+        rawToast.showPaymentSent,
+        "payment",
+        () => "Payment Sent",
+        () => "Payment has been marked as sent",
+      ),
+      showTradeComplete: wrap(
+        rawToast.showTradeComplete,
+        "complete",
+        () => "Trade Complete",
+        (a?: string) => (a ? `${a} USDT completed` : "Trade completed"),
+      ),
+      showEscrowLocked: wrap(
+        rawToast.showEscrowLocked,
+        "escrow",
+        () => "Escrow Locked",
+        (a?: string) => (a ? `${a} USDT locked` : "Funds locked in escrow"),
+      ),
+      showDisputeOpened: wrap(
+        rawToast.showDisputeOpened,
+        "dispute",
+        () => "Dispute Opened",
+        () => "A dispute has been raised",
+      ),
+      showNewMessage: wrap(
+        rawToast.showNewMessage,
+        "message",
+        (f: string) => `Message from ${f}`,
+        (_f: string, p?: string) => p || "New message",
+      ),
+      showWarning: wrap(
+        rawToast.showWarning,
+        "warning",
+        () => "Warning",
+        (m: string) => m,
+      ),
+      showOrderCancelled: wrap(
+        rawToast.showOrderCancelled,
+        "warning",
+        () => "Order Cancelled",
+        () => "Order has been cancelled",
+      ),
+      showOrderExpired: wrap(
+        rawToast.showOrderExpired,
+        "warning",
+        () => "Order Expired",
+        () => "Order has expired",
+      ),
+      showEscrowReleased: wrap(
+        rawToast.showEscrowReleased,
+        "complete",
+        () => "Escrow Released",
+        () => "Funds have been released",
+      ),
+      showMerchantAccepted: wrap(
+        rawToast.showMerchantAccepted,
+        "order",
+        () => "Merchant Accepted",
+        (n?: string) => (n ? `${n} accepted your order` : "Order accepted"),
+      ),
+      showExtensionRequest: wrap(
+        rawToast.showExtensionRequest,
+        "system",
+        () => "Extension Request",
+        (_w: string, m?: number) =>
+          m ? `${m} minutes requested` : "Time extension requested",
+      ),
     };
   }, [rawToast, addNotification]);
 
@@ -110,17 +231,35 @@ export default function Home() {
     setScreenRaw(s);
   };
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
-  const [activityTab, setActivityTab] = useState<'active' | 'completed' | 'cancelled'>('active');
+  const [activityTab, setActivityTab] = useState<
+    "active" | "completed" | "cancelled"
+  >("active");
   const [copied, setCopied] = useState(false);
   const [rating, setRating] = useState(0);
   const [showAddBank, setShowAddBank] = useState(false);
   const [newBank, setNewBank] = useState({ bank: "", iban: "", name: "" });
   const [timedOutOrders, setTimedOutOrders] = useState<any[]>([]);
-  const [pendingTradeData, setPendingTradeData] = useState<{ amount: string; fiatAmount: string; type: 'buy' | 'sell'; paymentMethod: 'bank' | 'cash' } | null>(null);
+  const [pendingTradeData, setPendingTradeData] = useState<{
+    amount: string;
+    fiatAmount: string;
+    type: "buy" | "sell";
+    paymentMethod: "bank" | "cash";
+  } | null>(null);
   const extensionRequestSetterRef = useRef<(req: any) => void>(() => {});
 
   // Data fetching
-  const { orders, setOrders, bankAccounts, setBankAccounts, resolvedDisputes, setResolvedDisputes, fetchOrders, fetchBankAccounts, fetchResolvedDisputes, addBankAccount } = useUserDataFetching();
+  const {
+    orders,
+    setOrders,
+    bankAccounts,
+    setBankAccounts,
+    resolvedDisputes,
+    setResolvedDisputes,
+    fetchOrders,
+    fetchBankAccounts,
+    fetchResolvedDisputes,
+    addBankAccount,
+  } = useUserDataFetching();
 
   // Auth
   const auth = useUserAuth({
@@ -129,7 +268,7 @@ export default function Home() {
     setBankAccounts,
     setResolvedDisputes,
     solanaWallet,
-    escrowTxStatus: 'idle',
+    escrowTxStatus: "idle",
     setEscrowTxStatus: () => {},
     fetchOrders,
     fetchBankAccounts,
@@ -170,7 +309,9 @@ export default function Home() {
     solanaWallet,
     playSound,
     toast,
-    setExtensionRequest: (req: any) => { extensionRequestSetterRef.current(req); },
+    setExtensionRequest: (req: any) => {
+      extensionRequestSetterRef.current(req);
+    },
   });
 
   const { activeOrder } = userEffects;
@@ -189,11 +330,15 @@ export default function Home() {
   });
   extensionRequestSetterRef.current = orderActions.setExtensionRequest;
 
-  // Refetch orders when returning to home screen so completed/cancelled orders update
+  // Refetch orders when returning to home screen so completed/cancelled orders update.
+  // Also drop activeOrderId: otherwise a stale id from a prior order survives into
+  // the next trade-creation flow and the order screen flashes the previous order's
+  // data before the new id/state commits.
   const prevScreenRef = useRef(screen);
   useEffect(() => {
-    if (screen === 'home' && prevScreenRef.current !== 'home' && auth.userId) {
-      fetchOrders(auth.userId);
+    if (screen === "home" && prevScreenRef.current !== "home") {
+      if (auth.userId) fetchOrders(auth.userId);
+      setActiveOrderId(null);
     }
     prevScreenRef.current = screen;
   }, [screen, auth.userId, fetchOrders]);
@@ -203,9 +348,9 @@ export default function Home() {
   // screen — leaving them in place keeps the URL looking like "/?welcome=skip"
   // for the entire session, which is confusing when sharing or bookmarking.
   useEffect(() => {
-    if (typeof window === 'undefined' || !auth.userId) return;
+    if (typeof window === "undefined" || !auth.userId) return;
     const url = new URL(window.location.href);
-    const junk = ['welcome', 'tab', 'reason'];
+    const junk = ["welcome", "tab", "reason"];
     let mutated = false;
     for (const key of junk) {
       if (url.searchParams.has(key)) {
@@ -214,14 +359,21 @@ export default function Home() {
       }
     }
     if (mutated) {
-      const clean = url.pathname + (url.searchParams.toString() ? `?${url.searchParams}` : '') + url.hash;
-      window.history.replaceState(null, '', clean);
+      const clean =
+        url.pathname +
+        (url.searchParams.toString() ? `?${url.searchParams}` : "") +
+        url.hash;
+      window.history.replaceState(null, "", clean);
     }
   }, [auth.userId]);
 
-  const pendingOrders = orders.filter(o => !["complete", "cancelled", "expired", "disputed"].includes(o.status));
-  const completedOrders = orders.filter(o => o.status === "complete");
-  const cancelledOrders = orders.filter(o => o.status === "cancelled" || o.status === "expired");
+  const pendingOrders = orders.filter(
+    (o) => !["complete", "cancelled", "expired", "disputed"].includes(o.status),
+  );
+  const completedOrders = orders.filter((o) => o.status === "complete");
+  const cancelledOrders = orders.filter(
+    (o) => o.status === "cancelled" || o.status === "expired",
+  );
 
   // Defensive guard: if the user is on the escrow screen but the active order
   // has already moved to a terminal state (completed / cancelled / expired /
@@ -231,14 +383,18 @@ export default function Home() {
     if (
       screen === "escrow" &&
       activeOrder &&
-      ["complete", "cancelled", "expired", "disputed"].includes(activeOrder.status)
+      ["complete", "cancelled", "expired", "disputed"].includes(
+        activeOrder.status,
+      )
     ) {
       setScreen("order");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, activeOrder?.status]);
 
-  const fiatAmount = tradeCreation.amount ? (parseFloat(tradeCreation.amount) * tradeCreation.currentRate).toFixed(2) : "0";
+  const fiatAmount = tradeCreation.amount
+    ? (parseFloat(tradeCreation.amount) * tradeCreation.currentRate).toFixed(2)
+    : "0";
   const currentFees = FEE_CONFIG[tradeCreation.tradePreference];
 
   const handleCopy = async (text: string) => {
@@ -258,13 +414,13 @@ export default function Home() {
   const maxW = "max-w-[440px] mx-auto";
 
   // The user route only uses two themes: dark (default) and light.
-  const isUserLight = theme === 'light';
+  const isUserLight = theme === "light";
 
   if (auth.isInitializing) {
     return (
       <div
-        className={`user-scope ${isUserLight ? 'user-light' : ''} h-dvh flex items-center justify-center overflow-hidden`}
-        style={{ background: 'var(--user-frame)' }}
+        className={`user-scope ${isUserLight ? "user-light" : ""} h-dvh flex items-center justify-center overflow-hidden`}
+        style={{ background: "var(--user-frame)" }}
       >
         <Loader2 className="w-8 h-8 animate-spin text-accent-text" />
       </div>
@@ -273,8 +429,8 @@ export default function Home() {
 
   return (
     <div
-      className={`user-scope ${isUserLight ? 'user-light' : ''} min-h-dvh flex flex-col items-center overflow-y-auto relative`}
-      style={{ background: 'var(--user-frame)' }}
+      className={`user-scope ${isUserLight ? "user-light" : ""} min-h-dvh flex flex-col items-center overflow-y-auto relative`}
+      style={{ background: "var(--user-frame)" }}
     >
       <NotificationToastContainer position="top-right" />
       {/* Global chat-toast overlay — shows per-order popups for inbound
@@ -291,33 +447,51 @@ export default function Home() {
       )}
       {/* TransactionProgress removed — simple loading on buttons instead */}
       <AnimatePresence mode="wait">
-        {screen === "welcome" && (() => {
-          // Parse query params for login route redirects
-          const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
-          const skipWelcome = params?.get('welcome') === 'skip';
-          const reason = params?.get('reason');
-          // Show "session expired" banner by pre-filling loginError once on mount
-          if (skipWelcome && reason === 'session_expired' && !auth.loginError) {
-            setTimeout(() => auth.setLoginError('Your session expired. Please sign in again.'), 0);
-          }
-          return (
-            <LandingPage
-              loginForm={auth.loginForm}
-              setLoginForm={auth.setLoginForm}
-              authMode={auth.authMode}
-              setAuthMode={auth.setAuthMode}
-              handleUserLogin={auth.handleUserLogin}
-              handleUserRegister={auth.handleUserRegister}
-              isLoggingIn={auth.isLoggingIn}
-              loginError={auth.loginError}
-              setLoginError={auth.setLoginError}
-              skipWelcome={skipWelcome}
-            />
-          );
-        })()}
+        {screen === "welcome" &&
+          (() => {
+            // Parse query params for login route redirects
+            const params =
+              typeof window !== "undefined"
+                ? new URLSearchParams(window.location.search)
+                : null;
+            const skipWelcome = params?.get("welcome") === "skip";
+            const reason = params?.get("reason");
+            // Show "session expired" banner by pre-filling loginError once on mount
+            if (
+              skipWelcome &&
+              reason === "session_expired" &&
+              !auth.loginError
+            ) {
+              setTimeout(
+                () =>
+                  auth.setLoginError(
+                    "Your session expired. Please sign in again.",
+                  ),
+                0,
+              );
+            }
+            return (
+              <LandingPage
+                loginForm={auth.loginForm}
+                setLoginForm={auth.setLoginForm}
+                authMode={auth.authMode}
+                setAuthMode={auth.setAuthMode}
+                handleUserLogin={auth.handleUserLogin}
+                handleUserRegister={auth.handleUserRegister}
+                isLoggingIn={auth.isLoggingIn}
+                loginError={auth.loginError}
+                setLoginError={auth.setLoginError}
+                skipWelcome={skipWelcome}
+              />
+            );
+          })()}
 
         {screen === "home" && (
-          <Panel k="home" className="relative" style={theme === 'light' ? lightPanelBg : darkBg}>
+          <Panel
+            k="home"
+            className="relative"
+            style={theme === "light" ? lightPanelBg : darkBg}
+          >
             <HomeScreen
               userName={auth.userName}
               userId={auth.userId}
@@ -338,7 +512,7 @@ export default function Home() {
               embeddedWallet={embeddedWallet}
               userBalance={auth.userBalance}
               maxW={maxW}
-              notificationCount={notifications.filter(n => !n.read).length}
+              notificationCount={notifications.filter((n) => !n.read).length}
             />
           </Panel>
         )}
@@ -362,11 +536,17 @@ export default function Home() {
               userId={auth.userId}
               startTrade={tradeCreation.startTrade}
               solanaWallet={solanaWallet}
-              selectedPaymentMethodId={tradeCreation.selectedPaymentMethod?.id || null}
+              selectedPaymentMethodId={
+                tradeCreation.selectedPaymentMethod?.id || null
+              }
               onSelectPaymentMethod={tradeCreation.setSelectedPaymentMethod}
               selectedPair={tradeCreation.selectedPair}
               onPairChange={tradeCreation.setSelectedPair}
               setCurrentRate={tradeCreation.setCurrentRate}
+              auctionMode={tradeCreation.auctionMode}
+              setAuctionMode={tradeCreation.setAuctionMode}
+              selectionMode={tradeCreation.selectionMode}
+              setSelectionMode={tradeCreation.setSelectionMode}
             />
           </Panel>
         )}
@@ -392,13 +572,17 @@ export default function Home() {
               setShowWalletModal={auth.setShowWalletModal}
               onConnectWallet={() => {
                 if (embeddedWallet) {
-                  if (embeddedWallet.state === 'none') auth.setShowWalletSetup(true);
-                  else if (embeddedWallet.state === 'locked') auth.setShowWalletUnlock(true);
+                  if (embeddedWallet.state === "none")
+                    auth.setShowWalletSetup(true);
+                  else if (embeddedWallet.state === "locked")
+                    auth.setShowWalletUnlock(true);
                 } else {
                   auth.setShowWalletModal(true);
                 }
               }}
-              fiatCurrency={tradeCreation.selectedPair === 'usdt_inr' ? 'INR' : 'AED'}
+              fiatCurrency={
+                tradeCreation.selectedPair === "usdt_inr" ? "INR" : "AED"
+              }
               solanaWallet={solanaWallet}
             />
           </Panel>
@@ -448,6 +632,8 @@ export default function Home() {
               requestCancelOrder={orderActions.requestCancelOrder}
               respondToCancelRequest={orderActions.respondToCancelRequest}
               isRequestingCancel={orderActions.isRequestingCancel}
+              claimRefund={orderActions.claimRefund}
+              isClaimingRefund={orderActions.isClaimingRefund}
               solanaWallet={solanaWallet}
               setShowWalletModal={auth.setShowWalletModal}
               userId={auth.userId}
@@ -465,7 +651,9 @@ export default function Home() {
               <button onClick={() => setScreen("home")} className="p-2 -ml-2">
                 <ChevronLeft className="w-6 h-6 text-white" />
               </button>
-              <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">Order Details</h1>
+              <h1 className="flex-1 text-center text-[17px] font-semibold text-white pr-8">
+                Order Details
+              </h1>
             </div>
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
@@ -477,7 +665,11 @@ export default function Home() {
         )}
 
         {screen === "orders" && (
-          <Panel k="orders" className="relative" style={theme === 'light' ? lightPanelBg : darkBg}>
+          <Panel
+            k="orders"
+            className="relative"
+            style={theme === "light" ? lightPanelBg : darkBg}
+          >
             <OrdersListScreen
               screen={screen}
               setScreen={setScreen}
@@ -493,21 +685,36 @@ export default function Home() {
         )}
 
         {screen === "notifications" && (
-          <Panel k="notifications" style={theme === 'light' ? lightPanelBg : darkBg}>
+          <Panel
+            k="notifications"
+            style={theme === "light" ? lightPanelBg : darkBg}
+          >
             <NotificationsScreen
               screen={screen}
               setScreen={setScreen}
               notifications={notifications}
-              onMarkRead={(id) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))}
-              onMarkAllRead={() => setNotifications(prev => prev.map(n => ({ ...n, read: true })))}
-              unreadCount={notifications.filter(n => !n.read).length}
+              onMarkRead={(id) =>
+                setNotifications((prev) =>
+                  prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+                )
+              }
+              onMarkAllRead={() =>
+                setNotifications((prev) =>
+                  prev.map((n) => ({ ...n, read: true })),
+                )
+              }
+              unreadCount={notifications.filter((n) => !n.read).length}
               maxW={maxW}
             />
           </Panel>
         )}
 
         {screen === "profile" && (
-          <Panel k="profile" className="overflow-hidden relative" style={theme === 'light' ? lightPanelBg : darkBg}>
+          <Panel
+            k="profile"
+            className="overflow-hidden relative"
+            style={theme === "light" ? lightPanelBg : darkBg}
+          >
             <ProfileScreen
               screen={screen}
               setScreen={setScreen}
@@ -558,7 +765,7 @@ export default function Home() {
               setActiveOrderId={setActiveOrderId}
               setOrders={setOrders}
               maxW={maxW}
-              notificationCount={notifications.filter(n => !n.read).length}
+              notificationCount={notifications.filter((n) => !n.read).length}
             />
           </Panel>
         )}
@@ -573,9 +780,21 @@ export default function Home() {
               setChatMessage={userEffects.setChatMessage}
               sendChatMessage={userEffects.sendChatMessage}
               chatMessagesRef={userEffects.chatMessagesRef}
-              onLoadOlder={activeOrder ? () => userEffects.loadOlderMessages(activeOrder.id) : undefined}
-              hasOlderMessages={activeOrder ? userEffects.hasOlderMessages(activeOrder.id) : false}
-              isLoadingOlder={activeOrder ? userEffects.isLoadingOlderMessages(activeOrder.id) : false}
+              onLoadOlder={
+                activeOrder
+                  ? () => userEffects.loadOlderMessages(activeOrder.id)
+                  : undefined
+              }
+              hasOlderMessages={
+                activeOrder
+                  ? userEffects.hasOlderMessages(activeOrder.id)
+                  : false
+              }
+              isLoadingOlder={
+                activeOrder
+                  ? userEffects.isLoadingOlderMessages(activeOrder.id)
+                  : false
+              }
               onTyping={userEffects.sendTypingIndicator}
               isCounterpartyTyping={!!(userEffects.activeChat as any)?.isTyping}
             />
@@ -658,7 +877,7 @@ export default function Home() {
         acceptedOrderInfo={userEffects.acceptedOrderInfo}
       />
 
-      <IssueReporter authed={!!auth.userId} />
+      <IssueReporter authed={!!auth.userId} hideTrigger />
     </div>
   );
 }
