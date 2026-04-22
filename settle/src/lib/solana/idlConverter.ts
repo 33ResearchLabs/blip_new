@@ -109,7 +109,14 @@ export function convertIdlToAnchor29(idl: any): Idl {
     instructions: (idl.instructions || []).map((ix: any) => ({
       name: ix.name,
       accounts: (ix.accounts || []).map((acc: any) => ({
-        name: acc.name,
+        // 0.30+ IDL uses snake_case account names; anchor@0.29's
+        // `validateAccounts` looks them up by the exact IDL key. Every
+        // client call site passes camelCase keys, so we camelCase the
+        // IDL here and the two sides align. Inlined to avoid any
+        // Turbopack module-init-order ambiguity around helper hoisting.
+        name: typeof acc.name === "string" && acc.name.includes("_")
+          ? acc.name.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase())
+          : acc.name,
         isMut: acc.writable ?? acc.isMut ?? false,
         isSigner: acc.signer ?? acc.isSigner ?? false,
         ...(acc.optional || acc.isOptional ? { isOptional: true } : {}),

@@ -152,7 +152,7 @@ export async function POST(
     const grossBase = toBaseUnits(cryptoAmount.toString(), USDT_DECIMALS);
     const { payoutBase } = calculateFeeBase(grossBase, auction.base_fee_bps);
 
-    const locked = await lockAuctionWinner({
+    const outcome = await lockAuctionWinner({
       auctionId: auction.id,
       orderId,
       winningBidId,
@@ -166,8 +166,50 @@ export async function POST(
         .filter((x): x is string => Boolean(x)),
     });
 
-    if (!locked) {
+    if (!outcome.ok) {
       const fresh = await getAuctionForOrder(orderId);
+
+      // A merchant claimed the order during the bidding window. The
+      // auction cannot safely overwrite pricing for a committed
+      // merchant, so we fall back to the base price on the existing
+      // claim and mark the auction cancelled.
+      if (outcome.reason === 'merchant_claim_mismatch') {
+        logger.warn('[Auction] Merchant claim during bidding — cancelling auction, base price stands', {
+          orderId,
+          detail: outcome.detail,
+        });
+        await query(
+          `UPDATE order_auctions
+              SET status = 'cancelled', updated_at = now()
+            WHERE id = $1 AND status IN ('open', 'scoring')`,
+          [auction.id],
+        );
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'merchant_claim_during_auction',
+            code: 'AUCTION_CANCELLED_BY_CLAIM',
+            detail: outcome.detail,
+            fell_back_to_base: true,
+          },
+          { status: 409 },
+        );
+      }
+
+      // Order was no longer open (expired, cancelled, or already
+      // moved past 'open' by some other path): surface and stop.
+      if (outcome.reason === 'order_not_open') {
+        logger.warn('[Auction] Order not open at finalize time', {
+          orderId,
+          detail: outcome.detail,
+        });
+        return NextResponse.json(
+          { success: false, error: 'order_not_open', detail: outcome.detail },
+          { status: 409 },
+        );
+      }
+
+      // race_lost: another worker finalized first. Idempotent success.
       return successResponse({
         status: 'race_lost',
         current_status: fresh?.status,

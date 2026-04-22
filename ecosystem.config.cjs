@@ -16,13 +16,12 @@ module.exports = {
     {
       name: 'settle',
       cwd: './settle',
-      script: 'node_modules/.bin/next',
-      args: 'start -p 3000',
+      script: 'server.js',
       instances: 1,
       exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
-        PORT: 3000,
+        PORT: 4545,
       },
       // Restart on crash, max 10 restarts in 60s
       max_restarts: 10,

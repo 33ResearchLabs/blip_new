@@ -153,7 +153,30 @@ export function useUserOrderActions({
 
     try {
       if (hasOnChain) {
-        // Step 1: Sign + accept trade
+        // Sign + accept trade on-chain. This moves the deployed program's
+        // Trade state from Locked → Accepted, which is required for the
+        // merchant's later `release_escrow` to succeed.
+        //
+        // We intentionally DO NOT call `confirm_payment` here. The deployed
+        // program's `confirm_payment` further transitions Accepted →
+        // PaymentSent, and from PaymentSent the creator (merchant) can no
+        // longer call `release_escrow` (only the counterparty can). That
+        // was the root cause of the "Release blocked: buyer has not joined"
+        // stuck trades we saw on orders like cbb7e9f9 and 71b0d9be — the
+        // user's "Payment Sent" click was pushing the on-chain state past
+        // the point where the merchant could release.
+        //
+        // accept_trade errors are NOT swallowed. If the user hasn't
+        // approved on-chain, the merchant's release will fail silently
+        // later (the "accept_trade skipped" logs were hiding this). Block
+        // the Payment-Sent flow with a clear error so the problem is
+        // visible at the source instead of 10 minutes later as a stuck
+        // trade.
+        const KNOWN_ALREADY_ACCEPTED = [
+          'CannotAccept', // 6013 / 0x177d — already accepted
+          '0x177d',
+          '6013',
+        ];
         try {
           const acceptResult = await solanaWallet.acceptTrade({
             creatorPubkey: activeOrder.escrowCreatorWallet,
@@ -161,35 +184,40 @@ export function useUserOrderActions({
           });
           if (acceptResult.success) {
             console.log("[User] acceptTrade success:", acceptResult.txHash);
-          }
-        } catch (acceptErr: any) {
-          console.log(
-            "[User] acceptTrade skipped (likely already done):",
-            acceptErr.message,
-          );
-        }
-        // Step complete — loading continues
-
-        // Step 2: Confirm payment on chain
-        try {
-          const confirmResult = await solanaWallet.confirmPayment({
-            creatorPubkey: activeOrder.escrowCreatorWallet,
-            tradeId: activeOrder.escrowTradeId,
-          });
-          if (confirmResult.success) {
-            console.log(
-              "[User] On-chain payment confirmed:",
-              confirmResult.txHash,
-            );
           } else {
-            console.warn(
-              "[User] On-chain confirmation failed, continuing with API",
+            const errMsg = acceptResult.error ?? 'unknown';
+            const isAlreadyAccepted = KNOWN_ALREADY_ACCEPTED.some((k) =>
+              errMsg.includes(k),
             );
+            if (!isAlreadyAccepted) {
+              showAlert(
+                'On-chain accept failed',
+                `Could not join the trade on-chain: ${errMsg}. Do not mark payment sent until this is resolved — your crypto would be unreleasable otherwise.`,
+                'error',
+              );
+              setIsLoading(false);
+              return;
+            }
+            console.log('[User] acceptTrade: trade already accepted — proceeding');
           }
-        } catch (chainError) {
-          console.warn("[User] On-chain confirmation failed:", chainError);
+        } catch (acceptErr: unknown) {
+          const errMsg =
+            acceptErr instanceof Error ? acceptErr.message : String(acceptErr);
+          const isAlreadyAccepted = KNOWN_ALREADY_ACCEPTED.some((k) =>
+            errMsg.includes(k),
+          );
+          if (!isAlreadyAccepted) {
+            console.error('[User] acceptTrade failed:', errMsg);
+            showAlert(
+              'On-chain accept failed',
+              `Could not join the trade on-chain: ${errMsg.slice(0, 200)}. Do not mark payment sent until this is resolved — your crypto would be unreleasable otherwise.`,
+              'error',
+            );
+            setIsLoading(false);
+            return;
+          }
+          console.log('[User] acceptTrade: trade already accepted — proceeding');
         }
-        // Step complete — loading continues
       }
 
       // Final step: Update order via API

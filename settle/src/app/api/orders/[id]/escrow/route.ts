@@ -21,23 +21,55 @@ import { mockEscrowLock, determineEscrowPayer } from "@/lib/money/escrowLock";
 import { auditLog } from "@/lib/auditLog";
 import { resolveTradeRole } from "@/lib/orders/handleOrderAction";
 import { normalizeStatus } from "@/lib/orders/statusNormalizer";
+import { query as dbQuery } from "@/lib/db";
+import { getConnection } from "@/lib/solana/escrow";
+import { verifyEscrowTx } from "@/lib/solana/verifyEscrowTx";
 
-// Schema for escrow deposit
+// Schema for escrow deposit.
+//
+// `tx_hash` is bounded to base58 signature length to defang silly inputs
+// before we spend an RPC call. Actual cryptographic validation happens in
+// verifyEscrowTx.
 const escrowDepositSchema = z.object({
-  tx_hash: z.string().min(1, "Transaction hash is required"),
+  tx_hash: z
+    .string()
+    .min(87, "Transaction hash too short")
+    .max(88, "Transaction hash too long")
+    .regex(/^[1-9A-HJ-NP-Za-km-z]+$/, "Transaction hash must be base58"),
   actor_type: z.enum(["user", "merchant"]),
   actor_id: z.string().uuid(),
   escrow_address: z.string().nullish(),
-  // On-chain escrow references for release
+  // On-chain escrow references. escrow_trade_pda is now REQUIRED for
+  // server-side verification (we need it to derive the vault ATA).
   escrow_trade_id: z.number().nullish(),
-  escrow_trade_pda: z.string().nullish(),
+  escrow_trade_pda: z.string().min(32).max(44),
   escrow_pda: z.string().nullish(),
-  escrow_creator_wallet: z.string().nullish(),
+  escrow_creator_wallet: z.string().min(32).max(44),
 });
 
-// Schema for escrow release
+const SOLANA_NETWORK: "devnet" | "mainnet-beta" =
+  process.env.NEXT_PUBLIC_SOLANA_NETWORK === "mainnet-beta"
+    ? "mainnet-beta"
+    : "devnet";
+
+// Schema for escrow release. Same base58-signature shape guard as the
+// lock route above. Without this, an earlier bug in the UI fabricated
+// `server-release-fallback-<timestamp>` strings here, which the backend
+// then stored as `release_tx_hash` and flipped `status -> completed`
+// even though no on-chain release_escrow ever ran — leaving funds
+// stranded in the vault. Enforcing the base58 signature shape here
+// makes that ghost-release impossible by construction, regardless of
+// what callers (current UI, old UIs, future UIs, direct API hits) try
+// to submit.
 const escrowReleaseSchema = z.object({
-  tx_hash: z.string().min(1, "Transaction hash is required"),
+  tx_hash: z
+    .string()
+    .min(87, "Transaction hash too short — must be a base58 Solana signature")
+    .max(88, "Transaction hash too long — must be a base58 Solana signature")
+    .regex(
+      /^[1-9A-HJ-NP-Za-km-z]+$/,
+      "Transaction hash must be base58 — fabricated placeholders (e.g. 'server-release-fallback-*') are rejected",
+    ),
   actor_type: z.enum(["user", "merchant"]),
   actor_id: z.string().uuid(),
 });
@@ -191,40 +223,37 @@ export async function POST(
     const isAlreadyEscrowed = minimalStatus === "escrowed";
 
     if (isAlreadyEscrowed) {
-      // Idempotent: order already escrowed (SELL escrow-first flow).
-      // Update on-chain references if needed, but don't change status.
-      logger.info("[Escrow:Deposit] Order already escrowed — updating on-chain refs only", {
+      // Idempotent re-submission path. Two valid cases:
+      //   (a) Client retried the SAME tx_hash — return current state (200).
+      //   (b) Client submitted a DIFFERENT tx_hash against an already-
+      //       escrowed order — reject (409). This blocks replay of an
+      //       unrelated on-chain transfer onto an order that's already
+      //       been accounted for, and would otherwise bypass the partial
+      //       UNIQUE(escrow_tx_hash) index (since the column is already
+      //       set for this order).
+      const existing = depositOrder.escrow_tx_hash as string | null;
+      if (existing && existing !== parseResult.data.tx_hash) {
+        logger.warn(
+          "[Escrow:Deposit] Rejected — order already escrowed with a different tx_hash",
+          { orderId: id, existing, submitted: parseResult.data.tx_hash },
+        );
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Order already has an escrow transaction recorded.",
+            code: "ESCROW_ALREADY_RECORDED",
+          },
+          { status: 409 },
+        );
+      }
+
+      // Same tx_hash (or none previously recorded because of an older
+      // flow). No status change; simply return the serialized order.
+      logger.info("[Escrow:Deposit] Idempotent hit on already-escrowed order", {
         orderId: id,
-        currentStatus: depositOrder.status,
-        existingTxHash: depositOrder.escrow_tx_hash,
-        newTxHash: parseResult.data.tx_hash,
+        txHash: parseResult.data.tx_hash,
       });
-
-      // Update escrow fields on the existing escrowed order
-      const { query: dbQuery } = await import("@/lib/db");
-      await dbQuery(
-        `UPDATE orders SET
-           escrow_tx_hash = COALESCE($2, escrow_tx_hash),
-           escrow_trade_id = COALESCE($3, escrow_trade_id),
-           escrow_trade_pda = COALESCE($4, escrow_trade_pda),
-           escrow_pda = COALESCE($5, escrow_pda),
-           escrow_creator_wallet = COALESCE($6, escrow_creator_wallet),
-           escrow_address = COALESCE($7, escrow_address)
-         WHERE id = $1`,
-        [
-          id,
-          parseResult.data.tx_hash,
-          parseResult.data.escrow_trade_id ?? null,
-          parseResult.data.escrow_trade_pda ?? null,
-          parseResult.data.escrow_pda ?? null,
-          parseResult.data.escrow_creator_wallet ?? null,
-          parseResult.data.escrow_address ?? null,
-        ],
-      );
-
-      // Return the updated order
-      const updatedOrder = await getOrderWithRelations(id);
-      return successResponse(updatedOrder);
+      return successResponse(depositOrder);
     }
 
     if (minimalStatus !== "accepted" && !allowOpenEscrow) {
@@ -279,6 +308,83 @@ export async function POST(
       cryptoCurrency: depositOrder?.crypto_currency ?? null,
       orderStatus: depositOrder?.status ?? null,
       txHash: parseResult.data.tx_hash,
+    });
+
+    // ── CROSS-ORDER REPLAY GUARD ──
+    // The partial UNIQUE index on orders.escrow_tx_hash (migration 065)
+    // would reject a duplicate at commit time, but we want a clean 409
+    // response and no wasted core-api work. Check explicitly up front.
+    const collisionRows = await dbQuery<{ id: string }>(
+      `SELECT id FROM orders WHERE escrow_tx_hash = $1 AND id <> $2 LIMIT 1`,
+      [parseResult.data.tx_hash, id],
+    );
+    if (collisionRows.length > 0) {
+      logger.warn("[Escrow:Deposit] Rejected — tx_hash already bound to another order", {
+        orderId: id,
+        collisionOrderId: collisionRows[0].id,
+        txHash: parseResult.data.tx_hash,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: "This transaction is already associated with a different order.",
+          code: "TX_HASH_REUSED",
+        },
+        { status: 409 },
+      );
+    }
+
+    // ── ON-CHAIN VERIFICATION ──
+    // Fail closed: until we've confirmed the tx exists on-chain, is
+    // successful, invoked the Blip V2 program, and actually deposited the
+    // expected USDT amount into the expected trade vault ATA, we do NOT
+    // record escrow. The backend must never take the client's word for it.
+    const connection = getConnection(SOLANA_NETWORK);
+    const verification = await verifyEscrowTx(connection, {
+      txHash: parseResult.data.tx_hash,
+      tradePda: parseResult.data.escrow_trade_pda,
+      expectedAmount: depositOrder.crypto_amount as number,
+      currency: (depositOrder.crypto_currency as string) || "USDT",
+      network: SOLANA_NETWORK,
+      creatorWallet: parseResult.data.escrow_creator_wallet,
+    });
+
+    if (!verification.ok) {
+      // Distinguish transient ("try again in a moment") from permanent
+      // ("this tx will never be valid for this order") failures so the
+      // client can behave accordingly.
+      const transient =
+        verification.code === "TX_NOT_CONFIRMED" ||
+        verification.code === "RPC_ERROR";
+      const status = transient ? 425 : 400;
+
+      logger.warn("[Escrow:Deposit] On-chain verification failed", {
+        orderId: id,
+        txHash: parseResult.data.tx_hash,
+        code: verification.code,
+        detail: verification.detail,
+        transient,
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: transient
+            ? "Transaction not yet confirmed on-chain. Please retry."
+            : "Submitted transaction does not match this order's expected escrow.",
+          code: verification.code,
+          detail: verification.detail,
+        },
+        { status },
+      );
+    }
+
+    logger.info("[Escrow:Deposit] On-chain verification passed", {
+      orderId: id,
+      txHash: parseResult.data.tx_hash,
+      slot: verification.slot,
+      vaultAta: verification.vaultAta,
+      rawAmount: verification.observedRawAmount.toString(),
     });
 
     // Forward to core-api (single writer for all mutations)

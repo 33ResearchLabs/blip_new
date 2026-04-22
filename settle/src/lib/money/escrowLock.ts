@@ -69,6 +69,20 @@ export async function mockEscrowLock(
     escrow_creator_wallet?: string;
   }
 ): Promise<EscrowLockResult> {
+  // Production fail-closed guard. `mockEscrowLock` debits real balances
+  // without any on-chain verification; it must never run against real
+  // money. Any production code path reaching this is a bug.
+  if (
+    process.env.NODE_ENV === 'production' &&
+    process.env.ALLOW_MOCK_ESCROW !== 'true'
+  ) {
+    logger.error('[mockEscrowLock] BLOCKED in production', { orderId, actorId, txHash });
+    return {
+      success: false,
+      error: 'mockEscrowLock is disabled in production — verified on-chain flow required',
+    };
+  }
+
   try {
     const order = await transaction(async (client) => {
       // 1. Lock the order row

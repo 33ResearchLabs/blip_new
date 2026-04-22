@@ -50,9 +50,24 @@ export async function getAuctionForOrder(orderId: string): Promise<OrderAuctionR
   );
 }
 
+export type LockAuctionOutcome =
+  | { ok: true }
+  | { ok: false; reason: 'race_lost' | 'order_not_open' | 'merchant_claim_mismatch'; detail?: string };
+
 /**
- * Atomically: mark auction 'scoring' → commit winner + update order →
- * mark auction 'locked'. Returns false if the auction was already finalised.
+ * Atomically: lock the order row → verify it is still eligible for
+ * auction resolution → claim the auction (open→scoring) → mark winner +
+ * losers → commit winner onto the order → mark auction locked.
+ *
+ * Invariants enforced here (mirrored by triggers in migration 102):
+ *   - Order must still be in 'pending' / 'open' (no prior accept/escrow).
+ *   - Order's existing merchant_id (if any) must equal the chosen winner,
+ *     otherwise a different merchant accepted before us — reject the lock.
+ *   - For BUY auction orders we overwrite merchant_id with the winner
+ *     unconditionally (rather than COALESCE), so the seller role matches
+ *     the bid winner and subsequent escrow MUST come from the winner.
+ *   - For SELL auction orders the user is seller; merchant_id on the
+ *     order is the auction winner but not the escrow funder.
  */
 export async function lockAuctionWinner(params: {
   auctionId: string;
@@ -64,9 +79,46 @@ export async function lockAuctionWinner(params: {
   expectedPayoutBase: bigint;
   selectedMerchantId: string;
   rejectedIds: string[];
-}): Promise<boolean> {
+}): Promise<LockAuctionOutcome> {
   return transaction(async (client) => {
-    // Claim the auction: open → scoring. If another worker got here first, bail.
+    // 1. Pessimistically lock the order row AND read its current claim
+    //    state. No other transaction can UPDATE this row until we commit.
+    const orderRes = await client.query<{
+      status: string;
+      merchant_id: string | null;
+      type: 'buy' | 'sell';
+      auction_mode: 'fixed' | 'auction';
+    }>(
+      `SELECT status, merchant_id, type, auction_mode
+         FROM orders
+        WHERE id = $1
+        FOR UPDATE`,
+      [params.orderId],
+    );
+    if (orderRes.rowCount === 0) {
+      return { ok: false, reason: 'order_not_open', detail: 'order_missing' };
+    }
+    const order = orderRes.rows[0];
+    if (order.auction_mode !== 'auction') {
+      return { ok: false, reason: 'order_not_open', detail: 'auction_mode_fixed' };
+    }
+    if (!['pending', 'open'].includes(order.status)) {
+      return { ok: false, reason: 'order_not_open', detail: `status_${order.status}` };
+    }
+    // A merchant accepted / claimed the order during the bidding window.
+    // The only safe outcome is rejecting their claim and proceeding with
+    // the winner, OR rejecting the auction. We choose the latter: if
+    // another merchant got there first, they've already committed to
+    // the base price — don't silently overwrite them.
+    if (order.merchant_id && order.merchant_id !== params.selectedMerchantId) {
+      return {
+        ok: false,
+        reason: 'merchant_claim_mismatch',
+        detail: `order_merchant=${order.merchant_id} winner=${params.selectedMerchantId}`,
+      };
+    }
+
+    // 2. Claim the auction (compare-and-swap).
     const claimed = await client.query(
       `UPDATE order_auctions
          SET status = 'scoring', updated_at = now()
@@ -74,9 +126,11 @@ export async function lockAuctionWinner(params: {
        RETURNING id`,
       [params.auctionId],
     );
-    if (claimed.rowCount === 0) return false;
+    if (claimed.rowCount === 0) {
+      return { ok: false, reason: 'race_lost' };
+    }
 
-    // Winner + losers.
+    // 3. Winner + losers.
     await client.query(
       `UPDATE order_bids SET status = 'won', updated_at = now()
        WHERE id = $1`,
@@ -95,19 +149,22 @@ export async function lockAuctionWinner(params: {
       );
     }
 
-    // Lock onto the order row. We stamp agreed_rate + fee_bps + fiat_amount
-    // so the existing pricing path downstream sees immutable, authoritative
-    // values for the rest of the lifecycle.
+    // 4. Stamp the winning bid onto the order. For BUY orders we force
+    //    merchant_id = winner (seller = merchant_id per role matrix); for
+    //    SELL orders the user is seller, and merchant_id carries the
+    //    winning buyer-merchant — still equals the winner.
     await client.query(
       `UPDATE orders
          SET selected_merchant_id = $1,
-             merchant_id          = COALESCE(merchant_id, $1),
+             merchant_id          = $1,
              agreed_rate          = $2,
              rate                 = $2,
              fiat_amount          = $3,
              fee_bps              = $4,
-             expected_payout_base = $5
-       WHERE id = $6`,
+             expected_payout_base = $5,
+             order_version        = order_version + 1
+       WHERE id = $6
+         AND status IN ('pending', 'open')`,
       [
         params.selectedMerchantId,
         params.agreedRate,
@@ -118,6 +175,9 @@ export async function lockAuctionWinner(params: {
       ],
     );
 
+    // 5. Finalize the auction. The AFTER UPDATE trigger
+    //    trg_auction_lock_consistency (migration 102) will re-verify
+    //    winner/order invariants and abort the tx on any drift.
     await client.query(
       `UPDATE order_auctions
          SET status = 'locked',
@@ -127,7 +187,7 @@ export async function lockAuctionWinner(params: {
       [params.winningBidId, params.auctionId],
     );
 
-    return true;
+    return { ok: true };
   });
 }
 
