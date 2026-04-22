@@ -22,6 +22,7 @@ import { useUserTradeCreation } from "@/hooks/useUserTradeCreation";
 import { useUserOrderActions } from "@/hooks/useUserOrderActions";
 import { useUserEffects } from "@/hooks/useUserEffects";
 import { useSolanaWalletSafe } from "@/hooks/useSolanaWalletSafe";
+import { IssueReporter } from "@/components/IssueReporter";
 
 import type { Screen } from "@/components/user/screens/types";
 import { FEE_CONFIG } from "@/components/user/screens/helpers";
@@ -656,6 +657,8 @@ export default function Home() {
         setShowAcceptancePopup={userEffects.setShowAcceptancePopup}
         acceptedOrderInfo={userEffects.acceptedOrderInfo}
       />
+
+      <IssueReporter authed={!!auth.userId} />
     </div>
   );
 }

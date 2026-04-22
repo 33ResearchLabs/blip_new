@@ -42,6 +42,7 @@ import {
   IssueCategory,
   useIssueReporter,
 } from '@/hooks/useIssueReporter';
+import { useMerchantStore } from '@/stores/merchantStore';
 import { IssueAnnotator } from './IssueAnnotator';
 
 const MAX_ATTACHMENTS = 5;
@@ -57,11 +58,23 @@ interface Toast {
 export function IssueReporter({
   triggerLabel = 'Report Issue',
   position = 'bottom-right',
+  authed: authedProp,
 }: {
   triggerLabel?: string;
   position?: 'bottom-right' | 'bottom-left';
+  /**
+   * Caller-supplied login state. When provided, this is the source of
+   * truth for gating the button. When omitted, the component falls back
+   * to reading the merchant store — so the merchant layout works
+   * unchanged, and the user page can pass its own auth signal.
+   */
+  authed?: boolean;
 }) {
-  const reporter = useIssueReporter();
+  const isLoggedIn = useMerchantStore((s) => s.isLoggedIn);
+  const merchantId = useMerchantStore((s) => s.merchantId);
+  const authed =
+    authedProp !== undefined ? authedProp : isLoggedIn || !!merchantId;
+  const reporter = useIssueReporter({ enabled: authed });
 
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<IssueCategory>('ui_bug');
@@ -195,6 +208,10 @@ export function IssueReporter({
 
   const positionClasses =
     position === 'bottom-left' ? 'left-4 bottom-4' : 'right-4 bottom-4';
+
+  // Gate behind login — the Report Issue button (and modal) only render
+  // once a merchant session is active.
+  if (!authed) return null;
 
   return (
     <>

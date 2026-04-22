@@ -69,7 +69,9 @@ function collectMetadata(): Record<string, unknown> {
   };
 }
 
-export function useIssueReporter() {
+export function useIssueReporter({
+  enabled = true,
+}: { enabled?: boolean } = {}) {
   const [isOpen, setIsOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [capturingShot, setCapturingShot] = useState(false);
@@ -170,6 +172,7 @@ export function useIssueReporter() {
 
   // Keyboard shortcut: Ctrl+Shift+I (or Cmd+Shift+I on Mac)
   useEffect(() => {
+    if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.shiftKey && e.key.toLowerCase() === 'i') {
@@ -181,7 +184,7 @@ export function useIssueReporter() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [open, enabled]);
 
   /**
    * Submit the issue. Performs one retry on network failure. Returns a
