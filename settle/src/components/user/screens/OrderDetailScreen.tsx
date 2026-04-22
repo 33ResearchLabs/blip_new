@@ -205,6 +205,9 @@ export interface OrderDetailScreenProps {
   requestCancelOrder: (reason?: string) => void;
   respondToCancelRequest: (accept: boolean) => void;
   isRequestingCancel: boolean;
+  // Stuck on-chain refund recovery
+  claimRefund: () => void;
+  isClaimingRefund: boolean;
   // Solana
   solanaWallet: {
     connected: boolean;
@@ -281,6 +284,8 @@ export const OrderDetailScreen = ({
   requestCancelOrder,
   respondToCancelRequest,
   isRequestingCancel,
+  claimRefund,
+  isClaimingRefund,
   solanaWallet,
   setShowWalletModal,
   userId,
@@ -1083,6 +1088,69 @@ export const OrderDetailScreen = ({
             </div>
           </div>
         )}
+
+        {/* Stuck on-chain refund — appears when the order is in a terminal
+            state but the escrow's on-chain release/refund tx never landed
+            (worker is backing off, backend signer lost authority, or an
+            RPC blip). Only the user who funded the escrow sees it —
+            `escrowDebitedEntityId` is the authoritative funder regardless
+            of whether merchant_id has since been reassigned. */}
+        {(() => {
+          const isTerminal =
+            activeOrder.status === "cancelled" ||
+            activeOrder.status === "expired" ||
+            activeOrder.status === "disputed" ||
+            activeOrder.dbStatus === "cancelled" ||
+            activeOrder.dbStatus === "expired" ||
+            activeOrder.dbStatus === "disputed";
+          const hasOnChainEscrow =
+            !!activeOrder.escrowTxHash && !!activeOrder.escrowTradeId;
+          const refundPending = !activeOrder.releaseTxHash;
+          const isFunder =
+            activeOrder.escrowDebitedEntityType === "user" &&
+            !!activeOrder.escrowDebitedEntityId &&
+            activeOrder.escrowDebitedEntityId === userId;
+
+          if (!isTerminal || !hasOnChainEscrow || !refundPending || !isFunder) {
+            return null;
+          }
+
+          return (
+            <div className={`mb-4 p-4 rounded-2xl ${AMBER_CARD}`}>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-warning-dim flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-warning" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[15px] font-semibold text-warning">
+                    Refund not yet received?
+                  </p>
+                  <p className="text-[13px] text-warning mt-0.5">
+                    Your escrow is still held on-chain. Our system retries
+                    automatically, but you can claim it back manually now.
+                  </p>
+                  <button
+                    onClick={claimRefund}
+                    disabled={isClaimingRefund}
+                    className={`mt-3 w-full h-11 rounded-xl flex items-center justify-center gap-2 text-[14px] font-semibold ${PRIMARY_BTN} disabled:opacity-60`}
+                  >
+                    {isClaimingRefund ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Claiming refund…
+                      </>
+                    ) : (
+                      <>
+                        <Wallet className="w-4 h-4" />
+                        Claim refund
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Steps — hidden when cancelled/expired */}
         {activeOrder.status !== "cancelled" &&

@@ -543,10 +543,6 @@ export default function Home() {
               selectedPair={tradeCreation.selectedPair}
               onPairChange={tradeCreation.setSelectedPair}
               setCurrentRate={tradeCreation.setCurrentRate}
-              auctionMode={tradeCreation.auctionMode}
-              setAuctionMode={tradeCreation.setAuctionMode}
-              selectionMode={tradeCreation.selectionMode}
-              setSelectionMode={tradeCreation.setSelectionMode}
             />
           </Panel>
         )}
