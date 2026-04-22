@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import {
   Bell,
+  Bug,
   ArrowUpRight,
   ArrowDownLeft,
   Zap,
@@ -12,6 +13,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
+import { openIssueReporter } from "@/components/IssueReporter";
 import { useState as useStateHook, useEffect } from "react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
 import { showAlert } from "@/context/ModalContext";
@@ -394,16 +396,31 @@ export const HomeScreen = ({
               </div>
             </div>
 
-            {/* Bell — opens Notifications */}
-            <motion.button whileTap={{ scale: 0.88 }} onClick={() => setScreen('notifications')}
-              className="relative flex items-center justify-center w-[38px] h-[38px] rounded-[13px] bg-surface-card border border-border-subtle">
-              <Bell size={17} strokeWidth={1.8} className="text-text-secondary" />
-              {notificationCount > 0 && (
-                <div className="absolute -top-[3px] -right-[3px] flex items-center justify-center min-w-[15px] h-[15px] px-1 rounded-full bg-accent border-2 border-surface-base">
-                  <span className="text-[7px] font-extrabold text-accent-text">{notificationCount}</span>
-                </div>
-              )}
-            </motion.button>
+            <div className="flex items-center gap-2">
+              {/* Report Issue — opens the issue reporter modal after
+                  capturing the current screen. Sits next to the bell
+                  so the trigger doesn't clash with the bottom tab bar. */}
+              <motion.button
+                whileTap={{ scale: 0.88 }}
+                onClick={() => void openIssueReporter()}
+                aria-label="Report Issue"
+                title="Report Issue"
+                className="flex items-center justify-center w-[38px] h-[38px] rounded-[13px] bg-surface-card border border-border-subtle"
+              >
+                <Bug size={17} strokeWidth={1.8} className="text-text-secondary" />
+              </motion.button>
+
+              {/* Bell — opens Notifications */}
+              <motion.button whileTap={{ scale: 0.88 }} onClick={() => setScreen('notifications')}
+                className="relative flex items-center justify-center w-[38px] h-[38px] rounded-[13px] bg-surface-card border border-border-subtle">
+                <Bell size={17} strokeWidth={1.8} className="text-text-secondary" />
+                {notificationCount > 0 && (
+                  <div className="absolute -top-[3px] -right-[3px] flex items-center justify-center min-w-[15px] h-[15px] px-1 rounded-full bg-accent border-2 border-surface-base">
+                    <span className="text-[7px] font-extrabold text-accent-text">{notificationCount}</span>
+                  </div>
+                )}
+              </motion.button>
+            </div>
           </div>
 
           {/* ── Balance section ── */}
