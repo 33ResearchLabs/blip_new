@@ -24,6 +24,9 @@ interface MerchantNavbarProps {
   rightActions?: React.ReactNode;
   onLogout?: () => void;
   onOpenProfile?: () => void;
+  onOpenSettings?: () => void;
+  onOpenWallet?: () => void;
+  onNavLinkClick?: () => void;
   notificationCount?: number;
   onOpenNotifications?: () => void;
 }
@@ -40,6 +43,9 @@ export function MerchantNavbar({
   rightActions,
   onLogout,
   onOpenProfile,
+  onOpenSettings,
+  onOpenWallet,
+  onNavLinkClick,
   notificationCount = 0,
   onOpenNotifications,
 }: MerchantNavbarProps) {
@@ -102,29 +108,56 @@ export function MerchantNavbar({
           {/* Center: Nav pills — desktop only */}
           <div className="hidden md:flex items-center gap-2 mx-auto">
             <nav className="flex items-center gap-0.5 bg-foreground/[0.03] rounded-lg p-[3px]">
-              <Link href="/merchant" className={pill(activePage === 'dashboard')}>
+              <Link href="/merchant" className={pill(activePage === 'dashboard')} onClick={onNavLinkClick}>
                 Dashboard
               </Link>
-              <Link
-                href="/merchant/wallet"
-                className={`${pill(activePage === 'wallet')} flex items-center gap-1.5`}
-              >
-                {embeddedWalletState === 'unlocked' ? (
-                  <Wallet className="w-3.5 h-3.5 text-green-400" />
-                ) : embeddedWalletState === 'locked' ? (
-                  <Lock className="w-3.5 h-3.5 text-primary" />
-                ) : (
-                  <Wallet className="w-3.5 h-3.5" />
-                )}
-                Wallet
-              </Link>
-              <Link href="/merchant/settings" className={pill(activePage === 'settings')}>
-                Settings
-              </Link>
+              {onOpenWallet ? (
+                <button
+                  onClick={onOpenWallet}
+                  className={`${pill(activePage === 'wallet')} flex items-center gap-1.5`}
+                >
+                  {embeddedWalletState === 'unlocked' ? (
+                    <Wallet className="w-3.5 h-3.5 text-green-400" />
+                  ) : embeddedWalletState === 'locked' ? (
+                    <Lock className="w-3.5 h-3.5 text-primary" />
+                  ) : (
+                    <Wallet className="w-3.5 h-3.5" />
+                  )}
+                  Wallet
+                </button>
+              ) : (
+                <Link
+                  href="/merchant/wallet"
+                  className={`${pill(activePage === 'wallet')} flex items-center gap-1.5`}
+                  onClick={onNavLinkClick}
+                >
+                  {embeddedWalletState === 'unlocked' ? (
+                    <Wallet className="w-3.5 h-3.5 text-green-400" />
+                  ) : embeddedWalletState === 'locked' ? (
+                    <Lock className="w-3.5 h-3.5 text-primary" />
+                  ) : (
+                    <Wallet className="w-3.5 h-3.5" />
+                  )}
+                  Wallet
+                </Link>
+              )}
+              {onOpenSettings ? (
+                <button
+                  onClick={onOpenSettings}
+                  className={pill(activePage === 'settings')}
+                >
+                  Settings
+                </button>
+              ) : (
+                <Link href="/merchant/settings" className={pill(activePage === 'settings')}>
+                  Settings
+                </Link>
+              )}
               {merchantInfo?.has_ops_access && (
                 <Link
                   href="/ops"
                   className={`${pill(activePage === 'ops')} flex items-center gap-1.5`}
+                  onClick={onNavLinkClick}
                 >
                   <Activity className="w-3.5 h-3.5 text-primary" />
                   Ops
@@ -134,6 +167,7 @@ export function MerchantNavbar({
                 <Link
                   href="/compliance"
                   className={`${pill(activePage === 'compliance' as NavPage)} flex items-center gap-1.5`}
+                  onClick={onNavLinkClick}
                 >
                   <Shield className="w-3.5 h-3.5 text-purple-400" />
                   Compliance
@@ -189,19 +223,37 @@ export function MerchantNavbar({
                       <button onClick={() => { setMenuOpen(false); onOpenProfile?.(); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/[0.06] transition-colors">
                         <User className="w-4 h-4" /> Edit Profile
                       </button>
-                      <Link href="/merchant/wallet" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/[0.06] transition-colors">
-                        <Wallet className="w-4 h-4" /> Wallet
-                      </Link>
-                      <Link href="/merchant/settings" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/[0.06] transition-colors">
-                        <Settings className="w-4 h-4" /> Settings
-                      </Link>
+                      {onOpenWallet ? (
+                        <button
+                          onClick={() => { setMenuOpen(false); onOpenWallet(); }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/[0.06] transition-colors"
+                        >
+                          <Wallet className="w-4 h-4" /> Wallet
+                        </button>
+                      ) : (
+                        <Link href="/merchant/wallet" onClick={() => { setMenuOpen(false); onNavLinkClick?.(); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/[0.06] transition-colors">
+                          <Wallet className="w-4 h-4" /> Wallet
+                        </Link>
+                      )}
+                      {onOpenSettings ? (
+                        <button
+                          onClick={() => { setMenuOpen(false); onOpenSettings(); }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/[0.06] transition-colors"
+                        >
+                          <Settings className="w-4 h-4" /> Settings
+                        </button>
+                      ) : (
+                        <Link href="/merchant/settings" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/[0.06] transition-colors">
+                          <Settings className="w-4 h-4" /> Settings
+                        </Link>
+                      )}
                       {merchantInfo?.has_ops_access && (
-                        <Link href="/ops" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-primary/70 hover:text-primary hover:bg-primary/[0.06] transition-colors">
+                        <Link href="/ops" onClick={() => { setMenuOpen(false); onNavLinkClick?.(); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-primary/70 hover:text-primary hover:bg-primary/[0.06] transition-colors">
                           <Activity className="w-4 h-4" /> Ops Panel
                         </Link>
                       )}
                       {merchantInfo?.has_compliance_access && (
-                        <Link href="/compliance" onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/[0.06] transition-colors">
+                        <Link href="/compliance" onClick={() => { setMenuOpen(false); onNavLinkClick?.(); }} className="w-full flex items-center gap-2.5 px-3 py-2 text-[12px] text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/[0.06] transition-colors">
                           <Shield className="w-4 h-4" /> Compliance
                         </Link>
                       )}
@@ -283,18 +335,36 @@ export function MerchantNavbar({
 
               {/* Drawer menu items */}
               <div className="flex-1 overflow-y-auto py-2">
-                <Link href="/merchant" onClick={() => setDrawerOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors">
+                <Link href="/merchant" onClick={() => { setDrawerOpen(false); onNavLinkClick?.(); }} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors">
                   <Zap className="w-5 h-5" /> Dashboard
                 </Link>
-                <Link href="/merchant/wallet" onClick={() => setDrawerOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors">
-                  <Wallet className="w-5 h-5" /> Wallet
-                </Link>
-                <Link href="/merchant/analytics" onClick={() => setDrawerOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors">
+                {onOpenWallet ? (
+                  <button
+                    onClick={() => { setDrawerOpen(false); onOpenWallet(); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
+                  >
+                    <Wallet className="w-5 h-5" /> Wallet
+                  </button>
+                ) : (
+                  <Link href="/merchant/wallet" onClick={() => { setDrawerOpen(false); onNavLinkClick?.(); }} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors">
+                    <Wallet className="w-5 h-5" /> Wallet
+                  </Link>
+                )}
+                <Link href="/merchant/analytics" onClick={() => { setDrawerOpen(false); onNavLinkClick?.(); }} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors">
                   <BarChart3 className="w-5 h-5" /> Analytics
                 </Link>
-                <Link href="/merchant/settings" onClick={() => setDrawerOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors">
-                  <Settings className="w-5 h-5" /> Settings
-                </Link>
+                {onOpenSettings ? (
+                  <button
+                    onClick={() => { setDrawerOpen(false); onOpenSettings(); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors"
+                  >
+                    <Settings className="w-5 h-5" /> Settings
+                  </button>
+                ) : (
+                  <Link href="/merchant/settings" onClick={() => setDrawerOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors">
+                    <Settings className="w-5 h-5" /> Settings
+                  </Link>
+                )}
                 <button onClick={() => { setDrawerOpen(false); onOpenProfile?.(); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm text-foreground/70 hover:text-foreground hover:bg-foreground/[0.04] transition-colors">
                   <User className="w-5 h-5" /> Edit Profile
                 </button>
@@ -302,13 +372,13 @@ export function MerchantNavbar({
                 {merchantInfo?.has_ops_access && (
                   <>
                     <div className="mx-4 my-2 border-t border-foreground/[0.06]" />
-                    <Link href="/ops" onClick={() => setDrawerOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-primary/70 hover:text-primary hover:bg-primary/[0.04] transition-colors">
+                    <Link href="/ops" onClick={() => { setDrawerOpen(false); onNavLinkClick?.(); }} className="flex items-center gap-3 px-4 py-3 text-sm text-primary/70 hover:text-primary hover:bg-primary/[0.04] transition-colors">
                       <Activity className="w-5 h-5" /> Ops Panel
                     </Link>
                   </>
                 )}
                 {merchantInfo?.has_compliance_access && (
-                  <Link href="/compliance" onClick={() => setDrawerOpen(false)} className="flex items-center gap-3 px-4 py-3 text-sm text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/[0.04] transition-colors">
+                  <Link href="/compliance" onClick={() => { setDrawerOpen(false); onNavLinkClick?.(); }} className="flex items-center gap-3 px-4 py-3 text-sm text-purple-400/70 hover:text-purple-400 hover:bg-purple-500/[0.04] transition-colors">
                     <Shield className="w-5 h-5" /> Compliance
                   </Link>
                 )}

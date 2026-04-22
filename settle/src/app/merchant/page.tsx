@@ -13,6 +13,8 @@ import {
   ConnectionIndicator,
 } from "@/components/NotificationToast";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
+import { MerchantSettingsOverlay } from "@/components/merchant/MerchantSettingsOverlay";
+import { MerchantWalletOverlay } from "@/components/merchant/MerchantWalletOverlay";
 import { LoginScreen } from "@/components/merchant/LoginScreen";
 import { useMerchantStore } from "@/stores/merchantStore";
 import type { Order } from "@/types/merchant";
@@ -65,6 +67,8 @@ export default function MerchantDashboard() {
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showWallet, setShowWallet] = useState(false);
   const [showTransactionHistory, setShowTransactionHistory] = useState(false);
   const [showPaymentMethods, setShowPaymentMethods] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
@@ -767,6 +771,8 @@ export default function MerchantDashboard() {
         embeddedWalletState={embeddedWallet?.state}
         onLogout={handleLogout}
         onOpenProfile={() => setShowProfileModal(true)}
+        onOpenSettings={() => setShowSettings(true)}
+        onOpenWallet={() => setShowWallet(true)}
         notificationCount={notifications.filter(n => !n.read).length}
         onOpenNotifications={() => setShowNotifications(!showNotifications)}
         rightActions={
@@ -1098,7 +1104,17 @@ export default function MerchantDashboard() {
         playSound={playSound}
       />
 
+      <MerchantSettingsOverlay
+        open={showSettings}
+        onClose={() => setShowSettings(false)}
+        onOpenWallet={() => { setShowSettings(false); setShowWallet(true); }}
+      />
 
+      <MerchantWalletOverlay
+        open={showWallet}
+        onClose={() => setShowWallet(false)}
+        onOpenSettings={() => { setShowWallet(false); setShowSettings(true); }}
+      />
     </div>
   );
 }

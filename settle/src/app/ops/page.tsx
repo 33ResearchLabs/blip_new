@@ -13,6 +13,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useMerchantStore } from '@/stores/merchantStore';
 import { MerchantNavbar } from '@/components/merchant/MerchantNavbar';
+import { MerchantSettingsOverlay } from '@/components/merchant/MerchantSettingsOverlay';
+import { MerchantWalletOverlay } from '@/components/merchant/MerchantWalletOverlay';
 
 type Tab = 'outbox' | 'stuck' | 'workers' | 'search';
 
@@ -26,6 +28,8 @@ export default function OpsPage() {
   const [adminSecret, setAdminSecret] = useState('');
   const [needsAuth, setNeedsAuth] = useState(false);
   const [secretInput, setSecretInput] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
+  const [showWallet, setShowWallet] = useState(false);
 
   const storeMerchantInfo = useMerchantStore(s => s.merchantInfo);
   const setMerchantInfo = useMerchantStore(s => s.setMerchantInfo);
@@ -156,7 +160,12 @@ export default function OpsPage() {
     <div className="min-h-screen bg-background text-foreground">
       {/* Merchant Navbar (only if merchant with ops access) */}
       {isMerchant && (
-        <MerchantNavbar activePage="ops" merchantInfo={merchantInfo} />
+        <MerchantNavbar
+          activePage="ops"
+          merchantInfo={merchantInfo}
+          onOpenSettings={() => setShowSettings(true)}
+          onOpenWallet={() => setShowWallet(true)}
+        />
       )}
 
       {/* Header */}
@@ -210,6 +219,18 @@ export default function OpsPage() {
           />
         )}
       </div>
+
+      <MerchantSettingsOverlay
+        open={showSettings}
+        onClose={() => setShowSettings(false)}
+        onOpenWallet={() => { setShowSettings(false); setShowWallet(true); }}
+      />
+
+      <MerchantWalletOverlay
+        open={showWallet}
+        onClose={() => setShowWallet(false)}
+        onOpenSettings={() => { setShowWallet(false); setShowSettings(true); }}
+      />
     </div>
   );
 }

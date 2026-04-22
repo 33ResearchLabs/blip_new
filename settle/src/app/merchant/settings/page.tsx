@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { copyToClipboard } from "@/lib/clipboard";
 import {
-  ArrowLeft,
   User,
   Shield,
   CreditCard,
@@ -22,12 +21,10 @@ import {
   Plus,
   Trash2,
   Zap,
-  Settings,
   Droplets,
   Monitor,
   Smartphone,
   Globe,
-  X,
   Palette,
   Lock,
   Trophy,
@@ -37,6 +34,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { CorridorProviderSettings } from "@/components/merchant/CorridorProviderSettings";
+import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { WalletLedger } from "@/components/merchant/WalletLedger";
 import { PaymentMethodModal } from "@/components/merchant/PaymentMethodModal";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
@@ -136,7 +134,10 @@ type SettingsTab =
   | "reputation"
   | "ledger";
 
-export default function MerchantSettingsPage() {
+export default function MerchantSettingsPage({
+  onClose,
+  onOpenWallet,
+}: { onClose?: () => void; onOpenWallet?: () => void } = {}) {
   const router = useRouter();
   const merchantId = useMerchantStore((s) => s.merchantId);
   const merchantInfo = useMerchantStore((s) => s.merchantInfo);
@@ -144,15 +145,21 @@ export default function MerchantSettingsPage() {
   const isLoggedIn = useMerchantStore((s) => s.isLoggedIn);
 
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
-  const [isLoading, setIsLoading] = useState(true);
-  const [merchant, setMerchant] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(!merchantInfo);
+  const [merchant, setMerchant] = useState<any>(merchantInfo ?? null);
 
-  // Profile form
-  const [displayName, setDisplayName] = useState("");
-  const [businessName, setBusinessName] = useState("");
-  const [bio, setBio] = useState("");
-  const [phone, setPhone] = useState("");
-  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
+  // Profile form — seeded from store so the page renders instantly on first open
+  const [displayName, setDisplayName] = useState<string>(
+    (merchantInfo as any)?.display_name || "",
+  );
+  const [businessName, setBusinessName] = useState<string>(
+    (merchantInfo as any)?.business_name || "",
+  );
+  const [bio, setBio] = useState<string>((merchantInfo as any)?.bio || "");
+  const [phone, setPhone] = useState<string>((merchantInfo as any)?.phone || "");
+  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(
+    (merchantInfo as any)?.avatar_url || null,
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -565,29 +572,14 @@ export default function MerchantSettingsPage() {
 
   return (
     <div className="min-h-screen bg-background text-white">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-white/[0.05]">
-        <div className="h-[50px] flex items-center px-4 gap-3 max-w-5xl mx-auto">
-          <Link
-            href="/merchant"
-            className="flex items-center gap-2 text-white/60 hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span className="text-[13px] font-medium hidden sm:inline">
-              Dashboard
-            </span>
-          </Link>
-
-          <div className="flex-1 flex items-center justify-center">
-            <div className="flex items-center gap-2">
-              <Settings className="w-4 h-4 text-white/40" />
-              <h1 className="text-[15px] font-bold">Settings</h1>
-            </div>
-          </div>
-
-          <div className="w-16" />
-        </div>
-      </header>
+      <MerchantNavbar
+        activePage="settings"
+        merchantInfo={merchantInfo}
+        onLogout={handleLogout}
+        onOpenSettings={onClose ? () => { /* already in settings */ } : undefined}
+        onOpenWallet={onOpenWallet}
+        onNavLinkClick={onClose}
+      />
 
       <div className="max-w-5xl mx-auto flex flex-col md:flex-row min-h-[calc(100vh-50px)]">
         {/* Sidebar Tabs */}
