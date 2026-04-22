@@ -425,18 +425,25 @@ async function processStuckOnChainEscrows(): Promise<void> {
     // Skip if backend signer is not configured
     if (!getBackendKeypair()) return;
 
-    // Find expired/cancelled orders that have on-chain escrow but no refund tx recorded
+    // Find expired/cancelled/disputed orders that have on-chain escrow but
+    // no refund tx recorded, AND whose backoff window has elapsed. Orders
+    // that just failed get skipped until refund_retry_after passes — this
+    // stops a single chronically-failing row from burning the whole batch
+    // every 30s. See migration 107.
     const stuckOrders = await query<{
       id: string; order_number: string; status: string;
       escrow_creator_wallet: string; escrow_trade_id: string;
+      refund_retry_count: number;
     }>(
-      `SELECT id, order_number, status, escrow_creator_wallet, escrow_trade_id
+      `SELECT id, order_number, status, escrow_creator_wallet, escrow_trade_id, refund_retry_count
        FROM orders
-       WHERE status IN ('expired', 'cancelled')
+       WHERE status IN ('expired', 'cancelled', 'disputed')
          AND escrow_tx_hash IS NOT NULL
          AND release_tx_hash IS NULL
          AND escrow_creator_wallet IS NOT NULL
          AND escrow_trade_id IS NOT NULL
+         AND (refund_retry_after IS NULL OR refund_retry_after <= NOW())
+       ORDER BY refund_retry_after NULLS FIRST
        LIMIT $1`,
       [BATCH_SIZE]
     );
@@ -455,9 +462,13 @@ async function processStuckOnChainEscrows(): Promise<void> {
         );
 
         if (result.success && result.txHash) {
-          // Record the refund tx hash on the order
+          // Record the refund tx hash + clear retry state.
           await query(
-            `UPDATE orders SET release_tx_hash = $1 WHERE id = $2`,
+            `UPDATE orders
+             SET release_tx_hash = $1,
+                 refund_retry_after = NULL,
+                 refund_last_error = NULL
+             WHERE id = $2`,
             [result.txHash, order.id]
           );
           invalidateOrderCache(order.id);
@@ -468,17 +479,63 @@ async function processStuckOnChainEscrows(): Promise<void> {
             orderNumber: order.order_number,
             txHash: result.txHash,
           });
-        } else if (result.error) {
-          logger.warn('[OnChainRefund] Could not auto-refund', {
+        } else {
+          // Exponential backoff: 30s * 2^count, capped at 1h.
+          // count 0 →   30s, 1 →   60s, 2 →  2m, 3 →  4m,
+          //       4 →    8m, 5 →  16m, 6 → 32m, 7+ → 60m.
+          const nextCount = order.refund_retry_count + 1;
+          const delaySeconds = Math.min(
+            30 * Math.pow(2, order.refund_retry_count),
+            3600,
+          );
+          await query(
+            `UPDATE orders
+             SET refund_retry_count = $1,
+                 refund_retry_after = NOW() + ($2 || ' seconds')::INTERVAL,
+                 refund_last_error  = $3
+             WHERE id = $4`,
+            [nextCount, String(delaySeconds), result.error || 'unknown', order.id]
+          );
+          logger.warn('[OnChainRefund] Auto-refund failed — backing off', {
             orderId: order.id,
             orderNumber: order.order_number,
             error: result.error,
+            retryCount: nextCount,
+            nextAttemptInSeconds: delaySeconds,
           });
         }
       } catch (orderErr) {
+        // Thrown errors (e.g. Anchor IDL decode failures inside
+        // `getBackendProgram`, malformed RPC responses) also need to
+        // stamp backoff — otherwise the same row gets picked up again
+        // every 30s and the whole batch thrashes.
+        const errMsg =
+          orderErr instanceof Error ? orderErr.message : String(orderErr);
+        const nextCount = order.refund_retry_count + 1;
+        const delaySeconds = Math.min(
+          30 * Math.pow(2, order.refund_retry_count),
+          3600,
+        );
+        try {
+          await query(
+            `UPDATE orders
+             SET refund_retry_count = $1,
+                 refund_retry_after = NOW() + ($2 || ' seconds')::INTERVAL,
+                 refund_last_error  = $3
+             WHERE id = $4`,
+            [nextCount, String(delaySeconds), errMsg, order.id]
+          );
+        } catch (stampErr) {
+          logger.error('[OnChainRefund] Failed to stamp backoff after throw', {
+            orderId: order.id,
+            error: stampErr instanceof Error ? stampErr.message : String(stampErr),
+          });
+        }
         logger.error('[OnChainRefund] Failed to process stuck escrow', {
           orderId: order.id,
-          error: orderErr instanceof Error ? orderErr.message : String(orderErr),
+          error: errMsg,
+          retryCount: nextCount,
+          nextAttemptInSeconds: delaySeconds,
         });
       }
     }

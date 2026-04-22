@@ -135,6 +135,10 @@ export function useUserOrderActions({
   // Cancel state
   const [isRequestingCancel, setIsRequestingCancel] = useState(false);
 
+  // Claim-refund state (user retry for on-chain refunds the worker couldn't
+  // complete — see POST /api/orders/[id]/claim-refund).
+  const [isClaimingRefund, setIsClaimingRefund] = useState(false);
+
   const markPaymentSent = async () => {
     if (!activeOrder || !userId) {
       console.log("markPaymentSent: missing activeOrder or userId", {
@@ -807,6 +811,59 @@ export function useUserOrderActions({
     }
   };
 
+  const claimRefund = async () => {
+    if (!activeOrder || !userId || isClaimingRefund) return;
+    setIsClaimingRefund(true);
+    try {
+      const res = await fetchWithAuth(
+        `/api/orders/${activeOrder.id}/claim-refund`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": generateIdempotencyKey(),
+          },
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success) {
+        const txHash = data.data?.txHash;
+        const alreadyRefunded = data.data?.alreadyRefunded;
+        optimisticOrderUpdate(activeOrder.id, {
+          releaseTxHash: txHash || "claimed",
+        });
+        playSound("click");
+        showAlert(
+          alreadyRefunded ? "Already Refunded" : "Refund Submitted",
+          alreadyRefunded
+            ? "Your escrow was already refunded on-chain. The order list will update shortly."
+            : "Refund transaction submitted. Funds should land in your wallet within a minute.",
+          "success",
+        );
+        if (solanaWallet.connected) solanaWallet.refreshBalances?.();
+      } else {
+        playSound("error");
+        showAlert(
+          "Refund Not Sent",
+          data.error ||
+            "We couldn't submit the refund transaction. Please try again in a moment or contact support if it keeps failing.",
+          "error",
+        );
+      }
+    } catch (err) {
+      console.error("Failed to claim refund:", err);
+      playSound("error");
+      showAlert(
+        "Network Error",
+        "Could not reach the server. Please check your connection and try again.",
+        "error",
+      );
+    } finally {
+      setIsClaimingRefund(false);
+    }
+  };
+
   const respondToCancelRequest = async (accept: boolean) => {
     if (!activeOrder || !userId) return;
     setIsRequestingCancel(true);
@@ -959,6 +1016,9 @@ export function useUserOrderActions({
     isRequestingCancel,
     requestCancelOrder,
     respondToCancelRequest,
+    // Refund recovery (user-triggered retry for stuck on-chain refunds)
+    isClaimingRefund,
+    claimRefund,
     // Order actions
     markPaymentSent,
     confirmFiatReceived,
