@@ -112,6 +112,12 @@ const PUBLIC_EXACT = new Set([
   // (login crashes, public pages). Route itself is feature-gated, rate-limited
   // and body-capped; safe to accept without a session.
   '/api/client-errors',
+  // Manual issue-reporter ingest — same pattern as /api/client-errors.
+  // Users on login/public pages should still be able to file bug reports
+  // without first authenticating. The endpoint itself is feature-gated
+  // (ENABLE_ISSUE_REPORTING), STRICT rate-limited (10/min), and body-capped
+  // (30MB for screenshot + attachments). Safe to accept without a session.
+  '/api/issues/create',
   // Sentry tunnel route — created automatically by withSentryConfig to
   // bypass ad-blockers. Must be reachable anonymously or Sentry beacons fail.
   '/monitoring',
@@ -326,8 +332,18 @@ export function middleware(request: NextRequest) {
   }
 
   // ── 1b. Body size guard (100KB max for non-upload routes) ────────────
+  // /api/client-errors carries an optional base64 JPEG screenshot from the
+  // ErrorBoundary — those reports can hit ~200KB legitimately. The endpoint
+  // itself enforces its own 256KB cap before processing.
+  // /api/issues/create carries a full-page annotated screenshot PLUS up to
+  // 5 file attachments (25MB each per spec). The route enforces its own
+  // 30MB cap internally.
   const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
-  if (contentLength > 100_000 && !pathname.startsWith('/api/upload')) {
+  const isLargeBodyRoute =
+    pathname.startsWith('/api/upload') ||
+    pathname === '/api/client-errors' ||
+    pathname === '/api/issues/create';
+  if (contentLength > 100_000 && !isLargeBodyRoute) {
     return applySecurityHeaders(NextResponse.json(
       { success: false, error: 'Request body too large' },
       { status: 413 }
