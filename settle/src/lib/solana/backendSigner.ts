@@ -10,14 +10,22 @@
  */
 
 import { Keypair, Connection, PublicKey } from '@solana/web3.js';
-import { AnchorProvider, Program } from '@coral-xyz/anchor';
+import { AnchorProvider, Program, Idl } from '@coral-xyz/anchor';
 import bs58 from 'bs58';
 import { createKeypairWalletAdapter } from '@/lib/wallet/keypairWalletAdapter';
 import { getV2ProgramId } from './v2/config';
-import idl from './v2/idl.json';
+import { convertIdlToAnchor29 } from './idlConverter';
+import idlRaw from './v2/idl.json';
 
 let cachedKeypair: Keypair | null = null;
 let cachedConnection: Connection | null = null;
+
+// The IDL file is emitted by Anchor 0.30+ (spec 0.1.0) but @coral-xyz/anchor
+// pins 0.29 here, so the Borsh instruction coder can't resolve the new
+// `{defined: {name: "X"}}` type references and throws "Type not found"
+// during `new Program(...)`. Normalise to the 0.29 shape once at module
+// load — the client-side wallet contexts do the same thing.
+const idl: Idl = convertIdlToAnchor29(idlRaw);
 
 /**
  * Load the backend signer keypair from env.

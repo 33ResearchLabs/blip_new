@@ -107,6 +107,9 @@ export function mapDbOrderToUI(dbOrder: DbOrder): Order | null {
     escrowTradePda: dbOrder.escrow_trade_pda,
     escrowCreatorWallet: dbOrder.escrow_creator_wallet,
     escrowTxHash: dbOrder.escrow_tx_hash,
+    releaseTxHash: dbOrder.release_tx_hash ?? null,
+    escrowDebitedEntityType: dbOrder.escrow_debited_entity_type ?? null,
+    escrowDebitedEntityId: dbOrder.escrow_debited_entity_id ?? null,
     // Merchant's wallet address captured when accepting (for sell order escrow release)
     acceptorWalletAddress: dbOrder.acceptor_wallet_address,
     // Unhappy path state

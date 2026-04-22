@@ -73,6 +73,13 @@ export interface DbOrder {
   escrow_trade_pda?: string;
   escrow_pda?: string;
   escrow_creator_wallet?: string;
+  // On-chain refund state — release_tx_hash is set once escrow is either
+  // released to the buyer (happy path) OR refunded to the seller (cancel
+  // path). When the order is in a terminal state AND release_tx_hash is
+  // null, the on-chain escrow is still holding funds.
+  release_tx_hash?: string | null;
+  escrow_debited_entity_type?: 'user' | 'merchant' | null;
+  escrow_debited_entity_id?: string | null;
   // Merchant's wallet address captured when accepting sell orders
   acceptor_wallet_address?: string;
   // Unhappy path fields
@@ -139,6 +146,11 @@ export interface Order {
   escrowTradePda?: string;
   escrowCreatorWallet?: string;
   escrowTxHash?: string;
+  // On-chain release/refund tx. When order is in a terminal state and
+  // this is null, an on-chain refund is still pending.
+  releaseTxHash?: string | null;
+  escrowDebitedEntityType?: 'user' | 'merchant' | null;
+  escrowDebitedEntityId?: string | null;
   // Merchant's wallet address captured when accepting (for sell order escrow release)
   acceptorWalletAddress?: string;
   // Unhappy path state
