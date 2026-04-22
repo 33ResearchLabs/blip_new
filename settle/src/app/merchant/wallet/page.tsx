@@ -22,6 +22,7 @@ import {
   Send,
 } from "lucide-react";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
+import { MerchantSettingsOverlay } from "@/components/merchant/MerchantSettingsOverlay";
 import { copyToClipboard } from "@/lib/clipboard";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { DEVNET_RPC } from "@/lib/solana/v2/config";
@@ -49,7 +50,10 @@ interface MerchantInfo {
 
 type WalletView = "loading" | "setup" | "unlock" | "main";
 
-export default function WalletPage() {
+export default function WalletPage({
+  onClose,
+  onOpenSettings: onOpenSettingsProp,
+}: { onClose?: () => void; onOpenSettings?: () => void } = {}) {
   const router = useRouter();
   const solanaWallet = useSolanaWallet();
   const embeddedWallet = (solanaWallet as any)?.embeddedWallet as
@@ -64,6 +68,7 @@ export default function WalletPage() {
 
   const [merchantInfo, setMerchantInfo] = useState<MerchantInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
   const [view, setView] = useState<WalletView>("loading");
 
   // Setup state
@@ -491,6 +496,9 @@ export default function WalletPage() {
         activePage="wallet"
         merchantInfo={merchantInfo}
         embeddedWalletState={embeddedWallet?.state}
+        onOpenSettings={onOpenSettingsProp ?? (() => setShowSettings(true))}
+        onOpenWallet={onClose ? () => { /* already in wallet */ } : undefined}
+        onNavLinkClick={onClose}
       />
 
       {/* Main content — centered card */}
@@ -1249,6 +1257,11 @@ export default function WalletPage() {
           </div>
         </div>
       )}
+
+      <MerchantSettingsOverlay
+        open={showSettings}
+        onClose={() => setShowSettings(false)}
+      />
     </div>
   );
 }
