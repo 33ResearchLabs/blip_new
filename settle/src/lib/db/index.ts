@@ -12,13 +12,24 @@ import { Pool, PoolClient } from 'pg';
 // Support both DATABASE_URL (Railway) and individual env vars (local dev)
 const isProduction = process.env.NODE_ENV === 'production';
 const defaultPoolMax = isProduction ? '100' : '20';
+// connectionTimeoutMillis covers the TCP+TLS handshake wait time.
+// Raised from 5s to 20s because Railway's public proxy path can take
+// 5-15s during platform warm-up, causing startup crash loops when the
+// timeout trips before the first handshake completes. Runtime queries
+// are still bounded by statement_timeout (30s) and idle connection
+// turnover is unaffected.
+const CONNECTION_TIMEOUT_MS = parseInt(
+  process.env.DB_CONNECTION_TIMEOUT_MS || '20000',
+  10,
+);
+
 const poolConfig = process.env.DATABASE_URL
   ? {
       connectionString: process.env.DATABASE_URL,
       ssl: isProduction ? { rejectUnauthorized: false } : false,
       max: parseInt(process.env.DB_POOL_MAX || defaultPoolMax),
-      idleTimeoutMillis: isProduction ? 10000 : 30000, // Return idle connections faster in prod
-      connectionTimeoutMillis: 5000, // Fail fast if pool exhausted
+      idleTimeoutMillis: isProduction ? 10000 : 30000,
+      connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
       statement_timeout: 30000,
     }
   : {
@@ -29,7 +40,7 @@ const poolConfig = process.env.DATABASE_URL
       password: process.env.DB_PASSWORD || '',
       max: parseInt(process.env.DB_POOL_MAX || defaultPoolMax),
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: CONNECTION_TIMEOUT_MS,
       statement_timeout: 30000,
     };
 

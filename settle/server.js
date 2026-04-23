@@ -111,11 +111,17 @@ app.prepare().then(async () => {
   // Validate DB connectivity before marking ready
   try {
     const { Pool } = require('pg');
+    // 20s handshake timeout — Railway's proxy can take 5-15s during
+    // platform warm-up. Falls back to DB_CONNECTION_TIMEOUT_MS if set.
+    const startupConnectTimeout = parseInt(
+      process.env.DB_CONNECTION_TIMEOUT_MS || '20000',
+      10,
+    );
     const testPool = process.env.DATABASE_URL
       ? new Pool({
           connectionString: process.env.DATABASE_URL,
           ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-          connectionTimeoutMillis: 5000,
+          connectionTimeoutMillis: startupConnectTimeout,
         })
       : new Pool({
           host: process.env.DB_HOST || 'localhost',
@@ -123,7 +129,7 @@ app.prepare().then(async () => {
           database: process.env.DB_NAME || 'settle',
           user: process.env.DB_USER || 'zeus',
           password: process.env.DB_PASSWORD || '',
-          connectionTimeoutMillis: 5000,
+          connectionTimeoutMillis: startupConnectTimeout,
         });
     await testPool.query('SELECT 1');
     await testPool.end();
