@@ -14,6 +14,7 @@ export interface MobileChatViewProps {
   onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
   onCloseOrderChat: () => void;
   onClearUnread: (orderId: string) => void;
+  onClearAllUnread?: () => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
 }
 
@@ -26,6 +27,7 @@ export function MobileChatView({
   onOpenOrderChat,
   onCloseOrderChat,
   onClearUnread,
+  onClearAllUnread,
   playSound,
 }: MobileChatViewProps) {
   return (
@@ -48,6 +50,7 @@ export function MobileChatView({
           isLoading={isLoadingConversations}
           onOpenOrderChat={onOpenOrderChat}
           onClearUnread={onClearUnread}
+          onClearAllUnread={onClearAllUnread}
         />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center py-12">
