@@ -28,7 +28,7 @@ export async function createAuction(params: {
   const row = await queryOne<OrderAuctionRow>(
     `INSERT INTO order_auctions
        (order_id, mode, base_rate, base_fee_bps, window_ms, window_closes_at)
-     VALUES ($1, $2, $3, $4, $5, now() + ($5 || ' milliseconds')::interval)
+     VALUES ($1, $2, $3, $4, $5, now() + ($5::text || ' milliseconds')::interval)
      RETURNING *`,
     [params.orderId, params.mode, params.baseRate, params.baseFeeBps, params.windowMs],
   );
