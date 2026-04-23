@@ -149,6 +149,12 @@ export async function POST(
       | { success: true; data: { txHash: string } }
       | { success: false; error: string; code: string };
 
+    // DEBUG: confirm the backend signer env var is reaching this process.
+    // Remove once the claim-refund flow is verified end-to-end.
+    const bskEnv = process.env.BACKEND_SIGNER_KEYPAIR;
+    console.log('[claim-refund][debug] BACKEND_SIGNER_KEYPAIR present:',
+      !!bskEnv, 'length:', bskEnv?.length ?? 0);
+
     const idempotencyResult = await withIdempotency<ClaimRefundResponse>(
       effectiveKey,
       'claim_refund',
