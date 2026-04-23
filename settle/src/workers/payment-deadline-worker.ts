@@ -462,15 +462,39 @@ async function processStuckOnChainEscrows(): Promise<void> {
         );
 
         if (result.success && result.txHash) {
-          // Record the refund tx hash + clear retry state.
-          await query(
-            `UPDATE orders
-             SET release_tx_hash = $1,
-                 refund_retry_after = NULL,
-                 refund_last_error = NULL
-             WHERE id = $2`,
-            [result.txHash, order.id]
-          );
+          // Sentinel tx hashes mean the on-chain refund was a no-op (escrow
+          // didn't exist / was already refunded). They must not land in
+          // release_tx_hash — that column has a unique index and repeating
+          // the same sentinel across orders throws 23505 on every retry,
+          // leaving the order stuck in the worker's queue forever.
+          const SENTINEL_TX_HASHES = new Set([
+            'escrow-already-closed',
+            'already-refunded',
+          ]);
+          const isSentinel = SENTINEL_TX_HASHES.has(result.txHash);
+
+          if (isSentinel) {
+            // Nothing to record on-chain. Park the order far in the
+            // future so the SELECT filter (refund_retry_after <= NOW())
+            // stops picking it up, and record the reason for audit.
+            await query(
+              `UPDATE orders
+               SET refund_retry_after = TIMESTAMP '9999-12-31 00:00:00+00',
+                   refund_last_error = $1
+               WHERE id = $2`,
+              [`resolved:${result.txHash}`, order.id]
+            );
+          } else {
+            // Normal success path — record the real tx hash + clear retry state.
+            await query(
+              `UPDATE orders
+               SET release_tx_hash = $1,
+                   refund_retry_after = NULL,
+                   refund_last_error = NULL
+               WHERE id = $2`,
+              [result.txHash, order.id]
+            );
+          }
           invalidateOrderCache(order.id);
           refundedCount++;
 
@@ -478,6 +502,7 @@ async function processStuckOnChainEscrows(): Promise<void> {
             orderId: order.id,
             orderNumber: order.order_number,
             txHash: result.txHash,
+            sentinel: isSentinel,
           });
         } else {
           // Exponential backoff: 30s * 2^count, capped at 1h.
