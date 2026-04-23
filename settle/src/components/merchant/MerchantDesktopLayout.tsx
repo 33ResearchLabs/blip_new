@@ -93,6 +93,7 @@ export interface MerchantDesktopLayoutProps {
   onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
   onCloseOrderChat: () => void;
   onClearUnread: (orderId: string) => void;
+  onClearAllUnread?: () => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
 }
 
@@ -118,7 +119,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     leaderboardTab, setLeaderboardTab,
     notifications, markNotificationRead,
     orderConversations, totalUnread, isLoadingConversations,
-    activeOrderChat, onOpenOrderChat, onCloseOrderChat, onClearUnread,
+    activeOrderChat, onOpenOrderChat, onCloseOrderChat, onClearUnread, onClearAllUnread,
     playSound,
   } = props;
 
@@ -395,6 +396,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                   isLoading={isLoadingConversations}
                   onOpenOrderChat={onOpenOrderChat}
                   onClearUnread={onClearUnread}
+                  onClearAllUnread={onClearAllUnread}
                   onOpenDisputeChat={(orderId, userName) => {
                     setActiveDisputeOrderId(orderId);
                     setActiveDisputeUserName(userName);

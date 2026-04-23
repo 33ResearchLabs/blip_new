@@ -168,6 +168,27 @@ export function useMerchantConversations() {
     setTimeout(scheduleFetch, 1500);
   }, [scheduleFetch]);
 
+  // "Mark all read" — persist to server in one shot so the badge doesn't
+  // snap back on the next poll. Optimistically zero the UI first so the
+  // click feels instant, then reconcile from the server response.
+  const clearAllUnread = useCallback(async () => {
+    setOrderConversations(prev => prev.map(c => ({ ...c, unread_count: 0 })));
+    setTotalUnread(0);
+    try {
+      const res = await fetchWithAuth('/api/merchant/messages/mark-all-read', {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        // Server rejected — pull the real state back so the UI doesn't
+        // sit on a fiction. The next fetch re-populates unread counts
+        // from the DB, which is authoritative.
+        scheduleFetch();
+      }
+    } catch {
+      scheduleFetch();
+    }
+  }, [scheduleFetch]);
+
   return {
     orderConversations,
     totalUnread,
@@ -175,5 +196,6 @@ export function useMerchantConversations() {
     fetchOrderConversations,
     scheduleFetch,
     clearUnreadForOrder,
+    clearAllUnread,
   };
 }

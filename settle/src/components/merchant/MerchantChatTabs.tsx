@@ -40,6 +40,7 @@ interface MerchantChatTabsProps {
   onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
   onOpenDisputeChat?: (orderId: string, userName: string) => void;
   onClearUnread?: (orderId: string) => void;
+  onClearAllUnread?: () => void;
   onClose?: () => void;
 }
 
@@ -95,6 +96,7 @@ export function MerchantChatTabs({
   onOpenOrderChat,
   onOpenDisputeChat,
   onClearUnread,
+  onClearAllUnread,
   onClose,
 }: MerchantChatTabsProps) {
   const [activeTab, setActiveTab] = useState<'orders' | 'disputes'>('orders');
@@ -160,10 +162,18 @@ export function MerchantChatTabs({
               <div className="group relative flex items-center">
                 <button
                   onClick={() => {
-                    // Clear unread counters for every order-conversation with unread
-                    orderConversations
-                      .filter((c) => c.unread_count > 0)
-                      .forEach((c) => onClearUnread?.(c.order_id));
+                    // Prefer the persistent bulk endpoint — the per-order
+                    // loop used to be purely optimistic, so the badge
+                    // would reappear on the next 15s poll. Fall back to
+                    // the loop only if the parent didn't wire the bulk
+                    // action (keeps old consumers compiling).
+                    if (onClearAllUnread) {
+                      onClearAllUnread();
+                    } else {
+                      orderConversations
+                        .filter((c) => c.unread_count > 0)
+                        .forEach((c) => onClearUnread?.(c.order_id));
+                    }
                   }}
                   className="flex items-center gap-1 px-1.5 py-1 rounded hover:bg-primary/10 text-primary/70 hover:text-primary transition-colors"
                   title="Mark all conversations as read"

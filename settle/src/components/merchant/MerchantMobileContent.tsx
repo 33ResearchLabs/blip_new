@@ -47,6 +47,7 @@ export interface MerchantMobileContentProps {
   onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
   onCloseOrderChat: () => void;
   onClearUnread: (orderId: string) => void;
+  onClearAllUnread?: () => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
 
   // History
@@ -86,7 +87,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
     markingDone, openEscrowModal, markFiatPaymentSent, confirmPayment,
     openDisputeModal, openCancelModal,
     merchantId, orderConversations, chatTotalUnread, isLoadingConversations,
-    activeOrderChat, onOpenOrderChat, onCloseOrderChat, onClearUnread, playSound,
+    activeOrderChat, onOpenOrderChat, onCloseOrderChat, onClearUnread, onClearAllUnread, playSound,
     merchantInfo, historyTab, setHistoryTab,
     effectiveBalance, totalTradedVolume, todayEarnings, pendingEarnings,
     setShowAnalytics, setShowWalletModal, handleLogout,
@@ -153,6 +154,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
               onOpenOrderChat={onOpenOrderChat}
               onCloseOrderChat={onCloseOrderChat}
               onClearUnread={onClearUnread}
+              onClearAllUnread={onClearAllUnread}
               playSound={playSound}
             />
           )}

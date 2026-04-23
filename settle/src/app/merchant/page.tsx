@@ -313,6 +313,7 @@ export default function MerchantDashboard() {
   const {
     orderConversations, totalUnread: chatTotalUnread, isLoadingConversations,
     fetchOrderConversations, scheduleFetch: scheduleConversationsFetch, clearUnreadForOrder,
+    clearAllUnread,
   } = useMerchantConversations();
 
   // ── Order-based chat state ──────────────────────────────────────────
@@ -872,6 +873,7 @@ export default function MerchantDashboard() {
         onOpenOrderChat={onOpenOrderChat}
         onCloseOrderChat={onCloseOrderChat}
         onClearUnread={clearUnreadForOrder}
+        onClearAllUnread={clearAllUnread}
         playSound={playSound}
       />
 
@@ -901,6 +903,7 @@ export default function MerchantDashboard() {
         onOpenOrderChat={onOpenOrderChat}
         onCloseOrderChat={onCloseOrderChat}
         onClearUnread={clearUnreadForOrder}
+        onClearAllUnread={clearAllUnread}
         playSound={playSound}
         merchantInfo={merchantInfo}
         historyTab={historyTab}
@@ -1101,6 +1104,7 @@ export default function MerchantDashboard() {
         onOpenOrderChat={onOpenOrderChat}
         onCloseOrderChat={onCloseOrderChat}
         onClearUnread={clearUnreadForOrder}
+        onClearAllUnread={clearAllUnread}
         playSound={playSound}
       />
 

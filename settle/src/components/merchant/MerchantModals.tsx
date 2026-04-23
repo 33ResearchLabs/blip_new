@@ -213,6 +213,7 @@ export interface MerchantModalsProps {
   onOpenOrderChat: (orderId: string, userName: string, orderNumber: string, orderType?: 'buy' | 'sell') => void;
   onCloseOrderChat: () => void;
   onClearUnread: (orderId: string) => void;
+  onClearAllUnread?: () => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
 }
 
@@ -249,7 +250,7 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
     openDisputeModal, requestCancelOrder, openCancelModal, fetchOrders, toast,
     showMessageHistory, setShowMessageHistory,
     orderConversations, chatTotalUnread, isLoadingConversations,
-    activeOrderChat, onOpenOrderChat, onCloseOrderChat, onClearUnread,
+    activeOrderChat, onOpenOrderChat, onCloseOrderChat, onClearUnread, onClearAllUnread,
     playSound,
   } = props;
 
@@ -493,6 +494,7 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
                 isLoading={isLoadingConversations}
                 onOpenOrderChat={onOpenOrderChat}
                 onClearUnread={onClearUnread}
+                onClearAllUnread={onClearAllUnread}
                 onOpenDisputeChat={(orderId, userName) => {
                   setActiveDisputeOrderId(orderId);
                   setActiveDisputeUserName(userName);

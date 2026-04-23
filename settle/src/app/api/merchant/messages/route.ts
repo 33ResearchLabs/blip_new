@@ -97,7 +97,17 @@ export async function GET(request: NextRequest) {
       LEFT JOIN LATERAL (
         SELECT
           COUNT(*)::int as cnt,
-          COUNT(*) FILTER (WHERE cm.sender_type != 'merchant' AND cm.is_read = false)::int as unread
+          -- Unread badge only counts messages on *active* orders. Terminal
+          -- orders (completed/cancelled/expired) accumulate is_read=false
+          -- rows that can never be cleared through normal interaction
+          -- because the chat is closed — they'd otherwise pin the badge
+          -- at "9+" forever. Kept 'disputed' IN because those still need
+          -- merchant attention.
+          COUNT(*) FILTER (
+            WHERE cm.sender_type != 'merchant'
+              AND cm.is_read = false
+              AND o.status NOT IN ('completed', 'cancelled', 'expired')
+          )::int as unread
         FROM chat_messages cm
         WHERE cm.order_id = o.id
       ) unread ON true
@@ -182,12 +192,18 @@ export async function GET(request: NextRequest) {
     const accessClause = `(o.merchant_id = $1 OR o.buyer_merchant_id = $1 OR ($2::boolean = true AND o.status = 'disputed'))`;
     const accessParams: (string | boolean)[] = [merchantId, hasComplianceAccess];
 
-    // Get total unread across all orders
+    // Get total unread across all orders. Excludes terminal-status orders
+    // for the same reason as the LATERAL subquery above — stale is_read=false
+    // rows on completed/cancelled/expired trades are unreachable from normal
+    // UI and pin the badge forever.
     const unreadResult = await query(
       `SELECT COUNT(*)::int as total_unread
        FROM chat_messages cm
        JOIN orders o ON cm.order_id = o.id
-       WHERE ${accessClause} AND cm.sender_type != 'merchant' AND cm.is_read = false`,
+       WHERE ${accessClause}
+         AND cm.sender_type != 'merchant'
+         AND cm.is_read = false
+         AND o.status NOT IN ('completed', 'cancelled', 'expired')`,
       accessParams
     );
     const totalUnread = (unreadResult[0] as { total_unread?: number })?.total_unread || 0;
@@ -205,11 +221,12 @@ export async function GET(request: NextRequest) {
     );
     const tabCounts = tabCountsResult[0] as { direct_count: number; automated_count: number; dispute_count: number } || { direct_count: 0, automated_count: 0, dispute_count: 0 };
 
-    // Get unread counts per tab
+    // Get unread counts per tab. Same terminal-status exclusion as above
+    // (disputed tab still included because disputed IS active).
     const tabUnreadResult = await query(
       `SELECT
-        COUNT(*) FILTER (WHERE COALESCE(o.has_manual_message, false) = true AND o.status != 'disputed')::int as direct_unread,
-        COUNT(*) FILTER (WHERE COALESCE(o.has_manual_message, false) = false AND o.status != 'disputed')::int as automated_unread,
+        COUNT(*) FILTER (WHERE COALESCE(o.has_manual_message, false) = true AND o.status NOT IN ('disputed','completed','cancelled','expired'))::int as direct_unread,
+        COUNT(*) FILTER (WHERE COALESCE(o.has_manual_message, false) = false AND o.status NOT IN ('disputed','completed','cancelled','expired'))::int as automated_unread,
         COUNT(*) FILTER (WHERE o.status = 'disputed')::int as dispute_unread
        FROM chat_messages cm
        JOIN orders o ON cm.order_id = o.id

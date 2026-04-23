@@ -47,6 +47,23 @@ export async function clearMerchantUnread(merchantId: string, orderId: string): 
 }
 
 /**
+ * Clear the entire merchant unread hash — used by "Mark all read".
+ * Returns the sum of counts that were cleared (for logging).
+ */
+export async function clearAllMerchantUnreads(merchantId: string): Promise<number> {
+  if (!redis) return 0;
+  try {
+    const raw = await redis.hgetall(UNREAD_KEY(merchantId));
+    let sum = 0;
+    for (const v of Object.values(raw)) sum += parseInt(v, 10) || 0;
+    await redis.del(UNREAD_KEY(merchantId));
+    return sum;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Get all unread counts for a merchant's inbox in ONE call.
  * Returns { [orderId]: count }. No N+1 — single HGETALL.
  */
