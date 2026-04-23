@@ -12,3 +12,4 @@ logs/
 .env.development
 **/.env
 **/.env.local
+*.md
