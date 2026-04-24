@@ -111,6 +111,24 @@ export function IssueReporter({
   // the chosen rectangle into captureScreenshot(region).
   const [regionPicking, setRegionPicking] = useState(false);
 
+  // Drag state for the floating trigger. `dragPos` null = use default
+  // Tailwind corner positioning; once set, we pin via inline left/top so
+  // the user can park the button anywhere it's not blocking other UI
+  // (e.g. the chat input). Position persists in localStorage per corner
+  // so page reloads don't reset it.
+  const DRAG_STORAGE_KEY = `blip-issue-reporter-pos-${position}`;
+  const [dragPos, setDragPos] = useState<{ x: number; y: number } | null>(null);
+  const dragStateRef = useRef<{
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+    moved: boolean;
+  } | null>(null);
+  // Set for one tick after a drag-release so the synthetic click that
+  // follows pointerup doesn't open the modal.
+  const justDraggedRef = useRef(false);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Expose this instance's open() globally so external triggers (e.g.
@@ -187,6 +205,108 @@ export function IssueReporter({
   const handleRegionCancel = useCallback(() => {
     setRegionPicking(false);
   }, []);
+
+  // Restore saved drag position on mount. Clamp to the current viewport
+  // in case the user resized the window since last session — otherwise
+  // the button could end up off-screen.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(DRAG_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (
+        parsed &&
+        typeof parsed.x === "number" &&
+        typeof parsed.y === "number"
+      ) {
+        const x = Math.min(Math.max(0, parsed.x), window.innerWidth - 40);
+        const y = Math.min(Math.max(0, parsed.y), window.innerHeight - 40);
+        setDragPos({ x, y });
+      }
+    } catch {
+      // ignore — corrupted value, fall back to default corner
+    }
+  }, [DRAG_STORAGE_KEY]);
+
+  const handleTriggerPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (e.button !== 0) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      dragStateRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        origX: rect.left,
+        origY: rect.top,
+        moved: false,
+      };
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        // ignore — some browsers reject capture on non-primary pointers
+      }
+    },
+    [],
+  );
+
+  const handleTriggerPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      const state = dragStateRef.current;
+      if (!state) return;
+      const dx = e.clientX - state.startX;
+      const dy = e.clientY - state.startY;
+      // 4px threshold keeps small tremors from turning a click into a drag
+      if (!state.moved && Math.abs(dx) + Math.abs(dy) < 4) return;
+      state.moved = true;
+      const btn = e.currentTarget;
+      const w = btn.offsetWidth;
+      const h = btn.offsetHeight;
+      const nextX = Math.min(
+        Math.max(0, state.origX + dx),
+        window.innerWidth - w,
+      );
+      const nextY = Math.min(
+        Math.max(0, state.origY + dy),
+        window.innerHeight - h,
+      );
+      setDragPos({ x: nextX, y: nextY });
+    },
+    [],
+  );
+
+  const handleTriggerPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      const state = dragStateRef.current;
+      dragStateRef.current = null;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+      if (state?.moved) {
+        justDraggedRef.current = true;
+        // Clear the flag after the click event fires (next task).
+        setTimeout(() => {
+          justDraggedRef.current = false;
+        }, 0);
+        const rect = e.currentTarget.getBoundingClientRect();
+        try {
+          window.localStorage.setItem(
+            DRAG_STORAGE_KEY,
+            JSON.stringify({ x: rect.left, y: rect.top }),
+          );
+        } catch {
+          // ignore — storage may be disabled (private mode, quota)
+        }
+      }
+    },
+    [DRAG_STORAGE_KEY],
+  );
+
+  const handleTriggerClick = useCallback(() => {
+    if (justDraggedRef.current) return;
+    void reporter.open();
+  }, [reporter]);
 
   const ingestFiles = useCallback(
     async (files: File[]) => {
@@ -292,13 +412,22 @@ export function IssueReporter({
       {!reporter.isOpen && !hideTrigger && (
         <button
           type="button"
-          onClick={() => void reporter.open()}
+          onClick={handleTriggerClick}
+          onPointerDown={handleTriggerPointerDown}
+          onPointerMove={handleTriggerPointerMove}
+          onPointerUp={handleTriggerPointerUp}
+          onPointerCancel={handleTriggerPointerUp}
           disabled={reporter.capturingShot}
-          className={`fixed ${positionClasses} z-[60] flex items-center gap-2 px-3.5 py-2 rounded-full
-                      bg-amber-500 text-black text-[12px] font-semibold
-                      shadow-lg shadow-amber-500/20 hover:bg-amber-400 active:scale-[0.98] transition
+          style={
+            dragPos
+              ? { left: `${dragPos.x}px`, top: `${dragPos.y}px`, touchAction: "none" }
+              : { touchAction: "none" }
+          }
+          className={`fixed ${dragPos ? "" : positionClasses} z-[60] flex items-center gap-2 px-3.5 py-2 rounded-full
+                      bg-amber-500 text-black text-[12px] font-semibold cursor-grab active:cursor-grabbing select-none
+                      shadow-lg shadow-amber-500/20 hover:bg-amber-400 transition
                       disabled:opacity-80 disabled:cursor-wait`}
-          title="Report Issue (Ctrl+Shift+I)"
+          title="Report Issue (Ctrl+Shift+I) — drag to move"
           data-issue-reporter-trigger
         >
           {reporter.capturingShot ? (
