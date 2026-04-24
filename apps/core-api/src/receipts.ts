@@ -158,6 +158,24 @@ export async function createOrderReceipt(orderId: string, order: OrderForReceipt
 
     const parties = await resolveParties(order, actorId);
 
+    // Defer the snapshot when the counterparty isn't yet identified.
+    // Happens when a merchant creates a broadcast order pre-escrowed: the
+    // placeholder user + null buyer_merchant_id collapses both sides onto
+    // the creator merchant. Writing the row now (with ON CONFLICT DO NOTHING
+    // downstream) would freeze a self-referential receipt that the later
+    // ACCEPTED event cannot overwrite. Return without inserting — the ACCEPTED
+    // listener will re-run this path with the real counterparty as actorId.
+    if (
+      parties.creator_type === parties.acceptor_type &&
+      parties.creator_id === parties.acceptor_id
+    ) {
+      logger.info('[Receipt] Deferring receipt — counterparty not yet identified', {
+        orderId,
+        creatorId: parties.creator_id,
+      });
+      return;
+    }
+
     const result = await dbQuery<{ order_id: string }>(
       `INSERT INTO order_receipts (
         order_id, order_number, type, payment_method,
