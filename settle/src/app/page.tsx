@@ -873,7 +873,7 @@ export default function Home() {
         acceptedOrderInfo={userEffects.acceptedOrderInfo}
       />
 
-      <IssueReporter authed={!!auth.userId} hideTrigger />
+      <IssueReporter authed={!!auth.userId} />
     </div>
   );
 }
