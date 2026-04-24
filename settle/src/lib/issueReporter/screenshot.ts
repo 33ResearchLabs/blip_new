@@ -84,6 +84,106 @@ const log = (...args: unknown[]) => {
   if (DEBUG) console.log('[IssueReporter/screenshot]', ...args);
 };
 
+export interface CaptureRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Capture a cropped region of the page. Strategy:
+ *   1) Full-page screenshot via captureReportScreenshot().
+ *   2) Load the resulting data URL into an Image.
+ *   3) Draw the requested region into a scratch canvas.
+ *   4) Export as JPEG.
+ *
+ * The caller is responsible for unmounting the region-selection
+ * overlay BEFORE invoking this function — otherwise the overlay will
+ * end up in the full capture and then be cropped along with the page.
+ * (Overlays marked with `data-issue-reporter-root` are filtered out
+ * by captureReportScreenshot, but the selector UI uses its own node
+ * and must be removed explicitly.)
+ *
+ * Coordinates are expressed in CSS pixels relative to the document
+ * (NOT the viewport — i.e. include scroll offset). The function
+ * translates them to the full-page snapshot's internal pixel space.
+ */
+export async function captureRegionScreenshot(
+  region: CaptureRegion,
+): Promise<CaptureResult> {
+  log('region capture', region);
+  const full = await captureReportScreenshot();
+  if (!full.ok || !full.dataUrl) return full;
+
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('region source image failed to load'));
+      el.src = full.dataUrl!;
+    });
+
+    // Full-page snapshot captures the whole document at some internal
+    // pixel ratio. Map the caller's CSS-pixel region to that buffer.
+    const pageCssWidth = document.documentElement.scrollWidth;
+    const pageCssHeight = document.documentElement.scrollHeight;
+    const scaleX = img.width / Math.max(1, pageCssWidth);
+    const scaleY = img.height / Math.max(1, pageCssHeight);
+
+    const sx = Math.max(0, Math.floor(region.x * scaleX));
+    const sy = Math.max(0, Math.floor(region.y * scaleY));
+    const sw = Math.min(img.width - sx, Math.floor(region.width * scaleX));
+    const sh = Math.min(img.height - sy, Math.floor(region.height * scaleY));
+    if (sw < 10 || sh < 10) {
+      return {
+        ok: false,
+        reason: 'unknown',
+        detail: 'Selected region is too small',
+      };
+    }
+
+    const out = document.createElement('canvas');
+    out.width = sw;
+    out.height = sh;
+    const ctx = out.getContext('2d');
+    if (!ctx) {
+      return { ok: false, reason: 'unknown', detail: 'canvas context unavailable' };
+    }
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+    // Progressive compression loop — same target budget as the
+    // full-page path so the server side cap matches.
+    let quality = 0.9;
+    let dataUrl = '';
+    for (let i = 0; i < 6; i++) {
+      try {
+        dataUrl = out.toDataURL('image/jpeg', quality);
+      } catch (err) {
+        return {
+          ok: false,
+          reason: 'tainted_canvas',
+          detail: (err as Error).message || 'region canvas tainted',
+        };
+      }
+      if (dataUrl.length <= TARGET_MAX_BYTES) break;
+      quality = Math.max(MIN_QUALITY, quality - 0.1);
+      if (quality === MIN_QUALITY) {
+        dataUrl = out.toDataURL('image/jpeg', quality);
+        break;
+      }
+    }
+    log('region final size (KB)', Math.round(dataUrl.length / 1024));
+    return { ok: true, dataUrl };
+  } catch (err) {
+    return {
+      ok: false,
+      reason: 'unknown',
+      detail: (err as Error).message || 'region crop failed',
+    };
+  }
+}
+
 export async function captureReportScreenshot(): Promise<CaptureResult> {
   log('capture start');
   if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -135,87 +235,63 @@ export async function captureReportScreenshot(): Promise<CaptureResult> {
   const scrollHeight = html.scrollHeight;
 
   try {
-    // Two-stage capture strategy:
-    //   1) Try `html-to-image` first. It uses SVG `foreignObject`
-    //      serialization, which handles absolute-positioned elements,
-    //      CSS Grid, transforms, and modern React layouts much more
-    //      reliably than canvas-based rasterization. It also handles
-    //      Tailwind v4's oklch() colors natively.
-    //   2) Fall back to `html2canvas-pro` if html-to-image fails (it
+    // Capture strategy (optimised for human-initiated "Report Issue"
+    // latency — NOT for crash telemetry):
+    //   1) html-to-image `toJpeg` at pixelRatio 1.5 — fast, compact,
+    //      visually indistinguishable from PNG at this size.
+    //   2) Fallback to html2canvas-pro if html-to-image fails (it
     //      occasionally trips on cross-origin CSS or svg issues).
     //
-    // html-to-image returns a JPEG data URL directly, so we skip the
-    // canvas-compression loop below when it succeeds.
+    // pixelRatio was previously `max(2, dpr)`, which rendered ~4×
+    // the pixel area of viewport for little benefit in a preview that
+    // fits-to-width inside the modal. 1.5 keeps text crisp while
+    // roughly halving capture time on large dashboards.
+    const targetPixelRatio = Math.min(1.5, window.devicePixelRatio || 1);
+    const h2iOptions = {
+      cacheBust: true,
+      pixelRatio: targetPixelRatio,
+      width: scrollWidth,
+      height: scrollHeight,
+      style: { transform: 'none', transformOrigin: 'top left' },
+      backgroundColor: undefined,
+      filter: (node: HTMLElement) => {
+        if (!node || !node.getAttribute) return true;
+        if (
+          node.hasAttribute &&
+          node.hasAttribute('data-issue-reporter-trigger')
+        )
+          return false;
+        if (
+          node.hasAttribute &&
+          node.hasAttribute('data-issue-reporter-root')
+        )
+          return false;
+        if (
+          node.hasAttribute &&
+          node.hasAttribute('data-issue-reporter-region-selector')
+        )
+          return false;
+        return true;
+      },
+    };
+
     let h2iDataUrl: string | null = null;
     try {
-      log('trying html-to-image (toPng per spec)');
+      log('trying html-to-image toJpeg', {
+        pixelRatio: targetPixelRatio,
+        page: `${scrollWidth}x${scrollHeight}`,
+      });
       const h2i = await import('html-to-image');
-      // Per the capture spec, prefer toPng — PNG is lossless, produces
-      // pixel-perfect dashboard captures that render crisply when
-      // zoomed/annotated. If the PNG ends up over our size budget,
-      // toJpeg is used as a second attempt below.
-      const pngFn =
-        h2i.toPng ||
-        (h2i as unknown as { default?: { toPng?: typeof h2i.toPng } }).default?.toPng;
-      if (typeof pngFn === 'function') {
-        h2iDataUrl = await pngFn(body, {
-          cacheBust: true,
-          // pixelRatio: 2 → retina-quality output even on non-retina
-          // displays. Spec explicitly asks for this.
-          pixelRatio: Math.max(2, window.devicePixelRatio || 1),
-          // Capture the FULL scrolled document, not just the viewport.
-          // This is what gives us the entire desktop dashboard in one
-          // shot when the page is taller than the visible area.
-          width: scrollWidth,
-          height: scrollHeight,
-          // Explicit transform:none ensures any ancestor CSS transform
-          // (e.g. a parent with scale()) doesn't shrink the rendered
-          // output. Already cleared on <html>/<body> above, but
-          // passing it here belt-and-braces per the spec.
-          style: {
-            transform: 'none',
-            transformOrigin: 'top left',
-          },
-          backgroundColor: undefined,
-          // Skip the floating Report Issue button + any modal-root
-          // elements — they should never appear in the capture.
-          filter: (node: HTMLElement) => {
-            if (!node || !node.getAttribute) return true;
-            if (node.hasAttribute && node.hasAttribute('data-issue-reporter-trigger')) return false;
-            if (node.hasAttribute && node.hasAttribute('data-issue-reporter-root')) return false;
-            return true;
-          },
-        });
-        log('html-to-image PNG size (KB)', Math.round((h2iDataUrl?.length || 0) / 1024));
-      }
-
-      // PNG too big? Re-attempt with toJpeg (lossy but compact).
-      if (
-        h2iDataUrl &&
-        h2iDataUrl.length > TARGET_MAX_BYTES * 1.2
-      ) {
-        log('PNG over budget — retrying with toJpeg');
-        const jpegFn =
-          h2i.toJpeg ||
-          (h2i as unknown as { default?: { toJpeg?: typeof h2i.toJpeg } }).default?.toJpeg;
-        if (typeof jpegFn === 'function') {
-          h2iDataUrl = await jpegFn(body, {
-            cacheBust: true,
-            pixelRatio: Math.max(2, window.devicePixelRatio || 1),
-            quality: 0.85,
-            width: scrollWidth,
-            height: scrollHeight,
-            style: { transform: 'none', transformOrigin: 'top left' },
-            backgroundColor: undefined,
-            filter: (node: HTMLElement) => {
-              if (!node || !node.getAttribute) return true;
-              if (node.hasAttribute && node.hasAttribute('data-issue-reporter-trigger')) return false;
-              if (node.hasAttribute && node.hasAttribute('data-issue-reporter-root')) return false;
-              return true;
-            },
-          });
-          log('html-to-image JPEG size (KB)', Math.round((h2iDataUrl?.length || 0) / 1024));
-        }
+      const jpegFn =
+        h2i.toJpeg ||
+        (h2i as unknown as { default?: { toJpeg?: typeof h2i.toJpeg } })
+          .default?.toJpeg;
+      if (typeof jpegFn === 'function') {
+        h2iDataUrl = await jpegFn(body, { ...h2iOptions, quality: 0.85 });
+        log(
+          'html-to-image JPEG size (KB)',
+          Math.round((h2iDataUrl?.length || 0) / 1024),
+        );
       }
     } catch (err) {
       log('html-to-image failed, falling back to html2canvas-pro', err);

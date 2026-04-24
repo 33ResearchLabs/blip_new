@@ -17,7 +17,11 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { captureReportScreenshot } from '@/lib/issueReporter/screenshot';
+import {
+  captureRegionScreenshot,
+  captureReportScreenshot,
+  type CaptureRegion,
+} from '@/lib/issueReporter/screenshot';
 
 export type IssueCategory =
   | 'ui_bug'
@@ -88,71 +92,95 @@ export function useIssueReporter({
   /**
    * Low-level capture (used for Retake inside the modal). Hides the
    * reporter modal first so it doesn't land in the shot, then restores.
+   *
+   * When `region` is supplied, the full-page capture is cropped to
+   * that rectangle (document-space CSS pixels). Caller is responsible
+   * for dismissing any region-picker UI *before* calling this so the
+   * selector overlay doesn't appear in the capture.
    */
-  const captureScreenshot = useCallback(async (): Promise<string | null> => {
-    console.log('[IssueReporter/hook] captureScreenshot called');
-    setCapturingShot(true);
+  const captureScreenshot = useCallback(
+    async (region?: CaptureRegion): Promise<string | null> => {
+      console.log('[IssueReporter/hook] captureScreenshot called', { region });
+      setCapturingShot(true);
+      setCaptureError(null);
+      const modalRoot = document.querySelector<HTMLElement>(
+        '[data-issue-reporter-root]',
+      );
+      const prevVisibility = modalRoot?.style.visibility;
+      if (modalRoot) modalRoot.style.visibility = 'hidden';
+      // Two animation frames so the visibility change actually paints
+      // before html2canvas reads the DOM.
+      await new Promise<void>((r) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => r())),
+      );
+      try {
+        const result = region
+          ? await captureRegionScreenshot(region)
+          : await captureReportScreenshot();
+        console.log('[IssueReporter/hook] capture result', {
+          ok: result.ok,
+          reason: result.reason,
+          detail: result.detail,
+          size: result.dataUrl?.length,
+        });
+        if (result.ok && result.dataUrl) return result.dataUrl;
+        setCaptureError(
+          result.detail ||
+            result.reason ||
+            'Screenshot capture failed — you can still submit without one',
+        );
+        return null;
+      } catch (e) {
+        console.error('[IssueReporter/hook] capture threw', e);
+        setCaptureError((e as Error).message || 'Screenshot capture failed');
+        return null;
+      } finally {
+        if (modalRoot) modalRoot.style.visibility = prevVisibility || '';
+        setCapturingShot(false);
+      }
+    },
+    [],
+  );
+
+  /**
+   * Open the reporter. Mount the modal IMMEDIATELY so the user can
+   * start typing title/description while the screenshot renders in
+   * the background. The screenshot area already has a "Capturing…"
+   * spinner state that surfaces the async work.
+   *
+   * We hide the modal via `visibility: hidden` for the duration of the
+   * capture so it never leaks into the snapshot — the same technique
+   * Retake uses. `captureReportScreenshot` also strips any element
+   * with `data-issue-reporter-root` / `data-issue-reporter-trigger`
+   * from html-to-image's filter as a belt-and-braces safety net.
+   */
+  const open = useCallback(async (): Promise<void> => {
+    if (isOpen) return;
+    setInitialShot(null);
     setCaptureError(null);
+    setCapturingShot(true);
+    setIsOpen(true);
+
+    // One frame so the modal actually mounts before we hide it — if we
+    // hid it before mount, querySelector below would miss the node.
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
     const modalRoot = document.querySelector<HTMLElement>(
       '[data-issue-reporter-root]',
     );
     const prevVisibility = modalRoot?.style.visibility;
     if (modalRoot) modalRoot.style.visibility = 'hidden';
-    // Two animation frames so the visibility change actually paints
-    // before html2canvas reads the DOM.
-    await new Promise<void>((r) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => r())),
-    );
-    try {
-      const result = await captureReportScreenshot();
-      console.log('[IssueReporter/hook] capture result', {
-        ok: result.ok,
-        reason: result.reason,
-        detail: result.detail,
-        size: result.dataUrl?.length,
-      });
-      if (result.ok && result.dataUrl) return result.dataUrl;
-      setCaptureError(
-        result.detail ||
-          result.reason ||
-          'Screenshot capture failed — you can still submit without one',
-      );
-      return null;
-    } catch (e) {
-      console.error('[IssueReporter/hook] capture threw', e);
-      setCaptureError((e as Error).message || 'Screenshot capture failed');
-      return null;
-    } finally {
-      if (modalRoot) modalRoot.style.visibility = prevVisibility || '';
-      setCapturingShot(false);
-    }
-  }, []);
+    // One more frame so the visibility change paints before capture.
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
 
-  /**
-   * Open the reporter. Per capture spec, takes the screenshot FIRST
-   * (while the modal is not in the DOM) and only then mounts the
-   * modal with the shot pre-loaded. This guarantees the modal UI can
-   * never leak into the snapshot.
-   */
-  const open = useCallback(async (): Promise<void> => {
-    if (isOpen) return;
-    setCapturingShot(true);
-    setCaptureError(null);
-    // Two animation frames so any pre-click hover/focus styles settle
-    // before html2canvas reads the DOM.
-    await new Promise<void>((r) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => r())),
-    );
-    let shot: string | null = null;
     try {
       const result = await captureReportScreenshot();
-      console.log('[IssueReporter/hook] pre-open capture result', {
+      console.log('[IssueReporter/hook] open-time capture', {
         ok: result.ok,
         reason: result.reason,
         size: result.dataUrl?.length,
       });
       if (result.ok && result.dataUrl) {
-        shot = result.dataUrl;
+        setInitialShot(result.dataUrl);
       } else {
         setCaptureError(
           result.detail ||
@@ -161,13 +189,12 @@ export function useIssueReporter({
         );
       }
     } catch (e) {
-      console.error('[IssueReporter/hook] pre-open capture threw', e);
+      console.error('[IssueReporter/hook] open-time capture threw', e);
       setCaptureError((e as Error).message || 'Screenshot capture failed');
     } finally {
+      if (modalRoot) modalRoot.style.visibility = prevVisibility || '';
       setCapturingShot(false);
     }
-    setInitialShot(shot);
-    setIsOpen(true);
   }, [isOpen]);
 
   // Keyboard shortcut: Ctrl+Shift+I (or Cmd+Shift+I on Mac)

@@ -26,10 +26,11 @@
 
 import {
   Bug,
-  Camera,
   CloudUpload,
+  Crop,
   Loader2,
   Lock,
+  Monitor,
   Paperclip,
   Send,
   Sparkles,
@@ -44,6 +45,7 @@ import {
 } from "@/hooks/useIssueReporter";
 import { useMerchantStore } from "@/stores/merchantStore";
 import { IssueAnnotator } from "./IssueAnnotator";
+import { RegionSelector, type Region } from "./RegionSelector";
 
 const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25MB
@@ -104,6 +106,10 @@ export function IssueReporter({
   const [attachments, setAttachments] = useState<AttachmentInput[]>([]);
   const [toast, setToast] = useState<Toast | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  // Region-capture mode: when the user picks "Region", we temporarily
+  // hide the modal, show a fullscreen drag-to-select overlay, and feed
+  // the chosen rectangle into captureScreenshot(region).
+  const [regionPicking, setRegionPicking] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -148,6 +154,39 @@ export function IssueReporter({
     const shot = await reporter.captureScreenshot();
     if (shot) setScreenshot(shot);
   }, [reporter]);
+
+  /**
+   * Region mode: hide the current modal, mount the RegionSelector, wait
+   * for the user to drag-select a rectangle, then capture that region
+   * only. The modal stays in the DOM under the selector (with its own
+   * data-issue-reporter-root attribute, which the screenshot filter
+   * strips out of the capture anyway) so the user's in-flight form
+   * inputs are preserved.
+   */
+  const handleRegionCapture = useCallback(() => {
+    setScreenshot(null);
+    setAnnotatedScreenshot(null);
+    setRegionPicking(true);
+  }, []);
+
+  const handleRegionPicked = useCallback(
+    async (region: Region) => {
+      setRegionPicking(false);
+      // Wait a frame so the overlay is fully unmounted before we
+      // capture — otherwise its selection rectangle could leak into
+      // the snapshot.
+      await new Promise<void>((r) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => r())),
+      );
+      const shot = await reporter.captureScreenshot(region);
+      if (shot) setScreenshot(shot);
+    },
+    [reporter],
+  );
+
+  const handleRegionCancel = useCallback(() => {
+    setRegionPicking(false);
+  }, []);
 
   const ingestFiles = useCallback(
     async (files: File[]) => {
@@ -276,10 +315,43 @@ export function IssueReporter({
         </button>
       )}
 
+      {/* Global capture toast. Rendered OUTSIDE the modal conditional
+          so it paints the instant `capturingShot` flips to true — even
+          if the modal itself takes a frame or two to mount on slower
+          devices. This is the "something is happening" signal users
+          look for right after clicking.
+
+          Tagged `data-issue-reporter-root` so the screenshot capture
+          filter strips it out (otherwise the toast would appear in
+          the snapshot). */}
+      {reporter.capturingShot && (
+        <div
+          data-issue-reporter-root
+          role="status"
+          aria-live="assertive"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[90] flex items-center gap-2.5 px-4 py-2.5 rounded-full
+                     bg-amber-500 text-black text-[12px] font-semibold
+                     shadow-xl shadow-amber-500/30 animate-[pulse_2s_ease-in-out_infinite]"
+        >
+          <Loader2 size={14} className="animate-spin" />
+          <span>
+            Preparing your issue report — capturing screen, please wait…
+          </span>
+        </div>
+      )}
+
+      {reporter.isOpen && regionPicking && (
+        <RegionSelector
+          onSelect={handleRegionPicked}
+          onCancel={handleRegionCancel}
+        />
+      )}
+
       {reporter.isOpen && (
         <div
           data-issue-reporter-root
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          style={regionPicking ? { visibility: "hidden" } : undefined}
           onClick={(e) => {
             if (e.target === e.currentTarget) reporter.close();
           }}
@@ -306,6 +378,29 @@ export function IssueReporter({
               </button>
             </div>
 
+            {/* Capture-in-progress banner. Spans the full width of the
+                modal so the user sees it no matter which side of the
+                two-column body they're looking at. Auto-hides the
+                instant the screenshot lands in the annotator. */}
+            {reporter.capturingShot && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex items-center gap-2.5 px-6 py-2.5 bg-amber-500/10 border-b border-amber-400/30 text-[12px] text-amber-200"
+              >
+                <Loader2 size={14} className="animate-spin shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <span className="font-medium">
+                    Capturing your screen…
+                  </span>{" "}
+                  <span className="text-amber-200/80">
+                    This can take a few seconds on large pages. You can
+                    start filling out the issue details while it finishes.
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Body (two columns) */}
             <div className="flex-1 flex min-h-0">
               {/* ── Left column — screenshot + annotation ────────────── */}
@@ -319,9 +414,23 @@ export function IssueReporter({
                         onExport={(dataUrl) => setAnnotatedScreenshot(dataUrl)}
                       />
                     ) : reporter.capturingShot ? (
-                      <div className="h-full flex items-center justify-center text-[12px] text-foreground/50">
-                        <Loader2 size={14} className="animate-spin mr-2" />
-                        Capturing screenshot…
+                      <div className="h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
+                        <div className="relative">
+                          <div className="absolute inset-0 rounded-full bg-amber-500/20 animate-ping" />
+                          <div className="relative flex items-center justify-center h-10 w-10 rounded-full bg-amber-500/15 border border-amber-400/40">
+                            <Loader2 size={18} className="animate-spin text-amber-300" />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-[13px] font-medium text-amber-200">
+                            Capturing your screen…
+                          </div>
+                          <div className="text-[11px] text-foreground/50 max-w-xs">
+                            This can take a few seconds. Feel free to start
+                            filling in the issue details on the right — the
+                            screenshot will show up here when it&apos;s ready.
+                          </div>
+                        </div>
                       </div>
                     ) : (
                       <div className="h-full flex flex-col items-center justify-center gap-2 text-[12px] text-foreground/50 p-6 text-center">
@@ -342,24 +451,40 @@ export function IssueReporter({
                   </div>
                 </div>
 
-                {/* Footer row — tip + retake */}
-                <div className="flex items-center justify-between px-5 py-3 border-t border-border">
-                  <div className="flex items-center gap-1.5 text-[11px] text-foreground/50">
-                    <Sparkles size={11} className="text-amber-400" />
-                    Tip: You can highlight, add arrows or text to explain the
-                    issue clearly.
+                {/* Footer row — tip + capture mode picker */}
+                <div className="flex items-center justify-between px-4 py-2 border-t border-border gap-3">
+                  <div className="flex items-center gap-1.5 text-[11px] text-foreground/50 min-w-0">
+                    <Sparkles size={11} className="text-amber-400 shrink-0" />
+                    <span className="truncate">
+                      Tip: Select and drag shapes, press Delete to remove.
+                    </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleRecapture}
-                    disabled={reporter.capturingShot}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium bg-foreground/[0.06] border border-border hover:bg-foreground/[0.1] disabled:opacity-40"
-                  >
-                    <Camera size={12} />
-                    {reporter.capturingShot
-                      ? "Capturing…"
-                      : "Retake Screenshot"}
-                  </button>
+                  <div className="flex items-center gap-1 shrink-0 p-0.5 rounded-md bg-foreground/[0.04] border border-border">
+                    <button
+                      type="button"
+                      onClick={handleRecapture}
+                      disabled={reporter.capturingShot || regionPicking}
+                      className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-foreground/75 hover:bg-foreground/[0.08] hover:text-foreground/95 disabled:opacity-40 disabled:cursor-wait transition"
+                      title="Capture full page"
+                    >
+                      {reporter.capturingShot && !regionPicking ? (
+                        <Loader2 size={11} className="animate-spin" />
+                      ) : (
+                        <Monitor size={11} />
+                      )}
+                      Full
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRegionCapture}
+                      disabled={reporter.capturingShot || regionPicking}
+                      className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-foreground/75 hover:bg-foreground/[0.08] hover:text-foreground/95 disabled:opacity-40 transition"
+                      title="Drag to select a region"
+                    >
+                      <Crop size={11} />
+                      Region
+                    </button>
+                  </div>
                 </div>
               </div>
 
