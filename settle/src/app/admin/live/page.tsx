@@ -217,6 +217,12 @@ export default function LiveDashboardPage() {
   const activeOrders = orders.filter((o) => isActiveOrder(o.status));
   const recentCompleted = orders
     .filter((o) => o.status === "completed")
+    .slice()
+    .sort((a, b) => {
+      const ta = new Date(a.completedAt ?? a.createdAt).getTime();
+      const tb = new Date(b.completedAt ?? b.createdAt).getTime();
+      return tb - ta;
+    })
     .slice(0, 10);
   const disputedOrders = orders.filter((o) => o.status === "disputed");
 
@@ -391,22 +397,14 @@ export default function LiveDashboardPage() {
 
             <div className="flex-1 overflow-y-auto scrollbar-hide space-y-1.5 min-h-0">
               {activeOrders.length > 0 || disputedOrders.length > 0 ? (
-                <>
-                  {disputedOrders.map((order) => (
-                    <OrderCard key={order.id} order={order} />
-                  ))}
-                  {activeOrders
-                    .sort((a, b) => {
-                      const priority: Record<string, number> = {
-                        releasing: 0, payment_confirmed: 1, payment_sent: 2,
-                        escrowed: 3, escrow_pending: 4, accepted: 5, pending: 6,
-                      };
-                      return (priority[a.status] ?? 99) - (priority[b.status] ?? 99);
-                    })
-                    .map((order) => (
-                      <OrderCard key={order.id} order={order} />
-                    ))}
-                </>
+                [...disputedOrders, ...activeOrders]
+                  .slice()
+                  .sort(
+                    (a, b) =>
+                      new Date(b.createdAt).getTime() -
+                      new Date(a.createdAt).getTime(),
+                  )
+                  .map((order) => <OrderCard key={order.id} order={order} />)
               ) : (
                 <EmptyActiveOrders />
               )}
