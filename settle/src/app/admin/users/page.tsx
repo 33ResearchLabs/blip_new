@@ -572,7 +572,9 @@ export default function AdminUsersPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <span className={`text-[11px] truncate ${u.isPlaceholder ? "text-foreground/55 font-mono" : "text-foreground/85 font-medium"}`}>
-                              {u.username || u.name || "Unnamed"}
+                              {u.isPlaceholder
+                                ? (u.username?.startsWith("m2m_") ? "M2M Buyer" : "Open Order")
+                                : (u.name || u.username || "Unnamed")}
                             </span>
                             {u.isPlaceholder && (
                               <span className="text-[8px] px-1 py-0.5 rounded bg-[var(--color-warning)]/10 text-[var(--color-warning)]/80 border border-[var(--color-warning)]/15 font-mono font-bold shrink-0">GHOST</span>

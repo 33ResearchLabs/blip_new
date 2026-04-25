@@ -60,7 +60,14 @@ export async function GET(request: NextRequest) {
 
     const orderClause = `ORDER BY ${SORT_COLUMNS[sortBy] || SORT_COLUMNS.volume}`;
 
-    const conditions: string[] = [];
+    // Exclude placeholder/ghost users from the admin Users view. These rows are
+    // synthetic accounts created for unclaimed broadcast (open_order_*) and
+    // M2M (m2m_*) orders — they're not real signed-up users.
+    const conditions: string[] = [
+      "u.username IS NOT NULL",
+      "u.username NOT LIKE 'open_order_%'",
+      "u.username NOT LIKE 'm2m_%'",
+    ];
     const params: unknown[] = [];
     let paramIdx = 0;
 
@@ -184,7 +191,8 @@ export async function GET(request: NextRequest) {
       params.slice(0, params.length - 2)
     );
 
-    // Aggregate platform stats (unfiltered, for the summary cards)
+    // Aggregate platform stats — also excludes placeholder/ghost users so the
+    // KPI cards show real-user counts only.
     const summary = await queryOne<{
       total_users: string;
       active_users: string;
@@ -205,6 +213,9 @@ export async function GET(request: NextRequest) {
         COALESCE(SUM(total_volume) FILTER (WHERE created_at < NOW() - INTERVAL '30 days'), 0)::text as total_volume_prev,
         COALESCE(SUM(total_trades) FILTER (WHERE created_at < NOW() - INTERVAL '30 days'), 0)::text as total_trades_prev
       FROM users
+      WHERE username IS NOT NULL
+        AND username NOT LIKE 'open_order_%'
+        AND username NOT LIKE 'm2m_%'
     `);
 
     const calcDelta = (current: number, prev: number) =>

@@ -66,7 +66,8 @@ const buildPageRange = (current: number, total: number): (number | "…")[] => {
 export default function AccessControlPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const initialTab: Tab = searchParams.get("tab") === "ops" ? "ops" : "compliance";
+  const initialTab: Tab =
+    searchParams.get("tab") === "ops" ? "ops" : "compliance";
 
   const [mounted, setMounted] = useState(false);
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -74,7 +75,10 @@ export default function AccessControlPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
-  const [adminLoginForm, setAdminLoginForm] = useState({ username: "", password: "" });
+  const [adminLoginForm, setAdminLoginForm] = useState({
+    username: "",
+    password: "",
+  });
   const [adminLoginError, setAdminLoginError] = useState("");
   const [isAdminLoggingIn, setIsAdminLoggingIn] = useState(false);
 
@@ -95,7 +99,9 @@ export default function AccessControlPage() {
   adminTokenRef.current = adminToken;
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -180,9 +186,12 @@ export default function AccessControlPage() {
     if (!token) return;
     setLoading(true);
     try {
-      const res = await fetchWithAuth("/api/admin/merchants?sort=volume&limit=200", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetchWithAuth(
+        "/api/admin/merchants?sort=volume&limit=200",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
       const data = await res.json();
       if (data.success) setMerchants(data.data);
     } catch (err) {
@@ -213,7 +222,9 @@ export default function AccessControlPage() {
       const data = await res.json();
       if (data.success) {
         setMerchants((prev) =>
-          prev.map((m) => m.id === merchantId ? { ...m, [field]: !current } : m)
+          prev.map((m) =>
+            m.id === merchantId ? { ...m, [field]: !current } : m,
+          ),
         );
       }
     } catch (err) {
@@ -227,15 +238,17 @@ export default function AccessControlPage() {
   // ── Derived ──
 
   const isOn = useCallback(
-    (m: MerchantItem) => tab === "compliance" ? m.hasComplianceAccess : m.hasOpsAccess,
-    [tab]
+    (m: MerchantItem) =>
+      tab === "compliance" ? m.hasComplianceAccess : m.hasOpsAccess,
+    [tab],
   );
 
   const filtered = useMemo(() => {
     return merchants.filter((m) => {
       if (search) {
         const q = search.toLowerCase();
-        if (!m.name?.toLowerCase().includes(q) && !m.id.includes(search)) return false;
+        if (!m.name?.toLowerCase().includes(q) && !m.id.includes(search))
+          return false;
       }
       if (statusFilter === "granted" && !isOn(m)) return false;
       if (statusFilter === "no_access" && isOn(m)) return false;
@@ -283,7 +296,9 @@ export default function AccessControlPage() {
                 <span className="italic text-foreground/90">money</span>
               </span>
             </div>
-            <p className="text-[11px] text-foreground/25 font-mono uppercase tracking-[0.2em]">Access Control</p>
+            <p className="text-[11px] text-foreground/25 font-mono uppercase tracking-[0.2em]">
+              Access Control
+            </p>
           </div>
 
           <div className="relative p-[1px] rounded-2xl bg-gradient-to-b from-foreground/[0.1] to-foreground/[0.02]">
@@ -295,23 +310,37 @@ export default function AccessControlPage() {
                 </div>
               )}
               <div>
-                <label className="text-[10px] text-foreground/30 font-mono uppercase tracking-wider mb-1.5 block">Username</label>
+                <label className="text-[10px] text-foreground/30 font-mono uppercase tracking-wider mb-1.5 block">
+                  Username
+                </label>
                 <input
                   type="text"
                   placeholder="admin"
                   value={adminLoginForm.username}
-                  onChange={(e) => setAdminLoginForm({ ...adminLoginForm, username: e.target.value })}
+                  onChange={(e) =>
+                    setAdminLoginForm({
+                      ...adminLoginForm,
+                      username: e.target.value,
+                    })
+                  }
                   maxLength={50}
                   className="w-full bg-card border border-border rounded-xl px-4 py-3 text-sm text-foreground font-mono placeholder:text-foreground/15 focus:border-primary/30 focus:outline-none focus:bg-card transition-all"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-foreground/30 font-mono uppercase tracking-wider mb-1.5 block">Password</label>
+                <label className="text-[10px] text-foreground/30 font-mono uppercase tracking-wider mb-1.5 block">
+                  Password
+                </label>
                 <input
                   type="password"
                   placeholder="••••••••"
                   value={adminLoginForm.password}
-                  onChange={(e) => setAdminLoginForm({ ...adminLoginForm, password: e.target.value })}
+                  onChange={(e) =>
+                    setAdminLoginForm({
+                      ...adminLoginForm,
+                      password: e.target.value,
+                    })
+                  }
                   onKeyDown={(e) => e.key === "Enter" && handleAdminLogin()}
                   maxLength={100}
                   className="w-full bg-card border border-border rounded-xl px-4 py-3 text-sm text-foreground font-mono placeholder:text-foreground/15 focus:border-primary/30 focus:outline-none focus:bg-card transition-all"
@@ -319,7 +348,11 @@ export default function AccessControlPage() {
               </div>
               <button
                 onClick={handleAdminLogin}
-                disabled={isAdminLoggingIn || !adminLoginForm.username || !adminLoginForm.password}
+                disabled={
+                  isAdminLoggingIn ||
+                  !adminLoginForm.username ||
+                  !adminLoginForm.password
+                }
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-primary to-primary/80 text-foreground text-sm font-bold hover:from-primary/90 hover:to-primary transition-all disabled:opacity-20 disabled:cursor-not-allowed shadow-lg shadow-primary/20"
               >
                 {isAdminLoggingIn ? (
@@ -345,7 +378,7 @@ export default function AccessControlPage() {
     tab === "compliance"
       ? "Manage user access and compliance permissions"
       : "Manage user access and ops permissions";
-  const enabledLabel = tab === "compliance" ? "Compliance Enabled" : "Ops Enabled";
+  const enabledLabel = tab === "compliance" ? "Access granted" : "Ops Enabled";
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -363,14 +396,54 @@ export default function AccessControlPage() {
           </div>
           <div className="flex items-center gap-2 mx-auto">
             <nav className="flex items-center gap-0.5 bg-card rounded-lg p-[3px]">
-              <Link href="/admin" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Console</Link>
-              <Link href="/admin/live" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Live Feed</Link>
-              <Link href="/admin/access-control" className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-accent-subtle text-foreground transition-colors">Access Control</Link>
-              <Link href="/admin/accounts" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Accounts</Link>
-              <Link href="/admin/disputes" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Disputes</Link>
-              <Link href="/admin/monitor" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Monitor</Link>
-              <Link href="/admin/observability" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Observability</Link>
-              <Link href="/admin/usdt-inr-price" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Price</Link>
+              <Link
+                href="/admin"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Console
+              </Link>
+              <Link
+                href="/admin/live"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Live Feed
+              </Link>
+              <Link
+                href="/admin/access-control"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-accent-subtle text-foreground transition-colors"
+              >
+                Access Control
+              </Link>
+              <Link
+                href="/admin/accounts"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Accounts
+              </Link>
+              <Link
+                href="/admin/disputes"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Disputes
+              </Link>
+              <Link
+                href="/admin/monitor"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Monitor
+              </Link>
+              <Link
+                href="/admin/observability"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Observability
+              </Link>
+              <Link
+                href="/admin/usdt-inr-price"
+                className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors"
+              >
+                Price
+              </Link>
             </nav>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -382,21 +455,29 @@ export default function AccessControlPage() {
       </header>
 
       {/* Page header */}
-      <div className="max-w-6xl mx-auto px-6 pt-7 pb-3">
+      <div className="w-full px-8 pt-7 pb-3">
         <h1 className="text-2xl font-bold text-foreground">{tabLabel}</h1>
         <p className="text-[12px] text-foreground/40 mt-1">{tabSubtitle}</p>
       </div>
 
       {/* Tab pills */}
-      <div className="max-w-6xl mx-auto px-6 border-b border-section-divider">
+      <div className="w-full px-8 border-b border-section-divider">
         <div className="flex items-center gap-1">
-          <TabPill active={tab === "compliance"} onClick={() => switchTab("compliance")} label="Compliance" />
-          <TabPill active={tab === "ops"} onClick={() => switchTab("ops")} label="Ops" />
+          <TabPill
+            active={tab === "compliance"}
+            onClick={() => switchTab("compliance")}
+            label="Compliance"
+          />
+          <TabPill
+            active={tab === "ops"}
+            onClick={() => switchTab("ops")}
+            label="Ops"
+          />
         </div>
       </div>
 
       {/* Toolbar — search + filters */}
-      <div className="max-w-6xl mx-auto px-6 pt-5 pb-4 flex items-center gap-3">
+      <div className="w-full px-8 pt-5 pb-4 flex items-center gap-3">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/25" />
           <input
@@ -404,7 +485,10 @@ export default function AccessControlPage() {
             type="text"
             placeholder="Search by name or ID..."
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             maxLength={100}
             className="w-full bg-card border border-border rounded-lg pl-9 pr-4 py-2.5 text-[13px] text-foreground placeholder:text-foreground/25 focus:border-primary/30 focus:outline-none transition-all"
           />
@@ -414,7 +498,11 @@ export default function AccessControlPage() {
           {/* Filters */}
           <div className="relative">
             <button
-              onClick={(e) => { e.stopPropagation(); setFilterOpen((o) => !o); setPageSizeOpen(false); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setFilterOpen((o) => !o);
+                setPageSizeOpen(false);
+              }}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-medium border transition-colors ${
                 statusFilter !== "all"
                   ? "bg-primary/10 border-primary/30 text-primary"
@@ -423,16 +511,42 @@ export default function AccessControlPage() {
             >
               <Filter className="w-3.5 h-3.5" />
               Filters
-              {statusFilter !== "all" && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
+              {statusFilter !== "all" && (
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+              )}
             </button>
             {filterOpen && (
               <div
                 onMouseDown={(e) => e.stopPropagation()}
                 className="absolute right-0 top-full mt-1.5 w-52 bg-card-solid border border-border rounded-lg shadow-lg p-1 z-20"
               >
-                <FilterOption label="All users" active={statusFilter === "all"} onClick={() => { setStatusFilter("all"); setFilterOpen(false); setPage(1); }} />
-                <FilterOption label="Granted only" active={statusFilter === "granted"} onClick={() => { setStatusFilter("granted"); setFilterOpen(false); setPage(1); }} />
-                <FilterOption label="No access" active={statusFilter === "no_access"} onClick={() => { setStatusFilter("no_access"); setFilterOpen(false); setPage(1); }} />
+                <FilterOption
+                  label="All users"
+                  active={statusFilter === "all"}
+                  onClick={() => {
+                    setStatusFilter("all");
+                    setFilterOpen(false);
+                    setPage(1);
+                  }}
+                />
+                <FilterOption
+                  label="Granted only"
+                  active={statusFilter === "granted"}
+                  onClick={() => {
+                    setStatusFilter("granted");
+                    setFilterOpen(false);
+                    setPage(1);
+                  }}
+                />
+                <FilterOption
+                  label="No access"
+                  active={statusFilter === "no_access"}
+                  onClick={() => {
+                    setStatusFilter("no_access");
+                    setFilterOpen(false);
+                    setPage(1);
+                  }}
+                />
               </div>
             )}
           </div>
@@ -449,16 +563,28 @@ export default function AccessControlPage() {
       </div>
 
       {/* Table */}
-      <div className="max-w-6xl mx-auto px-6 pb-4">
+      <div className="w-full px-8 pb-4">
         <div className="bg-card-solid border border-border rounded-xl overflow-hidden">
           {/* Header row */}
           <div className="grid grid-cols-[2fr_1.4fr_1.6fr_1.2fr_1fr_60px] gap-4 px-5 py-3 border-b border-section-divider bg-card">
-            <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">User</div>
-            <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">Details</div>
-            <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">Permissions</div>
-            <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">Status</div>
-            <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">Last Active</div>
-            <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider text-right">Action</div>
+            <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">
+              User
+            </div>
+            <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">
+              Details
+            </div>
+            <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">
+              Permissions
+            </div>
+            <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">
+              Status
+            </div>
+            <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider">
+              Last Active
+            </div>
+            <div className="text-[10px] font-mono font-medium text-foreground/40 uppercase tracking-wider text-right">
+              Action
+            </div>
           </div>
 
           {loading ? (
@@ -466,7 +592,9 @@ export default function AccessControlPage() {
               <div className="w-5 h-5 border-2 border-foreground/20 border-t-primary rounded-full animate-spin" />
             </div>
           ) : pageRows.length === 0 ? (
-            <p className="text-center text-foreground/25 text-[13px] py-16 font-mono">No merchants found.</p>
+            <p className="text-center text-foreground/25 text-[13px] py-16 font-mono">
+              No merchants found.
+            </p>
           ) : (
             pageRows.map((merchant) => {
               const on = isOn(merchant);
@@ -481,7 +609,9 @@ export default function AccessControlPage() {
                   actionOpen={actionOpenId === merchant.id}
                   onToggleAction={(e) => {
                     e.stopPropagation();
-                    setActionOpenId((prev) => (prev === merchant.id ? null : merchant.id));
+                    setActionOpenId((prev) =>
+                      prev === merchant.id ? null : merchant.id,
+                    );
                   }}
                   onToggleAccess={() => toggleAccess(merchant.id, on)}
                 />
@@ -494,7 +624,9 @@ export default function AccessControlPage() {
         {!loading && filtered.length > 0 && (
           <div className="flex items-center justify-between mt-4 px-1">
             <div className="text-[12px] text-foreground/40 font-mono">
-              Showing {formatCount(pageStart + 1)} to {formatCount(Math.min(pageEnd, filtered.length))} of {formatCount(filtered.length)} users
+              Showing {formatCount(pageStart + 1)} to{" "}
+              {formatCount(Math.min(pageEnd, filtered.length))} of{" "}
+              {formatCount(filtered.length)} users
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -509,7 +641,12 @@ export default function AccessControlPage() {
 
               {buildPageRange(page, totalPages).map((p, i) =>
                 p === "…" ? (
-                  <span key={`ellipsis-${i}`} className="px-1 text-foreground/30 text-[12px]">…</span>
+                  <span
+                    key={`ellipsis-${i}`}
+                    className="px-1 text-foreground/30 text-[12px]"
+                  >
+                    …
+                  </span>
                 ) : (
                   <button
                     key={p}
@@ -522,7 +659,7 @@ export default function AccessControlPage() {
                   >
                     {p}
                   </button>
-                )
+                ),
               )}
 
               <button
@@ -537,7 +674,11 @@ export default function AccessControlPage() {
               {/* Page size */}
               <div className="relative ml-2">
                 <button
-                  onClick={(e) => { e.stopPropagation(); setPageSizeOpen((o) => !o); setFilterOpen(false); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPageSizeOpen((o) => !o);
+                    setFilterOpen(false);
+                  }}
                   className="flex items-center gap-1.5 px-3 h-8 rounded-lg text-[12px] bg-card border border-border text-foreground/70 hover:bg-accent-subtle transition-colors"
                 >
                   {pageSize} / page
@@ -551,7 +692,11 @@ export default function AccessControlPage() {
                     {PAGE_SIZE_OPTIONS.map((size) => (
                       <button
                         key={size}
-                        onClick={() => { setPageSize(size); setPage(1); setPageSizeOpen(false); }}
+                        onClick={() => {
+                          setPageSize(size);
+                          setPage(1);
+                          setPageSizeOpen(false);
+                        }}
                         className={`w-full text-left px-3 py-1.5 rounded text-[12px] transition-colors ${
                           size === pageSize
                             ? "bg-primary/10 text-primary"
@@ -576,7 +721,15 @@ export default function AccessControlPage() {
 // COMPONENTS
 // ============================================
 
-function TabPill({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+function TabPill({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
   return (
     <button
       onClick={onClick}
@@ -585,17 +738,29 @@ function TabPill({ active, onClick, label }: { active: boolean; onClick: () => v
       }`}
     >
       {label}
-      {active && <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-primary rounded-t" />}
+      {active && (
+        <span className="absolute left-0 right-0 -bottom-px h-[2px] bg-primary rounded-t" />
+      )}
     </button>
   );
 }
 
-function FilterOption({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function FilterOption({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
       className={`w-full flex items-center justify-between px-3 py-1.5 rounded text-[12px] transition-colors ${
-        active ? "bg-primary/10 text-primary" : "text-foreground/70 hover:bg-accent-subtle"
+        active
+          ? "bg-primary/10 text-primary"
+          : "text-foreground/70 hover:bg-accent-subtle"
       }`}
     >
       {label}
@@ -624,7 +789,9 @@ function UserRow({
   onToggleAccess: () => void;
 }) {
   const permissions: string[] = on
-    ? tab === "compliance" ? ["Read", "Trade"] : ["Read", "Trade", "Withdraw"]
+    ? tab === "compliance"
+      ? ["Read", "Trade"]
+      : ["Read", "Trade", "Withdraw"]
     : ["Read Only"];
 
   return (
@@ -636,10 +803,14 @@ function UserRow({
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="text-[13px] font-medium text-foreground truncate">{merchant.name}</span>
+            <span className="text-[13px] font-medium text-foreground truncate">
+              {merchant.name}
+            </span>
             <span
               className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                merchant.isOnline ? "bg-[var(--color-success)]" : "bg-foreground/15"
+                merchant.isOnline
+                  ? "bg-[var(--color-success)]"
+                  : "bg-foreground/15"
               }`}
               title={merchant.isOnline ? "Online" : "Offline"}
             />
@@ -652,8 +823,12 @@ function UserRow({
 
       {/* Details */}
       <div className="flex items-center gap-3 text-[11px] text-foreground/55 font-mono">
-        <span className="tabular-nums">{formatCount(merchant.trades)} trades</span>
-        <span className="tabular-nums">{formatCrypto(merchant.volume, { decimals: 0 })} vol</span>
+        <span className="tabular-nums">
+          {formatCount(merchant.trades)} trades
+        </span>
+        <span className="tabular-nums">
+          {formatCrypto(merchant.volume, { decimals: 0 })} vol
+        </span>
       </div>
 
       {/* Permissions */}
@@ -671,7 +846,7 @@ function UserRow({
       {/* Status */}
       <div>
         {on ? (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-medium bg-primary/15 border border-primary/30 text-primary">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-medium bg-[var(--color-success)]/15 border border-[var(--color-success)]/30 text-[var(--color-success)]">
             <Eye className="w-3 h-3" />
             {enabledLabel}
           </span>
@@ -684,9 +859,11 @@ function UserRow({
       </div>
 
       {/* Last Active */}
-      <div className={`text-[11px] font-mono tabular-nums ${
-        on ? "text-[var(--color-success)]/70" : "text-foreground/40"
-      }`}>
+      <div
+        className={`text-[11px] font-mono tabular-nums ${
+          on ? "text-[var(--color-success)]/70" : "text-foreground/40"
+        }`}
+      >
         {formatRelativeAgo(merchant.lastSeenAt)}
       </div>
 
