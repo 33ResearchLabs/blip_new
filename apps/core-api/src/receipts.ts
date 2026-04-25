@@ -15,6 +15,7 @@ import {
   queryOne,
   logger,
 } from 'settlement-core';
+import { pusherNotifyChatMessageNew, pusherNotifyReceiptUpdated } from './pusher';
 
 // ── Status priority map ─────────────────────────────────────────
 // Higher number = further in the lifecycle.  "cancelled" is a
@@ -142,6 +143,17 @@ async function resolveParties(order: OrderForReceipt, actorId: string): Promise<
  */
 export async function createOrderReceipt(orderId: string, order: OrderForReceipt, actorId: string): Promise<void> {
   try {
+    logger.info('[Receipt][debug] createOrderReceipt invoked', {
+      orderId,
+      orderNumber: order.order_number,
+      type: order.type,
+      status: order.status,
+      actorId,
+      userId: order.user_id,
+      merchantId: order.merchant_id,
+      buyerMerchantId: order.buyer_merchant_id,
+    });
+
     // Pre-check: verify the order still exists before we do expensive lookups
     // and an INSERT that would fail the FK constraint. Orders can be deleted
     // or rolled back between the time the job was enqueued and now, leaving
@@ -157,21 +169,36 @@ export async function createOrderReceipt(orderId: string, order: OrderForReceipt
     }
 
     const parties = await resolveParties(order, actorId);
+    logger.info('[Receipt][debug] resolveParties result', {
+      orderId,
+      creatorType: parties.creator_type,
+      creatorId: parties.creator_id,
+      creatorName: parties.creator_name,
+      acceptorType: parties.acceptor_type,
+      acceptorId: parties.acceptor_id,
+      acceptorName: parties.acceptor_name,
+    });
 
     // Defer the snapshot when the counterparty isn't yet identified.
-    // Happens when a merchant creates a broadcast order pre-escrowed: the
-    // placeholder user + null buyer_merchant_id collapses both sides onto
-    // the creator merchant. Writing the row now (with ON CONFLICT DO NOTHING
-    // downstream) would freeze a self-referential receipt that the later
-    // ACCEPTED event cannot overwrite. Return without inserting — the ACCEPTED
-    // listener will re-run this path with the real counterparty as actorId.
-    if (
-      parties.creator_type === parties.acceptor_type &&
-      parties.creator_id === parties.acceptor_id
-    ) {
-      logger.info('[Receipt] Deferring receipt — counterparty not yet identified', {
+    // Two collapse modes both produce a self-referential receipt that the
+    // later ACCEPTED event cannot overwrite (ON CONFLICT DO NOTHING):
+    //   1. M2M broadcast pre-escrowed: creator_type=acceptor_type='merchant',
+    //      creator_id=acceptor_id (placeholder user + null buyer_merchant_id
+    //      collapses both sides onto the creator merchant).
+    //   2. User-initiated SELL broadcast: creator_type='user',
+    //      acceptor_type='merchant', BUT creator_id=acceptor_id=user_id
+    //      because the user-branch of resolveParties passes actorId (which is
+    //      the user's user_id when no merchant was pre-specified) into the
+    //      merchant lookup, which returns null.
+    // The shared signature is `creator_id === acceptor_id` — types may differ.
+    // Defer; the ACCEPTED listener will re-run with the real merchant as actorId.
+    if (parties.creator_id === parties.acceptor_id) {
+      logger.info('[Receipt][debug] GUARD HIT — deferring receipt (creator==acceptor)', {
         orderId,
         creatorId: parties.creator_id,
+        creatorType: parties.creator_type,
+        acceptorType: parties.acceptor_type,
+        acceptorName: parties.acceptor_name,
       });
       return;
     }
@@ -208,9 +235,15 @@ export async function createOrderReceipt(orderId: string, order: OrderForReceipt
     );
 
     if (result.length === 0) {
-      logger.info('[Receipt] Receipt already exists (ON CONFLICT), skipping', { orderId });
+      logger.info('[Receipt][debug] ON CONFLICT — receipt already exists, skipping INSERT', { orderId });
       return;
     }
+    logger.info('[Receipt][debug] INSERT succeeded', {
+      orderId,
+      orderNumber: order.order_number,
+      creatorName: parties.creator_name,
+      acceptorName: parties.acceptor_name,
+    });
 
     // Insert receipt message into chat for both parties to see.
     // Stores structured data in receipt_data JSONB column with a human-readable
@@ -237,11 +270,30 @@ export async function createOrderReceipt(orderId: string, order: OrderForReceipt
     const receiptText = `Order Receipt #${order.order_number}`;
 
     // Insert into order chat (chat_messages) — visible to user in ChatViewScreen
-    await dbQuery(
+    const cmRes = await dbQuery<{ id: string; created_at: Date }>(
       `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type, receipt_data)
-       VALUES ($1, $2, $3, $4, 'receipt', $5::jsonb)`,
+       VALUES ($1, $2, $3, $4, 'receipt', $5::jsonb)
+       RETURNING id, created_at`,
       [orderId, parties.acceptor_type, parties.acceptor_id, receiptText, receiptData]
     );
+
+    // Real-time push so connected clients see the receipt without refreshing.
+    // Without this trigger, the receipt only appears after the user reloads the
+    // order chat (the GET re-fetches chat_messages).
+    if (cmRes.length > 0) {
+      pusherNotifyChatMessageNew({
+        messageId: cmRes[0].id,
+        orderId,
+        senderType: parties.acceptor_type,
+        senderId: parties.acceptor_id,
+        content: receiptText,
+        messageType: 'receipt',
+        createdAt: new Date(cmRes[0].created_at).toISOString(),
+        userId: order.user_id,
+        merchantId: order.merchant_id,
+        buyerMerchantId: order.buyer_merchant_id,
+      });
+    }
 
     // Insert a single row into direct_messages — visible to both parties in DirectChatView.
     // Read status is tracked per-participant in dm_read_status.
@@ -299,6 +351,12 @@ export async function updateOrderReceipt(
     expired_at?: boolean;
   }
 ): Promise<boolean> {
+  logger.info('[Receipt][debug] updateOrderReceipt invoked', {
+    orderId,
+    newStatus,
+    fields: fields ? Object.keys(fields).filter((k) => (fields as Record<string, unknown>)[k] != null) : [],
+  });
+
   // ── Build the allowed-current-statuses list ───────────────────
   // Only statuses with a strictly lower priority may be overwritten.
   const newPriority = STATUS_PRIORITY[newStatus] ?? 0;
@@ -365,12 +423,91 @@ export async function updateOrderReceipt(
   );
 
   if (result.length === 0) {
-    logger.info('[Receipt] Update skipped (terminal or not a forward transition)', {
-      orderId, newStatus,
+    logger.info('[Receipt][debug] UPDATE skipped (terminal/no row/not forward)', {
+      orderId,
+      newStatus,
+      allowedCurrent,
     });
     return false;
   }
 
-  logger.info('[Receipt] Updated order receipt', { orderId, newStatus });
+  logger.info('[Receipt][debug] UPDATE applied', { orderId, newStatus });
+
+  // Sync the JSONB snapshot stored in chat_messages.receipt_data and
+  // direct_messages.receipt_data so the ReceiptCard's fallback (data.status)
+  // matches the order's live status. Without this, a refresh would still
+  // render the frozen-at-insert status (e.g. "Accepted") even after the
+  // canonical order_receipts row was updated.
+  //
+  // We update status, updated_at, and any timestamp fields the caller flagged.
+  // Each is added to a single jsonb_build_object so the merge is one statement.
+  try {
+    const setProps: Record<string, unknown> = {
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    };
+    if (fields?.escrowed_at) setProps.escrowed_at = setProps.updated_at;
+    if (fields?.payment_sent_at) setProps.payment_sent_at = setProps.updated_at;
+    if (fields?.completed_at) setProps.completed_at = setProps.updated_at;
+    if (fields?.cancelled_at) setProps.cancelled_at = setProps.updated_at;
+    if (fields?.expired_at) setProps.expired_at = setProps.updated_at;
+
+    const setJson = JSON.stringify(setProps);
+    await dbQuery(
+      `UPDATE chat_messages
+         SET receipt_data = receipt_data || $2::jsonb
+       WHERE order_id = $1 AND message_type = 'receipt'`,
+      [orderId, setJson],
+    );
+    await dbQuery(
+      `UPDATE direct_messages
+         SET receipt_data = receipt_data || $2::jsonb
+       WHERE message_type = 'receipt'
+         AND receipt_data->>'order_number' = (SELECT order_number FROM orders WHERE id = $1)`,
+      [orderId, setJson],
+    );
+    logger.info('[Receipt][debug] JSONB snapshots synced', { orderId, newStatus });
+  } catch (jsonbErr) {
+    // Don't fail the whole update if JSONB sync fails — the canonical row is
+    // already updated. Log for visibility.
+    logger.warn('[Receipt] JSONB snapshot sync failed (canonical row was updated)', {
+      orderId, newStatus, error: jsonbErr instanceof Error ? jsonbErr.message : String(jsonbErr),
+    });
+  }
+
+  // Real-time push so connected clients update the receipt card without
+  // refreshing. The frontend should listen for `chat:receipt-updated` on the
+  // order channel and merge the patch into the visible receipt.
+  try {
+    const orderRow = await queryOne<{ order_number: string; user_id: string; merchant_id: string | null; buyer_merchant_id: string | null }>(
+      'SELECT order_number, user_id, merchant_id, buyer_merchant_id FROM orders WHERE id = $1',
+      [orderId],
+    );
+    if (orderRow) {
+      pusherNotifyReceiptUpdated({
+        orderId,
+        orderNumber: orderRow.order_number,
+        newStatus,
+        fields: {
+          escrowed_at: fields?.escrowed_at ? true : undefined,
+          payment_sent_at: fields?.payment_sent_at ? true : undefined,
+          completed_at: fields?.completed_at ? true : undefined,
+          cancelled_at: fields?.cancelled_at ? true : undefined,
+          expired_at: fields?.expired_at ? true : undefined,
+          escrow_tx_hash: fields?.escrow_tx_hash ?? null,
+          release_tx_hash: fields?.release_tx_hash ?? null,
+          refund_tx_hash: fields?.refund_tx_hash ?? null,
+        },
+        userId: orderRow.user_id,
+        merchantId: orderRow.merchant_id,
+        buyerMerchantId: orderRow.buyer_merchant_id,
+      });
+    }
+  } catch (pushErr) {
+    logger.warn('[Receipt] receipt-updated push failed', {
+      orderId, error: pushErr instanceof Error ? pushErr.message : String(pushErr),
+    });
+  }
+
   return true;
 }

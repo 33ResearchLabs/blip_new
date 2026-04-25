@@ -184,6 +184,41 @@ export async function GET(request: NextRequest) {
       params.slice(0, params.length - 2)
     );
 
+    // Aggregate platform stats (unfiltered, for the summary cards)
+    const summary = await queryOne<{
+      total_users: string;
+      active_users: string;
+      verified_users: string;
+      total_volume: string;
+      total_trades: string;
+      total_users_prev: string;
+      total_volume_prev: string;
+      total_trades_prev: string;
+    }>(`
+      SELECT
+        COUNT(*)::text as total_users,
+        COUNT(*) FILTER (WHERE updated_at >= NOW() - INTERVAL '30 days')::text as active_users,
+        COUNT(*) FILTER (WHERE kyc_status = 'verified')::text as verified_users,
+        COALESCE(SUM(total_volume), 0)::text as total_volume,
+        COALESCE(SUM(total_trades), 0)::text as total_trades,
+        COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '30 days')::text as total_users_prev,
+        COALESCE(SUM(total_volume) FILTER (WHERE created_at < NOW() - INTERVAL '30 days'), 0)::text as total_volume_prev,
+        COALESCE(SUM(total_trades) FILTER (WHERE created_at < NOW() - INTERVAL '30 days'), 0)::text as total_trades_prev
+      FROM users
+    `);
+
+    const calcDelta = (current: number, prev: number) =>
+      prev > 0 ? ((current - prev) / prev) * 100 : 0;
+
+    const totalUsers = parseInt(summary?.total_users || '0');
+    const activeUsers = parseInt(summary?.active_users || '0');
+    const verifiedUsers = parseInt(summary?.verified_users || '0');
+    const totalVolume = parseFloat(summary?.total_volume || '0');
+    const totalTrades = parseInt(summary?.total_trades || '0');
+    const totalUsersPrev = parseInt(summary?.total_users_prev || '0');
+    const totalVolumePrev = parseFloat(summary?.total_volume_prev || '0');
+    const totalTradesPrev = parseInt(summary?.total_trades_prev || '0');
+
     const formattedUsers = users.map((user) => ({
       id: user.id,
       username: user.username,
@@ -216,6 +251,16 @@ export async function GET(request: NextRequest) {
       total: parseInt(countResult?.count || '0'),
       limit,
       offset,
+      summary: {
+        totalUsers,
+        activeUsers,
+        verifiedUsers,
+        totalVolume,
+        totalTrades,
+        totalUsersDelta: calcDelta(totalUsers, totalUsersPrev),
+        totalVolumeDelta: calcDelta(totalVolume, totalVolumePrev),
+        totalTradesDelta: calcDelta(totalTrades, totalTradesPrev),
+      },
     });
   } catch (error) {
     console.error('Error fetching admin users:', error);

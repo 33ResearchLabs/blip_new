@@ -1175,6 +1175,14 @@ export async function updateOrderStatus(
 
         // Create order receipt snapshot
         try {
+          logger.info('[Receipt][debug][settle] completion-path receipt write starting', {
+            orderId,
+            orderNumber: updatedOrder.order_number,
+            type: updatedOrder.type,
+            userId: updatedOrder.user_id,
+            merchantId: updatedOrder.merchant_id,
+            buyerMerchantId: updatedOrder.buyer_merchant_id,
+          });
           // Fetch creator (user) and acceptor (merchant) names
           const creatorRow = await client.query(
             'SELECT name, username FROM users WHERE id = $1',
@@ -1187,6 +1195,14 @@ export async function updateOrderStatus(
           const creatorName = creatorRow.rows[0]?.name || creatorRow.rows[0]?.username || null;
           const acceptorName = acceptorRow.rows[0]?.display_name || null;
           const acceptorWallet = acceptorRow.rows[0]?.wallet_address || updatedOrder.acceptor_wallet_address || null;
+          logger.info('[Receipt][debug][settle] resolved naive party names', {
+            orderId,
+            creatorName,
+            acceptorName,
+            creatorType: updatedOrder.buyer_merchant_id ? 'merchant' : 'user',
+            creatorId: updatedOrder.buyer_merchant_id || updatedOrder.user_id,
+            acceptorId: updatedOrder.merchant_id,
+          });
 
           await client.query(
             `INSERT INTO order_receipts (
@@ -1239,9 +1255,9 @@ export async function updateOrderStatus(
               updatedOrder.payment_sent_at,
             ]
           );
-          logger.info('Order receipt created', { orderId, orderNumber: updatedOrder.order_number });
+          logger.info('[Receipt][debug][settle] completion-path INSERT/UPDATE done', { orderId, orderNumber: updatedOrder.order_number });
         } catch (receiptErr) {
-          logger.warn('Failed to create order receipt', { orderId, error: receiptErr });
+          logger.warn('[Receipt][debug][settle] completion-path write failed', { orderId, error: receiptErr });
         }
 
         // Record reputation events for order completion
@@ -1626,6 +1642,54 @@ async function insertReceiptForClaim(
       order.escrowed_at || null,
     ],
   );
+
+  // Insert the receipt-card chat messages so the receipt is visible in chat.
+  // Without these, the canonical order_receipts row exists but no UI artifact
+  // appears in the order chat / direct messages — observed bug for BEED.
+  // Mirrors core-api/src/receipts.ts:267-291 exactly so the snapshot shape is
+  // consistent across both write paths.
+  const receiptData = JSON.stringify({
+    order_number: order.order_number,
+    order_type: order.type,
+    payment_method: order.payment_method,
+    crypto_amount: order.crypto_amount,
+    crypto_currency: order.crypto_currency,
+    fiat_amount: order.fiat_amount,
+    fiat_currency: order.fiat_currency,
+    rate: order.rate,
+    platform_fee: order.platform_fee || 0,
+    creator_type: creatorType,
+    creator_name: creatorName,
+    acceptor_type: 'merchant',
+    acceptor_name: acceptorName,
+    status: order.status,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
+  const receiptText = `Order Receipt #${order.order_number}`;
+
+  await client.query(
+    `INSERT INTO chat_messages (order_id, sender_type, sender_id, content, message_type, receipt_data)
+     VALUES ($1, $2, $3, $4, 'receipt', $5::jsonb)`,
+    [order.id, 'merchant', claimingMerchantId, receiptText, receiptData],
+  );
+
+  const dmRes = await client.query(
+    `INSERT INTO direct_messages (sender_type, sender_id, recipient_type, recipient_id, content, message_type, receipt_data)
+     VALUES ($1, $2, $3, $4, $5, 'receipt', $6::jsonb)
+     RETURNING id`,
+    ['merchant', claimingMerchantId, creatorType, creatorId, receiptText, receiptData],
+  );
+  if (dmRes.rows.length > 0) {
+    const dmId = (dmRes.rows[0] as { id: string }).id;
+    await client.query(
+      `INSERT INTO dm_read_status (message_id, actor_id, is_read, read_at) VALUES
+         ($1, $2, true,  NOW()),
+         ($1, $3, false, NULL)
+       ON CONFLICT DO NOTHING`,
+      [dmId, claimingMerchantId, creatorId],
+    );
+  }
 }
 
 /**

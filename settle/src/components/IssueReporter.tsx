@@ -34,6 +34,7 @@ import {
   Paperclip,
   Send,
   Sparkles,
+  Upload,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -51,6 +52,36 @@ const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024; // 25MB
 const ACCEPTED_MIMES =
   "image/*,video/mp4,video/webm,video/quicktime,text/plain,application/json,application/pdf";
+
+// Multi-screenshot caps. Mirrors the server (api/issues/create.ts) and
+// migration 109 — keep the three in sync.
+const MAX_SCREENSHOTS = 5;
+const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024; // 5MB per the spec
+const SCREENSHOT_ACCEPTED_MIMES = "image/png,image/jpeg,image/webp";
+
+// One screenshot entry in the multi-shot list. `source` is the raw
+// dataUrl (capture or upload); `annotated` is the overlay produced by
+// the IssueAnnotator the next time it exports — null until the user
+// has drawn anything.
+interface ShotEntry {
+  id: string;
+  source: string;
+  annotated: string | null;
+  type: "screenshot" | "upload";
+  mime?: string;
+  size_bytes?: number;
+}
+
+function newShotId(): string {
+  if (
+    typeof globalThis !== "undefined" &&
+    (globalThis as { crypto?: { randomUUID?: () => string } }).crypto
+      ?.randomUUID
+  ) {
+    return (globalThis as { crypto: { randomUUID: () => string } }).crypto.randomUUID();
+  }
+  return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
 
 interface Toast {
   variant: "success" | "error";
@@ -99,10 +130,12 @@ export function IssueReporter({
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<IssueCategory>("ui_bug");
   const [description, setDescription] = useState("");
-  const [screenshot, setScreenshot] = useState<string | null>(null);
-  const [annotatedScreenshot, setAnnotatedScreenshot] = useState<string | null>(
-    null,
-  );
+  // Multi-screenshot state. Each entry carries its source (raw capture or
+  // uploaded file) and an optional annotated overlay produced by the
+  // IssueAnnotator. The submit path prefers `annotated` and falls back
+  // to `source` when no annotation has been made yet.
+  const [shots, setShots] = useState<ShotEntry[]>([]);
+  const [selectedShotIdx, setSelectedShotIdx] = useState(0);
   const [attachments, setAttachments] = useState<AttachmentInput[]>([]);
   const [toast, setToast] = useState<Toast | null>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -110,6 +143,11 @@ export function IssueReporter({
   // hide the modal, show a fullscreen drag-to-select overlay, and feed
   // the chosen rectangle into captureScreenshot(region).
   const [regionPicking, setRegionPicking] = useState(false);
+
+  // Clamp selection if the array shrinks beneath the current index.
+  const safeSelectedIdx =
+    shots.length === 0 ? -1 : Math.min(selectedShotIdx, shots.length - 1);
+  const currentShot = safeSelectedIdx >= 0 ? shots[safeSelectedIdx] : null;
 
   // Drag state for the floating trigger. `dragPos` null = use default
   // Tailwind corner positioning; once set, we pin via inline left/top so
@@ -130,6 +168,10 @@ export function IssueReporter({
   const justDraggedRef = useRef(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Dedicated picker for the "Upload" capture mode — kept separate from
+  // the attachments file input so the accept= filter and validation
+  // (image-only, ≤ 5MB, ≤ MAX_SCREENSHOTS) don't bleed across.
+  const screenshotInputRef = useRef<HTMLInputElement | null>(null);
 
   // Expose this instance's open() globally so external triggers (e.g.
   // a header icon) can open the reporter. Gated by `authed` so logged-
@@ -148,30 +190,117 @@ export function IssueReporter({
     setTitle("");
     setCategory("ui_bug");
     setDescription("");
-    setScreenshot(null);
-    setAnnotatedScreenshot(null);
+    setShots([]);
+    setSelectedShotIdx(0);
     setAttachments([]);
   }, []);
 
-  // Seed the preview with the pre-captured shot that open() took before
-  // the modal mounted (per the capture spec: "Screenshot must be taken
-  // before opening the issue modal"). If it's missing (e.g. capture
-  // failed pre-open), the user can still click Retake inside the modal.
+  /**
+   * Append a new entry to the shot list and select it. Caps at
+   * MAX_SCREENSHOTS — over-cap calls toast and no-op so the user
+   * understands why nothing happened. Returns the new entry's index
+   * (or -1 if at cap) for callers that want to chain follow-up work.
+   */
+  const addShot = useCallback(
+    (
+      source: string,
+      type: ShotEntry["type"],
+      meta?: { mime?: string; size_bytes?: number },
+    ): number => {
+      let appendedIdx = -1;
+      setShots((prev) => {
+        if (prev.length >= MAX_SCREENSHOTS) {
+          setToast({
+            variant: "error",
+            message: `Max ${MAX_SCREENSHOTS} screenshots — remove one to add another`,
+          });
+          return prev;
+        }
+        const next: ShotEntry[] = [
+          ...prev,
+          {
+            id: newShotId(),
+            source,
+            annotated: null,
+            type,
+            ...(meta?.mime ? { mime: meta.mime } : {}),
+            ...(typeof meta?.size_bytes === "number"
+              ? { size_bytes: meta.size_bytes }
+              : {}),
+          },
+        ];
+        appendedIdx = next.length - 1;
+        return next;
+      });
+      // Auto-select the new shot so the annotator switches to it.
+      setSelectedShotIdx((prevIdx) =>
+        appendedIdx >= 0 ? appendedIdx : prevIdx,
+      );
+      return appendedIdx;
+    },
+    [],
+  );
+
+  const removeShot = useCallback((idx: number) => {
+    setShots((prev) => {
+      if (idx < 0 || idx >= prev.length) return prev;
+      const next = prev.slice(0, idx).concat(prev.slice(idx + 1));
+      return next;
+    });
+    setSelectedShotIdx((prev) => {
+      // Shift the selected index left if we removed something at or
+      // before it. Clamp into the new bounds.
+      if (idx < prev) return Math.max(0, prev - 1);
+      return prev;
+    });
+  }, []);
+
+  const updateAnnotation = useCallback(
+    (idx: number, annotatedDataUrl: string) => {
+      setShots((prev) => {
+        if (idx < 0 || idx >= prev.length) return prev;
+        if (prev[idx].annotated === annotatedDataUrl) return prev;
+        const next = prev.slice();
+        next[idx] = { ...next[idx], annotated: annotatedDataUrl };
+        return next;
+      });
+    },
+    [],
+  );
+
+  // Seed with the pre-captured open() shot — but only on the very first
+  // open of this session. After that, the user owns the list.
+  const initialShotConsumedRef = useRef(false);
   useEffect(() => {
-    if (!reporter.isOpen) return;
-    if (screenshot || annotatedScreenshot) return;
+    if (!reporter.isOpen) {
+      // Reset the consumption flag when the modal closes so the next
+      // open() seeds again.
+      initialShotConsumedRef.current = false;
+      return;
+    }
+    if (initialShotConsumedRef.current) return;
+    if (shots.length > 0) {
+      initialShotConsumedRef.current = true;
+      return;
+    }
     if (reporter.initialShot) {
-      setScreenshot(reporter.initialShot);
+      initialShotConsumedRef.current = true;
+      addShot(reporter.initialShot, "screenshot");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reporter.isOpen, reporter.initialShot]);
 
   const handleRecapture = useCallback(async () => {
-    setScreenshot(null);
-    setAnnotatedScreenshot(null);
+    if (shots.length >= MAX_SCREENSHOTS) {
+      setToast({
+        variant: "error",
+        message: `Max ${MAX_SCREENSHOTS} screenshots — remove one to add another`,
+      });
+      return;
+    }
     const shot = await reporter.captureScreenshot();
-    if (shot) setScreenshot(shot);
-  }, [reporter]);
+    if (shot) addShot(shot, "screenshot");
+  }, [reporter, shots.length, addShot]);
 
   /**
    * Region mode: hide the current modal, mount the RegionSelector, wait
@@ -182,10 +311,15 @@ export function IssueReporter({
    * inputs are preserved.
    */
   const handleRegionCapture = useCallback(() => {
-    setScreenshot(null);
-    setAnnotatedScreenshot(null);
+    if (shots.length >= MAX_SCREENSHOTS) {
+      setToast({
+        variant: "error",
+        message: `Max ${MAX_SCREENSHOTS} screenshots — remove one to add another`,
+      });
+      return;
+    }
     setRegionPicking(true);
-  }, []);
+  }, [shots.length]);
 
   const handleRegionPicked = useCallback(
     async (region: Region) => {
@@ -197,14 +331,61 @@ export function IssueReporter({
         requestAnimationFrame(() => requestAnimationFrame(() => r())),
       );
       const shot = await reporter.captureScreenshot(region);
-      if (shot) setScreenshot(shot);
+      if (shot) addShot(shot, "screenshot");
     },
-    [reporter],
+    [reporter, addShot],
   );
 
   const handleRegionCancel = useCallback(() => {
     setRegionPicking(false);
   }, []);
+
+  /**
+   * Manual upload mode. Reads the picked file as a dataUrl and adds it
+   * to shots[] with type='upload' so the API/admin can render it as a
+   * user-supplied image instead of an in-app capture.
+   */
+  const handleScreenshotPick = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files || []);
+      e.target.value = "";
+      for (const file of files) {
+        if (shots.length >= MAX_SCREENSHOTS) {
+          setToast({
+            variant: "error",
+            message: `Max ${MAX_SCREENSHOTS} screenshots — remove one to add another`,
+          });
+          break;
+        }
+        if (!file.type.startsWith("image/")) {
+          setToast({
+            variant: "error",
+            message: `"${file.name}" is not an image`,
+          });
+          continue;
+        }
+        if (file.size > MAX_SCREENSHOT_BYTES) {
+          setToast({
+            variant: "error",
+            message: `"${file.name}" exceeds 5MB limit`,
+          });
+          continue;
+        }
+        const dataUrl = await new Promise<string | null>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(file);
+        });
+        if (!dataUrl) continue;
+        addShot(dataUrl, "upload", {
+          mime: file.type || undefined,
+          size_bytes: file.size,
+        });
+      }
+    },
+    [shots.length, addShot],
+  );
 
   // Restore saved drag position on mount. Clamp to the current viewport
   // in case the user resized the window since last session — otherwise
@@ -362,11 +543,24 @@ export function IssueReporter({
       setToast({ variant: "error", message: "Description is required" });
       return;
     }
+    // Build the v2 screenshots[] payload from shots, preferring the
+    // annotated overlay when present. screenshotDataUrl is left null
+    // because the v2 list is the canonical source — the hook still
+    // accepts it for legacy callers but we no longer populate it here.
+    const screenshotsPayload = shots.map((s) => ({
+      dataUrl: s.annotated || s.source,
+      type: s.type,
+      ...(s.mime ? { mime: s.mime } : {}),
+      ...(typeof s.size_bytes === "number"
+        ? { size_bytes: s.size_bytes }
+        : {}),
+    }));
     const result = await reporter.submit({
       title: title.trim(),
       category,
       description: description.trim(),
-      screenshotDataUrl: annotatedScreenshot || screenshot,
+      screenshotDataUrl: null,
+      screenshots: screenshotsPayload,
       attachments,
     });
     if (result.ok) {
@@ -389,8 +583,7 @@ export function IssueReporter({
     title,
     description,
     category,
-    screenshot,
-    annotatedScreenshot,
+    shots,
     attachments,
     reporter,
     resetForm,
@@ -534,13 +727,34 @@ export function IssueReporter({
             <div className="flex-1 flex min-h-0">
               {/* ── Left column — screenshot + annotation ────────────── */}
               <div className="w-[62%] border-r border-border flex flex-col bg-foreground/[0.015]">
+                {/* Hidden screenshot file picker for the "Upload" mode.
+                    Separate from the attachments picker so the accept
+                    filter and 5MB cap stay scoped to image uploads. */}
+                <input
+                  ref={screenshotInputRef}
+                  type="file"
+                  accept={SCREENSHOT_ACCEPTED_MIMES}
+                  multiple
+                  className="hidden"
+                  onChange={handleScreenshotPick}
+                />
+
                 <div className="flex-1 min-h-0 px-5 pt-4 pb-2 flex flex-col">
-                  {/* Annotation canvas OR states */}
+                  {/* Annotation canvas OR states. The annotator is keyed
+                      by the selected shot's id so React fully unmounts
+                      and remounts when the user switches shots —
+                      otherwise the previous shot's annotation state
+                      would bleed into the new image. */}
                   <div className="flex-1 min-h-0 rounded-lg border border-border bg-black/40 overflow-hidden">
-                    {screenshot ? (
+                    {currentShot ? (
                       <IssueAnnotator
-                        source={screenshot}
-                        onExport={(dataUrl) => setAnnotatedScreenshot(dataUrl)}
+                        key={currentShot.id}
+                        source={currentShot.source}
+                        onExport={(dataUrl) => {
+                          if (safeSelectedIdx >= 0) {
+                            updateAnnotation(safeSelectedIdx, dataUrl);
+                          }
+                        }}
                       />
                     ) : reporter.capturingShot ? (
                       <div className="h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
@@ -564,7 +778,7 @@ export function IssueReporter({
                     ) : (
                       <div className="h-full flex flex-col items-center justify-center gap-2 text-[12px] text-foreground/50 p-6 text-center">
                         <div className="font-medium">
-                          No screenshot attached
+                          No screenshots attached
                         </div>
                         {reporter.captureError ? (
                           <div className="text-amber-300/80 max-w-md">
@@ -572,13 +786,76 @@ export function IssueReporter({
                           </div>
                         ) : (
                           <div className="text-foreground/40">
-                            You can still submit without one.
+                            Use Full / Region / Upload below to add up to{" "}
+                            {MAX_SCREENSHOTS}.
                           </div>
                         )}
                       </div>
                     )}
                   </div>
                 </div>
+
+                {/* Thumbnail strip — only shown once the user has at
+                    least one shot. Click a thumb to switch the
+                    annotator to that shot; X removes it. */}
+                {shots.length > 0 && (
+                  <div className="px-4 py-2 border-t border-border flex items-center gap-2 overflow-x-auto">
+                    {shots.map((shot, idx) => {
+                      const isSelected = idx === safeSelectedIdx;
+                      const preview = shot.annotated || shot.source;
+                      return (
+                        <div
+                          key={shot.id}
+                          className={`relative shrink-0 w-14 h-14 rounded-md overflow-hidden border transition group ${
+                            isSelected
+                              ? "border-amber-400 ring-2 ring-amber-400/30"
+                              : "border-border hover:border-foreground/30"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setSelectedShotIdx(idx)}
+                            className="absolute inset-0"
+                            title={`Screenshot ${idx + 1} of ${shots.length} — ${shot.type === "upload" ? "uploaded" : "captured"}`}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={preview}
+                              alt={`Screenshot ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </button>
+                          {/* Type badge: tiny dot for upload vs capture */}
+                          <span
+                            className={`absolute bottom-0.5 left-0.5 px-1 py-px rounded text-[8px] leading-none font-mono uppercase tracking-wide ${
+                              shot.type === "upload"
+                                ? "bg-sky-500/80 text-white"
+                                : "bg-amber-500/80 text-black"
+                            }`}
+                          >
+                            {shot.type === "upload" ? "U" : "C"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeShot(idx);
+                            }}
+                            className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                            title="Remove"
+                            aria-label="Remove screenshot"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {/* Counter slot — quick visual cap awareness */}
+                    <div className="text-[10px] text-foreground/40 font-mono shrink-0 ml-1">
+                      {shots.length}/{MAX_SCREENSHOTS}
+                    </div>
+                  </div>
+                )}
 
                 {/* Footer row — tip + capture mode picker */}
                 <div className="flex items-center justify-between px-4 py-2 border-t border-border gap-3">
@@ -592,9 +869,17 @@ export function IssueReporter({
                     <button
                       type="button"
                       onClick={handleRecapture}
-                      disabled={reporter.capturingShot || regionPicking}
+                      disabled={
+                        reporter.capturingShot ||
+                        regionPicking ||
+                        shots.length >= MAX_SCREENSHOTS
+                      }
                       className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-foreground/75 hover:bg-foreground/[0.08] hover:text-foreground/95 disabled:opacity-40 disabled:cursor-wait transition"
-                      title="Capture full page"
+                      title={
+                        shots.length >= MAX_SCREENSHOTS
+                          ? `Max ${MAX_SCREENSHOTS} screenshots`
+                          : "Capture full page"
+                      }
                     >
                       {reporter.capturingShot && !regionPicking ? (
                         <Loader2 size={11} className="animate-spin" />
@@ -606,12 +891,38 @@ export function IssueReporter({
                     <button
                       type="button"
                       onClick={handleRegionCapture}
-                      disabled={reporter.capturingShot || regionPicking}
+                      disabled={
+                        reporter.capturingShot ||
+                        regionPicking ||
+                        shots.length >= MAX_SCREENSHOTS
+                      }
                       className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-foreground/75 hover:bg-foreground/[0.08] hover:text-foreground/95 disabled:opacity-40 transition"
-                      title="Drag to select a region"
+                      title={
+                        shots.length >= MAX_SCREENSHOTS
+                          ? `Max ${MAX_SCREENSHOTS} screenshots`
+                          : "Drag to select a region"
+                      }
                     >
                       <Crop size={11} />
                       Region
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => screenshotInputRef.current?.click()}
+                      disabled={
+                        reporter.capturingShot ||
+                        regionPicking ||
+                        shots.length >= MAX_SCREENSHOTS
+                      }
+                      className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-foreground/75 hover:bg-foreground/[0.08] hover:text-foreground/95 disabled:opacity-40 transition"
+                      title={
+                        shots.length >= MAX_SCREENSHOTS
+                          ? `Max ${MAX_SCREENSHOTS} screenshots`
+                          : "Upload an image (PNG, JPG, WEBP, ≤ 5MB)"
+                      }
+                    >
+                      <Upload size={11} />
+                      Upload
                     </button>
                   </div>
                 </div>

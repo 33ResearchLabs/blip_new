@@ -28,6 +28,10 @@ import { startIdempotencyCleanupWorker, stopIdempotencyCleanupWorker } from './w
 import { startOutboxEventWorker, stopOutboxEventWorker } from './workers/outboxEventWorker';
 import { closeReceiptQueue } from './queues/receiptQueue';
 import { startReputationWorker, stopReputationWorker } from './workers/reputationWorker';
+import {
+  startReceiptReconciliationWorker,
+  stopReceiptReconciliationWorker,
+} from './workers/receiptReconciliationWorker';
 import { registerAllListeners } from './events';
 import { closePool, safeLog } from 'settlement-core';
 import { runPendingMigrations } from './migrationRunner';
@@ -182,6 +186,7 @@ try {
     startOutboxEventWorker();
     startReputationWorker();
     await startReceiptWorker();
+    startReceiptReconciliationWorker();
   }
 } catch (err) {
   fastify.log.error(err);
@@ -199,6 +204,7 @@ const shutdown = async (signal: string) => {
     stopIdempotencyCleanupWorker();
     stopOutboxEventWorker();
     stopReputationWorker();
+    stopReceiptReconciliationWorker();
     await stopReceiptWorker();
     await closeReceiptQueue();
     closeWebSocketServer();

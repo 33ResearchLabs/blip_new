@@ -181,6 +181,9 @@ export function MessageHistory({ merchantId, onOpenChat, onClose, refreshTrigger
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
           <input
             type="text"
+            name="search"
+            autoComplete="off"
+            maxLength={100}
             placeholder="Search messages..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Shield,
   Zap,
   XCircle,
   Search,
@@ -11,13 +10,29 @@ import {
   ChevronRight,
   Users,
   Star,
-  RefreshCw,
   LogOut,
-  AlertTriangle,
-  Clock,
+  Bell,
+  Activity,
+  CheckCircle,
+  Database,
+  TrendingUp,
+  Filter,
+  Upload,
+  Plus,
+  MoreHorizontal,
+  Crown,
+  Shield,
+  Diamond,
+  Flame,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import {
+  formatCount,
+  formatCrypto,
+  formatPercentage,
+} from "@/lib/format";
 
 // ============================================
 // TYPES
@@ -49,6 +64,17 @@ interface UserItem {
   updatedAt: string;
 }
 
+interface Summary {
+  totalUsers: number;
+  activeUsers: number;
+  verifiedUsers: number;
+  totalVolume: number;
+  totalTrades: number;
+  totalUsersDelta: number;
+  totalVolumeDelta: number;
+  totalTradesDelta: number;
+}
+
 type SortKey =
   | "volume" | "trades" | "rating" | "completed" | "cancelled"
   | "disputes_total" | "balance" | "reputation" | "newest" | "oldest" | "name";
@@ -57,24 +83,15 @@ type SortKey =
 // HELPERS
 // ============================================
 
-const PAGE_SIZE = 25;
+const PAGE_SIZES = [10, 25, 50, 100];
 
-const formatVolume = (v: number): string => {
+const formatVolumeShort = (v: number): string => {
   if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `$${(v / 1_000).toFixed(1)}K`;
-  return `$${v.toFixed(0)}`;
+  return `$${formatCrypto(v, { decimals: 0 })}`;
 };
 
-const formatTimeAgo = (dateStr: string | null) => {
-  if (!dateStr) return "—";
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h`;
-  return `${Math.floor(hrs / 24)}d`;
-};
+const formatVolumeFull = (v: number): string => `$${formatCount(Math.round(v))}`;
 
 const getKycStyle = (status: string) => {
   switch (status) {
@@ -87,6 +104,22 @@ const getKycStyle = (status: string) => {
     default:
       return "bg-card border-border text-foreground/40";
   }
+};
+
+// Per-user avatar variation (deterministic from id)
+const AVATAR_PALETTE = [
+  { Icon: Crown,    color: "text-[var(--color-warning)]/80", bg: "bg-[var(--color-warning)]/10 border-[var(--color-warning)]/20" },
+  { Icon: Diamond,  color: "text-primary/80",                bg: "bg-primary/10 border-primary/20" },
+  { Icon: Shield,   color: "text-[var(--color-info)]/80",    bg: "bg-[var(--color-info)]/10 border-[var(--color-info)]/20" },
+  { Icon: Zap,      color: "text-primary/80",                bg: "bg-primary/10 border-primary/20" },
+  { Icon: Sparkles, color: "text-[var(--color-warning)]/80", bg: "bg-[var(--color-warning)]/10 border-[var(--color-warning)]/20" },
+  { Icon: Flame,    color: "text-primary/80",                bg: "bg-primary/10 border-primary/20" },
+];
+
+const pickAvatar = (id: string) => {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  return AVATAR_PALETTE[Math.abs(hash) % AVATAR_PALETTE.length];
 };
 
 // ============================================
@@ -104,8 +137,8 @@ export default function AdminUsersPage() {
 
   const [users, setUsers] = useState<UserItem[]>([]);
   const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("volume");
@@ -115,7 +148,8 @@ export default function AdminUsersPage() {
   const [volumeTierFilter, setVolumeTierFilter] = useState("");
   const [ratingFilter, setRatingFilter] = useState("");
   const [page, setPage] = useState(0);
-  const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [pageSize, setPageSize] = useState(10);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const adminTokenRef = useRef<string | null>(null);
   adminTokenRef.current = adminToken;
@@ -167,9 +201,9 @@ export default function AdminUsersPage() {
   const fetchUsers = useCallback(async () => {
     const token = adminTokenRef.current;
     if (!token) return;
-    setIsRefreshing(true); setLoading(true);
+    setLoading(true);
     try {
-      const params = new URLSearchParams({ sort: sortBy, limit: String(PAGE_SIZE), offset: String(page * PAGE_SIZE) });
+      const params = new URLSearchParams({ sort: sortBy, limit: String(pageSize), offset: String(page * pageSize) });
       if (kycFilter) params.set("kyc", kycFilter);
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (riskFilter) params.set("risk", riskFilter);
@@ -179,14 +213,39 @@ export default function AdminUsersPage() {
 
       const res = await fetchWithAuth(`/api/admin/users?${params}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
-      if (data.success) { setUsers(data.data); setTotal(data.total || 0); setLastRefresh(new Date()); }
+      if (data.success) {
+        setUsers(data.data);
+        setTotal(data.total || 0);
+        if (data.summary) setSummary(data.summary);
+      }
     } catch (err) { console.error("Failed to fetch users:", err); }
-    finally { setLoading(false); setIsRefreshing(false); }
-  }, [sortBy, kycFilter, debouncedSearch, page, riskFilter, lastActiveFilter, volumeTierFilter, ratingFilter]);
+    finally { setLoading(false); }
+  }, [sortBy, kycFilter, debouncedSearch, page, pageSize, riskFilter, lastActiveFilter, volumeTierFilter, ratingFilter]);
 
   useEffect(() => { if (isAuthenticated) fetchUsers(); }, [isAuthenticated, fetchUsers]);
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const startIndex = page * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, total);
+  const allOnPageSelected = users.length > 0 && users.every((u) => selected.has(u.id));
+
+  const togglePageSelection = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) users.forEach((u) => next.delete(u.id));
+      else users.forEach((u) => next.add(u.id));
+      return next;
+    });
+  };
+
+  const toggleRow = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   // ── Loading ──
   if (!mounted || isCheckingSession) {
@@ -240,11 +299,14 @@ export default function AdminUsersPage() {
   // MAIN
   // ============================================
 
+  const activePct = summary && summary.totalUsers > 0 ? (summary.activeUsers / summary.totalUsers) * 100 : 0;
+  const verifiedPct = summary && summary.totalUsers > 0 ? (summary.verifiedUsers / summary.totalUsers) * 100 : 0;
+
   return (
-    <div className="hidden md:flex md:flex-col h-screen overflow-hidden">
+    <div className="hidden md:flex md:flex-col h-screen overflow-hidden bg-background">
 
       {/* ===== HEADER ===== */}
-      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border">
+      <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border shrink-0">
         <div className="h-[50px] flex items-center px-4 gap-3">
           <div className="flex items-center shrink-0">
             <Link href="/admin" className="flex items-center gap-2">
@@ -257,7 +319,8 @@ export default function AdminUsersPage() {
           <div className="flex items-center gap-2 mx-auto">
             <nav className="flex items-center gap-0.5 bg-card rounded-lg p-[3px]">
               <Link href="/admin" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Console</Link>
-              <Link href="/admin/live" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Live Feed</Link>              <Link href="/admin/access-control" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Access Control</Link>
+              <Link href="/admin/live" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Live Feed</Link>
+              <Link href="/admin/access-control" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Access Control</Link>
               <Link href="/admin/accounts" className="px-3 py-[5px] rounded-md text-[12px] font-medium bg-accent-subtle text-foreground transition-colors">Accounts</Link>
               <Link href="/admin/disputes" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Disputes</Link>
               <Link href="/admin/monitor" className="px-3 py-[5px] rounded-md text-[12px] font-medium text-foreground/40 hover:text-foreground/70 hover:bg-accent-subtle transition-colors">Monitor</Link>
@@ -266,15 +329,22 @@ export default function AdminUsersPage() {
             </nav>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-card border border-border">
-              <Users className="w-3 h-3 text-foreground/30" />
-              <span className="text-[9px] font-mono text-foreground/30">{total} users</span>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card border border-border">
+              <Users className="w-3.5 h-3.5 text-foreground/40" />
+              <span className="text-[11px] font-medium text-foreground/70 tabular-nums">{formatCount(summary?.totalUsers ?? total)} users</span>
             </div>
-            <span className="text-[9px] font-mono text-foreground/20 tabular-nums">{mounted ? lastRefresh.toLocaleTimeString() : "--:--:--"}</span>
-            <button onClick={fetchUsers} disabled={isRefreshing} className="p-2 rounded-lg transition-all bg-card hover:bg-accent-subtle border border-border">
-              <RefreshCw className={`w-[18px] h-[18px] text-foreground/40 ${isRefreshing ? "animate-spin" : ""}`} />
+            <button className="relative p-2 rounded-lg bg-card border border-border hover:bg-accent-subtle transition-colors" aria-label="Notifications">
+              <Bell className="w-[18px] h-[18px] text-foreground/50" />
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[var(--color-error)] text-[8px] font-bold text-foreground flex items-center justify-center tabular-nums">12</span>
             </button>
-            <div className="w-px h-6 bg-border mx-0.5" />
+            <div className="flex items-center gap-2 px-2 py-1 rounded-lg bg-card border border-border">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center text-[11px] font-bold text-foreground shrink-0">A</div>
+              <div className="hidden xl:flex flex-col leading-tight">
+                <span className="text-[11px] font-medium text-foreground/80">Admin User</span>
+                <span className="text-[8px] font-mono text-foreground/40 uppercase tracking-wider">Super Admin</span>
+              </div>
+              <ChevronDown className="w-3 h-3 text-foreground/30 hidden xl:block" />
+            </div>
             <button onClick={handleAdminLogout} className="p-2 rounded-lg hover:bg-[var(--color-error)]/10 transition-colors" title="Logout">
               <LogOut className="w-[18px] h-[18px] text-foreground/40" />
             </button>
@@ -283,307 +353,526 @@ export default function AdminUsersPage() {
       </header>
 
       {/* ===== CONTENT ===== */}
-      <div className="flex-1 overflow-hidden flex flex-col bg-background">
+      <div className="flex-1 overflow-y-auto scrollbar-hide">
+        <div className="p-3 flex flex-col gap-3">
 
-        {/* ── Stats Strip ── */}
-        <div className="flex items-center justify-between px-4 py-2.5 bg-card border-b border-section-divider text-[9px] font-mono relative overflow-hidden shrink-0">
-          <div className="absolute inset-0 shimmer pointer-events-none" />
-          <div className="flex items-center gap-4 relative z-10">
-            <div className="flex items-center gap-1.5">
-              <Users className="w-3 h-3 text-primary/60" />
-              <span className="text-primary/80 font-bold tracking-wide">USERS</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-foreground/25">TOTAL <span className="text-foreground/70 font-bold">{total}</span></span>
-            </div>
+          {/* ── Summary cards ── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+            <SummaryCard
+              label="Total Users"
+              value={summary != null ? formatCount(summary.totalUsers) : "—"}
+              meta={summary != null ? <DeltaText delta={summary.totalUsersDelta} /> : null}
+              icon={<Users className="w-4 h-4" />}
+              tone="primary"
+            />
+            <SummaryCard
+              label="Active Users"
+              value={summary != null ? formatCount(summary.activeUsers) : "—"}
+              meta={summary != null ? <PctText value={activePct} suffix="of total" tone="success" /> : null}
+              icon={<Activity className="w-4 h-4" />}
+              tone="primary"
+            />
+            <SummaryCard
+              label="Verified Users"
+              value={summary != null ? formatCount(summary.verifiedUsers) : "—"}
+              meta={summary != null ? <PctText value={verifiedPct} suffix="of total" tone="warning" /> : null}
+              icon={<CheckCircle className="w-4 h-4" />}
+              tone="success"
+            />
+            <SummaryCard
+              label="Total Volume"
+              value={summary != null ? formatVolumeFull(summary.totalVolume) : "—"}
+              meta={summary != null ? <DeltaText delta={summary.totalVolumeDelta} /> : null}
+              icon={<Database className="w-4 h-4" />}
+              tone="primary"
+            />
+            <SummaryCard
+              label="Total Trades"
+              value={summary != null ? formatCount(summary.totalTrades) : "—"}
+              meta={summary != null ? <DeltaText delta={summary.totalTradesDelta} /> : null}
+              icon={<TrendingUp className="w-4 h-4" />}
+              tone="primary"
+            />
           </div>
-        </div>
 
-        {/* ── Filters Row 1 ── */}
-        <div className="px-3 py-2 border-b border-section-divider flex flex-wrap items-center gap-2 shrink-0">
-          <div className="relative flex-1 min-w-[140px] max-w-[220px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-foreground/25" />
-            <input type="text" placeholder="Search name, email, wallet..." value={search} onChange={(e) => setSearch(e.target.value)}
-              maxLength={100}
-              className="w-full bg-card border border-border rounded-md pl-7 pr-2 py-1.5 text-[10px] text-foreground/70 font-mono placeholder:text-foreground/25 focus:border-border-strong focus:outline-none" />
-          </div>
+          {/* ── Filters / actions row ── */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[220px] max-w-[360px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-foreground/30" />
+              <input
+                type="text"
+                placeholder="Search by name, email, or wallet address..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                maxLength={100}
+                className="w-full bg-card border border-border rounded-lg pl-9 pr-3 py-2 text-[12px] text-foreground/80 placeholder:text-foreground/30 focus:border-border-strong focus:outline-none"
+              />
+            </div>
 
-          {/* KYC pills */}
-          <div className="flex gap-0.5 bg-card rounded-md p-0.5">
-            {(["", "none", "pending", "verified", "rejected"] as const).map((f) => (
-              <button key={f} onClick={() => { setKycFilter(f); setPage(0); }}
-                className={`px-2 py-1 text-[10px] font-mono rounded transition-colors ${
-                  kycFilter === f
-                    ? f === "rejected" ? "bg-[var(--color-error)]/15 text-[var(--color-error)] font-bold" :
-                      f === "verified" ? "bg-[var(--color-success)]/10 text-[var(--color-success)] font-bold" :
-                      f === "pending" ? "bg-[var(--color-warning)]/10 text-[var(--color-warning)] font-bold" :
-                      "bg-accent-subtle text-foreground/80"
-                    : "text-foreground/35 hover:text-foreground/60"
-                }`}>
-                {f === "" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+            <FilterSelect
+              label="Risk"
+              value={riskFilter}
+              onChange={(v) => { setRiskFilter(v); setPage(0); }}
+              options={[
+                { value: "", label: "All" },
+                { value: "high_dispute", label: "High Dispute (>10%)" },
+                { value: "high_cancel", label: "High Cancel (>20%)" },
+                { value: "zero_trades", label: "Zero Trades" },
+              ]}
+              accent={riskFilter ? "error" : "default"}
+            />
+
+            <FilterSelect
+              label="Status"
+              value={kycFilter}
+              onChange={(v) => { setKycFilter(v); setPage(0); }}
+              options={[
+                { value: "", label: "All" },
+                { value: "verified", label: "Verified" },
+                { value: "pending", label: "Pending" },
+                { value: "none", label: "None" },
+                { value: "rejected", label: "Rejected" },
+              ]}
+              accent={kycFilter === "verified" ? "success" : kycFilter === "pending" ? "warning" : kycFilter === "rejected" ? "error" : "default"}
+            />
+
+            <FilterSelect
+              label="Volume"
+              value={volumeTierFilter}
+              onChange={(v) => { setVolumeTierFilter(v); setPage(0); }}
+              options={[
+                { value: "", label: "All" },
+                { value: "0", label: "$0" },
+                { value: "1k", label: "<$1K" },
+                { value: "10k", label: "$1K–$10K" },
+                { value: "100k", label: "$10K+" },
+              ]}
+              accent={volumeTierFilter ? "success" : "default"}
+            />
+
+            <FilterSelect
+              label="Rating"
+              value={ratingFilter}
+              onChange={(v) => { setRatingFilter(v); setPage(0); }}
+              options={[
+                { value: "", label: "All" },
+                { value: "top", label: "4.5+ (Top)" },
+                { value: "high", label: "4.0–4.5" },
+                { value: "mid", label: "3.0–4.0" },
+                { value: "low", label: "<3.0" },
+                { value: "unrated", label: "Unrated" },
+              ]}
+              accent={ratingFilter ? "primary" : "default"}
+            />
+
+            <button
+              onClick={() => {
+                setRiskFilter(""); setKycFilter(""); setVolumeTierFilter(""); setRatingFilter(""); setLastActiveFilter("");
+                setPage(0);
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-card border border-border text-[12px] text-foreground/70 hover:bg-accent-subtle transition-colors"
+            >
+              <Filter className="w-3.5 h-3.5" />
+              Filters
+            </button>
+
+            <div className="ml-auto flex items-center gap-2">
+              <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-card border border-border text-[12px] text-foreground/70 hover:bg-accent-subtle transition-colors">
+                <Upload className="w-3.5 h-3.5" />
+                Export
               </button>
-            ))}
-          </div>
-
-          {/* Sort */}
-          <select value={sortBy} onChange={(e) => { setSortBy(e.target.value as SortKey); setPage(0); }}
-            className="bg-card border border-border rounded-md px-2 py-1 text-[10px] font-mono text-foreground/60 focus:outline-none cursor-pointer">
-            <option value="volume" className="bg-card-solid text-foreground">Volume</option>
-            <option value="trades" className="bg-card-solid text-foreground">Trades</option>
-            <option value="rating" className="bg-card-solid text-foreground">Rating</option>
-            <option value="completed" className="bg-card-solid text-foreground">Completed</option>
-            <option value="cancelled" className="bg-card-solid text-foreground">Cancelled</option>
-            <option value="disputes_total" className="bg-card-solid text-foreground">Disputes</option>
-            <option value="balance" className="bg-card-solid text-foreground">Balance</option>
-            <option value="reputation" className="bg-card-solid text-foreground">Reputation</option>
-            <option value="newest" className="bg-card-solid text-foreground">Newest</option>
-            <option value="oldest" className="bg-card-solid text-foreground">Oldest</option>
-            <option value="name" className="bg-card-solid text-foreground">Name</option>
-          </select>
-        </div>
-
-        {/* ── Filters Row 2 ── */}
-        <div className="px-3 py-1.5 border-b border-section-divider flex flex-wrap items-center gap-2 shrink-0">
-          <div className="flex items-center gap-1">
-            <AlertTriangle className="w-3 h-3 text-[var(--color-error)]/40" />
-            <select value={riskFilter} onChange={(e) => { setRiskFilter(e.target.value); setPage(0); }}
-              className={`bg-card border rounded-md px-2 py-1 text-[10px] font-mono focus:outline-none cursor-pointer ${riskFilter ? "border-[var(--color-error)]/30 text-[var(--color-error)]" : "border-border text-foreground/60"}`}>
-              <option value="" className="bg-card-solid text-foreground">Risk: All</option>
-              <option value="high_dispute" className="bg-card-solid text-foreground">High Dispute (&gt;10%)</option>
-              <option value="high_cancel" className="bg-card-solid text-foreground">High Cancel (&gt;20%)</option>
-              <option value="zero_trades" className="bg-card-solid text-foreground">Zero Trades</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-1">
-            <Clock className="w-3 h-3 text-foreground/30" />
-            <select value={lastActiveFilter} onChange={(e) => { setLastActiveFilter(e.target.value); setPage(0); }}
-              className={`bg-card border rounded-md px-2 py-1 text-[10px] font-mono focus:outline-none cursor-pointer ${lastActiveFilter ? "border-primary/30 text-primary" : "border-border text-foreground/60"}`}>
-              <option value="" className="bg-card-solid text-foreground">Active: All</option>
-              <option value="1d" className="bg-card-solid text-foreground">Last 24h</option>
-              <option value="7d" className="bg-card-solid text-foreground">Last 7d</option>
-              <option value="30d" className="bg-card-solid text-foreground">Last 30d</option>
-              <option value="inactive" className="bg-card-solid text-foreground">Inactive (&gt;30d)</option>
-            </select>
-          </div>
-          <select value={volumeTierFilter} onChange={(e) => { setVolumeTierFilter(e.target.value); setPage(0); }}
-            className={`bg-card border rounded-md px-2 py-1 text-[10px] font-mono focus:outline-none cursor-pointer ${volumeTierFilter ? "border-[var(--color-success)]/30 text-[var(--color-success)]" : "border-border text-foreground/60"}`}>
-            <option value="" className="bg-card-solid text-foreground">Vol: All</option>
-            <option value="0" className="bg-card-solid text-foreground">$0</option>
-            <option value="1k" className="bg-card-solid text-foreground">&lt;$1K</option>
-            <option value="10k" className="bg-card-solid text-foreground">$1K–$10K</option>
-            <option value="100k" className="bg-card-solid text-foreground">$10K+</option>
-          </select>
-          <select value={ratingFilter} onChange={(e) => { setRatingFilter(e.target.value); setPage(0); }}
-            className={`bg-card border rounded-md px-2 py-1 text-[10px] font-mono focus:outline-none cursor-pointer ${ratingFilter ? "border-primary/30 text-primary" : "border-border text-foreground/60"}`}>
-            <option value="" className="bg-card-solid text-foreground">Rating: All</option>
-            <option value="top" className="bg-card-solid text-foreground">4.5+ (Top)</option>
-            <option value="high" className="bg-card-solid text-foreground">4.0–4.5</option>
-            <option value="mid" className="bg-card-solid text-foreground">3.0–4.0</option>
-            <option value="low" className="bg-card-solid text-foreground">&lt;3.0</option>
-            <option value="unrated" className="bg-card-solid text-foreground">Unrated</option>
-          </select>
-          {(riskFilter || lastActiveFilter || volumeTierFilter || ratingFilter) && (
-            <button onClick={() => { setRiskFilter(""); setLastActiveFilter(""); setVolumeTierFilter(""); setRatingFilter(""); setPage(0); }}
-              className="px-2 py-1 text-[10px] font-mono font-medium text-[var(--color-error)]/70 hover:text-[var(--color-error)] rounded hover:bg-[var(--color-error)]/10 transition-colors">
-              Clear filters
-            </button>
-          )}
-        </div>
-
-        {/* ── Table Header ── */}
-        <div className="px-3 py-2 border-b border-border shrink-0 bg-card">
-          <div className="grid grid-cols-[32px_1fr_72px_60px_72px_52px_52px_52px_72px_60px_56px_64px] gap-1 items-center">
-            <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider">#</span>
-            <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider">User</span>
-            <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider">KYC</span>
-            <button onClick={() => { setSortBy("rating"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
-              Rating {sortBy === "rating" && <ChevronDown className="w-2.5 h-2.5" />}
-            </button>
-            <button onClick={() => { setSortBy("volume"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
-              Volume {sortBy === "volume" && <ChevronDown className="w-2.5 h-2.5" />}
-            </button>
-            <button onClick={() => { setSortBy("trades"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
-              Trades {sortBy === "trades" && <ChevronDown className="w-2.5 h-2.5" />}
-            </button>
-            <button onClick={() => { setSortBy("completed"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
-              Done {sortBy === "completed" && <ChevronDown className="w-2.5 h-2.5" />}
-            </button>
-            <button onClick={() => { setSortBy("cancelled"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
-              Cancel {sortBy === "cancelled" && <ChevronDown className="w-2.5 h-2.5" />}
-            </button>
-            <button onClick={() => { setSortBy("disputes_total"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
-              Disputes {sortBy === "disputes_total" && <ChevronDown className="w-2.5 h-2.5" />}
-            </button>
-            <button onClick={() => { setSortBy("balance"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
-              Balance {sortBy === "balance" && <ChevronDown className="w-2.5 h-2.5" />}
-            </button>
-            <button onClick={() => { setSortBy("reputation"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
-              Rep {sortBy === "reputation" && <ChevronDown className="w-2.5 h-2.5" />}
-            </button>
-            <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right">Joined</span>
-          </div>
-        </div>
-
-        {/* ── Table Body ── */}
-        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
-          {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <div className="w-5 h-5 border-2 border-foreground/20 border-t-primary rounded-full animate-spin" />
+              <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-foreground text-[12px] font-medium hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20">
+                <Plus className="w-3.5 h-3.5" />
+                Add User
+              </button>
             </div>
-          ) : users.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-foreground/25">
-              <Users className="w-6 h-6 mb-1.5 opacity-20" />
-              <p className="text-[10px] font-mono">No users found</p>
+          </div>
+
+          {/* ── Table ── */}
+          <div className="bg-card border border-border rounded-lg overflow-hidden">
+            {/* Header row */}
+            <div className="px-3 py-2.5 border-b border-section-divider bg-card-solid/50">
+              <div className="grid grid-cols-[28px_32px_1fr_72px_84px_88px_60px_70px_60px_72px_72px_56px_64px_100px] gap-2 items-center">
+                <input type="checkbox" checked={allOnPageSelected} onChange={togglePageSelection}
+                  className="w-3.5 h-3.5 rounded border-border bg-card accent-primary cursor-pointer" />
+                <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider">#</span>
+                <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider">User</span>
+                <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider">KYC</span>
+                <button onClick={() => { setSortBy("rating"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider hover:text-foreground/60 flex items-center gap-0.5">
+                  Rating {sortBy === "rating" && <ChevronDown className="w-2.5 h-2.5" />}
+                </button>
+                <button onClick={() => { setSortBy("volume"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+                  Volume {sortBy === "volume" && <ChevronDown className="w-2.5 h-2.5" />}
+                </button>
+                <button onClick={() => { setSortBy("trades"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+                  Trades {sortBy === "trades" && <ChevronDown className="w-2.5 h-2.5" />}
+                </button>
+                <button onClick={() => { setSortBy("completed"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+                  Done {sortBy === "completed" && <ChevronDown className="w-2.5 h-2.5" />}
+                </button>
+                <button onClick={() => { setSortBy("cancelled"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+                  Cancel {sortBy === "cancelled" && <ChevronDown className="w-2.5 h-2.5" />}
+                </button>
+                <button onClick={() => { setSortBy("disputes_total"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+                  Disputes {sortBy === "disputes_total" && <ChevronDown className="w-2.5 h-2.5" />}
+                </button>
+                <button onClick={() => { setSortBy("balance"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+                  Balance {sortBy === "balance" && <ChevronDown className="w-2.5 h-2.5" />}
+                </button>
+                <button onClick={() => { setSortBy("reputation"); setPage(0); }} className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right hover:text-foreground/60 flex items-center justify-end gap-0.5">
+                  Rep {sortBy === "reputation" && <ChevronDown className="w-2.5 h-2.5" />}
+                </button>
+                <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right">Joined</span>
+                <span className="text-[9px] font-mono text-foreground/35 uppercase tracking-wider text-right">Actions</span>
+              </div>
             </div>
-          ) : (
-            users.map((u, i) => {
-              const winRate = u.totalTrades > 0 ? ((u.completedCount / u.totalTrades) * 100).toFixed(0) : "—";
-              const rank = page * PAGE_SIZE + i + 1;
 
-              return (
-                <div key={u.id}
-                  className="grid grid-cols-[32px_1fr_72px_60px_72px_52px_52px_52px_72px_60px_56px_64px] gap-1 items-center px-3 py-2 border-b border-section-divider hover:bg-accent-subtle transition-colors">
+            {/* Body */}
+            <div>
+              {loading ? (
+                <div className="flex items-center justify-center py-20">
+                  <div className="w-5 h-5 border-2 border-foreground/20 border-t-primary rounded-full animate-spin" />
+                </div>
+              ) : users.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-foreground/25">
+                  <Users className="w-6 h-6 mb-1.5 opacity-20" />
+                  <p className="text-[10px] font-mono">No users found</p>
+                </div>
+              ) : (
+                users.map((u, i) => {
+                  const winRate = u.totalTrades > 0 ? Math.round((u.completedCount / u.totalTrades) * 100) : null;
+                  const rank = page * pageSize + i + 1;
+                  const avatar = pickAvatar(u.id);
+                  const AvatarIcon = avatar.Icon;
+                  const isSelected = selected.has(u.id);
 
-                  {/* Rank */}
-                  <span className={`text-[10px] font-mono font-bold ${rank === 1 ? "text-primary" : rank <= 3 ? "text-foreground/50" : "text-foreground/30"}`}>
-                    {rank}
-                  </span>
+                  // "Active" if updated within last 30 days
+                  const lastActiveMs = u.updatedAt ? Date.now() - new Date(u.updatedAt).getTime() : Infinity;
+                  const isActive = lastActiveMs < 30 * 24 * 60 * 60 * 1000;
 
-                  {/* User */}
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
-                      u.isPlaceholder ? "bg-[var(--color-warning)]/10 border border-[var(--color-warning)]/20 text-[var(--color-warning)]/60" : "bg-card border border-border text-foreground/40"
-                    }`}>
-                      {u.isPlaceholder ? "?" : (u.name || u.username || "?").charAt(0).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-[10px] font-medium truncate ${u.isPlaceholder ? "text-foreground/30 italic" : "text-foreground/60"}`}>
-                          {u.name || u.username || "Unnamed"}
+                  return (
+                    <div
+                      key={u.id}
+                      className={`grid grid-cols-[28px_32px_1fr_72px_84px_88px_60px_70px_60px_72px_72px_56px_64px_100px] gap-2 items-center px-3 py-2 border-b border-section-divider/50 hover:bg-accent-subtle transition-colors ${isSelected ? "bg-primary/[0.04]" : ""}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleRow(u.id)}
+                        className="w-3.5 h-3.5 rounded border-border bg-card accent-primary cursor-pointer"
+                      />
+
+                      <span className={`text-[11px] font-mono tabular-nums ${rank === 1 ? "text-primary font-bold" : "text-foreground/35"}`}>{rank}</span>
+
+                      {/* User cell */}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${avatar.bg}`}>
+                          <AvatarIcon className={`w-4 h-4 ${avatar.color}`} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[11px] truncate ${u.isPlaceholder ? "text-foreground/55 font-mono" : "text-foreground/85 font-medium"}`}>
+                              {u.username || u.name || "Unnamed"}
+                            </span>
+                            {u.isPlaceholder && (
+                              <span className="text-[8px] px-1 py-0.5 rounded bg-[var(--color-warning)]/10 text-[var(--color-warning)]/80 border border-[var(--color-warning)]/15 font-mono font-bold shrink-0">GHOST</span>
+                            )}
+                          </div>
+                          <span className="text-[9px] text-foreground/30 font-mono truncate block">
+                            {u.walletAddress
+                              ? `${u.walletAddress.slice(0, 7)}...${u.walletAddress.slice(-3)}`
+                              : u.email || u.id.slice(0, 8) + "...-" + u.id.slice(-3)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* KYC */}
+                      <div>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${getKycStyle(u.kycStatus)}`}>
+                          {u.kycStatus.toUpperCase()}
                         </span>
-                        {u.isPlaceholder && (
-                          <span className="text-[7px] px-1 py-0.5 rounded bg-[var(--color-warning)]/10 text-[var(--color-warning)]/70 border border-[var(--color-warning)]/15 font-mono font-bold shrink-0">GHOST</span>
+                      </div>
+
+                      {/* Rating */}
+                      <div className="flex items-center gap-1">
+                        <Star className="w-3 h-3 text-[var(--color-warning)] fill-[var(--color-warning)]" />
+                        <span className="text-[11px] font-medium text-foreground/80 tabular-nums">
+                          {u.rating > 0 ? formatCrypto(u.rating, { decimals: 1 }) : "5.0"}
+                        </span>
+                        <span className="text-[9px] text-foreground/35 font-mono tabular-nums">({formatCount(u.ratingCount)})</span>
+                      </div>
+
+                      {/* Volume */}
+                      <div className="text-right">
+                        <span className="text-[11px] font-medium text-foreground/80 tabular-nums">{formatVolumeShort(u.volume)}</span>
+                      </div>
+
+                      {/* Trades */}
+                      <div className="text-right text-[11px] text-foreground/70 tabular-nums">{formatCount(u.totalTrades)}</div>
+
+                      {/* Done */}
+                      <div className="text-right">
+                        {winRate != null ? (
+                          <span className="text-[11px] font-medium text-[var(--color-success)] tabular-nums">{winRate}%</span>
+                        ) : (
+                          <span className="text-[11px] text-foreground/25">—</span>
                         )}
                       </div>
-                      <span className="text-[9px] text-foreground/30 font-mono truncate block">{u.email || (u.isPlaceholder ? u.id.slice(0, 12) : u.walletAddress?.slice(0, 12) || u.id.slice(0, 8))}</span>
+
+                      {/* Cancel */}
+                      <div className="text-right">
+                        <span className={`text-[11px] tabular-nums ${u.cancelledCount > 0 ? "text-primary/70" : "text-foreground/30"}`}>
+                          {formatCount(u.cancelledCount)}
+                        </span>
+                      </div>
+
+                      {/* Disputes */}
+                      <div className="text-right">
+                        <span className={`text-[11px] font-medium tabular-nums ${u.disputesTotal > 0 ? "text-[var(--color-error)]" : "text-foreground/30"}`}>
+                          {formatCount(u.disputesTotal)}
+                        </span>
+                      </div>
+
+                      {/* Balance */}
+                      <div className="text-right">
+                        <span className={`text-[11px] tabular-nums ${u.balance > 0 ? "text-foreground/70" : "text-foreground/25"}`}>
+                          {u.balance > 0 ? formatVolumeShort(u.balance) : "—"}
+                        </span>
+                      </div>
+
+                      {/* Rep */}
+                      <div className="text-right">
+                        <span className={`text-[11px] font-medium tabular-nums ${
+                          u.reputationScore >= 80 ? "text-[var(--color-success)]" :
+                          u.reputationScore >= 50 ? "text-foreground/70" :
+                          u.reputationScore > 0 ? "text-[var(--color-warning)]" :
+                          "text-foreground/25"
+                        }`}>
+                          {u.reputationScore > 0 ? formatCount(u.reputationScore) : "—"}
+                        </span>
+                      </div>
+
+                      {/* Joined */}
+                      <div className="text-right text-[11px] text-foreground/50 tabular-nums">
+                        {u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-US", { day: "2-digit", month: "short" }) : "—"}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                          isActive ? "text-[var(--color-success)]" : "text-foreground/35"
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-[var(--color-success)]" : "bg-foreground/30"}`} />
+                          {isActive ? "Active" : "Idle"}
+                        </span>
+                        <button className="p-1 rounded hover:bg-accent-subtle transition-colors" aria-label="Row actions">
+                          <MoreHorizontal className="w-3.5 h-3.5 text-foreground/40" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  );
+                })
+              )}
+            </div>
 
-                  {/* KYC */}
-                  <div>
-                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold border ${getKycStyle(u.kycStatus)}`}>
-                      {u.kycStatus.toUpperCase()}
-                    </span>
-                  </div>
+            {/* Pagination */}
+            <div className="px-3 py-2.5 border-t border-section-divider flex items-center justify-between bg-card-solid/40">
+              <span className="text-[11px] text-foreground/50 tabular-nums">
+                {total === 0
+                  ? "No users"
+                  : `Showing ${formatCount(startIndex + 1)} to ${formatCount(endIndex)} of ${formatCount(total)} users`}
+              </span>
 
-                  {/* Rating */}
-                  <div className="text-right">
-                    {u.rating > 0 ? (
-                      <div className="flex items-center justify-end gap-0.5">
-                        <Star className="w-2 h-2 text-primary/40 fill-primary/40" />
-                        <span className="text-[10px] font-mono text-foreground/60">{u.rating.toFixed(1)}</span>
-                        <span className="text-[8px] text-foreground/30 font-mono">({u.ratingCount})</span>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-foreground/25 font-mono">—</span>
-                    )}
-                  </div>
-
-                  {/* Volume */}
-                  <div className="text-right">
-                    <span className="text-[10px] font-mono font-bold text-foreground/50 tabular-nums">{formatVolume(u.volume)}</span>
-                  </div>
-
-                  {/* Trades */}
-                  <div className="text-right text-[10px] font-mono text-foreground/40 tabular-nums">{u.totalTrades}</div>
-
-                  {/* Completed */}
-                  <div className="text-right">
-                    <span className="text-[10px] font-mono text-[var(--color-success)]/60 tabular-nums">{u.completedCount}</span>
-                    <span className="text-[8px] text-foreground/25 font-mono ml-0.5">{winRate}%</span>
-                  </div>
-
-                  {/* Cancelled */}
-                  <div className="text-right">
-                    <span className={`text-[10px] font-mono tabular-nums ${u.cancelledCount > 0 ? "text-primary/60" : "text-foreground/25"}`}>{u.cancelledCount}</span>
-                  </div>
-
-                  {/* Disputes */}
-                  <div className="text-right">
-                    <span className={`text-[10px] font-mono font-bold tabular-nums ${u.disputesTotal > 0 ? "text-[var(--color-error)]" : "text-foreground/25"}`}>
-                      {u.disputesTotal}
-                    </span>
-                    {u.disputesTotal > 0 && (
-                      <div className="flex items-center justify-end gap-1 mt-0.5">
-                        <span className="text-[8px] font-mono text-[var(--color-info)]/50" title="Raised by user">{u.disputesRaisedByUser}&#8593;</span>
-                        <span className="text-[8px] font-mono text-[var(--color-error)]/50" title="Against user">{u.disputesAgainstUser}&#8595;</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Balance */}
-                  <div className="text-right">
-                    <span className={`text-[10px] font-mono tabular-nums ${u.balance > 0 ? "text-foreground/40" : "text-foreground/25"}`}>
-                      {u.balance > 0 ? formatVolume(u.balance) : "—"}
-                    </span>
-                  </div>
-
-                  {/* Reputation */}
-                  <div className="text-right">
-                    <span className={`text-[10px] font-mono font-bold tabular-nums ${
-                      u.reputationScore >= 80 ? "text-[var(--color-success)]/70" :
-                      u.reputationScore >= 50 ? "text-foreground/50" :
-                      u.reputationScore > 0 ? "text-[var(--color-warning)]/70" :
-                      "text-foreground/25"
-                    }`}>
-                      {u.reputationScore > 0 ? u.reputationScore : "—"}
-                    </span>
-                  </div>
-
-                  {/* Joined */}
-                  <div className="text-right text-[10px] font-mono text-foreground/40 tabular-nums">
-                    {u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) : "—"}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* ── Pagination ── */}
-        {totalPages > 1 && (
-          <div className="px-3 py-2 border-t border-border flex items-center justify-between shrink-0 bg-card">
-            <span className="text-[10px] text-foreground/40 font-mono tabular-nums">
-              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
-            </span>
-            <div className="flex items-center gap-0.5">
-              <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
-                className="p-1 rounded transition-colors hover:bg-accent-subtle disabled:opacity-20 disabled:cursor-not-allowed">
-                <ChevronLeft className="w-3 h-3 text-foreground/30" />
-              </button>
-              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                let pageNum: number;
-                if (totalPages <= 7) pageNum = i;
-                else if (page < 3) pageNum = i;
-                else if (page > totalPages - 4) pageNum = totalPages - 7 + i;
-                else pageNum = page - 3 + i;
-                return (
-                  <button key={pageNum} onClick={() => setPage(pageNum)}
-                    className={`w-5 h-5 rounded text-[8px] font-mono font-medium transition-all ${
-                      page === pageNum ? "bg-primary/15 text-primary border border-primary/20" : "text-foreground/25 hover:text-foreground/50 hover:bg-accent-subtle"
-                    }`}>
-                    {pageNum + 1}
-                  </button>
-                );
-              })}
-              <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
-                className="p-1 rounded transition-colors hover:bg-accent-subtle disabled:opacity-20 disabled:cursor-not-allowed">
-                <ChevronRight className="w-3 h-3 text-foreground/30" />
-              </button>
+              <div className="flex items-center gap-3">
+                <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+                <select
+                  value={pageSize}
+                  onChange={(e) => { setPageSize(parseInt(e.target.value)); setPage(0); }}
+                  className="bg-card border border-border rounded-md px-2 py-1 text-[11px] text-foreground/70 focus:outline-none cursor-pointer"
+                >
+                  {PAGE_SIZES.map((s) => (
+                    <option key={s} value={s} className="bg-card-solid text-foreground">{s} / page</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
-        )}
+
+          {/* breathing room for floating tab switcher */}
+          <div className="h-12 shrink-0" />
+        </div>
       </div>
+    </div>
+  );
+}
+
+// ============================================
+// SUMMARY CARD
+// ============================================
+
+function SummaryCard({
+  label,
+  value,
+  meta,
+  icon,
+  tone,
+}: {
+  label: string;
+  value: string;
+  meta: React.ReactNode;
+  icon: React.ReactNode;
+  tone: "primary" | "success" | "warning";
+}) {
+  const iconBg = tone === "success"
+    ? "bg-[var(--color-success)]/10 text-[var(--color-success)]"
+    : tone === "warning"
+    ? "bg-[var(--color-warning)]/10 text-[var(--color-warning)]"
+    : "bg-primary/10 text-primary";
+
+  return (
+    <div className="bg-card border border-border rounded-lg p-4">
+      <div className="flex items-start justify-between mb-3">
+        <span className="text-[10px] font-mono text-foreground/40 uppercase tracking-wider">{label}</span>
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${iconBg}`}>
+          {icon}
+        </div>
+      </div>
+      <div className="text-[24px] font-bold text-foreground tabular-nums leading-none mb-2">{value}</div>
+      <div className="text-[11px] tabular-nums">{meta}</div>
+    </div>
+  );
+}
+
+function DeltaText({ delta }: { delta: number }) {
+  const sign = delta > 0 ? "+" : "";
+  const tone = delta > 0
+    ? "text-[var(--color-success)]"
+    : delta < 0
+    ? "text-[var(--color-error)]"
+    : "text-foreground/40";
+  return (
+    <span className={tone}>
+      {sign}{formatPercentage(delta)} <span className="text-foreground/30 font-normal">vs last month</span>
+    </span>
+  );
+}
+
+function PctText({ value, suffix, tone }: { value: number; suffix: string; tone: "success" | "warning" }) {
+  const cls = tone === "success" ? "text-[var(--color-success)]" : "text-[var(--color-warning)]";
+  return (
+    <span className={cls}>
+      {formatPercentage(value)} <span className="text-foreground/30 font-normal">{suffix}</span>
+    </span>
+  );
+}
+
+// ============================================
+// FILTER SELECT
+// ============================================
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+  accent,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  accent: "default" | "primary" | "success" | "warning" | "error";
+}) {
+  const accentClass = value === "" || accent === "default"
+    ? "border-border text-foreground/70"
+    : accent === "primary"
+    ? "border-primary/30 text-primary"
+    : accent === "success"
+    ? "border-[var(--color-success)]/30 text-[var(--color-success)]"
+    : accent === "warning"
+    ? "border-[var(--color-warning)]/30 text-[var(--color-warning)]"
+    : "border-[var(--color-error)]/30 text-[var(--color-error)]";
+
+  const display = options.find((o) => o.value === value)?.label ?? "All";
+
+  return (
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`appearance-none bg-card border rounded-lg pl-3 pr-7 py-2 text-[12px] focus:outline-none cursor-pointer ${accentClass}`}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value} className="bg-card-solid text-foreground">
+            {label}: {o.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-foreground/40 pointer-events-none" />
+      <span className="sr-only">{display}</span>
+    </div>
+  );
+}
+
+// ============================================
+// PAGINATION
+// ============================================
+
+function Pagination({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (p: number) => void;
+}) {
+  const buildPages = (): (number | "ellipsis")[] => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i);
+    const pages: (number | "ellipsis")[] = [];
+    pages.push(0);
+    if (page > 2) pages.push("ellipsis");
+    const start = Math.max(1, page - 1);
+    const end = Math.min(totalPages - 2, page + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (page < totalPages - 3) pages.push("ellipsis");
+    pages.push(totalPages - 1);
+    return pages;
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onChange(Math.max(0, page - 1))}
+        disabled={page === 0}
+        className="w-7 h-7 rounded-md flex items-center justify-center border border-border bg-card hover:bg-accent-subtle disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+      >
+        <ChevronLeft className="w-3.5 h-3.5 text-foreground/50" />
+      </button>
+      {buildPages().map((p, i) =>
+        p === "ellipsis" ? (
+          <span key={`e-${i}`} className="w-7 h-7 flex items-center justify-center text-[11px] text-foreground/30">…</span>
+        ) : (
+          <button
+            key={p}
+            onClick={() => onChange(p)}
+            className={`w-7 h-7 rounded-md text-[11px] font-medium transition-colors ${
+              p === page
+                ? "bg-primary text-foreground shadow-sm shadow-primary/20"
+                : "border border-border bg-card text-foreground/60 hover:bg-accent-subtle"
+            }`}
+          >
+            {p + 1}
+          </button>
+        )
+      )}
+      <button
+        onClick={() => onChange(Math.min(totalPages - 1, page + 1))}
+        disabled={page >= totalPages - 1}
+        className="w-7 h-7 rounded-md flex items-center justify-center border border-border bg-card hover:bg-accent-subtle disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
+      >
+        <ChevronRight className="w-3.5 h-3.5 text-foreground/50" />
+      </button>
     </div>
   );
 }

@@ -845,6 +845,8 @@ export default function MerchantDashboard() {
         setSelectedOrderId={setSelectedOrderId}
         acceptOrder={acceptOrder}
         acceptingOrderId={acceptingOrderId}
+        lockingEscrowOrderId={isLockingEscrow ? escrowOrder?.id ?? null : null}
+        confirmingOrderId={confirmingOrderId}
         handleCancelOrder={handleCancelOrder}
         handleOpenChat={handleOpenChat}
         handleOrderAction={handleOrderAction}

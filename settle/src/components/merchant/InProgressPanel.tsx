@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useRef, useState, useMemo } from 'react';
-import { Shield, Zap, ChevronRight, ChevronDown, Flame, ArrowRight, Clock, XCircle, MessageSquare, AlertTriangle } from 'lucide-react';
+import { Shield, Zap, ChevronRight, ChevronDown, Flame, ArrowRight, Clock, XCircle, MessageSquare, AlertTriangle, Loader2 } from 'lucide-react';
 import { CountdownRing } from './CountdownRing';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { getAuthoritativeStatus, getStatusBadgeConfig, getNextAction as getNextActionFromStatus, MinimalStatus } from '@/lib/orders/statusResolver';
@@ -31,6 +31,8 @@ interface InProgressPanelProps {
   collapsed?: boolean;
   onCollapseChange?: (collapsed: boolean) => void;
   merchantId?: string | null;
+  lockingEscrowOrderId?: string | null;
+  confirmingOrderId?: string | null;
 }
 
 // Viewer-perspective side resolver: matches the helper in
@@ -90,6 +92,8 @@ const InProgressOrderList = memo(function InProgressOrderList({
   getStatusBadge,
   getNextAction,
   merchantId,
+  lockingEscrowOrderId,
+  confirmingOrderId,
 }: {
   orders: any[];
   onSelectOrder: (order: any) => void;
@@ -99,6 +103,8 @@ const InProgressOrderList = memo(function InProgressOrderList({
   getStatusBadge: (order: any) => React.ReactNode;
   getNextAction: (order: any) => string;
   merchantId?: string | null;
+  lockingEscrowOrderId?: string | null;
+  confirmingOrderId?: string | null;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -360,24 +366,49 @@ const InProgressOrderList = memo(function InProgressOrderList({
                       Waiting for other merchant
                     </span>
                   </div>
-                ) : (
-                  <button
-                    data-testid="order-primary-action"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (onAction) {
-                        onAction(order, nextAction);
-                      } else {
-                        onSelectOrder(order);
-                      }
-                    }}
-                    className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-primary rounded-lg text-[11px] text-white font-bold hover:bg-primary/80 transition-colors"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    {nextAction}
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                )}
+                ) : (() => {
+                  const isLockingThis = lockingEscrowOrderId === order.id;
+                  const isConfirmingThis = confirmingOrderId === order.id;
+                  const isActionLoading = isLockingThis || isConfirmingThis;
+                  const loadingLabel = isLockingThis
+                    ? 'Locking escrow…'
+                    : isConfirmingThis
+                      ? 'Confirming payment…'
+                      : null;
+                  return (
+                    <button
+                      data-testid="order-primary-action"
+                      disabled={isActionLoading}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isActionLoading) return;
+                        if (onAction) {
+                          onAction(order, nextAction);
+                        } else {
+                          onSelectOrder(order);
+                        }
+                      }}
+                      className={`w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-[11px] text-white font-bold transition-colors ${
+                        isActionLoading
+                          ? 'bg-primary/40 cursor-wait'
+                          : 'bg-primary hover:bg-primary/80'
+                      }`}
+                    >
+                      {isActionLoading ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          {loadingLabel}
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-3.5 h-3.5" />
+                          {nextAction}
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </>
+                      )}
+                    </button>
+                  );
+                })()}
 
                 {/* Chat button — always visible */}
                 {onOpenChat && (
@@ -441,7 +472,7 @@ const STATUS_FILTERS: { value: FilterValue; label: string }[] = [
   { value: 'cancel_requested', label: 'Cancel Req' },
 ];
 
-export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction, onOpenChat, collapsed = false, onCollapseChange, merchantId }: InProgressPanelProps) {
+export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectOrder, onAction, onOpenChat, collapsed = false, onCollapseChange, merchantId, lockingEscrowOrderId, confirmingOrderId }: InProgressPanelProps) {
   const [statusFilter, setStatusFilter] = useState<FilterValue>('all');
 
   const filteredOrders = useMemo(() => {
@@ -549,6 +580,8 @@ export const InProgressPanel = memo(function InProgressPanel({ orders, onSelectO
           getStatusBadge={getStatusBadge}
           getNextAction={getNextAction}
           merchantId={merchantId}
+          lockingEscrowOrderId={lockingEscrowOrderId}
+          confirmingOrderId={confirmingOrderId}
         />
       )}
     </div>

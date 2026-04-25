@@ -162,6 +162,13 @@ export function useUserEffects({
   const pusherCtx = usePusher();
   const refetchMessagesForOrderRef = useRef(refetchMessagesForOrder);
   refetchMessagesForOrderRef.current = refetchMessagesForOrder;
+  // Snapshot of chatWindows for the user-channel handler to consult — lets us
+  // skip a redundant refetch when the order-channel listener has already
+  // delivered the same message. Without this, the chat panel re-renders fully
+  // (replaced messages array → all child components re-paint, scroll resets)
+  // every time core-api pushes a chat:message-new (e.g. the receipt card).
+  const chatWindowsRef = useRef(chatWindows);
+  chatWindowsRef.current = chatWindows;
   useEffect(() => {
     if (!userId || !pusherCtx) return;
     const channelName = getUserChannel(userId);
@@ -207,10 +214,24 @@ export function useUserEffects({
 
       // Force the open chat window (if any) to refetch its messages so the
       // newly-arrived merchant DM appears in the chat UI without a refresh.
-      // The dedup-by-id path in useRealtimeChat prevents duplicates if the
-      // order-channel listener also delivered it.
+      //
+      // BUT: if the order-channel listener (useRealtimeChat.ts:648) has
+      // already delivered this exact message, a refetch replaces the entire
+      // messages array → causes a visible re-render of the whole chat panel
+      // (scroll resets, all message rows update reference). We give the
+      // order-channel listener a brief moment to land first, then refetch
+      // only if the message is still missing.
       if (data.orderId) {
-        refetchMessagesForOrderRef.current?.(data.orderId);
+        const oid = data.orderId;
+        const mid = data.messageId;
+        setTimeout(() => {
+          const win = chatWindowsRef.current?.find((w) => w.orderId === oid);
+          if (win?.messages?.some((m) => m.id === mid)) {
+            // Already delivered by order-channel handler — no refetch needed.
+            return;
+          }
+          refetchMessagesForOrderRef.current?.(oid);
+        }, 250);
       }
     };
 

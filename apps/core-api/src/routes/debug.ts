@@ -8,9 +8,10 @@
  * Guarded: returns 404 when NODE_ENV === 'production'.
  */
 import type { FastifyPluginAsync } from 'fastify';
-import { query } from 'settlement-core';
+import { query, queryOne } from 'settlement-core';
 import { getWsStats } from '../ws/broadcast';
 import { readFileSync } from 'fs';
+import { orderBus, ORDER_EVENT } from '../events/orderEvents';
 
 export const debugRoutes: FastifyPluginAsync = async (fastify) => {
   // Block in production — return 404 to hide existence
@@ -69,4 +70,34 @@ export const debugRoutes: FastifyPluginAsync = async (fastify) => {
       total: rows.length,
     };
   });
+
+  // POST /debug/emit-cancel?orderId=...
+  // Fires orderBus.emitOrderEvent with a synthetic CANCELLED payload to test
+  // that all listeners (receipt, broadcast, notification) wire up correctly.
+  fastify.post<{ Querystring: { orderId: string } }>(
+    '/debug/emit-cancel',
+    async (request) => {
+      const { orderId } = request.query;
+      const order = await queryOne<Record<string, unknown>>(
+        'SELECT * FROM orders WHERE id = $1',
+        [orderId],
+      );
+      if (!order) return { error: 'order not found' };
+      orderBus.emitOrderEvent({
+        event: ORDER_EVENT.CANCELLED,
+        orderId,
+        previousStatus: String(order.status),
+        newStatus: 'cancelled',
+        actorType: 'system',
+        actorId: 'debug',
+        userId: String(order.user_id),
+        merchantId: order.merchant_id ? String(order.merchant_id) : null,
+        buyerMerchantId: order.buyer_merchant_id ? String(order.buyer_merchant_id) : undefined,
+        order: order,
+        orderVersion: Number(order.order_version) || 1,
+        minimalStatus: 'cancelled',
+      });
+      return { ok: true, emitted: 'order.cancelled', orderId };
+    },
+  );
 };

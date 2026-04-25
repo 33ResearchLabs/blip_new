@@ -21,6 +21,7 @@ import {
   ArrowDownLeft,
   Shield,
   Wallet,
+  Paperclip,
 } from "lucide-react";
 import { ConnectionIndicator } from "@/components/NotificationToast";
 import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
@@ -2941,46 +2942,55 @@ export const OrderDetailScreen = ({
               )}
 
               <div className="p-4 pb-8 border-t border-border-medium">
-                <div className="flex items-center gap-2">
-                  {/* Emoji button */}
-                  <button
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-surface-raised"
-                  >
-                    <span className="text-lg">😊</span>
-                  </button>
-                  {/* Image attach button */}
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50 bg-surface-raised"
-                  >
-                    {isUploading ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
-                    ) : (
-                      <ArrowUpRight className="w-4 h-4 text-text-tertiary" />
-                    )}
-                  </button>
-                  <input
-                    ref={chatInputRef}
-                    value={chatMessage}
-                    onChange={(e) => handleTypingChange(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        if (pendingImage) {
-                          handleImageConfirm();
-                        } else {
-                          handleSendMessage();
+                <div className="flex items-center gap-2 w-full">
+                  {/* Pill: emoji + attach + text input all live in one rounded row.
+                      min-w-0 on the wrapper + the input keeps long text from
+                      pushing the Send button off-screen on narrow viewports. */}
+                  <div className="flex-1 min-w-0 flex items-center gap-1 rounded-full bg-surface-raised pl-1.5 pr-1.5 focus-within:ring-1 focus-within:ring-accent/40">
+                    {/* Emoji picker trigger */}
+                    <button
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                      className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center hover:bg-surface-active transition-colors"
+                    >
+                      <span className="text-lg leading-none">😊</span>
+                    </button>
+                    <input
+                      ref={chatInputRef}
+                      maxLength={1000}
+                      value={chatMessage}
+                      onChange={(e) => handleTypingChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          if (pendingImage) {
+                            handleImageConfirm();
+                          } else {
+                            handleSendMessage();
+                          }
+                          setShowEmojiPicker(false);
                         }
-                        setShowEmojiPicker(false);
+                      }}
+                      placeholder={
+                        pendingImage ? "Add a caption..." : "Message..."
                       }
-                    }}
-                    placeholder={
-                      pendingImage ? "Add a caption..." : "Message..."
-                    }
-                    className="flex-1 rounded-xl px-4 py-3 text-[15px] outline-none bg-surface-raised text-text-primary"
-                  />
+                      className="flex-1 min-w-0 appearance-none border-0 bg-transparent px-2 py-3 text-[15px] outline-none text-text-primary placeholder:text-text-tertiary"
+                    />
+                    {/* Image attach — placed after the input so the
+                        paperclip sits to the right of the text field. */}
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center hover:bg-surface-active transition-colors disabled:opacity-50"
+                      title="Attach image"
+                    >
+                      {isUploading ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-text-tertiary" />
+                      ) : (
+                        <Paperclip className="w-4 h-4 text-text-tertiary" />
+                      )}
+                    </button>
+                  </div>
+                  {/* Send — separate circular button outside the pill */}
                   <button
                     onClick={() => {
                       if (pendingImage) {
@@ -2991,7 +3001,7 @@ export const OrderDetailScreen = ({
                       setShowEmojiPicker(false);
                     }}
                     disabled={!chatMessage.trim() && !pendingImage}
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 disabled:opacity-50 ${
+                    className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center disabled:opacity-50 ${
                       pendingImage ? "bg-warning" : "bg-accent"
                     }`}
                   >

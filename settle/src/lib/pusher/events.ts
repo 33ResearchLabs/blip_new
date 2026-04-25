@@ -25,6 +25,10 @@ export const CHAT_EVENTS = {
   MESSAGES_DELIVERED: 'chat:messages-delivered',
   MESSAGE_PREVIEW: 'chat:message-preview',
   UNREAD_UPDATE: 'chat:unread-update',
+  // Pushed by core-api updateOrderReceipt() whenever an order_receipts row's
+  // status changes. Subscribers should merge the patch into the visible
+  // receipt card so the status pill updates without a page refresh.
+  RECEIPT_UPDATED: 'chat:receipt-updated',
 } as const;
 
 // Presence events

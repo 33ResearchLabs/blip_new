@@ -39,9 +39,35 @@ function buildReceiptPayload(o: Record<string, unknown>) {
 export function registerReceiptListener(): void {
   // Create receipt when order is accepted (BUY flow: pending -> accepted)
   orderBus.safeOn(ORDER_EVENT.ACCEPTED, (p: OrderEventPayload) => {
-    enqueueCreateReceipt(p.orderId, buildReceiptPayload(p.order), p.actorId).catch((err) => {
-      logger.error('[ReceiptListener] Failed to enqueue receipt creation (ACCEPTED)', { orderId: p.orderId, error: err });
+    logger.info('[Receipt][debug] ACCEPTED listener fired', {
+      orderId: p.orderId,
+      orderNumber: p.order.order_number,
+      type: p.order.type,
+      status: p.order.status,
+      previousStatus: p.previousStatus,
+      newStatus: p.newStatus,
+      actorId: p.actorId,
+      actorType: p.actorType,
+      userId: p.order.user_id,
+      merchantId: p.order.merchant_id,
+      buyerMerchantId: p.order.buyer_merchant_id,
     });
+    const job = enqueueCreateReceipt(p.orderId, buildReceiptPayload(p.order), p.actorId);
+    logger.info('[Receipt][debug] enqueueCreateReceipt(ACCEPTED) sync returned', {
+      orderId: p.orderId,
+      returnedNonNull: job !== null,
+    });
+    job
+      .then((j: any) => {
+        logger.info('[Receipt][debug] enqueueCreateReceipt(ACCEPTED) promise resolved', {
+          orderId: p.orderId,
+          jobId: j?.id ?? null,
+          jobName: j?.name ?? null,
+        });
+      })
+      .catch((err) => {
+        logger.error('[ReceiptListener] Failed to enqueue receipt creation (ACCEPTED)', { orderId: p.orderId, error: String(err) });
+      });
   });
 
   // Create receipt when order is CREATED already in `escrowed` status — this
@@ -55,48 +81,93 @@ export function registerReceiptListener(): void {
   // create is silently ignored — no duplicate receipts.
   orderBus.safeOn(ORDER_EVENT.CREATED, (p: OrderEventPayload) => {
     const status = String(p.order.status || p.newStatus || '').toLowerCase();
-    if (status !== 'escrowed') return; // BUY orders go pending -> accepted via ACCEPTED listener
-    enqueueCreateReceipt(p.orderId, buildReceiptPayload(p.order), p.actorId).catch((err) => {
-      logger.error('[ReceiptListener] Failed to enqueue receipt creation (CREATED-as-escrowed)', { orderId: p.orderId, error: err });
+    logger.info('[Receipt][debug] CREATED listener fired', {
+      orderId: p.orderId,
+      orderNumber: p.order.order_number,
+      type: p.order.type,
+      status,
+      actorId: p.actorId,
+      actorType: p.actorType,
+      userId: p.order.user_id,
+      merchantId: p.order.merchant_id,
+      buyerMerchantId: p.order.buyer_merchant_id,
+      willEnqueue: status === 'escrowed',
     });
+    if (status !== 'escrowed') return; // BUY orders go pending -> accepted via ACCEPTED listener
+    const job = enqueueCreateReceipt(p.orderId, buildReceiptPayload(p.order), p.actorId);
+    logger.info('[Receipt][debug] enqueueCreateReceipt(CREATED-as-escrowed) sync returned', {
+      orderId: p.orderId,
+      returnedNonNull: job !== null,
+    });
+    job
+      .then((j: any) => {
+        logger.info('[Receipt][debug] enqueueCreateReceipt(CREATED-as-escrowed) promise resolved', {
+          orderId: p.orderId,
+          jobId: j?.id ?? null,
+          jobName: j?.name ?? null,
+        });
+      })
+      .catch((err) => {
+        logger.error('[ReceiptListener] Failed to enqueue receipt creation (CREATED-as-escrowed)', { orderId: p.orderId, error: String(err) });
+      });
   });
 
   // Update receipt on payment_sent
   orderBus.safeOn(ORDER_EVENT.PAYMENT_SENT, (p: OrderEventPayload) => {
-    enqueueUpdateReceipt(p.orderId, 'payment_sent', { payment_sent_at: true })
-      ?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue payment_sent update', { orderId: p.orderId, error: String(err) }));
+    logger.info('[Receipt][debug] PAYMENT_SENT listener fired', { orderId: p.orderId, orderNumber: p.order.order_number });
+    const job = enqueueUpdateReceipt(p.orderId, 'payment_sent', { payment_sent_at: true });
+    logger.info('[Receipt][debug] enqueueUpdateReceipt(payment_sent) returned', { orderId: p.orderId, enqueued: job !== null });
+    job?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue payment_sent update', { orderId: p.orderId, error: String(err) }));
   });
 
   // Update receipt on completed (with release tx hash)
   orderBus.safeOn(ORDER_EVENT.COMPLETED, (p: OrderEventPayload) => {
-    enqueueUpdateReceipt(p.orderId, 'completed', {
+    logger.info('[Receipt][debug] COMPLETED listener fired', { orderId: p.orderId, orderNumber: p.order.order_number });
+    const job = enqueueUpdateReceipt(p.orderId, 'completed', {
       release_tx_hash: p.txHash ?? null,
       completed_at: true,
-    })?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue completed update', { orderId: p.orderId, error: String(err) }));
+    });
+    logger.info('[Receipt][debug] enqueueUpdateReceipt(completed) returned', { orderId: p.orderId, enqueued: job !== null });
+    job?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue completed update', { orderId: p.orderId, error: String(err) }));
   });
 
   // Update receipt on cancelled (with optional refund tx hash)
   orderBus.safeOn(ORDER_EVENT.CANCELLED, (p: OrderEventPayload) => {
-    enqueueUpdateReceipt(p.orderId, 'cancelled', {
+    logger.info('[Receipt][debug] CANCELLED listener fired', {
+      orderId: p.orderId,
+      orderNumber: p.order.order_number,
+      previousStatus: p.previousStatus,
+      newStatus: p.newStatus,
+      refundTxHash: p.refundTxHash ?? null,
+    });
+    const job = enqueueUpdateReceipt(p.orderId, 'cancelled', {
       refund_tx_hash: p.refundTxHash ?? null,
       cancelled_at: true,
-    })?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue cancelled update', { orderId: p.orderId, error: String(err) }));
+    });
+    logger.info('[Receipt][debug] enqueueUpdateReceipt(cancelled) returned', { orderId: p.orderId, enqueued: job !== null });
+    job?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue cancelled update', { orderId: p.orderId, error: String(err) }));
   });
 
   // Update receipt on expired
   orderBus.safeOn(ORDER_EVENT.EXPIRED, (p: OrderEventPayload) => {
+    logger.info('[Receipt][debug] EXPIRED listener fired', { orderId: p.orderId, previousStatus: p.previousStatus });
     // Only accepted+ orders have receipts; pending orders do not
     if (p.previousStatus !== 'pending') {
-      enqueueUpdateReceipt(p.orderId, 'expired', { expired_at: true })
-        ?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue expired update', { orderId: p.orderId, error: String(err) }));
+      const job = enqueueUpdateReceipt(p.orderId, 'expired', { expired_at: true });
+      logger.info('[Receipt][debug] enqueueUpdateReceipt(expired) returned', { orderId: p.orderId, enqueued: job !== null });
+      job?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue expired update', { orderId: p.orderId, error: String(err) }));
+    } else {
+      logger.info('[Receipt][debug] EXPIRED skipped — was pending (no receipt to update)', { orderId: p.orderId });
     }
   });
 
   // Generic handler for transitions handled by the general TX path
   // (escrowed, etc. — anything not caught by a specific listener above)
   orderBus.safeOn(ORDER_EVENT.ESCROWED, (p: OrderEventPayload) => {
-    enqueueUpdateReceipt(p.orderId, 'escrowed', { escrowed_at: true })
-      ?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue escrowed update', { orderId: p.orderId, error: String(err) }));
+    logger.info('[Receipt][debug] ESCROWED listener fired', { orderId: p.orderId, orderNumber: p.order.order_number });
+    const job = enqueueUpdateReceipt(p.orderId, 'escrowed', { escrowed_at: true });
+    logger.info('[Receipt][debug] enqueueUpdateReceipt(escrowed) returned', { orderId: p.orderId, enqueued: job !== null });
+    job?.catch((err) => logger.error('[ReceiptListener] Failed to enqueue escrowed update', { orderId: p.orderId, error: String(err) }));
   });
 
   logger.info('[ReceiptListener] Registered');

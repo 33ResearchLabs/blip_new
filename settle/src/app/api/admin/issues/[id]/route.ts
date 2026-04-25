@@ -5,10 +5,11 @@
  * PATCH /api/admin/issues/:id          — update status / priority / add note
  *
  * Body for PATCH (all fields optional — send only what's changing):
- *   { status?: 'open' | 'in_progress' | 'resolved' | 'closed',
+ *   { status?: 'open' | 'in_progress' | 'resolved' | 'closed' | 'rejected',
  *     priority?: 'low' | 'medium' | 'high' | 'critical',
  *     note?: string,          // appended to admin_notes
- *     resolvedBy?: string }   // recorded when status → resolved/closed
+ *     statusNote?: string,    // appended to status_history (user-visible)
+ *     resolvedBy?: string }   // recorded when status → resolved/closed/rejected
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -23,7 +24,8 @@ import {
 } from '@/lib/issueReporter/repository';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const VALID_STATUS: IssueStatus[] = ['open', 'in_progress', 'resolved', 'closed'];
+// 'rejected' was added in migration 109. Matches the DB CHECK constraint.
+const VALID_STATUS: IssueStatus[] = ['open', 'in_progress', 'resolved', 'closed', 'rejected'];
 const VALID_PRIORITY: IssuePriority[] = ['low', 'medium', 'high', 'critical'];
 
 export async function GET(
@@ -66,6 +68,7 @@ export async function PATCH(
     status?: string;
     priority?: string;
     note?: string;
+    statusNote?: string;
     resolvedBy?: string;
   };
   try {
@@ -82,10 +85,24 @@ export async function PATCH(
   }
 
   try {
+    // statusNote is the user-visible reason that shows up on the
+    // detail-page timeline. statusByType is hard-coded to 'admin' here
+    // because this is the admin route; statusById carries the admin
+    // username for audit attribution.
+    const statusByType = body.status ? ('admin' as const) : undefined;
+    const statusById = body.status ? body.resolvedBy ?? null : undefined;
+    const trimmedStatusNote =
+      typeof body.statusNote === 'string' && body.statusNote.trim()
+        ? body.statusNote.trim().slice(0, 2000)
+        : undefined;
+
     let row = await updateIssue(id, {
       status: body.status as IssueStatus | undefined,
       priority: body.priority as IssuePriority | undefined,
       resolvedBy: body.resolvedBy,
+      statusNote: trimmedStatusNote,
+      statusByType,
+      statusById,
     });
     if (!row) {
       return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });

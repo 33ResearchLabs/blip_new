@@ -406,6 +406,7 @@ export const MerchantModals = React.memo(function MerchantModals(props: Merchant
         acceptingOrderId={acceptingOrderId}
         confirmingOrderId={confirmingOrderId}
         cancellingOrderId={cancellingOrderId}
+        lockingEscrowOrderId={isLockingEscrow ? escrowOrder?.id ?? null : null}
         isRequestingCancel={isRequestingCancel}
         onClose={() => setSelectedOrderPopup(null)}
         onAcceptOrder={acceptOrder}

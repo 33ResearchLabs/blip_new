@@ -57,6 +57,8 @@ export interface MerchantDesktopLayoutProps {
   setSelectedOrderId: (id: string | null) => void;
   acceptOrder: (order: Order) => void;
   acceptingOrderId: string | null;
+  lockingEscrowOrderId?: string | null;
+  confirmingOrderId?: string | null;
   handleCancelOrder: (order: Order) => void;
   handleOpenChat: (order: Order) => void;
   handleOrderAction: (order: any, action: string) => void;
@@ -110,7 +112,7 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
     openTradeForm, setOpenTradeForm, isCreatingTrade,
     handleDirectOrderCreation, refreshBalance,
     setSelectedOrderPopup, setSelectedMempoolOrder, setSelectedOrderId,
-    acceptOrder, acceptingOrderId, handleCancelOrder, handleOpenChat,
+    acceptOrder, acceptingOrderId, lockingEscrowOrderId, confirmingOrderId, handleCancelOrder, handleOpenChat,
     handleOrderAction, fetchOrders, loadMoreOrders, hasMoreOrders, isLoadingMore, openDisputeModal, setRatingModalData,
     inProgressCollapsed, setInProgressCollapsed,
     completedCollapsed, setCompletedCollapsed,
@@ -261,6 +263,8 @@ export const MerchantDesktopLayout = React.memo(function MerchantDesktopLayout(p
                 collapsed={inProgressCollapsed}
                 onCollapseChange={setInProgressCollapsed}
                 merchantId={merchantId}
+                lockingEscrowOrderId={lockingEscrowOrderId}
+                confirmingOrderId={confirmingOrderId}
               />
             </div>
             <div

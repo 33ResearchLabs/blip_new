@@ -163,6 +163,7 @@ export interface OrderQuickViewProps {
   acceptingOrderId?: string | null;
   confirmingOrderId?: string | null;
   cancellingOrderId?: string | null;
+  lockingEscrowOrderId?: string | null;
   isRequestingCancel?: boolean;
   onClose: () => void;
   onAcceptOrder: (order: Order) => void;
@@ -183,6 +184,7 @@ export function OrderQuickView({
   acceptingOrderId,
   confirmingOrderId,
   cancellingOrderId,
+  lockingEscrowOrderId,
   isRequestingCancel,
   onClose,
   onAcceptOrder,
@@ -715,6 +717,8 @@ export function OrderQuickView({
                     return confirmingOrderId === selectedOrder.id;
                   if (type === "CANCEL")
                     return cancellingOrderId === selectedOrder.id;
+                  if (type === "LOCK_ESCROW")
+                    return lockingEscrowOrderId === selectedOrder.id;
                   if (type === "SEND_PAYMENT") return markingDone;
                   return false;
                 };

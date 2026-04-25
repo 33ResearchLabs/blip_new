@@ -45,11 +45,28 @@ export interface AttachmentInput {
   size: number;
 }
 
+// One entry in the multi-screenshot list. `dataUrl` is the version we
+// upload — for annotated shots that's the annotated PNG, otherwise it's
+// the raw source. `type` discriminates in-app captures from manual file
+// uploads so the server (and admin UI) can render them differently.
+export interface ScreenshotInput {
+  dataUrl: string;
+  type: 'screenshot' | 'upload';
+  mime?: string;
+  size_bytes?: number;
+}
+
 export interface SubmitInput {
   title: string;
   category: IssueCategory;
   description: string;
+  // Legacy single-shot field. Kept so older callers (and any external
+  // integrations) don't break. When `screenshots` is also supplied it
+  // wins; this field is ignored.
   screenshotDataUrl: string | null;
+  // v2 multi-shot list. Optional — when omitted the hook falls back to
+  // sending `screenshotDataUrl` under the legacy `screenshot` field.
+  screenshots?: ScreenshotInput[];
   attachments: AttachmentInput[];
 }
 
@@ -220,17 +237,30 @@ export function useIssueReporter({
    */
   const submit = useCallback(async (input: SubmitInput): Promise<SubmitResult> => {
     setSubmitting(true);
-    const payload = {
+    // Prefer the v2 screenshots[] field. Only emit the legacy single
+    // `screenshot` when the caller hasn't migrated. The server accepts
+    // both shapes — see /api/issues/create.
+    const useMultiShot = Array.isArray(input.screenshots) && input.screenshots.length > 0;
+    const payload: Record<string, unknown> = {
       title: input.title,
       category: input.category,
       description: input.description,
-      screenshot: input.screenshotDataUrl || undefined,
       attachments: input.attachments.map((a) => ({
         name: a.name,
         dataUrl: a.dataUrl,
       })),
       metadata: collectMetadata(),
     };
+    if (useMultiShot) {
+      payload.screenshots = input.screenshots!.map((s) => ({
+        dataUrl: s.dataUrl,
+        type: s.type,
+        ...(s.mime ? { mime: s.mime } : {}),
+        ...(typeof s.size_bytes === 'number' ? { size_bytes: s.size_bytes } : {}),
+      }));
+    } else if (input.screenshotDataUrl) {
+      payload.screenshot = input.screenshotDataUrl;
+    }
     const body = JSON.stringify(payload);
 
     const doFetch = async () => {

@@ -44,6 +44,9 @@ import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
 import { ImageMessageBubble, type ImageUploadStatus } from "@/components/chat/ImageMessageBubble";
 import { compressImage } from "@/lib/utils/compressImage";
 import type { ChatMessage, PresenceMember } from "@/hooks/useRealtimeChat";
+import { usePusherOptional } from "@/context/PusherContext";
+import { CHAT_EVENTS } from "@/lib/pusher/events";
+import { getOrderChannel } from "@/lib/pusher/channels";
 
 // ============================================
 // Types
@@ -401,6 +404,30 @@ export function ChatRoom({
   const [messageText, setMessageText] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+
+  // Live receipt-status override. Subscribes to chat:receipt-updated from
+  // core-api/src/receipts.ts so the embedded ReceiptCard re-renders without
+  // a refresh when the order's status changes. Falls through to the JSONB
+  // payload's data.status if no live event has been received yet.
+  const pusher = usePusherOptional();
+  const [liveReceiptStatus, setLiveReceiptStatus] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pusher || !orderId) return;
+    const channelName = getOrderChannel(orderId);
+    const channel = pusher.subscribe(channelName);
+    if (!channel) return;
+    const handler = (rawData: unknown) => {
+      const data = rawData as { status?: string };
+      if (data?.status) setLiveReceiptStatus(data.status);
+    };
+    channel.bind(CHAT_EVENTS.RECEIPT_UPDATED, handler);
+    return () => {
+      try {
+        channel.unbind(CHAT_EVENTS.RECEIPT_UPDATED, handler);
+      } catch { /* channel may already be torn down */ }
+      pusher.unsubscribe(channelName);
+    };
+  }, [pusher, orderId]);
   const [pendingFile, setPendingFile] = useState<{
     file: File;
     previewUrl?: string;
@@ -943,7 +970,10 @@ export function ChatRoom({
             if (payload) {
               return (
                 <div key={msg.id} className="max-w-[90%] mx-auto my-2">
-                  <ReceiptCard data={payload as never} />
+                  <ReceiptCard
+                    data={payload as never}
+                    currentStatus={liveReceiptStatus ?? undefined}
+                  />
                   <p className="text-[10px] mt-1 text-center text-gray-500">
                     {formatTime(msg.timestamp)}
                   </p>
@@ -1234,8 +1264,8 @@ export function ChatRoom({
         )}
 
         {(chatEnabled || currentUserType === "compliance") && (
-        <div className="flex items-center gap-2">
-          {/* File upload button */}
+        <div className="flex items-center gap-2 w-full">
+          {/* Hidden native file picker — triggered by the paperclip button inside the pill */}
           <input
             ref={fileInputRef}
             type="file"
@@ -1248,44 +1278,55 @@ export function ChatRoom({
               (isFrozen && currentUserType !== "compliance")
             }
           />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={
-              disabled ||
-              isUploading ||
-              (isFrozen && currentUserType !== "compliance")
-            }
-            className="p-2 rounded-lg hover:bg-foreground/[0.06] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            title="Attach file"
-          >
-            <Paperclip className="w-4 h-4 text-foreground/40" />
-          </button>
 
-          {/* Text input — disabled when chat is closed/frozen/waiting */}
-          <input
-            ref={inputRef}
-            type="text"
-            maxLength={1000}
-            value={messageText}
-            onChange={(e) => handleTypingChange(e.target.value.slice(0, 1000))}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              !chatEnabled && chatReason
-                ? chatReason
-                : isFrozen && currentUserType !== "compliance"
-                ? "Chat is frozen..."
-                : "Type a message..."
-            }
-            disabled={
-              disabled ||
-              isUploading ||
-              !chatEnabled ||
-              (isFrozen && currentUserType !== "compliance")
-            }
-            className="flex-1 bg-foreground/[0.04] border border-foreground/[0.06] rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-foreground/30 outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-40"
-          />
+          {/* Pill container: text input + attach button live inside one rounded row
+              so the Send button can never be pushed off-screen by long text.
+              min-w-0 on the flex parent is the critical bit — without it the
+              <input> can overflow its flex cell on narrow screens. */}
+          <div className="flex-1 min-w-0 flex items-center gap-1 bg-foreground/[0.04] border border-foreground/[0.06] rounded-full pl-4 pr-1.5 focus-within:border-primary/30 transition-colors">
+            {/* Text input — disabled when chat is closed/frozen/waiting */}
+            <input
+              ref={inputRef}
+              type="text"
+              name="chat-message"
+              autoComplete="off"
+              maxLength={1000}
+              value={messageText}
+              onChange={(e) => handleTypingChange(e.target.value.slice(0, 1000))}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                !chatEnabled && chatReason
+                  ? chatReason
+                  : isFrozen && currentUserType !== "compliance"
+                  ? "Chat is frozen..."
+                  : "Type a message..."
+              }
+              disabled={
+                disabled ||
+                isUploading ||
+                !chatEnabled ||
+                (isFrozen && currentUserType !== "compliance")
+              }
+              className="flex-1 min-w-0 appearance-none border-0 bg-transparent py-2.5 text-sm text-foreground placeholder:text-foreground/30 outline-none focus-visible:outline-none disabled:opacity-40"
+            />
 
-          {/* Send button */}
+            {/* Attach-file trigger — shrink-0 so it holds its width when text is long */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={
+                disabled ||
+                isUploading ||
+                (isFrozen && currentUserType !== "compliance")
+              }
+              className="shrink-0 p-2 rounded-full hover:bg-foreground/[0.06] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Attach file"
+            >
+              <Paperclip className="w-4 h-4 text-foreground/40" />
+            </button>
+          </div>
+
+          {/* Send button — circular, sits outside the pill. shrink-0 keeps it
+              at a fixed size; the row never wraps. */}
           <button
             onClick={handleSend}
             disabled={
@@ -1294,7 +1335,7 @@ export function ChatRoom({
               (isFrozen && currentUserType !== "compliance") ||
               (!messageText.trim() && !pendingFile)
             }
-            className="p-2.5 rounded-xl bg-primary hover:bg-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full bg-primary hover:bg-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isUploading ? (
               <Loader2 className="w-4 h-4 text-background animate-spin" />

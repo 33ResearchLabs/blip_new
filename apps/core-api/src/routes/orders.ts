@@ -29,6 +29,49 @@ import { ORDER_EVENT, type OrderEventPayload } from '../events';
 import { insertOutboxEvent, insertOutboxEventDirect } from '../outbox';
 import { withIdempotency, getIdempotencyKey } from '../idempotency';
 import { checkFinancialRateLimit } from '../rateLimit';
+import { createOrderReceipt, updateOrderReceipt } from '../receipts';
+
+// Defense-in-depth sync helper. Mirrors what receiptListener does via the
+// BullMQ queue, but inline so a transient enqueue failure doesn't drop the
+// receipt update silently. updateOrderReceipt is idempotent (forward-only
+// guard inside), so duplicate calls from sync + listener are harmless.
+function syncReceiptTransition(
+  orderId: string,
+  event: 'PAYMENT_SENT' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED' | 'ESCROWED',
+  extras?: { txHash?: string | null; refundTxHash?: string | null; previousStatus?: string },
+): void {
+  let newStatus: string;
+  let fields: Parameters<typeof updateOrderReceipt>[2];
+  switch (event) {
+    case 'PAYMENT_SENT':
+      newStatus = 'payment_sent';
+      fields = { payment_sent_at: true };
+      break;
+    case 'COMPLETED':
+      newStatus = 'completed';
+      fields = { release_tx_hash: extras?.txHash ?? null, completed_at: true };
+      break;
+    case 'CANCELLED':
+      newStatus = 'cancelled';
+      fields = { refund_tx_hash: extras?.refundTxHash ?? null, cancelled_at: true };
+      break;
+    case 'EXPIRED':
+      // Match receiptListener: skip when previous was 'pending' (no receipt to update)
+      if (extras?.previousStatus === 'pending') return;
+      newStatus = 'expired';
+      fields = { expired_at: true };
+      break;
+    case 'ESCROWED':
+      newStatus = 'escrowed';
+      fields = { escrowed_at: true };
+      break;
+  }
+  updateOrderReceipt(orderId, newStatus, fields).catch((err) => {
+    logger.warn('[core-api] Sync updateOrderReceipt failed (queue path will retry)', {
+      orderId, event, error: err instanceof Error ? err.message : String(err),
+    });
+  });
+}
 
 interface OrderRow {
   id: string;
@@ -210,6 +253,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             orderVersion: cancelResult.order!.order_version, minimalStatus: 'cancelled',
             refundTxHash: cancelResult.order?.refund_tx_hash ?? undefined,
           });
+          syncReceiptTransition(id, 'CANCELLED', { refundTxHash: cancelResult.order?.refund_tx_hash ?? null });
           return reply.send({ success: true, data: { ...cancelResult.order, minimal_status: normalizeStatus(cancelResult.order!.status) } });
         }
         // Non-escrow cancel falls through to general TX path
@@ -275,6 +319,48 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           orderVersion: order.order_version, minimalStatus: normalizeStatus(order.status as OrderStatus),
           metadata: request.body.metadata,
         });
+
+        // Defense-in-depth: synchronously create the receipt here, in addition to
+        // the BullMQ enqueue triggered by the ACCEPTED listener. The queue path
+        // has dropped jobs silently (BED6, 04:57 cancel). createOrderReceipt's
+        // ON CONFLICT (order_id) DO NOTHING makes the duplicate harmless: whichever
+        // path lands first writes the row; the second path's INSERT is a no-op
+        // and skips the chat_messages/direct_messages INSERTs (per the early-return
+        // in receipts.ts after ON CONFLICT).
+        try {
+          await createOrderReceipt(
+            id,
+            {
+              id: order.id,
+              order_number: order.order_number,
+              type: order.type,
+              payment_method: order.payment_method,
+              crypto_amount: String(order.crypto_amount),
+              crypto_currency: order.crypto_currency,
+              fiat_amount: String(order.fiat_amount),
+              fiat_currency: order.fiat_currency,
+              rate: String(order.rate),
+              platform_fee: String(order.platform_fee ?? 0),
+              protocol_fee_amount: order.protocol_fee_amount ? String(order.protocol_fee_amount) : null,
+              status: order.status,
+              user_id: order.user_id,
+              merchant_id: order.merchant_id,
+              buyer_merchant_id: order.buyer_merchant_id ?? null,
+              acceptor_wallet_address: (order as any).acceptor_wallet_address ?? null,
+              buyer_wallet_address: (order as any).buyer_wallet_address ?? null,
+              escrow_tx_hash: (order as any).escrow_tx_hash ?? null,
+              payment_details: (order as any).payment_details ?? null,
+              accepted_at: order.accepted_at ? new Date(order.accepted_at) : new Date(),
+              escrowed_at: (order as any).escrowed_at ? new Date((order as any).escrowed_at) : null,
+            },
+            actor_id,
+          );
+        } catch (receiptErr) {
+          logger.warn('[core-api] Sync createOrderReceipt failed (queue path will retry)', {
+            orderId: id, error: receiptErr instanceof Error ? receiptErr.message : String(receiptErr),
+          });
+        }
+
         return reply.send({ success: true, data: { ...order, minimal_status: normalizeStatus(order.status as OrderStatus) } });
       }
 
@@ -361,6 +447,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             order: updated as unknown as Record<string, unknown>,
             orderVersion: updated.order_version, minimalStatus: 'payment_sent',
           });
+          syncReceiptTransition(id, 'PAYMENT_SENT');
           return { statusCode: 200, body: { success: true, data: { ...updated, minimal_status: normalizeStatus(updated.status) } } };
         });
       }
@@ -634,6 +721,67 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(400).send({ success: false, error: result.error });
       }
 
+      // Defense-in-depth: synchronously create the receipt for transitions that
+      // produce one (accept-into-escrowed claim, escrowed-claim, etc.). Mirror
+      // of the fast-accept-path safety net. Idempotent via ON CONFLICT.
+      // Only attempt on transitions where a receipt is expected — accepted/
+      // escrowed/payment_pending. Other transitions (payment_sent, completed,
+      // cancelled, expired, disputed) update an existing receipt via the listener.
+      if (result.order && ['accepted', 'escrowed', 'payment_pending'].includes(String(result.order.status))) {
+        try {
+          const o = result.order;
+          await createOrderReceipt(
+            id,
+            {
+              id: o.id,
+              order_number: o.order_number,
+              type: o.type,
+              payment_method: o.payment_method,
+              crypto_amount: String(o.crypto_amount),
+              crypto_currency: o.crypto_currency,
+              fiat_amount: String(o.fiat_amount),
+              fiat_currency: o.fiat_currency,
+              rate: String(o.rate),
+              platform_fee: String(o.platform_fee ?? 0),
+              protocol_fee_amount: o.protocol_fee_amount ? String(o.protocol_fee_amount) : null,
+              status: o.status,
+              user_id: o.user_id,
+              merchant_id: o.merchant_id,
+              buyer_merchant_id: o.buyer_merchant_id ?? null,
+              acceptor_wallet_address: (o as any).acceptor_wallet_address ?? null,
+              buyer_wallet_address: (o as any).buyer_wallet_address ?? null,
+              escrow_tx_hash: (o as any).escrow_tx_hash ?? null,
+              payment_details: (o as any).payment_details ?? null,
+              accepted_at: o.accepted_at ? new Date(o.accepted_at) : null,
+              escrowed_at: (o as any).escrowed_at ? new Date((o as any).escrowed_at) : null,
+            },
+            actor_id,
+          );
+        } catch (receiptErr) {
+          logger.warn('[core-api] Sync createOrderReceipt (general TX) failed', {
+            orderId: id, error: receiptErr instanceof Error ? receiptErr.message : String(receiptErr),
+          });
+        }
+      }
+
+      // Defense-in-depth: sync updateOrderReceipt for non-create transitions
+      // emitted by the general TX path. Mirrors the listener path in case
+      // BullMQ silently drops the update job (observed multiple times).
+      if (result.order) {
+        const s = String(result.order.status);
+        if (s === 'escrowed') {
+          syncReceiptTransition(id, 'ESCROWED');
+        } else if (s === 'payment_sent') {
+          syncReceiptTransition(id, 'PAYMENT_SENT');
+        } else if (s === 'completed') {
+          syncReceiptTransition(id, 'COMPLETED');
+        } else if (s === 'cancelled') {
+          syncReceiptTransition(id, 'CANCELLED');
+        } else if (s === 'expired') {
+          syncReceiptTransition(id, 'EXPIRED', { previousStatus: result.oldStatus });
+        }
+      }
+
       return reply.send({
         success: true,
         data: { ...result.order, minimal_status: normalizeStatus(result.order!.status) },
@@ -723,6 +871,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             orderVersion: result.order!.order_version, minimalStatus: 'cancelled',
             refundTxHash: result.order?.refund_tx_hash ?? undefined,
           });
+          syncReceiptTransition(id, 'CANCELLED', { refundTxHash: result.order?.refund_tx_hash ?? null });
 
           return {
             statusCode: 200,
@@ -810,6 +959,8 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           if (!result.success) {
             return { statusCode: 400, body: { success: false, error: result.error } };
           }
+
+          syncReceiptTransition(id, 'CANCELLED');
 
           return {
             statusCode: 200,
@@ -931,6 +1082,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             orderVersion: result.updated.order_version, minimalStatus: 'completed',
             txHash: tx_hash, metadata: { tx_hash },
           });
+          syncReceiptTransition(id, 'COMPLETED', { txHash: tx_hash });
 
           return {
             statusCode: 200,
@@ -986,6 +1138,7 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           orderVersion: refundResult.order!.order_version, minimalStatus: 'cancelled',
           refundTxHash: refundResult.order?.refund_tx_hash ?? undefined,
         });
+        syncReceiptTransition(id, 'CANCELLED', { refundTxHash: refundResult.order?.refund_tx_hash ?? null });
 
         return reply.send({
           success: true,

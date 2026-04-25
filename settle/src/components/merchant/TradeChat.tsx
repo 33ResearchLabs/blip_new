@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from "react";
 import {
   ChevronLeft,
   Send,
@@ -20,21 +20,30 @@ import {
   MessageSquare,
   Users,
   Paperclip,
-  X
-} from 'lucide-react';
-import { motion } from 'framer-motion';
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
-import { BankInfoCard, EscrowCard, ReceiptCard, StatusEventCard, detectEventType } from '../chat/cards';
+  X,
+} from "lucide-react";
+import { motion } from "framer-motion";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import {
+  BankInfoCard,
+  EscrowCard,
+  ReceiptCard,
+  StatusEventCard,
+  detectEventType,
+} from "../chat/cards";
+import { usePusher } from "@/context/PusherContext";
+import { CHAT_EVENTS } from "@/lib/pusher/events";
+import { getOrderChannel } from "@/lib/pusher/channels";
 
 // Message type from the chat system
 interface ChatMessage {
   id: string;
-  from: 'me' | 'them' | 'system' | 'compliance';
+  from: "me" | "them" | "system" | "compliance";
   text: string;
   timestamp: Date;
   messageType?: string;
   imageUrl?: string | null;
-  senderType?: 'user' | 'merchant' | 'system' | 'compliance';
+  senderType?: "user" | "merchant" | "system" | "compliance";
   senderName?: string;
 }
 
@@ -63,7 +72,7 @@ interface OrderContext {
   release_tx_hash?: string;
   crypto_amount?: number;
   crypto_currency?: string;
-  payment_method?: 'bank' | 'cash';
+  payment_method?: "bank" | "cash";
 }
 
 // Compliance officer info
@@ -77,7 +86,7 @@ interface ComplianceInfo {
 interface TradeInfo {
   orderId: string;
   orderNumber: string;
-  orderType: 'buy' | 'sell';
+  orderType: "buy" | "sell";
   status: string;
   cryptoAmount: number;
   fiatAmount: number;
@@ -101,7 +110,7 @@ interface TradeInfo {
   completedAt?: Date;
   cancelledAt?: Date;
   // Extended fields for rich cards
-  paymentMethod?: 'bank' | 'cash';
+  paymentMethod?: "bank" | "cash";
 }
 
 interface TradeChatProps {
@@ -110,7 +119,7 @@ interface TradeChatProps {
   isLoading?: boolean;
   onSendMessage: (text: string, imageUrl?: string) => void;
   onBack: () => void;
-  currentUserType: 'merchant' | 'user' | 'compliance';
+  currentUserType: "merchant" | "user" | "compliance";
   userName?: string;
   userEmoji?: string;
   orderContext?: OrderContext;
@@ -118,28 +127,80 @@ interface TradeChatProps {
 }
 
 // Status colors for badges
-const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
-  pending: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', icon: <Timer className="w-3 h-3" /> },
-  accepted: { bg: 'bg-white/10', text: 'text-white/70', icon: <Check className="w-3 h-3" /> },
-  escrowed: { bg: 'bg-white/10', text: 'text-white/70', icon: <Lock className="w-3 h-3" /> },
-  payment_sent: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', icon: <DollarSign className="w-3 h-3" /> },
-  payment_confirmed: { bg: 'bg-teal-500/20', text: 'text-teal-400', icon: <CheckCircle2 className="w-3 h-3" /> },
-  completed: { bg: 'bg-white/10', text: 'text-white/70', icon: <CheckCircle2 className="w-3 h-3" /> },
-  cancelled: { bg: 'bg-red-500/20', text: 'text-red-400', icon: <XCircle className="w-3 h-3" /> },
-  disputed: { bg: 'bg-white/10', text: 'text-white/70', icon: <AlertTriangle className="w-3 h-3" /> },
-  expired: { bg: 'bg-zinc-500/20', text: 'text-zinc-400', icon: <Clock className="w-3 h-3" /> },
+const STATUS_COLORS: Record<
+  string,
+  { bg: string; text: string; icon: React.ReactNode }
+> = {
+  pending: {
+    bg: "bg-yellow-500/20",
+    text: "text-yellow-400",
+    icon: <Timer className="w-3 h-3" />,
+  },
+  accepted: {
+    bg: "bg-white/10",
+    text: "text-white/70",
+    icon: <Check className="w-3 h-3" />,
+  },
+  escrowed: {
+    bg: "bg-white/10",
+    text: "text-white/70",
+    icon: <Lock className="w-3 h-3" />,
+  },
+  payment_sent: {
+    bg: "bg-cyan-500/20",
+    text: "text-cyan-400",
+    icon: <DollarSign className="w-3 h-3" />,
+  },
+  payment_confirmed: {
+    bg: "bg-teal-500/20",
+    text: "text-teal-400",
+    icon: <CheckCircle2 className="w-3 h-3" />,
+  },
+  completed: {
+    bg: "bg-white/10",
+    text: "text-white/70",
+    icon: <CheckCircle2 className="w-3 h-3" />,
+  },
+  cancelled: {
+    bg: "bg-red-500/20",
+    text: "text-red-400",
+    icon: <XCircle className="w-3 h-3" />,
+  },
+  disputed: {
+    bg: "bg-white/10",
+    text: "text-white/70",
+    icon: <AlertTriangle className="w-3 h-3" />,
+  },
+  expired: {
+    bg: "bg-zinc-500/20",
+    text: "text-zinc-400",
+    icon: <Clock className="w-3 h-3" />,
+  },
 };
 
 // Get emoji from username hash
 function getUserEmoji(username: string): string {
-  const emojis = ['🦊', '🐻', '🐼', '🐨', '🦁', '🐯', '🐸', '🐙', '🦋', '🐳', '🦄', '🐲'];
-  const hash = username.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+  const emojis = [
+    "🦊",
+    "🐻",
+    "🐼",
+    "🐨",
+    "🦁",
+    "🐯",
+    "🐸",
+    "🐙",
+    "🦋",
+    "🐳",
+    "🦄",
+    "🐲",
+  ];
+  const hash = username.split("").reduce((a, b) => a + b.charCodeAt(0), 0);
   return emojis[hash % emojis.length];
 }
 
 // Format timestamp
 function formatTime(date: Date): string {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDate(date: Date): string {
@@ -148,54 +209,60 @@ function formatDate(date: Date): string {
   yesterday.setDate(yesterday.getDate() - 1);
 
   if (date.toDateString() === today.toDateString()) {
-    return 'Today';
+    return "Today";
   } else if (date.toDateString() === yesterday.toDateString()) {
-    return 'Yesterday';
+    return "Yesterday";
   }
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 // Timeline step component for order progression
 interface TimelineStepProps {
-  status: 'pending' | 'current' | 'completed' | 'failed' | 'warning';
+  status: "pending" | "current" | "completed" | "failed" | "warning";
   label: string;
   time?: Date;
   isFirst?: boolean;
   isLast?: boolean;
 }
 
-function TimelineStep({ status, label, time, isFirst, isLast }: TimelineStepProps) {
+function TimelineStep({
+  status,
+  label,
+  time,
+  isFirst,
+  isLast,
+}: TimelineStepProps) {
   const getStatusStyles = () => {
     switch (status) {
-      case 'completed':
+      case "completed":
         return {
-          dot: 'bg-white/10',
-          line: 'bg-white/[0.05]',
-          text: 'text-white/70',
+          dot: "bg-white/10",
+          line: "bg-white/[0.05]",
+          text: "text-white/70",
         };
-      case 'current':
+      case "current":
         return {
-          dot: 'bg-primary animate-pulse',
-          line: 'bg-gray-700',
-          text: 'text-primary',
+          dot: "bg-primary animate-pulse",
+          line: "bg-gray-700",
+          text: "text-primary",
         };
-      case 'failed':
+      case "failed":
         return {
-          dot: 'bg-red-500',
-          line: 'bg-red-500/50',
-          text: 'text-red-400',
+          dot: "bg-red-500",
+          line: "bg-red-500/50",
+          text: "text-red-400",
         };
-      case 'warning':
+      case "warning":
         return {
-          dot: 'bg-primary',
-          line: 'bg-primary/50',
-          text: 'text-white/70',
+          dot: "bg-primary",
+          line: "bg-primary/50",
+          text: "text-white/70",
         };
       default:
         return {
-          dot: 'bg-gray-600',
-          line: 'bg-gray-700',
-          text: 'text-foreground/35',
+          dot: "bg-gray-600",
+          line: "bg-gray-700",
+          text: "text-foreground/35",
         };
     }
   };
@@ -209,8 +276,10 @@ function TimelineStep({ status, label, time, isFirst, isLast }: TimelineStepProp
 
       {/* Step indicator */}
       <div className="flex flex-col items-center min-w-[60px]">
-        <div className={`w-3 h-3 rounded-full ${styles.dot} ring-2 ring-black/50`}>
-          {status === 'completed' && (
+        <div
+          className={`w-3 h-3 rounded-full ${styles.dot} ring-2 ring-black/50`}
+        >
+          {status === "completed" && (
             <Check className="w-3 h-3 text-background p-0.5" />
           )}
         </div>
@@ -219,7 +288,10 @@ function TimelineStep({ status, label, time, isFirst, isLast }: TimelineStepProp
         </span>
         {time && (
           <span className="text-[9px] text-gray-600">
-            {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {time.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
           </span>
         )}
       </div>
@@ -231,16 +303,36 @@ function TimelineStep({ status, label, time, isFirst, isLast }: TimelineStepProp
 }
 
 // Parse system message to extract event type
-function parseSystemMessage(text: string): { icon: React.ReactNode; type: string } {
-  if (text.includes('accepted')) return { icon: <Check className="w-3.5 h-3.5" />, type: 'accepted' };
-  if (text.includes('locked in escrow') || text.includes('🔒')) return { icon: <Lock className="w-3.5 h-3.5" />, type: 'escrowed' };
-  if (text.includes('Payment') && text.includes('sent')) return { icon: <DollarSign className="w-3.5 h-3.5" />, type: 'payment_sent' };
-  if (text.includes('Payment confirmed')) return { icon: <CheckCircle2 className="w-3.5 h-3.5" />, type: 'payment_confirmed' };
-  if (text.includes('completed') || text.includes('released')) return { icon: <Unlock className="w-3.5 h-3.5" />, type: 'completed' };
-  if (text.includes('cancelled')) return { icon: <XCircle className="w-3.5 h-3.5" />, type: 'cancelled' };
-  if (text.includes('expired')) return { icon: <Clock className="w-3.5 h-3.5" />, type: 'expired' };
-  if (text.includes('dispute')) return { icon: <AlertTriangle className="w-3.5 h-3.5" />, type: 'disputed' };
-  return { icon: <Bot className="w-3.5 h-3.5" />, type: 'info' };
+function parseSystemMessage(text: string): {
+  icon: React.ReactNode;
+  type: string;
+} {
+  if (text.includes("accepted"))
+    return { icon: <Check className="w-3.5 h-3.5" />, type: "accepted" };
+  if (text.includes("locked in escrow") || text.includes("🔒"))
+    return { icon: <Lock className="w-3.5 h-3.5" />, type: "escrowed" };
+  if (text.includes("Payment") && text.includes("sent"))
+    return {
+      icon: <DollarSign className="w-3.5 h-3.5" />,
+      type: "payment_sent",
+    };
+  if (text.includes("Payment confirmed"))
+    return {
+      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+      type: "payment_confirmed",
+    };
+  if (text.includes("completed") || text.includes("released"))
+    return { icon: <Unlock className="w-3.5 h-3.5" />, type: "completed" };
+  if (text.includes("cancelled"))
+    return { icon: <XCircle className="w-3.5 h-3.5" />, type: "cancelled" };
+  if (text.includes("expired"))
+    return { icon: <Clock className="w-3.5 h-3.5" />, type: "expired" };
+  if (text.includes("dispute"))
+    return {
+      icon: <AlertTriangle className="w-3.5 h-3.5" />,
+      type: "disputed",
+    };
+  return { icon: <Bot className="w-3.5 h-3.5" />, type: "info" };
 }
 
 export function TradeChat({
@@ -255,30 +347,70 @@ export function TradeChat({
   orderContext,
   showTimeline = true,
 }: TradeChatProps) {
-  const [messageText, setMessageText] = useState('');
-  const [activeChatTab, setActiveChatTab] = useState<'order' | 'direct'>('order');
+  const [messageText, setMessageText] = useState("");
+  const [activeChatTab, setActiveChatTab] = useState<"order" | "direct">(
+    "order",
+  );
   const [isUploading, setIsUploading] = useState(false);
-  const [pendingImage, setPendingImage] = useState<{ file: File; previewUrl: string } | null>(null);
+  const [pendingImage, setPendingImage] = useState<{
+    file: File;
+    previewUrl: string;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Scroll to bottom on new messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Live receipt-status override. Subscribes to chat:receipt-updated so the
+  // ReceiptCard's status pill updates in real time when the order's status
+  // changes (e.g. accepted -> escrowed -> payment_sent -> completed). Without
+  // this, the card relies on tradeInfo.status from the parent — which can lag
+  // or miss updates depending on what the parent subscribes to.
+  const { subscribe, unsubscribe } = usePusher();
+  const [liveReceiptStatus, setLiveReceiptStatus] = useState<string | null>(null);
+  useEffect(() => {
+    const orderId = tradeInfo?.orderId;
+    if (!orderId) return;
+    const channelName = getOrderChannel(orderId);
+    const channel = subscribe(channelName);
+    if (!channel) return;
+    const handler = (rawData: unknown) => {
+      const data = rawData as { status?: string };
+      if (data?.status) setLiveReceiptStatus(data.status);
+    };
+    channel.bind(CHAT_EVENTS.RECEIPT_UPDATED, handler);
+    return () => {
+      try {
+        channel.unbind(CHAT_EVENTS.RECEIPT_UPDATED, handler);
+      } catch { /* channel may already be torn down */ }
+      unsubscribe(channelName);
+    };
+  }, [tradeInfo?.orderId, subscribe, unsubscribe]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) return;
     // Allow images, PDFs, and Word docs
-    const validTypes = ['image/', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    const isValid = validTypes.some(type => file.type.startsWith(type) || file.type === type);
+    const validTypes = [
+      "image/",
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ];
+    const isValid = validTypes.some(
+      (type) => file.type.startsWith(type) || file.type === type,
+    );
     if (!isValid) return;
-    const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
+    const previewUrl = file.type.startsWith("image/")
+      ? URL.createObjectURL(file)
+      : "";
     setPendingImage({ file, previewUrl });
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const clearPendingImage = () => {
@@ -293,49 +425,56 @@ export function TradeChat({
     setIsUploading(true);
     setUploadError(null);
     try {
-      const sigRes = await fetchWithAuth('/api/upload/signature', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const sigRes = await fetchWithAuth("/api/upload/signature", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId: tradeInfo.orderId }),
       });
       if (!sigRes.ok) {
-        setUploadError(sigRes.status === 401 ? 'Session expired — please refresh the page' : 'Failed to prepare upload');
+        setUploadError(
+          sigRes.status === 401
+            ? "Session expired — please refresh the page"
+            : "Failed to prepare upload",
+        );
         setIsUploading(false);
         return;
       }
       const sigData = await sigRes.json();
       if (!sigData.success) {
-        setUploadError(sigData.error || 'Failed to prepare upload');
+        setUploadError(sigData.error || "Failed to prepare upload");
         setIsUploading(false);
         return;
       }
       const sig = sigData.data;
 
       const formData = new FormData();
-      formData.append('file', pendingImage.file);
-      formData.append('signature', sig.signature);
-      formData.append('timestamp', sig.timestamp.toString());
-      formData.append('api_key', sig.apiKey);
-      formData.append('folder', sig.folder);
-
+      formData.append("file", pendingImage.file);
+      formData.append("signature", sig.signature);
+      formData.append("timestamp", sig.timestamp.toString());
+      formData.append("api_key", sig.apiKey);
+      formData.append("folder", sig.folder);
 
       const uploadRes = await fetch(
         `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`,
-        { method: 'POST', body: formData }
+        { method: "POST", body: formData },
       );
       if (uploadRes.ok) {
         const result = await uploadRes.json();
-        const text = messageText.trim() || 'Photo';
+        const text = messageText.trim() || "Photo";
         onSendMessage(text, result.secure_url);
-        setMessageText('');
+        setMessageText("");
       } else {
-        const errText = await uploadRes.text().catch(() => '');
-        console.error('[TradeChat] Cloudinary upload failed:', uploadRes.status, errText);
-        setUploadError('Upload failed — please try again');
+        const errText = await uploadRes.text().catch(() => "");
+        console.error(
+          "[TradeChat] Cloudinary upload failed:",
+          uploadRes.status,
+          errText,
+        );
+        setUploadError("Upload failed — please try again");
       }
     } catch (err) {
-      console.error('[TradeChat] Image upload error:', err);
-      setUploadError('Upload failed — check your connection');
+      console.error("[TradeChat] Image upload error:", err);
+      setUploadError("Upload failed — check your connection");
     } finally {
       setIsUploading(false);
       clearPendingImage();
@@ -345,7 +484,8 @@ export function TradeChat({
   // Cleanup preview URL on unmount
   useEffect(() => {
     return () => {
-      if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
+      if (pendingImage?.previewUrl)
+        URL.revokeObjectURL(pendingImage.previewUrl);
     };
   }, [pendingImage]);
 
@@ -354,34 +494,37 @@ export function TradeChat({
       uploadAndSend();
     } else if (messageText.trim()) {
       onSendMessage(messageText.trim());
-      setMessageText('');
+      setMessageText("");
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
 
   // Get display name for sender
-  const getSenderInfo = (msg: ChatMessage): { name: string; avatar: React.ReactNode; color: string } => {
-    if (msg.from === 'system') {
+  const getSenderInfo = (
+    msg: ChatMessage,
+  ): { name: string; avatar: React.ReactNode; color: string } => {
+    if (msg.from === "system") {
       return {
-        name: 'Trade Bot',
+        name: "Trade Bot",
         avatar: (
           <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
             <Bot className="w-4 h-4 text-amber-400" />
           </div>
         ),
-        color: 'text-amber-400',
+        color: "text-amber-400",
       };
     }
 
     // Compliance officer message
-    if (msg.from === 'compliance' || msg.senderType === 'compliance') {
-      const complianceName = msg.senderName || tradeInfo?.compliance?.name || 'Compliance Officer';
+    if (msg.from === "compliance" || msg.senderType === "compliance") {
+      const complianceName =
+        msg.senderName || tradeInfo?.compliance?.name || "Compliance Officer";
       return {
         name: complianceName,
         avatar: (
@@ -389,55 +532,64 @@ export function TradeChat({
             <Shield className="w-4 h-4 text-red-400" />
           </div>
         ),
-        color: 'text-red-400',
+        color: "text-red-400",
       };
     }
 
-    if (msg.from === 'me') {
+    if (msg.from === "me") {
       // Current user is compliance
-      if (currentUserType === 'compliance') {
+      if (currentUserType === "compliance") {
         return {
-          name: tradeInfo?.compliance?.name || 'You (Compliance)',
+          name: tradeInfo?.compliance?.name || "You (Compliance)",
           avatar: (
             <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
               <Shield className="w-4 h-4 text-red-400" />
             </div>
           ),
-          color: 'text-red-400',
+          color: "text-red-400",
         };
       }
       return {
-        name: currentUserType === 'merchant' ? (tradeInfo?.merchant.displayName || 'You') : 'You',
+        name:
+          currentUserType === "merchant"
+            ? tradeInfo?.merchant.displayName || "You"
+            : "You",
         avatar: (
           <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
-            {currentUserType === 'merchant' ? (
+            {currentUserType === "merchant" ? (
               <Store className="w-4 h-4 text-primary" />
             ) : (
-              <span className="text-sm">{userEmoji || getUserEmoji(userName || 'User')}</span>
+              <span className="text-sm">
+                {userEmoji || getUserEmoji(userName || "User")}
+              </span>
             )}
           </div>
         ),
-        color: 'text-primary',
+        color: "text-primary",
       };
     }
 
     // 'them' - the other party
-    if (currentUserType === 'merchant') {
+    if (currentUserType === "merchant") {
       // Other party is the user
-      const otherName = msg.senderName || tradeInfo?.user.username || userName || 'User';
+      const otherName =
+        msg.senderName || tradeInfo?.user.username || userName || "User";
       return {
         name: otherName,
         avatar: (
           <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
-            <span className="text-sm">{userEmoji || getUserEmoji(otherName)}</span>
+            <span className="text-sm">
+              {userEmoji || getUserEmoji(otherName)}
+            </span>
           </div>
         ),
-        color: 'text-white/70',
+        color: "text-white/70",
       };
-    } else if (currentUserType === 'compliance') {
+    } else if (currentUserType === "compliance") {
       // When compliance views, determine sender type from senderType field
-      if (msg.senderType === 'merchant') {
-        const otherName = msg.senderName || tradeInfo?.merchant.displayName || 'Merchant';
+      if (msg.senderType === "merchant") {
+        const otherName =
+          msg.senderName || tradeInfo?.merchant.displayName || "Merchant";
         return {
           name: otherName,
           avatar: (
@@ -445,23 +597,27 @@ export function TradeChat({
               <Store className="w-4 h-4 text-primary" />
             </div>
           ),
-          color: 'text-primary',
+          color: "text-primary",
         };
       } else {
-        const otherName = msg.senderName || tradeInfo?.user.username || userName || 'User';
+        const otherName =
+          msg.senderName || tradeInfo?.user.username || userName || "User";
         return {
           name: otherName,
           avatar: (
             <div className="w-8 h-8 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
-              <span className="text-sm">{userEmoji || getUserEmoji(otherName)}</span>
+              <span className="text-sm">
+                {userEmoji || getUserEmoji(otherName)}
+              </span>
             </div>
           ),
-          color: 'text-white/70',
+          color: "text-white/70",
         };
       }
     } else {
       // Other party is the merchant
-      const otherName = msg.senderName || tradeInfo?.merchant.displayName || 'Merchant';
+      const otherName =
+        msg.senderName || tradeInfo?.merchant.displayName || "Merchant";
       return {
         name: otherName,
         avatar: (
@@ -469,23 +625,24 @@ export function TradeChat({
             <Store className="w-4 h-4 text-white/70" />
           </div>
         ),
-        color: 'text-white/70',
+        color: "text-white/70",
       };
     }
   };
 
-  const statusInfo = STATUS_COLORS[tradeInfo?.status || 'pending'] || STATUS_COLORS.pending;
+  const statusInfo =
+    STATUS_COLORS[tradeInfo?.status || "pending"] || STATUS_COLORS.pending;
 
   // Separate system messages (timeline events) from regular chat messages
   // Guidance messages (from system but messageType='text') stay in the main chat
   const isTimelineEvent = (msg: ChatMessage) =>
-    msg.from === 'system' && msg.messageType !== 'text';
+    msg.from === "system" && msg.messageType !== "text";
   const systemMessages = messages.filter(isTimelineEvent);
-  const chatMessages = messages.filter(msg => !isTimelineEvent(msg));
+  const chatMessages = messages.filter((msg) => !isTimelineEvent(msg));
 
   // Group chat messages by date
   const groupedChatMessages: { date: string; messages: ChatMessage[] }[] = [];
-  let currentChatDate = '';
+  let currentChatDate = "";
   chatMessages.forEach((msg) => {
     const dateStr = formatDate(msg.timestamp);
     if (dateStr !== currentChatDate) {
@@ -497,7 +654,10 @@ export function TradeChat({
   });
 
   return (
-    <div data-testid="chat-panel" className="h-full flex flex-col bg-background">
+    <div
+      data-testid="chat-panel"
+      className="h-full flex flex-col bg-background"
+    >
       {/* Header with trade info */}
       <div className="border-b border-white/[0.04] bg-card-solid">
         {/* Navigation bar */}
@@ -512,18 +672,22 @@ export function TradeChat({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-semibold text-white truncate">
-                Trade #{tradeInfo?.orderNumber || '...'}
+                Trade #{tradeInfo?.orderNumber || "..."}
               </h2>
               {tradeInfo && (
-                <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full flex items-center gap-1 ${statusInfo.bg} ${statusInfo.text}`}>
+                <span
+                  className={`px-2 py-0.5 text-[10px] font-medium rounded-full flex items-center gap-1 ${statusInfo.bg} ${statusInfo.text}`}
+                >
                   {statusInfo.icon}
-                  {tradeInfo.status.replace('_', ' ')}
+                  {tradeInfo.status.replace("_", " ")}
                 </span>
               )}
             </div>
             {tradeInfo && (
               <p className="text-xs text-foreground/35 truncate">
-                {tradeInfo.orderType === 'buy' ? 'Selling' : 'Buying'} {tradeInfo.cryptoAmount} USDT • {tradeInfo.fiatAmount.toLocaleString()} {tradeInfo.fiatCurrency}
+                {tradeInfo.orderType === "buy" ? "Selling" : "Buying"}{" "}
+                {tradeInfo.cryptoAmount} USDT •{" "}
+                {tradeInfo.fiatAmount.toLocaleString()} {tradeInfo.fiatCurrency}
               </p>
             )}
           </div>
@@ -535,12 +699,19 @@ export function TradeChat({
             {/* User */}
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 rounded-full bg-white/5 border border-white/6 flex items-center justify-center">
-                <span className="text-[10px]">{userEmoji || getUserEmoji(tradeInfo?.user.username || userName || 'User')}</span>
+                <span className="text-[10px]">
+                  {userEmoji ||
+                    getUserEmoji(
+                      tradeInfo?.user.username || userName || "User",
+                    )}
+                </span>
               </div>
               <span className="text-foreground/40">
-                {tradeInfo?.user.username || userName || 'User'}
+                {tradeInfo?.user.username || userName || "User"}
                 {tradeInfo?.user.rating && (
-                  <span className="text-white/70 ml-1">★ {tradeInfo.user.rating.toFixed(1)}</span>
+                  <span className="text-white/70 ml-1">
+                    ★ {tradeInfo.user.rating.toFixed(1)}
+                  </span>
                 )}
               </span>
             </div>
@@ -553,7 +724,7 @@ export function TradeChat({
                 <Store className="w-3 h-3 text-primary" />
               </div>
               <span className="text-foreground/40">
-                {tradeInfo?.merchant.displayName || 'Merchant'}
+                {tradeInfo?.merchant.displayName || "Merchant"}
               </span>
             </div>
 
@@ -568,7 +739,7 @@ export function TradeChat({
             </div>
 
             {/* Compliance Officer (shown when assigned or order is disputed) */}
-            {(tradeInfo?.compliance || tradeInfo?.status === 'disputed') && (
+            {(tradeInfo?.compliance || tradeInfo?.status === "disputed") && (
               <>
                 <span className="text-gray-600">•</span>
                 <div className="flex items-center gap-2">
@@ -576,7 +747,7 @@ export function TradeChat({
                     <Shield className="w-3 h-3 text-red-400" />
                   </div>
                   <span className="text-red-400/70">
-                    {tradeInfo?.compliance?.name || 'Compliance'}
+                    {tradeInfo?.compliance?.name || "Compliance"}
                   </span>
                 </div>
               </>
@@ -594,7 +765,9 @@ export function TradeChat({
             <div className="px-4 py-3 border-b border-white/[0.04] bg-card-solid/50">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-foreground/35" />
-                <span className="text-xs font-medium text-foreground/40">Order Timeline</span>
+                <span className="text-xs font-medium text-foreground/40">
+                  Order Timeline
+                </span>
               </div>
             </div>
 
@@ -602,34 +775,82 @@ export function TradeChat({
             {tradeInfo && (
               <div className="px-4 py-3 border-b border-white/[0.04] bg-card-solid/30">
                 <div className="flex items-center gap-1 overflow-x-auto pb-2">
-                  <TimelineStep status="completed" label="Created" time={tradeInfo.createdAt} isFirst />
                   <TimelineStep
-                    status={tradeInfo.acceptedAt ? 'completed' : (tradeInfo.status === 'pending' ? 'current' : 'pending')}
+                    status="completed"
+                    label="Created"
+                    time={tradeInfo.createdAt}
+                    isFirst
+                  />
+                  <TimelineStep
+                    status={
+                      tradeInfo.acceptedAt
+                        ? "completed"
+                        : tradeInfo.status === "pending"
+                          ? "current"
+                          : "pending"
+                    }
                     label="Accepted"
                     time={tradeInfo.acceptedAt}
                   />
                   <TimelineStep
-                    status={tradeInfo.escrowedAt ? 'completed' : (['pending', 'accepted', 'escrow_pending'].includes(tradeInfo.status) ? (tradeInfo.status === 'escrow_pending' ? 'current' : 'pending') : 'pending')}
+                    status={
+                      tradeInfo.escrowedAt
+                        ? "completed"
+                        : ["pending", "accepted", "escrow_pending"].includes(
+                              tradeInfo.status,
+                            )
+                          ? tradeInfo.status === "escrow_pending"
+                            ? "current"
+                            : "pending"
+                          : "pending"
+                    }
                     label="Escrowed"
                     time={tradeInfo.escrowedAt}
                   />
                   <TimelineStep
-                    status={tradeInfo.paymentSentAt ? 'completed' : (['payment_pending', 'escrowed'].includes(tradeInfo.status) ? 'current' : 'pending')}
+                    status={
+                      tradeInfo.paymentSentAt
+                        ? "completed"
+                        : ["payment_pending", "escrowed"].includes(
+                              tradeInfo.status,
+                            )
+                          ? "current"
+                          : "pending"
+                    }
                     label="Payment"
                     time={tradeInfo.paymentSentAt}
                   />
                   <TimelineStep
-                    status={tradeInfo.paymentConfirmedAt ? 'completed' : (tradeInfo.status === 'payment_sent' ? 'current' : 'pending')}
+                    status={
+                      tradeInfo.paymentConfirmedAt
+                        ? "completed"
+                        : tradeInfo.status === "payment_sent"
+                          ? "current"
+                          : "pending"
+                    }
                     label="Confirmed"
                     time={tradeInfo.paymentConfirmedAt}
                   />
-                  {tradeInfo.status === 'cancelled' || tradeInfo.cancelledAt ? (
-                    <TimelineStep status="failed" label="Cancelled" time={tradeInfo.cancelledAt} isLast />
-                  ) : tradeInfo.status === 'disputed' ? (
+                  {tradeInfo.status === "cancelled" || tradeInfo.cancelledAt ? (
+                    <TimelineStep
+                      status="failed"
+                      label="Cancelled"
+                      time={tradeInfo.cancelledAt}
+                      isLast
+                    />
+                  ) : tradeInfo.status === "disputed" ? (
                     <TimelineStep status="warning" label="Disputed" isLast />
                   ) : (
                     <TimelineStep
-                      status={tradeInfo.completedAt ? 'completed' : (['payment_confirmed', 'releasing'].includes(tradeInfo.status) ? 'current' : 'pending')}
+                      status={
+                        tradeInfo.completedAt
+                          ? "completed"
+                          : ["payment_confirmed", "releasing"].includes(
+                                tradeInfo.status,
+                              )
+                            ? "current"
+                            : "pending"
+                      }
                       label="Done"
                       time={tradeInfo.completedAt}
                       isLast
@@ -657,21 +878,71 @@ export function TradeChat({
                     </div>
                   )}
                   {systemMessages.slice(-10).map((msg, index) => {
-                  let structuredData: { type: string; text: string; data?: Record<string, unknown> } | null = null;
-                  try {
-                    if (msg.text.startsWith('{')) {
-                      structuredData = JSON.parse(msg.text);
+                    let structuredData: {
+                      type: string;
+                      text: string;
+                      data?: Record<string, unknown>;
+                    } | null = null;
+                    try {
+                      if (msg.text.startsWith("{")) {
+                        structuredData = JSON.parse(msg.text);
+                      }
+                    } catch {
+                      // Not JSON
                     }
-                  } catch {
-                    // Not JSON
-                  }
-                  const eventType = structuredData?.type || detectEventType(msg.text);
-                  const displayText = structuredData?.text || msg.text;
+                    const eventType =
+                      structuredData?.type || detectEventType(msg.text);
+                    const displayText = structuredData?.text || msg.text;
 
-                  // Render rich cards for specific events
-                  if (eventType === 'bank_info' || msg.text.toLowerCase().includes('payment details')) {
-                    const bankData = structuredData?.data || orderContext?.payment_details;
-                    if (bankData && orderContext?.payment_method === 'bank') {
+                    // Render rich cards for specific events
+                    if (
+                      eventType === "bank_info" ||
+                      msg.text.toLowerCase().includes("payment details")
+                    ) {
+                      const bankData =
+                        structuredData?.data || orderContext?.payment_details;
+                      if (bankData && orderContext?.payment_method === "bank") {
+                        return (
+                          <motion.div
+                            key={msg.id}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                          >
+                            <BankInfoCard
+                              data={{
+                                bank_name: bankData.bank_name as string,
+                                account_name:
+                                  bankData.bank_account_name as string,
+                                iban: bankData.bank_iban as string,
+                              }}
+                              title="Payment Details"
+                              subtitle={
+                                tradeInfo?.orderType === "buy"
+                                  ? "Send fiat to this account"
+                                  : "Merchant will send fiat here"
+                              }
+                            />
+                          </motion.div>
+                        );
+                      }
+                    }
+
+                    if (
+                      eventType === "escrowed" ||
+                      (msg.text.toLowerCase().includes("escrow") &&
+                        msg.text.toLowerCase().includes("lock"))
+                    ) {
+                      const escrowData = structuredData?.data || {
+                        amount:
+                          orderContext?.crypto_amount ||
+                          tradeInfo?.cryptoAmount,
+                        currency: orderContext?.crypto_currency || "USDT",
+                        txHash: orderContext?.escrow_tx_hash,
+                        escrowPda:
+                          orderContext?.escrow_pda ||
+                          orderContext?.escrow_trade_pda,
+                      };
                       return (
                         <motion.div
                           key={msg.id}
@@ -679,27 +950,70 @@ export function TradeChat({
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: index * 0.05 }}
                         >
-                          <BankInfoCard
-                            data={{
-                              bank_name: bankData.bank_name as string,
-                              account_name: bankData.bank_account_name as string,
-                              iban: bankData.bank_iban as string,
-                            }}
-                            title="Payment Details"
-                            subtitle={tradeInfo?.orderType === 'buy' ? "Send fiat to this account" : "Merchant will send fiat here"}
+                          <EscrowCard
+                            data={
+                              escrowData as {
+                                amount?: number;
+                                currency?: string;
+                                txHash?: string;
+                                escrowPda?: string;
+                              }
+                            }
+                            status="locked"
                           />
                         </motion.div>
                       );
                     }
-                  }
 
-                  if (eventType === 'escrowed' || (msg.text.toLowerCase().includes('escrow') && msg.text.toLowerCase().includes('lock'))) {
-                    const escrowData = structuredData?.data || {
-                      amount: orderContext?.crypto_amount || tradeInfo?.cryptoAmount,
-                      currency: orderContext?.crypto_currency || 'USDT',
-                      txHash: orderContext?.escrow_tx_hash,
-                      escrowPda: orderContext?.escrow_pda || orderContext?.escrow_trade_pda,
-                    };
+                    if (
+                      eventType === "completed" &&
+                      (msg.text.toLowerCase().includes("released") ||
+                        orderContext?.release_tx_hash)
+                    ) {
+                      const escrowData = {
+                        amount:
+                          orderContext?.crypto_amount ||
+                          tradeInfo?.cryptoAmount,
+                        currency: orderContext?.crypto_currency || "USDT",
+                        txHash:
+                          orderContext?.release_tx_hash ||
+                          orderContext?.escrow_tx_hash,
+                        escrowPda:
+                          orderContext?.escrow_pda ||
+                          orderContext?.escrow_trade_pda,
+                      };
+                      return (
+                        <motion.div
+                          key={msg.id}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                        >
+                          <EscrowCard data={escrowData} status="released" />
+                        </motion.div>
+                      );
+                    }
+
+                    // Order receipt card
+                    if (eventType === "order_receipt" && structuredData?.data) {
+                      return (
+                        <motion.div
+                          key={msg.id}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                        >
+                          <ReceiptCard
+                            data={
+                              structuredData.data as Record<string, unknown>
+                            }
+                            currentStatus={liveReceiptStatus || tradeInfo?.status}
+                          />
+                        </motion.div>
+                      );
+                    }
+
+                    // Default status event card
                     return (
                       <motion.div
                         key={msg.id}
@@ -707,63 +1021,26 @@ export function TradeChat({
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: index * 0.05 }}
                       >
-                        <EscrowCard
-                          data={escrowData as { amount?: number; currency?: string; txHash?: string; escrowPda?: string }}
-                          status="locked"
+                        <StatusEventCard
+                          type={
+                            eventType as
+                              | "order_created"
+                              | "accepted"
+                              | "escrowed"
+                              | "payment_sent"
+                              | "payment_confirmed"
+                              | "completed"
+                              | "cancelled"
+                              | "expired"
+                              | "disputed"
+                              | "info"
+                          }
+                          text={displayText}
+                          timestamp={msg.timestamp}
                         />
                       </motion.div>
                     );
-                  }
-
-                  if (eventType === 'completed' && (msg.text.toLowerCase().includes('released') || orderContext?.release_tx_hash)) {
-                    const escrowData = {
-                      amount: orderContext?.crypto_amount || tradeInfo?.cryptoAmount,
-                      currency: orderContext?.crypto_currency || 'USDT',
-                      txHash: orderContext?.release_tx_hash || orderContext?.escrow_tx_hash,
-                      escrowPda: orderContext?.escrow_pda || orderContext?.escrow_trade_pda,
-                    };
-                    return (
-                      <motion.div
-                        key={msg.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                      >
-                        <EscrowCard data={escrowData} status="released" />
-                      </motion.div>
-                    );
-                  }
-
-                  // Order receipt card
-                  if (eventType === 'order_receipt' && structuredData?.data) {
-                    return (
-                      <motion.div
-                        key={msg.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                      >
-                        <ReceiptCard data={structuredData.data as Record<string, unknown>} currentStatus={tradeInfo?.status} />
-                      </motion.div>
-                    );
-                  }
-
-                  // Default status event card
-                  return (
-                    <motion.div
-                      key={msg.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                    >
-                      <StatusEventCard
-                        type={eventType as 'order_created' | 'accepted' | 'escrowed' | 'payment_sent' | 'payment_confirmed' | 'completed' | 'cancelled' | 'expired' | 'disputed' | 'info'}
-                        text={displayText}
-                        timestamp={msg.timestamp}
-                      />
-                    </motion.div>
-                  );
-                })}
+                  })}
                 </>
               )}
             </div>
@@ -771,45 +1048,51 @@ export function TradeChat({
         )}
 
         {/* Right Panel - Chat Messages (50% or 100% if no timeline) */}
-        <div className={`${showTimeline ? 'w-1/2' : 'w-full'} flex flex-col min-h-0 overflow-hidden`}>
+        <div
+          className={`${showTimeline ? "w-1/2" : "w-full"} flex flex-col min-h-0 overflow-hidden`}
+        >
           {/* Chat tabs header */}
           <div className="border-b border-white/[0.04] bg-card-solid/50">
             <div className="flex">
               {/* Order Chat Tab */}
               <button
-                onClick={() => setActiveChatTab('order')}
+                onClick={() => setActiveChatTab("order")}
                 className={`flex-1 px-4 py-3 flex items-center justify-center gap-2 text-xs font-medium transition-colors relative ${
-                  activeChatTab === 'order'
-                    ? 'text-primary'
-                    : 'text-foreground/35 hover:text-foreground/50'
+                  activeChatTab === "order"
+                    ? "text-primary"
+                    : "text-foreground/35 hover:text-foreground/50"
                 }`}
               >
                 <MessageSquare className="w-4 h-4" />
                 <span>Order Chat</span>
                 {chatMessages.length > 0 && (
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                    activeChatTab === 'order' ? 'bg-primary/20 text-primary' : 'bg-gray-700 text-foreground/40'
-                  }`}>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                      activeChatTab === "order"
+                        ? "bg-primary/20 text-primary"
+                        : "bg-gray-700 text-foreground/40"
+                    }`}
+                  >
                     {chatMessages.length}
                   </span>
                 )}
-                {activeChatTab === 'order' && (
+                {activeChatTab === "order" && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
                 )}
               </button>
 
               {/* Direct Chat Tab */}
               <button
-                onClick={() => setActiveChatTab('direct')}
+                onClick={() => setActiveChatTab("direct")}
                 className={`flex-1 px-4 py-3 flex items-center justify-center gap-2 text-xs font-medium transition-colors relative ${
-                  activeChatTab === 'direct'
-                    ? 'text-primary'
-                    : 'text-foreground/35 hover:text-foreground/50'
+                  activeChatTab === "direct"
+                    ? "text-primary"
+                    : "text-foreground/35 hover:text-foreground/50"
                 }`}
               >
                 <Users className="w-4 h-4" />
                 <span>Direct Chat</span>
-                {activeChatTab === 'direct' && (
+                {activeChatTab === "direct" && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
                 )}
               </button>
@@ -819,7 +1102,7 @@ export function TradeChat({
           {/* Chat messages area */}
           <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
             {/* Order Chat Content */}
-            {activeChatTab === 'order' && (
+            {activeChatTab === "order" && (
               <>
                 {isLoading ? (
                   <div className="flex items-center justify-center py-8">
@@ -829,148 +1112,187 @@ export function TradeChat({
                   <div className="flex flex-col items-center justify-center py-12 text-foreground/35">
                     <MessageSquare className="w-10 h-10 mb-2 opacity-30" />
                     <p className="text-sm">No order messages yet</p>
-                    <p className="text-xs mt-1">Messages about this trade will appear here</p>
+                    <p className="text-xs mt-1">
+                      Messages about this trade will appear here
+                    </p>
                   </div>
                 ) : (
                   groupedChatMessages.map((group, groupIndex) => (
-                <div key={groupIndex}>
-                  {/* Date separator */}
-                  <div className="flex items-center gap-3 my-4">
-                    <div className="flex-1 h-px bg-white/[0.04]" />
-                    <span className="text-[10px] text-gray-600 uppercase tracking-wider">{group.date}</span>
-                    <div className="flex-1 h-px bg-white/[0.04]" />
-                  </div>
+                    <div key={groupIndex}>
+                      {/* Date separator */}
+                      <div className="flex items-center gap-3 my-4">
+                        <div className="flex-1 h-px bg-white/[0.04]" />
+                        <span className="text-[10px] text-gray-600 uppercase tracking-wider">
+                          {group.date}
+                        </span>
+                        <div className="flex-1 h-px bg-white/[0.04]" />
+                      </div>
 
-                  {/* Messages for this date */}
-                  <div className="space-y-3">
-                    {group.messages.map((msg, msgIndex) => {
-                      // Detect receipt card messages (JSON with type: 'order_receipt')
-                      let receiptData: Record<string, unknown> | null = null;
-                      try {
-                        if (msg.text.startsWith('{')) {
-                          const parsed = JSON.parse(msg.text);
-                          if (parsed.type === 'order_receipt' && parsed.data) {
-                            receiptData = parsed.data;
+                      {/* Messages for this date */}
+                      <div className="space-y-3">
+                        {group.messages.map((msg, msgIndex) => {
+                          // Detect receipt card messages (JSON with type: 'order_receipt')
+                          let receiptData: Record<string, unknown> | null =
+                            null;
+                          try {
+                            if (msg.text.startsWith("{")) {
+                              const parsed = JSON.parse(msg.text);
+                              if (
+                                parsed.type === "order_receipt" &&
+                                parsed.data
+                              ) {
+                                receiptData = parsed.data;
+                              }
+                            }
+                          } catch {
+                            /* not JSON */
                           }
-                        }
-                      } catch { /* not JSON */ }
 
-                      if (receiptData) {
-                        return (
-                          <motion.div
-                            key={msg.id}
-                            data-testid={`chat-msg-${msg.id}`}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: msgIndex * 0.02 }}
-                            className="max-w-[90%]"
-                          >
-                            <ReceiptCard data={receiptData} currentStatus={tradeInfo?.status} />
-                            <span className="text-[10px] text-foreground/35 mt-1 block">
-                              {formatTime(msg.timestamp)}
-                            </span>
-                          </motion.div>
-                        );
-                      }
+                          if (receiptData) {
+                            return (
+                              <motion.div
+                                key={msg.id}
+                                data-testid={`chat-msg-${msg.id}`}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: msgIndex * 0.02 }}
+                                className="max-w-[90%]"
+                              >
+                                <ReceiptCard
+                                  data={receiptData}
+                                  currentStatus={liveReceiptStatus || tradeInfo?.status}
+                                />
+                                <span className="text-[10px] text-foreground/35 mt-1 block">
+                                  {formatTime(msg.timestamp)}
+                                </span>
+                              </motion.div>
+                            );
+                          }
 
-                      // System guidance messages (default order status messages)
-                      if (msg.from === 'system' && msg.messageType !== 'system') {
-                        return (
-                          <motion.div
-                            key={msg.id}
-                            data-testid={`chat-msg-${msg.id}`}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: msgIndex * 0.02 }}
-                            className="flex justify-center"
-                          >
-                            <div className="w-full max-w-[90%] bg-amber-500/5 border border-amber-500/10 rounded-2xl px-4 py-3">
-                              <div className="flex items-center gap-1.5 mb-1.5">
-                                <Bot className="w-3.5 h-3.5 text-amber-400" />
-                                <span className="text-[10px] text-amber-400 font-medium">Trade Bot</span>
-                              </div>
-                              <p className="text-[13px] text-foreground/60 whitespace-pre-line leading-relaxed">{msg.text}</p>
-                              <span className="text-[10px] text-gray-600 mt-1.5 block">
-                                {formatTime(msg.timestamp)}
-                              </span>
-                            </div>
-                          </motion.div>
-                        );
-                      }
+                          // System guidance messages (default order status messages)
+                          if (
+                            msg.from === "system" &&
+                            msg.messageType !== "system"
+                          ) {
+                            return (
+                              <motion.div
+                                key={msg.id}
+                                data-testid={`chat-msg-${msg.id}`}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: msgIndex * 0.02 }}
+                                className="flex justify-center"
+                              >
+                                <div className="w-full max-w-[90%] bg-amber-500/5 border border-amber-500/10 rounded-2xl px-4 py-3">
+                                  <div className="flex items-center gap-1.5 mb-1.5">
+                                    <Bot className="w-3.5 h-3.5 text-amber-400" />
+                                    <span className="text-[10px] text-amber-400 font-medium">
+                                      Trade Bot
+                                    </span>
+                                  </div>
+                                  <p className="text-[13px] text-foreground/60 whitespace-pre-line leading-relaxed">
+                                    {msg.text}
+                                  </p>
+                                  <span className="text-[10px] text-gray-600 mt-1.5 block">
+                                    {formatTime(msg.timestamp)}
+                                  </span>
+                                </div>
+                              </motion.div>
+                            );
+                          }
 
-                      const senderInfo = getSenderInfo(msg);
+                          const senderInfo = getSenderInfo(msg);
 
-                      return (
-                        <motion.div
-                          key={msg.id}
-                          data-testid={`chat-msg-${msg.id}`}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: msgIndex * 0.02 }}
-                          className={`flex gap-2 ${msg.from === 'me' ? 'flex-row-reverse' : ''}`}
-                        >
-                          {/* Avatar */}
-                          <div className="flex-shrink-0 mt-1">
-                            {senderInfo.avatar}
-                          </div>
-
-                          {/* Message content */}
-                          <div className={`flex flex-col max-w-[85%] ${msg.from === 'me' ? 'items-end' : 'items-start'}`}>
-                            {/* Sender name */}
-                            <span className={`text-[10px] mb-1 ${senderInfo.color}`}>
-                              {senderInfo.name}
-                            </span>
-
-                            {/* Message bubble */}
-                            <div
-                              className={`px-4 py-2.5 rounded-2xl text-sm ${
-                                msg.from === 'compliance' || msg.senderType === 'compliance'
-                                  ? 'bg-red-500/20 text-gray-200 border border-red-500/30'
-                                  : msg.from === 'me'
-                                    ? 'bg-primary text-background'
-                                    : 'bg-[#1f1f1f] text-gray-200'
-                              }`}
+                          return (
+                            <motion.div
+                              key={msg.id}
+                              data-testid={`chat-msg-${msg.id}`}
+                              initial={{ opacity: 0, y: 10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: msgIndex * 0.02 }}
+                              className={`flex gap-2 ${msg.from === "me" ? "flex-row-reverse" : ""}`}
                             >
-                              {/* Compliance badge for official messages */}
-                              {(msg.from === 'compliance' || msg.senderType === 'compliance') && (
-                                <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-red-500/20">
-                                  <Shield className="w-3 h-3 text-red-400" />
-                                  <span className="text-[10px] text-red-400 font-medium">Official Compliance Message</span>
+                              {/* Avatar */}
+                              <div className="flex-shrink-0 mt-1">
+                                {senderInfo.avatar}
+                              </div>
+
+                              {/* Message content */}
+                              <div
+                                className={`flex flex-col max-w-[85%] ${msg.from === "me" ? "items-end" : "items-start"}`}
+                              >
+                                {/* Sender name */}
+                                <span
+                                  className={`text-[10px] mb-1 ${senderInfo.color}`}
+                                >
+                                  {senderInfo.name}
+                                </span>
+
+                                {/* Message bubble */}
+                                <div
+                                  className={`px-4 py-2.5 rounded-2xl text-sm ${
+                                    msg.from === "compliance" ||
+                                    msg.senderType === "compliance"
+                                      ? "bg-red-500/20 text-gray-200 border border-red-500/30"
+                                      : msg.from === "me"
+                                        ? "bg-primary text-background"
+                                        : "bg-[#1f1f1f] text-gray-200"
+                                  }`}
+                                >
+                                  {/* Compliance badge for official messages */}
+                                  {(msg.from === "compliance" ||
+                                    msg.senderType === "compliance") && (
+                                    <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-red-500/20">
+                                      <Shield className="w-3 h-3 text-red-400" />
+                                      <span className="text-[10px] text-red-400 font-medium">
+                                        Official Compliance Message
+                                      </span>
+                                    </div>
+                                  )}
+                                  {msg.messageType === "image" &&
+                                    msg.imageUrl && (
+                                      <div
+                                        className="max-w-[200px] rounded-lg overflow-hidden mb-2 cursor-pointer"
+                                        onClick={() =>
+                                          window.open(msg.imageUrl!, "_blank")
+                                        }
+                                      >
+                                        <img
+                                          src={msg.imageUrl}
+                                          alt="Shared image"
+                                          className="w-full h-auto max-h-[200px] object-cover"
+                                        />
+                                      </div>
+                                    )}
+                                  {msg.text && msg.text !== "Photo" && (
+                                    <p>{msg.text}</p>
+                                  )}
+                                  <span
+                                    className={`text-[10px] mt-1 block ${
+                                      msg.from === "compliance" ||
+                                      msg.senderType === "compliance"
+                                        ? "text-red-400/50"
+                                        : msg.from === "me"
+                                          ? "text-black/50"
+                                          : "text-foreground/35"
+                                    }`}
+                                  >
+                                    {formatTime(msg.timestamp)}
+                                  </span>
                                 </div>
-                              )}
-                              {msg.messageType === 'image' && msg.imageUrl && (
-                                <div className="max-w-[200px] rounded-lg overflow-hidden mb-2 cursor-pointer" onClick={() => window.open(msg.imageUrl!, '_blank')}>
-                                  <img
-                                    src={msg.imageUrl}
-                                    alt="Shared image"
-                                    className="w-full h-auto max-h-[200px] object-cover"
-                                  />
-                                </div>
-                              )}
-                              {msg.text && msg.text !== 'Photo' && <p>{msg.text}</p>}
-                              <span className={`text-[10px] mt-1 block ${
-                                msg.from === 'compliance' || msg.senderType === 'compliance'
-                                  ? 'text-red-400/50'
-                                  : msg.from === 'me'
-                                    ? 'text-black/50'
-                                    : 'text-foreground/35'
-                              }`}>
-                                {formatTime(msg.timestamp)}
-                              </span>
-                            </div>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))
                 )}
               </>
             )}
 
             {/* Direct Chat Content */}
-            {activeChatTab === 'direct' && (
+            {activeChatTab === "direct" && (
               <div className="flex flex-col items-center justify-center py-12 text-foreground/35">
                 <Users className="w-10 h-10 mb-2 opacity-30" />
                 <p className="text-sm">Direct Chat</p>
@@ -1010,7 +1332,10 @@ export function TradeChat({
           {uploadError && (
             <div className="mx-3 mb-1 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-between gap-2">
               <p className="text-[11px] text-red-400">{uploadError}</p>
-              <button onClick={() => setUploadError(null)} className="text-red-400/60 hover:text-red-400">
+              <button
+                onClick={() => setUploadError(null)}
+                className="text-red-400/60 hover:text-red-400"
+              >
                 <X className="w-3 h-3" />
               </button>
             </div>
@@ -1018,7 +1343,9 @@ export function TradeChat({
 
           {/* Input area */}
           {(() => {
-            const isChatClosed = ['completed', 'cancelled', 'expired'].includes(tradeInfo?.status || '');
+            const isChatClosed = ["completed", "cancelled", "expired"].includes(
+              tradeInfo?.status || "",
+            );
             return isChatClosed ? (
               <div className="p-3 bg-card-solid border-t border-white/[0.04]">
                 <div className="px-4 py-3 rounded-xl bg-white/[0.02] border border-white/[0.06] text-center">
@@ -1028,57 +1355,65 @@ export function TradeChat({
                 </div>
               </div>
             ) : (
-          <div className="p-3 bg-card-solid border-t border-white/[0.04]">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,.pdf,.doc,.docx"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
-                className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/[0.08] flex items-center justify-center
-                           disabled:opacity-50 transition-all hover:bg-white/[0.1] hover:border-white/[0.12] active:scale-95 self-end"
-                title="Attach file"
-              >
-                {isUploading ? (
-                  <Loader2 className="w-4 h-4 text-white/50 animate-spin" />
-                ) : (
-                  <Paperclip className="w-4 h-4 text-white/50" />
-                )}
-              </button>
-              <input
-                ref={inputRef}
-                data-testid="chat-input"
-                type="text"
-                value={messageText}
-                onChange={(e) => setMessageText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={pendingImage ? "Add a caption..." : "Type a message..."}
-                className="flex-1 bg-[#1f1f1f] rounded-xl px-4 py-3 outline-none text-sm
-                           text-white placeholder:text-foreground/35 focus:ring-1 focus:ring-primary/50"
-              />
-              <motion.button
-                data-testid="chat-send"
-                whileTap={{ scale: 0.95 }}
-                onClick={handleSend}
-                disabled={!messageText.trim() && !pendingImage}
-                className={`w-10 h-10 rounded-xl flex items-center justify-center self-end
-                           disabled:opacity-30 disabled:cursor-not-allowed transition-all ${
-                             pendingImage ? 'bg-primary/80' : 'bg-primary'
-                           }`}
-              >
-                {isUploading ? (
-                  <Loader2 className="w-4 h-4 text-background animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4 text-background" />
-                )}
-              </motion.button>
-            </div>
-          </div>
+              <div className="p-3 bg-card-solid border-t border-white/[0.04]">
+                {/* Hidden native file picker — triggered from paperclip inside pill */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,.pdf,.doc,.docx"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <div className="flex items-center gap-2 w-full">
+                  {/* Pill: text input + attach button share one rounded container.
+                  min-w-0 + appearance-none strip browser UA chrome so no
+                  inner rounded rectangle shows inside the pill. */}
+                  <div className="flex-1 min-w-0 flex items-center gap-1 bg-[#1f1f1f] rounded-full pl-4 pr-1.5 focus-within:ring-1 focus-within:ring-primary/50">
+                    <input
+                      ref={inputRef}
+                      data-testid="chat-input"
+                      type="text"
+                      maxLength={1000}
+                      value={messageText}
+                      onChange={(e) => setMessageText(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder={
+                        pendingImage ? "Add a caption..." : "Type a message..."
+                      }
+                      className="flex-1 min-w-0 appearance-none bg-transparent py-2.5 outline-none text-sm text-white placeholder:text-foreground/35"
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center hover:bg-white/[0.06] transition-colors disabled:opacity-50 active:scale-95"
+                      title="Attach file"
+                    >
+                      {isUploading ? (
+                        <Loader2 className="w-4 h-4 text-white/50 animate-spin" />
+                      ) : (
+                        <Paperclip className="w-4 h-4 text-white/50" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Send — separate circular button; shrink-0 keeps it aligned */}
+                  <motion.button
+                    data-testid="chat-send"
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleSend}
+                    disabled={!messageText.trim() && !pendingImage}
+                    className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed transition-all ${
+                      pendingImage ? "bg-primary/80" : "bg-primary"
+                    }`}
+                  >
+                    {isUploading ? (
+                      <Loader2 className="w-4 h-4 text-background animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4 text-background" />
+                    )}
+                  </motion.button>
+                </div>
+              </div>
             );
           })()}
         </div>

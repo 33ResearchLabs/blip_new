@@ -110,6 +110,8 @@ export async function GET(request: NextRequest) {
       completed: string;
       cancelled: string;
       disputed: string;
+      pending: string;
+      active: string;
       avg_size: string;
       avg_completion_seconds: string;
     }>(`
@@ -118,6 +120,10 @@ export async function GET(request: NextRequest) {
         COUNT(*) FILTER (WHERE status = 'completed')::text AS completed,
         COUNT(*) FILTER (WHERE status IN ('cancelled', 'expired'))::text AS cancelled,
         COUNT(*) FILTER (WHERE status = 'disputed')::text AS disputed,
+        -- Pending = orders waiting for a counterparty (no acceptance yet)
+        COUNT(*) FILTER (WHERE status = 'pending')::text AS pending,
+        -- Active = in-progress (claimed/escrowed/payment_sent)
+        COUNT(*) FILTER (WHERE status IN ('accepted', 'escrowed', 'payment_sent', 'payment_pending', 'payment_confirmed', 'releasing'))::text AS active,
         COALESCE(AVG(crypto_amount) FILTER (WHERE status = 'completed'), 0)::numeric(14,2)::text AS avg_size,
         COALESCE(
           EXTRACT(EPOCH FROM AVG(completed_at - created_at) FILTER (WHERE status = 'completed' AND completed_at IS NOT NULL)),
@@ -237,6 +243,8 @@ export async function GET(request: NextRequest) {
         completed: completedCount,
         cancelled: cancelledCount,
         disputed: parseInt(ordersAnalytics?.disputed || '0'),
+        pending: parseInt(ordersAnalytics?.pending || '0'),
+        active: parseInt(ordersAnalytics?.active || '0'),
         successRate: Number(successRate.toFixed(1)),
         avgSize: parseFloat(ordersAnalytics?.avg_size || '0'),
         avgCompletionSeconds: parseInt(ordersAnalytics?.avg_completion_seconds || '0'),

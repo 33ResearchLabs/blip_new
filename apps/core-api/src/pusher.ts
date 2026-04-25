@@ -76,6 +76,94 @@ async function triggerEvent(channels: string | string[], event: string, data: un
   }
 }
 
+// ── Public: emit chat:message-new for a freshly-inserted chat row ──
+// Mirrors settle's notifyNewMessage for the case where a chat message is
+// inserted by a backend worker (e.g. order-receipt rows from createOrderReceipt).
+// Without this, connected clients have to refresh the order chat to see the
+// new message — there's no real-time push.
+export interface ChatMessageNewPayload {
+  messageId: string;
+  orderId: string;
+  senderType: string;
+  senderId: string;
+  content: string;
+  messageType: string;
+  createdAt: string;
+  userId?: string | null;
+  merchantId?: string | null;
+  buyerMerchantId?: string | null;
+}
+
+// ── Public: emit chat:receipt-updated for receipt status/timestamp changes ──
+// Fired from updateOrderReceipt so connected clients re-render the receipt
+// card live. The frontend should merge the patch into the visible receipt
+// (status, updated_at, and any timestamp/tx-hash fields included).
+export interface ReceiptUpdatedPayload {
+  orderId: string;
+  orderNumber: string;
+  newStatus: string;
+  fields: {
+    escrowed_at?: boolean;
+    payment_sent_at?: boolean;
+    completed_at?: boolean;
+    cancelled_at?: boolean;
+    expired_at?: boolean;
+    escrow_tx_hash?: string | null;
+    release_tx_hash?: string | null;
+    refund_tx_hash?: string | null;
+  };
+  userId: string;
+  merchantId: string | null;
+  buyerMerchantId?: string | null;
+}
+
+export function pusherNotifyReceiptUpdated(payload: ReceiptUpdatedPayload): void {
+  const channels: string[] = [getOrderChannel(payload.orderId)];
+  if (payload.userId) channels.push(getUserChannel(payload.userId));
+  if (payload.merchantId) channels.push(getMerchantChannel(payload.merchantId));
+  if (payload.buyerMerchantId && payload.buyerMerchantId !== payload.merchantId) {
+    channels.push(getMerchantChannel(payload.buyerMerchantId));
+  }
+  triggerEvent(channels, 'chat:receipt-updated', {
+    orderId: payload.orderId,
+    orderNumber: payload.orderNumber,
+    status: payload.newStatus,
+    updatedAt: new Date().toISOString(),
+    fields: payload.fields,
+  }).catch((err) => {
+    logger.error('[Pusher] pusherNotifyReceiptUpdated failed', { orderId: payload.orderId, error: String(err) });
+  });
+}
+
+export function pusherNotifyChatMessageNew(payload: ChatMessageNewPayload): void {
+  const channels: string[] = [getOrderChannel(payload.orderId)];
+  if (payload.userId && !(payload.senderType === 'user' && payload.senderId === payload.userId)) {
+    channels.push(getUserChannel(payload.userId));
+  }
+  if (payload.merchantId && !(payload.senderType === 'merchant' && payload.senderId === payload.merchantId)) {
+    channels.push(getMerchantChannel(payload.merchantId));
+  }
+  if (
+    payload.buyerMerchantId &&
+    payload.buyerMerchantId !== payload.merchantId &&
+    !(payload.senderType === 'merchant' && payload.senderId === payload.buyerMerchantId)
+  ) {
+    channels.push(getMerchantChannel(payload.buyerMerchantId));
+  }
+  // chat:message-new must match settle/src/lib/pusher/events.ts CHAT_EVENTS.MESSAGE_NEW
+  triggerEvent(channels, 'chat:message-new', {
+    messageId: payload.messageId,
+    orderId: payload.orderId,
+    senderType: payload.senderType,
+    senderId: payload.senderId,
+    content: payload.content,
+    messageType: payload.messageType,
+    createdAt: payload.createdAt,
+  }).catch((err) => {
+    logger.error('[Pusher] pusherNotifyChatMessageNew failed', { orderId: payload.orderId, error: String(err) });
+  });
+}
+
 // ── Public: notify order status updated ─────────────────────────
 export interface OrderStatusPayload {
   orderId: string;

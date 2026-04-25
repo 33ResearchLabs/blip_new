@@ -244,6 +244,41 @@ export async function GET(request: NextRequest) {
       params.slice(0, params.length - 2) // exclude limit/offset
     );
 
+    // Aggregate platform stats (unfiltered, for the summary cards)
+    const summary = await queryOne<{
+      total_merchants: string;
+      online_merchants: string;
+      verified_merchants: string;
+      total_volume: string;
+      total_trades: string;
+      total_merchants_prev: string;
+      total_volume_prev: string;
+      total_trades_prev: string;
+    }>(`
+      SELECT
+        COUNT(*)::text as total_merchants,
+        COUNT(*) FILTER (WHERE is_online = true)::text as online_merchants,
+        COUNT(*) FILTER (WHERE verification_level >= 1 AND status = 'active')::text as verified_merchants,
+        COALESCE(SUM(total_volume), 0)::text as total_volume,
+        COALESCE(SUM(total_trades), 0)::text as total_trades,
+        COUNT(*) FILTER (WHERE created_at < NOW() - INTERVAL '30 days')::text as total_merchants_prev,
+        COALESCE(SUM(total_volume) FILTER (WHERE created_at < NOW() - INTERVAL '30 days'), 0)::text as total_volume_prev,
+        COALESCE(SUM(total_trades) FILTER (WHERE created_at < NOW() - INTERVAL '30 days'), 0)::text as total_trades_prev
+      FROM merchants
+    `);
+
+    const calcDelta = (current: number, prev: number) =>
+      prev > 0 ? ((current - prev) / prev) * 100 : 0;
+
+    const totalMerchants = parseInt(summary?.total_merchants || '0');
+    const onlineMerchants = parseInt(summary?.online_merchants || '0');
+    const verifiedMerchants = parseInt(summary?.verified_merchants || '0');
+    const totalVolume = parseFloat(summary?.total_volume || '0');
+    const totalTrades = parseInt(summary?.total_trades || '0');
+    const totalMerchantsPrev = parseInt(summary?.total_merchants_prev || '0');
+    const totalVolumePrev = parseFloat(summary?.total_volume_prev || '0');
+    const totalTradesPrev = parseInt(summary?.total_trades_prev || '0');
+
     const emojis = ['🏪', '💎', '👑', '🛡️', '⚡', '🌟', '💰', '🔥', '🦊', '🐋'];
     const formattedMerchants = merchants.map((merchant, i) => ({
       id: merchant.id,
@@ -283,6 +318,16 @@ export async function GET(request: NextRequest) {
       total: parseInt(countResult?.count || '0'),
       limit,
       offset,
+      summary: {
+        totalMerchants,
+        onlineMerchants,
+        verifiedMerchants,
+        totalVolume,
+        totalTrades,
+        totalMerchantsDelta: calcDelta(totalMerchants, totalMerchantsPrev),
+        totalVolumeDelta: calcDelta(totalVolume, totalVolumePrev),
+        totalTradesDelta: calcDelta(totalTrades, totalTradesPrev),
+      },
     });
   } catch (error) {
     console.error('Error fetching admin merchants:', error);

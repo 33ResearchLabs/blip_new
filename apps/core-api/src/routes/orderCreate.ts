@@ -24,6 +24,37 @@ import { ORDER_EVENT } from '../events';
 import { insertOutboxEvent } from '../outbox';
 import { buildScopedKey } from '../idempotency';
 import { financialRateLimitHook } from '../rateLimit';
+import { createOrderReceipt } from '../receipts';
+
+// Build the receipt-creation payload from the freshly-inserted order row.
+// Mirrors the shape that the receiptListener's CREATED-as-escrowed handler
+// passes through buildReceiptPayload — kept inline here so the sync fallback
+// is self-contained and doesn't depend on listener internals.
+function orderForReceipt(o: any) {
+  return {
+    id: o.id,
+    order_number: o.order_number,
+    type: o.type,
+    payment_method: o.payment_method,
+    crypto_amount: String(o.crypto_amount),
+    crypto_currency: o.crypto_currency,
+    fiat_amount: String(o.fiat_amount),
+    fiat_currency: o.fiat_currency,
+    rate: String(o.rate),
+    platform_fee: String(o.platform_fee ?? 0),
+    protocol_fee_amount: o.protocol_fee_amount ? String(o.protocol_fee_amount) : null,
+    status: o.status,
+    user_id: o.user_id,
+    merchant_id: o.merchant_id,
+    buyer_merchant_id: o.buyer_merchant_id ?? null,
+    acceptor_wallet_address: o.acceptor_wallet_address ?? null,
+    buyer_wallet_address: o.buyer_wallet_address ?? null,
+    escrow_tx_hash: o.escrow_tx_hash ?? null,
+    payment_details: o.payment_details ?? null,
+    accepted_at: o.accepted_at ? new Date(o.accepted_at) : null,
+    escrowed_at: o.escrowed_at ? new Date(o.escrowed_at) : null,
+  };
+}
 
 /**
  * Check idempotency_log for a previously completed action (scoped key).
@@ -305,6 +336,19 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
         remainingLiquidity, type: data.type,
       });
 
+      // Defense-in-depth: synchronously create receipt for orders that start
+      // already in 'escrowed' (user-initiated SELL pre-escrowed at creation).
+      // Mirrors the CREATED-as-escrowed listener gate. Idempotent via ON CONFLICT.
+      if (String(order.status) === 'escrowed') {
+        try {
+          await createOrderReceipt(order.id, orderForReceipt(order), data.merchant_id || data.user_id);
+        } catch (receiptErr) {
+          logger.warn('[order-create] Sync createOrderReceipt failed', {
+            orderId: order.id, error: receiptErr instanceof Error ? receiptErr.message : String(receiptErr),
+          });
+        }
+      }
+
       const responseBody = {
         success: true,
         data: { ...order, minimal_status: normalizeStatus(order.status as any) },
@@ -418,6 +462,18 @@ export const orderCreateRoutes: FastifyPluginAsync = async (fastify) => {
           remainingLiquidity, buyerMerchantId: data.buyer_merchant_id,
           isM2M: (data as any).is_m2m,
         });
+
+        // Defense-in-depth: sync receipt for merchant-created orders that start
+        // pre-escrowed. Same idempotency story as above.
+        if (String(order.status) === 'escrowed') {
+          try {
+            await createOrderReceipt(order.id, orderForReceipt(order), data.merchant_id || data.buyer_merchant_id || actorId);
+          } catch (receiptErr) {
+            logger.warn('[merchant-order-create] Sync createOrderReceipt failed', {
+              orderId: order.id, error: receiptErr instanceof Error ? receiptErr.message : String(receiptErr),
+            });
+          }
+        }
 
         return reply.status(201).send({
           success: true,

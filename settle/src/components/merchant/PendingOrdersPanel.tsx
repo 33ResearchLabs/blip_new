@@ -1463,14 +1463,17 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
 
         {/* Search + Filter + Sort */}
         <div className="flex items-center gap-1.5">
-          <div className="flex-1 flex items-center gap-1.5 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-2.5 py-1.5">
+          <div className="flex-1 flex items-center gap-1.5 bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg px-2.5 py-1.5 focus-within:border-primary/30 transition-colors">
             <Search className="w-3 h-3 text-foreground/20" />
             <input
               type="text"
+              name="search"
+              autoComplete="off"
+              maxLength={100}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search orders..."
-              className="flex-1 bg-transparent text-[11px] text-white placeholder:text-foreground/15 outline-none font-mono"
+              className="flex-1 bg-transparent text-[11px] text-white placeholder:text-foreground/15 outline-none focus-visible:outline-none font-mono"
             />
           </div>
 

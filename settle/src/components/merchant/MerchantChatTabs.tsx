@@ -260,10 +260,13 @@ export function MerchantChatTabs({
 
       {/* Search */}
       <div className="px-2 py-1.5 border-b border-white/[0.04]">
-        <div className="flex items-center gap-1.5 bg-white/[0.02] border border-white/[0.06] rounded-lg px-2.5 py-1.5">
+        <div className="flex items-center gap-1.5 bg-white/[0.02] border border-white/[0.06] rounded-lg px-2.5 py-1.5 focus-within:border-primary/30 transition-colors">
           <Search className="w-3 h-3 text-white/20" />
           <input
             type="text"
+            name="search"
+            autoComplete="off"
+            maxLength={100}
             placeholder={activeTab === 'orders' ? 'Search orders...' : 'Search disputes...'}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

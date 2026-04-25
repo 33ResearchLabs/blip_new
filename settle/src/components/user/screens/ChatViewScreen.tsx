@@ -25,7 +25,7 @@ import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { usePusherOptional } from "@/context/PusherContext";
 import { getOrderChannel } from "@/lib/pusher/channels";
-import { ORDER_EVENTS } from "@/lib/pusher/events";
+import { ORDER_EVENTS, CHAT_EVENTS } from "@/lib/pusher/events";
 import { formatLastSeen } from "./helpers";
 import type { Screen, Order } from "./types";
 import type { RefObject } from "react";
@@ -225,6 +225,16 @@ export const ChatViewScreen = ({
     if (!pusher || receiptOrderIds.current.length === 0) return;
 
     const channels: ReturnType<typeof pusher.subscribe>[] = [];
+    // ReceiptCard reads receiptStatuses[orderNumber] (not orderId), so we
+    // key the override by order_number. The order:status-updated payload
+    // doesn't carry order_number, so we use the chat:receipt-updated event
+    // emitted by core-api/src/receipts.ts which does include orderNumber.
+    const handleReceiptUpdated = (rawData: unknown) => {
+      const data = rawData as { orderNumber?: string; status?: string };
+      if (data?.orderNumber && data?.status) {
+        setReceiptStatuses(prev => ({ ...prev, [data.orderNumber!]: data.status! }));
+      }
+    };
     const handleStatusUpdate = (rawData: unknown) => {
       const data = rawData as { orderId: string; status: string };
       if (data.orderId && data.status) {
@@ -235,6 +245,7 @@ export const ChatViewScreen = ({
     for (const orderId of receiptOrderIds.current) {
       const channel = pusher.subscribe(getOrderChannel(orderId));
       if (channel) {
+        channel.bind(CHAT_EVENTS.RECEIPT_UPDATED, handleReceiptUpdated);
         channel.bind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdate);
         channel.bind(ORDER_EVENTS.CANCELLED, handleStatusUpdate);
         channels.push(channel);
@@ -244,6 +255,7 @@ export const ChatViewScreen = ({
     return () => {
       for (const channel of channels) {
         if (channel) {
+          channel.unbind(CHAT_EVENTS.RECEIPT_UPDATED, handleReceiptUpdated);
           channel.unbind(ORDER_EVENTS.STATUS_UPDATED, handleStatusUpdate);
           channel.unbind(ORDER_EVENTS.CANCELLED, handleStatusUpdate);
         }
@@ -736,6 +748,7 @@ export const ChatViewScreen = ({
       {/* Message Input / Chat Status Banner — pinned to bottom */}
       {chatEnabled ? (
         <div className="shrink-0 px-4 py-3 pb-8 bg-surface-raised border-t border-border-subtle">
+          {/* Hidden native file picker — triggered by the paperclip inside the pill */}
           <input
             ref={fileInputRef}
             type="file"
@@ -743,36 +756,45 @@ export const ChatViewScreen = ({
             onChange={handleFileSelect}
             className="hidden"
           />
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="w-12 h-12 rounded-full flex items-center justify-center disabled:opacity-50"
-            >
-              {isUploading ? (
-                <Loader2 className="w-5 h-5 animate-spin text-text-tertiary" />
-              ) : (
-                <Paperclip className="w-5 h-5 text-text-tertiary" />
-              )}
-            </button>
-            <input
-              type="text"
-              placeholder={pendingImage ? "Add a caption..." : "Type a message..."}
-              className="flex-1 rounded-full px-5 py-3 text-[15px] outline-none bg-surface-card border border-border-subtle text-text-primary"
-              value={chatMessage}
-              onChange={(e) => handleTypingChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-            />
+          <div className="flex items-center gap-2 w-full">
+            {/* Pill: text input + attach button live in one rounded row.
+                min-w-0 on the wrapper + the input is what actually prevents
+                long text from pushing the Send button off-screen. */}
+            <div className="flex-1 min-w-0 flex items-center gap-1 rounded-full bg-surface-card border border-border-subtle pl-5 pr-1.5 focus-within:border-accent/40">
+              <input
+                type="text"
+                maxLength={1000}
+                placeholder={pendingImage ? "Add a caption..." : "Type a message..."}
+                className="flex-1 min-w-0 appearance-none border-0 bg-transparent py-3 text-[15px] outline-none focus-visible:outline-none text-text-primary placeholder:text-text-tertiary"
+                value={chatMessage}
+                onChange={(e) => handleTypingChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center hover:bg-surface-raised transition-colors disabled:opacity-50"
+                title="Attach image"
+              >
+                {isUploading ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-text-tertiary" />
+                ) : (
+                  <Paperclip className="w-5 h-5 text-text-tertiary" />
+                )}
+              </button>
+            </div>
+
+            {/* Send — separate circular button; shrink-0 locks its size */}
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={handleSend}
               disabled={!chatMessage.trim() && !pendingImage}
-              className={`w-12 h-12 rounded-full flex items-center justify-center disabled:opacity-50 ${
+              className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center disabled:opacity-50 ${
                 chatMessage.trim() || pendingImage ? 'bg-accent' : 'bg-surface-card'
               }`}
             >

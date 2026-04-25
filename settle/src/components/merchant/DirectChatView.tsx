@@ -683,6 +683,7 @@ export function DirectChatView({
           <input
             ref={inputRef}
             type="text"
+            maxLength={1000}
             value={inputText}
             onChange={(e) => { setInputText(e.target.value); onTyping?.(activeOrderId); }}
             onKeyDown={(e) => {
@@ -693,7 +694,7 @@ export function DirectChatView({
               }
             }}
             placeholder={pendingImage ? "Add a caption..." : "Type a message..."}
-            className="flex-1 px-3 py-1.5 text-[11px] bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg
+            className="flex-1 min-w-0 appearance-none px-3 py-1.5 text-[11px] bg-foreground/[0.02] border border-foreground/[0.06] rounded-lg
                        text-white placeholder:text-foreground/15 focus:outline-none focus:border-white/15 transition-colors font-mono"
           />
           <button
