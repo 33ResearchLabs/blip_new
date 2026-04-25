@@ -235,7 +235,11 @@ export async function GET(request: NextRequest) {
       username: user.username,
       name: user.name,
       email: user.email,
-      isPlaceholder: user.username.startsWith('open_order_') || user.wallet_address?.startsWith('placeholder_') || false,
+      // Only treat as placeholder when the username actually follows the
+      // synthetic-account pattern. The `placeholder_*` wallet prefix is also
+      // present on real users (we generate one when no wallet is linked yet),
+      // so it's not a reliable ghost signal on its own.
+      isPlaceholder: user.username.startsWith('open_order_') || user.username.startsWith('m2m_'),
       walletAddress: user.wallet_address,
       phone: user.phone,
       kycStatus: user.kyc_status,
