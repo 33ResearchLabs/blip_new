@@ -855,21 +855,32 @@ export default function AdminConsolePage() {
                             {getStatusLabel(order.status)}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1 text-[8px] text-foreground/25 font-mono">
-                          <span className="truncate max-w-[60px]">{order.buyerMerchant || order.user}</span>
+                        <div className="flex items-center gap-1 text-[8px] text-foreground/25 font-mono min-w-0">
+                          <span
+                            className="truncate max-w-[90px]"
+                            title={order.buyerMerchant || order.user}
+                          >
+                            {order.buyerMerchant || order.user}
+                          </span>
                           <ArrowRight className="w-2 h-2 text-foreground/10 shrink-0" />
-                          <span className="truncate max-w-[60px]">{order.merchant}</span>
+                          <span className="truncate max-w-[90px]" title={order.merchant}>
+                            {order.merchant}
+                          </span>
                           <span className="text-foreground/10">·</span>
-                          <span className="text-foreground/15">{formatTimeAgo(order.createdAt)}</span>
+                          <span className="text-foreground/15 shrink-0">{formatTimeAgo(order.createdAt)}</span>
                         </div>
                       </div>
 
                       <div className="text-right shrink-0">
-                        <p className="text-[10px] font-bold font-mono tabular-nums text-foreground/80">${order.amount.toLocaleString()}</p>
+                        <p className="text-[10px] font-bold font-mono tabular-nums text-foreground/80">
+                          ${Number.isFinite(order.amount) ? order.amount.toLocaleString() : '—'}
+                        </p>
                         {order.feeAmount ? (
                           <span className="text-[8px] font-mono text-primary/40">{order.feePercentage}%</span>
                         ) : (
-                          <span className="text-[8px] font-mono text-foreground/15">{order.fiatAmount?.toLocaleString()} AED</span>
+                          <span className="text-[8px] font-mono text-foreground/15">
+                            {Number.isFinite(order.fiatAmount) ? `${order.fiatAmount.toLocaleString()} AED` : ''}
+                          </span>
                         )}
                       </div>
 
@@ -1009,10 +1020,14 @@ export default function AdminConsolePage() {
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1 text-[8px] text-foreground/25 font-mono">
-                          <span className="truncate max-w-[50px]">{order.buyerMerchant || order.user}</span>
-                          <ArrowRight className="w-2 h-2 text-foreground/10" />
-                          <span className="truncate max-w-[50px]">{order.merchant}</span>
+                        <div className="flex items-center gap-1 text-[8px] text-foreground/25 font-mono min-w-0">
+                          <span className="truncate max-w-[80px]" title={order.buyerMerchant || order.user}>
+                            {order.buyerMerchant || order.user}
+                          </span>
+                          <ArrowRight className="w-2 h-2 text-foreground/10 shrink-0" />
+                          <span className="truncate max-w-[80px]" title={order.merchant}>
+                            {order.merchant}
+                          </span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <span className="text-[10px] font-bold font-mono tabular-nums text-foreground/80">${order.amount.toLocaleString()}</span>
@@ -1065,10 +1080,14 @@ export default function AdminConsolePage() {
                           {order.type.toUpperCase()}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1 text-[8px] text-foreground/20 font-mono">
-                        <span className="truncate max-w-[60px]">{order.buyerMerchant || order.user}</span>
-                        <ArrowRight className="w-2 h-2 text-foreground/10" />
-                        <span className="truncate max-w-[60px]">{order.merchant}</span>
+                      <div className="flex items-center gap-1 text-[8px] text-foreground/20 font-mono min-w-0">
+                        <span className="truncate max-w-[90px]" title={order.buyerMerchant || order.user}>
+                          {order.buyerMerchant || order.user}
+                        </span>
+                        <ArrowRight className="w-2 h-2 text-foreground/10 shrink-0" />
+                        <span className="truncate max-w-[90px]" title={order.merchant}>
+                          {order.merchant}
+                        </span>
                       </div>
                     </div>
                     <div className="text-right shrink-0">

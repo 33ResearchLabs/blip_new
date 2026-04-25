@@ -19,8 +19,8 @@ interface OrderRow {
   created_at: string;
   expires_at: string;
   completed_at: string | null;
-  user_name: string;
-  merchant_name: string;
+  user_name: string | null;
+  merchant_name: string | null;
   buyer_merchant_name: string | null;
 }
 
@@ -70,9 +70,22 @@ export async function GET(request: NextRequest) {
         o.created_at::text,
         o.expires_at::text,
         o.completed_at::text,
-        COALESCE(u.username, 'Unknown User') as user_name,
-        COALESCE(m.business_name, 'Unknown Merchant') as merchant_name,
-        bm.business_name as buyer_merchant_name
+        CASE
+          WHEN u.username LIKE 'open_order_%' THEN 'Open Order'
+          WHEN u.username LIKE 'm2m_%' THEN 'M2M Buyer'
+          ELSE COALESCE(NULLIF(u.username, ''), NULLIF(u.name, ''),
+                        CASE WHEN o.user_id IS NOT NULL
+                             THEN '#' || LEFT(o.user_id::text, 8)
+                             ELSE NULL END)
+        END as user_name,
+        COALESCE(NULLIF(m.display_name, ''), NULLIF(m.business_name, ''),
+                 CASE WHEN o.merchant_id IS NOT NULL
+                      THEN '#' || LEFT(o.merchant_id::text, 8)
+                      ELSE NULL END) as merchant_name,
+        COALESCE(NULLIF(bm.display_name, ''), NULLIF(bm.business_name, ''),
+                 CASE WHEN o.buyer_merchant_id IS NOT NULL
+                      THEN '#' || LEFT(o.buyer_merchant_id::text, 8)
+                      ELSE NULL END) as buyer_merchant_name
       FROM orders o
       LEFT JOIN users u ON o.user_id = u.id
       LEFT JOIN merchants m ON o.merchant_id = m.id
@@ -87,9 +100,9 @@ export async function GET(request: NextRequest) {
       orders.map(order => ({
         id: order.id,
         orderNumber: order.order_number,
-        user: order.user_name,
-        merchant: order.merchant_name,
-        buyerMerchant: order.buyer_merchant_name || null,
+        user: order.user_name ?? '—',
+        merchant: order.merchant_name ?? '—',
+        buyerMerchant: order.buyer_merchant_name ?? null,
         amount: parseFloat(order.crypto_amount),
         fiatAmount: parseFloat(order.fiat_amount || '0'),
         status: order.status,

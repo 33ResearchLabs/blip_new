@@ -461,7 +461,7 @@ function SystemHealthRing({
             </PieChart>
           </ResponsiveContainer>
           <div
-            className="pointer-events-none absolute inset-0 flex items-center justify-center text-[22px] font-black font-mono tabular-nums leading-none"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] font-black font-mono tabular-nums leading-none"
             style={{ color: ringColor }}
           >
             {pct.toFixed(0)}%
@@ -1250,23 +1250,19 @@ function ActivityBarChart({
 // they match the rest of the dashboard without an extra round-trip. Active =
 // total - completed - cancelled - disputed (in-progress).
 
+// Matches the camelCase shape returned by /api/admin/orders.
 interface AdminOrderRow {
   id: string;
-  order_number: string;
+  orderNumber: string;
   type: string;
   status: string;
-  crypto_amount: number | string;
-  fiat_amount: number | string;
-  fiat_currency?: string;
-  crypto_currency?: string;
-  created_at: string;
-  completed_at?: string | null;
-  user?: { username?: string; name?: string };
-  merchant?: { display_name?: string; business_name?: string };
-  buyer_merchant?: { display_name?: string; business_name?: string } | null;
-  user_name?: string;
-  merchant_name?: string;
-  buyer_merchant_name?: string | null;
+  amount: number;
+  fiatAmount: number;
+  createdAt: string;
+  completedAt?: string | null;
+  user: string;
+  merchant: string;
+  buyerMerchant: string | null;
 }
 
 const ALL_ORDERS_TABS: {
@@ -1397,12 +1393,12 @@ function AllOrdersPanel({
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       rows = rows.filter((o) =>
-        (o.order_number || "").toLowerCase().includes(q),
+        (o.orderNumber || "").toLowerCase().includes(q),
       );
     }
     rows = [...rows].sort((a, b) => {
-      const da = new Date(a.created_at).getTime();
-      const db = new Date(b.created_at).getTime();
+      const da = new Date(a.createdAt).getTime();
+      const db = new Date(b.createdAt).getTime();
       return sort === "newest" ? db - da : da - db;
     });
     return rows;
@@ -1483,20 +1479,16 @@ function AllOrdersPanel({
         ) : (
           filtered.map((o) => {
             const pill = STATUS_PILL[o.status] ?? STATUS_PILL.pending;
-            const counterparty =
-              o.buyer_merchant?.display_name ||
-              o.buyer_merchant?.business_name ||
-              o.buyer_merchant_name ||
-              o.merchant?.display_name ||
-              o.merchant?.business_name ||
-              o.merchant_name ||
-              "—";
-            const initiator =
-              o.user?.username || o.user?.name || o.user_name || "Unknown";
-            const typeColor =
-              (o.type || "").toLowerCase() === "buy"
-                ? "text-blue-400"
-                : "text-amber-400";
+            // The API populates `buyerMerchant` for M2M orders (buyer side is
+            // a merchant) and otherwise leaves it null. `user` is the buyer
+            // for U2M orders (or a placeholder label like "Open Order" /
+            // "M2M Buyer" for unclaimed/M2M orders).
+            const initiator = o.buyerMerchant || o.user || "—";
+            const counterparty = o.merchant || "—";
+            const isBuy = (o.type || "").toLowerCase() === "buy";
+            const typeColor = isBuy ? "text-blue-400" : "text-amber-400";
+            const cryptoOk = Number.isFinite(o.amount);
+            const fiatOk = Number.isFinite(o.fiatAmount) && o.fiatAmount > 0;
             return (
               <div
                 key={o.id}
@@ -1505,12 +1497,12 @@ function AllOrdersPanel({
                 <div
                   className={`w-5 h-5 rounded shrink-0 flex items-center justify-center text-[10px] font-bold font-mono ${typeColor} bg-foreground/[0.04]`}
                 >
-                  {(o.type || "").toLowerCase() === "buy" ? "B" : "S"}
+                  {isBuy ? "B" : "S"}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5 text-[11px] font-mono">
                     <span className="font-bold text-foreground/90 truncate">
-                      {o.order_number}
+                      {o.orderNumber}
                     </span>
                     <span
                       className={`shrink-0 px-1.5 py-px rounded text-[9px] font-bold ${pill.bg} ${pill.text}`}
@@ -1518,22 +1510,20 @@ function AllOrdersPanel({
                       {pill.label}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 text-[9px] font-mono text-foreground/40 truncate">
-                    <span>{initiator}</span>
-                    <ArrowRight className="w-2.5 h-2.5 opacity-50" />
-                    <span>{counterparty}</span>
-                    <span className="opacity-50">·</span>
-                    <span>{formatTimeAgo(o.created_at)}</span>
+                  <div className="flex items-center gap-1 text-[9px] font-mono text-foreground/40 min-w-0">
+                    <span className="truncate max-w-[110px]" title={initiator}>{initiator}</span>
+                    <ArrowRight className="w-2.5 h-2.5 opacity-50 shrink-0" />
+                    <span className="truncate max-w-[110px]" title={counterparty}>{counterparty}</span>
+                    <span className="opacity-50 shrink-0">·</span>
+                    <span className="shrink-0">{formatTimeAgo(o.createdAt)}</span>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-[11px] font-mono font-bold tabular-nums text-foreground/90">
-                    {compactCrypto(Number(o.crypto_amount))}{" "}
-                    {o.crypto_currency || "USDT"}
+                    {cryptoOk ? compactCrypto(o.amount) : "—"} USDT
                   </div>
                   <div className="text-[9px] font-mono text-foreground/40 tabular-nums">
-                    {compactCrypto(Number(o.fiat_amount))}{" "}
-                    {o.fiat_currency || ""}
+                    {fiatOk ? compactCrypto(o.fiatAmount) : ""}
                   </div>
                 </div>
               </div>
