@@ -26,6 +26,21 @@ const CORRIDORS = [
   { id: "USDT_INR", label: "USDT / INR", flag: "🇮🇳", fiat: "INR" },
 ] as const;
 
+// "TypeError: Failed to fetch" is what the browser throws when fetch can't
+// reach the server at all — offline, backgrounded tab, dev server restart, etc.
+// These are transient and not user-actionable; we don't want them in the
+// Next.js dev error overlay (which intercepts console.error).
+function isTransientNetworkError(err: unknown): boolean {
+  if (!(err instanceof TypeError)) return false;
+  const msg = err.message?.toLowerCase() ?? "";
+  return (
+    msg.includes("failed to fetch") ||
+    msg.includes("networkerror") ||
+    msg.includes("load failed") ||
+    msg.includes("network request failed")
+  );
+}
+
 interface StatusCardProps {
   balance: number;
   lockedInEscrow: number;
@@ -215,7 +230,11 @@ export const StatusCard = memo(function StatusCard({
         }
       }
     } catch (error) {
-      console.error("Failed to fetch corridor data:", error);
+      if (isTransientNetworkError(error)) {
+        console.warn("[StatusCard] corridor poll skipped — network unreachable (offline, tab backgrounded, or server restarted). Will retry on next tick.");
+      } else {
+        console.error("Failed to fetch corridor data:", error);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -234,19 +253,35 @@ export const StatusCard = memo(function StatusCard({
         }
       }
     } catch (err) {
-      console.error("Failed to fetch sAED balance:", err);
+      if (isTransientNetworkError(err)) {
+        console.warn("[StatusCard] sAED balance poll skipped — network unreachable (offline, tab backgrounded, or server restarted). Will retry on next tick.");
+      } else {
+        console.error("Failed to fetch sAED balance:", err);
+      }
     }
   }, [merchantId]);
 
-  // Unified polling: corridor + sAED balance in a single 30s interval
+  // Unified polling: corridor + sAED balance in a single 30s interval.
+  // Skip when the tab is hidden or the browser is offline — the request
+  // would just throw "Failed to fetch" and pollute the dev overlay.
   useEffect(() => {
     const fetchAll = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
       fetchCorridorData();
       if (merchantId) fetchSaedBalance();
     };
     fetchAll(); // initial fetch
     const interval = setInterval(fetchAll, 30000);
-    return () => clearInterval(interval);
+    // Refresh immediately when the user returns to the tab or comes back online
+    const onWake = () => fetchAll();
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("online", onWake);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("online", onWake);
+    };
   }, [merchantId, fetchSaedBalance]);
 
   const handleConvert = async () => {

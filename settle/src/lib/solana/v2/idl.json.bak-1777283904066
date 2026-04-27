@@ -33,33 +33,6 @@
           "signer": true
         },
         {
-          "name": "protocol_config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  114,
-                  111,
-                  116,
-                  111,
-                  99,
-                  111,
-                  108,
-                  45,
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
-        },
-        {
           "name": "trade",
           "writable": true,
           "pda": {
@@ -260,7 +233,7 @@
           "writable": true
         },
         {
-          "name": "depositor",
+          "name": "creator",
           "writable": true
         },
         {
@@ -725,9 +698,7 @@
         {
           "name": "escrow",
           "docs": [
-            "Escrow account - same structure in V2.2 and V2.3",
-            "Closed on success so it cannot be reused by any future instruction.",
-            "Rent goes to the depositor (the party who funded the escrow)."
+            "Escrow account - same structure in V2.2 and V2.3"
           ],
           "writable": true,
           "pda": {
@@ -807,13 +778,8 @@
         {
           "name": "creator",
           "docs": [
-            "Trade creator account",
-            "checking the V2.2 layout, NOT for rent. Rent goes to depositor."
+            "Trade creator account (for rent return)"
           ],
-          "writable": true
-        },
-        {
-          "name": "depositor",
           "writable": true
         },
         {
@@ -945,33 +911,6 @@
           "name": "depositor",
           "writable": true,
           "signer": true
-        },
-        {
-          "name": "protocol_config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  114,
-                  111,
-                  116,
-                  111,
-                  99,
-                  111,
-                  108,
-                  45,
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
         },
         {
           "name": "trade",
@@ -1345,33 +1284,6 @@
           "name": "depositor",
           "writable": true,
           "signer": true
-        },
-        {
-          "name": "protocol_config",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  112,
-                  114,
-                  111,
-                  116,
-                  111,
-                  99,
-                  111,
-                  108,
-                  45,
-                  99,
-                  111,
-                  110,
-                  102,
-                  105,
-                  103
-                ]
-              }
-            ]
-          }
         },
         {
           "name": "trade",
@@ -2304,7 +2216,7 @@
           "writable": true
         },
         {
-          "name": "depositor",
+          "name": "creator",
           "writable": true
         },
         {
@@ -2475,10 +2387,7 @@
           "writable": true
         },
         {
-          "name": "depositor",
-          "docs": [
-            "party who funded the trade and paid the escrow + vault rent)."
-          ],
+          "name": "creator",
           "writable": true
         },
         {
@@ -2652,14 +2561,12 @@
         {
           "name": "treasury_ata",
           "docs": [
-            "Treasury ATA for fees (only used if releasing to buyer).",
-            "V2.3: validate against `trade.treasury` snapshot so a post-creation",
-            "authority rotation cannot redirect this trade's fee."
+            "Treasury ATA for fees (only used if releasing to buyer)"
           ],
           "writable": true
         },
         {
-          "name": "depositor",
+          "name": "creator",
           "writable": true
         },
         {
@@ -2807,7 +2714,7 @@
           "writable": true
         },
         {
-          "name": "depositor",
+          "name": "creator",
           "writable": true
         },
         {
@@ -3458,26 +3365,6 @@
       "code": 6044,
       "name": "PaymentNotStale",
       "msg": "PaymentSent stale threshold has not elapsed"
-    },
-    {
-      "code": 6045,
-      "name": "InvalidAmount",
-      "msg": "Amount must be greater than zero"
-    },
-    {
-      "code": 6046,
-      "name": "InvalidLaneBounds",
-      "msg": "Lane bounds invalid: min must be > 0 and ≤ max"
-    },
-    {
-      "code": 6047,
-      "name": "MaxFeeBpsExceedsHardCap",
-      "msg": "max_fee_bps exceeds protocol-wide hard cap (10%)"
-    },
-    {
-      "code": 6048,
-      "name": "CounterpartyMismatch",
-      "msg": "Counterparty does not match the value bound to the signed offer"
     }
   ],
   "types": [
@@ -3934,13 +3821,6 @@
             "type": "pubkey"
           },
           {
-            "name": "nonce",
-            "docs": [
-              "Nonce from the signed Offer — required to reconstruct the hash on-chain."
-            ],
-            "type": "u64"
-          },
-          {
             "name": "offer_hash",
             "docs": [
               "SHA256 hash of the canonical offer"
@@ -4016,10 +3896,7 @@
         "This MUST be serialized identically across all clients",
         "to ensure signature verification works.",
         "",
-        "V2.3: Added `counterparty` so offers are bound to the intended buyer at",
-        "signature time. Without this binding, an attacker who observes a signed",
-        "offer can race to match it with `params.counterparty = attacker`,",
-        "consuming the OfferFill PDA and locking out the intended buyer."
+        "V2.2: Added lane_id for atomic matching via prefunded lanes"
       ],
       "type": {
         "kind": "struct",
@@ -4028,14 +3905,6 @@
             "name": "creator",
             "docs": [
               "Offer creator (signer)"
-            ],
-            "type": "pubkey"
-          },
-          {
-            "name": "counterparty",
-            "docs": [
-              "Counterparty the offer is bound to (the intended buyer).",
-              "Must equal `params.counterparty` at match time."
             ],
             "type": "pubkey"
           },
@@ -4361,16 +4230,6 @@
               "Snapshot of protocol fee at creation (immutable)"
             ],
             "type": "u16"
-          },
-          {
-            "name": "treasury",
-            "docs": [
-              "Snapshot of protocol treasury at creation (immutable for the life",
-              "of this trade). The release path uses `trade.treasury` instead of",
-              "`protocol_config.treasury` so an admin who rotates the treasury",
-              "after a trade is created cannot redirect that trade's fees."
-            ],
-            "type": "pubkey"
           },
           {
             "name": "escrow_bump",
