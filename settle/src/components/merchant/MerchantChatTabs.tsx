@@ -263,9 +263,13 @@ export function MerchantChatTabs({
         <div className="flex items-center gap-1.5 bg-white/[0.02] border border-white/[0.06] rounded-lg px-2.5 py-1.5 focus-within:border-primary/30 transition-colors">
           <Search className="w-3 h-3 text-white/20" />
           <input
-            type="text"
-            name="search"
+            type="search"
+            role="searchbox"
+            name="chat-search"
             autoComplete="off"
+            data-1p-ignore="true"
+            data-lpignore="true"
+            data-form-type="other"
             maxLength={100}
             placeholder={activeTab === 'orders' ? 'Search orders...' : 'Search disputes...'}
             value={searchQuery}
