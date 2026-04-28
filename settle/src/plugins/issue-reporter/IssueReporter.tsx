@@ -970,9 +970,14 @@ export function IssueReporter({
                         setCategory(e.target.value as IssueCategory)
                       }
                       className="w-full px-3 py-2 rounded-md bg-foreground/[0.04] border border-border text-[13px] focus:outline-none focus:border-amber-400/60"
+                      style={{ colorScheme: 'dark' }}
                     >
                       {ISSUE_CATEGORIES.map((c) => (
-                        <option key={c.value} value={c.value}>
+                        <option
+                          key={c.value}
+                          value={c.value}
+                          style={{ background: '#18181b', color: '#fafafa' }}
+                        >
                           {c.label}
                         </option>
                       ))}
