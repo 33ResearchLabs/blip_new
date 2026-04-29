@@ -4,6 +4,11 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import type { Screen, Order, BankAccount } from "@/components/user/screens/types";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { useMerchantStore } from '@/stores/merchantStore';
+import {
+  validateUserUsername,
+  validateUserEmail,
+  validateUserPassword,
+} from '@/lib/validation/userAuth';
 
 interface UseUserAuthParams {
   setScreen: (s: Screen) => void;
@@ -37,7 +42,10 @@ export function useUserAuth({
   const [newUserName, setNewUserName] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  // `email` is only collected on the register form; sign-in uses
+  // username + password only. Keeping the shape unified avoids a separate
+  // register-form state object and a discriminated union here.
+  const [loginForm, setLoginForm] = useState({ username: "", password: "", email: "" });
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -221,18 +229,16 @@ export function useUserAuth({
   }, [loginForm, setScreen, fetchOrders, fetchBankAccounts, fetchResolvedDisputes]);
 
   const handleUserRegister = useCallback(async () => {
-    if (!loginForm.username || !loginForm.password) {
-      setLoginError('Username and password are required');
-      return;
-    }
-    if (loginForm.username.length < 3) {
-      setLoginError('Username must be at least 3 characters');
-      return;
-    }
-    if (loginForm.password.length < 6) {
-      setLoginError('Password must be at least 6 characters');
-      return;
-    }
+    const email = loginForm.email?.trim() ?? '';
+    // Single source of truth for the rules — same module the API uses, so
+    // the message the user sees here matches what would come back from the
+    // server if they bypassed the client check.
+    const usernameErr = validateUserUsername(loginForm.username);
+    if (usernameErr) { setLoginError(usernameErr); return; }
+    const emailErr = validateUserEmail(email);
+    if (emailErr) { setLoginError(emailErr); return; }
+    const passwordErr = validateUserPassword(loginForm.password);
+    if (passwordErr) { setLoginError(passwordErr); return; }
 
     setIsLoggingIn(true);
     setLoginError("");
@@ -244,6 +250,7 @@ export function useUserAuth({
         body: JSON.stringify({
           username: loginForm.username.trim(),
           password: loginForm.password,
+          email,
           action: 'register',
         }),
       });

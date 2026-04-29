@@ -12,6 +12,7 @@ import {
   Loader2,
   ChevronDown,
   X,
+  Trash2,
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { colors } from "@/lib/design/theme";
@@ -51,6 +52,10 @@ export const PaymentMethodSelector = ({
   const [expanded, setExpanded] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Two-tap delete: first tap arms `confirmDeleteId`, second tap within
+  // 4s actually deletes. Avoids the jarring `window.confirm()` modal.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Add form state
   const [addType, setAddType] = useState<MethodType>("bank");
@@ -84,6 +89,36 @@ export const PaymentMethodSelector = ({
     setAddLabel("");
     setAddDetails({});
     setFormError("");
+  };
+
+  // Auto-clear the "tap again to confirm" arming after a few seconds so a
+  // forgotten arm doesn't fire a delete on a stray tap minutes later.
+  useEffect(() => {
+    if (!confirmDeleteId) return;
+    const id = setTimeout(() => setConfirmDeleteId(null), 4000);
+    return () => clearTimeout(id);
+  }, [confirmDeleteId]);
+
+  const handleDelete = async (methodId: string) => {
+    if (!userId) return;
+    setDeletingId(methodId);
+    try {
+      const res = await fetchWithAuth(
+        `/api/users/${userId}/payment-methods/${methodId}`,
+        { method: "DELETE" },
+      );
+      if (res.ok) {
+        setMethods((prev) => prev.filter((m) => m.id !== methodId));
+        // If the deleted one was selected, clear the selection so callers
+        // don't render a stale chip.
+        if (selectedId === methodId) onSelect(null);
+      }
+    } catch {
+      // Best-effort — leave the row in place if the API call failed.
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
+    }
   };
 
   const handleAdd = async () => {
@@ -230,37 +265,69 @@ export const PaymentMethodSelector = ({
             className="overflow-hidden"
           >
             <div className="mt-1 space-y-1 max-h-[240px] overflow-y-auto">
-              {/* Show only methods OTHER than the currently selected one —
-                  the selected one is already rendered as the trigger card above. */}
-              {methods.filter((m) => m.id !== selectedId).map((m) => {
+              {/* All methods listed (including the selected one) so the user
+                  can delete any of them. The currently selected method gets a
+                  check mark so its identity stays clear. */}
+              {methods.map((m) => {
                 const cfg = TYPE_CONFIG[m.type];
                 const Ic = cfg.Icon;
+                const armed = confirmDeleteId === m.id;
+                const deleting = deletingId === m.id;
+                const isSelected = m.id === selectedId;
                 return (
-                  <button
+                  <div
                     key={m.id}
-                    onClick={() => {
-                      onSelect(m);
-                      setExpanded(false);
-                    }}
-                    className="w-full flex items-center gap-3 rounded-xl p-3 text-left transition-colors"
+                    className="w-full flex items-center gap-2 rounded-xl p-3 text-left transition-colors"
                     style={{ background: colors.surface.card, border: `1px solid ${colors.border.subtle}` }}
                   >
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                      style={{ background: `${cfg.color}30` }}
+                    <button
+                      onClick={() => {
+                        onSelect(m);
+                        setExpanded(false);
+                      }}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
                     >
-                      <Ic className="w-3.5 h-3.5" style={{ color: cfg.color }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-text-primary truncate">
-                        {m.label}
-                        <span className="ml-1.5 text-[10px] text-text-secondary font-normal">
-                          {cfg.label}
-                        </span>
-                      </p>
-                      <p className="text-[11px] text-text-secondary truncate">{getSubtext(m)}</p>
-                    </div>
-                  </button>
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ background: `${cfg.color}30` }}
+                      >
+                        <Ic className="w-3.5 h-3.5" style={{ color: cfg.color }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-medium text-text-primary truncate flex items-center gap-1.5">
+                          <span className="truncate">{m.label}</span>
+                          {isSelected && <Check className="w-3 h-3 text-success shrink-0" />}
+                          <span className="ml-1.5 text-[10px] text-text-secondary font-normal">
+                            {cfg.label}
+                          </span>
+                        </p>
+                        <p className="text-[11px] text-text-secondary truncate">{getSubtext(m)}</p>
+                      </div>
+                    </button>
+                    {/* Two-tap delete — first tap arms, second confirms */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (armed) handleDelete(m.id);
+                        else setConfirmDeleteId(m.id);
+                      }}
+                      disabled={deleting}
+                      aria-label={armed ? "Confirm delete" : "Delete payment method"}
+                      className={`shrink-0 h-8 px-2 rounded-lg flex items-center justify-center gap-1 transition-colors text-[11px] font-semibold ${
+                        armed
+                          ? "bg-error-dim text-error border border-error-border"
+                          : "text-text-tertiary hover:text-error hover:bg-error-dim"
+                      }`}
+                    >
+                      {deleting ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : armed ? (
+                        <>Confirm</>
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
                 );
               })}
 

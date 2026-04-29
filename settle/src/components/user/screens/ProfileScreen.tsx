@@ -96,7 +96,7 @@ export interface ProfileScreenProps {
   setBankAccounts: React.Dispatch<React.SetStateAction<BankAccount[]>>;
   setResolvedDisputes: React.Dispatch<React.SetStateAction<any[]>>;
   setLoginError: (v: string) => void;
-  setLoginForm: (v: { username: string; password: string }) => void;
+  setLoginForm: (v: { username: string; password: string; email: string }) => void;
   maxW: string;
 }
 
@@ -421,7 +421,7 @@ export const ProfileScreen = ({
             setBankAccounts([]);
             setResolvedDisputes([]);
             setLoginError('');
-            setLoginForm({ username: '', password: '' });
+            setLoginForm({ username: '', password: '', email: '' });
             if (solanaWallet.disconnect) {
               solanaWallet.disconnect();
             }

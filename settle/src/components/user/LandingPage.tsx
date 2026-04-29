@@ -2,13 +2,18 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Zap, Loader2, Eye, EyeOff } from "lucide-react";
+import { Zap, Loader2, Eye, EyeOff, Mail } from "lucide-react";
 import Link from "next/link";
 import { UserWelcomePage } from "./UserWelcomePage";
+import {
+  validateUserUsername,
+  validateUserEmail,
+  validateUserPassword,
+} from "@/lib/validation/userAuth";
 
 interface LandingPageProps {
-  loginForm: { username: string; password: string };
-  setLoginForm: (f: { username: string; password: string }) => void;
+  loginForm: { username: string; password: string; email: string };
+  setLoginForm: (f: { username: string; password: string; email: string }) => void;
   authMode: 'login' | 'register';
   setAuthMode: (m: 'login' | 'register') => void;
   handleUserLogin: () => void;
@@ -29,9 +34,33 @@ export function LandingPage({
   const [showPassword, setShowPassword] = useState(false);
   // Setter unused — navigation to the form happens via /login URL, not state toggle.
   const [showWelcome] = useState(!skipWelcome);
+  // Track which fields the user has interacted with so we don't surface
+  // "required" errors before they've even started typing.
+  const [touched, setTouched] = useState<{ username?: boolean; email?: boolean; password?: boolean }>({});
   const submit = () => authMode === 'login' ? handleUserLogin() : handleUserRegister();
 
-  const isDisabled = isLoggingIn || !loginForm.username || !loginForm.password;
+  // Per-field validity — only computed for register so login stays simple
+  // (login just needs a non-empty username + password and trusts the server).
+  const usernameError = authMode === 'register' && touched.username
+    ? validateUserUsername(loginForm.username)
+    : null;
+  const emailError = authMode === 'register' && touched.email
+    ? validateUserEmail(loginForm.email)
+    : null;
+  const passwordError = authMode === 'register' && touched.password
+    ? validateUserPassword(loginForm.password)
+    : null;
+
+  const isDisabled =
+    isLoggingIn ||
+    !loginForm.username ||
+    !loginForm.password ||
+    (authMode === 'register' && (
+      !loginForm.email ||
+      !!validateUserUsername(loginForm.username) ||
+      !!validateUserEmail(loginForm.email) ||
+      !!validateUserPassword(loginForm.password)
+    ));
 
   // Welcome page — full user landing
   if (showWelcome) {
@@ -105,25 +134,83 @@ export function LandingPage({
                 type="text"
                 value={loginForm.username}
                 onChange={e => setLoginForm({ ...loginForm, username: e.target.value })}
-                onBlur={e => setLoginForm({ ...loginForm, username: e.target.value.trim() })}
-                placeholder={authMode === 'register' ? 'Choose a username' : 'Your username'}
+                onBlur={e => {
+                  setLoginForm({ ...loginForm, username: e.target.value.trim() });
+                  setTouched(t => ({ ...t, username: true }));
+                }}
+                placeholder={authMode === 'register' ? '3–20 chars · letters, numbers, _' : 'Your username'}
                 autoCapitalize="none"
                 autoCorrect="off"
+                maxLength={20}
                 onKeyDown={e => e.key === 'Enter' && submit()}
-                className="w-full rounded-xl px-4 py-3 text-sm font-medium outline-none bg-surface-hover border border-border-subtle text-text-primary placeholder:text-text-tertiary"
+                className={`w-full rounded-xl px-4 py-3 text-sm font-medium outline-none bg-surface-hover border ${
+                  usernameError ? 'border-error' : 'border-border-subtle'
+                } text-text-primary placeholder:text-text-tertiary`}
               />
+              {usernameError && (
+                <p className="mt-1.5 text-[11px] text-error">{usernameError}</p>
+              )}
             </div>
 
+            {/* Email — register only. Required so the user can recover their
+                account via the forgot-password flow. */}
+            {authMode === 'register' && (
+              <div>
+                <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary mb-2">Email</label>
+                <div className="relative">
+                  <input
+                    type="email"
+                    value={loginForm.email}
+                    onChange={e => setLoginForm({ ...loginForm, email: e.target.value })}
+                    onBlur={e => {
+                      setLoginForm({ ...loginForm, email: e.target.value.trim() });
+                      setTouched(t => ({ ...t, email: true }));
+                    }}
+                    placeholder="you@email.com"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    maxLength={254}
+                    onKeyDown={e => e.key === 'Enter' && submit()}
+                    className={`w-full rounded-xl pl-10 pr-4 py-3 text-sm font-medium outline-none bg-surface-hover border ${
+                      emailError ? 'border-error' : 'border-border-subtle'
+                    } text-text-primary placeholder:text-text-tertiary`}
+                  />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary" />
+                </div>
+                {emailError ? (
+                  <p className="mt-1.5 text-[11px] text-error">{emailError}</p>
+                ) : (
+                  <p className="mt-1.5 text-[10px] text-text-tertiary">
+                    We&apos;ll send a verification link. You&apos;ll also use this email to recover your password.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div>
-              <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary mb-2">Password</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-[10px] font-bold tracking-[0.2em] uppercase text-text-tertiary">Password</label>
+                {authMode === 'login' && (
+                  <Link
+                    href="/user/forgot-password"
+                    className="text-[10px] font-semibold text-text-secondary hover:text-text-primary transition-colors"
+                  >
+                    Forgot password?
+                  </Link>
+                )}
+              </div>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
                   value={loginForm.password}
                   onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
-                  placeholder={authMode === 'register' ? 'Min. 6 characters' : '••••••••'}
+                  onBlur={() => setTouched(t => ({ ...t, password: true }))}
+                  placeholder={authMode === 'register' ? '6–24 characters' : '••••••••'}
+                  maxLength={24}
                   onKeyDown={e => e.key === 'Enter' && submit()}
-                  className="w-full rounded-xl pl-4 pr-11 py-3 text-sm font-medium outline-none bg-surface-hover border border-border-subtle text-text-primary placeholder:text-text-tertiary"
+                  className={`w-full rounded-xl pl-4 pr-11 py-3 text-sm font-medium outline-none bg-surface-hover border ${
+                    passwordError ? 'border-error' : 'border-border-subtle'
+                  } text-text-primary placeholder:text-text-tertiary`}
                 />
                 <button
                   type="button"
@@ -133,6 +220,9 @@ export function LandingPage({
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              {passwordError && (
+                <p className="mt-1.5 text-[11px] text-error">{passwordError}</p>
+              )}
             </div>
 
             <motion.button
