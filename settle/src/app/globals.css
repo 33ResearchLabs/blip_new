@@ -714,6 +714,15 @@ input[type="number"] { -moz-appearance: textfield; }
 .animate-slideInRight { animation: slideInRight 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 .animate-slideInLeft { animation: slideInLeft 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 
+/* Marquee — horizontal infinite scroll. The track contains the
+   content twice; translateX(-50%) loops one full content width
+   for a seamless cycle. Use with a flex track of duplicated items. */
+@keyframes marquee-x {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.animate-marquee-x { animation: marquee-x 30s linear infinite; }
+
 .delay-100 { animation-delay: 100ms; }
 .delay-200 { animation-delay: 200ms; }
 .delay-300 { animation-delay: 300ms; }

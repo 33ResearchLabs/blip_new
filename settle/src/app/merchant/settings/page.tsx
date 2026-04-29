@@ -579,6 +579,7 @@ export default function MerchantSettingsPage({
         onOpenSettings={onClose ? () => { /* already in settings */ } : undefined}
         onOpenWallet={onOpenWallet}
         onNavLinkClick={onClose}
+        onBack={onClose ?? (() => router.push("/merchant"))}
       />
 
       <div className="max-w-5xl mx-auto flex flex-col md:flex-row min-h-[calc(100vh-50px)]">

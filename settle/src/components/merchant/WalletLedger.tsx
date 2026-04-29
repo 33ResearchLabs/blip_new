@@ -350,47 +350,51 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
         />
       )}
 
-      {/* Ledger Table */}
+      {/* Ledger Table — wraps header + body in a single overflow-x-auto
+          container with a min-width so all 5 columns stay legible on
+          phone-width viewports and the user can scroll horizontally. */}
       <div className="bg-white/[0.03] rounded-xl border border-white/10 overflow-hidden">
-        {/* Table Header */}
-        <div className="grid grid-cols-[1fr_120px_100px_100px_120px] gap-2 px-4 py-2.5 border-b border-white/10 bg-white/[0.03]">
-          <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider">Transaction</span>
-          <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">Amount</span>
-          <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">Before</span>
-          <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">After</span>
-          <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">Date</span>
-        </div>
-
-        {/* Table Body */}
-        {isLoading && entries.length === 0 ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-6 h-6 text-white/30 animate-spin" />
-          </div>
-        ) : entries.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
-            <div className="w-12 h-12 rounded-full border border-white/[0.06] bg-white/[0.02] flex items-center justify-center">
-              <BookOpen className="w-6 h-6 text-white/20" />
+        <div className="overflow-x-auto">
+          <div className="min-w-[640px]">
+            {/* Table Header */}
+            <div className="grid grid-cols-[1fr_120px_100px_100px_120px] gap-2 px-4 py-2.5 border-b border-white/10 bg-white/[0.03]">
+              <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider">Transaction</span>
+              <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">Amount</span>
+              <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">Before</span>
+              <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">After</span>
+              <span className="text-[11px] font-bold text-white/40 uppercase tracking-wider text-right">Date</span>
             </div>
-            <div className="text-center">
-              <p className="text-sm font-medium text-white/40">No transactions found</p>
-              <p className="text-xs text-white/25 mt-1">
-                {txType !== 'all' || timeRange !== 'all'
-                  ? 'Try adjusting your filters'
-                  : 'Transactions will appear here after your first trade'}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="divide-y divide-white/[0.06]">
-            {entries.map((entry) => {
-              const isPositive = entry.amount >= 0;
-              const colors = getTypeColor(entry.entry_type, entry.amount);
 
-              return (
-                <div
-                  key={entry.id}
-                  className="grid grid-cols-[1fr_120px_100px_100px_120px] gap-2 px-4 py-3 hover:bg-white/[0.03] transition-colors items-center"
-                >
+            {/* Table Body */}
+            {isLoading && entries.length === 0 ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="w-6 h-6 text-white/30 animate-spin" />
+              </div>
+            ) : entries.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <div className="w-12 h-12 rounded-full border border-white/[0.06] bg-white/[0.02] flex items-center justify-center">
+                  <BookOpen className="w-6 h-6 text-white/20" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-white/40">No transactions found</p>
+                  <p className="text-xs text-white/25 mt-1">
+                    {txType !== 'all' || timeRange !== 'all'
+                      ? 'Try adjusting your filters'
+                      : 'Transactions will appear here after your first trade'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="divide-y divide-white/[0.06]">
+                {entries.map((entry) => {
+                  const isPositive = entry.amount >= 0;
+                  const colors = getTypeColor(entry.entry_type, entry.amount);
+
+                  return (
+                    <div
+                      key={entry.id}
+                      className="grid grid-cols-[1fr_120px_100px_100px_120px] gap-2 px-4 py-3 hover:bg-white/[0.03] transition-colors items-center"
+                    >
                   {/* Transaction Info */}
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${colors.bg} ${colors.border}`}>
@@ -444,6 +448,8 @@ export function WalletLedger({ merchantId, walletBalance }: WalletLedgerProps) {
             })}
           </div>
         )}
+          </div>
+        </div>
       </div>
 
       {/* Pagination */}

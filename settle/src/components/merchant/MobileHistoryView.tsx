@@ -10,11 +10,67 @@ import {
   ArrowRight,
   ExternalLink,
   LogOut,
+  Wallet,
+  DollarSign,
+  Clock,
+  Star,
+  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 import { UserBadge } from "@/components/merchant/UserBadge";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
+import { formatCrypto } from "@/lib/format";
 import type { Order } from "@/types/merchant";
+import type { LucideIcon } from "lucide-react";
+
+// Reusable stat tile for the Stats tab — small icon chip in the corner,
+// label/sublabel row, big value with a small unit suffix. Keeps the four
+// cards visually consistent so the grid reads as a single block.
+function StatCard({
+  icon: Icon,
+  accent,
+  accentBg,
+  label,
+  sublabel,
+  value,
+  suffix,
+  valueClass,
+}: {
+  icon: LucideIcon;
+  accent: string;
+  accentBg: string;
+  label: string;
+  sublabel?: string;
+  value: string;
+  suffix?: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="p-3.5 bg-white/[0.03] rounded-xl border border-white/[0.06]">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] font-mono uppercase tracking-wider text-foreground/40">
+          {label}
+          {sublabel && (
+            <span className="ml-1 text-foreground/25">({sublabel})</span>
+          )}
+        </span>
+        <div className={`w-6 h-6 rounded-md flex items-center justify-center ${accentBg}`}>
+          <Icon className={`w-3 h-3 ${accent}`} strokeWidth={2.5} />
+        </div>
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <span className={`text-lg font-extrabold tabular-nums tracking-tight ${valueClass ?? "text-white"}`}>
+          {value}
+        </span>
+        {suffix && (
+          <span className="text-[10px] text-foreground/40 font-medium uppercase tracking-wide">
+            {suffix}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export interface MobileHistoryViewProps {
   completedOrders: Order[];
@@ -30,6 +86,10 @@ export interface MobileHistoryViewProps {
   onShowAnalytics: () => void;
   onShowWalletModal: () => void;
   onLogout: () => void;
+  // Tap handler for a history card — opens the merchant's order quick-view
+  // popup so the user can read the full order details. Same callback the
+  // desktop pending / in-progress panels use.
+  onSelectOrder?: (order: Order) => void;
 }
 
 export function MobileHistoryView({
@@ -46,6 +106,7 @@ export function MobileHistoryView({
   onShowAnalytics,
   onShowWalletModal,
   onLogout,
+  onSelectOrder,
 }: MobileHistoryViewProps) {
   return (
     <div className="space-y-4">
@@ -112,7 +173,12 @@ export function MobileHistoryView({
                   key={order.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="p-4 bg-white/[0.03] rounded-xl border border-white/[0.04]"
+                  onClick={() => onSelectOrder?.(order)}
+                  role={onSelectOrder ? "button" : undefined}
+                  tabIndex={onSelectOrder ? 0 : undefined}
+                  className={`p-4 bg-white/[0.03] rounded-xl border border-white/[0.04] ${
+                    onSelectOrder ? "cursor-pointer hover:bg-white/[0.05] transition-colors" : ""
+                  }`}
                 >
                   <div className="flex items-center gap-3">
                     <UserBadge name={order.user} emoji={order.emoji} size="lg" showName={false} />
@@ -150,6 +216,7 @@ export function MobileHistoryView({
                         href={getSolscanTxUrl(order.escrowTxHash)}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
                         className="flex items-center gap-1 text-[10px] text-foreground/35 hover:text-foreground transition-colors"
                       >
                         <ExternalLink className="w-3 h-3" />
@@ -160,6 +227,7 @@ export function MobileHistoryView({
                           href={getBlipscanTradeUrl(order.escrowPda)}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
                           className="flex items-center gap-1 text-[10px] text-primary/70 hover:text-primary transition-colors"
                         >
                           <ExternalLink className="w-3 h-3" />
@@ -194,7 +262,12 @@ export function MobileHistoryView({
                   key={order.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="p-4 bg-white/[0.03] rounded-xl border border-red-500/10"
+                  onClick={() => onSelectOrder?.(order)}
+                  role={onSelectOrder ? "button" : undefined}
+                  tabIndex={onSelectOrder ? 0 : undefined}
+                  className={`p-4 bg-white/[0.03] rounded-xl border border-red-500/10 ${
+                    onSelectOrder ? "cursor-pointer hover:bg-white/[0.05] transition-colors" : ""
+                  }`}
                 >
                   <div className="flex items-center gap-3">
                     <UserBadge name={order.user} emoji={order.emoji} size="lg" showName={false} />
@@ -237,53 +310,89 @@ export function MobileHistoryView({
       {/* Stats Tab */}
       {historyTab === 'stats' && (
         <div className="space-y-4">
+          {/* Section header */}
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-mono text-foreground/40 uppercase tracking-wide">Trading Stats</h3>
+            <h3 className="text-xs font-mono text-foreground/40 uppercase tracking-wider">
+              Trading Stats
+            </h3>
             <button
               onClick={onShowAnalytics}
-              className="flex items-center gap-1 px-3 py-1.5 bg-white/5 text-white rounded-lg text-xs font-medium"
+              className="flex items-center gap-1 px-3 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white/70 rounded-lg text-[11px] font-semibold transition-colors"
             >
               <TrendingUp className="w-3 h-3" />
               Full Analytics
             </button>
           </div>
 
+          {/* Hero — wallet balance. Slight gradient + Wallet icon so it
+              reads as the primary number on the page. */}
           <button
             onClick={onShowWalletModal}
-            className="w-full p-4 bg-white/[0.04] rounded-xl border border-white/[0.08] text-left"
+            className="w-full text-left rounded-2xl overflow-hidden border border-primary/20 bg-gradient-to-br from-primary/[0.10] via-foreground/[0.03] to-transparent p-5 hover:border-primary/30 transition-colors"
           >
-            <p className="text-xs text-white/70 mb-1">USDT Balance</p>
-            <p className="text-xl font-bold text-white/70">
-              {effectiveBalance !== null
-                ? `${effectiveBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
-                : "Loading..."}
-            </p>
+            <div className="flex items-center justify-between mb-1">
+              <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-foreground/40">
+                <Wallet className="w-3 h-3" />
+                Wallet Balance
+              </span>
+              <ChevronRight className="w-4 h-4 text-foreground/30" />
+            </div>
+            <div className="flex items-baseline gap-1.5 mt-1">
+              <span className="text-3xl font-extrabold text-white tabular-nums tracking-tight">
+                {effectiveBalance !== null ? formatCrypto(effectiveBalance) : "—"}
+              </span>
+              <span className="text-sm text-foreground/40 font-medium">USDT</span>
+            </div>
           </button>
 
+          {/* 2×2 stat grid — consistent card style with a small accent
+              icon and color per metric. Values use the USDT suffix
+              (these are USDT amounts, not USD). */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="p-4 bg-white/[0.03] rounded-xl border border-white/[0.04]">
-              <p className="text-xs text-foreground/35 mb-1">Today&apos;s Volume</p>
-              <p className="text-xl font-bold">${totalTradedVolume.toLocaleString()}</p>
-            </div>
-            <div className="p-4 bg-white/5 rounded-xl border border-white/6">
-              <p className="text-xs text-white mb-1">Earnings</p>
-              <p className="text-xl font-bold text-white">+${Math.round(todayEarnings)}</p>
-            </div>
-            <div className="p-4 bg-white/5 rounded-xl border border-white/6">
-              <p className="text-xs text-white/70 mb-1">Pending</p>
-              <p className="text-xl font-bold text-white/70">+${Math.round(pendingEarnings)}</p>
-            </div>
-            <div className="p-4 bg-white/[0.03] rounded-xl border border-white/[0.04]">
-              <p className="text-xs text-foreground/35 mb-1">Trades</p>
-              <p className="text-xl font-bold">{completedOrders.length}</p>
-            </div>
+            <StatCard
+              icon={TrendingUp}
+              accent="text-foreground/70"
+              accentBg="bg-foreground/[0.06]"
+              label="Volume"
+              value={formatCrypto(totalTradedVolume)}
+              suffix="USDT"
+            />
+            <StatCard
+              icon={DollarSign}
+              accent="text-emerald-400"
+              accentBg="bg-emerald-500/10"
+              label="Earnings"
+              sublabel="24h"
+              value={`+${formatCrypto(todayEarnings)}`}
+              suffix="USDT"
+              valueClass="text-emerald-300"
+            />
+            <StatCard
+              icon={Clock}
+              accent="text-amber-300"
+              accentBg="bg-amber-500/10"
+              label="Pending"
+              value={`+${formatCrypto(pendingEarnings)}`}
+              suffix="USDT"
+              valueClass="text-amber-200"
+            />
+            <StatCard
+              icon={Check}
+              accent="text-primary"
+              accentBg="bg-primary/10"
+              label="Completed"
+              value={String(completedOrders.length)}
+              suffix="trades"
+            />
           </div>
 
           {/* Account Section */}
-          <div className="mt-4 pt-4 border-t border-white/[0.04]">
-            <h3 className="text-xs font-mono text-foreground/40 uppercase tracking-wide mb-3">Account</h3>
+          <div className="pt-2">
+            <h3 className="text-xs font-mono text-foreground/40 uppercase tracking-wider mb-3">
+              Account
+            </h3>
             <div className="space-y-2">
-              <div className="p-3 bg-white/[0.03] rounded-xl border border-white/[0.04]">
+              <div className="p-3 bg-white/[0.03] rounded-xl border border-white/[0.06]">
                 <div className="flex items-center gap-3">
                   <UserBadge
                     name={merchantInfo?.username || merchantInfo?.display_name || 'Merchant'}
@@ -292,41 +401,52 @@ export function MobileHistoryView({
                     size="lg"
                     showName={false}
                   />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{merchantInfo?.username || merchantInfo?.display_name || 'Merchant'}</p>
-                    <p className="text-xs text-foreground/35">{merchantInfo?.rating?.toFixed(2) || '5.00'} &middot; {merchantInfo?.total_trades || 0} trades</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">
+                      {merchantInfo?.username || merchantInfo?.display_name || 'Merchant'}
+                    </p>
+                    <p className="text-[11px] text-foreground/50 flex items-center gap-1 mt-0.5">
+                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                      <span className="font-mono tabular-nums">{merchantInfo?.rating?.toFixed(2) || '5.00'}</span>
+                      <span className="text-foreground/30">·</span>
+                      <span>{merchantInfo?.total_trades || 0} trades</span>
+                    </p>
                   </div>
                 </div>
               </div>
               <Link
                 href="/merchant/settings"
-                className="w-full flex items-center justify-between p-3 bg-white/[0.03] rounded-xl border border-white/[0.04] hover:bg-card transition-colors"
+                className="w-full flex items-center justify-between p-3 bg-white/[0.03] rounded-xl border border-white/[0.06] hover:bg-card hover:border-white/[0.10] transition-colors"
               >
-                <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-white/40" />
-                  <span className="text-sm font-medium text-white/70">Settings & Profile</span>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-foreground/[0.04] flex items-center justify-center">
+                    <Shield className="w-4 h-4 text-foreground/60" />
+                  </div>
+                  <span className="text-sm font-medium text-white/80">Settings & Profile</span>
                 </div>
-                <ArrowRight className="w-4 h-4 text-white/20" />
+                <ChevronRight className="w-4 h-4 text-foreground/30" />
               </Link>
               {merchantId && (
                 <Link
                   href={`/merchant/profile/${merchantId}`}
-                  className="w-full flex items-center justify-between p-3 bg-white/[0.03] rounded-xl border border-white/[0.04] hover:bg-card transition-colors"
+                  className="w-full flex items-center justify-between p-3 bg-white/[0.03] rounded-xl border border-white/[0.06] hover:bg-card hover:border-white/[0.10] transition-colors"
                 >
-                  <div className="flex items-center gap-2">
-                    <ExternalLink className="w-4 h-4 text-white/40" />
-                    <span className="text-sm font-medium text-white/70">View Public Profile</span>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-foreground/[0.04] flex items-center justify-center">
+                      <ExternalLink className="w-4 h-4 text-foreground/60" />
+                    </div>
+                    <span className="text-sm font-medium text-white/80">View Public Profile</span>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-white/20" />
+                  <ChevronRight className="w-4 h-4 text-foreground/30" />
                 </Link>
               )}
               <motion.button
                 whileTap={{ scale: 0.98 }}
                 onClick={onLogout}
-                className="w-full flex items-center justify-center gap-2 p-3 bg-red-500/10 rounded-xl border border-red-500/20 hover:bg-[var(--color-error)]/20 transition-colors"
+                className="w-full mt-1 flex items-center justify-center gap-2 p-3 bg-red-500/[0.06] rounded-xl border border-red-500/20 hover:bg-[var(--color-error)]/15 transition-colors"
               >
                 <LogOut className="w-4 h-4 text-red-400" />
-                <span className="text-sm font-medium text-red-400">Disconnect & Logout</span>
+                <span className="text-sm font-semibold text-red-400">Disconnect & Logout</span>
               </motion.button>
             </div>
           </div>

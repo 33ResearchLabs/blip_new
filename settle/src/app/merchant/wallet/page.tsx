@@ -499,6 +499,7 @@ export default function WalletPage({
         onOpenSettings={onOpenSettingsProp ?? (() => setShowSettings(true))}
         onOpenWallet={onClose ? () => { /* already in wallet */ } : undefined}
         onNavLinkClick={onClose}
+        onBack={onClose ?? (() => router.push("/merchant"))}
       />
 
       {/* Main content — centered card */}

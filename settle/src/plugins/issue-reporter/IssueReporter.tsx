@@ -629,22 +629,23 @@ export function IssueReporter({
               ? { left: `${dragPos.x}px`, top: `${dragPos.y}px`, touchAction: "none" }
               : { touchAction: "none" }
           }
-          className={`fixed ${dragPos ? "" : positionClasses} z-[60] flex items-center gap-2 px-3.5 py-2 rounded-full
+          className={`fixed ${dragPos ? "" : positionClasses} z-[60] flex items-center sm:gap-2 p-3 sm:px-3.5 sm:py-2 rounded-full
                       bg-amber-500 text-black text-[12px] font-semibold cursor-grab active:cursor-grabbing select-none
                       shadow-lg shadow-amber-500/20 hover:bg-amber-400 transition
                       disabled:opacity-80 disabled:cursor-wait`}
           title="Report Issue (Ctrl+Shift+I) — drag to move"
+          aria-label={resolvedTriggerLabel}
           data-issue-reporter-trigger
         >
           {reporter.capturingShot ? (
             <>
               <Loader2 size={14} className="animate-spin" />
-              Capturing…
+              <span className="hidden sm:inline">Capturing…</span>
             </>
           ) : (
             <>
               <Bug size={14} />
-              {resolvedTriggerLabel}
+              <span className="hidden sm:inline">{resolvedTriggerLabel}</span>
             </>
           )}
         </button>
@@ -685,15 +686,15 @@ export function IssueReporter({
       {reporter.isOpen && (
         <div
           data-issue-reporter-root
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4"
           style={regionPicking ? { visibility: "hidden" } : undefined}
           onClick={(e) => {
             if (e.target === e.currentTarget) reporter.close();
           }}
         >
-          <div className="w-full max-w-6xl h-[88vh] max-h-[780px] bg-background border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+          <div className="w-full sm:max-w-6xl h-[100dvh] sm:h-[88vh] max-h-none sm:max-h-[780px] bg-background border-0 sm:border sm:border-border rounded-none sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden">
             {/* Modal header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-border">
               <div>
                 <div className="text-[18px] font-semibold leading-tight">
                   Create Issue
@@ -736,10 +737,10 @@ export function IssueReporter({
               </div>
             )}
 
-            {/* Body (two columns) */}
-            <div className="flex-1 flex min-h-0">
+            {/* Body — two columns on desktop, stacked on phone (single scroll). */}
+            <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-y-auto md:overflow-visible">
               {/* ── Left column — screenshot + annotation ────────────── */}
-              <div className="w-[62%] border-r border-border flex flex-col bg-foreground/[0.015]">
+              <div className="w-full md:w-[62%] border-b md:border-b-0 md:border-r border-border flex flex-col bg-foreground/[0.015]">
                 {/* Hidden screenshot file picker for the "Upload" mode.
                     Separate from the attachments picker so the accept
                     filter and 5MB cap stay scoped to image uploads. */}
@@ -752,7 +753,9 @@ export function IssueReporter({
                   onChange={handleScreenshotPick}
                 />
 
-                <div className="flex-1 min-h-0 px-5 pt-4 pb-2 flex flex-col">
+                {/* On phone the column is stacked, so flex-1 has nothing to
+                    fill — pin the canvas to ~45vh so it stays usable. */}
+                <div className="h-[45vh] md:h-auto md:flex-1 md:min-h-0 px-3 md:px-5 pt-3 md:pt-4 pb-2 flex flex-col">
                   {/* Annotation canvas OR states. The annotator is keyed
                       by the selected shot's id so React fully unmounts
                       and remounts when the user switches shots —
@@ -942,8 +945,8 @@ export function IssueReporter({
               </div>
 
               {/* ── Right column — form ────────────────────────────── */}
-              <div className="w-[38%] flex flex-col">
-                <div className="flex-1 min-h-0 overflow-auto px-5 py-4 space-y-4">
+              <div className="w-full md:w-[38%] flex flex-col">
+                <div className="flex-1 md:min-h-0 md:overflow-auto px-4 md:px-5 py-3 md:py-4 space-y-4">
                   <div className="text-[13px] font-semibold">Issue Details</div>
 
                   <div>
@@ -1100,9 +1103,11 @@ export function IssueReporter({
                   )}
                 </div>
 
-                {/* Form footer — actions + tagline */}
-                <div className="border-t border-border">
-                  <div className="flex items-center justify-end gap-2 px-5 pt-3 pb-2">
+                {/* Form footer — actions + tagline.
+                    Sticky on phone so Submit stays visible while the form
+                    section scrolls within the body container. */}
+                <div className="border-t border-border bg-background sticky bottom-0 md:static z-10 pb-safe">
+                  <div className="flex items-center justify-end gap-2 px-4 md:px-5 pt-3 pb-2">
                     <button
                       type="button"
                       onClick={reporter.close}
@@ -1129,7 +1134,7 @@ export function IssueReporter({
                       {reporter.submitting ? "Submitting…" : "Submit Issue"}
                     </button>
                   </div>
-                  <div className="flex items-center justify-center gap-1 px-5 pb-3 text-[10px] text-foreground/40">
+                  <div className="hidden sm:flex items-center justify-center gap-1 px-5 pb-3 text-[10px] text-foreground/40">
                     <Lock size={9} />
                     {config.footerText}
                   </div>
